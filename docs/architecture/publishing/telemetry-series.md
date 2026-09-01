@@ -107,7 +107,7 @@ says only where each figure comes from.
 | What checking one summary cost | the same binning over the checker's own clock, with its own median and 95th | `score_ms` |
 | Which sources the checker doubts | summaries carrying a low band, a figure the article did not give, or a flattened hedge, grouped by the source the article came from | `band`, `unsupported_numbers`, `hedge_dropped`, joined to `source_id` on `url_key` |
 | How long the summaries came out | the lowest, middle and highest summary length of each run, against the band its own articles were asked for | `summary_word_count`, `source_word_count`, `summarize.bands` |
-| Did the model change move anything | ten measures either side of the newest day the model id changed, each as a ratio against its own value before | `model_id` plus the columns above, and the two token rates |
+| What the model change moved | ten measures either side of the newest day the model id changed, each as a ratio against its own value before | `model_id` plus the columns above, and the two token rates |
 
 `hhem` still decides the band and it never prints. A faithfulness score is a
 value between zero and one, and no lever moves it - so it earns no column, and
@@ -303,7 +303,7 @@ ledger had been committed for four days with no page reading a cell of it.
 | Busy and load | `cpu_busy_pct`, `model_load_ms` | lowest, slowest |
 | Peak memory | `peak_rss_bytes` against the runner's 16 GB | the LARGEST shard, never their sum - shards are separate jobs on separate hosts |
 | The shape of a run | the item ledger's `summarize_ms` | one ladder a run at the five configured percentiles, interpolated between the two nearest ranks, never pooled between runs |
-| Do the two clocks agree | the item ledger's `prefill_ms` and `input_tokens - cached_tokens` against the server's own totals | the same pooling and the same 5 percent bound `backend/utilities/reconcile_prefill.py` gates on |
+| The two clocks, compared | the item ledger's `prefill_ms` and `input_tokens - cached_tokens` against the server's own totals | the same pooling and the same 5 percent bound `backend/utilities/reconcile_prefill.py` gates on |
 
 Both ceilings come from `config/idhazh.json` through
 [frontend/src/lib/server/config.ts](../../../frontend/src/lib/server/config.ts)

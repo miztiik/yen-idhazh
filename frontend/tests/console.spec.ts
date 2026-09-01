@@ -8,7 +8,7 @@ import {
 	type TelemetryRow
 } from '../src/lib/charts/series';
 import { axisLabels, centreOffset, spanLabel } from '../src/lib/charts/run-history';
-import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
+import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/lib/charts/viewport';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 import { failing, reliability, skipped, type FeedRecord } from '../src/lib/feed-health';
@@ -76,6 +76,26 @@ const WINDOW_PRESETS = (
 		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 	) as { console?: { window_presets?: number[] } }
 ).console?.window_presets ?? [7, 14, 30, 90];
+
+/** Which end of the window today sits on, from the knob the page reads. */
+const TODAY_ANCHOR = (
+	JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+	) as { console?: { today_anchor?: 'right' | 'centre' } }
+).console?.today_anchor ?? 'right';
+
+/** The span every windowed surface opens on, hung off the build clock the way
+ * the page hangs it. Both daily tables follow the control since 2026-08-31, so
+ * a test that expected every committed day would fail on the two the fixture
+ * puts before the default window reaches back to. */
+function openWindow(dates: string[]) {
+	return windowOfDays(
+		dates,
+		new Date().toISOString().slice(0, 10),
+		DEFAULT_WINDOW_DAYS,
+		TODAY_ANCHOR
+	);
+}
 
 /** Every window control is disabled in the prerendered document and enabled on
  * mount, so a click before this just times out. */
@@ -1568,13 +1588,17 @@ test('every chart cell equals what the day committed', async ({ page }) => {
 	const dates = await page
 		.locator('[data-chart-day]')
 		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-chart-day') ?? ''));
-	// Newest first, and every day the manifest covers, so a day the visuals
-	// planner never reached still counts towards the arm's fourteen-day window.
-	expect(dates).toEqual(
-		manifestDays()
-			.map((day) => day.date)
-			.reverse()
+	// Newest first, and every day inside the open window that the manifest covers
+	// - so a day the visuals planner never reached still counts towards the arm's
+	// fourteen-day rule. Days older than the window are the section's own answer
+	// to a preset the reader picked, not rows that went missing.
+	const committed = manifestDays().map((day) => day.date);
+	const span = openWindow(committed);
+	const expected = committed.filter((date) => date >= span.start && date <= span.end).reverse();
+	expect(expected.length, 'the window reaches no committed day, so this asserts nothing').toBeGreaterThan(
+		0
 	);
+	expect(dates).toEqual(expected);
 
 	for (const date of dates) {
 		const row = page.locator(`[data-chart-day="${date}"]`);
@@ -1814,7 +1838,15 @@ test('every model cell equals what the day committed', async ({ page }) => {
 		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-model-day') ?? ''));
 	// A day the pipeline found no article on gets no row at all. A row of zeroes
 	// would read as a day that went badly rather than a day with nothing in it.
-	expect(dates).toEqual(modelDays());
+	// A day outside the open window gets none either, because the rows answer the
+	// same control the cards above them do.
+	const worked = modelDays();
+	const span = openWindow(worked);
+	const expected = worked.filter((date) => date >= span.start && date <= span.end);
+	expect(expected.length, 'the window reaches no worked day, so this asserts nothing').toBeGreaterThan(
+		0
+	);
+	expect(dates).toEqual(expected);
 
 	for (const date of dates) {
 		const row = page.locator(`[data-model-day="${date}"]`);

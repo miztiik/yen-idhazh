@@ -228,6 +228,18 @@
 	const modelWindow = $derived(
 		[...modelDays.filter((day) => day.date >= modelSpan.start && day.date <= modelSpan.end)].reverse()
 	);
+	/** The table's own rows, over the same span. A disclosure inside a windowed
+	 * section that ignored the preset above it would be the two-spans defect in a
+	 * `<details>`: the cards say 7 days and the rows below them say every day on
+	 * record. The swap dividers are filtered on the same date, so a divider can
+	 * never outlive the rows it divides. */
+	const tableRows = $derived(
+		data.modelWork.filter((row) => {
+			const date = row.kind === 'day' ? row.day.date : row.date;
+			return date >= modelSpan.start && date <= modelSpan.end;
+		})
+	);
+	const tableDays = $derived(tableRows.filter((row) => row.kind === 'day').length);
 
 	/** One card's drawn points, and the swap rules that land on them. */
 	function trendFor(key: string): {
@@ -372,23 +384,16 @@
 </script>
 
 <svelte:head>
-	<title>Console: Model &mdash; {data.ui.site_title}</title>
+	<title>Console: Summaries &mdash; {data.ui.site_title}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
 <section class="py-6" data-surface="operator" data-console-route="model">
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
-	<p class="mt-1 text-[0.9375rem] text-text-secondary">
-		What the model wrote, how long it took, and what it got wrong, per day, from the committed
-		ledger.
-	</p>
 
-	<ConsoleBand band={data.band}>
-		{#snippet window()}
-			<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
-		{/snippet}
-	</ConsoleBand>
 	<ConsoleNav routes={data.routes} active="model" />
+	<ConsoleBand band={data.band} />
+	<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 
 	<!-- One sentence, no chart. A route that never points at another is a route
 	     that hides the panel explaining its own numbers. -->
@@ -497,9 +502,19 @@
 			{#if data.modelWork.length > 0}
 				<!-- The rows behind the shape, on demand. Nothing is deleted and nothing
 				     needs a script: a closed disclosure is complete in the prerendered
-				     document, and opening it costs no fetch. -->
-				<details class="console-disclosure mt-4" data-model-table-control>
-					<summary class="console-summary">Show the daily figures</summary>
+				     document, and opening it costs no fetch. It follows the control above
+				     it, and says so on the line that opens it. -->
+				<details
+					class="console-disclosure mt-4"
+					data-model-table-control
+					data-daily-figures="model"
+					data-daily-rows={tableDays}
+					data-windowed="daily-figures"
+					data-window-days={windowDays}
+				>
+					<summary class="console-summary"
+						>Show these figures day by day, over these {windowDays} days</summary
+					>
 					<div class="console-table mt-3" data-model="table">
 						<table class="w-full text-[0.8125rem]">
 							<thead class="text-text-tertiary">
@@ -515,7 +530,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each data.modelWork as row (row.kind === 'swap' ? `swap ${row.date}` : row.day.date)}
+								{#each tableRows as row (row.kind === 'swap' ? `swap ${row.date}` : row.day.date)}
 									{#if row.kind === 'swap'}
 										<!-- A date and an id. An arrow or a delta here would claim the swap
 										     caused whatever moved, and no committed figure says that. -->
@@ -727,7 +742,7 @@
 		     counts print and the panel refuses to draw where either side is thin. -->
 		{#if data.modelSwap !== null}
 			<div data-model-swap-section>
-				<h2 class="console-h2">Did the model change move anything</h2>
+				<h2 class="console-h2">What the model change moved</h2>
 				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-swap-intro>
 					Every measure is drawn against its own value on the old model, so the dot on the rule
 					is the old model and the arrow points to where the new one landed. Different articles
