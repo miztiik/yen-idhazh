@@ -32,6 +32,11 @@ export interface UiConfig {
 	items_per_topic: number;
 	/** How many topic pills stay on the row before the rest go in a disclosure. */
 	topic_pills_max: number;
+	/** How long a reader may wait for the rest of a day before the page says one
+	 * sentence about it. The one knob in this block ONLY a browser reads, which
+	 * is why it travels in the prerendered document and `shell_seed_items` does
+	 * not. */
+	payload_slow_ms: number;
 	repo_url: string;
 	site_title: string;
 	tagline: string;
@@ -217,6 +222,7 @@ const DEFAULTS: UiConfig = {
 	show_filter: true,
 	items_per_topic: 3,
 	topic_pills_max: 8,
+	payload_slow_ms: 1200,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
 	tagline: 'A daily digest that checks its own work.',
