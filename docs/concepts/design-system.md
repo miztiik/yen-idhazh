@@ -359,6 +359,22 @@ It says nothing about how much is behind it, it is invisible until a pointer arr
 
 Two shapes replace it. A row of variable-width labels **wraps**, and the overflow past a configured count folds into a `<details>` reading `+N more` - the pill row is the case, with the count in `digest.topic_pills_max`. Which items fold is decided by a count at build time and never by measuring the row: every page here is prerendered, so a row that measures itself is wrong until a script runs. A grid guards its own minimum with `minmax(min(var(--auto-grid-min), 100%), 1fr)`, because a bare minimum is a demand for room the container may not have.
 
+### A control only sticks where it is one band
+
+> **A panel that follows the reader down the page must be one band tall at the width it sticks at.**
+
+The filter bar is the case. It sticks from `frame.breakpoints_px[1]` (1024px) up, where the pills sit on the left and the field on the right in a single band. Below that it can run to several wrapped lines plus a field, and a control holding a third of a phone screen for the whole scroll is screen the reader paid for. A media query cannot read a custom property, so the number is written twice - in `config/appearance.json` and in the component - which is the one place this duplication is unavoidable and is already true of the item's side rail.
+
+### A control that needs a script is not left on the page without one
+
+> **A dead input that swallows typing is worse than no input.**
+
+Every page here is prerendered and complete before a script runs, so a control that only works afterwards has to say so. The shape is a `<noscript>` block holding a `<style>` that hides the scripted controls by attribute, and one sentence, hidden by `hidden`, that the same rule un-hides. Nothing is conditionally rendered, so hydration has nothing to reconcile and there is no flash.
+
+Two details make it work rather than look like it works. The rule inside `<noscript>` is unscoped, and a Svelte scoped class rule outranks it - `.field.svelte-<hash>` is specificity (0,2,0) against (0,1,0) - so the element carrying the attribute must not take a `display` of its own; the layout goes on a child. And the fallback sentence uses `hidden`, which the author rule beats without an `!important`. The trap and its symptom are in [../reference/agent-notes.md](../reference/agent-notes.md).
+
+What survives without a script is the part that was never scripted. On a day page the topic pills are links to prerendered routes, so a reader with no script still reaches every desk; on the archive they are buttons over a list a script fetched, so they go with the field and the page keeps its prerendered day row.
+
 `frontend/tests/layout-overflow.spec.ts` is the memory: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, on every reader-facing route, at 360, 801 and 1536 CSS px, in both themes. Measured before the rule landed, `/archive/` reported 368px of document in a 360px viewport in both themes, from an `--auto-grid-min` of `22rem` inside the 328px a 360px screen leaves after its gutters.
 
 The console is not covered by that spec. It carries live scroll containers of its own and a sibling plan holds those routes; `frontend/tests/console-frame.spec.ts` asserts the same property there, per element.

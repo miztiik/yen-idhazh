@@ -9,9 +9,9 @@
 	import DayNotice from '$lib/components/DayNotice.svelte';
 	import DigestItemView from '$lib/components/DigestItem.svelte';
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
+	import FilterBar from '$lib/components/FilterBar.svelte';
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
-	import TopicPills from '$lib/components/TopicPills.svelte';
-	import { leadingStories } from '$lib/day-shape';
+	import { filterNeedle, leadingStories, matchItems } from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
 	import type { DigestDay } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
@@ -65,17 +65,12 @@
 				? day.verticals.reduce((sum, ref) => sum + ref.count, 0)
 				: scoped.length
 	);
-	const needle = $derived(query.trim().toLowerCase());
-	const matched = $derived(
-		needle
-			? scoped.filter(
-					(item) =>
-						item.title.toLowerCase().includes(needle) ||
-						item.summary.toLowerCase().includes(needle) ||
-						item.key_points.some((point) => point.toLowerCase().includes(needle))
-				)
-			: scoped
-	);
+	const needle = $derived(filterNeedle(query, ui.filter_min_chars));
+	// Over `scoped`, which is derived from the `day` prop - so when a reading
+	// route's fetch lands, the filter re-runs over the whole day. A list captured
+	// once would narrow the document's seed for ever.
+	const matched = $derived(matchItems(scoped, needle));
+	const filtering = $derived(needle !== null);
 	const visible = $derived(hideRead ? matched.filter((item) => !read.has(item.item_id)) : matched);
 
 	// Chosen by the pipeline over the whole day and published on the payload.
@@ -85,7 +80,7 @@
 	// `visible` for the same reason - a lead a reader has hidden drops out of the
 	// block rather than leaving a dead anchor behind.
 	const leads = $derived(
-		vertical === null && needle === '' ? leadingStories(day.leads ?? [], visible) : []
+		vertical === null && !filtering ? leadingStories(day.leads ?? [], visible) : []
 	);
 	const leading = $derived(new Set(leads.map((story) => story.item_id)));
 
@@ -121,15 +116,20 @@
 	{:else if section === 'leads'}
 		<LeadingStories stories={leads} />
 	{:else if section === 'topics' && day.verticals.length > 0}
-		<TopicPills
+		<FilterBar
+			label="Topics and filter"
 			verticals={day.verticals}
 			active={vertical}
 			{total}
-			shown={visible.length}
+			pillsMax={ui.topic_pills_max}
 			{datePrefix}
 			bind:query
-			showFilter={ui.show_filter}
-			pillsMax={ui.topic_pills_max}
+			fieldId="page-filter"
+			fieldLabel="Filter today's stories"
+			placeholder="Filter today's stories"
+			showField={ui.show_filter}
+			matchNote={filtering ? `${visible.length} of ${total}` : ''}
+			noscriptNote="Filtering needs JavaScript. Every topic above is a link and still works."
 		/>
 	{:else if section === 'items'}
 		{#if day.items.length === 0}
