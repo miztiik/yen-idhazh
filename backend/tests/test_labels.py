@@ -12,29 +12,33 @@ No mocks and no network (Rule #7): the draw runs over the committed ledger.
 from __future__ import annotations
 
 import ast
-import csv
 import sys
 from itertools import pairwise
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, STATE_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh import config
 from idhazh.contracts.label_row import LabelRow
-from idhazh.evals import labels
+from idhazh.evals import labels, writer
 from utilities import label_queue
-
-SCORES = REPO_ROOT / "state" / "scores" / "2026-08.csv"
 
 #: A pair no run has ever written, so a draw for it is empty on any ledger.
 NO_SUCH_PIPELINE = "0" * 64
 
 
 def ledger() -> list[dict[str, str]]:
-    with SCORES.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
+    """Every committed row, oldest month first - the population the tool reads.
+
+    A month is a shard boundary and nothing else, so a helper that names one
+    file stops agreeing with `label_queue` about what the ledger holds on the
+    first of every month. The disagreement lands in the inventory the tool
+    prints for an empty pool, which is the one screen an operator reads to tell
+    a gate one run-day away from a gate that is unreachable.
+    """
+    return list(writer.records(STATE_DIR))
 
 
 def live_scorer(records: list[dict[str, str]]) -> str:

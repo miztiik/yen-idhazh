@@ -14,13 +14,12 @@ come from committed fixtures that other contract tests already read, and the
 from __future__ import annotations
 
 import ast
-import csv
 import json
 from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, STATE_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh import cli
@@ -30,12 +29,11 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.label_row import LabelTag, LabelVerdict
 from idhazh.contracts.summary import Summary
-from idhazh.evals import evidence
+from idhazh.evals import evidence, writer
 from utilities import label_queue
 
 EVIDENCE_FIXTURE = CONTRACT_FIXTURES_DIR / "evidence-item" / "premise-recorded.json"
 ROW_FIXTURE = CONTRACT_FIXTURES_DIR / "eval-row" / "premise-recorded.json"
-SCORES = REPO_ROOT / "state" / "scores" / "2026-08.csv"
 DIGEST_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "digest.yml"
 
 
@@ -57,8 +55,8 @@ def _no_input(*_: object) -> str:
 
 
 def ledger() -> list[dict[str, str]]:
-    with SCORES.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
+    """Every committed row, oldest month first. The ledger is a directory of shards."""
+    return list(writer.records(STATE_DIR))
 
 
 def written(directory: Path, item: EvidenceItem) -> Path:

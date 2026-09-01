@@ -292,6 +292,15 @@ same commit (`CLAUDE.md` section 11):
 3. Read every migrated row back through `from_csv_row` before committing. A
    header that widened without its rows widening is worse than a raised error.
 
+**A check on the migration reads rows, never shards.** Step 2 rewrites the
+shards that exist on the day it runs, so a shard the pipeline opens afterwards
+holds no migrated row at all - and it opens one on the first of every month. Two
+tests asked every committed shard for a row older than the column and went red
+on 2026-09-01, when `state/item-health/2026-09.csv` arrived with 63 rows and
+none of them older than either column. The population a migration check is about
+is the ledger, and so is the guard that stops the check passing on an empty
+list.
+
 Expect a merge conflict on the shard, because the pipeline appends to it several
 times an hour. Resolve it by taking the upstream file whole and re-running the
 migration on it - never by keeping your copy, which would drop the rows the

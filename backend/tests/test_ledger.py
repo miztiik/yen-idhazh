@@ -352,16 +352,16 @@ def test_the_committed_score_ledger_never_reads_more_than_the_article_holds() ->
 
     Every row the pipeline writes from 2026-08-27 goes through the `EvalRow`
     validator that refuses this shape. The committed rows predate it, so the
-    file is what has to prove it.
+    file is what has to prove it - and the ledger is a directory of monthly
+    shards, so naming one month would quietly stop reading the newest rows on
+    the first of every month.
     """
-    path = REPO_ROOT / "state" / "scores" / "2026-08.csv"
-    with path.open(encoding="utf-8", newline="") as handle:
-        impossible = [
-            row["item_id"]
-            for row in csv.DictReader(handle)
-            if row["source_word_count"]
-            and int(row["source_seen_word_count"]) > int(row["source_word_count"])
-        ]
+    impossible = [
+        row["item_id"]
+        for row in writer.records(REPO_ROOT / "state")
+        if row["source_word_count"]
+        and int(row["source_seen_word_count"]) > int(row["source_word_count"])
+    ]
 
     assert impossible == [], f"{len(impossible)} rows say the model read more than the article"
 
