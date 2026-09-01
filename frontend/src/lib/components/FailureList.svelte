@@ -144,7 +144,7 @@
 				// until the ledger is thirty days deep.
 				value: `${grouped(source.lost)} of ${grouped(source.articles)} ${articleWord(source.articles)}`,
 				context:
-					`${source.causes} ${source.causes === 1 ? 'cause' : 'causes'}` +
+					`${source.cause ?? `${source.causes} causes`}` +
 					` - ${occurrence(source.lastAgo)}`
 			}
 		}))
@@ -215,10 +215,9 @@
 
 	<h3 class="mt-8 text-[0.9375rem] font-semibold text-text">Which sources lost the most</h3>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-losses-intro>
-		One row per source, most articles lost first. A failure costs the digest an article, and the
-		rows below name a source each without ever saying which one cost the most. The second number
-		is every article the window saw from that source, so a source that lost all of them reads
-		differently from one that lost a few. Pick one to see the items behind it.
+		One row per source, most articles lost first. The second number is every article the window saw
+		from that source, so a source that lost all of them reads differently from one that lost a few.
+		Pick one to see the items behind it.
 	</p>
 
 	<div class="mt-3" data-source-losses>
@@ -237,8 +236,12 @@
 
 	<details class="console-disclosure mt-6" bind:open={rowsOpen} data-failure-rows>
 		<summary class="console-summary" data-failure-toggle>
-			Show the {grouped(failures.length)}
-			{scope}
+			{#if failures.length === 0}
+				No failed item to list
+			{:else}
+				Show the {grouped(failures.length)}
+				{scope}
+			{/if}
 		</summary>
 
 		{#if selectedCause || selectedSource}

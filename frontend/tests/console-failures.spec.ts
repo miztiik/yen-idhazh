@@ -284,6 +284,17 @@ test.describe('THE ORACLE: sources ranked by the articles their failures cost', 
 			// lose more articles than the window saw from it.
 			expect(source.lost).toBeLessThanOrEqual(source.articles);
 			expect(source.causes).toBeGreaterThan(0);
+			// The cause is named only while naming it is a fact. Ten rows each
+			// printing `1 cause` is a column that says nothing.
+			expect(source.cause === null, `${source.key} names a cause it does not have`).toBe(
+				source.causes !== 1
+			);
+			if (source.cause !== null) {
+				const seen = new Set(
+					failedRows(rows, window, null, null, source.key).map((row) => causeKey(row))
+				);
+				expect(seen).toEqual(new Set([source.cause]));
+			}
 		}
 		expect(measured.lost).toBe(
 			[...byHand.values()].reduce((total, source) => total + source.lost, 0)

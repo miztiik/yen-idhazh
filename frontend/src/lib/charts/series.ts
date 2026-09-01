@@ -720,6 +720,10 @@ export interface SourceLoss {
 	/** Causes those failures fell under. One is usually a site that changed its
 	 * markup; several is usually something else. */
 	causes: number;
+	/** The one cause, where there is only one. Ten rows each printing `1 cause`
+	 * is a column that says nothing; the cause's own name is the fact behind the
+	 * number, and it is only a fact while the count is one. */
+	cause: string | null;
 	/** The newest day it lost one. */
 	last: string;
 	/** Days between that and the window's end. Zero is the newest day in view,
@@ -778,6 +782,7 @@ export function sourceLosses(rows: TelemetryRow[], window: TimeWindow): SourceLo
 			lost: entry.lost.size,
 			articles: entry.articles.size,
 			causes: entry.causes.size,
+			cause: entry.causes.size === 1 ? [...entry.causes][0] : null,
 			last: entry.last,
 			lastAgo: daysBetween(entry.last, window.end) - 1
 		}));
