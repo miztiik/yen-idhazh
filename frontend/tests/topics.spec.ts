@@ -1,17 +1,21 @@
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { shouldGroup, topicSlices } from '../src/lib/day-shape';
-import type { DigestItem, DigestVerticalRef } from '../src/lib/payload/types';
+import { leadingStories, splitPills } from '../src/lib/day-shape';
+import type { DigestItem, DigestLead, DigestVerticalRef } from '../src/lib/payload/types';
 
 /**
  * The day page's shape.
  *
  * The arithmetic runs without a browser, the way the run strip's axis does.
- * The browser half asserts the one case the canary fixture can show: a day
- * that ran to a single topic must stay flat, because grouping it would put
- * items behind a link that leads back to the same list - and the canary suite
- * depends on every planted item being on that page.
+ * The browser half asserts what the canary fixture can show: a day that ran to
+ * a single topic draws its stories flat, and the canary suite depends on every
+ * planted item being on that page.
+ *
+ * The three-per-topic sections are gone. They drew three stories under each
+ * desk and put the rest behind five links - 15 shown and 416 hidden on the
+ * 431-story day of 2026-08-30 - and the flat stream now carries the whole day
+ * with a leading block above it.
  */
 
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
@@ -40,7 +44,7 @@ function item(id: string, vertical: string): DigestItem {
 	return {
 		item_id: id,
 		vertical,
-		title: id,
+		title: `Story ${id}`,
 		source_url: `https://example.test/${id}`,
 		source_id: 'test',
 		source_name: 'Test',
@@ -62,54 +66,49 @@ function item(id: string, vertical: string): DigestItem {
 	};
 }
 
-test('a day with more than one topic gets sections; every other view stays flat', () => {
-	const many = [ref('ai', 4), ref('world', 2)];
+function lead(id: string, reason: string): DigestLead {
+	return { item_id: id, reason };
+}
 
-	expect(shouldGroup(null, '', many)).toBe(true);
-	// A topic route already has a subject.
-	expect(shouldGroup('ai', '', many)).toBe(false);
-	// So does a filter, and its results cross topics.
-	expect(shouldGroup(null, 'reactor', many)).toBe(false);
-	// One topic is already the shape of the page.
-	expect(shouldGroup(null, '', [ref('ai', 8)])).toBe(false);
-	expect(shouldGroup(null, '', [])).toBe(false);
-});
-
-test('a slice is the head of the published order, and the topic count decides the link', () => {
-	const verticals = [ref('ai', 4), ref('world', 2)];
-	const items = [
-		item('ai-1', 'ai'),
-		item('ai-2', 'ai'),
-		item('ai-3', 'ai'),
-		item('ai-4', 'ai'),
-		item('world-1', 'world'),
-		item('world-2', 'world')
+test('the leading block draws the day payload in the order it was given', () => {
+	const items = [item('ai-1', 'ai'), item('world-1', 'world'), item('ai-2', 'ai')];
+	const leads = [
+		lead('ai-2', "Four of today's stories are about Nvidia."),
+		lead('world-1', 'The lead story on our World desk.')
 	];
 
-	const slices = topicSlices(verticals, items, 3);
+	const stories = leadingStories(leads, items);
 
-	// Payload topic order, which is the order the pills already use.
-	expect(slices.map((slice) => slice.vertical.id)).toEqual(['ai', 'world']);
-	// The head of the published order, never a re-rank.
-	expect(slices[0].items.map((entry) => entry.item_id)).toEqual(['ai-1', 'ai-2', 'ai-3']);
-	expect(slices[0].hasMore).toBe(true);
-	// A topic that fits offers no link, because the link leads to what is shown.
-	expect(slices[1].items.map((entry) => entry.item_id)).toEqual(['world-1', 'world-2']);
-	expect(slices[1].hasMore).toBe(false);
+	// The pipeline decided the order. Re-ranking here would make a shared link
+	// show the recipient a different page from the one the sender saw.
+	expect(stories.map((story) => story.item_id)).toEqual(['ai-2', 'world-1']);
+	expect(stories[0].title).toBe('Story ai-2');
+	expect(stories[0].reason).toBe("Four of today's stories are about Nvidia.");
 });
 
-test('a topic emptied by hide-read renders no section, and the rest still link', () => {
-	const verticals = [ref('ai', 4), ref('world', 2)];
-	// What a reader sees after hiding the two world stories they have read.
-	const visible = [item('ai-1', 'ai'), item('ai-2', 'ai')];
+test('a lead the page cannot reach is dropped, and the rest of the block still draws', () => {
+	// Every entry is an anchor into the stream, so a lead whose story is not on
+	// the page is a link to nothing. Degrade, do not fail.
+	const stories = leadingStories(
+		[lead('ai-1', 'A reason.'), lead('ai-9', 'Another.')],
+		[item('ai-1', 'ai')]
+	);
 
-	const slices = topicSlices(verticals, visible, 3);
+	expect(stories.map((story) => story.item_id)).toEqual(['ai-1']);
+});
 
-	// A heading over nothing reads as broken software.
-	expect(slices.map((slice) => slice.vertical.id)).toEqual(['ai']);
-	// Hiding what you have read does not make the rest of the topic stop
-	// existing, so the link is measured against the day, not against the view.
-	expect(slices[0].hasMore).toBe(true);
+test('a day with no block asks for nothing to be drawn', () => {
+	expect(leadingStories([], [item('ai-1', 'ai')])).toEqual([]);
+});
+
+test('the topic pills fold by story count, and the active topic always stays out', () => {
+	const verticals = [ref('ai', 9), ref('world', 4), ref('energy', 1)];
+
+	const split = splitPills(verticals, 'energy', 2);
+
+	expect(split.shown.map((vertical) => vertical.id)).toEqual(['ai', 'world', 'energy']);
+	expect(split.folded).toEqual([]);
+	expect(splitPills(verticals, null, 2).folded.map((vertical) => vertical.id)).toEqual(['energy']);
 });
 
 test('a single-topic day renders flat, with every item on the page', async ({ page }) => {

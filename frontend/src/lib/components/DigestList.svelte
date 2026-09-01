@@ -9,9 +9,9 @@
 	import DayNotice from '$lib/components/DayNotice.svelte';
 	import DigestItemView from '$lib/components/DigestItem.svelte';
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
+	import LeadingStories from '$lib/components/LeadingStories.svelte';
 	import TopicPills from '$lib/components/TopicPills.svelte';
-	import TopicSection from '$lib/components/TopicSection.svelte';
-	import { shouldGroup, topicSlices } from '$lib/day-shape';
+	import { leadingStories } from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
 	import type { DigestDay } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
@@ -65,14 +65,31 @@
 			: scoped
 	);
 	const visible = $derived(hideRead ? matched.filter((item) => !read.has(item.item_id)) : matched);
-	const paged = $derived(visible.slice(0, shownCount || PAGE));
+
+	// Chosen by the pipeline over the whole day and published on the payload.
+	// The block only draws on the all-topics view: a topic route and a filter
+	// both already have a subject, and a block whose leads sit outside what the
+	// page is showing is a set of links that scroll to nothing. Resolved against
+	// `visible` for the same reason - a lead a reader has hidden drops out of the
+	// block rather than leaving a dead anchor behind.
+	const leads = $derived(
+		vertical === null && needle === '' ? leadingStories(day.leads ?? [], visible) : []
+	);
+	const leading = $derived(new Set(leads.map((story) => story.item_id)));
+
+	// The head of the published order, plus every lead. A lead is chosen across
+	// the WHOLE day - measured 2026-09-01 on the 601-story day of 2026-08-31,
+	// the five sat at positions 249, 285, 337, 344 and 493 - so a page holding
+	// only the head is a block whose links land on nothing. They keep their own
+	// published positions and the set never holds one twice: past the last lead
+	// this is exactly the prefix it always was.
+	const paged = $derived(
+		visible.filter((item, index) => index < (shownCount || PAGE) || leading.has(item.item_id))
+	);
 	const remaining = $derived(Math.max(visible.length - paged.length, 0));
 	const verticalNames = $derived(
 		Object.fromEntries(day.verticals.map((ref) => [ref.id, ref.display_name]))
 	);
-
-	const grouped = $derived(shouldGroup(vertical, needle, day.verticals));
-	const slices = $derived(topicSlices(day.verticals, visible, ui.items_per_topic));
 
 	// `introduced_by_run` is on every item and was rendered nowhere, so the day
 	// notice named a fact with no place on the page. One divider, at the seam.
@@ -89,6 +106,8 @@
 {#each ui.sections as section (section)}
 	{#if section === 'notice'}
 		<DayNotice {day} />
+	{:else if section === 'leads'}
+		<LeadingStories stories={leads} />
 	{:else if section === 'topics' && day.verticals.length > 0}
 		<TopicPills
 			verticals={day.verticals}
@@ -125,18 +144,6 @@
 				<p class="py-12 text-base text-text-secondary">
 					You have read everything here today.
 				</p>
-			{:else if grouped}
-				{#each slices as slice (slice.vertical.id)}
-					<TopicSection
-						vertical={slice.vertical}
-						items={slice.items}
-						more={slice.hasMore}
-						{datePrefix}
-						showMark={ui.source_mark}
-						{read}
-						onRead={(itemId) => (read = markRead(itemId, read, day.date))}
-					/>
-				{/each}
 			{:else}
 				{#each paged as item (item.item_id)}
 					{#if item.item_id === firstLaterItem}
@@ -159,7 +166,7 @@
 				{#if remaining > 0}
 					<button
 						type="button"
-						onclick={() => (shownCount = paged.length + PAGE)}
+						onclick={() => (shownCount = (shownCount || PAGE) + PAGE)}
 						class="min-h-11 w-full py-6 text-base text-accent hover:underline"
 					>
 						Show {remaining} more
