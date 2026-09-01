@@ -90,7 +90,7 @@ The console is the one surface added since, and it was added for a named person 
 | Run health shown on the digest page | The reader is not the operator. A grid of squares above the news answers a question they did not ask. | owner |
 | A cookie for the read mark | Sent on every request, so it would put a reading history into the host's access logs. | Reader |
 | A day-level chart of the confidence bands | Its proportions were the same every day, and it shared its colours with the item mark that does vary. Colour is spent per item. | Jony, Reader |
-| Truncating a long day so the page looks like a digest | It would stop being one. Topic sections give the day a shape without dropping a published item. | Jony |
+| Truncating a long day so the page looks like a digest | It would stop being one. The day's leading stories give the page a first screen without dropping a published item, and the stream below carries the whole day. | Jony |
 
 ## See also
 
