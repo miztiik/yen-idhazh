@@ -1,5 +1,21 @@
 {
   "$defs": {
+    "AssembleConfig": {
+      "additionalProperties": false,
+      "description": "What the published day does with the items a run finished.\n\nIts own group rather than a knob under `assist`, because `AppearanceConfig`\nimports `AssistConfig` whole: a threshold the pipeline applies once at build\ntime would then also land in `config/appearance.json`, where it has no\nreader and no meaning.",
+      "properties": {
+        "duplicate_similarity_min": {
+          "default": 0.94,
+          "description": "How alike two of a day's items have to be before they are one story. Cosine over the vectors the day already carries, and EVERY pair inside a group has to clear it - not only each item against the one it joined. NOT comparable to assist.similarity_floor: that one scores a reader's query against an item and this one scores two items against each other, so the two distributions are different shapes. Set by hand labels rather than by taste. Every group the pass forms over the eleven committed days was read and marked same-story or not, measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over 3,978 items: at 0.93 one group of thirty is two different stories - Ontario's pushback against the lake renaming, merged into Google doing the renaming, at 0.9317 - and at 0.94 all twenty-two groups are one story each. The rule is the first round hundredth above the highest-scoring pair a person marked as two stories, which leaves a margin of 0.0083. That margin is thin, and the way to widen it is more labels rather than a higher number. Raising this costs missed duplicates, which a reader sees as the same story twice; lowering it costs a false merge, which is a story that never ran, so the two errors are not equal and this number leans high.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Duplicate Similarity Min",
+          "type": "number"
+        }
+      },
+      "title": "AssembleConfig",
+      "type": "object"
+    },
     "AssistConfig": {
       "additionalProperties": false,
       "description": "On-device archive search: what the encoder reads, and what the list shows.\n\nEvery value here was a literal with no override path (Rule #6). The first two\ndescribe how much of an item the encoder is allowed to read; the rest describe\nwhat the reader's list keeps. All five are set from measurement rather than\nfrom taste.",
@@ -1518,6 +1534,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the assemble group and its duplicate_similarity_min knob.",
+      "version": "2026-09-01T09:00",
+      "why": "The published day now groups its own items on the vectors it already carries, so a reader is not shown the same story eight times, and the cosine that decides it is a tuning knob rather than a literal (Rule #6). Its own group because `AppearanceConfig` imports `AssistConfig` whole: filing a build-time threshold there would publish it to a config the browser reads, where nothing can act on it. Additive with a default, so a config written before today still loads (section 11)."
+    },
+    {
       "change": "Added collect.max_source_share_per_day, and the committed config sets it.",
       "version": "2026-08-31T23:58",
       "why": "Nothing counted one feed's contribution across a day. collect.max_per_source bounds a count inside one desk in one run, and a feed sits on exactly one desk, so a feed's ceiling for a whole day is that count times the runs the day had - 10 on a five-run day. A fixed count is a moving share: measured 2026-08-31 over the eleven committed days, 21 feeds held exactly 10 items of the 431-item day of 2026-08-30, which is 2.32 percent each, while one feed held 1 of the four-item day of 2026-08-21, which is 25 percent. The share is what a reader sees and nothing bounded it. Additive with a default, so a config written before today still loads (section 11)."
@@ -1815,6 +1836,9 @@
   ],
   "description": "`config/idhazh.json` - every tunable, schema-validated.",
   "properties": {
+    "assemble": {
+      "$ref": "#/$defs/AssembleConfig"
+    },
     "assist": {
       "$ref": "#/$defs/AssistConfig"
     },
@@ -1861,7 +1885,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-31T23:58",
+      "default": "2026-09-01T09:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1875,5 +1899,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-31T23:58"
+  "version": "2026-09-01T09:00"
 }

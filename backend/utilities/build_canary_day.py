@@ -36,6 +36,7 @@ from typing import Final, NamedTuple
 from idhazh import config
 from idhazh.assemble import (
     build_embeddings,
+    collapse_same_story,
     day_dir,
     month_of,
     reader_note,
@@ -414,6 +415,11 @@ def build(target: Path, evaluation: EvaluationConfig) -> DigestDay:
         )
         for index, item in enumerate(items)
     ]
+    # The same pass `build_day` runs, so the fixture carries the two fields a
+    # real day carries. Eight items on one desk: nothing here is the same story,
+    # so every item reads 0 - which is the sentence the reader sees most.
+    embeddings = build_embeddings(items, Embedder(Path.cwd()))
+    items = collapse_same_story(items, embeddings)
     day = DigestDay(
         version=DigestDay.schema_version(),
         date=DATE,
@@ -425,7 +431,7 @@ def build(target: Path, evaluation: EvaluationConfig) -> DigestDay:
         runs=[DigestRunRef(n=1, at=f"{DATE}T06:00:00Z", items_added=len(items))],
         verticals=[DigestVerticalRef(id="ai", display_name="AI", count=len(items))],
         items=items,
-        embeddings=build_embeddings(items, Embedder(Path.cwd())),
+        embeddings=embeddings,
     )
     write_atomic(day_dir(target, DATE) / "digest.json", day.to_json())
     return day
