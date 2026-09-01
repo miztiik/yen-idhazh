@@ -10,12 +10,14 @@ import {
 	chronological,
 	failing,
 	feedDays,
+	reliability,
 	resting,
 	resultLabel,
 	skipped,
 	streak,
 	type FeedDay,
-	type FeedDayOutcome
+	type FeedDayOutcome,
+	type Reliability
 } from '$lib/feed-health';
 import { chartConfig, collectConfig, consoleConfig, retentionConfig, runConfig, summarizeConfig } from '$lib/server/config';
 import {
@@ -77,7 +79,7 @@ export interface FeedTrouble {
 	days: FeedDay[];
 }
 
-export type { FeedDay, FeedDayOutcome };
+export type { FeedDay, FeedDayOutcome, Reliability };
 
 /** What one day's chart arm cost and what it produced.
  *
@@ -353,6 +355,15 @@ export async function load() {
 	}));
 
 	const results = feedResults();
+	// The list names only the feeds that broke, which is the right list and half
+	// an answer. This is the other half, read over the whole record because the
+	// pipeline rests on the whole count and not on a windowed one.
+	const feedRecord = reliability(results);
+	const troubled = trouble(results, quarantineAfter);
+	// Capped here rather than in the browser: this list is inlined into the
+	// prerendered document, so the rows the cap drops cost the page nothing.
+	const feeds = troubled.slice(0, console.feed_rows);
+	const hidden = troubled.slice(feeds.length);
 	// Seeded to the window the viewport opens on, not to every committed month:
 	// this list is inlined into the prerendered HTML, so an unbounded seed makes
 	// the page grow for as long as the pipeline runs. The compression plot is
@@ -437,13 +448,18 @@ export async function load() {
 		itemCeiling,
 		siteBudgetMb,
 		quarantineAfter,
-		feeds: trouble(results, quarantineAfter),
+		feeds,
+		// What the cap left out, as a count and a sum. A ranking is read from the
+		// top and its tail is a number, never another page of rows.
+		feedsHidden: hidden.length,
+		feedsHiddenFailures: hidden.reduce((total, feed) => total + feed.failures, 0),
+		// How many feeds have never failed, out of how many were asked, over how
+		// many runs. A count with no denominator is not a reliability record.
+		feedRecord,
 		// One date axis for every feed's strip, so two rows can be read against each
 		// other. A per-feed axis would put each strip on its own days, and "broken
 		// since Tuesday" and "flaky all month" would draw the same picture.
 		feedDates: [...new Set(results.map((row) => row.date))].sort(),
-		feedsChecked: new Set(results.map((row) => row.feedId)).size,
-		feedRuns: new Set(results.map((row) => row.runId)).size,
 		// Ten rows and the two sentences under them, aggregated here rather than in
 		// the browser. A window of the ledger is thousands of rows and this page
 		// inlines whatever it is given, so the ten rows cross and the rows they were

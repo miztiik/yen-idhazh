@@ -462,6 +462,25 @@ class AppearanceConfig(Contract):
             ),
         ),
         ChangelogEntry(
+            version="2026-09-01T02:00",
+            change=(
+                "console.source_rows and console.feed_rows added, both defaulting to "
+                "10. The shape is `ConsoleConfig`, which this document and "
+                "`AppConfig` share, so both schemas moved together."
+            ),
+            why=(
+                "Two console lists gained a cap on the same day, and a cap a "
+                "component hardcodes is one an operator cannot move (Rule #6). The "
+                "failure section now ranks sources by the articles their failures "
+                "cost the digest; measured 2026-09-01 over the committed "
+                "projection, a thirty-day window holds 60 sources with a loss, so "
+                "an uncapped ranking is a list nobody reads to the end. The feed "
+                "list had no cap at all and draws 26 of 182 checked feeds. "
+                "Additive with defaults, so an appearance file written before today "
+                "still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01",
             change=(
                 "digest.shell_seed_items added, defaulting to 15. The shape is "

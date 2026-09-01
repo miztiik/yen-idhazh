@@ -132,6 +132,11 @@ export interface ConsoleConfig {
 	chart_height: number;
 	chart_width: number;
 	failure_list_max: number;
+	/** How many sources the failure section ranks by articles lost, before the
+	 * tail sentence. */
+	source_rows: number;
+	/** How many failing feeds the feed section lists, before the tail sentence. */
+	feed_rows: number;
 	/** How many summaries the band section names before the tail sentence. */
 	band_outlier_rows: number;
 	/** The span the chart arm's retirement rule is stated over. Under it the
@@ -265,6 +270,8 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	chart_height: 180,
 	chart_width: 600,
 	failure_list_max: 25,
+	source_rows: 10,
+	feed_rows: 10,
 	band_outlier_rows: 10,
 	chart_arm_rule_days: 14,
 	chart_arm_minutes_target: 6,
