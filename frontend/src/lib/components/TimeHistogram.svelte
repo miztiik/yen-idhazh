@@ -44,11 +44,11 @@
 		AXIS_LABEL_PX,
 		chartWidth,
 		frame,
-		labelWidth,
 		linearAxis,
 		observeWidth,
 		pointerReadout,
 		readoutMarks,
+		thinLabels,
 		type DayReadout,
 		type Margin
 	} from '$lib/charts/frame';
@@ -191,31 +191,10 @@
 	/** The labels that fit, left to right.
 	 *
 	 * Measured rather than counted, the rule Row #1 settled for every date axis
-	 * on this console: a label is kept only where its left edge clears the last
-	 * kept label's right edge by a readable gap. Two numbers that touch read as
-	 * one longer number, which on a doubling axis is a wrong reading and not
-	 * merely an ugly one. The first and the last are always kept - they are the
-	 * two ends the whole axis is read against - and a dropped label leaves its
-	 * bar, so nothing about the distribution goes with it.
+	 * on this console. `thinLabels` owns it, so an eleven-edge axis at 390 can
+	 * be checked without a ledger that happens to span eleven doublings.
 	 */
-	const shownEdges = $derived.by(() => {
-		if (edges.length <= 2) return edges;
-		const half = (text: string) => labelWidth(text, AXIS_LABEL_PX) / 2;
-		const last = edges[edges.length - 1];
-		const kept = [edges[0]];
-		let right = edges[0].x + half(edges[0].text);
-		const lastLeft = last.x - half(last.text);
-		for (const edge of edges.slice(1, -1)) {
-			const left = edge.x - half(edge.text);
-			if (left < right + AXIS_LABEL_GAP_PX) continue;
-			// It also has to clear the end label, which is always drawn.
-			if (edge.x + half(edge.text) + AXIS_LABEL_GAP_PX > lastLeft) continue;
-			kept.push(edge);
-			right = edge.x + half(edge.text);
-		}
-		kept.push(last);
-		return kept;
-	});
+	const shownEdges = $derived(thinLabels(edges, AXIS_LABEL_PX, AXIS_LABEL_GAP_PX));
 
 	function barTitle(bin: Distribution['bins'][number]): string {
 		const span = bin.from === 0 ? 'under 1 second' : `${bin.from} to ${bin.to} seconds`;

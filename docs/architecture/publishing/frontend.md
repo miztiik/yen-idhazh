@@ -1850,6 +1850,20 @@ the six tracks drew inside 91px of it.
   `10,00` clip measured on 2026-08-31 was fixed there;
   [../../../frontend/tests/console-source-cuts.spec.ts](../../../frontend/tests/console-source-cuts.spec.ts)
   asserts it stays fixed rather than fixing it again.
+- **`thinLabels` drops the axis labels that will not fit, and keeps both ends.**
+  A label survives only where its left edge clears the last kept label's right
+  edge by `AXIS_LABEL_GAP_PX`; a dropped label leaves its mark, so nothing about
+  the data goes with it. Measured 2026-09-01 at 390 on the built console: a
+  doubling axis running to 1,024 seconds carries twelve edge labels across the
+  274px of plot the phone leaves, which is 24.9px an edge against the 28.3px
+  `512` and `1,024` need side by side. Drawn every edge, the two ends of the
+  axis are crowded; thinned, seven of the twelve survive and none is.
+  It lives in `frame.ts` rather than inside the chart because a ledger is not
+  obliged to span twelve doublings and the committed canary does not - its
+  slowest check is under a second, so the drawn page cannot put the rule under
+  load, and an axis the data never stresses is a null result rather than a pass.
+  [../../../frontend/tests/console-model-panels.spec.ts](../../../frontend/tests/console-model-panels.spec.ts)
+  drives it directly at the plot width the page reports.
 
 **The log domain still snaps to decades, and the dead space is the price.** The
 plot fills its frame; the tracks do not fill the plot, and that is a different
