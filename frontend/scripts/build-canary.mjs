@@ -10,7 +10,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
@@ -31,6 +31,36 @@ function newestDirectory(at) {
 		.map((entry) => entry.name)
 		.sort()
 		.at(-1);
+}
+
+/** The article key the score ledger gave each published canary item.
+ *
+ * The two canary ledgers are written by two programs - the day and its scores
+ * by `build_canary_day.py`, the item-health rows here - and `url_key` is the
+ * key that joins them. It is a digest of the canonical address, so it is READ
+ * off the ledger the Python step already wrote rather than derived a second
+ * time in JavaScript: two derivations of one key is how the fixture would come
+ * to disagree with the contract it stands in for.
+ *
+ * An item the scores do not name keeps its own id, which is what every row
+ * here carried before. Those rows are the cut fixtures, which nothing scored.
+ */
+function scoredKeys() {
+	const dir = join(STATE, 'scores');
+	const found = new Map();
+	if (!existsSync(dir)) return found;
+	for (const name of readdirSync(dir).filter((entry) => entry.endsWith('.csv'))) {
+		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
+		const header = lines[0].split(',');
+		const itemAt = header.indexOf('item_id');
+		const keyAt = header.indexOf('url_key');
+		if (itemAt < 0 || keyAt < 0) continue;
+		for (const row of lines.slice(1)) {
+			const cells = row.split(',');
+			if (cells[itemAt] && cells[keyAt]) found.set(cells[itemAt], cells[keyAt]);
+		}
+	}
+	return found;
 }
 
 function writeItemHealthCanary() {
@@ -70,12 +100,13 @@ function writeItemHealthCanary() {
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.
 	const line = (cells) => COLUMNS.map((name) => cells[name] ?? '').join(',');
+	const keyOf = scoredKeys();
 	const item = (rowDate, run, id) => ({
 		version: '2026-08-24T18:30',
 		date: rowDate,
 		run_id: `${rowDate}-${run}`,
 		item_id: id,
-		url_key: id,
+		url_key: keyOf.get(id) ?? id,
 		canonical_url: `https://canary.example/${id}`,
 		vertical: 'ai',
 		source_id: 'canary'

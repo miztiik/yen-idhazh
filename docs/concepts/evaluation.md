@@ -468,6 +468,50 @@ before using the bands as a distribution. Measured 2026-08-24 on the committed
 57.7 / 24.2 / 18.1. Twenty-seven rows move, all of them written before the caps
 landed - 11 on lead coverage, 11 on a dropped hedge, 5 on both.
 
+## Which sources the checker doubts
+
+A doubted summary is one the checker stopped on for any of three reasons: the
+band came out `low`, the summary asserted a figure the article never gave, or it
+turned the article's hedge into a fact. The Summaries route ranks sources by how
+many of their summaries carry at least one of the three, over the window in
+force, capped at `console.doubt_rows`.
+
+**Three counts, never a blend.** The three have different causes and different
+fixes - a low band is the grader's own confidence, an unsupported number is a
+fabrication, and a dropped hedge is a certainty the article did not have - so the
+row prints all three beside the count and the page never adds them into a score.
+A summary can carry more than one, so the three do not sum to the row's own
+count, which is also why they are never stacked into a bar. `doubted()` in
+[frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts)
+is the one predicate; the model-change panel below reads the same one, so the
+list and the panel cannot disagree about what a doubt is.
+
+**The order is the count, and the page says so.** A share sort puts a source
+with 2 doubted of 3 above one with 40 of 400, and it is the forty that reached a
+reader. Every row carries its own denominator for the same reason, and a source
+under `console.min_attempts_for_rate` summaries prints no share at all - a share
+over three summaries is the second summary. A tie goes to the source's own name:
+a second criterion would be a second ranking nobody declared.
+
+**No source is tinted.** The grader has a measured length bias (see the slicing
+section above), so a colour on a publisher's row would publish a verdict off an
+instrument still being calibrated. The order is the ranking; nothing else on the
+row is a judgement.
+
+**The source is a join, and the join is printed when it fails.** The eval ledger
+records the address and the title and never the feed, so a summary reaches a
+source through `url_key` on `state/item-health/<YYYY-MM>.csv`. Measured
+2026-09-01 over the committed ledgers, 3,959 of 4,110 scored rows join, and every
+day from 2026-08-24 joins at 100 percent - the 151 that do not are the two oldest
+scored days, written before item-health carried them. Rows that do not join are
+counted in a sentence under the list rather than dropped, because a denominator
+that quietly shrinks is how a rate starts lying.
+
+Measured 2026-09-01 over a thirty-day window on the committed ledger: 123 sources
+scored something, 112 of them carry at least one doubt, 1,047 summaries of 3,959
+were doubted, and the worst ten hold 266 of those. The tail is sources with a
+single doubt in a month, which is what the cap exists to leave out.
+
 ## The human labels: the instrument, and what it still needs
 
 The thresholds are a promise to a reader and nothing has measured their error
@@ -1344,6 +1388,40 @@ The second limb exists because the first one alone can be gamed by the model
 itself. A summarizer that copies the source verbatim invents no numbers and
 scores well on faithfulness - it has stopped summarizing, and only the
 extractiveness pair sees it.
+
+### What the console draws either side of a swap
+
+The alarm above is a gate. The `Did the model change move anything` panel on the
+Summaries route is the reading a person does when it trips, and it obeys three
+rules the gate does not have to.
+
+**Ten measures, each against its own value before the change.** A median in
+seconds, a length in words, a count in a hundred summaries and a token rate have
+no common scale, so the only axis all ten share is "the old model at 100
+percent". The ten are: time to write one summary, summary length, copying,
+summaries the checker doubted, the three doubt signals apart, summaries outside
+the length the prompt asked for, and the two token rates.
+
+**A measure only one side recorded is named, never drawn.** Both token rates
+arrived on `state/item-health/<YYYY-MM>.csv` part way through its life, so a
+boundary older than that has nothing on the left. Drawing a track from an absent
+value would be a claim about a run nobody instrumented, so those rows print as a
+sentence under the plot saying which side is missing. Zero and absent are not
+the same answer, and the ledger holds both.
+
+**A measure with no agreed direction paints neutral and says why.** Four of the
+ten have none. Summary length and copying are the two the console already
+refused to tint. The two token rates join them for a different reason: a shard's
+rate is set by the runner it landed on as much as by the model, and the committed
+runtime ledger holds one run whose fastest shard read the prompt 4.35 times
+faster than its slowest, on one configuration
+([../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)).
+A hue there would attribute the machine to the model.
+
+The panel refuses to draw at all where either side holds fewer than
+`console.min_attempts_for_rate` summaries, and both article counts print above it
+whether it draws or not: two models over two article sets is two measurements and
+not a trend.
 
 ## See also
 

@@ -51,6 +51,7 @@
     "chart_height": 160,
     "chart_width": 520,
     "default_window_days": 21,
+    "doubt_rows": 6,
     "failure_list_max": 10,
     "feed_rows": 6,
     "max_window_days": 180,

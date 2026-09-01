@@ -81,7 +81,7 @@ keeps reading a projection it cannot see the end of.
 The console's `What the model did` section is not drawn from the published
 shards. It is computed while the site is built, out of two private ledgers:
 
-- `state/scores.csv` - one row per scored item.
+- `state/scores/<YYYY-MM>.csv` - one row per scored item.
 - `state/item-health/<YYYY-MM>.csv` - one row per planned item per run.
 
 Neither file is served and neither crosses to a browser. What reaches the page
@@ -104,9 +104,10 @@ says only where each figure comes from.
 | Model minutes | every millisecond the model spent that day | `summarize_ms` |
 | Failed | rows whose run ended in a failure | `outcome` |
 | What one summary cost | every timed article in the window, binned by doublings of the clock, with the median and the 95th taken over the values | `summarize_ms` |
-| Checking a summary | median and 95th of the scorer's own clock, over the rows it timed | `score_ms` |
+| What checking one summary cost | the same binning over the checker's own clock, with its own median and 95th | `score_ms` |
+| Which sources the checker doubts | summaries carrying a low band, a figure the article did not give, or a flattened hedge, grouped by the source the article came from | `band`, `unsupported_numbers`, `hedge_dropped`, joined to `source_id` on `url_key` |
 | How long the summaries came out | the lowest, middle and highest summary length of each run, against the band its own articles were asked for | `summary_word_count`, `source_word_count`, `summarize.bands` |
-| Did the model change move anything | seven measures either side of the newest day the model id changed, each as a ratio against its own value before | `model_id` plus the six columns above |
+| Did the model change move anything | ten measures either side of the newest day the model id changed, each as a ratio against its own value before | `model_id` plus the columns above, and the two token rates |
 
 `hhem` still decides the band and it never prints. A faithfulness score is a
 value between zero and one, and no lever moves it - so it earns no column, and
@@ -198,16 +199,23 @@ summarize stage. Everything else prints as absence rather than as zero:
 
 ## Every span the control offers is measured at build time
 
-The two distribution panels on the Model route - `What one summary cost` and the
-scoring cost beside it - cannot answer for a different span by re-reading what
-the page already holds. A percentile is taken over the values, and a percentile
-read out of a drawn bar is a guess at where inside a doubling it fell.
+The two distribution panels on the Model route - `What one summary cost` and
+`What checking one summary cost` - cannot answer for a different span by
+re-reading what the page already holds. A percentile is taken over the values,
+and a percentile read out of a drawn bar is a guess at where inside a doubling it
+fell.
 
 So `frontend/src/routes/console/model/+page.server.ts` measures each panel once
 per entry in `console.window_presets`, over the millisecond values themselves,
 and the browser picks the answer for the open window. Four presets is four small
 objects. The alternative was inlining every timing the ledger holds so the page
 could re-bin them, which grows with the ledger and buys nothing exact.
+
+The ranked list of doubted sources is measured the same way and for a different
+reason: the ranking is a fold over every scored row in the span, and inlining the
+rows so the browser could fold them again would put the whole ledger on the page.
+It is capped on the server at `console.doubt_rows`, so what is inlined is ten
+rows a preset and a pair of tail counts.
 
 The run-length panel is different and is filtered rather than re-measured: a run
 is already three numbers, so narrowing the window drops columns and recomputes
@@ -217,6 +225,31 @@ Every span is anchored on the same day list the cards are anchored on, so the
 panels on that page name one window. `DayWindow` in
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts)
 is that one answer, passed down rather than re-derived.
+
+### One binning, two clocks
+
+The writing clock and the checking clock are drawn by one component and binned
+by one function. They ask the same question - how long did one take, and how bad
+does it get - so a second implementation of a log binning and a second pair of
+rules could only drift from the first.
+
+`distribution()` in `model-work.ts` owns the bars: the first bar holds everything
+under a second, every edge after it doubles, leading and trailing empty bars are
+dropped as axis while a gap between two occupied bars stays as data, and the
+median and the 95th are taken over the values rather than off a bar.
+`TimeHistogram.svelte` draws it, and what differs between the two panels is four
+strings and a name.
+
+Neither draws a model-change rule, and both say why in `data-model-rule-none`. A
+change to the model, the prompt or the cap moves every bar on the writing chart;
+but the horizontal axis is seconds, so a day has no position on it and a rule
+would have to be drawn where no date exists.
+
+Measured 2026-09-01 over a thirty-day window on the committed ledger: the writing
+clock holds 4,064 timings with a median of 121.2 s and a 95th of 301.9 s, and the
+checking clock holds 4,100 with a median of 2.2 s and a 95th of 14.1 s. The
+checker's slowest is 51.6 s. Both distributions run over several doublings, which
+is what the shape exists to show and what two numbers cannot.
 
 ## The compression plot was retired, and what replaced it
 
