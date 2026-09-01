@@ -435,6 +435,29 @@ worktree that just built - not a fresh extract of `origin/main`, which brings
 its own byte offset from whatever gitignored state differs between the two
 trees.
 
+**That pin is a live grenade on any build where `BUILD_VERSION` is not set, and
+it does not look like one.** The fallback reads as a no-op, because SvelteKit's
+own default for `version.name` is also `Date.now().toString()`. It is not the
+same thing: the config is evaluated once per Vite pass, so the server pass and
+the client pass get different milliseconds, the prerendered document names
+`__sveltekit_<hashA>` and the client bundle defines `__sveltekit_<hashB>`, and
+**every page on the site stops hydrating**. Measured 2026-09-01: the theme
+toggle was dead on `/evals/`, a route the branch never touched, with one
+`TypeError: Cannot read properties of undefined (reading 'data')` thrown out of
+`kit.start` on every route - which reads exactly like a branch that broke the
+whole app. Three builds went into proving it was not, and the control that
+settled it was `main`'s own source with the pin still in, which failed the same
+way. Either export `BUILD_VERSION` in every script that builds while the pin is
+in the tree, or take the pin out the moment the byte arms are finished.
+
+**And a hand-started `vite preview --outDir build` hits the same wall from the
+other side.** [../how-to/run-the-gates.md](../how-to/run-the-gates.md) gives that
+command for the section 12 smoke and it is correct, but it serves the directory
+raw rather than through SvelteKit's preview middleware, so it cannot tell a real
+hydration failure from its own. When a page will not hydrate, re-serve the same
+tree with `npm run preview -- --port <n> --strictPort --host 127.0.0.1`, which is
+what `playwright.config.ts` runs, before concluding anything about the code.
+
 **A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
 Windows filenames are case-insensitive, so a gate script that writes
 `ruff check` output to `$out\ruff.txt` and then a sentinel to `$out\RUFF.txt`

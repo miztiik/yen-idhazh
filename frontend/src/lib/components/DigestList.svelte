@@ -53,6 +53,15 @@
 	const scoped = $derived(
 		vertical ? day.items.filter((item) => item.vertical === vertical) : day.items
 	);
+	// What the topic published, not what is in hand. A topic page's document
+	// carries the head of its desk and fetches the rest, so counting the list
+	// here would print a number that ticks up while the reader watches - and sits
+	// beside a pill already showing the day's own count for the same topic.
+	const total = $derived(
+		vertical
+			? (day.verticals.find((ref) => ref.id === vertical)?.count ?? scoped.length)
+			: scoped.length
+	);
 	const needle = $derived(query.trim().toLowerCase());
 	const matched = $derived(
 		needle
@@ -93,7 +102,7 @@
 		<TopicPills
 			verticals={day.verticals}
 			active={vertical}
-			total={scoped.length}
+			{total}
 			shown={visible.length}
 			{datePrefix}
 			bind:query
