@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -2208,6 +2208,195 @@ or above**, and each panel printed its own named empty state rather than a zero.
 1,872 px, which is the control saying the arm bit the ledgers the console reads
 and nothing else. The height fall is the proof the content really left; a page
 that still measured 10,484 px would mean the arm had missed.
+
+#### All three ceilings again, at the close of the chart-craft plan (2026-09-01)
+
+Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+2026-09-01. Tree: `origin/main` at `2d11328a`, the commit this branch was cut
+from, plus this branch's own three edits - **twelve published days, 4,110
+scored rows, 5,227 item-health rows and 84 runtime-counter rows over 20 runs**.
+Method: `npm run build`, then `gzipSync(readFileSync(page), { level: 9 }).length`
+- the byte the gate itself takes.
+
+**Nothing crossed a ceiling and all three still rose. What expired is the
+runway.** The pages measured 142,623, 27,744 and 29,599 against committed
+ceilings of 251,324, 29,273 and 31,714, so the gate never fired. But a ceiling
+here is the page plus **seven published days of growth**, and twenty-six rows had
+landed since the last derivation: `/console/model/` was down to 1,529 bytes of
+slack, which is **1.05 publishes**, and `/console/machine/` to 2,115, which is
+**1.47**. A ceiling that cannot survive two publishes is a ceiling that will fire
+on ordinary work rather than on a regression.
+
+**Five builds of the same tree, heaviest per route, never a mean.** A mean fires
+on half of all builds:
+
+| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 142,618 | 142,620 | 142,619 | 142,613 | 142,615 | 142,620 | 7 |
+| `/console/model/` | 27,742 | 27,744 | 27,740 | 27,739 | 27,733 | **27,744** | 11 |
+| `/console/machine/` | 29,599 | 29,596 | 29,596 | 29,593 | 29,592 | **29,599** | 7 |
+
+**The sixth build was the control, and on one route it landed outside the
+five-build range.** Taken after both removal arms to leave the real site on disk,
+it read 142,623 / 27,742 / 29,599 - inside the spread on Model and Machine, and
+**3 bytes above the top of it on `/console/`**. So the honest spread on that route
+is 10 bytes rather than 7, on a 142.6 KB page - 0.007 percent, and well inside
+the 64-byte noise floor every other ceiling on this site carries. The page term
+below is the heaviest of all six, not of the five, because a control that reads
+high is evidence and not an outlier.
+
+**Two removal arms, because the three routes do not grow on the same thing.** A
+published day is priced by removing a real one, never by cloning one: a clone
+reads about 18 percent cheap because gzip sees a near-copy of a block it already
+holds. Both arms drop a mature day - neither the newest nor the oldest, so the
+30-day window anchor never moves - from `state/published.csv`,
+`state/scores/`, `state/runtime-counters.csv`, `state/item-health/`,
+`state/feed-health/`, `frontend/public/telemetry/` and the day's own directory
+under `frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT`
+and `DIGEST_ROOT`. `frontend/public/assist/` is copied beside `digest/` in each
+arm, because `INDEX_ROOT` is derived from `DIGEST_ROOT` and has no switch of its
+own. Both arms are paired against build 1, the same source and the same command.
+
+| Arm | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
+| --- | --- | ---: | ---: | ---: |
+| twelve days (build 1) | - | 142,618 | 27,742 | 29,599 |
+| A: without 2026-08-25 | 724 scored, 1,000 item-health, 828 feed-health, 1,000 telemetry rows, 29 files, **no counter rows** | 123,455 | 26,289 | 28,647 |
+| **cost of that day** | | **19,163** | **1,453** | 952 |
+| B: without 2026-08-27 | 334 scored, 480 item-health, 414 feed-health, 480 telemetry rows, 27 files, **16 counter rows over 3 runs** | 134,584 | 26,867 | 28,736 |
+| **cost of that day** | | 8,034 | 875 | **863, so 288 a run** |
+
+**Arm A prices the two routes that grow per day and arm B prices the one that
+grows per run.** 2026-08-25 is the heavier day and predates the counters
+entirely, so it is the honest worst case for Pipelines and Model and says nothing
+about Machine. 2026-08-27 carries three runs, which is what makes a per-run
+figure available at all.
+
+The ceilings follow the method already written down above - heaviest build, plus
+seven publishes, plus the 64-byte build noise floor - with Machine priced at the
+observed maximum of five runs a day:
+
+```text
+  142,623 + 7 x 19,163     + 64 = 276,828  /console/
+   27,744 + 7 x  1,453     + 64 =  37,979  /console/model/
+   29,599 + 7 x 5 x    288 + 64 =  39,743  /console/machine/
+```
+
+**Machine now grows on both, and the run term is still the larger one.** Arm A
+says a day with no runs at all costs it 952 bytes - the item-health the clock
+check reads and the band's own text - against 434 when it was last priced. Seven
+five-run days at 288 come to 10,080, which is 1,440 a publish, so the allowance
+still covers a counter-free day with room over. That is why the run term is the
+one the allowance is built from.
+
+**The raise decomposes exactly into a page term and a rate term.** The totals are
++25,504, +8,706 and +8,029 bytes, and the two halves sum to each:
+
+| Route | page since its ceiling was set | a day, or a run, since then | seven publishes of that | total |
+| --- | ---: | ---: | ---: | ---: |
+| `/console/` | 116,153 -> 142,623, **+26,470** | 19,301 -> 19,163, **-138** | -966 | **+25,504** |
+| `/console/model/` | 20,956 -> 27,744, **+6,788** | 1,179 -> 1,453, +274 | +1,918 | **+8,706** |
+| `/console/machine/` | 23,110 -> 29,599, **+6,489** | 244 -> 288 a run, +44 | +1,540 | **+8,029** |
+
+**`/console/` is the one route whose rate FELL**, by 138 bytes a published day,
+so its raise is entirely page and the rate gives 966 bytes back. Rows #7, #8 and
+#12 replaced per-item failure rows with sources ranked by articles lost and
+stopped charts drawing spans nothing measured, and a ranked list of sources does
+not grow with the day the way a list of failed items does.
+
+**What the bytes bought, stated because the ruling requires it.** The page terms
+- 26,470, 6,788 and 6,489 - are twenty-six rows of panels across three routes:
+sources ranked by articles lost, a reliability denominator on the feeds, an
+articles-published skyline, a doubt list, a cost distribution, one context chart
+in place of thirteen repeated bars, peak memory per shard, latency per
+percentile, and a shared date axis, hover readout and movement colour under all
+of them. No panel was cut, deferred or shrunk to fit, which is the owner's ruling
+of 2026-08-31 working rather than a number being nudged.
+
+**The regression each ceiling exists to catch is still far above its slack.** A
+day payload inlined by a layout measured 313,300 gzipped bytes on 2026-08-26. The
+new slack is 134,205 on `/console/`, 10,235 on `/console/model/` and 10,144 on
+`/console/machine/`, so that regression is 2.33x, 30.6x and 30.9x the slack. All
+three stay well under the 433,000 bound
+`test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
+them to.
+
+**All three are meant to expire, and the two small routes expire first.** Each
+slack is exactly seven publishes at its own measured rate. Model and Machine were
+last derived two days ago and had already fallen to 1.05 and 1.47 publishes of
+room, so the useful figure to carry forward is not the ceiling but the rate: a
+published day now costs Pipelines 19,163 bytes, Model 1,453, and Machine 1,440 at
+five runs. The answer when the gate fires is still to re-measure and raise it.
+
+**`origin/main` moved to `8d658de` while this was being measured, and the three
+numbers are kept.** That merge put the day page's filter and the archive's topic
+pills into one panel, which touches the shell every route carries, so a single
+build of the merged tree read 142,628, 27,750 and 29,612 - **5, 6 and 13 bytes
+above** the page terms above. All three are inside the 10 to 14 bytes of
+build-to-build spread measured here and well inside the 64-byte noise floor the
+allowance already carries, so re-running the six-build census to move a ceiling
+by 13 bytes would buy nothing. The gate on the merged tree passes with 134,200,
+10,229 and 10,131 bytes spare.
+
+**The lazy chart chunk did not move across the whole plan.**
+`_app/immutable/chunks/EWEX9oIW.js` measured **567,839 bytes raw and 192,029
+gzipped on every one of the eight builds** taken here, which is the figure Row #2
+recorded when it removed the legend component. Twenty-six rows added panels to
+three routes and not one of them registered a new echarts type, so the
+200,000-byte escalate trigger was never approached and 7,971 bytes of headroom
+remain. **The chunk is found by content and never by size**: the encoder chunk in
+the same tree is bigger, at 901,929 bytes raw and 234,135 gzipped, so "the
+largest chunk" names the wrong file. `text.includes('sankey')` names the right
+one.
+
+#### The console is shorter where an operator lands and taller behind it (2026-09-01)
+
+Same tree, same day. Measured in chromium off the built site served by a plain
+static file server, at 1440x1000 and 390x844, in both themes:
+`document.documentElement.scrollHeight` per route, and the chart census
+`frontend/tests/console-readout.spec.ts` uses - every `svg` on the operator
+surface that is not an icon and that measures wider than zero.
+
+**Both themes gave identical heights on every route**, which is the control
+saying colour is the only thing a theme changes.
+
+| Route | 1440, at the plan's start | 1440, now | 390, at the plan's start | 390, now |
+| --- | ---: | ---: | ---: | ---: |
+| `/console/` | 10,484 px | **9,769 px** | 16,385 px | **15,131 px** |
+| `/console/model/` | 3,818 px | 5,054 px | 6,650 px | 9,083 px |
+| `/console/machine/` | 5,038 px | 6,801 px | 9,219 px | 12,283 px |
+
+**The plan opened by complaining the console was too tall on a phone, and the
+route an operator lands on is now 7.7 percent shorter there** - 1,254 px off a
+16,385 px page, and 715 px off the desktop one. The band went from 528 px of an
+844 px phone viewport to three facts, and the failure list gained a cap.
+
+**The other two routes grew by about a third**, 32 to 37 percent, and that is the
+plan working rather than failing: the Summaries route gained a doubt list and a
+cost distribution, and the Hardware route gained a context chart, peak memory and
+three latency plots. Across all three the console is 11.8 percent taller at 1440
+and 13.2 percent taller at 390. Height was never the target; **the page a reader
+of this console lands on** was, and that one came down.
+
+**Every chart now declares what it does about a hover, and none is undeclared.**
+
+| Route | charts drawn, then -> now | with a shared column and a strip | no column, with the reason in words |
+| --- | --- | ---: | ---: |
+| `/console/` | 24 -> 24 | 5 of 5 | 19 |
+| `/console/model/` | 17 -> 16 | 4 of 4 | 12 |
+| `/console/machine/` | 7 -> 7 | 7 of 7 | 0 |
+
+Charts with a hover readout went from **4 / 3 / 3 to 5 / 4 / 7**, and the number
+that matters is the second column against the first: **every chart on all three
+routes that shares a column between its marks resolves exactly one readout strip,
+and every chart that does not carries a written reason.** Zero charts on any
+route are undeclared, which is the pair Row #2 introduced doing its job - a chart
+somebody decided needs no hover and a chart where the readout was forgotten look
+identical on screen otherwise. `/console/` draws 23 rather than 24 at 390,
+because Row #13 replaces the chart-arm flow with a stepped list below the
+breakpoint.
+
+All twenty page loads answered with **zero console errors, zero page errors and
+zero responses at 400 or above**, and every one hydrated.
 
 ### Days to the 1 GB Pages ceiling
 
