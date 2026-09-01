@@ -218,10 +218,50 @@ export function labelGutter(
 	return room > width * MAX_GUTTER_SHARE ? null : room;
 }
 
+/** A label on an axis: the string, and where its centre sits in the plot. */
+export interface AxisLabel {
+	x: number;
+	text: string;
+}
+
+/** Which of an axis's labels can be drawn without two of them touching.
+ *
+ * A label is kept only where its left edge clears the last kept label's right
+ * edge by `gap`. Two numbers that touch read as one longer number, which on a
+ * doubling axis is a wrong reading and not merely an ugly one. The first and
+ * the last are always kept - they are the two ends the whole axis is read
+ * against - and a dropped label leaves its mark, so nothing about the data
+ * goes with it.
+ *
+ * Measured 2026-09-01: eleven doubling edges from 0 to 1024 seconds, in the
+ * 306px of plot a 390px phone leaves, need 388px of type. Drawn every edge,
+ * seven pairs touch.
+ */
+export function thinLabels<T extends AxisLabel>(
+	labels: readonly T[],
+	fontSize: number = AXIS_LABEL_PX,
+	gap: number = AXIS_LABEL_GAP_PX
+): T[] {
+	if (labels.length <= 2) return [...labels];
+	const half = (text: string) => labelWidth(text, fontSize) / 2;
+	const last = labels[labels.length - 1];
+	const kept = [labels[0]];
+	let right = labels[0].x + half(labels[0].text);
+	const lastLeft = last.x - half(last.text);
+	for (const label of labels.slice(1, -1)) {
+		if (label.x - half(label.text) < right + gap) continue;
+		// It also has to clear the end label, which is always drawn.
+		if (label.x + half(label.text) + gap > lastLeft) continue;
+		kept.push(label);
+		right = label.x + half(label.text);
+	}
+	kept.push(last);
+	return kept;
+}
+
 /** The least a chart row may be and still carry two lines of type with air
  * between one row and the next. `rowPitch` clamps to it and never below. */
 export const ROW_PITCH_MIN = 40;
-
 /** How tall one row of a horizontal chart is, in the frame it was given.
  *
  * `cellFor` in `run-history.ts` grows a run-strip cell the same way, and for

@@ -13,19 +13,21 @@
 	import { onMount } from 'svelte';
 	import { windowOfDays } from '$lib/charts/viewport';
 	import { grouped } from '$lib/charts/series';
+	import { rank, type Rankable, type RankedDisplay } from '$lib/charts/rank';
 	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
 	import type { MovementPolarity } from '$lib/charts/theme';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
+	import RankedList from '$lib/components/RankedList.svelte';
 	import RunLengths from '$lib/components/RunLengths.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import SwapDots from '$lib/components/SwapDots.svelte';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
+	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
-	import WriteTimeHistogram from '$lib/components/WriteTimeHistogram.svelte';
 	import { base } from '$app/paths';
-	import type { ModelDay } from './+page.server';
+	import type { ModelDay, SourceDoubt } from './+page.server';
 
 	let { data } = $props();
 
@@ -291,6 +293,68 @@
 	const writeTimes = $derived(data.writeTimes[String(windowDays)] ?? null);
 	const scoreCost = $derived(data.scoreCost[String(windowDays)] ?? null);
 
+	/** Which sources the checker doubted, over the open window.
+	 *
+	 * Already capped and already ordered on the server, so the browser only
+	 * turns counts into bar fractions. `rank` with no cap re-sorts by the same
+	 * two keys the server sorted on - the count, then the source's own name -
+	 * so the drawn order is the ranked order and not a second opinion of it.
+	 */
+	const doubts = $derived(data.sourceDoubts[String(windowDays)] ?? null);
+	const doubtEntries = $derived<Rankable<RankedDisplay>[]>(
+		(doubts?.rows ?? []).map((source) => ({
+			key: source.sourceId,
+			value: source.doubted,
+			row: {
+				label: source.sourceId,
+				// The denominator rides in the value rather than under it: 2 doubted
+				// of 3 and 40 of 400 are different facts and a count cannot tell them
+				// apart. No tint and no verdict - the checker has a known length bias.
+				value: `${grouped(source.doubted)} of ${grouped(source.summaries)} ${
+					source.summaries === 1 ? 'summary' : 'summaries'
+				}`,
+				context:
+					source.sharePct === null
+						? `fewer than ${data.console.min_attempts_for_rate} summaries, so no share`
+						: `${source.sharePct}% of its summaries`
+			}
+		}))
+	);
+	const doubtRanked = $derived(rank(doubtEntries, 0));
+	/** What the cap left out. Written here rather than through `tailSentence`,
+	 * because the tail was measured on the server over every source and the
+	 * ranked set the browser holds is already the capped one. */
+	const doubtTail = $derived.by(() => {
+		if (doubts === null || doubts.moreSources === 0) return null;
+		const sources = doubts.moreSources === 1 ? 'source' : 'sources';
+		const doubted = doubts.moreDoubted === 1 ? 'doubted summary' : 'doubted summaries';
+		return `${grouped(doubts.moreSources)} more ${sources} had ${grouped(doubts.moreDoubted)} ${doubted} between them.`;
+	});
+	/** The three signals, per source, keyed the way the ranked row is - the list
+	 * caps and re-orders what it was built from. */
+	const doubtSignals = $derived(
+		new Map((doubts?.rows ?? []).map((source) => [source.sourceId, signalsOf(source)]))
+	);
+
+	/** The three counts a doubt row prints, in the words the cards use.
+	 *
+	 * Three, never one blended figure: a low band is the checker's confidence,
+	 * an unsupported number is a fabrication, and a dropped hedge is a certainty
+	 * the article did not have. A summary can carry more than one, so they do
+	 * not add up to the row's own count and they are never stacked into a bar.
+	 */
+	function signalsOf(source: SourceDoubt): { key: string; n: number; label: string }[] {
+		return [
+			{ key: 'not-sure', n: source.notSure, label: 'marked "not sure"' },
+			{
+				key: 'unsupported',
+				n: source.unsupportedNumbers,
+				label: 'numbers not in the article'
+			},
+			{ key: 'hedge', n: source.hedgeDropped, label: '"maybe" told as fact' }
+		];
+	}
+
 	/** The runs inside the open window, oldest first. Each is already three
 	 * numbers, so the window is a filter and never a re-aggregation. */
 	const runsInWindow = $derived(
@@ -484,6 +548,71 @@
 			{/if}
 		</div>
 
+		<!-- Which publishers the checker keeps stopping on. The cards above say how
+		     often it doubted something; this says where. -->
+		{#if doubts !== null}
+			<div
+				data-model-doubt
+				data-model-doubt-from={doubts.start}
+				data-model-doubt-to={doubts.end}
+				data-model-doubt-days={doubts.days}
+			>
+				<h2 class="console-h2">Which sources the checker doubts</h2>
+				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-doubt-intro>
+					One row per source over these {windowDays} days, most doubted summaries first. A summary is
+					doubted when the checker marked it "not sure", when it carried a figure the article did
+					not, or when it told a "maybe" as fact. The three are counted apart - they have different
+					causes, and one summary can carry more than one.
+					<strong class="font-semibold text-text-secondary" data-model-doubt-rule
+						>The order is the count and never the share</strong
+					>, so a source with 2 doubted of 3 does not outrank one with 40 of 400, and a tie goes to
+					the source's own name. No source is tinted: the checker has a known length bias, and a
+					colour would publish a verdict about a publisher off an instrument nobody has finished
+					calibrating.
+				</p>
+
+				<div class="mt-3" data-model-doubt-list>
+					<RankedList
+						caption="Sources in these {windowDays} days, most doubted summaries first"
+						ranked={doubtRanked}
+						maxText="{grouped(doubtRanked.max)} doubted {doubtRanked.max === 1
+							? 'summary'
+							: 'summaries'}"
+						measured={doubts.summaries > 0}
+						unmeasuredNote="Nothing scored a summary in these {windowDays} days."
+						emptyNote="The checker doubted nothing in these {windowDays} days."
+						tail={doubtTail}
+					>
+						{#snippet trend(row)}
+							<span class="doubt-signals">
+								{#each doubtSignals.get(row.key) ?? [] as signal (signal.key)}
+									<span
+										class="doubt-signal"
+										data-doubt-count={signal.key}
+										data-doubt-n={signal.n}
+									>
+										<span class="doubt-n tabular-nums">{grouped(signal.n)}</span>
+										<span class="doubt-word">{signal.label}</span>
+									</span>
+								{/each}
+							</span>
+						{/snippet}
+					</RankedList>
+				</div>
+
+				{#if doubts.unattributed > 0}
+					<!-- The score ledger records the address and never the feed, so the
+					     source is a join onto the item ledger. The two oldest scored days
+					     were written before that ledger carried them. -->
+					<p class="mt-2 text-[0.75rem] text-text-tertiary" data-model-doubt-unattributed>
+						{grouped(doubts.unattributed)} of {grouped(doubts.summaries)}
+						{doubts.summaries === 1 ? 'summary' : 'summaries'} in these {windowDays} days could not
+						be traced to a source, so they are counted in neither list.
+					</p>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- What one item cost, as a distribution. A median answers "how long does
 		     one take" and refuses "how bad does it get", and the second decides
 		     whether a shard fits its timeout. -->
@@ -510,8 +639,12 @@
 					slowest {asSeconds(writeTimes.slowest)}.
 				</p>
 			{:else}
-				<WriteTimeHistogram
+				<TimeHistogram
 					times={writeTimes}
+					name="write-times"
+					subject="Time to write one summary"
+					verb="written"
+					noRuleReason="one distribution over the window, with no day axis to place a boundary on"
 					width={data.console.chart_width}
 					height={data.console.chart_height}
 					readoutMaxShare={data.chart.readout_max_share}
@@ -527,6 +660,13 @@
 			<!-- Scoring runs after the summary is written, so nothing waits on it.
 			     It sat beside fetch, extract and summarize until 2026-08-31, where a
 			     fourth bar on a critical-path chart read as a fourth constraint. -->
+			<h3 class="mt-8 text-[0.9375rem] font-semibold text-text">What checking one summary cost</h3>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-score-cost-intro>
+				The same shape over the checker's own clock. It runs after the model has finished, so the
+				run never waits on it - what the tail decides is whether the checker fits the job it runs
+				in.
+			</p>
+
 			{#if scoreCost === null}
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="empty">
 					Nothing scored a summary in these {windowDays} days.
@@ -540,6 +680,16 @@
 					waits on it.
 				</p>
 			{:else}
+				<TimeHistogram
+					times={scoreCost}
+					name="score-cost"
+					subject="Time to check one summary"
+					verb="checked"
+					noRuleReason="one distribution over the window, with no day axis to place a boundary on"
+					width={data.console.chart_width}
+					height={data.console.chart_height}
+					readoutMaxShare={data.chart.readout_max_share}
+				/>
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="readout">
 					Checking a summary afterwards took a middle of
 					<span data-score-cost="median">{asSeconds(scoreCost.median)}</span>, and
@@ -602,3 +752,32 @@
 		{/if}
 	{/if}
 </section>
+
+<style>
+	/* The three signals behind a doubt, in the ranked list's trend column. They
+	   wrap rather than truncate: each is a count and a name, and a count with no
+	   name is a number nobody can act on. */
+	.doubt-signals {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1) var(--space-3);
+		max-inline-size: 22rem;
+	}
+
+	/* One count and its name are one wrapping unit. A wrap between them would
+	   leave a bare number at the end of a line. */
+	.doubt-signal {
+		display: inline-flex;
+		align-items: baseline;
+		gap: var(--space-1);
+		white-space: nowrap;
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		color: var(--color-text-tertiary);
+	}
+
+	.doubt-n {
+		font-weight: 600;
+		color: var(--color-text-secondary);
+	}
+</style>

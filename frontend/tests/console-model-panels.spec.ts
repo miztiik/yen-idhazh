@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import {
+	AXIS_LABEL_GAP_PX,
+	AXIS_LABEL_PX,
+	LABEL_ADVANCE_EM,
+	thinLabels
+} from '../src/lib/charts/frame';
 import { grouped, swapScale } from '../src/lib/charts/series';
 import {
 	modelSwap,
@@ -26,6 +32,29 @@ import {
  */
 
 const WEEK: DayWindow = { start: '2026-08-15', end: '2026-08-21', days: 7 };
+
+/** The two type sizes `SwapDots` draws its row labels at. */
+const NAME_PX = 11;
+const VALUE_PX = 10;
+
+/** The canary's own state tree, which the built page was rendered from. */
+const STATE = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
+
+/** A ledger directory, read the way the page's server reads it. */
+function shards(dir: string): Record<string, string>[] {
+	const rows: Record<string, string>[] = [];
+	for (const name of readdirSync(dir)
+		.filter((entry) => entry.endsWith('.csv'))
+		.sort()) {
+		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
+		const header = lines[0].split(',');
+		for (const line of lines.slice(1)) {
+			const cells = line.split(',');
+			rows.push(Object.fromEntries(header.map((key, at) => [key, cells[at] ?? ''])));
+		}
+	}
+	return rows;
+}
 
 /** The three bands the committed config carries at the ends of its range, so a
  * fixture article picks an ask the way a real one does. */
@@ -126,13 +155,13 @@ test.describe('what one summary cost, as a distribution', () => {
 	test('the chart on the page draws one bar a bin and says what it is out of', async ({ page }) => {
 		await page.goto('/console/model/');
 
-		const chart = page.locator('[data-write-times="chart"]');
+		const chart = page.locator('[data-histogram="write-times"]');
 		await expect(chart, 'the model route draws no per-item cost chart').toHaveCount(1);
 
-		const drawn = await chart.locator('[data-write-bin]').evaluateAll((nodes) =>
+		const drawn = await chart.locator('[data-hist-bin]').evaluateAll((nodes) =>
 			nodes.map((node) => ({
-				from: Number(node.getAttribute('data-write-bin')),
-				n: Number(node.getAttribute('data-write-bin-n'))
+				from: Number(node.getAttribute('data-hist-bin')),
+				n: Number(node.getAttribute('data-hist-bin-n'))
 			}))
 		);
 		expect(drawn.length, 'a distribution of one bar is a number').toBeGreaterThan(1);
@@ -140,7 +169,7 @@ test.describe('what one summary cost, as a distribution', () => {
 		// The bars are the whole population, so they sum to the figure printed
 		// under the chart. A bar chart whose bars do not add up to its own
 		// denominator is two measurements pretending to be one.
-		const total = Number(await chart.getAttribute('data-write-times-n'));
+		const total = Number(await chart.getAttribute('data-histogram-n'));
 		expect(drawn.reduce((sum, bin) => sum + bin.n, 0)).toBe(total);
 		await expect(page.locator('[data-write-times="readout"]')).toContainText(
 			`${grouped(total)} summaries`
@@ -154,20 +183,21 @@ test.describe('what one summary cost, as a distribution', () => {
 
 	test('each rule prints its own value, in whole seconds', async ({ page }) => {
 		await page.goto('/console/model/');
+		const chart = page.locator('[data-histogram="write-times"]');
 
 		for (const key of ['median', 'p95']) {
-			const rule = page.locator(`[data-write-rule="${key}"]`);
+			const rule = chart.locator(`[data-hist-rule="${key}"]`);
 			await expect(rule, `the ${key} rule is not drawn`).toHaveCount(1);
-			const seconds = Number(await rule.getAttribute('data-write-rule-seconds'));
+			const seconds = Number(await rule.getAttribute('data-hist-rule-seconds'));
 			expect(seconds, `the ${key} rule carries no value`).toBeGreaterThan(0);
 			// The label is the number, so nobody has to read it off the axis.
-			await expect(page.locator(`[data-write-rule-label="${key}"]`)).toContainText(`${seconds} s`);
+			await expect(chart.locator(`[data-hist-rule-label="${key}"]`)).toContainText(`${seconds} s`);
 		}
 
 		// The 95th is at or past the median by definition, and a chart that drew
 		// them the other way round would be drawing the wrong two values.
 		const at = async (key: string) =>
-			Number(await page.locator(`[data-write-rule="${key}"]`).getAttribute('x1'));
+			Number(await chart.locator(`[data-hist-rule="${key}"]`).getAttribute('x1'));
 		expect(await at('p95')).toBeGreaterThanOrEqual(await at('median'));
 	});
 
@@ -231,6 +261,198 @@ test.describe('what checking a summary cost, off the critical path', () => {
 	test('nothing timed at all draws nothing', () => {
 		expect(scoreCost([scored('2026-08-20', '0')], WEEK)).toBeNull();
 		expect(scoreCost([], WEEK)).toBeNull();
+	});
+
+	test('the checker gets the same binning the model does, over its own clock', () => {
+		// Row #16: the shape is the histogram the writing clock already draws,
+		// reused rather than reimplemented. Two doublings apart, so the bars
+		// cannot be a coincidence of one value.
+		const cost = scoreCost(
+			[300, 1500, 3000, 3000, 9000].map((ms) => scored('2026-08-20', String(ms))),
+			WEEK
+		) as NonNullable<ReturnType<typeof scoreCost>>;
+		expect(cost.bins[0].from).toBe(0);
+		expect(cost.bins[0].to).toBe(1);
+		for (let index = 1; index < cost.bins.length; index += 1) {
+			expect(cost.bins[index].from).toBe(cost.bins[index - 1].to);
+			expect(cost.bins[index].to).toBe(cost.bins[index].from * 2);
+		}
+		expect(cost.bins.reduce((total, bin) => total + bin.n, 0)).toBe(5);
+		expect(cost.bins[cost.bins.length - 1].throughPct).toBe(100);
+
+		// The two rules are taken over the values. Five of them, so the median is
+		// the third and the 95th interpolates between the fourth and the fifth.
+		expect(cost.median).toBe(3000);
+		expect(cost.p95).toBeCloseTo(7800, 6);
+		expect(cost.fastest).toBe(300);
+		expect(cost.slowest).toBe(9000);
+	});
+
+	test('THE ORACLE: the drawn rules are the values the module measured', async ({ page }) => {
+		await page.goto('/console/model/');
+
+		// The window the page says it drew, read off the page rather than assumed,
+		// so the oracle follows a config change instead of pinning one.
+		const doubt = page.locator('[data-model-doubt]');
+		const from = (await doubt.getAttribute('data-model-doubt-from')) ?? '';
+		const to = (await doubt.getAttribute('data-model-doubt-to')) ?? '';
+		expect(from, 'the page did not say which window it drew').not.toBe('');
+
+		// Re-derived here from the two ledgers, straight off the CSV, with no bin
+		// anywhere in the arithmetic. A percentile read off a bar lands on that
+		// bar's centre, and on a doubling axis the centre of the bar holding the
+		// median can be a factor of two away from the median.
+		const ledgers: Record<string, { rows: Record<string, string>[]; column: string }> = {
+			'write-times': { rows: shards(join(STATE, 'item-health')), column: 'summarize_ms' },
+			'score-cost': { rows: shards(join(STATE, 'scores')), column: 'score_ms' }
+		};
+
+		let checked = 0;
+		const spoken = (seconds: number) => (seconds === 0 ? '<1 s' : `${seconds} s`);
+		for (const [name, ledger] of Object.entries(ledgers)) {
+			const chart = page.locator(`[data-histogram="${name}"]`);
+			if ((await chart.count()) === 0) continue;
+			checked += 1;
+
+			const values = ledger.rows
+				.filter((row) => (row.date ?? '') >= from && (row.date ?? '') <= to)
+				.map((row) => Number(row[ledger.column] || '0'))
+				.filter((ms) => Number.isFinite(ms) && ms > 0)
+				.sort((a, b) => a - b);
+			expect(values.length, `${name}: the ledger timed nothing in the drawn window`).toBeGreaterThan(
+				0
+			);
+			await expect(chart, `${name}: the chart is drawn over a different count`).toHaveAttribute(
+				'data-histogram-n',
+				String(values.length)
+			);
+
+			for (const [key, fraction] of [
+				['median', 0.5],
+				['p95', 0.95]
+			] as const) {
+				const rule = chart.locator(`[data-hist-rule="${key}"]`);
+				await expect(rule, `${name}: the ${key} rule is not drawn`).toHaveCount(1);
+				const drawn = Number(await rule.getAttribute('data-hist-rule-seconds'));
+				// The linear-interpolation rule `quantile` states, restated here so
+				// the two are one definition rather than one call.
+				const at = (values.length - 1) * fraction;
+				const low = Math.floor(at);
+				const high = Math.ceil(at);
+				const want = Math.round(
+					(values[low] + (values[high] - values[low]) * (at - low)) / 1000
+				);
+				expect(drawn, `${name}: the ${key} rule is not the ${key} of the ledger`).toBe(want);
+				// Labelled in type on the chart, so the figure is readable without
+				// measuring a bar. A real measurement that rounds away prints `<1 s`
+				// rather than a zero, which would say it took no time.
+				await expect(
+					chart.locator(`[data-hist-rule-label="${key}"]`),
+					`${name}: the ${key} rule is drawn and not labelled`
+				).toContainText(spoken(drawn));
+			}
+		}
+		expect(checked, 'neither distribution drew at all').toBeGreaterThan(0);
+
+		// The sentence under the checking chart prints the module's own two
+		// figures, so the mark and the words are one number rather than two
+		// readings of it.
+		const cost = page.locator('[data-histogram="score-cost"]');
+		if ((await cost.count()) === 0) return;
+		const at = async (key: string) =>
+			Number(await cost.locator(`[data-hist-rule="${key}"]`).getAttribute('data-hist-rule-seconds'));
+		await expect(page.locator('[data-score-cost="median"]')).toHaveText(spoken(await at('median')));
+		await expect(page.locator('[data-score-cost="p95"]')).toHaveText(spoken(await at('p95')));
+	});
+
+	test('THE ORACLE: no two axis labels of a distribution overlap at 390', async ({ page }) => {
+		// The width the plan calls load-bearing.
+		//
+		// Driven against `thinLabels` over the plot the page actually leaves at
+		// 390, because a ledger is not obliged to span eleven doublings and the
+		// committed canary does not: its slowest check is under a second, so every
+		// bar it can draw fits and the drawn page cannot put this rule under load.
+		// An axis the data never stresses is a null result, not a pass.
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/console/model/');
+
+		const chart = page.locator('[data-histogram="write-times"]');
+		await expect(chart, 'the writing-time chart is not on the page').toHaveCount(1);
+
+		// The first and last edge labels are the two ends of the plot, and
+		// `thinLabels` never drops either - so their centres measure the plot the
+		// page gave itself, rather than a number typed in here.
+		const ends = await chart.locator('[data-tick="x"]').evaluateAll((nodes) =>
+			nodes.map((node) => {
+				const box = node.getBoundingClientRect();
+				return box.left + box.width / 2;
+			})
+		);
+		expect(ends.length, 'the chart drew fewer than two edge labels').toBeGreaterThan(1);
+		const plot = Math.max(...ends) - Math.min(...ends);
+		expect(plot, 'the plot measured at nothing').toBeGreaterThan(0);
+
+		// The edge set the real ledger produces: its slowest summary is under
+		// twenty minutes, so the doubling runs to 1024 seconds. Twelve labels, the
+		// same even spacing a log axis gives every doubling.
+		const EDGES = ['<1', '1', '2', '4', '8', '16', '32', '64', '128', '256', '512', '1024'];
+		const laid = EDGES.map((text, index) => ({
+			key: text,
+			text,
+			x: (plot / (EDGES.length - 1)) * index
+		}));
+		// Crowded, not overlapping: two numbers a hair apart read as one longer
+		// number just as surely as two that touch, and the gap is the rule the
+		// component enforces.
+		const half = (text: string) => (text.length * AXIS_LABEL_PX * LABEL_ADVANCE_EM) / 2;
+		const crowded = (labels: { text: string; x: number }[]) => {
+			let pairs = 0;
+			for (let index = 1; index < labels.length; index += 1) {
+				const left = labels[index].x - half(labels[index].text);
+				const right = labels[index - 1].x + half(labels[index - 1].text);
+				if (left < right + AXIS_LABEL_GAP_PX) pairs += 1;
+			}
+			return pairs;
+		};
+		expect(
+			crowded(laid),
+			`twelve doubling edges in ${Math.round(plot)}px are not crowded, so this proves nothing`
+		).toBeGreaterThan(0);
+
+		const kept = thinLabels(laid, AXIS_LABEL_PX, AXIS_LABEL_GAP_PX);
+		expect(crowded(kept), 'two labels the thinning kept are still crowded').toBe(0);
+		expect(kept[0].text, 'the first edge was dropped').toBe(EDGES[0]);
+		expect(kept[kept.length - 1].text, 'the last edge was dropped').toBe(EDGES[EDGES.length - 1]);
+		expect(kept.length, 'the thinning dropped every middle label').toBeGreaterThan(2);
+		expect(kept.length, 'the thinning kept every label, so it did not thin').toBeLessThan(
+			EDGES.length
+		);
+
+		// And then on the page, at the width, over whatever the ledger holds.
+		let checked = 0;
+		for (const name of ['write-times', 'score-cost']) {
+			const drawn = page.locator(`[data-histogram="${name}"]`);
+			if ((await drawn.count()) === 0) continue;
+			const boxes = await drawn.locator('[data-tick="x"]').evaluateAll((nodes) =>
+				nodes.map((node) => {
+					const box = node.getBoundingClientRect();
+					return { text: node.textContent ?? '', left: box.left, right: box.right };
+				})
+			);
+			expect(boxes.length, `${name} drew no axis labels at all`).toBeGreaterThan(1);
+			const ordered = [...boxes].sort((a, b) => a.left - b.left);
+			for (let index = 1; index < ordered.length; index += 1) {
+				expect(
+					ordered[index].left,
+					`${name}: "${ordered[index - 1].text.trim()}" and "${ordered[index].text.trim()}" overlap at 390`
+				).toBeGreaterThanOrEqual(ordered[index - 1].right);
+			}
+			// The two ends are what the axis is read against, so they are never the
+			// ones dropped.
+			expect(ordered[0].text.trim(), `${name} dropped its first edge`).not.toBe('');
+			checked += 1;
+		}
+		expect(checked, 'neither distribution drew at 390').toBeGreaterThan(0);
 	});
 
 	test('the model route prints both figures and never the column name', async ({ page }) => {
@@ -399,7 +621,61 @@ test.describe('did the model change move anything', () => {
 		// the newer ones was, so the rate goes to nothing.
 		expect(by.get('Marked "not sure"')?.before).toBe(100);
 		expect(by.get('Marked "not sure"')?.after).toBe(0);
-		expect(swap.measures).toHaveLength(7);
+		// A low band is one of the three signals, so a run where every summary was
+		// marked "not sure" is a run the checker doubted entirely.
+		expect(by.get('Summaries the checker doubted')?.before).toBe(100);
+		expect(by.get('Summaries the checker doubted')?.after).toBe(0);
+		expect(swap.measures).toHaveLength(10);
+	});
+
+	test('a measure neither side recorded is named, never drawn as a change', () => {
+		// Row #17 decision 2, made mechanical. The two token rates arrived on the
+		// item ledger part way through its life, so a boundary older than that has
+		// nothing on the left - and a track from an absent value would be a claim
+		// about a run nobody instrumented.
+		const swap = modelSwap(
+			[...pair(10, '2026-08-20', 'old'), ...pair(10, '2026-08-21', 'new')],
+			[],
+			BANDS,
+			5
+		) as NonNullable<ReturnType<typeof modelSwap>>;
+		for (const label of ['Reading the article', 'Writing the summary', 'Time to write one']) {
+			const measure = swap.measures.find((entry) => entry.label === label);
+			expect(measure?.before, `${label} invented a value for a side with no rows`).toBeNull();
+			expect(measure?.after, `${label} invented a value for a side with no rows`).toBeNull();
+			expect(measure?.ratio, `${label} drew a ratio out of two absences`).toBeNull();
+		}
+	});
+
+	test('a rate both sides recorded is a comparison, and it is drawn', () => {
+		const rate = (date: string, prefill: number, decode: number) => ({
+			date,
+			prefill_ms: String(prefill),
+			decode_ms: String(decode),
+			input_tokens: '1000',
+			output_tokens: '100',
+			cached_tokens: '0'
+		});
+		const swap = modelSwap(
+			[...pair(10, '2026-08-20', 'old'), ...pair(10, '2026-08-21', 'new')],
+			[
+				...Array.from({ length: 10 }, () => rate('2026-08-20', 1000, 1000)),
+				...Array.from({ length: 10 }, () => rate('2026-08-21', 2000, 1000))
+			],
+			BANDS,
+			5
+		) as NonNullable<ReturnType<typeof modelSwap>>;
+		const read = swap.measures.find((entry) => entry.label === 'Reading the article');
+		// 1,000 prompt tokens in a second, then in two. Cached tokens come out of
+		// the count on both sides, which is why the helper is shared.
+		expect(read?.before).toBe(1000);
+		expect(read?.after).toBe(500);
+		expect(read?.ratio).toBeCloseTo(0.5, 6);
+		// A rate the runner sets as much as the model does carries no verdict.
+		expect(read?.polarity).toBe('no-agreed-direction');
+		expect(
+			swap.measures.find((entry) => entry.label === 'Writing the summary')?.polarity
+		).toBe('no-agreed-direction');
 	});
 
 	test('a thin side draws nothing, and the counts are the whole answer', () => {
@@ -501,6 +777,79 @@ test.describe('did the model change move anything', () => {
 				['lower-is-better', 'higher-is-better', 'no-agreed-direction'],
 				`${entry.label} declares no direction, so it would paint neutral by default`
 			).toContain(entry.polarity);
+			// A drawn row is a comparison, so both sides had a value. A row that
+			// only one side recorded belongs in the sentence below the plot.
+			expect(
+				entry.values,
+				`${entry.label} is drawn and one of its two sides recorded nothing`
+			).not.toContain('nothing recorded');
 		}
+	});
+
+	test('THE ORACLE: the panel takes the width it is given, and its rows fit it', async ({
+		page
+	}) => {
+		// Row #17: the panel is the most useful one on the route and it was drawn
+		// into a 600px box with a fixed 196px label gutter. The frame now follows
+		// the container and the gutter is measured against it.
+		await page.setViewportSize({ width: 1440, height: 1000 });
+		await page.goto('/console/model/');
+
+		const plot = page.locator('[data-model-swap-plot]');
+		if ((await plot.count()) === 0) test.skip(true, 'no model change on the committed ledger');
+
+		const svg = plot.locator('svg');
+		const drawn = Number(await svg.getAttribute('data-swap-frame'));
+		const container = await plot.evaluate((node) => node.getBoundingClientRect().width);
+		expect(container, 'the panel has no width to fill').toBeGreaterThan(0);
+		expect(
+			drawn / container,
+			`the panel drew ${drawn}px inside a ${Math.round(container)}px container`
+		).toBeGreaterThanOrEqual(0.9);
+
+		// Beside the plot at this width, and the gutter is a share of the frame
+		// rather than a constant, so the plot keeps most of what it was given.
+		await expect(svg).toHaveAttribute('data-swap-layout', 'beside');
+		const inner = Number(await svg.getAttribute('data-swap-plot'));
+		expect(inner / drawn, 'the label gutter took most of the frame').toBeGreaterThan(0.6);
+
+		// And it is the width the labels ACTUALLY need, which is the whole of what
+		// "earns the width it takes" means. A constant that happens to leave the
+		// plot enough room at 1440 is still a constant: too narrow, and the widest
+		// row name runs under its own track.
+		const names = await plot.locator('[data-swap-cell="name"]').allTextContents();
+		const values = await plot.locator('[data-swap-cell="values"]').allTextContents();
+		expect(names.length, 'the panel drew no row labels to measure').toBeGreaterThan(0);
+		const need = (texts: string[], px: number) =>
+			texts.reduce((most, text) => Math.max(most, text.trim().length * px * LABEL_ADVANCE_EM), 0);
+		const widest = Math.max(need(names, NAME_PX), need(values, VALUE_PX));
+		const gutter = drawn - inner;
+		expect(
+			gutter,
+			`the gutter is ${Math.round(gutter)}px where the widest of ${names.length + values.length} labels needs ${Math.round(widest)}px`
+		).toBeGreaterThanOrEqual(widest);
+
+		// One row per drawn measure, and every row carries type rather than being
+		// a hairline across a page-wide frame.
+		const rows = Number(await plot.getAttribute('data-swap-rows'));
+		await expect(plot.locator('[data-swap-row]')).toHaveCount(rows);
+		expect(Number(await svg.getAttribute('data-swap-pitch'))).toBeGreaterThanOrEqual(40);
+	});
+
+	test('at 390 the labels go above the track rather than squeezing the plot', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto('/console/model/');
+
+		const plot = page.locator('[data-model-swap-plot]');
+		if ((await plot.count()) === 0) test.skip(true, 'no model change on the committed ledger');
+
+		const svg = plot.locator('svg');
+		// `Outside the length we asked for` cannot fit beside a 324px plot, and
+		// `frame.ts` refuses a gutter past 30 percent of the frame rather than
+		// clipping the name or shrinking the plot behind it.
+		await expect(svg).toHaveAttribute('data-swap-layout', 'stacked');
+		const drawn = Number(await svg.getAttribute('data-swap-frame'));
+		const inner = Number(await svg.getAttribute('data-swap-plot'));
+		expect(inner / drawn, 'the plot is still a margin on a phone').toBeGreaterThan(0.85);
 	});
 });

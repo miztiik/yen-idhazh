@@ -138,6 +138,9 @@ export interface ConsoleConfig {
 	feed_rows: number;
 	/** How many summaries the band section names before the tail sentence. */
 	band_outlier_rows: number;
+	/** How many sources the Summaries route ranks by the summaries its checker
+	 * doubted, before the tail sentence. */
+	doubt_rows: number;
 	/** The span the chart arm's retirement rule is stated over. Under it the
 	 * section prints the rule's own span and no median. */
 	chart_arm_rule_days: number;
@@ -271,6 +274,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	source_rows: 10,
 	feed_rows: 10,
 	band_outlier_rows: 10,
+	doubt_rows: 10,
 	chart_arm_rule_days: 14,
 	chart_arm_minutes_target: 6,
 	chart_arm_coverage_pct: 5

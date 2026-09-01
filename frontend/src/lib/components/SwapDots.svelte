@@ -1,20 +1,35 @@
 <script lang="ts">
-	/** Did the model swap move anything - seven measures, one axis.
+	/** Did the model swap move anything - ten measures, one axis.
 	 *
-	 * Seven measures in four units cannot share a scale, so each one is drawn
+	 * Ten measures in five units cannot share a scale, so each one is drawn
 	 * against itself: the old model sits at 100 percent on every row and the new
-	 * model sits wherever it landed. That is the only axis all seven can share,
-	 * and the question is the same for all seven anyway - did it move, and which
+	 * model sits wherever it landed. That is the only axis all ten can share,
+	 * and the question is the same for all ten anyway - did it move, and which
 	 * way.
+	 *
+	 * **A measure only one side recorded is named, never drawn.** The two token
+	 * rates arrived on the item ledger part way through its life, so on an older
+	 * boundary there is nothing on the left to compare against - and a track
+	 * from an absent value would be a claim about a run nobody instrumented.
+	 * Those rows print as a sentence under the plot saying which side is
+	 * missing.
 	 *
 	 * **Direction is carried by the arrowhead first and by hue second.** Until
 	 * 2026-08-31 the hue was refused outright, because nobody had said which way
-	 * was worse for each of the seven. Five of them now say so themselves - the
-	 * polarity is declared on the measure in `model-work.ts` - and the two that
-	 * genuinely have no agreed direction, summary length and copying, keep the
-	 * grey they always had and print the reason under the chart. So a hue here
-	 * is never a guess: it is a property of the measure, and a measure with no
-	 * property gets no hue.
+	 * was worse for each measure. Six of them now say so themselves - the
+	 * polarity is declared on the measure in `model-work.ts` - and the four that
+	 * genuinely have no agreed direction keep the grey they always had and print
+	 * the reason under the chart. So a hue here is never a guess: it is a
+	 * property of the measure, and a measure with no property gets no hue.
+	 *
+	 * **The panel takes the width it is given.** The label column is measured
+	 * against the frame rather than fixed: a 196px gutter was 15 percent of a
+	 * 1,342px frame and 60 percent of a 324px one, so on a phone the names took
+	 * more of the chart than the plot did. Where they will not fit beside the
+	 * plot they go above it, which is the rule `frame.ts` already holds for
+	 * every row chart on this console. The row pitch is solved for the frame the
+	 * same way, so a page-wide panel is rows of type rather than hairlines with
+	 * air nowhere.
 	 *
 	 * Both absolute values print on the row, because a ratio with no magnitude
 	 * behind it can be a rounding error wearing a percentage. And both article
@@ -23,7 +38,15 @@
 	 *
 	 * Hand-written SVG, so the panel is complete before any script runs.
 	 */
-	import { chartWidth, frame, observeWidth, type Margin } from '$lib/charts/frame';
+	import {
+		chartWidth,
+		frame,
+		labelGutter,
+		observeWidth,
+		rowPitch,
+		ROW_PITCH_MIN,
+		type Margin
+	} from '$lib/charts/frame';
 	import { swapScale } from '$lib/charts/series';
 	import { movementVerdict } from '$lib/charts/theme';
 	import type { ModelSwap, SwapMeasure } from '../../routes/console/model/+page.server';
@@ -36,34 +59,74 @@
 		width: number;
 	} = $props();
 
-	/** One measure: the name, the two values under it, and the track between. */
-	const ROW = 38;
-	/** The longest label is `Outside the length we asked for` at 31 characters,
-	 * and the two values sit on their own line below it. */
-	const LABEL_ROOM = 196;
+	/** The row label, and the two values on the line under it. */
+	const NAME_PX = 11;
+	const VALUE_PX = 10;
+	/** Clear pixels between the label column and the plot. */
+	const GUTTER_GAP = 12;
+	/** A row carries two lines of type and a track. Below this the rows touch. */
+	const PITCH_MIN = ROW_PITCH_MIN;
+	/** Where the label sits above its own track, the row is two lines of type,
+	 * then the track, then the air that separates two rows. */
+	const PITCH_MIN_STACKED = ROW_PITCH_MIN + 18;
+	/** Past this the rows stop reading as one set. */
+	const PITCH_MAX = 56;
 	const AXIS_ROOM = 34;
 	const TOP = 18;
+	/** Where the two label lines go when they cannot sit beside the plot. */
+	const STACK_NAME_Y = 11;
+	const STACK_VALUE_Y = 23;
+	const STACK_TRACK_Y = 36;
 	/** Under this, the two dots overlap and the arrow has nowhere to point. It
 	 * is drawn anyway - a measure that did not move is an answer. */
 	const ARROW = 5;
+	/** The right-most tick label anchors `middle`, so it needs half its own
+	 * width outside the plot. `150%` at 10px is the widest it gets. */
+	const RIGHT_ROOM = 16;
 
 	let measured = $state<number | null>(null);
 
-	/** Every measure that has a ratio at all. A before of zero has no ratio,
-	 * because a move away from nothing has no size, and the row says so in words
-	 * rather than drawing a track to infinity. */
+	const chartBox = $derived(chartWidth(measured, width));
+
+	/** Every measure both sides recorded and that has a ratio at all. A before of
+	 * zero has no ratio, because a move away from nothing has no size, and the
+	 * row says so in words rather than drawing a track to infinity. */
 	const drawn = $derived(swap.measures.filter((measure) => measure.ratio !== null));
 	const unmeasured = $derived(swap.measures.filter((measure) => measure.ratio === null));
 	/** The drawn rows nobody has agreed a direction for. Named under the chart,
-	 * because a grey row beside six coloured ones has to say why it is grey. */
+	 * because a grey row beside coloured ones has to say why it is grey. */
 	const greyed = $derived(drawn.filter((measure) => measure.polarity === 'no-agreed-direction'));
 
+	function valueLine(measure: SwapMeasure): string {
+		return `${reading(measure, measure.before)}, then ${reading(measure, measure.after)}`;
+	}
+
+	/** The room the two label lines need, or null where the frame cannot spare
+	 * it. `labelGutter` refuses a gutter past 30 percent of the frame, which is
+	 * the bound that stops a chart becoming a list with a plot in the margin. */
+	const gutter = $derived.by(() => {
+		const names = labelGutter(
+			drawn.map((measure) => measure.label),
+			NAME_PX,
+			GUTTER_GAP,
+			chartBox
+		);
+		const values = labelGutter(drawn.map(valueLine), VALUE_PX, GUTTER_GAP, chartBox);
+		return names === null || values === null ? null : Math.max(names, values);
+	});
+	const stacked = $derived(gutter === null);
+	const leftRoom = $derived(gutter ?? RIGHT_ROOM);
+	const innerRoom = $derived(Math.max(1, chartBox - leftRoom - RIGHT_ROOM));
+	const pitch = $derived(
+		rowPitch(innerRoom, stacked ? PITCH_MIN_STACKED : PITCH_MIN, PITCH_MAX)
+	);
+
 	const box = $derived(
-		frame(chartWidth(measured, width), TOP + drawn.length * ROW + AXIS_ROOM, {
+		frame(chartBox, TOP + drawn.length * pitch + AXIS_ROOM, {
 			top: TOP,
-			right: 16,
+			right: RIGHT_ROOM,
 			bottom: AXIS_ROOM,
-			left: LABEL_ROOM
+			left: leftRoom
 		} satisfies Margin)
 	);
 
@@ -83,13 +146,24 @@
 		return Math.round(value * 10) / 10;
 	}
 
+	/** Where a row's track sits, and where its label lines sit against it.
+	 * Beside the plot the pair is centred on the track; above it the name leads
+	 * and the track follows. */
+	function trackY(rowTop: number): number {
+		return stacked ? rowTop + STACK_TRACK_Y : rowTop + pitch / 2;
+	}
+
 	/** Whole units only, and `<1` where a real measurement rounds away. */
-	function reading(measure: SwapMeasure, value: number): string {
+	function reading(measure: SwapMeasure, value: number | null): string {
+		if (value === null) return 'nothing recorded';
 		const whole = Math.round(value);
 		const short = whole === 0 && value > 0;
 		if (measure.unit === 'seconds') return short ? '<1 s' : `${whole} s`;
 		if (measure.unit === 'words') return short ? '<1 word' : `${whole} words`;
 		if (measure.unit === 'percent') return short ? '<1%' : `${whole}%`;
+		if (measure.unit === 'tokens-a-second') {
+			return short ? '<1 token a second' : `${whole} tokens a second`;
+		}
 		return short ? '<1 in 100' : `${whole} in 100`;
 	}
 
@@ -97,6 +171,14 @@
 		const change = pct(measure) - 100;
 		if (change === 0) return 'no change';
 		return change > 0 ? `up ${change}%` : `down ${Math.abs(change)}%`;
+	}
+
+	/** Which side of the boundary never recorded this measure, in words. */
+	function missing(measure: SwapMeasure): string {
+		if (measure.before === null && measure.after === null) return 'neither model recorded it';
+		if (measure.before === null) return `${swap.before.model} recorded none`;
+		if (measure.after === null) return `${swap.after.model} has recorded none`;
+		return `${swap.before.model} measured none`;
 	}
 
 	/** Did this measure move the way we wanted.
@@ -131,12 +213,12 @@
 	}
 
 	const description = $derived(
-		`Seven measures either side of the day the model changed, each against its own value on ${swap.before.model}. ` +
+		`${swap.measures.length} measures either side of the day the model changed, each against its own value on ${swap.before.model}. ` +
 			`${swap.before.model} wrote ${swap.before.articles} articles to ${swap.before.to}; ${swap.after.model} has written ${swap.after.articles} since ${swap.after.from}. ` +
 			swap.measures
 				.map((measure) =>
 					measure.ratio === null
-						? `${measure.label}: nothing to compare, ${swap.before.model} measured none.`
+						? `${measure.label}: nothing to compare, ${missing(measure)}.`
 						: sentence(measure)
 				)
 				.join(' ')
@@ -147,6 +229,7 @@
 	class="plot"
 	data-model-swap-plot
 	data-swap-at={swap.at}
+	data-swap-rows={drawn.length}
 	data-readout-none="one row per measure, each against its own baseline, so no column is shared"
 >
 	<div use:observeWidth={(next) => (measured = next)}>
@@ -157,6 +240,10 @@
 			viewBox={`0 0 ${box.width} ${box.height}`}
 			role="img"
 			aria-label={description}
+			data-swap-layout={stacked ? 'stacked' : 'beside'}
+			data-swap-frame={box.width}
+			data-swap-plot={round(box.innerWidth)}
+			data-swap-pitch={pitch}
 		>
 			<!-- No change. Every row starts on this rule, so it is the chart's
 			     baseline rather than a threshold anybody set. -->
@@ -193,36 +280,37 @@
 			</text>
 
 			{#each drawn as measure, index (measure.label)}
-				{@const y = box.top + index * ROW + 12}
+				{@const top = box.top + index * pitch}
+				{@const y = trackY(top)}
 				<g
 					data-swap-row={measure.label}
 					data-swap-pct={pct(measure)}
-					data-swap-before={Math.round(measure.before)}
-					data-swap-after={Math.round(measure.after)}
+					data-swap-before={Math.round(measure.before as number)}
+					data-swap-after={Math.round(measure.after as number)}
 					data-movement={change(measure).toFixed(4)}
 					data-polarity={measure.polarity}
 					data-movement-verdict={verdict(measure)}
 				>
 					<title>{sentence(measure)}</title>
 					<text
-						x={box.left - 12}
-						y={y + 3}
-						text-anchor="end"
+						x={stacked ? box.left : box.left - GUTTER_GAP}
+						y={stacked ? top + STACK_NAME_Y : y + 3}
+						text-anchor={stacked ? 'start' : 'end'}
 						fill="var(--color-text)"
-						font-size="11"
+						font-size={NAME_PX}
 						data-swap-cell="name"
 					>
 						{measure.label}
 					</text>
 					<text
-						x={box.left - 12}
-						y={y + 16}
-						text-anchor="end"
+						x={stacked ? box.left : box.left - GUTTER_GAP}
+						y={stacked ? top + STACK_VALUE_Y : y + 16}
+						text-anchor={stacked ? 'start' : 'end'}
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={VALUE_PX}
 						data-swap-cell="values"
 					>
-						{reading(measure, measure.before)}, then {reading(measure, measure.after)}
+						{valueLine(measure)}
 					</text>
 
 					<line
@@ -255,15 +343,19 @@
 
 	{#if unmeasured.length > 0}
 		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-swap-unmeasured>
-			{#each unmeasured as measure, index (measure.label)}{index > 0 ? ', ' : ''}{measure.label}{/each}
-			measured nothing on {swap.before.model}, so there is nothing to compare against.
+			{#each unmeasured as measure, index (measure.label)}{index > 0
+					? '; '
+					: ''}{measure.label} - {missing(measure)}{/each}. Nothing is drawn for those: a
+			measure one side never wrote down is not a comparison.
 		</p>
 	{/if}
 	{#if greyed.length > 0}
 		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-swap-no-direction>
 			{#each greyed as measure, index (measure.label)}{index > 0 ? ', ' : ''}{measure.label}{/each}
 			{greyed.length === 1 ? 'is drawn' : 'are drawn'} grey: nobody has agreed which way is the
-			better way, so the row says how far it moved and stops there.
+			better way, so the row says how far it moved and stops there. The two token rates are set
+			by the runner a shard landed on as much as by the model - one committed run read the prompt
+			4.35 times faster on its fastest shard than on its slowest.
 		</p>
 	{/if}
 </div>

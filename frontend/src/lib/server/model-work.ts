@@ -134,10 +134,7 @@ function measured(value: string | undefined): number | null {
 }
 
 function median(values: number[]): number | null {
-	if (values.length === 0) return null;
-	const sorted = [...values].sort((a, b) => a - b);
-	const middle = Math.floor(sorted.length / 2);
-	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+	return values.length === 0 ? null : quantile([...values].sort((a, b) => a - b), 0.5);
 }
 
 function byDate(rows: Record<string, string>[]): Map<string, Record<string, string>[]> {
@@ -165,6 +162,27 @@ function summarizeMs(health: Record<string, string>[]): number[] {
  */
 function copied(row: Record<string, string>): number {
 	return Math.max(measured(row.extractiveness) ?? 0, measured(row.verbatim_run) ?? 0);
+}
+
+/** Did the checker doubt this summary - any one of the three signals.
+ *
+ * One predicate, because the ranked list of sources and the swap row under it
+ * both ask this question and two spellings of it would let one surface call a
+ * summary doubted while the other did not.
+ *
+ * The three are never blended into a score, and everywhere the count is shown
+ * the three are shown beside it. They have different causes and different
+ * fixes: a low band is the grader's own confidence, an unsupported number is a
+ * fabrication, and a dropped hedge is a certainty the article did not have.
+ * One blended figure would hide which of the three fired, which is the only
+ * part an operator can act on.
+ */
+export function doubted(row: Record<string, string>): boolean {
+	return (
+		row.band === 'low' ||
+		(measured(row.unsupported_numbers) ?? 0) > 0 ||
+		flag(row.hedge_dropped)
+	);
 }
 
 function day(
@@ -627,26 +645,79 @@ export interface WriteBin {
 	throughPct: number;
 }
 
-/** How long one summary took, over every article the runtime timed in a window.
+/** How long one thing took, over every one of them a clock recorded.
+ *
+ * The bars and the two rules, and nothing about which window they came from -
+ * that belongs to the caller, which knows what it asked for. Two panels on the
+ * Summaries route draw this shape over two different clocks: the model writing
+ * a summary, and the checker reading one afterwards. It is the same question
+ * both times - how long did one take, and how bad does it get - so it is one
+ * binning and one pair of rules rather than two that can drift apart.
  *
  * The median and the 95th are taken over the values themselves and never off
  * the bars: a percentile read out of a bin is a guess at where inside the bin
- * it fell, and the two rules on this chart are the figures somebody quotes.
- *
- * One entry per timed attempt, not per article - the same rows the `Time to
- * write one` card takes its median over. A re-run really did spend the time
- * again, and a chart of what the machine spent that counts a second attempt
- * once would not add up to the model minutes printed beside it.
+ * it fell, and these two are the figures somebody quotes.
  */
-export interface WriteTimes {
+export interface Distribution {
 	bins: WriteBin[];
-	/** Articles behind the chart. The denominator for every bar. */
+	/** Timings behind the chart. The denominator for every bar. */
 	n: number;
 	/** Milliseconds. */
 	median: number;
 	p95: number;
 	slowest: number;
 	fastest: number;
+}
+
+/** The bars and the rules, or null where nothing was timed.
+ *
+ * Null is the empty state and it is not a chart of zeroes. Nothing measured it;
+ * it did not run instantly.
+ */
+function distribution(values: number[]): Distribution | null {
+	const sorted = [...values].sort((a, b) => a - b);
+	if (sorted.length === 0) return null;
+
+	// The first edge is one second, so every label on the axis is a whole
+	// number. Everything below it shares one bar, labelled the way the console
+	// spells a measurement that rounds away.
+	const top = Math.max(1, sorted[sorted.length - 1] / 1000);
+	const edges = [0, 1];
+	while (edges[edges.length - 1] <= top) edges.push(edges[edges.length - 1] * 2);
+
+	const bins: WriteBin[] = [];
+	let through = 0;
+	for (let index = 0; index < edges.length - 1; index += 1) {
+		const from = edges[index];
+		const to = edges[index + 1];
+		const n = sorted.filter((ms) => ms / 1000 >= from && ms / 1000 < to).length;
+		through += n;
+		bins.push({ from, to, n, throughPct: Math.round((through / sorted.length) * 100) });
+	}
+
+	// Leading and trailing empty bars are axis, not data. A gap between two
+	// occupied bars stays: it is the distribution saying nothing landed there.
+	const first = bins.findIndex((bin) => bin.n > 0);
+	const last = bins.length - 1 - [...bins].reverse().findIndex((bin) => bin.n > 0);
+
+	return {
+		bins: bins.slice(first, last + 1),
+		n: sorted.length,
+		median: quantile(sorted, 0.5),
+		p95: quantile(sorted, 0.95),
+		slowest: sorted[sorted.length - 1],
+		fastest: sorted[0]
+	};
+}
+
+/** How long one summary took, over every article the runtime timed in a window.
+ *
+ * One entry per timed attempt, not per article - the same rows the `Time to
+ * write one` card takes its median over. A re-run really did spend the time
+ * again, and a chart of what the machine spent that counts a second attempt
+ * once would not add up to the model minutes printed beside it.
+ */
+export interface WriteTimes extends Distribution {
 	/** The days the window covers, and the days in it that timed anything. */
 	days: number;
 	timedDays: number;
@@ -665,38 +736,11 @@ export function writeTimes(
 	window: DayWindow
 ): WriteTimes | null {
 	const rows = within(health, window);
-	const values = summarizeMs(rows).sort((a, b) => a - b);
-	if (values.length === 0) return null;
-
-	// The first edge is one second, so every label on the axis is a whole
-	// number. Everything below it shares one bar, labelled the way the console
-	// spells a measurement that rounds away.
-	const top = Math.max(1, values[values.length - 1] / 1000);
-	const edges = [0, 1];
-	while (edges[edges.length - 1] <= top) edges.push(edges[edges.length - 1] * 2);
-
-	const bins: WriteBin[] = [];
-	let through = 0;
-	for (let index = 0; index < edges.length - 1; index += 1) {
-		const from = edges[index];
-		const to = edges[index + 1];
-		const n = values.filter((ms) => ms / 1000 >= from && ms / 1000 < to).length;
-		through += n;
-		bins.push({ from, to, n, throughPct: Math.round((through / values.length) * 100) });
-	}
-
-	// Leading and trailing empty bars are axis, not data. A gap between two
-	// occupied bars stays: it is the distribution saying nothing landed there.
-	const first = bins.findIndex((bin) => bin.n > 0);
-	const last = bins.length - 1 - [...bins].reverse().findIndex((bin) => bin.n > 0);
+	const spread = distribution(summarizeMs(rows));
+	if (spread === null) return null;
 
 	return {
-		bins: bins.slice(first, last + 1),
-		n: values.length,
-		median: quantile(values, 0.5),
-		p95: quantile(values, 0.95),
-		slowest: values[values.length - 1],
-		fastest: values[0],
+		...spread,
 		days: window.days,
 		timedDays: new Set(
 			rows.filter((row) => (measured(row.summarize_ms) ?? 0) > 0).map((row) => row.date ?? '')
@@ -712,13 +756,12 @@ export function writeTimes(
  * already finished, so nothing waits on it - which is why it is here and not
  * beside fetch, extract and summarize, where a fourth bar read as a fourth
  * constraint.
+ *
+ * It is drawn as the same distribution the writing clock is drawn as. Two
+ * numbers out of 4,100 checks cannot say whether the tail is long or thin, and
+ * the tail is what decides whether the scorer fits the job it runs in.
  */
-export interface ScoreCost {
-	/** Summaries the scorer timed. */
-	n: number;
-	/** Milliseconds. */
-	median: number;
-	p95: number;
+export interface ScoreCost extends Distribution {
 	/** Rows carrying the zero the column defaulted to before it was written.
 	 *
 	 * Not a measurement of no time: they are rows the scorer never timed, and
@@ -735,13 +778,180 @@ export function scoreCost(
 	window: DayWindow
 ): ScoreCost | null {
 	const cells = within(scores, window).map((row) => measured(row.score_ms));
-	const values = cells.filter((ms): ms is number => ms !== null && ms > 0).sort((a, b) => a - b);
-	if (values.length === 0) return null;
+	const values = cells.filter((ms): ms is number => ms !== null && ms > 0);
+	const spread = distribution(values);
+	if (spread === null) return null;
 	return {
-		n: values.length,
-		median: quantile(values, 0.5),
-		p95: quantile(values, 0.95),
+		...spread,
 		untimed: cells.length - values.length,
+		days: window.days,
+		start: window.start,
+		end: window.end
+	};
+}
+
+/** One article's two rates, or null where the runtime reported no timing.
+ *
+ * Cached prompt tokens are taken out of the read count. Leaving them in reports
+ * a rate the machine never ran at: it did not read them.
+ *
+ * It lives here rather than beside the throughput candle that draws it, because
+ * the model-change panel compares the same two rates either side of a swap.
+ * Two spellings of "the read rate" would let one surface take cached tokens out
+ * and the other leave them in.
+ */
+export function itemRates(row: Record<string, string>): {
+	read: number | null;
+	write: number | null;
+} {
+	const prefillMs = measured(row.prefill_ms);
+	const decodeMs = measured(row.decode_ms);
+	const prompt = measured(row.input_tokens);
+	const written = measured(row.output_tokens);
+	const evaluated = prompt === null ? null : prompt - (measured(row.cached_tokens) ?? 0);
+	return {
+		read:
+			prefillMs !== null && prefillMs > 0 && evaluated !== null && evaluated > 0
+				? evaluated / (prefillMs / 1000)
+				: null,
+		write:
+			decodeMs !== null && decodeMs > 0 && written !== null && written > 0
+				? written / (decodeMs / 1000)
+				: null
+	};
+}
+
+/** The source each article came from, keyed by the article.
+ *
+ * The score ledger records the address and the title and never the feed, so the
+ * source a summary belongs to is a join onto the item-health ledger, which
+ * records `source_id`. `url_key` is the key both carry and it is stable across
+ * runs; `item_id` is a slot on a page and only holds inside one day.
+ *
+ * Measured 2026-09-01 over the committed ledgers: 3,959 of 4,110 scored rows
+ * join, and every day from 2026-08-24 joins at 100 percent. The 151 that do not
+ * are the two oldest scored days, written before item-health carried them. So
+ * the join is complete over any window an operator opens, and the count that
+ * did not join is printed rather than quietly dropped.
+ */
+export function sourceByUrlKey(health: Record<string, string>[]): Map<string, string> {
+	const found = new Map<string, string>();
+	for (const row of health) {
+		const key = row.url_key ?? '';
+		const sourceId = row.source_id ?? '';
+		if (key === '' || sourceId === '') continue;
+		found.set(key, sourceId);
+	}
+	return found;
+}
+
+/** One source, and how often the checker doubted what the model wrote from it. */
+export interface SourceDoubt {
+	sourceId: string;
+	/** Summaries carrying at least one of the three signals. The ranking. */
+	doubted: number;
+	/** The three signals, counted apart. A summary can carry more than one, so
+	 * these three do not add up to `doubted` and are never stacked. */
+	notSure: number;
+	unsupportedNumbers: number;
+	hedgeDropped: number;
+	/** The summaries every count above is out of. The denominator, carried
+	 * rather than inferred: 2 doubted of 3 and 40 of 400 are different facts and
+	 * the count alone cannot tell them apart. */
+	summaries: number;
+	/** `doubted` as whole percent of `summaries`, or null under the floor. A
+	 * share over three summaries is the second summary. */
+	sharePct: number | null;
+}
+
+/** The ranked list, and the sentences that cover what it left out. */
+export interface SourceDoubts {
+	/** The worst sources by doubted summaries, worst first. */
+	rows: SourceDoubt[];
+	/** Sources the cap did not reach, and the doubts they hold between them. */
+	moreSources: number;
+	moreDoubted: number;
+	/** Scored summaries in the window no source could be found for. */
+	unattributed: number;
+	/** Sources the window scored anything from, and summaries it scored. */
+	sources: number;
+	summaries: number;
+	/** Summaries the checker doubted, over every source. */
+	doubted: number;
+	days: number;
+	start: string;
+	end: string;
+}
+
+/** Which sources the checker doubts, over the window the page is showing.
+ *
+ * Sorted by the COUNT of doubted summaries and never by the share. A share sort
+ * puts a source with 2 doubted of 3 above one with 40 of 400, and it is the
+ * forty that reached a reader. The page states that rule, because a ranking
+ * whose rule is not on the page can only be read for order.
+ *
+ * A tie is broken by the source's own name. A second criterion would be a
+ * second ranking nobody declared, and the alphabet at least cannot be mistaken
+ * for a judgement.
+ *
+ * A source with nothing doubted is left out rather than ranked at zero: it can
+ * never reach the top of a list ordered by count, so a row for it would be a
+ * row that says the list is longer than it is.
+ */
+export function sourceDoubts(
+	scores: Record<string, string>[],
+	health: Record<string, string>[],
+	window: DayWindow,
+	options: { limit: number; minForShare: number }
+): SourceDoubts {
+	const sourceOf = sourceByUrlKey(health);
+	const rows = within(scores, window);
+
+	const per = new Map<string, SourceDoubt>();
+	let unattributed = 0;
+	for (const row of rows) {
+		const sourceId = sourceOf.get(row.url_key ?? '');
+		if (sourceId === undefined) {
+			unattributed += 1;
+			continue;
+		}
+		const at = per.get(sourceId) ?? {
+			sourceId,
+			doubted: 0,
+			notSure: 0,
+			unsupportedNumbers: 0,
+			hedgeDropped: 0,
+			summaries: 0,
+			sharePct: null
+		};
+		at.summaries += 1;
+		if (row.band === 'low') at.notSure += 1;
+		if ((measured(row.unsupported_numbers) ?? 0) > 0) at.unsupportedNumbers += 1;
+		if (flag(row.hedge_dropped)) at.hedgeDropped += 1;
+		if (doubted(row)) at.doubted += 1;
+		per.set(sourceId, at);
+	}
+
+	const found = [...per.values()]
+		.filter((source) => source.doubted > 0)
+		.map((source) => ({
+			...source,
+			sharePct:
+				source.summaries < options.minForShare
+					? null
+					: Math.round((source.doubted / source.summaries) * 100)
+		}))
+		.sort((a, b) => b.doubted - a.doubted || a.sourceId.localeCompare(b.sourceId));
+
+	const rest = found.slice(options.limit);
+	return {
+		rows: found.slice(0, options.limit),
+		moreSources: rest.length,
+		moreDoubted: rest.reduce((total, source) => total + source.doubted, 0),
+		unattributed,
+		sources: per.size,
+		summaries: rows.length,
+		doubted: [...per.values()].reduce((total, source) => total + source.doubted, 0),
 		days: window.days,
 		start: window.start,
 		end: window.end
@@ -830,22 +1040,29 @@ export function runLengths(
 /** One measure, on each side of the day the model changed.
  *
  * `ratio` is the after over the before, so 1 is no change. It is the only thing
- * the seven rows can share an axis on: a median in seconds, a length in words
- * and a count in a hundred summaries have no common scale, and the question is
- * the same for all seven - did it move, and which way.
+ * the rows can share an axis on: a median in seconds, a length in words, a
+ * count in a hundred summaries and a token rate have no common scale, and the
+ * question is the same for all of them - did it move, and which way.
  */
 export interface SwapMeasure {
 	label: string;
-	unit: 'seconds' | 'words' | 'percent' | 'per-hundred';
-	before: number;
-	after: number;
-	/** After over before. Null where the before side is zero, because a move
-	 * away from nothing has no size. */
+	unit: 'seconds' | 'words' | 'percent' | 'per-hundred' | 'tokens-a-second';
+	/** Null where that side of the boundary recorded the measure at all.
+	 *
+	 * Not zero. A measure the older model never wrote down is not a comparison,
+	 * and drawing it as a move from nothing would be a claim about a run nobody
+	 * instrumented. The panel names it as unmeasured instead.
+	 */
+	before: number | null;
+	after: number | null;
+	/** After over before. Null where either side recorded nothing, and null
+	 * where the before side is zero - a move away from nothing has no size. */
 	ratio: number | null;
 	/** Which direction is the good one. Declared here, with the measure, so the
-	 * chart never decides it. Two of the seven have no agreed direction: a
-	 * shorter summary is what a smaller model was picked for, and more copying
-	 * is not obviously worse than more invention. */
+	 * chart never decides it. Four of the ten have no agreed direction: a
+	 * shorter summary is what a smaller model was picked for, more copying is
+	 * not obviously worse than more invention, and the two token rates are set
+	 * by the runner a shard landed on as much as by the model. */
 	polarity: MovementPolarity;
 }
 
@@ -868,21 +1085,36 @@ export interface ModelSwap {
 	enough: boolean;
 }
 
-function share(rows: Record<string, string>[], of: (row: Record<string, string>) => boolean): number {
-	return rows.length === 0 ? 0 : (rows.filter(of).length / rows.length) * 100;
+/** A rate over rows, or null where no row was there to take it over.
+ *
+ * Zero and null are different answers. Zero is "none of these summaries did
+ * it"; null is "nothing on this side of the boundary was asked".
+ */
+function share(
+	rows: Record<string, string>[],
+	of: (row: Record<string, string>) => boolean
+): number | null {
+	return rows.length === 0 ? null : (rows.filter(of).length / rows.length) * 100;
+}
+
+interface SideMeasure {
+	label: string;
+	unit: SwapMeasure['unit'];
+	value: number | null;
+	polarity: MovementPolarity;
 }
 
 function sideMeasures(
 	scores: Record<string, string>[],
 	health: Record<string, string>[],
 	bands: readonly SummaryBand[]
-): { label: string; unit: SwapMeasure['unit']; value: number; polarity: MovementPolarity }[] {
-	const times = summarizeMs(health).sort((a, b) => a - b);
+): SideMeasure[] {
+	const times = summarizeMs(health);
 	const words = scores
 		.map((row) => measured(row.summary_word_count))
-		.filter((count): count is number => count !== null)
-		.sort((a, b) => a - b);
-	const copies = scores.map(copied).sort((a, b) => a - b);
+		.filter((count): count is number => count !== null);
+	const copies = scores.map(copied);
+	const rates = health.map(itemRates);
 	const outside = scores.filter((row) => {
 		const wrote = measured(row.summary_word_count);
 		const read = measured(row.source_word_count) ?? measured(row.source_seen_word_count);
@@ -894,13 +1126,13 @@ function sideMeasures(
 		{
 			label: 'Time to write one',
 			unit: 'seconds',
-			value: times.length === 0 ? 0 : quantile(times, 0.5) / 1000,
+			value: times.length === 0 ? null : (quantile([...times].sort((a, b) => a - b), 0.5)) / 1000,
 			polarity: 'lower-is-better'
 		},
 		{
 			label: 'Summary length',
 			unit: 'words',
-			value: words.length === 0 ? 0 : quantile(words, 0.5),
+			value: median(words),
 			// The bands in config say what length was ASKED for, so neither longer
 			// nor shorter is better on its own - the measure two rows down is the
 			// one that carries a verdict about length.
@@ -909,10 +1141,18 @@ function sideMeasures(
 		{
 			label: 'Copied, not rewritten',
 			unit: 'percent',
-			value: copies.length === 0 ? 0 : quantile(copies, 0.5) * 100,
+			value: copies.length === 0 ? null : (median(copies) as number) * 100,
 			// No agreed threshold, and more copying is not obviously worse than more
 			// invention. The model route already refuses to tint this one.
 			polarity: 'no-agreed-direction'
+		},
+		{
+			label: 'Summaries the checker doubted',
+			unit: 'per-hundred',
+			// The same predicate the ranked list of sources above it uses, so the
+			// panel and the list cannot disagree about what a doubt is.
+			value: share(scores, doubted),
+			polarity: 'lower-is-better'
 		},
 		{
 			label: 'Marked "not sure"',
@@ -935,8 +1175,24 @@ function sideMeasures(
 		{
 			label: 'Outside the length we asked for',
 			unit: 'per-hundred',
-			value: scores.length === 0 ? 0 : (outside.length / scores.length) * 100,
+			value: scores.length === 0 ? null : (outside.length / scores.length) * 100,
 			polarity: 'lower-is-better'
+		},
+		{
+			label: 'Reading the article',
+			unit: 'tokens-a-second',
+			value: median(rates.map((rate) => rate.read).filter((r): r is number => r !== null)),
+			// A shard's read rate is set by the runner it landed on as much as by
+			// the model: the committed runtime ledger holds one run whose fastest
+			// shard read 4.35 times faster than its slowest, on one config. So the
+			// figure is a fact about the machine and never a verdict on the swap.
+			polarity: 'no-agreed-direction'
+		},
+		{
+			label: 'Writing the summary',
+			unit: 'tokens-a-second',
+			value: median(rates.map((rate) => rate.write).filter((r): r is number => r !== null)),
+			polarity: 'no-agreed-direction'
 		}
 	];
 }
@@ -980,14 +1236,21 @@ export function modelSwap(
 			from: newer[0],
 			to: newer[newer.length - 1]
 		},
-		measures: left.map((measure, index) => ({
-			label: measure.label,
-			unit: measure.unit,
-			polarity: measure.polarity,
-			before: measure.value,
-			after: right[index].value,
-			ratio: measure.value === 0 ? null : right[index].value / measure.value
-		})),
+		measures: left.map((measure, index) => {
+			const before = measure.value;
+			const after = right[index].value;
+			return {
+				label: measure.label,
+				unit: measure.unit,
+				polarity: measure.polarity,
+				before,
+				after,
+				// Both sides have to have recorded it, and the before side has to be
+				// something. A measure only one side wrote down is not a comparison,
+				// and a move away from nothing has no size.
+				ratio: before === null || after === null || before === 0 ? null : after / before
+			};
+		}),
 		enough: beforeScores.length >= minArticles && afterScores.length >= minArticles
 	};
 }

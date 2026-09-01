@@ -250,6 +250,13 @@
           "title": "Default Window Days",
           "type": "integer"
         },
+        "doubt_rows": {
+          "default": 10,
+          "description": "How many sources the Summaries route ranks by the summaries its faithfulness checker doubted, before it states the tail in one sentence. Measured 2026-09-01 over the committed score ledger, a thirty-day window holds 112 sources carrying at least one doubted summary and the worst ten hold 266 of the 1,047 doubts - so the tail is sources with a single doubt in a month, which nobody acts on. Ten, matching `console.source_rows` and `console.feed_rows`.",
+          "minimum": 1,
+          "title": "Doubt Rows",
+          "type": "integer"
+        },
         "failure_list_max": {
           "default": 25,
           "description": "How many failed items the console lists before it offers more. The shape comes first and the rows come on demand: an uncapped list put the compression chart 9000 pixels down the page.",
@@ -1613,6 +1620,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.doubt_rows added, defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Additive with a default, so a config written before today still validates.",
+      "version": "2026-09-01T13:00",
+      "why": "The Summaries route now ranks sources by how often the faithfulness checker doubted their summaries, and an uncapped ranking is a page nobody reads to the end: measured 2026-09-01 over the committed score ledger, a thirty-day window holds 112 sources with a doubted summary. The cap is a knob rather than a literal for the same reason `source_rows` and `feed_rows` are (Rule #6), and it takes their default so three ranked lists on one console do not each end at a different depth."
+    },
+    {
       "change": "ui.leading_stories, ui.leading_per_desk, ui.leading_min, ui.lead_cluster_floor, ui.lead_shared_subject_weight and ui.lead_max_yesterday added, defaulting to 5, 2, 3, 3, 0.2 and 1. ui.items_per_topic is deprecated, read by nothing, and dropped from the committed file. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
       "version": "2026-09-01T12:30",
       "why": "The day gets a leading block, and every number that decides it is a knob rather than a literal in a stage (Rule #6). The block replaces the three-per-topic headings, which on the 431-story day of 2026-08-30 drew 15 stories and put 416 behind five links - so items_per_topic lost its only reader. The field stays so a config written before today still validates, because an unknown key is refused; nothing reads it and the committed file no longer sets it (section 11). Every addition carries a default, so a file written before today still validates either way."
@@ -1989,7 +2001,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-01T12:30",
+      "default": "2026-09-01T13:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2003,5 +2015,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-01T12:30"
+  "version": "2026-09-01T13:00"
 }
