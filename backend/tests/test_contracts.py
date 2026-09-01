@@ -330,6 +330,21 @@ def test_the_seed_the_shell_carries_is_a_knob_the_frontend_agrees_with() -> None
     assert int(mirrored.group(1)) == UiConfig().shell_seed_items
 
 
+def test_the_wait_worth_a_sentence_is_a_knob_the_frontend_agrees_with() -> None:
+    """The two-copies problem on the one digest knob only a browser reads.
+
+    `payload_slow_ms` bounds a wait that happens in a reader's browser, so a
+    fresh clone with no config file resolves it from the frontend's own copy.
+    Let the two drift and the sentence about a slow day fires at a moment the
+    contract does not bound - and on a clone with no `config/` there is nothing
+    else to catch it.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"payload_slow_ms:\s*(\d+),", reader)
+    assert mirrored is not None, "the frontend dropped its payload_slow_ms default"
+    assert int(mirrored.group(1)) == UiConfig().payload_slow_ms
+
+
 def test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts() -> None:
     """The seed is what a document holds once the rest of the day arrives by fetch.
 

@@ -482,6 +482,14 @@
           "title": "Items Per Topic",
           "type": "integer"
         },
+        "payload_slow_ms": {
+          "default": 1200,
+          "description": "How long a reader may wait for the rest of a day before the page says one sentence about it. The opposite of `shell_seed_items`: this is the one knob in this block only a browser reads, because the wait happens in the browser and a prerendered document is the only way to tell it anything. No spinner and no bar - a sentence, which is what a state a reader has to act on gets (docs/concepts/design-system.md). Under 250 ms the sentence fires on a fetch that was never slow, which teaches a reader to ignore it; over 30 s they have already decided the page is broken. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, Chromium against a local preview server: a 9,731-byte served day answered in 10.2 to 22.3 ms over 12 probes, median 13, so the default is about 90 times that median and cannot fire on a healthy fetch here. That is a server on the same machine and not a reader's connection, which is exactly why this is a knob and not a constant.",
+          "maximum": 30000,
+          "minimum": 250,
+          "title": "Payload Slow Ms",
+          "type": "integer"
+        },
         "read_mark_days": {
           "default": 7,
           "description": "How many digest days of read marks the browser keeps. Marks are held per digest date, so a mark made on one day can never grey out a different day's article. Every page load keeps the newest days up to this number and drops the rest, which bounds the store without trusting the device clock. One week covers a reader who comes back after a break.",
@@ -570,6 +578,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "digest.payload_slow_ms added, defaulting to 1200. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
+      "version": "2026-09-01T10:00",
+      "why": "The rest of a day is about to arrive by fetch, so for the first time a reading page can be waiting on something. What it shows meanwhile is one sentence past this number - never a spinner and never a bar, because the first frame is already readable and a compressed response cannot report a byte count worth printing. This is the one knob in the block only a browser reads, which is the exact opposite of `shell_seed_items` beside it."
+    },
     {
       "change": "console.source_rows and console.feed_rows added, both defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
       "version": "2026-09-01T02:00",
@@ -661,7 +674,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-01T02:00",
+      "default": "2026-09-01T10:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -669,5 +682,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-01T02:00"
+  "version": "2026-09-01T10:00"
 }
