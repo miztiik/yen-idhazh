@@ -1372,6 +1372,37 @@ class UiConfig(Model):
             "stays one click away on its own topic page."
         ),
     )
+    topic_pills_max: int = Field(
+        default=8,
+        ge=1,
+        description=(
+            "How many topic pills stay on the row before the rest go inside a "
+            "disclosure. The cut is decided by each topic's story count at build "
+            "time, never by measuring the row in pixels: every page here is "
+            "prerendered, so a pixel-measured row is wrong until a script runs. "
+            "Eight is what a 360px screen holds in three wrapped lines without the "
+            "row becoming the page."
+        ),
+    )
+    shell_seed_items: int = Field(
+        default=15,
+        ge=1,
+        description=(
+            "How many of a day's stories a prerendered document carries. It is the "
+            "one knob in this block a browser is never told, because the root "
+            "layout inlines the rest of them into every document and a number no "
+            "page reads would ride to every reader for ever. Fifteen is the most "
+            "items any reading surface draws before the reader acts: the five "
+            "desks config/taxonomy.json declares times items_per_topic, which is "
+            "above the twelve a flat list pages at. Re-derive it from those two "
+            "when either moves - do not raise it to cover a busy day, because the "
+            "stories past the seed arrive by fetch. Measured 2026-09-01 on the "
+            "431-story day of 2026-08-30, gzip -9, Intel Core i7-1265U / Windows "
+            "11 / node 24.12.0: the first fifteen stories cost a dated route "
+            "20,302 bytes across the two documents it emits, against 420,074 for "
+            "all 431."
+        ),
+    )
     repo_url: str = Field(default="https://github.com/miztiik/yen-idhazh", min_length=1)
     site_title: str = Field(default="yen-idhazh", min_length=1)
     tagline: str = Field(
@@ -1621,6 +1652,43 @@ class AppConfig(Contract):
                 "whole: filing a build-time threshold there would publish it to a "
                 "config the browser reads, where nothing can act on it. Additive with "
                 "a default, so a config written before today still loads (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-01",
+            change=(
+                "ui.shell_seed_items added, defaulting to 15. The shape is "
+                "`UiConfig`, which this document and `AppearanceConfig` share, so "
+                "both schemas moved together. Additive with a default, so a config "
+                "written before today still validates."
+            ),
+            why=(
+                "A reading route's build-time load now splits a day into the facts "
+                "that do not grow with the story count, the head of the published "
+                "order, and the remainder. This number is where the head ends. "
+                "Nothing fetches yet - the two halves are put straight back "
+                "together, and the prerendered output is byte-identical - so the "
+                "knob decides nothing today and everything once the item list "
+                "moves to a browser fetch. Fifteen is the most items any reading "
+                "surface draws before the reader acts, measured against the five "
+                "desks `config/taxonomy.json` declares and `ui.items_per_topic`."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-31T23:59",
+            change=(
+                "ui.topic_pills_max added, defaulting to 8. The shape is `UiConfig`, "
+                "which this document and `AppearanceConfig` share, so both schemas "
+                "moved together. Additive with a default, so a config written before "
+                "today still validates."
+            ),
+            why=(
+                "The topic row was a horizontal scroll container, which is a control "
+                "that hides its own contents; the owner ruled on 2026-08-31 that no "
+                "reader-facing surface carries one. The row wraps now, and the topics "
+                "past this number sit inside a `+N more` disclosure so a day with "
+                "many topics does not turn the row into the page. A cap a component "
+                "spells is a cap an operator cannot move (Rule #6)."
             ),
         ),
         ChangelogEntry(

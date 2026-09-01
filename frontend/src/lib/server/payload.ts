@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 // where no Vite alias exists to resolve one.
 import { dayKey, toDay } from '../charts/viewport';
 import { dropVectors } from '../payload/project';
-import type { DigestDay } from '$lib/payload/types';
+import type { DigestDay, DigestItem } from '$lib/payload/types';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
 export const REPO_ROOT = resolve(process.cwd(), '..');
@@ -118,6 +118,53 @@ export function loadDay(date: string, root: string = DIGEST_ROOT): DigestDay | n
 
 export function latestDate(root: string = DIGEST_ROOT): string | null {
 	return publishedDates(root)[0] ?? null;
+}
+
+/** A day split at the seam a reading route loads across.
+ *
+ * `facts` is everything the day says that does not grow with the number of
+ * stories - the date, the run list, the topic counts, the retention window.
+ * `seed` is the head of the published order and `rest` is the remainder, so
+ * `[...seed, ...rest]` is the day's item list unchanged.
+ *
+ * `facts.items` is empty and keeps its slot on purpose. A prerendered document
+ * serialises an object in its own key order and the committed payload writes
+ * its keys sorted, so a day rebuilt with the stories appended is a different
+ * document holding the same day.
+ */
+export interface DayShell {
+	facts: DigestDay;
+	seed: DigestItem[];
+	rest: DigestItem[];
+}
+
+/** The day, in the two halves a reading route loads.
+ *
+ * Null for the same reason `loadDay` is null: the date was never published, or
+ * its payload cannot be read. Both are designed states, not errors.
+ */
+export function dayShell(
+	date: string,
+	seedItems: number,
+	root: string = DIGEST_ROOT
+): DayShell | null {
+	const day = loadDay(date, root);
+	if (!day) return null;
+	return {
+		facts: { ...day, items: [] },
+		seed: day.items.slice(0, seedItems),
+		rest: day.items.slice(seedItems)
+	};
+}
+
+/** The two halves back together.
+ *
+ * Every reading route still renders the whole day, so this is what its `load`
+ * returns and the prerendered output does not move. The rows that follow stop
+ * calling it on the routes that fetch their remainder instead.
+ */
+export function wholeDay(shell: DayShell): DigestDay {
+	return { ...shell.facts, items: [...shell.seed, ...shell.rest] };
 }
 
 /** The cells of a CSV, quoting and all.

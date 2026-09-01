@@ -50,11 +50,13 @@
       "topics",
       "items"
     ],
+    "shell_seed_items": 15,
     "show_filter": true,
     "site_title": "yen-idhazh",
     "source_mark": true,
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark",
+    "topic_pills_max": 8,
     "visual_side": "trailing"
   },
   "frame": {

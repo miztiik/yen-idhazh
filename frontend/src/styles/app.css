@@ -181,11 +181,18 @@ body {
 
 /* A grid splits on the width it HAS, never on the width of the window. Asking
    the viewport a question only the container could answer is what drew three
-   console charts at 164px each inside a 624px column. */
+   console charts at 164px each inside a 624px column.
+
+   `min(..., 100%)` is the guard, and it belongs here rather than at each call
+   site. A bare `minmax(22rem, 1fr)` builds a 352px track inside the 328px a
+   360px screen leaves after its gutters, and the page then scrolls sideways -
+   measured 2026-08-31 on `/archive/`, 368px of document in a 360px viewport.
+   The minimum is a floor for a track that HAS the room, not a demand for room
+   that is not there. */
 .auto-grid {
 	display: grid;
 	gap: var(--space-4);
-	grid-template-columns: repeat(auto-fit, minmax(var(--auto-grid-min, 20rem), 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(var(--auto-grid-min, 20rem), 100%), 1fr));
 }
 
 .panel {

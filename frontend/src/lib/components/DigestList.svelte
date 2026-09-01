@@ -98,6 +98,7 @@
 			{datePrefix}
 			bind:query
 			showFilter={ui.show_filter}
+			pillsMax={ui.topic_pills_max}
 		/>
 	{:else if section === 'items'}
 		{#if day.items.length === 0}
