@@ -250,6 +250,7 @@
     "source_mark": true,
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark",
+    "topic_pills_max": 5,
     "visual_side": "above"
   },
   "version": "2026-08-26T10:10",

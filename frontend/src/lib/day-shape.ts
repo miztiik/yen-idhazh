@@ -19,6 +19,48 @@ export interface TopicSlice {
 	hasMore: boolean;
 }
 
+/** The topic row split into the pills that stay out and the pills that fold away. */
+export interface PillSplit {
+	/** On the row, in the payload's own topic order. */
+	shown: DigestVerticalRef[];
+	/** Inside the disclosure, in the payload's own topic order. */
+	folded: DigestVerticalRef[];
+}
+
+/** Which topic pills stay on the row, and which go inside the `+N more` control.
+ *
+ * The cut is decided by each topic's story count, at build time. It cannot be
+ * decided by measuring the row: every page here is prerendered, so a row that
+ * measures itself is wrong until a script runs, which is the one moment a
+ * static site is supposed to be already finished.
+ *
+ * The topic the reader is on is always on the row. Folding it away would hide
+ * the only mark saying where they are, and it is the one pill they came for.
+ *
+ * Order is the payload's, in both halves, never the count order the cut used.
+ * `day.items` is grouped by desk and the pills already read alphabetically, so
+ * re-sorting by size would move a topic between two days for a reason a reader
+ * cannot see.
+ */
+export function splitPills(
+	verticals: DigestVerticalRef[],
+	active: string | null,
+	limit: number
+): PillSplit {
+	if (verticals.length <= limit) return { shown: verticals, folded: [] };
+	const keep = new Set(
+		[...verticals]
+			.sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
+			.slice(0, Math.max(limit, 1))
+			.map((vertical) => vertical.id)
+	);
+	if (active !== null) keep.add(active);
+	return {
+		shown: verticals.filter((vertical) => keep.has(vertical.id)),
+		folded: verticals.filter((vertical) => !keep.has(vertical.id))
+	};
+}
+
 /** Whether the all-topics view should render sections instead of one queue.
  *
  * A topic route already has a subject and a filter already has one, so both

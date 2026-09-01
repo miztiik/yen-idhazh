@@ -30,6 +30,8 @@ export interface UiConfig {
 	source_mark: boolean;
 	show_filter: boolean;
 	items_per_topic: number;
+	/** How many topic pills stay on the row before the rest go in a disclosure. */
+	topic_pills_max: number;
 	repo_url: string;
 	site_title: string;
 	tagline: string;
@@ -209,6 +211,7 @@ const DEFAULTS: UiConfig = {
 	source_mark: true,
 	show_filter: true,
 	items_per_topic: 3,
+	topic_pills_max: 8,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
 	tagline: 'A daily digest that checks its own work.',
