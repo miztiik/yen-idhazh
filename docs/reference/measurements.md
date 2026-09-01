@@ -2212,7 +2212,8 @@ that still measured 10,484 px would mean the arm had missed.
 #### All three ceilings again, at the close of the chart-craft plan (2026-09-01)
 
 Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
-2026-09-01. Tree: `origin/main` at `8d658de`, **twelve published days, 4,110
+2026-09-01. Tree: `origin/main` at `2d11328a`, the commit this branch was cut
+from, plus this branch's own three edits - **twelve published days, 4,110
 scored rows, 5,227 item-health rows and 84 runtime-counter rows over 20 runs**.
 Method: `npm run build`, then `gzipSync(readFileSync(page), { level: 9 }).length`
 - the byte the gate itself takes.
@@ -2325,6 +2326,16 @@ last derived two days ago and had already fallen to 1.05 and 1.47 publishes of
 room, so the useful figure to carry forward is not the ceiling but the rate: a
 published day now costs Pipelines 19,163 bytes, Model 1,453, and Machine 1,440 at
 five runs. The answer when the gate fires is still to re-measure and raise it.
+
+**`origin/main` moved to `8d658de` while this was being measured, and the three
+numbers are kept.** That merge put the day page's filter and the archive's topic
+pills into one panel, which touches the shell every route carries, so a single
+build of the merged tree read 142,628, 27,750 and 29,612 - **5, 6 and 13 bytes
+above** the page terms above. All three are inside the 10 to 14 bytes of
+build-to-build spread measured here and well inside the 64-byte noise floor the
+allowance already carries, so re-running the six-build census to move a ceiling
+by 13 bytes would buy nothing. The gate on the merged tree passes with 134,200,
+10,229 and 10,131 bytes spare.
 
 **The lazy chart chunk did not move across the whole plan.**
 `_app/immutable/chunks/EWEX9oIW.js` measured **567,839 bytes raw and 192,029

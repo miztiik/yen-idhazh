@@ -1213,6 +1213,15 @@ child, or the fix becomes an `!important`.
   pass on a route that ignores the window entirely.** Every preset then selects
   every row, so the assertion is true for the wrong reason. The fix is a fixture
   with a row only the widest preset can reach, not a stronger assertion.
+- **One arm of a two-arm test failing is a race, not a regression.**
+  `layout-overflow.spec.ts` runs the same routes at the same widths in the dark
+  theme and then the light one. On 2026-09-01 the dark arm failed in 5.3 s -
+  `/evals/` at 360 px reporting a `scrollWidth` of 789 off a `w-max` grid - and
+  the light arm passed the identical assertions in the same run, 1.1 min later.
+  A theme changes colour and not text metrics, so both arms measure one layout
+  and they cannot honestly disagree. Alone the spec passed 6 of 6 in 31 s.
+  Before you read a width failure as a layout bug, check whether its sibling arm
+  passed; if it did, the fast arm measured a page that had not settled.
 - **A per-day figure and a per-article figure need different degraded arms.**
   Emptying every ledger reaches only the whole-surface empty state, which proves
   the page renders and nothing about either figure. Drop one real day for the
@@ -1893,6 +1902,18 @@ the variable protects the shell you remember to set it in and nothing else.
   result you are reading describes a base that may no longer exist. That gap is
   the whole hazard: #186 landed in it, between the run that passed on #166 and
   the press that merged #166.
+- **A migration test that asserts the producer has not run yet is a time bomb,
+  and its fuse is one pipeline run.**
+  `test_a_committed_day_reads_an_absent_ranking_field_as_unknown` held that no
+  committed day carried any of five new ranking fields. The scheduled publish of
+  2026-08-31 then wrote a day with the new writer and the assertion was simply
+  false. Two things hid it: a pipeline push carries the job's own token and
+  starts no workflow, so nothing went red at the moment it broke, and when the
+  next human pull request did start a run, **every open pull request went red at
+  once** - which reads as an infrastructure fault rather than as one stale
+  assertion. Write the test against what a payload OMITS, not against what no
+  payload has yet. Whenever a whole branch set goes red together, check
+  `origin/main` before reading a single diff.
 - The check that closes the gap, before merging anything into a base that has
   moved: merge `origin/main` into the branch locally and run the suite on the
   merged tree. It is the only thing that tests the tree the merge will actually
