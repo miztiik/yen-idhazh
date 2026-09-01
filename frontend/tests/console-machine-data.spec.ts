@@ -14,9 +14,19 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+	contextColumns,
+	contextHeadroom,
+	curveOf,
+	latencyColumns,
+	peakMemory,
+	percentileHistory,
+	PERCENTILES,
+	RUNNER_MEMORY_BYTES
+} from '../src/lib/charts/machine';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
 	machineCounters,
@@ -27,6 +37,37 @@ import {
 } from '../src/lib/server/runtime-counters';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+/** The canary tree the browser suite is built from. The three oracles below
+ * that drive a page read THIS ledger, never the committed one: the page under
+ * the browser was built from it, and reading the other tree would compare a
+ * drawing of one ledger against the arithmetic of another. */
+const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
+
+/** The canary's counter rows, read the way the page's server reads them. */
+function canaryCounters(): Record<string, string>[] {
+	const text = readFileSync(join(CANARY, 'runtime-counters.csv'), 'utf8');
+	const lines = text.split('\n').filter(Boolean);
+	const header = lines[0].split(',');
+	return lines
+		.slice(1)
+		.map((line) => Object.fromEntries(header.map((key, at) => [key, line.split(',')[at] ?? ''])));
+}
+
+/** The canary's item rows, over every month shard. */
+function canaryHealth(): Record<string, string>[] {
+	const dir = join(CANARY, 'item-health');
+	const rows: Record<string, string>[] = [];
+	for (const name of readdirSync(dir).filter((entry) => entry.endsWith('.csv')).sort()) {
+		const lines = readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean);
+		const header = lines[0].split(',');
+		for (const line of lines.slice(1)) {
+			const cells = line.split(',');
+			rows.push(Object.fromEntries(header.map((key, at) => [key, cells[at] ?? ''])));
+		}
+	}
+	return rows;
+}
 
 /** 150 minutes, the committed `run.shard_timeout_minutes`, as seconds. */
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
@@ -662,5 +703,412 @@ test.describe('the shard board survives a phone', () => {
 			}
 		}
 		expect(collisions, 'these strings are drawn on top of each other').toEqual([]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Context headroom, peak memory, and the shape of a run's latency
+//
+// Three panels, three oracles, and each one has an arm that recomputes its
+// figure from the ledger the page was built from and an arm that measures what
+// the page actually drew. Neither arm alone is enough: arithmetic that never
+// reaches a screen is a function nobody looks at, and a mark count off a page
+// says nothing about whether the number under it is right.
+// ---------------------------------------------------------------------------
+
+const CONSOLE = JSON.parse(
+	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+).console as { window_presets: number[]; min_attempts_for_rate: number };
+const INFERENCE = JSON.parse(
+	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
+).models.inference as { n_ctx: number };
+
+const WIDEST = Math.max(...CONSOLE.window_presets);
+
+/** Drive the shared control to a preset and wait for the page to hold it. */
+async function widen(page: import('@playwright/test').Page, days: number) {
+	await page.locator(`[data-window-preset="${days}"]`).click();
+	await expect(page.locator('[data-window-control]')).toHaveAttribute(
+		'data-window-days',
+		String(days)
+	);
+}
+
+test.describe('Row #19 - context headroom is one chart with a limit rule', () => {
+	const limits: MachineLimits = { contextWindow: INFERENCE.n_ctx, jobTimeoutSeconds: 9000 };
+	const { runs } = machineCounters(canaryCounters(), [], limits);
+
+	/** The longest sequence per run, read straight off the CSV rather than off
+	 * the module - a maximum over the run's shards, blanks skipped. */
+	function longestByRun(): Map<string, number> {
+		const found = new Map<string, number>();
+		for (const row of canaryCounters()) {
+			const value = Number(row.n_tokens_max);
+			if (row.n_tokens_max === '' || !Number.isFinite(value)) continue;
+			const runId = row.run_id ?? '';
+			found.set(runId, Math.max(found.get(runId) ?? 0, value));
+		}
+		return found;
+	}
+
+	test('THE ORACLE: one mark a run, and the spare series is the window less it', () => {
+		const expected = longestByRun();
+		expect(expected.size, 'the canary ledger records no sequence length').toBeGreaterThan(1);
+
+		const bars = contextHeadroom(runs, limits.contextWindow);
+		const window = INFERENCE.n_ctx;
+		expect(bars.map((bar) => bar.runId).sort()).toEqual([...expected.keys()].sort());
+		for (const bar of bars) {
+			const longest = expected.get(bar.runId) as number;
+			expect(bar.longest, `${bar.runId} drew a sequence the ledger does not hold`).toBe(longest);
+			// The second series is derived, and this is what it is derived from.
+			expect(bar.spare, `${bar.runId}: spare is not the window less the longest`).toBe(
+				window - longest
+			);
+			expect(bar.usedPct).toBe(Math.round((longest / window) * 100));
+		}
+	});
+
+	test('no ceiling means no spare series and no share, and the sequence survives', () => {
+		// The bite for the clause above: a spare computed from a window nobody
+		// configured would be a number invented by the chart.
+		for (const bar of contextHeadroom(runs, null)) {
+			expect(bar.spare).toBeNull();
+			expect(bar.usedPct).toBeNull();
+			expect(bar.longest).not.toBeNull();
+		}
+	});
+
+	test('the strip prints the same three numbers the chart drew', () => {
+		const bars = contextHeadroom(runs, limits.contextWindow);
+		const columns = contextColumns(bars, limits.contextWindow);
+		expect(columns).toHaveLength(bars.length);
+		columns.forEach((column, at) => {
+			const bar = bars[at];
+			expect(column.date).toBe(bar.runId);
+			const said = Object.fromEntries(column.rows.map((row) => [row.label, row.value]));
+			expect(said['Longest sequence'].replace(/,/g, '')).toContain(String(bar.longest));
+			expect(said['Spare'].replace(/,/g, '')).toContain(String(bar.spare));
+			expect(said['Of the window']).toContain(`${bar.usedPct}%`);
+		});
+	});
+
+	test('THE ORACLE: the built page draws one mark a run, in date order, under the rule', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
+		await widen(page, WIDEST);
+
+		const drawn = await page.evaluate(() => {
+			const panel = document.querySelector('[data-windowed="machine-context"]');
+			if (panel === null) return null;
+			const svg = panel.querySelector('svg');
+			const rule = panel.querySelector('[data-context-limit]');
+			return {
+				runs: [...panel.querySelectorAll('[data-context-run]')].map((li) => ({
+					runId: li.getAttribute('data-context-run') ?? '',
+					longest: Number(li.getAttribute('data-context-longest')),
+					said: (li.textContent ?? '').replace(/\s+/g, ' ').trim()
+				})),
+				marks: svg === null ? 0 : svg.querySelectorAll('[data-context-series="longest"] circle').length,
+				spare: svg === null ? '' : (svg.querySelector('[data-context-series="spare"] polyline, polyline[data-context-series="spare"]')?.getAttribute('points') ?? ''),
+				limit: rule?.getAttribute('data-context-limit') ?? '',
+				ruleY: rule === null ? null : Number(rule.getAttribute('y1')),
+				markYs: svg === null ? [] : [...svg.querySelectorAll('[data-context-series="longest"] circle')].map((c) => Number(c.getAttribute('cy')))
+			};
+		});
+
+		expect(drawn, 'no context panel on the page').not.toBeNull();
+		const expected = longestByRun();
+		// One mark a run, and the runs are the ones the ledger holds.
+		expect(drawn!.runs.length, 'the panel names a different set of runs').toBe(expected.size);
+		expect(drawn!.marks, 'the chart drew a different number of marks from the runs it names').toBe(
+			drawn!.runs.length
+		);
+		for (const run of drawn!.runs) {
+			expect(run.longest, `${run.runId} drew a sequence the ledger does not hold`).toBe(
+				expected.get(run.runId)
+			);
+			expect(run.said, `${run.runId} prints no denominator`).toMatch(/over \d+ of \d+ shards/);
+		}
+		// Date order, oldest first: a run id is `<date>-<n>`, so a plain sort is
+		// the order the chart must be in.
+		expect(drawn!.runs.map((run) => run.runId)).toEqual(
+			[...drawn!.runs.map((run) => run.runId)].sort()
+		);
+		// The rule is the configured window, and it sits above every mark, which
+		// is the geometry that makes it a limit rather than a series.
+		expect(drawn!.limit).toBe(String(INFERENCE.n_ctx));
+		expect(drawn!.markYs.length).toBeGreaterThan(0);
+		expect(
+			Math.min(...drawn!.markYs),
+			'a mark is drawn above the window it cannot exceed'
+		).toBeGreaterThanOrEqual(drawn!.ruleY as number);
+		expect(drawn!.spare, 'the spare series drew nothing').not.toBe('');
+	});
+
+	test('THE ORACLE: hovering a run prints that run own three numbers', async ({ page }) => {
+		await page.goto('/console/machine/');
+		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
+		await widen(page, WIDEST);
+
+		const panel = page.locator('[data-windowed="machine-context"]');
+		const plot = panel.locator('svg').first();
+		await plot.scrollIntoViewIfNeeded();
+		const box = await plot.boundingBox();
+		expect(box, 'the context chart has no box to point at').not.toBeNull();
+
+		const runs = await panel
+			.locator('[data-context-run]')
+			.evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-context-run') ?? ''));
+
+		await page.mouse.move(box!.x + 4, box!.y + box!.height / 2);
+		await page.waitForTimeout(150);
+		const first = await panel.locator('[data-readout="context"] [data-readout-day]').innerText();
+		await page.mouse.move(box!.x + box!.width - 4, box!.y + box!.height / 2);
+		await page.waitForTimeout(150);
+		const last = await panel.locator('[data-readout="context"] [data-readout-day]').innerText();
+
+		// The strip names the run it is on, and the two ends are two runs.
+		expect(first.trim()).toBe(runs[0]);
+		expect(last.trim()).toBe(runs[runs.length - 1]);
+		expect(first).not.toBe(last);
+		// And the numbers under that heading are the ones the list prints for it.
+		const said = await panel.locator('[data-readout="context"]').innerText();
+		const listed = await panel
+			.locator(`[data-context-run="${runs[runs.length - 1]}"]`)
+			.getAttribute('data-context-longest');
+		expect(said.replace(/,/g, '')).toContain(String(listed));
+	});
+});
+
+test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
+	const highest = 7_000_000_000;
+
+	test('THE ORACLE: the run figure is the largest shard, not their total', () => {
+		const run = only(machineCounters(FULL, [], LIMITS).runs, '2026-09-02-1');
+		const view = peakMemory(run);
+		// 6 GB and 7 GB. A sum would report 13 GB on a machine that has 16.
+		expect(view.shards.map((shard) => [shard.shard, shard.bytes])).toEqual([
+			[0, 6_000_000_000],
+			[1, highest]
+		]);
+		expect(view.highWater, 'the aggregate is not the maximum').toBe(highest);
+		expect(view.highWater, 'the aggregate summed the shards').not.toBe(13_000_000_000);
+		expect(view.from).toBe(2);
+		expect(view.outOf).toBe(2);
+		expect(view.pctOfRunner).toBe(Math.round((highest / RUNNER_MEMORY_BYTES) * 100));
+		// Every bar runs to the same ceiling, so their lengths compare.
+		const tracks = new Set(view.shards.map((shard) => shard.marks.track));
+		expect(tracks.size, 'the per-shard bars are drawn on different tracks').toBe(1);
+		expect(view.marks.sense, 'the polarity is decided at the paint site').toBe('lower-is-better');
+	});
+
+	test('THE ORACLE: a run the reader refuses contributes nothing to either', () => {
+		// Two servers answered for shard 0 of `2026-08-29-3`, so the run cannot be
+		// made into one run. It is in the ledger below and must be in neither the
+		// per-shard bars nor the aggregate - not as a shard, and not as a zero.
+		const refusedRun = [
+			row({ run_id: '2026-08-29-3', date: '2026-08-29', shard: 0, peak_rss_bytes: 15_000_000_000 }),
+			row({
+				run_id: '2026-08-29-3',
+				date: '2026-08-29',
+				shard: 0,
+				peak_rss_bytes: 15_000_000_000,
+				prompt_seconds_total: 250,
+				scraped_at: '2026-08-29T11:00:00Z'
+			}),
+			row({ run_id: '2026-08-29-3', date: '2026-08-29', shard: 1, peak_rss_bytes: 9_000_000_000 })
+		];
+		const { runs, refused } = machineCounters([...FULL, ...refusedRun], [], LIMITS);
+		expect(refused.map((one) => one.runId)).toEqual(['2026-08-29-3']);
+		expect(runs.map((run) => run.runId)).not.toContain('2026-08-29-3');
+
+		// The page reads the newest run the READER handed over, which is the clean
+		// one - the refused run's 15 GB is nowhere.
+		for (const run of runs) {
+			const view = peakMemory(run);
+			expect(view.runId).not.toBe('2026-08-29-3');
+			expect(view.highWater, 'the refused run reached the aggregate').not.toBe(15_000_000_000);
+			expect(view.shards.map((shard) => shard.bytes)).not.toContain(15_000_000_000);
+		}
+	});
+
+	test('a shard that recorded nothing is left out, never drawn as no memory', () => {
+		const partial = [
+			row({ run_id: '2026-09-02-9', shards: 4, shard: 0, peak_rss_bytes: 5_000_000_000 }),
+			row({ run_id: '2026-09-02-9', shards: 4, shard: 1 })
+		];
+		const view = peakMemory(only(machineCounters(partial, [], LIMITS).runs, '2026-09-02-9'));
+		expect(view.shards.map((shard) => shard.shard)).toEqual([0]);
+		expect(view.from).toBe(1);
+		expect(view.outOf).toBe(4);
+		expect(view.highWater).toBe(5_000_000_000);
+	});
+
+	test('no shard recorded it at all is an empty panel, never a zero', () => {
+		const view = peakMemory(only(machineCounters([row({ shards: 2 })], [], LIMITS).runs, '2026-09-02-1'));
+		expect(view.empty).toBe(true);
+		expect(view.highWater).toBeNull();
+		expect(view.highWater).not.toBe(0);
+	});
+
+	test('THE ORACLE: the built page prints the ledger own bytes, and no sum', async ({ page }) => {
+		await page.goto('/console/machine/');
+
+		const drawn = await page.evaluate(() => {
+			const panel = document.querySelector('[data-peak-memory]');
+			if (panel === null) return null;
+			return {
+				runId: panel.getAttribute('data-peak-memory') ?? '',
+				highWater: Number(
+					panel.querySelector('[data-memory-high-water]')?.getAttribute('data-memory-high-water')
+				),
+				shards: [...panel.querySelectorAll('[data-memory-shard]')].map((node) => ({
+					shard: Number(node.getAttribute('data-memory-shard')),
+					bytes: Number(node.getAttribute('data-memory-bytes'))
+				}))
+			};
+		});
+		expect(drawn, 'no peak-memory panel on the page').not.toBeNull();
+
+		// Recomputed from the canary ledger, not from the module.
+		const mine = canaryCounters().filter((row) => row.run_id === drawn!.runId);
+		const bytes = mine
+			.map((row) => Number(row.peak_rss_bytes))
+			.filter((value, at) => mine[at].peak_rss_bytes !== '' && Number.isFinite(value));
+		expect(bytes.length, 'the newest canary run records no memory').toBeGreaterThan(0);
+		expect(drawn!.shards.map((shard) => shard.bytes).sort()).toEqual([...bytes].sort());
+		expect(drawn!.highWater, 'the page drew something other than the maximum').toBe(
+			Math.max(...bytes)
+		);
+		const total = bytes.reduce((carry, value) => carry + value, 0);
+		if (bytes.length > 1) {
+			expect(drawn!.highWater, 'the page summed the shards').not.toBe(total);
+		}
+		// The figure the panel exists for, in the unit the runner's limit is quoted
+		// in, beside the limit itself.
+		await expect(page.locator('[data-peak-memory]')).toContainText(/GiB/);
+		await expect(page.locator('[data-peak-memory]')).toContainText(
+			`of the runner's ${(RUNNER_MEMORY_BYTES / 1024 / 1024 / 1024).toFixed(2)} GiB`
+		);
+	});
+});
+
+test.describe('Row #21 - one plot a percentile, and one across them', () => {
+	const health = canaryHealth();
+	const history = percentileHistory(health, CONSOLE.min_attempts_for_rate);
+
+	test('THE ORACLE: one value per configured percentile, per readable run', () => {
+		// Recomputed here from the rows, so the module never checks itself.
+		const timed = new Map<string, number[]>();
+		for (const row of health) {
+			const ms = Number(row.summarize_ms);
+			if (row.summarize_ms === '' || !Number.isFinite(ms) || ms <= 0) continue;
+			timed.set(row.run_id ?? '', [...(timed.get(row.run_id ?? '') ?? []), ms]);
+		}
+		const readable = [...timed.entries()].filter(
+			([, values]) => values.length >= CONSOLE.min_attempts_for_rate
+		);
+		expect(readable.length, 'the canary times too few items to draw anything').toBeGreaterThan(0);
+
+		expect(history.runs.map((run) => run.runId).sort()).toEqual(
+			readable.map(([runId]) => runId).sort()
+		);
+		for (const run of history.runs) {
+			expect(run.ms, `${run.runId} drew a different number of percentiles`).toHaveLength(
+				PERCENTILES.length
+			);
+			// Non-decreasing, because a percentile ladder that dips is a sort that
+			// did not happen.
+			expect([...run.ms], `${run.runId}: the ladder is not in order`).toEqual(
+				[...run.ms].sort((a, b) => a - b)
+			);
+		}
+		// A run under the floor is printed, never drawn.
+		for (const few of history.tooFew) {
+			expect(few.items).toBeLessThan(CONSOLE.min_attempts_for_rate);
+			expect(history.runs.map((run) => run.runId)).not.toContain(few.runId);
+		}
+	});
+
+	test('THE ORACLE: the aggregate reads the newest run own values, at every percentile', () => {
+		const newest = history.runs.at(-1);
+		expect(newest, 'no run to aggregate').toBeTruthy();
+		const curve = curveOf(newest!);
+		expect(curve.points.map((point) => point.percentile)).toEqual([...PERCENTILES]);
+		PERCENTILES.forEach((percentile, at) => {
+			expect(
+				curve.points[at].ms,
+				`the aggregate and the p${percentile} plot disagree about the newest run`
+			).toBe(newest!.ms[at]);
+		});
+		// And the strip under the plots prints the same ladder.
+		const column = latencyColumns([newest!])[0];
+		expect(column.date).toBe(newest!.runId);
+		expect(column.rows.slice(0, PERCENTILES.length).map((row) => row.label)).toEqual(
+			PERCENTILES.map((percentile) => `p${percentile}`)
+		);
+	});
+
+	test('THE ORACLE: the built page draws a plot a percentile on one shared scale', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
+		await widen(page, WIDEST);
+
+		const drawn = await page.evaluate(() => {
+			const panel = document.querySelector('[data-windowed="machine-latency"]');
+			if (panel === null) return null;
+			const svg = panel.querySelector('svg');
+			if (svg === null) return { plots: [], tops: [], runs: 0, empty: true };
+			return {
+				plots: [...svg.querySelectorAll('[data-latency-series]')].map((group) => ({
+					name: group.getAttribute('data-latency-series') ?? '',
+					marks: group.querySelectorAll('circle').length,
+					// The vertical span the line covers, in the plot own pixels.
+					points: (group.querySelector('polyline')?.getAttribute('points') ?? '')
+						.split(' ')
+						.filter(Boolean)
+						.map((pair) => Number(pair.split(',')[1]))
+				})),
+				tops: [...svg.querySelectorAll('[data-latency-top]')].map((node) =>
+					node.getAttribute('data-latency-top')
+				),
+				runs: Number(svg.getAttribute('data-latency-runs')),
+				empty: false
+			};
+		});
+
+		expect(drawn, 'no latency panel on the page').not.toBeNull();
+		expect(drawn!.empty, 'the widest preset drew no latency plot at all').toBe(false);
+		// One plot a configured percentile, and each draws one mark a run.
+		expect(drawn!.plots.map((plot) => plot.name)).toEqual(
+			PERCENTILES.map((percentile) => `p${percentile}`)
+		);
+		expect(drawn!.runs, 'the panel drew no run').toBeGreaterThan(0);
+		for (const plot of drawn!.plots) {
+			expect(plot.marks, `${plot.name} drew a different number of marks from the runs`).toBe(
+				drawn!.runs
+			);
+		}
+		// ONE domain across all five. Five plots on five domains would each label
+		// their own maximum, and the five labels would differ.
+		expect(new Set(drawn!.tops).size, 'the five plots are not on one scale').toBe(1);
+		expect(drawn!.tops.length, 'a plot draws no scale at all').toBe(PERCENTILES.length);
+
+		// And the shared scale is what makes the heights comparable: with the same
+		// domain and the same cell height, a bigger value sits nearer its own plot's
+		// top. p99 is the biggest, so within its own cell it sits highest.
+		const CELL = 96 + 12;
+		const within = (plot: { points: number[] }, at: number, index: number) =>
+			plot.points[at] - index * CELL;
+		const last = drawn!.runs - 1;
+		expect(
+			within(drawn!.plots[PERCENTILES.length - 1], last, PERCENTILES.length - 1),
+			'p99 does not sit higher in its own plot than p50 does in its'
+		).toBeLessThan(within(drawn!.plots[0], last, 0));
 	});
 });
