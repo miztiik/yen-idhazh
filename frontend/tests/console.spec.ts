@@ -874,6 +874,12 @@ test('the telemetry viewport renders the published projection', async ({ page })
 test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
 	await page.goto('/console/');
 
+	// The rows sit behind a disclosure, so the control that reaches them is what
+	// has to work before anything about them can be read.
+	const toggle = page.locator('[data-failure-toggle]');
+	await expect(toggle).toBeVisible();
+	await toggle.click();
+
 	const rows = page.locator('[data-failure-list="rows"] tbody tr');
 	const empty = page.locator('[data-failure-list="empty"]');
 	if ((await empty.count()) === 1) {
@@ -1085,8 +1091,13 @@ test('an empty section costs the page that section, never the page', async ({ pa
 
 	// The canary telemetry records no failed item, so the failed-item list has
 	// nothing to list. It says so and the page carries on: the timing chart, the
-	// run grid, the feed table and the score table all still draw.
-	await expect(page.locator('[data-failure-list="empty"]')).toBeVisible();
+	// run grid, the feed table and the score table all still draw. The rows are
+	// behind a disclosure now, so what has to survive is the control that reaches
+	// them and the sentence it carries - not the table itself.
+	await expect(page.locator('[data-failure-toggle]')).toBeVisible();
+	await expect(page.locator('[data-failure-list="empty"]')).toHaveText(
+		'No failed item is in this window.'
+	);
 	await expect(page.getByText('Time per item, by stage')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
