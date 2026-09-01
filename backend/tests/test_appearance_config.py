@@ -237,8 +237,8 @@ def test_a_theme_that_never_existed_is_still_refused() -> None:
 def test_the_schema_is_generated_and_stamped() -> None:
     schema = AppearanceConfig.json_schema()
     assert schema["$id"] == "appearance-config.schema.json"
-    assert schema["version"] == "2026-08-31T23:56"
-    assert schema["changelog"][0]["version"] == "2026-08-31T23:56"
+    assert schema["version"] == "2026-08-31T23:59"
+    assert schema["changelog"][0]["version"] == "2026-08-31T23:59"
     for block in ("digest", "console", "assist", "frame", "theme", "chart", "icons", "motion"):
         assert block in schema["properties"], f"{block} missing from the generated schema"
 

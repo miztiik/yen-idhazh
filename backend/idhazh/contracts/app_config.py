@@ -1336,6 +1336,18 @@ class UiConfig(Model):
             "stays one click away on its own topic page."
         ),
     )
+    topic_pills_max: int = Field(
+        default=8,
+        ge=1,
+        description=(
+            "How many topic pills stay on the row before the rest go inside a "
+            "disclosure. The cut is decided by each topic's story count at build "
+            "time, never by measuring the row in pixels: every page here is "
+            "prerendered, so a pixel-measured row is wrong until a script runs. "
+            "Eight is what a 360px screen holds in three wrapped lines without the "
+            "row becoming the page."
+        ),
+    )
     repo_url: str = Field(default="https://github.com/miztiik/yen-idhazh", min_length=1)
     site_title: str = Field(default="yen-idhazh", min_length=1)
     tagline: str = Field(
@@ -1574,6 +1586,23 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31T23:59",
+            change=(
+                "ui.topic_pills_max added, defaulting to 8. The shape is `UiConfig`, "
+                "which this document and `AppearanceConfig` share, so both schemas "
+                "moved together. Additive with a default, so a config written before "
+                "today still validates."
+            ),
+            why=(
+                "The topic row was a horizontal scroll container, which is a control "
+                "that hides its own contents; the owner ruled on 2026-08-31 that no "
+                "reader-facing surface carries one. The row wraps now, and the topics "
+                "past this number sit inside a `+N more` disclosure so a day with "
+                "many topics does not turn the row into the page. A cap a component "
+                "spells is a cap an operator cannot move (Rule #6)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-31T23:58",
             change="Added collect.max_source_share_per_day, and the committed config sets it.",
