@@ -450,6 +450,20 @@ to find one, so it opens on the same twenty-five the console's failure list
 does. Like `items_per_topic` it hides nothing - every story is one more click
 away, and the order is the published one.
 
+`ui.shell_seed_items` (15) is how many of a day's stories a prerendered document
+carries. It is the one knob in this block a browser is never told: the root
+layout inlines the rest of them into every document, and a build-only number put
+there would ride to every reader on every page for ever. Fifteen is the most
+stories any reading surface draws before the reader acts - the five desks
+`config/taxonomy.json` declares times `items_per_topic`, which is above the
+twelve a flat list pages at - so re-derive it from those two rather than raising
+it to cover a busy day. It decides nothing today, because the reading routes put
+the seed and the remainder straight back together and prerender the whole day.
+It decides everything once the remainder arrives by fetch: measured 2026-09-01
+on the 431-story day of 2026-08-30, `gzip -9`, the first fifteen stories cost a
+dated route 20,302 bytes across the two documents it emits, against 420,074 for
+all 431.
+
 The `assist` block is on-device search. The runner embeds the day and commits
 the vectors; a reader's tab embeds only the query. The first two knobs say how
 much of an item the encoder is allowed to read, and the last two say how much of
