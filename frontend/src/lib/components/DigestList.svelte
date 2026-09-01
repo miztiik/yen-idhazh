@@ -53,14 +53,17 @@
 	const scoped = $derived(
 		vertical ? day.items.filter((item) => item.vertical === vertical) : day.items
 	);
-	// What the topic published, not what is in hand. A topic page's document
-	// carries the head of its desk and fetches the rest, so counting the list
-	// here would print a number that ticks up while the reader watches - and sits
-	// beside a pill already showing the day's own count for the same topic.
+	// What the day published, not what is in hand. A reading route's document
+	// carries a seed and fetches the rest, so counting the list here would print
+	// a number that ticks up while the reader watches - and the topic pill beside
+	// it already shows the day's own count for its own desk. Both halves read a
+	// bounded fact off the payload instead: one desk's count, or every desk's.
 	const total = $derived(
 		vertical
 			? (day.verticals.find((ref) => ref.id === vertical)?.count ?? scoped.length)
-			: scoped.length
+			: day.verticals.length > 0
+				? day.verticals.reduce((sum, ref) => sum + ref.count, 0)
+				: scoped.length
 	);
 	const needle = $derived(query.trim().toLowerCase());
 	const matched = $derived(

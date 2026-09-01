@@ -194,9 +194,9 @@ export function dayShell(
 
 /** The two halves back together.
  *
- * Every reading route still renders the whole day, so this is what its `load`
- * returns and the prerendered output does not move. The rows that follow stop
- * calling it on the routes that fetch their remainder instead.
+ * The home page still renders the whole day inline, so this is what its `load`
+ * returns. The dated routes stopped calling it: they keep a seed and let the
+ * browser fetch the remainder.
  *
  * Only for a shell split with nothing kept out of order (see `DayShellSplit`).
  */
