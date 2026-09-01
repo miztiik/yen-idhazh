@@ -313,6 +313,29 @@
       "title": "DigestItem",
       "type": "object"
     },
+    "DigestLead": {
+      "additionalProperties": false,
+      "description": "One of the day's leading stories, and the one sentence saying why it leads.\n\nThe story itself stays in `items` in the published order, so the block adds\na way in and removes nothing. Nothing here carries a position: a number\nbeside a story implies a score we would then owe the reader an explanation\nfor.",
+      "properties": {
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "reason": {
+          "description": "One sentence a reader can check against the story, built from our own published title and our own closed registry and never from fetched text (Rule #11). A lead that cannot say something true is not a lead.",
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "reason"
+      ],
+      "title": "DigestLead",
+      "type": "object"
+    },
     "DigestRunRef": {
       "additionalProperties": false,
       "description": "A run of this date, as the page footer and the new-arrivals block need it.",
@@ -500,6 +523,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added leads: the day's leading stories, each with the reason it leads.",
+      "version": "2026-09-01T12:30",
+      "why": "The page had no first screen. Its opening stories were whichever desk sorted first in run 1, which is an accident rather than an edit, and the reader could not see why any story was there. The block is chosen across the whole day from the ranking signal the item already publishes plus a shared-subject term computed here, and it removes nothing: every lead is still in items, in the published order, and every excluded story still publishes. Additive with an empty default, so every day published before today - 11 days and 4,086 items when this landed, 2026-09-01 - still validates and still renders, with no block (section 11)."
+    },
+    {
       "change": "Added carried_by, watchlist_hit, on_front_page, rank_score and time_source to published items.",
       "version": "2026-08-31T10:30",
       "why": "The planning step computed all five and published none, so the page could not say why a story is in the digest or which clock its time came from. Nothing new is computed: four are the score's own terms and the fifth is the choice rank.appeared_at already makes. All five are optional and null on every day published before this - 11 days and 3,596 items when this landed, 2026-08-31 - and a null reads as unknown, never as 0, which for carried_by would claim a story no feed carried, and never as false, which for on_front_page would claim a vote that was never counted (section 11)."
@@ -580,6 +608,14 @@
       "title": "Items Planned",
       "type": "integer"
     },
+    "leads": {
+      "description": "The day's leading stories, strongest first, chosen across the whole day rather than off the head of the published order. Empty is the normal state and it means the block does not render: a day with too few stories worth leading goes straight to the stream rather than padding. Every entry names an item this same day holds.",
+      "items": {
+        "$ref": "#/$defs/DigestLead"
+      },
+      "title": "Leads",
+      "type": "array"
+    },
     "partial": {
       "description": "A run with failures publishes, and says it was partial.",
       "title": "Partial",
@@ -601,7 +637,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-31T10:30",
+      "default": "2026-09-01T12:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -626,5 +662,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-08-31T10:30"
+  "version": "2026-09-01T12:30"
 }

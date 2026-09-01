@@ -29,7 +29,6 @@ export interface UiConfig {
 	visual_side: 'above' | 'leading' | 'trailing';
 	source_mark: boolean;
 	show_filter: boolean;
-	items_per_topic: number;
 	/** How many topic pills stay on the row before the rest go in a disclosure. */
 	topic_pills_max: number;
 	repo_url: string;
@@ -210,12 +209,11 @@ export interface MotionConfig {
 }
 
 const DEFAULTS: UiConfig = {
-	sections: ['notice', 'topics', 'items'],
+	sections: ['notice', 'leads', 'topics', 'items'],
 	theme_default: 'dark',
 	visual_side: 'above',
 	source_mark: true,
 	show_filter: true,
-	items_per_topic: 3,
 	topic_pills_max: 8,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
@@ -328,9 +326,30 @@ interface RawConfig {
 	models?: { inference?: Partial<InferenceConfig> };
 }
 
-/** The `digest` block: everything `UiConfig` holds, plus the build-only knobs
+/** Keys the `digest` block carries that no page reads.
+ *
+ * Whatever `uiConfig()` returns is inlined into every prerendered document, so
+ * a number no component opens would ride to every reader on every page for
+ * ever. `shell_seed_items` is read by the build alone. The six leading-block
+ * knobs are read by the pipeline, which decides the block at assemble and
+ * publishes the answer on the day - the page draws what it is handed and
+ * re-decides nothing. `items_per_topic` is retired and read by nothing at all.
+ */
+const BUILD_ONLY_KEYS = [
+	'shell_seed_items',
+	'items_per_topic',
+	'leading_stories',
+	'leading_per_desk',
+	'leading_min',
+	'lead_cluster_floor',
+	'lead_shared_subject_weight',
+	'lead_max_yesterday'
+] as const;
+
+/** The `digest` block: everything `UiConfig` holds, plus the knobs
  * `uiConfig()` deliberately leaves out of what it hands a browser. */
-type DigestBlock = Partial<UiConfig> & { shell_seed_items?: number };
+type DigestBlock = Partial<UiConfig> &
+	Partial<Record<(typeof BUILD_ONLY_KEYS)[number], number>>;
 
 interface RawAppearance {
 	digest?: DigestBlock;
@@ -380,10 +399,10 @@ export function mergeLayers<T extends object>(
 }
 
 export function uiConfig(): UiConfig {
-	const ui = mergeLayers(DEFAULTS, raw().ui, appearance().digest);
-	// `shell_seed_items` shares the block and must not ride along - see below.
-	delete (ui as DigestBlock).shell_seed_items;
-	return ui;
+	const ui = mergeLayers(DEFAULTS, raw().ui, appearance().digest) as DigestBlock;
+	// These share the block and must not ride along - see BUILD_ONLY_KEYS.
+	for (const key of BUILD_ONLY_KEYS) delete ui[key];
+	return ui as UiConfig;
 }
 
 /** How many of a day's stories a prerendered document carries.

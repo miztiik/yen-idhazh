@@ -193,7 +193,7 @@ def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() 
     """
     legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
     resolved = AppConfig.model_validate(legacy)
-    assert resolved.ui.items_per_topic >= 1
+    assert resolved.ui.archive_page_size >= 1
     assert resolved.console.chart_width >= 240
 
 
@@ -237,8 +237,8 @@ def test_a_theme_that_never_existed_is_still_refused() -> None:
 def test_the_schema_is_generated_and_stamped() -> None:
     schema = AppearanceConfig.json_schema()
     assert schema["$id"] == "appearance-config.schema.json"
-    assert schema["version"] == "2026-09-01T02:00"
-    assert schema["changelog"][0]["version"] == "2026-09-01T02:00"
+    assert schema["version"] == "2026-09-01T12:30"
+    assert schema["changelog"][0]["version"] == "2026-09-01T12:30"
     for block in ("digest", "console", "assist", "frame", "theme", "chart", "icons", "motion"):
         assert block in schema["properties"], f"{block} missing from the generated schema"
 

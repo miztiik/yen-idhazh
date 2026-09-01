@@ -477,9 +477,52 @@
         },
         "items_per_topic": {
           "default": 3,
-          "description": "How many of a topic's stories the all-topics page shows before it links to the rest. One long queue has no usable first screen: its opening items are whichever topic sorts first. Nothing is removed or re-ranked - every item stays one click away on its own topic page.",
+          "deprecated": true,
+          "description": "Retired 2026-09-01 and read by nothing. The all-topics page drew this many of each topic under a heading and put the rest behind a link, which on the 431-story day of 2026-08-30 published 15 stories and hid 416. The leading block replaced the headings and the flat stream carries the whole day. Kept as a field, and dropped from the committed config, so a file written before today still validates - an unknown key is refused (section 11).",
           "minimum": 1,
           "title": "Items Per Topic",
+          "type": "integer"
+        },
+        "lead_cluster_floor": {
+          "default": 3,
+          "description": "How many distinct sources must name one entity in their published titles before that shared subject counts for anything. Under it the term is zero. Measured 2026-09-01 over the 11 committed days and 4,086 items: at two sources 14.64 percent of stories sit in a cluster and at three it is 12.85 percent, so the stronger claim costs 73 stories in 11 days.",
+          "minimum": 2,
+          "title": "Lead Cluster Floor",
+          "type": "integer"
+        },
+        "lead_max_yesterday": {
+          "default": 1,
+          "description": "The most leads the block may give to stories the feed dated to the previous calendar day. A day's leading stories are today's; one late arrival is a catch-up and three are yesterday's page.",
+          "minimum": 0,
+          "title": "Lead Max Yesterday",
+          "type": "integer"
+        },
+        "lead_shared_subject_weight": {
+          "default": 0.2,
+          "description": "What a qualifying shared subject adds to a story's rank inside the leading block. It is a step and not a ramp: no measurement supports a shape, and a shape nobody measured may not justify a design (Rule #10). It must stay below what one more trade-press carrier is worth, which is collect.tier_weights.trade_press times collect.repetition_weight - 0.6 on the committed config - so a recurring subject cannot outrank a story two independent feeds carried today. Measured 2026-09-01: a second carrier fires on 4.49 percent of the stories that record it and a shared subject on 12.85 percent, 2.9 times as often, and 0.6 divided by 2.9 is 0.21.",
+          "minimum": 0.0,
+          "title": "Lead Shared Subject Weight",
+          "type": "number"
+        },
+        "leading_min": {
+          "default": 3,
+          "description": "The fewest leads worth drawing a block for. Under it nothing renders and the day goes straight to the stream, because four real leads beat five with one filler.",
+          "minimum": 1,
+          "title": "Leading Min",
+          "type": "integer"
+        },
+        "leading_per_desk": {
+          "default": 2,
+          "description": "The most leads one desk may hold. It matters more than it looks: 25 of the 30 committed watchlist entries are technology companies, so the shared-subject term is structurally biased toward the AI and business desks, and this is the only thing holding it.",
+          "minimum": 1,
+          "title": "Leading Per Desk",
+          "type": "integer"
+        },
+        "leading_stories": {
+          "default": 5,
+          "description": "The most stories the leading block may hold. They are chosen across the whole day, so the block is the page's first screen and the stream below it still carries every story in the published order.",
+          "minimum": 1,
+          "title": "Leading Stories",
           "type": "integer"
         },
         "read_mark_days": {
@@ -506,7 +549,7 @@
         },
         "shell_seed_items": {
           "default": 15,
-          "description": "How many of a day's stories a prerendered document carries. It is the one knob in this block a browser is never told, because the root layout inlines the rest of them into every document and a number no page reads would ride to every reader for ever. Fifteen is the most items any reading surface draws before the reader acts: the five desks config/taxonomy.json declares times items_per_topic, which is above the twelve a flat list pages at. Re-derive it from those two when either moves - do not raise it to cover a busy day, because the stories past the seed arrive by fetch. Measured 2026-09-01 on the 431-story day of 2026-08-30, gzip -9, Intel Core i7-1265U / Windows 11 / node 24.12.0: the first fifteen stories cost a dated route 20,302 bytes across the two documents it emits, against 420,074 for all 431.",
+          "description": "How many of a day's stories a prerendered document carries. It is the one knob in this block a browser is never told, because the root layout inlines the rest of them into every document and a number no page reads would ride to every reader for ever. Fifteen covers the twelve a flat list pages at and the five the leading block draws. It is a floor rather than the whole answer: a lead is chosen across the whole day and is not inside any prefix, so the document has to carry those as well - measured 2026-09-01 on the 601-story day of 2026-08-31, the five sat at positions 249, 285, 337, 344 and 493. Re-derive it when the block or the page size moves; do not raise it to cover a busy day, because the stories past the seed arrive by fetch. Measured 2026-09-01 on the 431-story day of 2026-08-30, gzip -9, Intel Core i7-1265U / Windows 11 / node 24.12.0: the first fifteen stories cost a dated route 20,302 bytes across the two documents it emits, against 420,074 for all 431.",
           "minimum": 1,
           "title": "Shell Seed Items",
           "type": "integer"
@@ -570,6 +613,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "digest.leading_stories, digest.leading_per_desk, digest.leading_min, digest.lead_cluster_floor, digest.lead_shared_subject_weight and digest.lead_max_yesterday added, defaulting to 5, 2, 3, 3, 0.2 and 1. digest.items_per_topic is deprecated, read by nothing, and dropped from the committed file. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together.",
+      "version": "2026-09-01T12:30",
+      "why": "The day gets a leading block: five stories chosen across the whole day, each carrying one sentence saying why it is there. Every number that decides it is a knob rather than a literal in a stage (Rule #6). The block replaces the three-per-topic headings, which on the 431-story day of 2026-08-30 drew 15 stories and put 416 behind five links, so items_per_topic lost its only reader. Additive with defaults and one deprecation that still validates, so an appearance file written before today still reads (section 11)."
+    },
     {
       "change": "console.source_rows and console.feed_rows added, both defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
       "version": "2026-09-01T02:00",
@@ -661,7 +709,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-01T02:00",
+      "default": "2026-09-01T12:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -669,5 +717,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-01T02:00"
+  "version": "2026-09-01T12:30"
 }

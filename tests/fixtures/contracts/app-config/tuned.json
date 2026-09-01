@@ -240,10 +240,17 @@
   "ui": {
     "archive_page_size": 40,
     "items_per_topic": 5,
+    "lead_cluster_floor": 2,
+    "lead_max_yesterday": 0,
+    "lead_shared_subject_weight": 0.15,
+    "leading_min": 2,
+    "leading_per_desk": 1,
+    "leading_stories": 4,
     "read_mark_days": 3,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [
       "notice",
+      "leads",
       "topics",
       "items"
     ],

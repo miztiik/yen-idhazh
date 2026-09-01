@@ -2627,6 +2627,8 @@ def stage_assemble(
             digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
         ),
         item_health_rows=item_health_rows,
+        watchlist=settings.watchlist,
+        ui=settings.app.ui,
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
 

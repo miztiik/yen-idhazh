@@ -124,6 +124,12 @@
   ],
   "items_failed": 1,
   "items_planned": 4,
+  "leads": [
+    {
+      "item_id": "energy-01",
+      "reason": "The lead story on our Energy desk."
+    }
+  ],
   "partial": true,
   "retention_window_months": -1,
   "runs": [

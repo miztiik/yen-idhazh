@@ -443,32 +443,51 @@ its own. See
 
 ## Reader surface
 
-`ui.items_per_topic` is how many of a topic's stories the all-topics page shows
-before it links to the rest. It is a hierarchy knob, never a cap: nothing is
-removed, hidden or re-ranked, and the whole topic is one prerendered click away.
-A day that ran to a single topic ignores it, because a lone heading over the
-whole page states what the page already says.
+Six knobs decide the day's leading block, and every one of them is a number the
+pipeline reads at assemble rather than a literal in a stage.
+`ui.leading_stories` (5) is the most stories it may hold, `ui.leading_per_desk`
+(2) the most from one desk, and `ui.leading_min` (3) the fewest worth drawing a
+block for - under it nothing renders and the day goes straight to the stream.
+`ui.lead_cluster_floor` (3) is how many distinct sources must name one registry
+entity in their published titles before that shared subject counts,
+`ui.lead_shared_subject_weight` (0.2) is what it then adds, and
+`ui.lead_max_yesterday` (1) bounds how many of the leads the feed dated to the
+previous day. None of them is handed to a browser: the block is decided before
+the page sees it, and the page draws what it is handed.
+
+Where the weight came from, and why it must stay under 0.6, is
+[../architecture/sources/discovery.md](../architecture/sources/discovery.md#where-the-weight-came-from).
+
+`ui.items_per_topic` is retired. It was how many of a topic's stories the
+all-topics page showed before linking to the rest, and the leading block
+replaced that page structure on 2026-09-01. The field survives on `UiConfig` so
+a config written before then still validates - an unknown key is refused - and
+nothing reads it.
 
 `ui.archive_page_size` (25) is how many stories the archive's list adds each
 time a reader asks for more. The day page pages at twelve because a day is short
 and the reader came to read it; the archive holds thousands and the reader came
 to find one, so it opens on the same twenty-five the console's failure list
-does. Like `items_per_topic` it hides nothing - every story is one more click
-away, and the order is the published one.
+does. It hides nothing - every story is one more click away, and the order is
+the published one.
 
 `ui.shell_seed_items` (15) is how many of a day's stories a prerendered document
 carries. It is the one knob in this block a browser is never told: the root
 layout inlines the rest of them into every document, and a build-only number put
-there would ride to every reader on every page for ever. Fifteen is the most
-stories any reading surface draws before the reader acts - the five desks
-`config/taxonomy.json` declares times `items_per_topic`, which is above the
-twelve a flat list pages at - so re-derive it from those two rather than raising
-it to cover a busy day. It decides nothing today, because the reading routes put
-the seed and the remainder straight back together and prerender the whole day.
-It decides everything once the remainder arrives by fetch: measured 2026-09-01
+there would ride to every reader on every page for ever. It decides nothing
+today, because the reading routes put the seed and the remainder straight back
+together and prerender the whole day. It decides everything once the remainder
+arrives by fetch: measured 2026-09-01
 on the 431-story day of 2026-08-30, `gzip -9`, the first fifteen stories cost a
 dated route 20,302 bytes across the two documents it emits, against 420,074 for
 all 431.
+
+**It is a floor and not the whole answer, and the row that moves the item list
+to a fetch owns the rest.** Fifteen covers the twelve a flat list pages at and
+the five the leading block draws. But a lead is chosen across the WHOLE day, so
+it is not inside any prefix: measured 2026-09-01 on the 601-story day of
+2026-08-31, the five sat at positions 249, 285, 337, 344 and 493. The document
+has to carry those five as well as the seed, or their anchors land on nothing.
 
 The `assist` block is on-device search. The runner embeds the day and commits
 the vectors; a reader's tab embeds only the query. The first two knobs say how

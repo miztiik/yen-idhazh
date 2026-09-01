@@ -333,19 +333,46 @@ def test_the_seed_the_shell_carries_is_a_knob_the_frontend_agrees_with() -> None
 def test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts() -> None:
     """The seed is what a document holds once the rest of the day arrives by fetch.
 
-    The all-topics page draws `items_per_topic` stories under every desk the day
-    published, so a seed shorter than every declared desk times that number
-    leaves a section empty until the fetch lands. Read from the two knobs the
-    number was derived from rather than restated, so a sixth desk fails this
-    instead of shipping a short first screen.
+    Every lead is an anchor into the stream, so a document that carries fewer
+    stories than the leading block holds is a block whose links scroll to
+    nothing. That is the floor, and it is not the whole answer: the leads are
+    chosen across the WHOLE day, so a lead can sit at position 300 of the
+    published order and outside any prefix. Whichever row moves the item list
+    to a browser fetch owns that, and this is the number it starts from.
     """
     ui = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).ui
-    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
-    live = [v for v in taxonomy.verticals if v.status is not LifecycleStatus.RETIRED]
-    assert ui.shell_seed_items >= len(live) * ui.items_per_topic, (
-        f"a {ui.shell_seed_items}-story seed cannot fill {len(live)} desks "
-        f"at {ui.items_per_topic} stories each"
+    assert ui.shell_seed_items >= ui.leading_stories, (
+        f"a {ui.shell_seed_items}-story seed cannot hold {ui.leading_stories} leads"
     )
+
+
+def test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story() -> None:
+    """Decision 3's ceiling, derived rather than spelled.
+
+    A second trade-press carrier of one address multiplies that story's
+    authority by `1 + repetition_weight`, which on the committed config is a
+    flat 0.6 added to the score. A recurring subject must not outrank a story
+    two independent feeds carried today, so the shared-subject term stays under
+    it. Measured 2026-09-01 over 11 committed days: a second carrier fires on
+    4.49 percent of the stories that record one and a shared subject on 12.85
+    percent, so the commoner signal is the one that has to be worth less.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    collect = committed.collect
+    second_carrier = collect.tier_weights.trade_press * collect.repetition_weight
+    assert committed.ui.lead_shared_subject_weight < second_carrier, (
+        f"a shared subject is worth {committed.ui.lead_shared_subject_weight} against "
+        f"{second_carrier} for a second trade-press carrier"
+    )
+    assert UiConfig().lead_shared_subject_weight < second_carrier
+
+
+def test_a_leading_block_that_could_never_draw_is_refused() -> None:
+    """A floor above the ceiling fails silently: the block never appears."""
+    with pytest.raises(ValidationError, match="leading_min"):
+        UiConfig(leading_stories=3, leading_min=4)
+    with pytest.raises(ValidationError, match="leading_per_desk"):
+        UiConfig(leading_stories=3, leading_per_desk=4)
 
 
 def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
