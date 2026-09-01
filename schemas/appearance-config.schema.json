@@ -490,6 +490,13 @@
           "title": "Sections",
           "type": "array"
         },
+        "shell_seed_items": {
+          "default": 15,
+          "description": "How many of a day's stories a prerendered document carries. It is the one knob in this block a browser is never told, because the root layout inlines the rest of them into every document and a number no page reads would ride to every reader for ever. Fifteen is the most items any reading surface draws before the reader acts: the five desks config/taxonomy.json declares times items_per_topic, which is above the twelve a flat list pages at. Re-derive it from those two when either moves - do not raise it to cover a busy day, because the stories past the seed arrive by fetch. Measured 2026-09-01 on the 431-story day of 2026-08-30, gzip -9, Intel Core i7-1265U / Windows 11 / node 24.12.0: the first fifteen stories cost a dated route 20,302 bytes across the two documents it emits, against 420,074 for all 431.",
+          "minimum": 1,
+          "title": "Shell Seed Items",
+          "type": "integer"
+        },
         "show_filter": {
           "default": true,
           "description": "An in-place filter inside the topic row. Never a top-level search bar: on a page this short it would promise an archive it cannot reach.",
@@ -549,6 +556,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "digest.shell_seed_items added, defaulting to 15. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
+      "version": "2026-09-01",
+      "why": "A reading route's build-time load now splits a day into the facts that do not grow with the story count, the head of the published order, and the remainder. This number is where the head ends. Nothing fetches yet - the two halves are put straight back together, and the prerendered output is byte-identical - so the knob decides nothing today and everything once the item list moves to a browser fetch. It is also the one knob in this block the layout does not hand a browser, because no page reads it."
+    },
     {
       "change": "digest.topic_pills_max added, defaulting to 8. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
       "version": "2026-08-31T23:59",
@@ -630,7 +642,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-08-31T23:59",
+      "default": "2026-09-01",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -638,5 +650,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-08-31T23:59"
+  "version": "2026-09-01"
 }
