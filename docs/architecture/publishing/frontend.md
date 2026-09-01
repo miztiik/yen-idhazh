@@ -734,19 +734,21 @@ count.
 
 ### What the Machine route draws
 
-Nine panels, all off `state/runtime-counters.csv` and `state/item-health/`, both
-read at build time under `$lib/server/` and neither published. The route added
-no telemetry column and no reader sees a cell of either ledger.
+Eleven panels, all off `state/runtime-counters.csv` and `state/item-health/`,
+both read at build time under `$lib/server/` and neither published. The route
+added no telemetry column and no reader sees a cell of either ledger.
 
 | Panel | Grain | The sentence it is for |
 | --- | --- | --- |
 | Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
+| Peak memory, and how near the runner's ceiling it got | one bar a shard | How much of the runner's 16 GB one run needed. |
 | Reading against writing | the newest run | What a written token costs against a read one. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
-| Context headroom | one bar a day | Whether raising the truncation cap is even possible. |
+| Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
 | Do the two clocks agree | one bar a shard | Whether the day's rates can be trusted at all. |
-| The host under the newest run | the newest run | Which processors it drew, how busy they were, how close to 16 GB, and how long the weights took to open. |
-| The shape of a run's latency | one curve a run | Whether a tail changed shape, which no single percentile says. |
+| The host under the newest run | the newest run | Which processors it drew, how busy they were, and how long the weights took to open. |
+| Is the tail growing | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
+| How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
 | Tokens per run | one bar a run, twice | How much the model read and how much it wrote. |
 | What this would have cost somewhere else | the whole span | Whether the runner time was a good trade. |
 
@@ -801,6 +803,76 @@ The operator's pair is kept in `localStorage` and read on mount only, so the
 first paint always matches the prerendered document, and every cost figure on
 the page is derived from one shared value rather than from four copies that
 could drift.
+
+### Context headroom is one chart with a limit rule
+
+**Thirteen near-identical bars, each with two lines of prose, is a table
+pretending to be a chart.** The panel used to draw one target bar a run, so a
+question about a trend - is headroom moving toward the ceiling - had to be
+answered by reading thirteen numbers in a row. Since 2026-09-01 it is one chart:
+runs across the x-axis oldest first, the longest sequence on the y, the context
+window as a rule, and spare capacity as a second series. Authority: Susan,
+2026-08-31.
+
+**The window is a rule, not a bar.** A limit is a line a series approaches. A bar
+beside a bar invites a reader to compare two lengths and forget which of them is
+the ceiling, and the browser oracle checks the geometry rather than the
+attribute: every mark must sit at or below the rule, because no run can exceed
+the window it was given. Authority: Jony.
+
+**Spare capacity is dotted, because it is derived.** It is the window minus the
+measurement and not a second reading of anything, so the stroke says so.
+Measured on the committed ledger 2026-09-01 over 18 readable runs, the longest
+sequence ran 4,120 to 7,186 tokens of the configured 8,192 - so the worst run in
+the window used 88 percent of the window, and the panel's answer to "can the
+truncation cap go up" is currently no.
+
+**The panel is about the worst run in the span, not the newest**, which is why
+it stays windowed and why every run in the span keeps a mark. Drawing only the
+newest run was refused for that reason. Authority: Carmack.
+
+**One mark a run means the x-axis columns are runs, not days**, and a day can
+carry several runs. Two consequences follow. `dayTicks` still owns the thinning
+and the anchoring, but a repeated day is labelled once and the tick mark stays -
+two identical dates side by side read as a chart that lost its order. And the
+model-change rule falls on the FIRST run of a changed day, so one change draws
+one rule; without that, a day with three runs would say the pipeline changed
+three times.
+
+**Every run's own three numbers stay on the page**, in a screen-reader list
+under the chart. The chart is the shape of the question; the list is the table it
+was made from, and nothing on this route is only in a picture.
+
+### Peak memory is a maximum, and never a sum
+
+**Shards are separate jobs on separate hosts.** Adding four of them reports a
+machine that never existed, and on this ledger the sum would read about 53 GB on
+a runner that has 16. So the run's figure is the LARGEST of its shards, the
+per-shard bars sit beside it, and the oracle in
+[../../../frontend/tests/console-machine-data.spec.ts](../../../frontend/tests/console-machine-data.spec.ts)
+asserts the aggregate is the maximum and is not the total. Authority: Carmack,
+2026-08-31.
+
+**The 16 GB runner is the rule the marks are read against**, and every bar runs
+to the same track so their lengths compare. Measured 2026-09-01 over the 11
+committed runs that carry the cell, the high-water mark is **14,155,517,952 B -
+13.18 GiB, 82 percent of the runner** - on shard 1 of run
+`2026-08-31-33448379177`. That figure is why the panel exists: it is the number
+that decides whether a bigger model can be served at all.
+
+**No tint and no band.** Nobody has agreed how near 16 GB is too near, and a
+colour would publish a threshold that does not exist. Authority: Susan.
+
+**An unmeasured shard is left out and counted, never drawn as zero.**
+`peak_rss_bytes` landed on 2026-08-30, so a shard older than that reports
+nothing: measured 2026-09-01, 44 of the 76 committed rows carry it. The panel
+draws the shards that reported and names how many of the run's shards those
+were.
+
+**The polarity is declared at the measure, not at the paint site.**
+`MEMORY_POLARITY` sits beside `RUNNER_MEMORY_BYTES` in
+`frontend/src/lib/charts/machine.ts`, so a bar and a delta drawn from the same
+figure on two panels cannot disagree about which direction is good.
 
 ### Three cross-boundary carries, one sentence each
 
