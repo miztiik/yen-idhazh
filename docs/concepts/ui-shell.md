@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
@@ -75,7 +75,7 @@ The site is served from a project path on GitHub Pages, not from a domain root. 
 
 Putting payload loading and validation in exactly one place, rather than in each page, is what makes the four states above a shared implementation rather than three inconsistent ones - and it is the reason a malformed payload degrades instead of white-screening. The rejected alternative, per-page fetching, produces a site where the empty state is correct on the page someone remembered to test. Authority: Fowler (contract shape), Jony (what the states look like).
 
-Keeping the site to three surfaces is a delete-first decision. Filtering, search, per-source views and tag pages are all reachable and none of them have a named reader yet; a static page that nobody asked for is rent paid forever. Authority: Jony, with Reader as the check.
+Keeping the site to three surfaces is a delete-first decision. Per-source views and tag pages are both reachable and neither has a named reader yet; a static page that nobody asked for is rent paid forever. Filtering and search were on that list until the owner overruled it, and what shipped is not a page: they are two controls in one panel above a list that already exists, described in [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md). Authority: Jony, with Reader as the check.
 
 The console is the one surface added since, and it was added for a named person doing a named job: the owner, asking whether the pipeline is still working. That is a question the digest cannot answer - a quiet news day and a broken collector produce the same short page. It sits off the reading path, so it costs a reader nothing and costs the shell one route.
 
