@@ -336,12 +336,14 @@ The reading page carries both, one line apart, and without this rule the second 
 
 | | Outlined | Tinted fill |
 | --- | --- | --- |
-| Example | the topic pill row above a day | a lens chip on an item's eyebrow |
+| Example | the topic pill row above a day | the desk chip and a lens chip on an item's eyebrow |
 | Type | link or button | `<span>`, never focusable |
 | Size | `--text-sm`, tap-height | `--text-xs`, no minimum height |
 | Carries | a name and a count | a name only |
 
 **One tint for every member of a label family, not one per member.** A lens chip uses `--tint-accent` whatever the topic is: the word carries the category and the colour carries only "this is a topic". Six hues to say what six words already say would collide with the confidence ramp and the chart ramp, and a `war` chip in a warn hue would read as a severity we never assigned. The seventh lens then arrives with its slot already filled and needs no colour decision - which is the point.
+
+**The item's desk name joined that family on 2026-09-01**, and it is the case the rule was written for. It had been a hairline bullet and a word; it takes `--tint-accent`, the same padding and the same radius as the lens chips beside it, and it stays legible as a different kind of label through upper case and letter-spacing rather than through a second hue. It is not a link, and the tinted fill is what says so: the only thing a tap on it could do is what the filter panel on the same screen already does, and a 44px tap target does not fit a 12px line. What the reader loses is nothing they did not already have two inches above. Authority: Susan, plan row #16.
 
 A tinted label is decorative under the rule above, because it repeats a word that is already there. It stays decorative only while it carries the word; a tinted chip carrying an icon alone would be semantic colour with no second signal, and is refused.
 

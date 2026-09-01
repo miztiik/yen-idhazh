@@ -98,12 +98,6 @@
 		Object.fromEntries(day.verticals.map((ref) => [ref.id, ref.display_name]))
 	);
 
-	// `introduced_by_run` is on every item and was rendered nowhere, so the day
-	// notice named a fact with no place on the page. One divider, at the seam.
-	const firstLaterItem = $derived(
-		paged.find((item) => item.introduced_by_run > 1)?.item_id ?? null
-	);
-
 	function toggleHide() {
 		hideRead = !hideRead;
 		setHideRead(hideRead);
@@ -158,14 +152,6 @@
 				</p>
 			{:else}
 				{#each paged as item (item.item_id)}
-					{#if item.item_id === firstLaterItem}
-						<p
-							class="border-t border-rule pt-6 text-xs tracking-wide text-text-tertiary uppercase"
-							data-later-runs
-						>
-							Added later today
-						</p>
-					{/if}
 					<DigestItemView
 						{item}
 						verticalName={verticalNames[item.vertical] ?? item.vertical}

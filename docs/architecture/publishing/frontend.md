@@ -109,7 +109,7 @@ This is where Reader and the owner disagreed, and it is worth recording properly
 | `medium` | A 6px dot and the sentence named by `band_reason`. An older payload with no reason falls back to "Mostly matches the source" |
 | `low` | A 6px dot and the sentence named by `band_reason`, in the low token. An older payload with no reason falls back to "May not match the source" |
 
-It sits **on the meta line, after the summary and beside the source link** - never above the title. A caveat above the title pre-judges an item before the reader has read a word. The reading order is: what it is, what it says, then where it came from and how sure we are.
+It sits **in the item's footer, after the summary and beside the source link** - never above the title. A caveat above the title pre-judges an item before the reader has read a word. The reading order is: what it is, what it says, then where it came from and how sure we are.
 
 **No stripe, no tint, no coloured card.** If two-thirds of items are medium or low, a large treatment paints two-thirds of the page as broken and the reader concludes the whole digest is. One dot and eight words stays proportionate at any distribution.
 
@@ -149,7 +149,49 @@ Unread is filled with the source's own swatch and read is hollow, with a hairlin
 
 When `ui.source_mark` is off the mark is not drawn, and the read state falls back to the title's weight and colour alone. That is what turning a scanning aid off costs, and the knob's owner is the one turning it.
 
-Reader named one thing an item did not carry that they wanted before they would share it: **what kind of source it is.** "A company said its product is faster" and "a reporter measured it" are not the same claim, and they were arriving in the same typeface. `source_kind` is now on the payload, and the item prints it only where the speaker has a stake worth naming - `announcement` and `community`. Labelling every item "Reporting" would be noise; labelling a vendor's own copy is the warning.
+Reader named one thing an item did not carry that they wanted before they would share it: **what kind of source it is.** "A company said its product is faster" and "a reporter measured it" are not the same claim, and they were arriving in the same typeface. `source_kind` is now on the payload, and the item prints it beside the publication name on the eyebrow, only where the speaker has a stake worth naming.
+
+**Four kinds get named, since 2026-09-01.** `announcement` and `community` were the first two; `government` and `research` joined them because a ministry announcing its own policy and a paper nobody has reviewed are also a speaker with something to gain. Over the 12 committed days and 4,598 items on 2026-09-01, that is **340 more items labelled** - 241 `research` and 99 `government` - so 696 in all, 15.1 percent, up from 356 and 7.7 percent. The 340 is the part that holds still; the shares move with every publish.
+
+**`reporting` and `analysis` stay out, and the share is the argument.** The label is a warning, so it only works while most items do not carry one, and `reporting` alone is 79.2 percent of the committed tree. `analysis` is a publication's own reading of a story it does not stand to gain from, which is the line the other four are on the wrong side of. `frontend/tests/item-meta.spec.ts` holds the set and holds the labelled share under a third, so a later widening that turns the mark into wallpaper fails rather than merely looking odd. Authority: Editor, plan row #16.
+
+## The item's facts sit in two places, and the place says what they are about
+
+Until 2026-09-01 every fact about an item was on one line under the summary: the source, the kind, the coverage sentence, the date, the confidence sentence, `Listen` and the link out. Seven things, and the four a reader uses to decide whether to read at all were printed where that decision had already been made.
+
+They now split by what they are a claim about.
+
+| Above the title | Below the summary |
+| --- | --- |
+| the source monogram, in the item's own leading column | the coverage sentence |
+| the desk, as a tinted chip | the confidence sentence |
+| the lens chips the item's words earned, in one wrapper | `Listen` |
+| who is speaking, and its kind where the kind is worth saying | `Read the original`, at the trailing edge |
+| when - a date today, a time on the rail when row #17 lands | |
+
+**The cap is four child elements above the title, at every width.** A line that holds four on a desktop and five on a phone because a chip wrapped in from somewhere else is the failure worth catching, so `frontend/tests/item-meta.spec.ts` drives 360, 801 and 1536 rather than the default viewport. The count is of elements, not of facts: an item that earned three lens chips still spends one slot, because they arrive inside one wrapper, and the kind sits inside the source element it qualifies.
+
+**The monogram is the fourth thing above the title and it is not a child of that line.** Row #12 had already moved it into the item's own leading grid column, where it is level with the eyebrow and beside the title whose read state it carries. Putting it back into the line would undo that and cost a slot, so the ruling's four are read as four things the reader sees above the title, and the mechanical cap is on the line's own children.
+
+**The confidence sentence stays below, and that is the reason for the whole split.** It is a claim about our summary. Printing "our summary leaves out names or figures from the opening" above a headline the reader has not read is a disclaimer on nothing.
+
+**Below the summary is document order, not paint order.** At the side-rail breakpoint the footer moves into a 14rem column beside the prose, as the meta line always did. What the split promises is the order a reader meets the facts in, including with no stylesheet and in a screen reader; where the browser paints them at 1024px and up is [layout.md](layout.md)'s business and row #18 of the reading-page plan revisits it.
+
+**What it weighs: nothing worth a sentence, which is the answer that had to be measured.** Two builds on Intel Core i7-1265U / Windows 11 / node 24.12.0, 2026-09-01, over the same 12 committed days and 4,468 items - one of this branch, one of the same worktree with the five changed source files checked out at `8d658de3`. `gzip -9` on each prerendered document, treated minus control:
+
+| Route | Control | This change | Move |
+| --- | ---: | ---: | ---: |
+| `/` | 195,644 B | 195,630 B | -14 |
+| `/<date>/` | 22,683 B | 22,678 B | -5 |
+| `/<date>/<topic>/` | 19,478 B | 19,437 B | -41 |
+| `/archive/` | 4,604 B | 4,599 B | -5 |
+| `/404`, `/console/`, `/console/machine/`, `/console/model/`, `/evals/` | - | - | -1 to +1 |
+
+**The last row is the spread rather than a result.** Those five routes render no item and the change cannot reach them, so what they moved is what one build differs from another by: at most one byte either way. Every reading route moved further than that and all four moved down, so the split is a small saving and not a cost - the divider's markup and the eyebrow's bullet together weigh a little more than the desk chip that replaced them.
+
+**The cap was measured on the real digest, not only on the fixture.** 2026-09-01, the 382-item day of that date, every item on screen at 360, 801, 1280 and 1536 CSS px: at most four elements above the title on every item at every width, at least three, and zero horizontal overflow. The three-child case is an item that earned no lens.
+
+Authority: Susan, plan row #16.
 
 ## Topics: pills, and never an empty one
 
@@ -180,6 +222,20 @@ for the third word on a rare three-lens story. An item with no lens renders
 nothing at all: the majority have none, the absence is a gap in our keyword list
 rather than a fact about the story, and printing it on nine items in ten would
 be printing our own homework.
+
+**The desk name beside them became a chip of the same family on 2026-09-01.** It
+was a hairline bullet and a word; it is now a tinted fill on `--tint-accent`,
+the same tint the lens chips take, set in upper case so the desk we filed the
+story under still reads differently from the words the story itself earned. One
+tint for every member of a label family is the rule in
+[../../concepts/design-system.md](../../concepts/design-system.md), and it is
+what let the second of the two ship without inventing a look.
+
+**It is not a link, and the tinted fill is what says so.** An outline would mean
+a reader can act on it, and the only thing a tap could do is what the filter
+panel two inches above already does. Forcing a 44px tap target into a 12px line
+to duplicate a control on the same screen is a loss, not a gain. Authority:
+Susan, plan row #16.
 
 **Inert, and the reason is the count.** On a page grouped by desk, "War" beside
 a World item and beside an Energy item says those two are the same story seen
@@ -235,7 +291,7 @@ Three cues, and only one of them is brightness:
 - **The title steps one down the ramp and loses a weight**, to `--color-text-secondary` and no further. A dimmed item reads as "you cannot have this" rather than "you already had this".
 - **A visually-hidden `Read.` opens the heading**, so the accessible name of a read item is `Read. <title>`. A fill and a font weight are announced to nobody.
 
-**Two older cues are gone.** The eyebrow dot encoded the state as filled-or-hollow with no legend anywhere on the page - a dot with no sentence - and it stays only as a plain bullet before the desk name. The visible `Read` chip is removed by the owner, 2026-08-31; the word it printed is the one now in the heading, where a screen reader gets it and the page does not carry a second label.
+**Two older cues are gone.** The eyebrow dot encoded the state as filled-or-hollow with no legend anywhere on the page - a dot with no sentence - and the plain bullet it left behind before the desk name went with the desk name's own move to a tinted chip on 2026-09-01. The visible `Read` chip is removed by the owner, 2026-08-31; the word it printed is the one now in the heading, where a screen reader gets it and the page does not carry a second label.
 
 The reason the fill was needed at all: dim text plus a lighter weight is one signal twice. Both are less ink, so both fail in the same conditions, and on that page the reader had no third cue. Authority: Susan, 2026-08-31.
 
@@ -370,10 +426,7 @@ never fetched twice, and neither is a month. Until a day arrives, and if it
 never does, the result is the title, the date and the topic the index carried -
 so a failed fetch costs a summary and never a result.
 
-The day a result was found on sits **on the item's own meta line**, as the link
-back to it, in place of the day the publisher put on the article. The two are
-the same day or one apart, and printing both put two dates on a line that
-already carries four facts.
+The day a result was found on sits **in the item's eyebrow**, in the time slot, as the link back to it and in place of the day the publisher put on the article. The two are the same day or one apart, and printing both would put two dates on a line capped at four things.
 
 **Two files a month fail independently, and both are designed states.** No index
 leaves the story list saying so, and search says `these stories cannot be
@@ -570,12 +623,22 @@ those stories fairly, merged into the notice's sentence so nothing was lost.
 The run stamp goes **last** in the paragraph and the count goes first. A reader
 came for the stories, not for us.
 
-`introduced_by_run` is on every item and used to be rendered nowhere, so the
-notice named a fact with no place on the page. A flat list now carries one
-hairline divider - `Added later today` - before the first item a later run
-added. Once per page, never once per run and never once per item, and the
-divider itself carries no run number and no UTC time, because a reader reading
-past an item does not know what run 3 is.
+`introduced_by_run` is on every item and is drawn nowhere. It briefly was: from
+2026-08-31 a flat list carried one hairline divider - `Added later today` -
+before the first item a later run added. **The divider was deleted on
+2026-09-01.** It named a run boundary, and a run is our schedule rather than the
+reader's - somebody reading past it does not know what run 3 is and cannot do
+anything differently for knowing. The fact a reader wanted from it is when the
+story happened, and row #17 of the reading-page plan puts that on a time rail in
+words they already use. Authority: Editor, plan row #16.
+
+**The field stays on the served-day projection even though nothing renders it.**
+Taking it off is a change to `DigestView` - a contract, its schema, its version
+stamp and the read side of any shell already in a browser - and that is a bigger
+decision than deleting a divider. It costs 1.16 gzipped bytes an item. The
+comment in `frontend/src/lib/payload/project.ts` says the same thing, so the
+next person to read that allow-list does not have to trace a renderer that is
+not there.
 
 ## No summary of the summaries
 

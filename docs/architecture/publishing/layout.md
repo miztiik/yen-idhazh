@@ -99,7 +99,7 @@ A day runs the same story from more than one of our feeds, and until 2026-09-01 
 | `also_covered_by` | How many **other sources** carried the same story today. | Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. |
 | `same_story_as` | The item a reading surface would draw for this story. | Not a deletion, and not something any page acts on today. |
 
-**`also_covered_by` is what a reader sees.** The meta line under an item reads `Also covered by N other sources today.`, or `Only one of our sources carried this.` where nothing grouped with it. Both are facts about our feed set and never claims about the world - we know who we read, not who else covered a story. Null prints nothing at all, which is what every day published before 2026-09-01 does.
+**`also_covered_by` is what a reader sees.** The item's footer, under the summary, reads `Also covered by N other sources today.`, or `Only one of our sources carried this.` where nothing grouped with it. Both are facts about our feed set and never claims about the world - we know who we read, not who else covered a story. Null prints nothing at all, which is what every day published before 2026-09-01 does.
 
 **`same_story_as` is recorded and not yet drawn**, and that is deliberate. Collapsing a group in `DigestList` was built and then taken out again on the evidence of its own smoke: the reading routes reach an item by paging a topic, so an item filtered out of the list is not merely undrawn on the first screen - it becomes unreachable through every reading route while its address still exists. That is the reachability problem row 24 of the reading-page plan owns, and drawing the collapse before it is answered would take five stories off the 2026-08-30 page with nowhere for a reader to find them. The field is on the committed day so the decision is recorded and auditable; it is **not** on the served projection, because a field with no renderer does not earn the wire.
 
@@ -263,8 +263,8 @@ The staged file is now [../../../schemas/digest-view.schema.json](../../../schem
 | Added | What draws it | Cost |
 | --- | --- | ---: |
 | `carried_by`, `watchlist_hit`, `on_front_page`, `rank_score` | the lead block, which needs a comparable score across the whole day | +0.94, +1.12, +1.11, +1.16 B an item |
-| `published_at`, `time_source` | the time rail, and the meta line today | +8.29, +0.99 B an item |
-| `introduced_by_run` | the divider at the seam between runs | +1.16 B an item |
+| `published_at`, `time_source` | the time rail, and the item's eyebrow today | +8.29, +0.99 B an item |
+| `introduced_by_run` | nothing, since the run divider was deleted on 2026-09-01. It stays because taking a field off this list is a contract change | +1.16 B an item |
 | `lenses` | the topic chips | +1.11 B an item |
 | `key_points` | the in-page filter, which reads them today | +93.54 B an item |
 
