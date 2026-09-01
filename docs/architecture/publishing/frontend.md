@@ -874,6 +874,16 @@ has no spare room to divide and an offset would push its first column out of
 reach. At the default window the strip fills, so the rule is only visible at the
 7- and 14-day presets.
 
+**Centring it exposed a gap `cellFor` had been counting and the strip never
+draws.** `StripMetrics.width` was `days * (cell + gap)`, which includes a gap
+after the last column that is never painted. Nothing read the number until the
+spare room had to be halved, and then it put one whole gap more on the right
+than on the left - 8 px of 1,326 at a 34 px cell, measured 2026-09-01, which is
+a quarter of a column. `denseCellFor` beside it already counted the honest way
+and said why in a comment. The same width scales the readout's marks, so the
+correction also moved a pointer halfway along the strip onto the column it is
+actually over.
+
 **Where an overflowing strip OPENS is a different question, and it is the one
 `console.today_anchor` answers.** The two were one line of layout for a while
 and they are not the same fact: the anchor is a scroll position, and the
