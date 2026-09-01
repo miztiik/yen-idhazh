@@ -1,6 +1,11 @@
 <script lang="ts">
 	/** Where an operator can go, and what is worst on each route before he goes.
 	 *
+	 * Directly under the page title and above the band since 2026-08-31. Chrome
+	 * above content is the one ordering a reader never has to learn, and the
+	 * band's worst fact links into this strip - which a phone reader could not
+	 * find 337px below it.
+	 *
 	 * Real anchors, one per prerendered route. Not tabs holding hidden panels:
 	 * a tab strip that switches with script is a page that says nothing with
 	 * script off, and every panel it hides still ships in the document.
@@ -62,13 +67,16 @@
 		min-inline-size: 0;
 	}
 
-	/* The whole block is the target, not the word at the top of it. */
+	/* The whole block is the target, not the word at the top of it. The touch
+	   target is the 2.75rem floor, so the padding pays for looks and not for
+	   reach - and three stacked tabs above the band on a phone is where every
+	   pixel of it is charged three times. */
 	.tab {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
 		min-block-size: 2.75rem;
-		padding: var(--space-3) var(--space-4);
+		padding: var(--space-2) var(--space-3);
 		border-radius: var(--radius-md) var(--radius-md) 0 0;
 		/* Reserved on every tab, so the active one does not push the strip down
 		   by three pixels when the operator moves between routes. */

@@ -241,6 +241,18 @@ body {
 	box-shadow: var(--shadow-sm);
 }
 
+/* Shut, a disclosure is one line of link text. A bordered, shadowed, rounded
+   card around it gave a footnote the visual weight of a section, and that is
+   what made it read as something hanging off the bottom of the page rather
+   than as the last line of the section above. Open it holds a table, so it
+   takes the frame back. */
+.console-disclosure:not([open]) {
+	padding: 0;
+	border-width: 0;
+	background: none;
+	box-shadow: none;
+}
+
 .console-summary {
 	cursor: pointer;
 	min-block-size: 1.75rem;

@@ -203,7 +203,7 @@ test('the standing band carries the level, the track and the runway', async ({ p
 	const band = page.locator('[data-console-band] [data-band-fact="size"]');
 	await expect(band).toHaveCount(1);
 	const sentence = page.locator('[data-band-size]');
-	await expect(sentence).toContainText(/[\d.]+ MB of the 1 GB Pages cap/);
+	await expect(sentence).toContainText(/[\d.]+ MB of the 1 GB limit/);
 
 	// The track draws the value it prints over that limit.
 	const track = band.locator('[data-band-size-pct]');
@@ -214,17 +214,23 @@ test('the standing band carries the level, the track and the runway', async ({ p
 	expect(cap).toBe(PAGES_CAP_BYTES);
 	expect(drawnPct).toBeCloseTo(((printedMb * 1024 * 1024) / PAGES_CAP_BYTES) * 100, 1);
 
-	// The runway, in articles, at a rate the band also prints over the days it
-	// measured. A figure with no basis beside it is the thing the level it
-	// replaced was already guilty of. What the unit has to be, and why it may not
-	// be published days, is `console-band.spec.ts`.
-	await expect(sentence).toContainText(
-		/[\d,]+ B an article over \d+ published days?, that is room for about [\d,]+ more articles/
-	);
-	// And it names the tree it measured, because the cap is measured on a larger
-	// one and the number is optimistic by a multiple.
-	await expect(sentence).toContainText('committed payload tree, not the published site');
-	await expect(sentence).toContainText('idhazh site-weight');
+	// The runway, in articles. One line: the rate it divides by, the days it was
+	// measured over and the clause about which tree the cap measures all live on
+	// `What one more article costs` below, which already owns the rate, its n and
+	// its spread - and a band that repeated them spent sixty of its hundred words
+	// on a caveat. What the unit has to be, and why it may not be published days,
+	// is `console-band.spec.ts`.
+	await expect(sentence).toContainText(/room for about [\d,]+ more articles/);
+	const printedText = (await sentence.innerText()).trim();
+	expect(printedText.split(/\s+/).length, 'the band is growing a paragraph again').toBeLessThan(20);
+	expect(printedText, 'the basis came back to the band').not.toContain('an article over');
+	expect(printedText, 'a build command is not a reader string').not.toContain('site-weight');
+	expect(printedText, 'a subsystem term is not a reader term').not.toContain('payload tree');
+
+	// And the panel below it still carries all three, so nothing was deleted.
+	const panel = page.locator('[data-windowed="site-cost-per-item"]');
+	await expect(panel).toContainText(/[\d,]+ B an article/);
+	await expect(panel).toContainText('the most room we have');
 });
 
 test('the window delta is on the windowed panel, in megabytes', async ({ page }) => {

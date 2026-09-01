@@ -631,19 +631,41 @@ tab strip:
 | Path | Label | What it answers |
 | --- | --- | --- |
 | `/console/` | **Pipelines** | Did the runs work, which feeds broke, and what each stage cost. |
-| `/console/model/` | **Model** | What the model wrote, how long it took, and what it got wrong. |
-| `/console/machine/` | **Machine** | The hardware the model ran on, and how much it varied between runs. |
+| `/console/model/` | **Summaries** | What the model wrote, how long it took, and what it got wrong. |
+| `/console/machine/` | **Hardware** | The hardware the model ran on, and how much it varied between runs. |
 
 `/console/` keeps its path. It is the one an operator types and the one every
 existing bookmark points at, so moving it to `/console/pipelines/` would have
 cost a redirect and bought a symmetry nobody asked for.
 
-**The labels are the owner's own words, taken verbatim on 2026-08-30.** Each
-carries a one-line description under it and the same text as a `title`. `Model`
-and `Machine` share a first letter, which is the recorded cost of that name set;
-it is paid off by the description line and by the silhouette of the first panel
-on each route, which is what an operator recognises before he reads a word.
-`What the model did` survives verbatim as the h2 on the Model route - it is
+**Two of the three labels changed on 2026-08-31 and no address moved with
+them.** `Model` became **Summaries**, because every panel on that route is about
+a published summary - its length, its cost, how long it took, what the checker
+doubted - and none is about the model as an artefact. `Machine` became
+**Hardware**, which is the plainest word for a processor, a memory, a clock and
+a context window; `Runner` was refused because it is a term the build system
+uses on itself rather than a term for a reader (`CLAUDE.md` section 0b), and
+`Model` was refused for the middle route because it would put that word on the
+page about the box rather than the page about the output. The route ids stay
+`pipelines` / `model` / `machine`, every `href` is unchanged, and the three
+`page_weight.ceilings_bytes` keys are unchanged - a label is not an address.
+[../../../frontend/tests/console-title.spec.ts](../../../frontend/tests/console-title.spec.ts)
+asserts both halves in one file. Authority: owner, 2026-08-31.
+
+**Every panel title on the three routes is a noun phrase**, and that rule is
+mechanical so it can be checked: no trailing question mark, and no opening
+auxiliary verb. `Did the runs finish?` became `Runs that finished`, `Do the two
+clocks agree` became `The two clocks, compared`, `Is the tail growing` became
+`How the tail moved`, and `Did the model change move anything` became `What the
+model change moved`. `What one more article costs` was already the form and is
+the model for it. A question title asks the reader to hold it while he reads the
+panel; a noun phrase names what is in front of him. `What`, `Which` and `How`
+stay legal openings, because they head a free relative rather than a question.
+Authority: Editor, 2026-08-31.
+
+`Model` and `Machine` shared a first letter, which was the recorded cost of the
+old name set; `Summaries` and `Hardware` do not, so that cost is paid off.
+`What the model did` survives verbatim as the h2 on the Summaries route - it is
 protected copy, and [../../../frontend/tests/console-model.spec.ts](../../../frontend/tests/console-model.spec.ts)
 holds all eleven of its labels byte for byte.
 
@@ -676,26 +698,70 @@ radius, elevation, frame width, both ramps. The shapes they share live in
 rather than in three scoped `<style>` blocks, because three copies are three
 identities that happen to agree today.
 
-### The standing band carries four things and nothing else
+### The standing band carries three things, and the strip is above it
 
-Above the strip, on all three routes: yesterday's verdict as a sentence, the one
-worst thing and which route it is on, site size against the 1 GB cap with its
-runway, and the window control. It is derived once in
+The order down the page is title, strip, band, window control, content. Chrome
+above content is the one ordering a reader never has to learn, and the band's
+worst fact links into the strip - which on a phone used to sit 337px BELOW it,
+where a reader had already scrolled past. The control comes last of the three
+because a control read before any fact asks the operator to configure a page he
+has been told nothing about, and because it governs everything under it and
+nothing over it. Authority: Susan, 2026-08-31.
+
+The band's three facts: yesterday's verdict as a sentence with one square per
+run of that day, the one worst thing and what it costs, and site size against
+the 1 GB limit with the articles the headroom buys. It is derived once in
 [../../../frontend/src/lib/server/console-shell.ts](../../../frontend/src/lib/server/console-shell.ts)
-and read by all three, so they cannot disagree about which route is worst.
+and read by all three routes, so they cannot disagree about which route is
+worst.
 
-The first three are **not windowed**, and that is the difference between the
-band and the per-article cost panel on Pipelines. The band stands on every
-route, so a figure that moved when a control on one route moved would read as
-three different sites. The runway is taken over every published day on record
-and says so.
+**The band was 340px on a desktop and 586px on a phone - 69 percent of an 844px
+viewport - measured 2026-09-01 at bf37eeef.** Three changes pay for that: the
+control moved out, the site-size fact dropped from about sixty words to one
+line, and the page subtitle went from all three routes. The subtitle repeated
+what the active tab's own description says 150px lower and cost 25px on every
+route.
 
-The window control sits **inside** the band rather than under it, because a
-control below the thing it governs is read second. Each route hands its own
-control in: Pipelines prices the month files a wider window would fetch, and
-Model and Machine fetch nothing and price nothing. All three read the same
-`idhazh:console-window` key, so a span picked on Pipelines is the span Hardware
-opens on and the other way round -
+**The site-size fact is one line: the level, the limit and the articles the
+headroom buys.** The rate it divides by, the days it was measured over and the
+clause about which tree the cap measures live on `What one more article costs`,
+which already owns the rate, its n and its spread - a band that repeated them
+spent sixty of its hundred words on a caveat, and `idhazh site-weight` and
+`committed payload tree` are not reader strings anywhere now.
+
+**The worst-thing fact says what the state costs, and the strip keeps the short
+form.** `15 feeds resting` on a label becomes `15 feeds are resting, so nothing
+they carry reaches the digest. Each is asked again after 5 runs.` in the band.
+The retry count comes from `quarantine_after_failures` and never from a literal.
+The two said the same words until 2026-08-31, 337px apart on a phone. Nothing in
+the sentence invents a task: quarantine is self-terminating, so what it asks is
+that the operator knows the digest is short of sources until the retry
+([../sources/health.md](../sources/health.md)).
+
+**A resting feed no longer outranks a failed run on a tie.** Both rank BROKEN
+and the sort is stable, so listing the feeds first handed every tie to the state
+that clears itself after five skips. The run candidates are pushed first.
+
+**The verdict fact draws one small square per run of the newest day**, on the
+same `--fill-*` ramp and the same shape as `Run health` 800px below, capped at
+twelve then `+N`. It says what the sentence cannot: whether one run ate all 34
+failures or all five limped. It is hand-written markup, so it is on the page
+before any script runs, and every square names its verdict in words.
+
+None of the three is **windowed**, and that is the difference between the band
+and the per-article cost panel on Pipelines. The band stands on every route, so
+a figure that moved when a control on one route moved would read as three
+different sites. The runway is taken over every published day on record.
+
+The window control sits **below** the band, in a container of its own. Inside it
+it was a control in a panel it does not govern - `console-shell.ts` says twice
+that the band is deliberately not windowed - and it cost 125px of the first
+viewport on a desktop and 195px on a phone for four tiles and a sentence. Its
+tiles and its status line share one row now where the column is wide enough for
+both. Each route hands its own control the same props: Pipelines prices the
+month files a wider window would fetch, and Summaries and Hardware fetch nothing
+and price nothing. All three read the same `idhazh:console-window` key, so a
+span picked on Pipelines is the span Hardware opens on and the other way round -
 [../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts)
 drives it both ways in one browser session, because a route that writes the key
 and never reads it passes a one-way check.
@@ -727,14 +793,14 @@ span and a snapshot is not something a span can narrow - a board that emptied at
 7 days would say the run had stopped existing. The page states this once, above
 the four, and names the run they are about. Authority: Jony, 2026-08-31.
 
-Six surfaces on Machine declare `data-windowed`, and each one prints the day
+Seven surfaces on Hardware declare `data-windowed`, and each one prints the day
 count in its own words: the run count at the top, the prompt cache, context
-headroom, the host panel's three spans, tokens per run and the cost panel. The
-refused-run list follows the window without declaring it, because a clean span
-renders nothing at all and a surface that comes and goes cannot report a day
-count.
+headroom, the host panel's three spans, the latency plots, tokens per run and
+the cost panel. The refused-run list follows the window without declaring it,
+because a clean span renders nothing at all and a surface that comes and goes
+cannot report a day count.
 
-### What the Machine route draws
+### What the Hardware route draws
 
 Eleven panels, all off `state/runtime-counters.csv` and `state/item-health/`,
 both read at build time under `$lib/server/` and neither published. The route
@@ -747,9 +813,8 @@ added no telemetry column and no reader sees a cell of either ledger.
 | Reading against writing | the newest run | What a written token costs against a read one. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
 | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
-| Do the two clocks agree | one bar a shard | Whether the day's rates can be trusted at all. |
-| The host under the newest run | the newest run | Which processors it drew, how busy they were, and how long the weights took to open. |
-| Is the tail growing | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
+| The two clocks, compared | one bar a shard | Whether the day's rates can be trusted at all. || The host under the newest run | the newest run | Which processors it drew, how busy they were, and how long the weights took to open. |
+| How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
 | How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
 | Tokens per run | one bar a run, twice | How much the model read and how much it wrote. |
 | What this would have cost somewhere else | the whole span | Whether the runner time was a good trade. |
@@ -1062,7 +1127,7 @@ ledger still owns faithfulness and scorer time for the scored subset.
 was a fourth line until 2026-08-31. The chart is titled `Time per item, by
 stage`, so every line on it is something an item waits on - and the scorer reads
 a summary the model has already finished, so nothing waits on it. A fourth line
-there read as a fourth constraint on the run. It is on the Model route now,
+there read as a fourth constraint on the run. It is on the Summaries route now,
 under `What one summary cost`, beside the cost of writing the summary it checks,
 and it prints its middle and its slowest one in twenty over the summaries it
 timed. An empty cell is one fewer item timed, never a zero; a zero is the value
@@ -1531,7 +1596,7 @@ stage timed, and how many items there were - and each fact draws as itself:
   it finished faster than a 1 ms clock can measure, which is an ordinary state
   for a cheap stage. `state/scores.csv` recorded exactly that for `score_ms` on
   all ten rows of 2026-08-22 - the reading that made the rule necessary, taken
-  on a column that has since moved to the Model route.
+  on a column that has since moved to the Summaries route.
 - **A day timed in part** draws the items it timed, and the line under the chart
   says how many that was.
 
@@ -1862,6 +1927,50 @@ extra table column over twenty rows and a summary element, and against the
 Authority: the two bars and the verdict, Susan, 2026-08-30; the disclosure
 element, Jony, 2026-08-30.
 
+### Both daily tables follow the window, and shut they are not cards
+
+The Pipelines table and the Summaries table are the two `<details>` on the
+console that hold a row per day. Until 2026-08-31 neither followed the control
+above it: the cards on Summaries said 7 days while the rows under them held
+every day either ledger ever wrote, and on Pipelines the rule's own medians were
+taken over the window while the table below them was not. Two answers to one
+question on one page is exactly what a shared control was built to remove.
+
+Both are windowed now, and both take one name, byte-identical at the same
+preset: **Show these figures day by day, over these N days.** `Show the daily
+figures` was refused because "figures" names nothing on a page that is nothing
+but figures. The day count is on the line that opens the table, so an operator
+knows what he is opening before he opens it.
+
+**Neither table is deleted, and the Pipelines one was the closer call.** Most of
+what it holds is already drawn above it - the flow covers reached, asked,
+drafted and published, and two target bars with their sparklines cover the
+minutes and the coverage. Only `Items published` is uncharted. It stays as the
+per-DAY reading of a window-level picture: it is the only place a printed rate
+can be checked against the two counts it was divided from, and the only way to
+attribute a window aggregate to a day. Authority: Susan, 2026-08-31.
+
+**On Pipelines it ends `[data-windowed="chart-arm"]` rather than hanging below
+it.** It answers the section above it, and a table that has to be found is a
+table nobody reads. On Summaries the placement was already right, so only the
+chrome, the name and the span changed.
+
+**Shut, a disclosure drops its border, its background, its shadow and its
+padding.** Closed it is one line of link text, and a bordered, shadowed, rounded
+card around it gave a footnote the visual weight of a section - which is what
+made it read as something hanging off the bottom of the page rather than as the
+last line of the section above. Open it takes the frame back, because then it
+holds a table. The rule is `.console-disclosure:not([open])` in
+[../../../frontend/src/styles/app.css](../../../frontend/src/styles/app.css), and
+[../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts)
+reads the computed values either side - an eye cannot check a box-shadow.
+Authority: Susan, 2026-08-31.
+
+The Summaries table declares `data-windowed="daily-figures"`, so the window
+oracle holds it to the control like every other windowed surface. The Pipelines
+one declares nothing of its own: it sits inside `chart-arm`, which already
+declares the span and prints it in words.
+
 ## What the cap costs, and the four places the console says it
 
 The truncation cap is the one setting on this project that silently removes
@@ -2170,15 +2279,25 @@ The bundle is **14.63 times larger**, and it was eighteen times larger on
 2026-08-27 ([the run-manifest changelog](../../../backend/idhazh/contracts/run_manifest.py)),
 so the multiple itself is not stable. **The committed-tree runway above is how
 that cell was derived on the day it was measured**; it counts articles since
-2026-08-31, for the reason two paragraphs up. The card's sentence is therefore
-written caveat-first: it says the number is the committed payload tree and not
-the published site, that the site is what the cap measures, and that
-`idhazh site-weight` prints the runway that binds - and only then that this tree
-has room for about N more articles. It never says "the site" has room for N,
-because it does not know that. Measured 2026-08-31 the band read about 312,000
-articles of room in the committed payload tree, while `site-weight` on
-2026-08-30 read 119 published days in a bundle 14.63 times larger - two trees,
-two units, and that gap is what the wording exists to keep visible
+2026-08-31, for the reason two paragraphs up.
+
+**The caveat left the band on 2026-08-31 and lives on the panel it belongs to.**
+The band's fact was written caveat-first: three sentences naming the committed
+payload tree, the larger built site, and the build command that prints the
+runway that binds, before the one number the fact is for. It was about sixty of
+the band's hundred words, and it stood on all three routes. It is one line now -
+the level, the limit and the articles the headroom buys - and every clause it
+dropped is on `What one more article costs` directly below it, which already
+owns the rate, the days it was measured over, its spread and the sentence
+saying the cap is measured on a larger tree so the room is the most we have and
+never the least. `idhazh site-weight` and `committed payload tree` are not
+reader strings on any surface now: a build command is not something a reader can
+run, and neither phrase says anything the panel's own wording does not. The band
+still never says "the site" has room for N, because it does not know that.
+Measured 2026-08-31 the band read about 312,000 articles of room in the
+committed payload tree, while `site-weight` on 2026-08-30 read 119 published
+days in a bundle 14.63 times larger - two trees, two units, and that gap is what
+the panel's wording exists to keep visible
 ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
 
 **What the deleted table was for, and where each column went.** `Runs`,
@@ -2304,7 +2423,7 @@ middle one differs:
 ```
 
 **All three moved twice on 2026-08-31, and every move was a re-derivation rather
-than a nudge.** The first move was the Model route gaining its panels and the
+than a nudge.** The first move was the Summaries route gaining its panels and the
 Machine route gaining all nine of its own. The second was the closure of the
 observability plan, which re-derived all three on one tree once no sibling row
 was still in flight - because a ceiling set from a tree two rows old carries a

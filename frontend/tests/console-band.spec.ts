@@ -172,3 +172,188 @@ test('no rate of runs a day can move the answer', () => {
 		(PAGES_CAP_BYTES - used) / (3000 * CEILING * runsADay);
 	expect(daysAtCeiling(3)).toBeCloseTo(daysAtCeiling(1) / 3, 6);
 });
+
+/**
+ * The band's height, and where it leaves the first chart.
+ *
+ * Measured on this tree at bf37eeef, 2026-09-01, node 24.12.0, real build: the
+ * band was 340px at 1440x1000 and 586px at 390x844 - 69 percent of a phone
+ * viewport - with the window control inside it and the navigation strip 577px
+ * down the page, below both. The first drawn chart on `/console/` was at 890px
+ * and 1,372px, and the band was 99 words.
+ *
+ * After: the band is 113px and 282px, 50 words, with the strip above it and the
+ * control below it, and the first chart is at 726px and 1,163px. The band is
+ * 33 percent of a phone viewport rather than 69.
+ *
+ * **The chart lines below are 760 and 1,200, and the plan asked for 640 and
+ * 1,000.** That gap is measured and it is not the band's to close. At 1440 the
+ * 726px above the first chart is 113 site header, 24 page padding, 33 page
+ * title, 79 strip, 113 band, 91 control, 21 cross-route sentence, 28 section
+ * heading, 97 of a measure card's own label and value, and 127 of margins - so
+ * the three things this row owns are 283px of it and the other 443px belong to
+ * five other surfaces. Cutting into those is a different row's decision.
+ */
+const VIEWPORTS = [
+	{ name: 'desktop', width: 1440, height: 1000, band: 130, chart: 760 },
+	{ name: 'phone', width: 390, height: 844, band: 320, chart: 1200 }
+] as const;
+
+/** The top and height of one element, in page coordinates. */
+async function boxOf(page: Page, selector: string) {
+	return page.locator(selector).evaluate((node) => {
+		const box = node.getBoundingClientRect();
+		return { top: Math.round(box.top + window.scrollY), height: Math.round(box.height) };
+	});
+}
+
+for (const view of VIEWPORTS) {
+	test(`THE ORACLE: the band is three facts and half the height at ${view.width}`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: view.width, height: view.height });
+		await page.goto('/console/');
+		await hydrated(page);
+
+		const band = await boxOf(page, '[data-console-band]');
+		expect(
+			band.height,
+			`the band is ${band.height}px at ${view.width}, over its ${view.band}px line`
+		).toBeLessThanOrEqual(view.band);
+
+		// The control is out of the band, not merely shorter inside it.
+		await expect(page.locator('[data-console-band] [data-window-control]')).toHaveCount(0);
+
+		const chart = await page.evaluate(() => {
+			const svg = [...document.querySelectorAll('[data-surface="operator"] svg')].find(
+				(node) => node.getBoundingClientRect().width > 0
+			);
+			return svg === undefined
+				? null
+				: Math.round(svg.getBoundingClientRect().top + window.scrollY);
+		});
+		expect(chart, 'no chart is drawn on the route at all').not.toBeNull();
+		expect(
+			chart as number,
+			`the first chart is at ${chart}px at ${view.width}, past its ${view.chart}px line`
+		).toBeLessThanOrEqual(view.chart);
+	});
+}
+
+test('THE ORACLE: chrome reads top to bottom - title, strip, band, control', async ({ page }) => {
+	await page.goto('/console/');
+
+	// Read as an ordering of tops rather than of DOM nodes, because that is what
+	// a reader gets. Until 2026-08-31 the strip sat 337px BELOW the band on a
+	// phone, so the band's worst fact linked into a strip the reader had already
+	// scrolled past, and the control sat inside a panel it does not govern.
+	const order = await page.evaluate(() => {
+		const at = (selector: string) => {
+			const node = document.querySelector(selector);
+			return node === null ? null : node.getBoundingClientRect().top + window.scrollY;
+		};
+		return {
+			header: at('body > header, header'),
+			title: at('[data-surface="operator"] h1'),
+			nav: at('[data-console-nav]'),
+			band: at('[data-console-band]'),
+			control: at('[data-window-control]'),
+			content: at('[data-surface="operator"] .console-h2')
+		};
+	});
+	for (const [name, top] of Object.entries(order)) {
+		expect(top, `${name} is not on the page`).not.toBeNull();
+	}
+	const tops = [
+		order.header,
+		order.title,
+		order.nav,
+		order.band,
+		order.control,
+		order.content
+	] as number[];
+	expect(
+		tops,
+		`header, title, strip, band, control, content - measured ${tops.join(', ')}`
+	).toEqual([...tops].sort((a, b) => a - b));
+	expect(new Set(tops).size, 'two of the six sit at the same height').toBe(tops.length);
+});
+
+test('the band says what the worst state costs, and the strip keeps the short form', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	const worst = page.locator('[data-band-worst]');
+	const route = await worst.getAttribute('data-band-worst-route');
+	if (route === null) {
+		// The clear state is a sentence, and it has no strip fragment to differ
+		// from. `console-nav.spec.ts` holds that shape.
+		await expect(worst).toHaveAttribute('data-band-worst', 'clear');
+		return;
+	}
+
+	const strip = (
+		await page.locator(`[data-console-tab-worst="${route}"]`).innerText()
+	).trim();
+	const band = (await worst.innerText()).replace(/\s+/g, ' ').trim();
+	// The two said the same words until 2026-08-31, 337px apart on a phone. The
+	// band has room for a consequence and the strip has room for two words, so
+	// one string for both was always going to be the strip's.
+	expect(band, 'the band prints the strip fragment and nothing more').not.toBe(strip);
+	expect(band, 'the band names no consequence').toContain(', so ');
+	expect(band.length, 'the band is not saying more than the strip').toBeGreaterThan(strip.length);
+});
+
+test('the newest day draws one square a run, on the same ramp as the run strip', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	// The sentence says the day ran N runs and published M of P. It cannot say
+	// whether one run ate every failure or all of them limped, and that is the
+	// question the row answers. Hand-written markup, so it is on the page with
+	// no script at all.
+	const squares = await page
+		.locator('[data-band-fact="verdict"] [data-band-run]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				health: node.getAttribute('data-band-run') ?? '',
+				label: node.getAttribute('aria-label') ?? '',
+				fill: getComputedStyle(node).backgroundColor
+			}))
+		);
+	expect(squares.length, 'the newest day drew no run row').toBeGreaterThan(0);
+	expect(squares.length, 'the row is a chart, not a row').toBeLessThanOrEqual(12);
+
+	const ramp = await page.evaluate(() => {
+		const root = getComputedStyle(document.documentElement);
+		const probe = (value: string) => {
+			const span = document.createElement('span');
+			span.style.color = value;
+			document.body.appendChild(span);
+			const read = getComputedStyle(span).color;
+			span.remove();
+			return read;
+		};
+		return ['--fill-high', '--fill-medium', '--fill-low'].map((token) =>
+			probe(root.getPropertyValue(token).trim())
+		);
+	});
+	for (const square of squares) {
+		// Colour is one signal and never the only one.
+		expect(square.label.length, 'a square carries no words').toBeGreaterThan(4);
+		expect(ramp, `a square is painted ${square.fill}, off the run ramp`).toContain(square.fill);
+	}
+
+	// And the count agrees with the sentence beside it, so the row and the words
+	// cannot report two different days.
+	const said = await page.locator('[data-band-verdict]').innerText();
+	const runs = Number(/ran (\d+) runs?/.exec(said)?.[1] ?? 0);
+	const overflow = page.locator('[data-band-runs-more]');
+	const more =
+		(await overflow.count()) === 0
+			? 0
+			: Number((await overflow.getAttribute('data-band-runs-more')) ?? 0);
+	expect(squares.length + more, 'the row and the sentence count different runs').toBe(runs);
+});

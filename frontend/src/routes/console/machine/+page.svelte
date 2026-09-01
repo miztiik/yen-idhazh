@@ -396,22 +396,16 @@
 </script>
 
 <svelte:head>
-	<title>Console: Machine &mdash; {data.ui.site_title}</title>
+	<title>Console: Hardware &mdash; {data.ui.site_title}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
 <section class="py-6" data-surface="operator" data-console-route="machine">
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
-	<p class="mt-1 text-[0.9375rem] text-text-secondary">
-		The hardware the model ran on, and how much it varied between runs.
-	</p>
 
-	<ConsoleBand band={data.band}>
-		{#snippet window()}
-			<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
-		{/snippet}
-	</ConsoleBand>
 	<ConsoleNav routes={data.routes} active="machine" />
+	<ConsoleBand band={data.band} />
+	<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 
 	<!-- One sentence, no chart. It is what stops this route reading as a page
 	     about a machine nothing ran on. -->
@@ -856,7 +850,7 @@
 	</div>
 
 	<Panel
-		title="Do the two clocks agree"
+		title="The two clocks, compared"
 		note="Prompt tokens a second, counted twice: once by the item ledger and once by the model server itself. The runtime ledger was created for this check and nothing performed it on a screen. A day where the two disagree is a day whose rates cannot be trusted."
 	>
 		{#if data.clocksSvg === null}
@@ -1017,7 +1011,7 @@
 		data-model-rule-to={tailRuns.at(-1)?.date ?? ''}
 	>
 		<Panel
-			title="Is the tail growing"
+			title="How the tail moved"
 			note="One plot a percentile, one mark a run, over the last {windowDays} days. Five lines on one chart is a bundle a reader has to untangle by colour; separated, each is a trend read in one look. All five share one scale, which is the point of the arrangement - a p99 twenty times its own p50 has to look twenty times taller, and five plots on five scales would draw the same shape five times."
 		>
 			{#if tailRuns.length === 0}

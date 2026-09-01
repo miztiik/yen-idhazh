@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { monthsToFetch, stepPreset, windowOfDays } from '../src/lib/charts/viewport';
+import { readCsv } from '../src/lib/server/payload';
 
 /**
  * One window, and every section that follows it saying the same number.
@@ -18,10 +19,71 @@ import { monthsToFetch, stepPreset, windowOfDays } from '../src/lib/charts/viewp
 
 const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
-) as { console?: { window_presets?: number[]; default_window_days?: number } };
+) as {
+	console?: {
+		window_presets?: number[];
+		default_window_days?: number;
+		today_anchor?: 'right' | 'centre';
+	};
+};
 
 const PRESETS = CONFIG.console?.window_presets ?? [7, 14, 30, 90];
 const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 30;
+
+/** The tree the site was built from. The suite builds from the canaries. */
+const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
+
+/** N days earlier, in UTC, so the suite cannot drift west. */
+function minus(date: string, days: number): string {
+	const at = new Date(`${date}T00:00:00Z`);
+	at.setUTCDate(at.getUTCDate() - days);
+	return at.toISOString().slice(0, 10);
+}
+
+function dirs(at: string): string[] {
+	return readdirSync(at, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name)
+		.sort();
+}
+
+/** Every day the Pipelines daily table can draw a row for: one per committed
+ * run manifest, whatever the visuals planner did on it. */
+function chartArmDays(): string[] {
+	const root = join(CANARY, 'digest');
+	const found: string[] = [];
+	for (const year of dirs(root)) {
+		for (const month of dirs(join(root, year))) {
+			for (const day of dirs(join(root, year, month))) {
+				if (existsSync(join(root, year, month, day, 'run.json'))) {
+					found.push(`${year}-${month}-${day}`);
+				}
+			}
+		}
+	}
+	return found.sort();
+}
+
+function csvDates(dir: string, keep: (row: Record<string, string>) => boolean): string[] {
+	if (!existsSync(dir)) return [];
+	return readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.flatMap((name) => readCsv(join(dir, name)).rows)
+		.filter(keep)
+		.map((row) => row.date ?? '')
+		.filter(Boolean);
+}
+
+/** Every day the Summaries daily table can draw a row for, read off the two
+ * committed ledgers rather than off the page it is checking. */
+function workedDays(): string[] {
+	const scored = csvDates(join(CANARY, 'state', 'scores'), () => true);
+	const ran = csvDates(
+		join(CANARY, 'state', 'item-health'),
+		(row) => Number(row.summarize_ms) > 0
+	);
+	return [...new Set([...scored, ...ran])].sort();
+}
 
 /** The span the retirement rule is stated over, from the module that owns it. */
 const RULE_DAYS = 14;
@@ -158,7 +220,7 @@ test('THE ORACLE: the Model route obeys the same control over its own surfaces',
 	expect(
 		found.map((surface) => surface.name).sort(),
 		'the model route publishes no windowed surfaces, so the oracle asserts nothing'
-	).toEqual(['model-cards']);
+	).toEqual(['daily-figures', 'model-cards']);
 
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
@@ -387,7 +449,139 @@ test('two surfaces do not follow the window, and each says so', async ({ page })
 	const before = ((await size.textContent()) ?? '').trim();
 	await setWindow(page, 7);
 	await expect(size).toHaveText(before);
-	await expect(size).toContainText('committed payload tree, not the published site');
+	await expect(size).toContainText(/of the 1 GB limit/);
+});
+
+/** Both daily tables, and what each says about the span it is drawn over. */
+async function disclosures(page: Page) {
+	return page.locator('[data-daily-figures]').evaluateAll((nodes) =>
+		nodes.map((node) => ({
+			name: node.getAttribute('data-daily-figures') ?? '',
+			summary: (node.querySelector(':scope > summary')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+			dates: [...node.querySelectorAll('[data-chart-day], [data-model-day]')].map(
+				(row) =>
+					row.getAttribute('data-chart-day') ?? row.getAttribute('data-model-day') ?? ''
+			)
+		}))
+	);
+}
+
+/** The day the open window ends on, taken from the page rather than the clock.
+ *
+ * `windowOfDays` anchors on the newest date it is handed, not on today, and the
+ * two routes hand it different arrays - Pipelines the telemetry dates and
+ * Summaries the days the model worked. The run strip draws one column per day
+ * of the window, so its last column IS the end; on Summaries the table's own
+ * widest reading is, because the same array anchors both.
+ */
+async function endOfWindow(page: Page, route: string, widest: string[]): Promise<string> {
+	if (route !== '/console/') return [...widest].sort().at(-1) as string;
+	const days = await page
+		.locator('[data-grid="days"] [data-day]')
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-day') ?? ''));
+	return [...days].sort().at(-1) as string;
+}
+
+test('THE ORACLE: a daily table drawn under the control is drawn over the control span', async ({
+	page
+}) => {
+	// The two tables ignored the preset above them until 2026-08-31, so the cards
+	// on Summaries said 7 days while the rows under them held every day the
+	// ledger ever wrote. Two answers to one question on one page is exactly what
+	// the shared control was built to remove.
+	//
+	// Every date is read off the page and checked against a second reading of the
+	// committed fixture, never typed: a number written into a test goes stale the
+	// day the fixture grows a row, and it goes stale silently.
+	const widest = Math.max(...PRESETS);
+	for (const [route, committed] of [
+		['/console/', chartArmDays()],
+		['/console/model/', workedDays()]
+	] as const) {
+		await page.goto(route);
+		await hydrated(page);
+
+		expect((await disclosures(page)).length, `${route} publishes no daily table`).toBe(1);
+		expect(committed.length, `${route} has no committed day to window`).toBeGreaterThan(0);
+
+		// The widest preset reaches every day the fixture wrote, which is what makes
+		// a narrower one a cut rather than a coincidence.
+		await setWindow(page, widest);
+		const [wide] = await disclosures(page);
+		expect(
+			[...wide.dates].sort(),
+			`${route} does not draw every committed day at ${widest} days`
+		).toEqual(committed);
+		const end = await endOfWindow(page, route, wide.dates);
+
+		const counts = new Set<number>();
+		for (const preset of PRESETS) {
+			await setWindow(page, preset);
+			const [table] = await disclosures(page);
+			// The name is one string on both routes and it says the span out loud.
+			expect(table.summary, `${route} renamed its daily table`).toContain(
+				'Show these figures day by day'
+			);
+			expect(
+				table.summary,
+				`${route} opens a table without saying how many days are in it`
+			).toContain(`${preset} days`);
+
+			const first = minus(end, preset - 1);
+			const inside = committed.filter((date) => date >= first && date <= end);
+			expect(
+				[...table.dates].sort(),
+				`${route} at ${preset} days drew ${table.dates.length} rows where ${inside.length} days of the window carry data`
+			).toEqual(inside);
+			counts.add(table.dates.length);
+		}
+		// A table that returned the same rows at every preset would satisfy every
+		// assertion above on a fixture narrower than the narrowest window.
+		expect(
+			counts.size,
+			`${route} drew the same row count at all four presets`
+		).toBeGreaterThan(1);
+	}
+});
+
+test('a shut daily table is a line of prose, not a card', async ({ page }) => {
+	// Shut, it was a bordered, shadowed, rounded card wrapped around one line of
+	// link text - the visual weight of a section with the content of a footnote,
+	// which is what made it read as something hanging off the page. An eye cannot
+	// check a box-shadow, so this reads the computed values against the prose
+	// beside it rather than against a hard-coded string.
+	for (const route of ['/console/', '/console/model/']) {
+		await page.goto(route);
+		const shut = await page.locator('[data-daily-figures]').evaluate((node) => {
+			const details = node as HTMLDetailsElement;
+			details.open = false;
+			const style = getComputedStyle(details);
+			return {
+				open: details.open,
+				border: style.borderTopWidth,
+				shadow: style.boxShadow,
+				background: style.backgroundColor,
+				padding: style.paddingTop
+			};
+		});
+		expect(shut.open, `${route} opens its daily table on arrival`).toBe(false);
+		expect(shut.border, `${route} keeps a border on a shut disclosure`).toBe('0px');
+		expect(shut.shadow, `${route} keeps a shadow on a shut disclosure`).toBe('none');
+		expect(shut.padding, `${route} keeps a card's padding on a shut disclosure`).toBe('0px');
+		expect(
+			['rgba(0, 0, 0, 0)', 'transparent'],
+			`${route} keeps a card background on a shut disclosure: ${shut.background}`
+		).toContain(shut.background);
+
+		// And open it is a panel again, because then it holds one.
+		const opened = await page.locator('[data-daily-figures]').evaluate((node) => {
+			(node as HTMLDetailsElement).open = true;
+			const style = getComputedStyle(node);
+			return { border: style.borderTopWidth, shadow: style.boxShadow };
+		});
+		expect(opened.border, `${route} draws no frame around an open table`).not.toBe('0px');
+		expect(opened.shadow, `${route} draws no elevation on an open table`).not.toBe('none');
+	}
 });
 
 test('the prerendered page opens on the configured window, whatever was stored', async ({

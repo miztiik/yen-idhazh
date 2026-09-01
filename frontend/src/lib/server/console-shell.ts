@@ -6,6 +6,10 @@
  * "did it work, what is worst, how much room is left", and a navigation strip
  * whose every label carries its own worst state.
  *
+ * Three facts and no control. The window governs nothing in the band - the band
+ * stands on all three routes and is deliberately not windowed - so the control
+ * sits below it, in a container of its own.
+ *
  * It is server-only for the same reason `model-work.ts` is: it reads the
  * committed ledger under `state/`, which is not published, and SvelteKit
  * refuses to bundle `$lib/server/` for a browser.
@@ -29,6 +33,22 @@ import { loadMachineCounters, type MachineCounters } from '$lib/server/runtime-c
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
 
+/** What a square means, in words. Colour is one signal and never the only one,
+ * and the same three words the run strip 800 px below prints. */
+const VERDICT_WORD: Record<Health, string> = {
+	green: 'ran clean',
+	amber: 'is worth a look',
+	red: 'failed'
+};
+
+/** Squares the band draws before it starts counting instead.
+ *
+ * The schedule fires five runs a day, so twelve covers every day on record with
+ * room to spare. Past that a row of squares stops being a row and becomes a
+ * chart, and the band is not where a chart goes.
+ */
+const BAND_RUN_SQUARES = 12;
+
 export type RouteId = 'pipelines' | 'model' | 'machine';
 
 /** How loud a route's worst state is.
@@ -44,13 +64,20 @@ export const WORTH_KNOWING = 1;
 export const CLEAR = 0;
 
 interface Candidate {
+	/** The strip's fragment: short enough to sit beside a label. */
 	text: string;
+	/** The band's version, which says what the state costs rather than naming
+	 * it. The strip has room for two words and the band has room for a sentence,
+	 * so one string for both was always going to be the strip's. */
+	sentence: string;
 	severity: number;
 }
 
 export interface ConsoleRoute {
 	id: RouteId;
-	/** Verbatim as the owner wrote them on 2026-08-30. */
+	/** The strip's word for the route. `Pipelines` is the owner's own, taken
+	 * verbatim on 2026-08-30; `Summaries` and `Hardware` replaced `Model` and
+	 * `Machine` on 2026-08-31. The id and the href did not move with them. */
 	label: string;
 	/** Route-relative and trailing-slashed. A component prefixes `base`. */
 	href: string;
@@ -61,11 +88,27 @@ export interface ConsoleRoute {
 	severity: number;
 }
 
+/** One run of the newest day, as the band draws it. */
+export interface BandRun {
+	health: Health;
+	/** What the square means, for a reader who cannot see the colour. */
+	label: string;
+}
+
 export interface ConsoleBandFacts {
 	/** The newest day the manifests hold, as a sentence. */
-	verdict: { date: string | null; sentence: string; health: Health };
+	verdict: {
+		date: string | null;
+		sentence: string;
+		health: Health;
+		/** One square a run, in the order they ran. It says what the sentence
+		 * cannot: whether one run ate every failure or all five limped. */
+		runs: BandRun[];
+		/** Runs past the twelve drawn. A day of thirty squares is a chart. */
+		moreRuns: number;
+	};
 	/** The one worst thing on the whole console, and which route it is on. */
-	worst: { id: RouteId; label: string; href: string; text: string } | null;
+	worst: { id: RouteId; label: string; href: string; sentence: string } | null;
 	size: {
 		/** The committed payload tree at the newest run, or null if unmeasured. */
 		bytes: number | null;
@@ -170,26 +213,56 @@ function feedTrouble(results: FeedResult[], quarantineAfter: number) {
 	return { rested, failed };
 }
 
+/** What is wrong on Pipelines, loudest kind first.
+ *
+ * The runs come before the feeds and the order is load-bearing: a resting feed
+ * and a failed run both rank BROKEN, `worstOf` sorts stably, and a rest clears
+ * itself after `quarantine_after_failures` skips while a failed run does not.
+ * Listing the feeds first handed every tie to the state that fixes itself.
+ */
 function pipelinesCandidates(
 	newest: { date: string; records: RunRecord[] } | null,
-	feeds: { rested: number; failed: number }
+	feeds: { rested: number; failed: number },
+	quarantineAfter: number
 ): Candidate[] {
 	const found: Candidate[] = [];
-	if (feeds.rested > 0) {
-		found.push({ text: `${plural(feeds.rested, 'feed', 'feeds')} resting`, severity: BROKEN });
-	}
 	if (newest !== null) {
 		const verdicts = newest.records.map((run) => health(run, runConfig().success_floor_pct));
 		const red = verdicts.filter((v) => v === 'red').length;
 		const amber = verdicts.filter((v) => v === 'amber').length;
-		if (red > 0) found.push({ text: `${plural(red, 'run', 'runs')} failed`, severity: BROKEN });
-		if (amber > 0) {
-			found.push({ text: `${plural(amber, 'run', 'runs')} worth a look`, severity: WORTH_A_LOOK });
+		if (red > 0) {
+			found.push({
+				text: `${plural(red, 'run', 'runs')} failed`,
+				sentence: `${plural(red, 'run', 'runs')} failed, so the items ${red === 1 ? 'it' : 'they'} planned are not in the day.`,
+				severity: BROKEN
+			});
 		}
+		if (amber > 0) {
+			found.push({
+				text: `${plural(amber, 'run', 'runs')} worth a look`,
+				sentence: `${plural(amber, 'run', 'runs')} finished but not cleanly, so the day may hold fewer items than it planned.`,
+				severity: WORTH_A_LOOK
+			});
+		}
+	}
+	if (feeds.rested > 0) {
+		// The retry count comes from `quarantine_after_failures`, never a literal:
+		// an operator who moves the knob would otherwise be reading yesterday's
+		// rule in today's sentence.
+		const carry =
+			feeds.rested === 1
+				? '1 feed is resting, so nothing it carries reaches the digest.'
+				: `${feeds.rested} feeds are resting, so nothing they carry reaches the digest.`;
+		found.push({
+			text: `${plural(feeds.rested, 'feed', 'feeds')} resting`,
+			sentence: `${carry} Each is asked again after ${quarantineAfter} runs.`,
+			severity: BROKEN
+		});
 	}
 	if (feeds.failed > 0) {
 		found.push({
 			text: `${plural(feeds.failed, 'feed', 'feeds')} failing`,
+			sentence: `${plural(feeds.failed, 'feed', 'feeds')} failed on the last ask, so the digest is short of what ${feeds.failed === 1 ? 'it carries' : 'they carry'} until ${feeds.failed === 1 ? 'it answers' : 'they answer'} again.`,
 			severity: WORTH_A_LOOK
 		});
 	}
@@ -207,8 +280,10 @@ function pipelinesCandidates(
 function machineCandidates(counters: MachineCounters): Candidate[] {
 	const found: Candidate[] = [];
 	if (counters.refused.length > 0) {
+		const n = counters.refused.length;
 		found.push({
-			text: `${plural(counters.refused.length, 'run', 'runs')} cannot be read`,
+			text: `${plural(n, 'run', 'runs')} cannot be read`,
+			sentence: `${plural(n, 'run', 'runs')} cannot be read, so no figure on the Hardware route counts ${n === 1 ? 'it' : 'them'}.`,
 			severity: WORTH_A_LOOK
 		});
 	}
@@ -218,12 +293,15 @@ function machineCandidates(counters: MachineCounters): Candidate[] {
 		if (silent > 0) {
 			found.push({
 				text: `${plural(silent, 'shard', 'shards')} reported nothing`,
+				sentence: `${plural(silent, 'shard', 'shards')} of the newest run reported nothing, so the run's totals are short by whatever ${silent === 1 ? 'it' : 'they'} did.`,
 				severity: WORTH_A_LOOK
 			});
 		}
 		if (newest.readSpread.value !== null) {
+			const spread = newest.readSpread.value.toFixed(2);
 			found.push({
-				text: `shards read ${newest.readSpread.value.toFixed(2)}x apart`,
+				text: `shards read ${spread}x apart`,
+				sentence: `The newest run's shards read ${spread}x apart, so a rate taken over the whole run hides how slow the slowest of them was.`,
 				severity: WORTH_KNOWING
 			});
 		}
@@ -235,22 +313,36 @@ function modelCandidates(day: ModelDay | null): Candidate[] {
 	if (day === null) return [];
 	const found: Candidate[] = [];
 	if (day.failed !== null && day.failed > 0) {
-		found.push({ text: `${plural(day.failed, 'item', 'items')} failed`, severity: BROKEN });
+		const n = day.failed;
+		found.push({
+			text: `${plural(n, 'item', 'items')} failed`,
+			sentence: `${plural(n, 'item', 'items')} failed, so ${n === 1 ? 'it is' : 'they are'} not in the day the digest published.`,
+			severity: BROKEN
+		});
 	}
 	// Zero is the expected reading here: at the cap in force no prompt can reach
 	// the window, so anything above zero says the cap moved past what fits.
 	if (day.refusedForLength !== null && day.refusedForLength > 0) {
+		const n = day.refusedForLength;
 		found.push({
-			text: `${plural(day.refusedForLength, 'item', 'items')} too long to send`,
+			text: `${plural(n, 'item', 'items')} too long to send`,
+			sentence: `${plural(n, 'item', 'items')} ${n === 1 ? 'was' : 'were'} too long to send, so the model never saw ${n === 1 ? 'it' : 'them'} and the truncation cap is past what fits.`,
 			severity: WORTH_A_LOOK
 		});
 	}
 	if (day.notSure !== null && day.notSure > 0) {
-		found.push({ text: `${day.notSure} marked "not sure"`, severity: WORTH_A_LOOK });
+		const n = day.notSure;
+		found.push({
+			text: `${n} marked "not sure"`,
+			sentence: `${n} ${n === 1 ? 'summary is' : 'summaries are'} marked "not sure", so the checker could not hold ${n === 1 ? 'it' : 'them'} against the article.`,
+			severity: WORTH_A_LOOK
+		});
 	}
 	if (day.readInPart !== null && day.readInPart > 0) {
+		const n = day.readInPart;
 		found.push({
-			text: `${plural(day.readInPart, 'article', 'articles')} read only in part`,
+			text: `${plural(n, 'article', 'articles')} read only in part`,
+			sentence: `${plural(n, 'article', 'articles')} ${n === 1 ? 'was' : 'were'} read only in part, so the summary was written from less than the whole piece.`,
 			severity: WORTH_KNOWING
 		});
 	}
@@ -267,7 +359,8 @@ export function consoleShell(): ConsoleShell {
 	const newest = manifests[0] ?? null;
 	const floorPct = runConfig().success_floor_pct;
 	const budgetBytes = retentionConfig().site_budget_mb * 1024 * 1024;
-	const feeds = feedTrouble(feedResults(), collectConfig().quarantine_after_failures);
+	const quarantineAfter = collectConfig().quarantine_after_failures;
+	const feeds = feedTrouble(feedResults(), quarantineAfter);
 
 	const scored = evalRows().rows;
 	const itemRows = itemHealthRows().rows;
@@ -281,6 +374,7 @@ export function consoleShell(): ConsoleShell {
 	// first clause still knows whether the day published.
 	let sentence: string;
 	let verdictHealth: Health = 'green';
+	let runRow: BandRun[] = [];
 	if (newest === null) {
 		sentence = 'No run has recorded a manifest yet, so there is nothing to report on.';
 		verdictHealth = 'amber';
@@ -294,6 +388,10 @@ export function consoleShell(): ConsoleShell {
 			: verdicts.includes('amber')
 				? 'amber'
 				: 'green';
+		runRow = verdicts.map((value, index) => ({
+			health: value,
+			label: `Run ${index + 1} ${VERDICT_WORD[value]}`
+		}));
 		const head = `${newest.date} ran ${plural(newest.records.length, 'run', 'runs')} and published ${succeeded} of ${planned} planned items.`;
 		const tail =
 			verdictHealth === 'green'
@@ -305,7 +403,7 @@ export function consoleShell(): ConsoleShell {
 	}
 
 	// --- The routes and their worst states ---------------------------------
-	const worstPipelines = worstOf(pipelinesCandidates(newest, feeds));
+	const worstPipelines = worstOf(pipelinesCandidates(newest, feeds, quarantineAfter));
 	const worstModel = worstOf(modelCandidates(newestModelDay));
 	// The Machine route draws the counters since 2026-08-31, so its worst state is
 	// derived from them like the other two rather than being a standing note that
@@ -324,7 +422,7 @@ export function consoleShell(): ConsoleShell {
 		},
 		{
 			id: 'model',
-			label: 'Model',
+			label: 'Summaries',
 			href: '/console/model/',
 			description: DESCRIPTIONS.model,
 			worst: worstModel?.text ?? null,
@@ -332,7 +430,7 @@ export function consoleShell(): ConsoleShell {
 		},
 		{
 			id: 'machine',
-			label: 'Machine',
+			label: 'Hardware',
 			href: '/console/machine/',
 			description: DESCRIPTIONS.machine,
 			worst: worstMachine?.text ?? null,
@@ -343,6 +441,12 @@ export function consoleShell(): ConsoleShell {
 	const loudest = [...routes]
 		.filter((route) => route.worst !== null)
 		.sort((a, b) => b.severity - a.severity)[0];
+	/** The winning candidate's own long form, kept rather than recomputed. */
+	const sentenceFor: Record<RouteId, string | null> = {
+		pipelines: worstPipelines?.sentence ?? null,
+		model: worstModel?.sentence ?? null,
+		machine: worstMachine?.sentence ?? null
+	};
 
 	// --- Site size ---------------------------------------------------------
 	// Not windowed, and that is the difference between this and the panel on
@@ -352,18 +456,16 @@ export function consoleShell(): ConsoleShell {
 	const cost = siteCost(manifests, publishedItems(), null);
 	const runway = bytes === null ? null : siteRunway(bytes, cost.median, budgetBytes);
 	const capFraction = bytes === null ? null : bytes / PAGES_CAP_BYTES;
-	// The level says which tree it measured before it says anything else about
-	// it. `site_bytes` is the committed payload tree and the cap is measured on
-	// the built site, which is larger - so the share is a floor on the real one,
-	// and a percentage printed without that clause is optimistic by a multiple.
-	const TREE =
-		'That is the committed payload tree, not the published site: the site is larger, it is what the cap measures, and idhazh site-weight prints its runway after every build.';
+	// One line. The rate this divides by, the days it was measured over and the
+	// clause about which tree the cap measures all live on `What one more article
+	// costs`, which already owns the rate, its n and its spread - and a band that
+	// repeated them spent sixty of its hundred words on a caveat.
 	const sizeSentence =
 		bytes === null
-			? 'No run has recorded a size yet, so there is nothing to hold against the 1 GB Pages cap.'
+			? 'No run has recorded a size yet, so there is nothing to hold against the 1 GB limit.'
 			: runway === null
-				? `${mb(bytes)} of the 1 GB Pages cap. ${TREE} No published day grew the tree over an article it published, so there is no rate and no runway.`
-				: `${mb(bytes)} of the 1 GB Pages cap. ${TREE} At ${Math.round(cost.median ?? 0).toLocaleString('en-GB')} B an article over ${plural(cost.days.length, 'published day', 'published days')}, that is room for about ${roughly(runway.toCap)} more articles.`;
+				? `${mb(bytes)} of the 1 GB limit - no published day has grown it over an article yet, so there is no room figure.`
+				: `${mb(bytes)} of the 1 GB limit - room for about ${roughly(runway.toCap)} more articles.`;
 
 	// --- The three carries --------------------------------------------------
 	// One sentence each, no chart. They are what stops a route hiding the panel
@@ -375,11 +477,22 @@ export function consoleShell(): ConsoleShell {
 
 	return {
 		band: {
-			verdict: { date: newest?.date ?? null, sentence, health: verdictHealth },
+			verdict: {
+				date: newest?.date ?? null,
+				sentence,
+				health: verdictHealth,
+				runs: runRow.slice(0, BAND_RUN_SQUARES),
+				moreRuns: Math.max(0, runRow.length - BAND_RUN_SQUARES)
+			},
 			worst:
-				loudest === undefined || loudest.worst === null
+				loudest === undefined || sentenceFor[loudest.id] === null
 					? null
-					: { id: loudest.id, label: loudest.label, href: loudest.href, text: loudest.worst },
+					: {
+							id: loudest.id,
+							label: loudest.label,
+							href: loudest.href,
+							sentence: sentenceFor[loudest.id] as string
+						},
 			size: {
 				bytes,
 				capFraction,

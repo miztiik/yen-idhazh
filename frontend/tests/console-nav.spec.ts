@@ -10,10 +10,12 @@ import { resolve } from 'node:path';
  * every panel it hides still ships inside the one document. Three prerendered
  * routes with real anchors pass, and each one can be weighed on its own.
  *
- * Two things this file protects that a screenshot cannot. The three labels are
- * the owner's own words, taken verbatim on 2026-08-30, so a paraphrase fails.
- * And the strip may never take the health ramp: green, amber and red on a label
- * would say a route is failing, and a route is a noun.
+ * Three things this file protects that a screenshot cannot. The labels are the
+ * words the owner chose, so a paraphrase fails. The ids and the paths under
+ * them did NOT move when two of the labels changed on 2026-08-31, which is what
+ * makes that a rename and not a route change. And the strip may never take the
+ * health ramp: green, amber and red on a label would say a route is failing,
+ * and a route is a noun.
  */
 
 const CONFIG = JSON.parse(
@@ -22,11 +24,17 @@ const CONFIG = JSON.parse(
 
 /** The owner's words, and the paths they sit on. Typed out on purpose: this is
  * the copy the file exists to protect, so reading it from the source it guards
- * would only prove the page agrees with itself. */
+ * would only prove the page agrees with itself.
+ *
+ * `Model` became `Summaries` and `Machine` became `Hardware` on 2026-08-31.
+ * Every panel on the middle route is about a published summary and none is
+ * about the model as an artefact; `Hardware` is the plainest word for a
+ * processor, a memory and a clock, and unlike `Runner` it is not a term the
+ * build system uses on itself (CLAUDE.md section 0b). */
 const ROUTES = [
 	{ id: 'pipelines', label: 'Pipelines', path: '/console/' },
-	{ id: 'model', label: 'Model', path: '/console/model/' },
-	{ id: 'machine', label: 'Machine', path: '/console/machine/' }
+	{ id: 'model', label: 'Summaries', path: '/console/model/' },
+	{ id: 'machine', label: 'Hardware', path: '/console/machine/' }
 ] as const;
 
 /** The three verdict colours, as the tokens a stylesheet would have to name. */
@@ -62,6 +70,41 @@ test.describe('the strip', () => {
 			).toEqual([route.id]);
 		});
 	}
+
+	test('THE ORACLE: a label changed and no address moved with it', async ({ page }) => {
+		// Two of the three labels were rewritten on 2026-08-31. The whole risk of a
+		// rename row is that a word an operator reads and a word a browser resolves
+		// are the same string somewhere, so this asserts the second set did not
+		// move: the tab ids, the hrefs, the route markers each page prints, and the
+		// ceiling keys config holds them to.
+		await page.goto('/console/');
+		const drawn = await tabs(page);
+		expect(
+			drawn.map((tab) => tab.id),
+			'a tab id moved, which is an address and not a label'
+		).toEqual(['pipelines', 'model', 'machine']);
+
+		for (const [index, entry] of ROUTES.entries()) {
+			expect(drawn[index].href, `${entry.id} no longer points at its own route`).toContain(
+				entry.path
+			);
+		}
+		expect(
+			Object.keys(CONFIG.page_weight.ceilings_bytes)
+				.filter((key) => key.startsWith('/console/'))
+				.sort(),
+			'a ceiling key moved with a label'
+		).toEqual(['/console/', '/console/machine/', '/console/model/']);
+
+		for (const entry of ROUTES) {
+			const answered = await page.request.get(entry.path);
+			expect(answered.status(), `${entry.path} stopped answering`).toBe(200);
+			expect(
+				await answered.text(),
+				`${entry.path} no longer prints its own route marker`
+			).toContain(`data-console-route="${entry.id}"`);
+		}
+	});
 
 	test('every label carries a description, and the same words as its tooltip', async ({ page }) => {
 		await page.goto('/console/');
@@ -195,15 +238,15 @@ test.describe('with no script at all', () => {
 
 test.describe('the standing band', () => {
 	for (const route of ROUTES) {
-		test(`${route.path} carries the same four things and no others`, async ({ page }) => {
+		test(`${route.path} carries the same three things and no others`, async ({ page }) => {
 			await page.goto(route.path);
 			const facts = await page
 				.locator('[data-console-band] [data-band-fact]')
 				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-band-fact') ?? ''));
-			// Three facts plus the window slot. A band that grows becomes a fourth
-			// page nobody chose to open.
+			// Three facts and no control. A band that grows becomes a fourth page
+			// nobody chose to open, and the control governs nothing inside it.
 			expect(facts).toEqual(['verdict', 'worst', 'size']);
-			await expect(page.locator('[data-console-band] [data-band-window-slot]')).toHaveCount(1);
+			await expect(page.locator('[data-console-band] [data-window-control]')).toHaveCount(0);
 
 			for (const marker of ['[data-band-verdict]', '[data-band-worst]', '[data-band-size]']) {
 				const text = (await page.locator(`[data-console-band] ${marker}`).innerText()).trim();
@@ -298,14 +341,14 @@ test.describe('a route that draws what the server counted', () => {
 		expect(errors, 'the route logged an error').toEqual([]);
 	});
 
-	test('Machine carries the same window control as the other two', async ({ page }) => {
+	test('Hardware carries the same window control as the other two', async ({ page }) => {
 		await page.goto('/console/machine/');
 		// It was the one route without one until 2026-08-31, and it printed a
 		// sentence pointing at the two routes that had it. An operator who
 		// narrowed Pipelines to look at a bad afternoon lost the span the moment
 		// he asked what the machine had been doing, and two charts on two spans
 		// cannot be compared - which is the question he came to ask.
-		const control = page.locator('[data-console-band] [data-window-control]');
+		const control = page.locator('[data-window-control]');
 		await expect(control).toHaveCount(1);
 		await expect(control).toHaveAttribute('data-window-days', /\d+/);
 		await expect(page.locator('[data-band-window="none"]')).toHaveCount(0);

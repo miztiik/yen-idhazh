@@ -438,15 +438,31 @@ test('the horizon needs both rates, and prints nothing without either', () => {
 	expect(publishingHorizon(1_600_000, cost, new Map(), 10_000_000)).toBeNull();
 });
 
-test('the intro carries no count that only ever grows', async ({ page }) => {	await page.goto('/console/');
+test('nothing above the first heading carries a count that only ever grows', async ({ page }) => {
+	await page.goto('/console/');
 
-	const intro = page.locator('[data-surface="operator"] > p').first();
-	await expect(intro).toContainText('from the committed ledger');
-	// Two sentences used to follow that one: a running count of scored items and
-	// a running count of item-health rows. Neither can ever fall, so neither
-	// could tell an operator anything about the state of the machine.
-	await expect(intro).not.toContainText('on record');
-	await expect(intro).not.toContainText(/\d/);
+	// This used to read the page subtitle, which was cut from all three routes on
+	// 2026-08-31: it repeated what the active tab's own description says 150px
+	// lower and cost 25px of a first viewport the band was already filling. What
+	// it once carried is the thing that must not come back anywhere - a running
+	// count of scored items and a running count of item-health rows. Neither can
+	// ever fall, so neither could tell an operator anything about the state of
+	// the machine.
+	const above = await page.evaluate(() => {
+		const surface = document.querySelector('[data-surface="operator"]');
+		const heading = surface?.querySelector('h2') ?? null;
+		return [...(surface?.children ?? [])]
+			.filter((node) => node.tagName === 'P')
+			.filter(
+				(node) => heading === null || node.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING
+			)
+			.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim());
+	});
+	for (const text of above) {
+		expect(text, `a standing paragraph carries a running count: ${text}`).not.toContain('on record');
+	}
+	// And the subtitle itself is gone rather than reworded.
+	expect(above.join(' '), 'the page subtitle came back').not.toContain('from the committed ledger');
 });
 
 test('the two on-record counts have no reader left in the source', () => {
