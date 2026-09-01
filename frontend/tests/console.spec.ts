@@ -11,6 +11,7 @@ import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
+import { failing, reliability, skipped, type FeedRecord } from '../src/lib/feed-health';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -483,6 +484,199 @@ test('a feed past the quarantine count is marked rested', async ({ page }) => {
 	expect(named).toEqual(['canary-flaky', 'canary-empty', 'canary-gone']);
 });
 
+/** The cap the feed list draws with, from the file the page reads it from. */
+const FEED_ROWS =
+	(
+		JSON.parse(
+			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+		) as { console?: { feed_rows?: number } }
+	).console?.feed_rows ?? 10;
+
+/** The threshold under which this page prints counts and no rate. */
+const MIN_ATTEMPTS =
+	(
+		JSON.parse(
+			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+		) as { console?: { min_attempts_for_rate?: number } }
+	).console?.min_attempts_for_rate ?? 5;
+
+/** A feed-health ledger, read again independently of the page.
+ *
+ * The CANARY tree, because that is what `build:canary` built the site from.
+ * Reading `state/` here would compare the page to a ledger it never saw.
+ */
+function feedLedger(root: string): FeedRecord[] {
+	const dir = join(root, 'state', 'feed-health');
+	const rows: FeedRecord[] = [];
+	for (const shard of readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.sort()) {
+		const lines = readFileSync(join(dir, shard), 'utf8').trim().split(/\r?\n/);
+		const head = lines[0].split(',');
+		for (const line of lines.slice(1)) {
+			const cell = line.split(',');
+			const row = new Map(head.map((name, index) => [name, cell[index] ?? '']));
+			rows.push({
+				date: row.get('date') ?? '',
+				runId: row.get('run_id') ?? '',
+				outcome: row.get('outcome') ?? '',
+				items: Number(row.get('items') ?? 0) || 0,
+				feedId: row.get('feed_id') ?? ''
+			});
+		}
+	}
+	return rows;
+}
+
+/** The clean count, the denominator and the span, computed here from scratch. */
+function recordByHand(rows: FeedRecord[]) {
+	const asked = new Map<string, FeedRecord[]>();
+	for (const row of rows) {
+		if (skipped(row)) continue;
+		asked.set(row.feedId, [...(asked.get(row.feedId) ?? []), row]);
+	}
+	const clean: string[] = [];
+	const broken: string[] = [];
+	for (const [feedId, reads] of asked) {
+		if (reads.some(failing)) broken.push(feedId);
+		else clean.push(feedId);
+	}
+	return {
+		clean: clean.sort((a, b) => a.localeCompare(b)),
+		broken: broken.sort((a, b) => a.localeCompare(b)),
+		checked: asked.size,
+		runs: new Set(rows.map((row) => row.runId)).size
+	};
+}
+
+test('THE ORACLE: the feed headline carries its own denominator and span', async ({ page }) => {
+	await page.goto('/console/');
+
+	const byHand = recordByHand(feedLedger(CANARY));
+	// Read against a fact the fixture owns, never against a locator count: a
+	// renamed attribute would make every number zero and switch this off.
+	expect(byHand.checked, 'the canary ledger asked no feed at all').toBeGreaterThan(0);
+	expect(byHand.clean.length, 'the canary has no clean feed to name').toBeGreaterThan(0);
+	expect(byHand.broken.length, 'the canary has no failing feed, so the list is empty').toBeGreaterThan(
+		0
+	);
+
+	const headline = page.locator('[data-feed-reliability]');
+	await expect(headline, 'the feed section prints no denominator').toHaveCount(1);
+	await expect(headline).toHaveAttribute('data-feed-clean', String(byHand.clean.length));
+	await expect(headline).toHaveAttribute('data-feed-checked', String(byHand.checked));
+	await expect(headline).toHaveAttribute('data-feed-runs', String(byHand.runs));
+	// The numbers in the attributes are also the numbers in the type. An
+	// attribute nobody reads and a sentence that says something else is exactly
+	// the shape this section had before.
+	await expect(headline).toContainText(`${byHand.clean.length} of ${byHand.checked} feeds`);
+	await expect(headline).toContainText(String(byHand.runs));
+	// The record's depth decides which of the two sentences prints, and the
+	// canary is deep enough for the measured one.
+	await expect(headline).toHaveAttribute(
+		'data-feed-reliability',
+		byHand.runs >= MIN_ATTEMPTS ? 'measured' : 'shallow'
+	);
+});
+
+test('THE ORACLE: the disclosed names are exactly the feeds that never failed', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	const byHand = recordByHand(feedLedger(CANARY));
+	const named = await page
+		.locator('[data-feed-clean-name]')
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-clean-name') ?? ''));
+
+	expect(named).toEqual(byHand.clean);
+	// And the two lists are disjoint: no feed is both clean and listed as broken.
+	const listed = await page
+		.locator('[data-feed]')
+		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-feed') ?? ''));
+	expect(named.filter((feedId) => listed.includes(feedId))).toEqual([]);
+});
+
+test('THE ORACLE: the failure list is capped and its tail counts the remainder', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	const byHand = recordByHand(feedLedger(CANARY));
+	const table = page.locator('[data-feeds="table"]');
+	const drawn = Number(await table.getAttribute('data-feeds-drawn'));
+	const hidden = Number(await table.getAttribute('data-feeds-hidden'));
+
+	// The identity that catches a cap dropping rows without counting them. It
+	// holds at zero hidden, which is what makes it worth asserting on a fixture
+	// the cap does not bite.
+	expect(drawn + hidden, 'the cap lost a feed on the way past it').toBe(byHand.broken.length);
+	expect(drawn).toBeLessThanOrEqual(FEED_ROWS);
+	expect(drawn).toBe(Math.min(byHand.broken.length, FEED_ROWS));
+	await expect(page.locator('[data-feed]')).toHaveCount(drawn);
+
+	const tail = page.locator('[data-feeds-more]');
+	if (hidden === 0) {
+		// A sentence saying nothing is hidden is a line an operator reads and
+		// learns nothing from.
+		await expect(tail).toHaveCount(0);
+	} else {
+		await expect(tail).toContainText(`${hidden} more feed`);
+	}
+});
+
+test('a record too shallow for a rate says so instead of printing one', () => {
+	// The canary is deep enough, so the third state is driven here rather than
+	// left to a sentence that never prints. Two runs deep, "has never failed"
+	// means "did not fail twice", and the page has to say which it means.
+	const shallow: FeedRecord[] = [
+		{ feedId: 'a-wire', date: '2026-08-01', runId: '2026-08-01-1', outcome: 'ok', items: 9 },
+		{ feedId: 'a-wire', date: '2026-08-02', runId: '2026-08-02-1', outcome: 'ok', items: 9 },
+		{ feedId: 'b-wire', date: '2026-08-01', runId: '2026-08-01-1', outcome: 'transient', items: 0 }
+	];
+	const shallowRecord = reliability(shallow);
+	expect(shallowRecord.runs).toBe(2);
+	expect(shallowRecord.runs).toBeLessThan(MIN_ATTEMPTS);
+	expect(shallowRecord.clean).toEqual(['a-wire']);
+	expect(shallowRecord.checked).toBe(2);
+	expect(shallowRecord.failed).toBe(1);
+
+	// A feed nobody has asked is neither clean nor broken, so it is in neither
+	// number. Counting a rest as a clean read is how a dead feed joins the
+	// reliable list.
+	const rested: FeedRecord[] = [
+		...shallow,
+		{ feedId: 'c-wire', date: '2026-08-01', runId: '2026-08-01-1', outcome: 'skipped', items: 0 }
+	];
+	const withRest = reliability(rested);
+	expect(withRest.checked).toBe(2);
+	expect(withRest.clean).toEqual(['a-wire']);
+	// The run count is every run on record, rest or no rest.
+	expect(withRest.runs).toBe(2);
+	// And the partition holds, always.
+	expect(withRest.clean.length + withRest.failed).toBe(withRest.checked);
+});
+
+test('the committed ledger is deeper than the cap, so the tail sentence has work to do', () => {
+	// The canary cannot show a capped list, so the numbers the production build
+	// prints are pinned here off the ledger the production build reads. The
+	// click-through is the section-12 smoke.
+	const real = recordByHand(feedLedger(resolve(process.cwd(), '..')));
+	expect(real.checked, 'no committed feed-health ledger - the read is broken').toBeGreaterThan(0);
+	expect(
+		real.broken.length,
+		'the committed ledger holds fewer failing feeds than the cap, so nothing is hidden'
+	).toBeGreaterThan(FEED_ROWS);
+	expect(real.runs).toBeGreaterThanOrEqual(MIN_ATTEMPTS);
+	expect(real.clean.length + real.broken.length).toBe(real.checked);
+
+	const measured = reliability(feedLedger(resolve(process.cwd(), '..')));
+	expect(measured.clean).toEqual(real.clean);
+	expect(measured.checked).toBe(real.checked);
+	expect(measured.runs).toBe(real.runs);
+	expect(measured.failed).toBe(real.broken.length);
+});
+
 test('stage medians come from item health, not the score ledger', async ({ page }) => {
 	await page.goto('/console/');
 
@@ -559,13 +753,13 @@ test('the timing legend is sorted by the newest day, tallest first', async ({ pa
 
 /** What the timing chart drew for one stage, read off the chart itself.
  *
- * The notes under the plot count days, and the chart draws the window the page
- * is set to rather than the days that happen to carry a row. So a count typed
- * into a test here would have to be re-typed every time a preset moved or the
- * fixture grew, and it would go stale silently. The plot publishes the span it
- * drew, and it draws one mark for every day it has a number for - a filled dot
- * for a measured time, an open dot for a measured zero - so the days it timed
- * nothing on are the difference between the two.
+ * The chart draws the window the page is set to rather than the days that
+ * happen to carry a row. So a count typed into a test here would have to be
+ * re-typed every time a preset moved or the fixture grew, and it would go stale
+ * silently. The plot publishes the span it drew, and it draws one mark for every
+ * day it has a number for - a filled dot for a measured time, an open dot for a
+ * measured zero - so the days it timed nothing on are the difference between
+ * the two.
  */
 async function drewFor(
 	page: Page,
@@ -594,13 +788,13 @@ test('a stage with no number draws a gap, never a plunge to the axis floor', asy
 	// line falling to the bottom of the plot, which says the stage got a thousand
 	// times faster. The chart breaks the line and names the loss.
 	await expect(page.locator('[data-stage-mark="fetch"]')).not.toHaveCount(0);
-	const note = page.locator('[data-timing-note="fetch"]');
-	await expect(note, 'fetch is not timed on every day, so it owes a note').toHaveCount(1);
 	const fetched = await drewFor(page, 'fetch');
 	expect(fetched.blank, 'the fixture leaves fetch no gap to name').toBeGreaterThan(0);
-	await expect(note).toContainText(
-		`We timed no fetch work on ${fetched.blank} of the ${fetched.days} days. The line breaks there.`
-	);
+	// One sentence for the whole chart, not one per stage. It was three notes
+	// saying one window-level fact three times until 2026-09-01.
+	const note = page.locator('[data-timing-coverage]');
+	await expect(note, 'the window is part-timed, so it owes one sentence').toHaveCount(1);
+	await expect(note).toContainText(`of these ${fetched.days} days`);
 
 	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
 		const floor = Math.max(
@@ -654,36 +848,32 @@ test('a timing nobody took, a timing of zero and a partly timed day read apart',
 	});
 	expect(offBaseline).toBeLessThanOrEqual(1);
 
-	const extract = page.locator('[data-timing-note="extract"]');
-	await expect(extract, 'the measured zero is named in type').toHaveCount(1);
+	// The measured zero is named in type, once for the chart rather than once for
+	// the stage that happened to have one.
 	const drewExtract = await drewFor(page, 'extract');
-	await expect(extract).toHaveText(
-		`We timed no extract work on ${drewExtract.blank} of the ${drewExtract.days} days. ` +
-			'The line breaks there. ' +
-			`extract took under 1 ms per item on ${drewExtract.zeros} ` +
-			`${drewExtract.zeros === 1 ? 'day' : 'days'}, which is faster than we can time. ` +
-			'The open dot on the baseline marks it.'
+	expect(drewExtract.zeros, 'the fixture has no measured zero to name').toBeGreaterThan(0);
+	await expect(page.locator('[data-timing-zero-key]')).toHaveText(
+		'An open dot on the baseline is a day a stage took under 1 ms an item, which is faster than we can time.'
 	);
 
-	// Both facts about summarize, one paragraph, absence first.
-	const summarize = page.locator('[data-timing-note="summarize"]');
-	await expect(summarize, 'summarize has a blank day and a part-timed day').toHaveCount(1);
-	const drewSummarize = await drewFor(page, 'summarize');
-	await expect(summarize).toHaveText(
-		`We timed no summarize work on ${drewSummarize.blank} of the ${drewSummarize.days} days. ` +
-			'The line breaks there. ' +
-			'We timed 4 of the 5 items for summarize on 1 day. The line is the items we timed.'
+	// The partly timed day is in the one coverage sentence, as the items it
+	// reached against the items the days held. The denominator is the day's own
+	// item count and never the sum of the stages' totals.
+	const note = page.locator('[data-timing-coverage]');
+	const low = Number(await note.getAttribute('data-coverage-timed-low'));
+	const high = Number(await note.getAttribute('data-coverage-timed-high'));
+	const items = Number(await note.getAttribute('data-coverage-items'));
+	expect(items, 'the chart publishes no item denominator').toBeGreaterThan(0);
+	expect(low, 'the fixture times every item, so the numerator says nothing').toBeLessThan(items);
+	// The stages reached different amounts of the same days here, so the
+	// numerator is a range rather than one stage's count passed off as the whole.
+	expect(high, 'the fixture leaves the stages agreeing, so the range is untested').toBeGreaterThan(
+		low
 	);
+	await expect(note).toContainText(`${low} to ${high} of the ${items} items on them`);
 
-	// A note says only what happened. fetch was timed in full on every day it ran,
-	// so its note names the days it did not run and stops - no measured zero it
-	// never had, no partly timed day it never had.
-	const drewFetch = await drewFor(page, 'fetch');
-	expect(drewFetch.zeros, 'fetch has no measured zero to name').toBe(0);
-	await expect(page.locator('[data-timing-note="fetch"]')).toHaveText(
-		`We timed no fetch work on ${drewFetch.blank} of the ${drewFetch.days} days. ` +
-			'The line breaks there.'
-	);
+	// One note for the chart, and the count no longer scales with the series.
+	await expect(page.locator('[data-timing-note]')).toHaveCount(0);
 
 	// One place, not two. The legend used to print `no data` for the same
 	// absence a paragraph under it also named.
@@ -877,6 +1067,12 @@ test('the telemetry viewport renders the published projection', async ({ page })
 
 test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
 	await page.goto('/console/');
+
+	// The rows sit behind a disclosure, so the control that reaches them is what
+	// has to work before anything about them can be read.
+	const toggle = page.locator('[data-failure-toggle]');
+	await expect(toggle).toBeVisible();
+	await toggle.click();
 
 	const rows = page.locator('[data-failure-list="rows"] tbody tr');
 	const empty = page.locator('[data-failure-list="empty"]');
@@ -1089,8 +1285,13 @@ test('an empty section costs the page that section, never the page', async ({ pa
 
 	// The canary telemetry records no failed item, so the failed-item list has
 	// nothing to list. It says so and the page carries on: the timing chart, the
-	// run grid, the feed table and the score table all still draw.
-	await expect(page.locator('[data-failure-list="empty"]')).toBeVisible();
+	// run grid, the feed table and the score table all still draw. The rows are
+	// behind a disclosure now, so what has to survive is the control that reaches
+	// them and the sentence it carries - not the table itself.
+	await expect(page.locator('[data-failure-toggle]')).toBeVisible();
+	await expect(page.locator('[data-failure-list="empty"]')).toHaveText(
+		'No failed item is in this window.'
+	);
 	await expect(page.getByText('Time per item, by stage')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();

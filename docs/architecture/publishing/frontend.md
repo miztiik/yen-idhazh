@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -885,7 +885,9 @@ a fill value has to land in.
 
 **A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
 
-Beneath the strip is **every feed that failed at least once, nearest to a rest first**. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
+Beneath the strip, the section leads with its own denominator: **how many feeds have never failed, out of how many were asked, over how many runs** - 156 of 182 across 34 runs, measured 2026-09-01. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "has never failed" means "did not fail twice". The rule is `reliability()` in `frontend/src/lib/feed-health.ts`, reading the same `failing()` the quarantine reads ([../sources/health.md](../sources/health.md)).
+
+Then comes **every feed that failed at least once, nearest to a rest first**, capped at `console.feed_rows` with the remainder in one sentence. A feed with a clean record is not in that list: the operator came here to find what is broken, and a list naming all 182 sources hides the 26 that are. The cap is applied on the server, because this list is inlined into the prerendered document and the rows it drops cost the page nothing; the list publishes `data-feeds-drawn` and `data-feeds-hidden` so an oracle can check that the cap counted what it dropped. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
 
 **The count beside a feed is its run of failures, not its lifetime total.** The
 pipeline rests a feed on failures in a row ending at the newest read, so that is
@@ -1106,7 +1108,7 @@ The item-health viewport has three parts, in this order:
 
 - **Failure rate against volume**: one chart. Per-day columns of the day's items, split by where each one stopped - finished, then fetch, extract and summarize failures in the categorical ramp - so the height of a column IS the volume. Each stage's failure share is a line on a right-hand axis **fixed at 0 to 100%**: scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **Every rate is printed in type with its denominator in the same sentence** - `16% failed, 672 of the 4,273 that reached it.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **A stage under `console.min_attempts_for_rate` prints its counts and no rate at all**, and its line breaks over any day that thin, because a share of four items is not a measurement. An empty window says so rather than drawing a column of zeroes, because a column of zeroes reads as a run that went badly.
 - **Summary length against the length asked for**: one column a day, stacked three ways - inside the target band, short of it, past it - with the `summarize.bands` ladder printed as numbers beside the chart and the worst misses named underneath in a ranked list. Hand-written SVG in the categorical chart ramp, a word beside every swatch, and the counts carried on the column as `data-band-inside`, `data-band-short` and `data-band-long` so an oracle can add them up. It follows the shared window and declares itself `data-windowed="band-distance"`. It replaced a scatter of article length against summary length: the scatter placed every article in the browser, which is what made the console document 40 percent of its weight, and it answered "what does the corpus look like" where the operator's question is "how many missed, and by how much".
-- **Why items failed**: a ledger of causes, then the rows behind a selected one. **A cause is a stage and a code**, ranked by count through `RankedList` - a bar in the cell, a markup sparkline of that cause's daily count, and breadth as `sources hit: 3 of 47`. **Breadth is the column that earns its width**: one source changing its markup and the extractor being broken carry the same count and a very different number of sources, and until this landed the two read identically. The rows below are the detail: still newest-first, which is the one shape on this page a date sort is right for, still **capped at `console.failure_list_max` with a `Show 25 more` button**, and still stating their own scope - `Showing 25 of 214 failed items in this window.` A code chip and a selected cause both filter them; a new window, a new chip or a new cause resets the cap, because each is a new question. **The `Item` column is gone and `item_id` rides on the row's `title`**: it is a content address, it was the widest cell in the table, and no operator acts on one - the page-level grep it cost is a terminal job. Uncapped the list measured 7824px against 800 rows and put the compression chart at document y=9105. The section sits last for the same reason: it is the only child that can outgrow the screen, so it cannot sit between two charts. **There is no cause text and none is invented** - the published projection withholds `detail` ([telemetry-series.md](telemetry-series.md)), which can carry fetched article text, so the code is everything the browser is given. **The stage is a word and not a mark.** The design asked for a monochrome stage glyph beside it and it is refused here: the icon set is one generated module that reaches every route, because a lookup on a dynamic key cannot be tree-shaken. Fifteen glyphs cost the routes 1,404 to 1,900 gzipped bytes (measured 2026-08-29, [../../concepts/design-system.md](../../concepts/design-system.md)), which is 94 to 127 bytes a glyph a route against a 64-byte ratchet tolerance, so three stage marks would move `/`, `/404`, `/<date>/`, `/<date>/<topic>/`, `/archive/` and `/evals/` - six reader routes that cannot show this section at all. The same page calls an icon that needs a caption a label wearing a costume, and the stage name is already in the cell.
+- **Why items failed**: a ledger of causes, then the sources those failures cost the most articles, then the rows behind a selected one. **A cause is a stage and a code**, ranked by count through `RankedList` - a bar in the cell, a markup sparkline of that cause's daily count, and breadth as `sources hit: 3 of 47`. **Breadth is the column that earns its width**: one source changing its markup and the extractor being broken carry the same count and a very different number of sources, and until this landed the two read identically. **Which source is the second ranking, and it is the one column of the item table nothing above it answered.** A cause says what broke and a source says where, and an operator acts on both. It is a second `RankedList` and no new chart type: 122 sources against an eight-stop ramp is not a stacked bar, and the question - which is biggest - is a ranking, which this console already draws as a list with an opinion. **The magnitude is ARTICLES, one per source per day**, the rule `compressionView` reads the same ledger by, so the two surfaces cannot disagree about how many articles a day held; the rows under it are one per stage per run, so counting rows would leave every bar in proportion and every number too big. **The denominator rides in the value** - `42 of 42 articles` is a source that stopped working and `42 of 500` is a bad afternoon, and the count alone cannot tell them apart. **No tint and no verdict on a source row**: per-source yield is not measurable until the ledger is thirty days deep ([../sources/health.md](../sources/health.md)), so a colour would publish a threshold nobody agreed. Capped at `console.source_rows` with the tail in one sentence - measured 2026-09-01 over the committed projection, a thirty-day window holds 60 sources with a loss and 778 lost articles, so the tail names 50 sources and 398 articles. The rows below are the detail, and they sit behind a shut `<details>`: still newest-first, which is the one shape on this page a date sort is right for, still **capped at `console.failure_list_max` with a `Show 25 more` button**, and still stating their own scope - `Showing 25 of 214 failed items in this window.` A code chip, a selected cause and a selected source all filter them, and they narrow together rather than replacing one another; picking a cause or a source opens the disclosure, because a filter whose result is behind a shut disclosure is a control with no visible effect; a new window, a new chip, a new cause or a new source resets the cap, because each is a new question. **The `Item` column is gone and `item_id` rides on the row's `title`**: it is a content address, it was the widest cell in the table, and no operator acts on one - the page-level grep it cost is a terminal job. Uncapped the list measured 7824px against 800 rows and put the compression chart at document y=9105. The section sits last for the same reason, and the disclosure is why the two rankings stay readable: the rows are the only child that can outgrow the screen. They survive verbatim rather than being deleted - the address in one is where troubleshooting a single URL starts, and a documented workflow begins there. **There is no cause text and none is invented** - the published projection withholds `detail` ([telemetry-series.md](telemetry-series.md)), which can carry fetched article text, so the code is everything the browser is given. **The stage is a word and not a mark.** The design asked for a monochrome stage glyph beside it and it is refused here: the icon set is one generated module that reaches every route, because a lookup on a dynamic key cannot be tree-shaken. Fifteen glyphs cost the routes 1,404 to 1,900 gzipped bytes (measured 2026-08-29, [../../concepts/design-system.md](../../concepts/design-system.md)), which is 94 to 127 bytes a glyph a route against a 64-byte ratchet tolerance, so three stage marks would move `/`, `/404`, `/<date>/`, `/<date>/<topic>/`, `/archive/` and `/evals/` - six reader routes that cannot show this section at all. The same page calls an icon that needs a caption a label wearing a costume, and the stage name is already in the cell.
 
 Measured 2026-08-24 on the committed ledger: the console document went from
 11552px to 4878px.
@@ -1753,6 +1755,45 @@ of them an article lost text whichever cut was in force, so the emphasised span
 starts there and says the strong thing; the narrower rule is drawn with its own
 dates, so the move is visible rather than averaged away.
 
+**Every margin on this plot is measured, and the label column moves rather than
+the plot.** Three constants sized it until 2026-09-01: a 168px gutter for the
+source names, a 34px row pitch, and a 130px threshold past which a cap label
+flips to read right to left. Measured 2026-09-01 on the built console, the
+gutter was 12 percent of a 1,342px frame at 1440 and **52 percent of a 324px one
+at 390** - so on a phone the names took more of the chart than the plot did, and
+the six tracks drew inside 91px of it.
+
+- **`labelGutter` sizes the name column from the widest name's own advance**,
+  and returns null where that would take more than `MAX_GUTTER_SHARE` of the
+  frame. Null is the cue to put the names above their tracks instead. A source
+  id is the ledger's own spelling of a name and there is no shorter true form of
+  it, so the gutter moves and the word does not - nothing is abbreviated at any
+  width.
+- **`rowPitch` grows a row with the plot, between a floor and a ceiling**, the
+  way `cellFor` grows a run-strip cell. The floor is `ROW_PITCH_MIN`: two lines
+  of type and a 10px bar leave a 34px row with no air at all between one source
+  and the next. The ceiling is where six rows stop reading as one set.
+- **The cap label's flip is decided by the label's own advance.** `cut at 3,846
+  words (from 25 Aug)` needs 186px at `font-size="10"`; the constant it replaced
+  was 130. Nothing was clipped by it on the committed tree, and a constant that
+  is 56px under the string it guards is the same defect waiting for one more
+  word.
+- **The right-most decade label is Row #1's rule, not a second one.**
+  `tickAnchor` anchors the end labels inwards, so `10,000` needs no room outside
+  the plot and the 12px right margin is the track's own round cap. The
+  `10,00` clip measured on 2026-08-31 was fixed there;
+  [../../../frontend/tests/console-source-cuts.spec.ts](../../../frontend/tests/console-source-cuts.spec.ts)
+  asserts it stays fixed rather than fixing it again.
+
+**The log domain still snaps to decades, and the dead space is the price.** The
+plot fills its frame; the tracks do not fill the plot, and that is a different
+thing. Over the committed ledger the shortest article on the board is 361 words
+and the longest 6,670, inside a domain of 100 to 10,000 - so 27.9 percent of the
+plot sits left of the shortest track and 8.8 percent right of the longest,
+measured 2026-09-01 at 1440. Starting the domain at the shortest article would
+recover it and lose the landmark: the two cut rules are the reason the chart
+exists, and a floating domain gives a reader nothing to place a mark against.
+
 **The rule is read off the rows and never off the setting.** Every cut point
 comes off the `source_words` cell a run wrote after its own cap fired. Two
 things break if the page reads `extract.truncation_cap_tokens` instead. The
@@ -2362,7 +2403,8 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | Naming the months a search read, rather than the days | On 1 September "September 2026" reads like thirty days and holds one. The month name is what hid the collapse it was meant to disclose. | Jony |
 | Padding every sequence to the token cap so batch composition stops mattering | It was the first proposal and the measurement refused it. Fixed padding removes the *shape* a batch imposes, not the *scale* it sets: pad-to-cap against no padding still moved a component by 1.56e-2, and padding also moves the runner further from a browser that pads nothing. | Carmack, Rule #10 |
 | Accepting host variation and gating a re-encode on cosine alone | A cosine tolerance is the right check for a backfill, but leaving the arithmetic unpinned makes every future re-encode a fresh argument about which machine was right. | Carmack |
-| A console listing every feed, healthy ones included | Naming all seventy sources hides the four that are broken. | owner |
+| A console LISTING every feed, healthy ones included | Naming all 182 sources hides the 26 that are broken. The clean ones are named behind a disclosure since 2026-09-01, with no bars and no order - a name is a fact, a row in the broken list is a call to act. | owner, Susan |
+| A ranked "ten most reliable feeds" | Every key it could rank on ties: a feed is read once a run, so one that never failed has answered on every run it was asked. A top ten of a hundred-and-fifty-way tie is charting a constant. | Susan |
 | A newest-first run strip | Every other time series on the page reads left to right in time. One that read right to left made the newest day's position depend on how much history existed. | Jony |
 | An empty square for a scheduled run that wrote no manifest | It claims evidence the payload does not carry. Missed runs need a persisted schedule or attempt contract before they can be drawn. | Fowler |
 | A date under every column | At 16px a track and 10px a label the dates overlap from about the fourth day, and an axis that cannot be read is decoration. | Jony |

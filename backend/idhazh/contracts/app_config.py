@@ -1256,6 +1256,27 @@ class ConsoleConfig(Model):
             "compression chart 9000 pixels down the page."
         ),
     )
+    source_rows: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "How many sources the console ranks by the articles their failures cost, "
+            "before it states the tail in one sentence. Measured 2026-09-01 over the "
+            "committed projection, a thirty-day window holds 60 sources with a loss, "
+            "which is a list nobody reads to the end. Ten, matching the source-cut "
+            "list above it."
+        ),
+    )
+    feed_rows: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "How many failing feeds the console lists before it states the tail in one "
+            "sentence. Measured 2026-09-01 over the committed ledger, 26 of 182 "
+            "checked feeds have failed at least once. Ten, matching "
+            "`console.source_rows`."
+        ),
+    )
     band_outlier_rows: int = Field(
         default=10,
         ge=1,
@@ -1652,6 +1673,25 @@ class AppConfig(Contract):
                 "whole: filing a build-time threshold there would publish it to a "
                 "config the browser reads, where nothing can act on it. Additive with "
                 "a default, so a config written before today still loads (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-01T02:00",
+            change=(
+                "console.source_rows and console.feed_rows added, both defaulting to "
+                "10. The shape is `ConsoleConfig`, which this document and "
+                "`AppearanceConfig` share, so both schemas moved together."
+            ),
+            why=(
+                "Two console lists gained a cap on the same day, and a cap a "
+                "component hardcodes is one an operator cannot move (Rule #6). The "
+                "failure section now ranks sources by the articles their failures "
+                "cost the digest; measured 2026-09-01 over the committed "
+                "projection, a thirty-day window holds 60 sources with a loss, so "
+                "an uncapped ranking is a list nobody reads to the end. The feed "
+                "list had no cap at all and draws 26 of 182 checked feeds. "
+                "Additive with defaults, so a config written before today still "
+                "validates (section 11)."
             ),
         ),
         ChangelogEntry(
