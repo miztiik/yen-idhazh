@@ -1031,6 +1031,22 @@ def test_two_runs_on_one_day_both_leave_a_record() -> None:
     assert [row.run_id for row in rows[3:]] == ["2026-08-22-2"] * 3
 
 
+def test_the_same_run_planned_twice_still_leaves_one_row_per_feed() -> None:
+    """Two runs are two records; one run run twice is one record written down twice.
+
+    A job that is re-run keeps its `run_id`, so its second attempt appends a
+    second verdict for every feed it read. Counted raw, that turns one bad run
+    into two failures and a five-failure rest arrives after three runs.
+    """
+    state = Path(tempfile.mkdtemp())
+    plan([LAB, TRADE, COMMUNITY], state=state, run_n=1)
+    plan([LAB, TRADE, COMMUNITY], state=state, run_n=1)
+    rows = health_after(state)
+    assert len(rows) == 3
+    assert sorted(row.feed_id for row in rows) == ["community", "lab-blog", "trade-press"]
+    assert ledger.repeated_keys(ledger.health_path(state, DATE), ledger.FEED_HEALTH_KEY) == {}
+
+
 def test_reading_a_history_that_was_never_written_is_empty_not_an_error() -> None:
     """A fresh clone has no history, and that is a run where no feed has a record yet."""
     assert ledger.load_health(Path(tempfile.mkdtemp()), today=DATE, within_days=30) == []

@@ -264,6 +264,9 @@ function cutsByRun(rows: Record<string, string>[]): Map<string, number> {
  * feed four failures into a five-failure rule is one run from being dropped; a
  * feed with twelve failures spread over a month and answering today is not, and
  * a total-failure sort put the second one on top.
+ *
+ * `rows` is already one row per feed per run - `feedResults` settles the ledger
+ * once - so a run a second attempt wrote twice is counted once here.
  */
 function trouble(rows: FeedResult[], quarantineAfter: number): FeedTrouble[] {
 	const byFeed = new Map<string, FeedResult[]>();

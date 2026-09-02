@@ -59,13 +59,13 @@ fact, and it lives here.
 from __future__ import annotations
 
 import csv
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -79,6 +79,17 @@ TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 PUBLISHED_FILENAME: Final = "published.csv"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
+
+#: What makes two feed-health rows the same record. One feed, read once, in one
+#: run. The ledger always meant that - `docs/architecture/sources/health.md`
+#: opens on it - but nothing enforced it, so a second attempt at a run wrote a
+#: second verdict for every feed and `discover.resting` counted one failure
+#: twice.
+#:
+#: This is the one key here whose repeated rows can disagree, so it is the one
+#: that cannot settle by keeping whichever row arrived first. `FEED_HEALTH_RULE`
+#: is how it settles.
+FEED_HEALTH_KEY: Final = ("run_id", "feed_id")
 
 #: What makes two item-health rows the same record. One row per planned item per
 #: run, which is what the ledger has always meant - written down here because two
@@ -106,6 +117,32 @@ FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
 #: into last month's shard, so a quarantine decided on the first of the month can
 #: still see the failures that caused it.
 HEALTH_WINDOW_DAYS: Final = 31
+
+#: Which of two rows holding one key survives the settlement. `True` means the
+#: later row replaces the one already kept. A key with no rule keeps the first
+#: row it saw, which is what every ledger but one wants: there a repeat is the
+#: same attempt written twice and the two rows agree.
+Preference = Callable[[dict[str, str], dict[str, str]], bool]
+
+
+def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
+    """`contracts.feed_health.supersedes`, over the two lines as they were read.
+
+    Parsed here rather than compared cell by cell so the rule is written once,
+    in the contract that owns what a feed result means. A row that no longer
+    parses keeps whatever is already on record - the same choice `load_health`
+    makes, and for the same reason: this ledger is diagnostic, and refusing
+    would cost a run the whole commit step this pass was called from.
+    """
+    try:
+        return supersedes(FeedHealthRow.from_csv_row(later), FeedHealthRow.from_csv_row(kept))
+    except (KeyError, ValueError):
+        return False
+
+
+#: The keys whose repeats can disagree, and how each one picks a winner.
+FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
+_PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {FEED_HEALTH_KEY: FEED_HEALTH_RULE}
 
 
 def seen_relpath(date: str) -> str:
@@ -229,12 +266,14 @@ def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]
       returned. Measured on this checkout 2026-08-27: 2,097 rows and 2,097
       distinct addresses. `load_published` keeps the earliest date, so a repeat
       costs bytes and never moves a publication date.
-    - **feed-health** - one row per feed per run. A repeat needs a run to run
+    - **feed-health** - one row per feed per run. A repeat needs a run to be run
       twice under one `run_id`. Two runs cannot compute one any more - a run id
       now carries the identity of the execution that made it (`cli.stage_plan`)
-      - but a second attempt of the same execution still can, and this is the
-      one caller where the repeat is not free: `discover.resting` counts
-      failures to decide a quarantine, so a duplicated failure counts twice.
+      - but a second attempt at the same execution still can, and this is the
+      one caller whose two rows can disagree: the first attempt may have failed
+      where the second succeeded. `append_health` settles the shard against
+      `FEED_HEALTH_KEY` after the append, so the winner is picked by the rule in
+      `contracts.feed_health.supersedes` rather than by which line landed first.
     - **item-health** - two stages write it, so it cannot rely on a caller's own
       guarantee. `append_item_health` filters against `ITEM_HEALTH_KEY` instead.
     - **runtime-counters** - one writer, but the row is a cumulative total rather
@@ -356,9 +395,21 @@ def load_source_counts(state_dir: Path, date: str) -> dict[str, int]:
 
 
 def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> int:
-    """Append this run's verdict on every feed it tried."""
+    """Append this run's verdict on every feed it tried, one verdict per feed.
+
+    Settled against `FEED_HEALTH_KEY` straight after the write rather than
+    filtered before it, because this is the one ledger here where the row
+    arriving second can be the better account: a second attempt at a run that
+    failed the first time is exactly the case worth keeping. Filtering first
+    would throw the recovery away and leave the failure on record.
+
+    Returns how many rows the shard gained, so a caller can log the count. A row
+    that only replaced an earlier account of the same event is not a gain.
+    """
     payloads = [row.csv_row() for row in rows]
-    return _append(health_path(state_dir, date), FeedHealthRow.csv_columns(), payloads)
+    path = health_path(state_dir, date)
+    landed = _append(path, FeedHealthRow.csv_columns(), payloads)
+    return landed - drop_repeated_rows(path, FEED_HEALTH_KEY)
 
 
 def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
@@ -429,10 +480,14 @@ def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
 def keyed_paths(state_dir: Path) -> list[tuple[Path, tuple[str, ...]]]:
     """Every ledger here that says what makes two of its rows the same record.
 
-    `state/seen/` and `state/feed-health/` are deliberately absent. Neither has a
-    key: `load_seen` folds a second sight by keeping the earliest, and a feed's
-    row is one verdict per feed per run, which two runs are entitled to write
-    twice.
+    `state/seen/` is the one that is deliberately absent. It has no key at all:
+    `load_seen` folds a second sight by keeping the earliest, so a repeat costs
+    bytes and never moves an age.
+
+    `state/feed-health/` was absent too until 2026-09-02, on the reading that two
+    runs are entitled to write a verdict each. They are - and they get different
+    run ids, so they never repeat this key. What repeats it is one run written
+    down twice, which is one event with two accounts (`FEED_HEALTH_KEY`).
 
     `state/feed-retirements.csv` is listed before anything writes it, because the
     settlement runs over whatever it finds and a missing file settles to nothing.
@@ -442,6 +497,10 @@ def keyed_paths(state_dir: Path) -> list[tuple[Path, tuple[str, ...]]]:
     return [
         (runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY),
         (feed_retirements_path(state_dir), FEED_RETIREMENT_KEY),
+        *(
+            (path, FEED_HEALTH_KEY)
+            for path in sorted((state_dir / HEALTH_DIRNAME).glob("*.csv"))
+        ),
         *(
             (path, ITEM_HEALTH_KEY)
             for path in sorted((state_dir / ITEM_HEALTH_DIRNAME).glob("*.csv"))
@@ -463,15 +522,22 @@ def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
     shards and 44 repeated `(date, run_id, item_id)` item-health keys.
 
     So the file has to be settled once more after the merge, which is the only
-    moment both sides have ever been in one place. The first row wins, because
-    that is the rule `_append`'s callers already state: a re-run's items are
-    skipped, so the ledgers stay describing the attempt that got there first.
+    moment both sides have ever been in one place.
 
     Rows are matched and rewritten as whole lines rather than re-serialized, so
     a kept row is byte-identical to the row that was read and a pass that drops
     nothing leaves no diff. Reading by line is safe for the same reason the merge
     is: every free-text cell in these contracts is pinned to printable ASCII on
     one line, so no cell can carry a newline.
+
+    The first row wins unless the key declares otherwise in `_PREFERENCES`. Only
+    `FEED_HEALTH_KEY` does, because it is the only key here whose repeats can
+    disagree: two attempts at one run really did read the address twice and may
+    have got different answers. Everywhere else a repeat is one attempt written
+    down twice, so the rows agree and picking between them would be theatre.
+    The rule travels with the key rather than with the caller, so the workflow
+    step, the CLI stage and a test harness that spells the key out all settle the
+    same file the same way.
 
     Returns how many rows were dropped, so a caller can log the count.
     """
@@ -486,8 +552,9 @@ def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
         # A shard written before the key existed cannot be checked against it,
         # and refusing would cost a run its whole commit over an old file.
         return 0
+    prefer = _PREFERENCES.get(key)
     columns = [header.index(name) for name in key]
-    seen: set[tuple[str, ...]] = set()
+    seen: dict[tuple[str, ...], tuple[int, dict[str, str]]] = {}
     kept = [lines[0]]
     dropped = 0
     for line in lines[1:]:
@@ -496,10 +563,17 @@ def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
             kept.append(line)
             continue
         found = tuple(cells[index] for index in columns)
-        if found in seen:
+        held = seen.get(found)
+        if held is not None:
             dropped += 1
+            if prefer is not None:
+                where, incumbent = held
+                challenger = dict(zip(header, cells, strict=False))
+                if prefer(challenger, incumbent):
+                    kept[where] = line
+                    seen[found] = (where, challenger)
             continue
-        seen.add(found)
+        seen[found] = (len(kept), dict(zip(header, cells, strict=False)))
         kept.append(line)
     if dropped:
         path.write_text("".join(kept), encoding="utf-8", newline="")
