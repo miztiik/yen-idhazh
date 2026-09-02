@@ -8,7 +8,8 @@
  * it never used.
  *
  * So the rule lives here rather than in the page, in one place a test can drive
- * with rows it made up, and it is the same loop `discover._rests` runs.
+ * with rows it made up, and it is the same loop `discover.streak` runs over the
+ * same evidence `discover.settled` leaves.
  * `backend/idhazh/contracts/feed_health.py` and `backend/idhazh/discover.py`
  * are the source of truth; this is a reader of the same ledger and it has to
  * agree with them.
@@ -29,6 +30,11 @@ export interface FeedRead {
  * resting it would be us punishing a site for saying no. */
 const FAILING_OUTCOMES = new Set(['blocked', 'permanent', 'transient']);
 
+/** The same set as `PRESERVING_OUTCOMES` in the contract: a streak runs through
+ * these untouched. `robots_denied` is what the ledger writes for a refusal and
+ * for a robots.txt we could not read, and availability does not care which. */
+const PRESERVING_OUTCOMES = new Set(['robots_denied', 'skipped']);
+
 /** Did this read count against the feed?
  *
  * A successful read that parsed to no entries counts. The most common way a
@@ -37,6 +43,23 @@ const FAILING_OUTCOMES = new Set(['blocked', 'permanent', 'transient']);
 export function failing(row: FeedRead): boolean {
 	if (row.outcome === 'ok') return row.items === 0;
 	return FAILING_OUTCOMES.has(row.outcome);
+}
+
+/** Did the address itself come back carrying entries? The one result that
+ * clears a streak, and the one that wins a repeated run. */
+export function answered(row: FeedRead): boolean {
+	return row.outcome === 'ok' && row.items > 0;
+}
+
+/** Does a streak of failures run through this row untouched?
+ *
+ * True for a rest and for a robots result. Neither one asked the feed whether
+ * it still works, so neither may add a strike and neither may clear one.
+ * Clearing on a refusal is the sharper error: a dead address would launder its
+ * record every time the site said no.
+ */
+export function preserves(row: FeedRead): boolean {
+	return PRESERVING_OUTCOMES.has(row.outcome);
 }
 
 /** We did not ask. A rest is a record, not a measurement. */
@@ -55,15 +78,23 @@ export function chronological<T extends FeedRead>(rows: readonly T[]): T[] {
 
 /** Failures in a row, ending at the newest read. `rows` are oldest run first.
  *
- * This is `discover._rests`'s strike loop and it has to stay that loop. A rest
- * is transparent to it: the run it stands for never asked the question, so it
- * neither adds a strike nor clears one.
+ * Four kinds of evidence and three effects, which is the whole availability
+ * rule:
+ *
+ * - blocked, permanent, transient, and a success carrying no entries: one
+ *   strike each. An empty answer costs the digest exactly what a refusal does.
+ * - a robots result and a rest: neither adds a strike nor clears one. Neither
+ *   one asked the feed whether it still works.
+ * - a read that carried entries: the streak is over. The endpoint answers now,
+ *   and the ledger keeps every old failure for the reliability record.
+ *
+ * This is `discover.streak` and it has to stay that loop.
  */
 export function streak(rows: readonly FeedRead[]): number {
 	let strikes = 0;
 	for (let index = rows.length - 1; index >= 0; index -= 1) {
 		const row = rows[index];
-		if (skipped(row)) continue;
+		if (preserves(row)) continue;
 		if (!failing(row)) break;
 		strikes += 1;
 	}
@@ -85,6 +116,50 @@ export function resting(rows: readonly FeedRead[], after: number): boolean {
 	}
 	if (skips >= after) return false;
 	return streak(rows) >= after;
+}
+
+/** One read, and which feed made it. */
+export interface FeedRecord extends FeedRead {
+	feedId: string;
+}
+
+/** A read the settlement can place: which feed, which run, and when we looked. */
+export interface FeedEvent extends FeedRecord {
+	checkedAt: string;
+}
+
+/** Does `later` replace `kept` as this run's one result for this feed?
+ *
+ * `contracts.feed_health.supersedes`, restated. A read that carried entries
+ * wins, whichever row is newer: the attempt that got articles is the attempt
+ * that happened. Between two rows that agree on that, the later `checkedAt`
+ * wins. A tie leaves the row already held.
+ */
+function supersedes(later: FeedEvent, kept: FeedEvent): boolean {
+	if (answered(later) !== answered(kept)) return answered(later);
+	return later.checkedAt > kept.checkedAt;
+}
+
+/** One result per feed per run, in the order the rows arrived.
+ *
+ * A feed is read once in a run, so two rows under one run and feed are two
+ * accounts of one event, and counting both counts a run twice. They exist
+ * because a second attempt at a run cannot see what the first attempt pushed
+ * after its checkout, and the union merge on `state/**\/*.csv` keeps both
+ * lines rather than conflicting.
+ *
+ * `discover.settled` is the same reduction over the same rows. The page and the
+ * run have to agree about how many times a feed failed, or the console
+ * contradicts the pipeline that produced it.
+ */
+export function settled<T extends FeedEvent>(rows: readonly T[]): T[] {
+	const kept = new Map<string, T>();
+	for (const row of rows) {
+		const key = `${row.runId}\u0000${row.feedId}`;
+		const held = kept.get(key);
+		if (held === undefined || supersedes(row, held)) kept.set(key, row);
+	}
+	return [...kept.values()];
 }
 
 /** What a feed did on one day, as the worst thing that happened to it.
@@ -116,7 +191,7 @@ export function feedDays(rows: readonly FeedRead[]): FeedDay[] {
 	return [...byDay]
 		.map(([date, group]) => {
 			const tally = {
-				answered: group.filter((row) => row.outcome === 'ok' && row.items > 0).length,
+				answered: group.filter(answered).length,
 				failed: group.filter(failing).length,
 				refused: group.filter((row) => row.outcome === 'robots_denied').length,
 				resting: group.filter(skipped).length
@@ -154,11 +229,6 @@ export function feedDays(rows: readonly FeedRead[]): FeedDay[] {
 export function resultLabel(row: FeedRead): string {
 	if (row.outcome === 'ok' && row.items === 0) return 'answered with nothing';
 	return row.outcome;
-}
-
-/** One read, and which feed made it. */
-export interface FeedRecord extends FeedRead {
-	feedId: string;
 }
 
 /** How many feeds have never failed, out of how many were asked, over how many

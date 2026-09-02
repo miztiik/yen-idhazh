@@ -6,7 +6,9 @@ import {
 	failing,
 	feedDays,
 	resting,
+	settled,
 	streak,
+	type FeedEvent,
 	type FeedRead
 } from '../src/lib/feed-health';
 import { axisLabels, denseCellFor, ROW_STRIP_PX } from '../src/lib/charts/run-history';
@@ -62,7 +64,7 @@ function tickDensity(): number {
 
 /** The ledger the page read, read again independently. Nothing is mocked:
  * these are the CSVs `build_canary_day.py` wrote. */
-type LedgerRow = FeedRead & { feedId: string };
+type LedgerRow = FeedEvent;
 
 function ledger(): LedgerRow[] {
 	const dir = join(CANARY, 'state', 'feed-health');
@@ -78,6 +80,7 @@ function ledger(): LedgerRow[] {
 			rows.push({
 				date: row.get('date') ?? '',
 				runId: row.get('run_id') ?? '',
+				checkedAt: row.get('checked_at') ?? '',
 				outcome: row.get('outcome') ?? '',
 				items: Number(row.get('items') ?? 0) || 0,
 				feedId: row.get('feed_id') ?? ''
@@ -87,9 +90,12 @@ function ledger(): LedgerRow[] {
 	return rows;
 }
 
+/** One result per feed per run, then oldest run first - the order the rules
+ * read in, and the same reduction `feedResults` runs before the page sees a
+ * row. Recomputing without it would compare the page to evidence it never saw. */
 function byFeed(rows: LedgerRow[]): Map<string, LedgerRow[]> {
 	const found = new Map<string, LedgerRow[]>();
-	for (const row of rows) {
+	for (const row of settled(rows)) {
 		found.set(row.feedId, [...(found.get(row.feedId) ?? []), row]);
 	}
 	return new Map([...found].map(([id, group]) => [id, chronological(group)]));
@@ -193,6 +199,103 @@ test.describe('the quarantine rule, without a browser', () => {
 		const clean = feedDays([{ date: '2026-08-02', runId: 'a', outcome: 'ok', items: 5 }]);
 		expect(clean[0].outcome).toBe('answered');
 		expect(clean[0].label).toBe('2 Aug 2026, 1 run: 1 answered.');
+	});
+});
+
+/** The eight kinds of evidence a feed-health row can carry, and what each does
+ * to a streak of two. Three effects: add one, leave it alone, end it.
+ *
+ * The two robots rows are both written as `robots_denied`, because that is what
+ * the ledger records for a refusal and for a robots.txt we could not read. The
+ * difference is in `robots_outcome`, and availability does not care which it
+ * was - so both appear here and both preserve.
+ */
+const EVIDENCE: { name: string; row: FeedRead; after: number }[] = [
+	{ name: 'a success carrying entries', row: { ...at(9), outcome: 'ok', items: 3 }, after: 0 },
+	{ name: 'a success carrying nothing', row: { ...at(9), outcome: 'ok', items: 0 }, after: 3 },
+	{ name: 'blocked', row: { ...at(9), outcome: 'blocked', items: 0 }, after: 3 },
+	{ name: 'permanent', row: { ...at(9), outcome: 'permanent', items: 0 }, after: 3 },
+	{ name: 'transient', row: { ...at(9), outcome: 'transient', items: 0 }, after: 3 },
+	{ name: 'robots denied', row: { ...at(9), outcome: 'robots_denied', items: 0 }, after: 2 },
+	{ name: 'robots unknown', row: { ...at(9), outcome: 'robots_denied', items: 0 }, after: 2 },
+	{ name: 'a rest', row: { ...at(9), outcome: 'skipped', items: 0 }, after: 2 }
+];
+
+/** One run of the fixture day, so a case names its evidence and nothing else. */
+function at(run: number): { date: string; runId: string } {
+	return { date: '2026-08-30', runId: `2026-08-30-${run}` };
+}
+
+test.describe('the evidence table, without a browser', () => {
+	const twoStrikes: FeedRead[] = [
+		{ ...at(1), outcome: 'transient', items: 0 },
+		{ ...at(2), outcome: 'transient', items: 0 }
+	];
+
+	for (const { name, row, after } of EVIDENCE) {
+		test(`${name} leaves the streak at ${after}`, () => {
+			expect(streak(twoStrikes)).toBe(2);
+			expect(streak([...twoStrikes, row])).toBe(after);
+		});
+	}
+
+	test('a refusal never launders a record', () => {
+		// The half of the robots rule that is not "no strike". A refusal used to
+		// end the streak, so a dead address behind a site that says no would have
+		// had its record wiped after every failure and could never reach a rest.
+		const struck: FeedRead[] = Array.from({ length: QUARANTINE_AFTER }, (_, n) => ({
+			...at(n + 1),
+			outcome: 'transient',
+			items: 0
+		}));
+		const refused = [...struck, { ...at(9), outcome: 'robots_denied', items: 0 }];
+		expect(streak(refused)).toBe(QUARANTINE_AFTER);
+		expect(resting(refused, QUARANTINE_AFTER)).toBe(true);
+	});
+});
+
+test.describe('THE ORACLE: one result per feed per run, in both languages', () => {
+	/** The fixture both reducers read. `backend/tests/test_discover.py` opens the
+	 * same file and asserts the same three numbers, which is the only way to
+	 * show the page and the pipeline agree rather than merely claiming it. */
+	const FIXTURE = join(repo, 'tests', 'fixtures', 'feed-health', 'one-result-per-run.csv');
+
+	function fixtureRows(): FeedEvent[] {
+		const lines = readFileSync(FIXTURE, 'utf8').trim().split(/\r?\n/);
+		const head = lines[0].split(',');
+		return lines.slice(1).map((line) => {
+			const cell = line.split(',');
+			const row = new Map(head.map((name, index) => [name, cell[index] ?? '']));
+			return {
+				date: row.get('date') ?? '',
+				runId: row.get('run_id') ?? '',
+				checkedAt: row.get('checked_at') ?? '',
+				outcome: row.get('outcome') ?? '',
+				items: Number(row.get('items') ?? 0) || 0,
+				feedId: row.get('feed_id') ?? ''
+			};
+		});
+	}
+
+	test('nine rows are seven events, and each distinct run is counted once', () => {
+		const rows = fixtureRows();
+		expect(rows).toHaveLength(9);
+		const effective = chronological(settled(rows));
+		expect(effective).toHaveLength(7);
+		expect(new Set(effective.map((row) => row.runId)).size).toBe(7);
+		// The two accounts of run 3 are one event, and the one that carried
+		// articles is the one kept - however late the empty retry ran.
+		const third = effective.find((row) => row.runId === '2026-08-30-3') as FeedEvent;
+		expect(third.items).toBe(6);
+	});
+
+	test('the strike count is one, and it is two if nothing settles the rows', () => {
+		const rows = fixtureRows();
+		// Counted row by row, the empty retry of run 3 is a second strike that no
+		// run ever suffered.
+		expect(streak(chronological(rows))).toBe(2);
+		expect(streak(chronological(settled(rows)))).toBe(1);
+		expect(resting(chronological(settled(rows)), QUARANTINE_AFTER)).toBe(false);
 	});
 });
 
