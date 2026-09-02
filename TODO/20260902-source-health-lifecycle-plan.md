@@ -39,7 +39,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Widen the health record and name the knobs | - | A | DONE #373 | `yi-s01` | 373 | worker |
-| 2 | Read robots rules identically on every supported Python | 1 | B | PENDING | - | - | - |
+| 2 | Read robots rules identically on every supported Python | 1 | B | DONE #374 | `yi-s02` | 374 | worker |
 | 3 | One result per feed per run, and an honest strike rule | 2 | C | PENDING | - | - | - |
 | 4 | Retire gone endpoints and count only askable feeds | 3 | D | PENDING | - | - | - |
 | 5 | Name a cleanup age for every record | 1 | B | PENDING | - | - | - |
