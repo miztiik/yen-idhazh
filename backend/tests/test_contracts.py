@@ -28,7 +28,7 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import ledger
+from idhazh import ledger, source_health
 from idhazh.cli import main, stage_validate_days
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
@@ -59,8 +59,8 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.route import Route
-from idhazh.contracts.run_manifest import RunManifest
-from idhazh.contracts.run_plan import RunPlan, TimeSource
+from idhazh.contracts.run_manifest import RunManifest, VerticalCount
+from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.summary import Summary
@@ -737,19 +737,115 @@ def test_every_vertical_clears_its_own_feed_floor() -> None:
     quietly. A throwaway assertion in a migration script caught it; nothing in
     the repository would have. This is that assertion, kept.
 
+    Since 2026-09-02 it counts what a run may lawfully ask rather than what a
+    curator left active, which is the count the floor is actually compared
+    against - so it reads the committed retirement ledger and the committed
+    health record as well as the config. Measured on this checkout 2026-09-02
+    the two counts are identical on every desk, because no committed row records
+    a permission or a retirement yet.
+
     It reads the committed config on purpose. The number that decides a run is
     the one in `config/`, not a value a fixture chose.
     """
     taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
     sources = Sources.from_json(read_text(CONFIG_DIR / "sources.json"))
-    live = Counter(
+    state = REPO_ROOT / ledger.STATE_DIRNAME
+    records = source_health.endpoint_records(
+        ledger.load_health(state, today=newest_health_date(state), within_days=400)
+    )
+    retired = {row.endpoint_key for row in ledger.load_retirements(state)}
+    active = Counter(
         feed.vertical for feed in sources.feeds if feed.status is LifecycleStatus.ACTIVE
     )
     for vertical in taxonomy.verticals:
-        assert live[vertical.id] >= vertical.min_feeds, (
-            f"{vertical.id} has {live[vertical.id]} active feeds against a floor of "
-            f"{vertical.min_feeds}, so it would publish nothing"
+        askable = source_health.eligible(
+            sources.feeds, vertical.id, retired_keys=retired, records=records
         )
+        assert len(askable) >= vertical.min_feeds, (
+            f"{vertical.id} has {len(askable)} feeds it may ask against a floor of "
+            f"{vertical.min_feeds}, so it would publish nothing - of "
+            f"{active[vertical.id]} a curator left active"
+        )
+
+
+def newest_health_date(state: Path) -> str:
+    """The last day the committed record covers, so the read does not move with the clock.
+
+    A window ending at today would make this test's answer depend on when it
+    ran, and the question it asks is about committed evidence rather than about
+    the hour.
+    """
+    stems = sorted(path.stem for path in (state / "feed-health").glob("*.csv"))
+    return f"{stems[-1]}-28" if stems else "1970-01-01"
+
+
+def desk(**overrides: Any) -> dict[str, Any]:
+    """One vertical of a plan, spelled the way an earlier build wrote it."""
+    return {"id": "ai", "considered": 40, "planned": 5, "live_feeds": 3, **overrides}
+
+
+def test_a_plan_that_spells_live_feeds_still_reads() -> None:
+    """The rename landed on 2026-09-02 and the model forbids unknown keys.
+
+    Without the read migration a plan an earlier build wrote would be refused
+    outright rather than degrade, which is a release blocker by section 11.
+    """
+    parsed = VerticalPlan.model_validate(desk())
+    assert parsed.eligible_feeds == 3
+
+
+def test_a_plan_that_never_carried_a_floor_is_given_none() -> None:
+    """Absent reads as unknown, never as a floor of zero.
+
+    A zero would say the desk had no floor to clear, which on a payload that
+    recorded `below_feed_floor` is a claim the payload itself can contradict.
+    """
+    assert VerticalPlan.model_validate(desk()).feed_floor is None
+    assert VerticalPlan.model_validate(desk(below_feed_floor=True, planned=0)).feed_floor is None
+
+
+def test_a_plan_may_not_spell_the_count_twice() -> None:
+    """The migration maps the old name and never merges two answers.
+
+    A payload carrying both is not an old payload; it is a writer nobody has,
+    and quietly preferring one of the two is how a count starts disagreeing
+    with itself.
+    """
+    with pytest.raises(ValidationError):
+        VerticalPlan.model_validate(desk(eligible_feeds=9))
+
+
+def test_a_manifest_written_before_the_floor_was_recorded_reads_as_unknown() -> None:
+    """`VerticalCount` never carried either number, so both are null on every
+    manifest committed before today - and null is unknown rather than a desk
+    with no sources."""
+    count = VerticalCount.model_validate({"id": "ai", "planned": 5, "published": 4})
+    assert count.eligible_feeds is None
+    assert count.feed_floor is None
+
+
+def test_every_committed_run_manifest_still_reads_today() -> None:
+    """The release blocker this class of change carries, asked of the real files.
+
+    A payload yesterday's run wrote that today's build cannot open is a contract
+    break, and every one of these was written before the two fields existed.
+    """
+    manifests = sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/run.json"))
+    assert manifests, "no day is committed, so this proves nothing"
+    absent = 0
+    for path in manifests:
+        raw = json.loads(read_text(path))
+        parsed = RunManifest.from_json(read_text(path))
+        for record, verticals in zip(
+            parsed.runs, (run.get("verticals", []) for run in raw["runs"]), strict=True
+        ):
+            for count, written in zip(record.verticals, verticals, strict=True):
+                if "eligible_feeds" in written:
+                    continue
+                absent += 1
+                assert count.eligible_feeds is None, path.name
+                assert count.feed_floor is None, path.name
+    assert absent, "every committed desk already carries the field, so nothing was migrated"
 
 
 def test_the_watchlist_stays_inside_its_configured_cap() -> None:

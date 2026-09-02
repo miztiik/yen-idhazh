@@ -65,18 +65,24 @@
       "verticals": [
         {
           "below_feed_floor": false,
+          "eligible_feeds": null,
+          "feed_floor": null,
           "id": "ai",
           "planned": 1,
           "published": 1
         },
         {
           "below_feed_floor": false,
+          "eligible_feeds": null,
+          "feed_floor": null,
           "id": "energy",
           "planned": 1,
           "published": 1
         },
         {
           "below_feed_floor": false,
+          "eligible_feeds": null,
+          "feed_floor": null,
           "id": "world",
           "planned": 1,
           "published": 0
@@ -135,12 +141,16 @@
       "verticals": [
         {
           "below_feed_floor": false,
+          "eligible_feeds": null,
+          "feed_floor": null,
           "id": "ai",
           "planned": 2,
           "published": 2
         },
         {
           "below_feed_floor": false,
+          "eligible_feeds": null,
+          "feed_floor": null,
           "id": "energy",
           "planned": 1,
           "published": 1

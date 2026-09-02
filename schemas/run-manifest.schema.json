@@ -399,6 +399,34 @@
           "title": "Below Feed Floor",
           "type": "boolean"
         },
+        "eligible_feeds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Feeds on this desk whose configured address this run was allowed to ask, as the plan counted them. Null on a manifest written before the count existed, which is unknown rather than a desk with no sources.",
+          "title": "Eligible Feeds"
+        },
+        "feed_floor": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The floor that count was measured against, so below_feed_floor can be checked against the two numbers that decided it rather than taken on trust. Null on a manifest written before it was recorded.",
+          "title": "Feed Floor"
+        },
         "id": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "title": "Id",
@@ -430,6 +458,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added optional eligible_feeds and feed_floor to each vertical.",
+      "version": "2026-09-02T23:00",
+      "why": "below_feed_floor said a desk was under its floor and neither number that decided it, so a reader of a past run could not check the claim or see how close a desk came. The plan now counts only the addresses a run may lawfully ask, which makes the count a different fact from the one the manifest never carried - and recording it beside the floor is what lets a later reader tell a desk that went dark from a desk that was one source away. Both null on every manifest written before today, and null reads as unknown rather than as a desk with no sources (section 11)."
+    },
     {
       "change": "Added optional rank_version to a run.",
       "version": "2026-09-01T12:00",
@@ -507,7 +540,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-01T12:00",
+      "default": "2026-09-02T23:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -519,5 +552,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-01T12:00"
+  "version": "2026-09-02T23:00"
 }

@@ -24,15 +24,17 @@ The payoff compounds. One supply agreement between a chip maker and a datacentre
 
 Each carries a feed list, a feed floor and a lifecycle status. A vertical below its floor is not published.
 
-| id | feed floor | live feeds |
-| --- | --- | --- |
-| `ai` | 35 | 38 |
-| `energy` | 21 | 24 |
-| `business-economy` | 21 | 22 |
-| `world` | 21 | 27 |
-| `india` | 21 | 27 |
+| id | feed floor | feeds we may ask | margin |
+| --- | --- | --- | --- |
+| `ai` | 35 | 43 | 8 |
+| `energy` | 21 | 27 | 6 |
+| `business-economy` | 21 | 25 | 4 |
+| `world` | 21 | 25 | 4 |
+| `india` | 21 | 24 | 3 |
 
-Live counts measured 2026-08-22 by fetching and parsing every configured feed. A feed counts as live only if it resolves, parses and carries entries.
+Counts measured 2026-09-02 from the committed config and the committed health record, with no network involved. **A feed counts when we are allowed to ask its address**, not when it answered: a curated tombstone, an address a server reported permanently gone, a `robots.txt` refusal and a permission we could not establish are each out of the count, and a resting or failing address is in it. The rule and what it costs are in [health.md](health.md#the-feed-floor-counts-the-addresses-we-may-ask).
+
+The count changed on 2026-09-02 and the earlier figures are not comparable: until then the table said "live feeds", measured 2026-08-22 by fetching and parsing every configured feed, which answered a different question - whether a feed worked that morning.
 
 **There is no per-vertical daily cap and no daily item ceiling.** How many items a vertical publishes is decided by supply, by the score, and by `max_per_source`. What one feed may hold of the whole day is `max_source_share_per_day`. See [freshness.md](freshness.md).
 

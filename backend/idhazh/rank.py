@@ -343,7 +343,7 @@ def plan_vertical(
     candidates: Sequence[Candidate],
     *,
     config: CollectConfig,
-    live_feeds: int,
+    eligible_feeds: int,
     now: str,
     first_seen: Mapping[str, str] | None = None,
     already_published: frozenset[str] = frozenset(),
@@ -358,6 +358,11 @@ def plan_vertical(
     Supply, the score and `max_per_source` set the size. A vertical below its
     feed floor is still counted - it is being built in the open - but it plans
     nothing, so an under-sourced desk never reaches a reader.
+
+    `eligible_feeds` is how many of the desk's addresses this run may lawfully
+    ask, counted by `source_health.eligible`. A resting or failing endpoint is
+    in it and a retired or robots-refused one is not: the floor is about how
+    many independent sources the desk has, not about how many answered today.
 
     An address that reached a committed digest is dropped before anything is
     counted. A freshness rule cannot do that job on its own: an article
@@ -397,12 +402,13 @@ def plan_vertical(
         for url_key, carried in merge(candidates).items()
         if url_key not in dropped
     }
-    below_floor = live_feeds < vertical.min_feeds
+    below_floor = eligible_feeds < vertical.min_feeds
     summary = VerticalPlan(
         id=vertical.id,
         considered=len(grouped),
         planned=0,
-        live_feeds=live_feeds,
+        eligible_feeds=eligible_feeds,
+        feed_floor=vertical.min_feeds,
         below_feed_floor=below_floor,
     )
     if below_floor:

@@ -1947,14 +1947,14 @@ def test_a_desk_keeps_the_strongest_shortfall_any_run_recorded() -> None:
     wide = base.model_copy(
         update={
             "verticals": [
-                VerticalPlan(id="ai", considered=40, planned=5, live_feeds=3, too_old=28)
+                VerticalPlan(id="ai", considered=40, planned=5, eligible_feeds=3, too_old=28)
             ]
         }
     )
     narrow = base.model_copy(
         update={
             "verticals": [
-                VerticalPlan(id="ai", considered=35, planned=0, live_feeds=3, too_old=31)
+                VerticalPlan(id="ai", considered=35, planned=0, eligible_feeds=3, too_old=31)
             ]
         }
     )
@@ -2246,6 +2246,50 @@ def test_the_run_records_the_scoring_shape_that_decided_its_order() -> None:
         site_files=2,
     )
     assert silent.runs[-1].rank_version is None
+
+
+def test_a_run_records_how_many_feeds_a_desk_could_ask_and_against_what_floor() -> None:
+    """`below_feed_floor` alone says a desk went dark and neither number that decided it.
+
+    The manifest is the only committed record of a plan - `plan.json` is a
+    one-day artifact - so a reader looking at why a desk was absent has nothing
+    else to read. Both numbers are carried straight from the plan and computed
+    nowhere else, so the run that published cannot disagree with the run that
+    decided. A desk whose plan carried no floor writes null, which is unknown
+    rather than a floor of zero.
+    """
+    settings = config.load(CONFIG_DIR)
+    base = plan()
+    floored = base.model_copy(
+        update={
+            "verticals": [
+                vertical.model_copy(update={"feed_floor": 35})
+                if vertical.id == "ai"
+                else vertical
+                for vertical in base.verticals
+            ]
+        }
+    )
+    manifest = assemble.build_manifest(
+        plan=floored,
+        day=manifest_day(settings),
+        previous=None,
+        summaries=[summary()],
+        models=[],
+        commit_sha="a" * 40,
+        runner="local",
+        started_at="2026-08-21T06:00:00Z",
+        completed_at="2026-08-21T07:00:00Z",
+        config_digests=settings.digests,
+        site_bytes=1024,
+        site_files=2,
+    )
+
+    counts = {count.id: count for count in manifest.runs[-1].verticals}
+    planned = {vertical.id: vertical for vertical in floored.verticals}
+    assert counts["ai"].eligible_feeds == planned["ai"].eligible_feeds
+    assert counts["ai"].feed_floor == 35
+    assert counts["energy"].feed_floor is None
 
 
 def manifest_day(settings: config.Settings) -> DigestDay:

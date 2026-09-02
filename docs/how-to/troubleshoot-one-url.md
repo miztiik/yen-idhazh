@@ -219,7 +219,7 @@ plan = RunPlan(
             id=feed.vertical,
             considered=1,
             planned=1,
-            live_feeds=1,
+            eligible_feeds=1,
         )
     ],
     items=[item],
