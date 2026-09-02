@@ -344,8 +344,8 @@ def test_no_planted_attack_reaches_a_span_attribute(canary: Canary, tmp_path: Pa
     are built. Asserting on that rather than on `must_not_survive` is what makes
     this a test of the spans instead of a second test of the sanitizer.
 
-    A single leaked character fails the row and stops the plan
-    (`TODO/20260830-observability-plan.md`, ESCALATE trigger b).
+    A single leaked character is a contract break; the rule it guards is in
+    `docs/concepts/telemetry.md`.
     """
     article = as_a_real_page(canary)
     assert article.status is ArticleStatus.OK, "a refused page proves nothing about a span"
