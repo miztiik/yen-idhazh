@@ -3452,6 +3452,67 @@ datacentre address. The runner recovered 17. **The laptop over-counted by two,
 in the direction predicted** - which is the reason the runner table sits above
 this one and the laptop table is kept only for the contrast.
 
+### What the robots parser costs, 2026-09-02
+
+`protego==0.6.2` replaced `urllib.robotparser` because the standard library
+reads one committed file two ways across the interpreter range
+`pyproject.toml` declares - Python 3.12 takes the first matching group and the
+first matching rule, Python 3.14 merges repeated groups and applies
+longest-match. See
+[the trust boundary](../architecture/sources/trust-boundary.md). This is what
+that dependency costs (Rule #8, Rule #10).
+
+#### On the runner (authoritative)
+
+**Measured 2026-09-02** on `ubuntu-latest` (Linux 6.17.0-1022-azure x86_64,
+4 vCPU, 16,766,414,848 bytes of RAM), CPython 3.12.14, in a throwaway workflow
+on a branch cut from `main` - so the baseline is `pip install -e ".[dev]"` with
+no protego in it. Run `33668824024`; the branch was deleted once the log was
+read.
+
+| Quantity | Value |
+| --- | --- |
+| Install seconds | 0.661, 0.449, 0.454 (n=3, mean **0.521**, spread **0.212**) |
+| Installed bytes | 422,890,458 -> 422,943,750, so **+53,292** |
+| Installed files | 10,317 -> 10,334, so **+17** |
+| `pip list --format=freeze` | one line added, `Protego==0.6.2`; none removed, no version moved |
+
+Sample 1 includes the wheel download and samples 2 and 3 read pip's local
+cache, which is what the 0.212 s spread on a 0.521 s mean is. Half a second
+against the 15 minutes the `gates` job is allowed is not a number any design
+turns on; it is here because Rule #8 asks what a dependency costs.
+
+#### Against the figure the plan recorded
+
+The plan recorded a **10,296-byte wheel** from the package index and left the
+installed size unmeasured. Installed, it is **53,292 bytes - 5.18 times the
+wheel**. That ratio is what unpacking a zip and byte-compiling it costs, not a
+dependency that turned out bigger than it looked: the Python source alone is
+**19,709 bytes over five modules, 1.91 times the wheel**, and the rest is
+30,496 bytes of bytecode pip generates and 9,142 bytes of packaging metadata
+(counted per file on the developer box, below).
+
+In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes** and
+**0.15 percent of shellcheck-py's 34,782,285**, both of which are already
+dependencies nobody has argued about.
+
+**Beneficiary:** one reading of `robots.txt` on every interpreter the project
+supports. That is the control Rule #11 rests on, and it may not have an answer
+that depends on which runner picked up the job.
+
+#### On a developer machine (kept for the contrast)
+
+**Measured 2026-09-02** (Windows 11, CPython 3.14.2) by summing
+`site-packages` before and after: 356,807,900 -> 356,867,247 bytes over
+11,027 -> 11,044 files, so **+59,347 bytes over 17 files**. That is 6,055 bytes
+over the runner's figure, and the cp314 bytecode is where it goes. Installing
+it took 5.02 s here (n=1, with the test suite on the same box), so read that as
+an upper bound and the runner's 0.521 s as the number.
+
+`protego` ships `py.typed`, so `mypy --strict` needs no `ignore_missing_imports`
+entry for it - measured by running the gate with the package installed and no
+override: 0 errors over 141 source files.
+
 ### Why the other items failed
 
 **Measured 2026-08-23** on a developer machine (i7-1265U, Windows), by
