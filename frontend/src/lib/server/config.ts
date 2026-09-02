@@ -176,6 +176,13 @@ export interface FrameConfig {
 	gutter_max_px: number;
 	/** Exactly three, ascending. A breakpoint must earn a structural change. */
 	breakpoints_px: [number, number, number];
+	/** The three column zones the reading page draws beside its prose, in rem so
+	 * every one of them grows with the reader's own font size. Read by
+	 * `scripts/build-frame-css.mjs`, not by a component: a column width has to be
+	 * right on the first painted frame. */
+	zone_mark_rem: number;
+	zone_rail_rem: number;
+	zone_aside_rem: number;
 }
 
 /** What the surface is allowed to draw with. */
@@ -295,7 +302,10 @@ const FRAME_DEFAULTS: FrameConfig = {
 	measure_ch: 68,
 	gutter_min_px: 16,
 	gutter_max_px: 32,
-	breakpoints_px: [640, 1024, 1400]
+	breakpoints_px: [640, 1024, 1400],
+	zone_mark_rem: 1.75,
+	zone_rail_rem: 14,
+	zone_aside_rem: 18
 };
 const THEME_DEFAULTS: ThemeConfig = {
 	gradient_enabled: true,

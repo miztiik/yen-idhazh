@@ -148,7 +148,13 @@
 <style>
 	/* The measure is on the TEXT, never on the shell. Below the side-rail
 	   breakpoint the item is one column and the rail simply follows the body,
-	   which is what a phone should do. */
+	   which is what a phone should do.
+
+	   Every column here is a `rem` token from config/appearance.json, so a
+	   reader who set their browser text larger gets wider furniture with it -
+	   measured 2026-09-02, a 22px root moved the mark column 28 -> 38.5px and
+	   the rail 224 -> 308px, both 1.375x, which is what proves no zone is a
+	   pixel count. */
 	.item {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
@@ -218,7 +224,7 @@
 	   which moves into the right rail on a wide screen - and a read indicator
 	   14rem from the title it qualifies is paired with nothing. */
 	.item.has-mark {
-		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-columns: var(--zone-mark) minmax(0, 1fr);
 	}
 
 	.item.has-mark > .item-body,
@@ -245,12 +251,12 @@
 	   unavoidable. */
 	@media (min-width: 1024px) {
 		.item {
-			grid-template-columns: minmax(0, 1fr) 14rem;
+			grid-template-columns: minmax(0, 1fr) var(--zone-rail);
 			padding: var(--space-5);
 		}
 
 		.item.has-mark {
-			grid-template-columns: auto minmax(0, 1fr) 14rem;
+			grid-template-columns: var(--zone-mark) minmax(0, 1fr) var(--zone-rail);
 		}
 
 		.item.has-mark > .item-rail {
@@ -263,6 +269,37 @@
 			position: sticky;
 			top: var(--space-4);
 			margin-inline-start: var(--space-3);
+		}
+	}
+
+	/* And at this width it gives the column back - but only to a day that grew an
+	   aside (app.css). The frame's content box holds a 68-character measure plus
+	   exactly ONE trailing column: measured 2026-09-02, keeping both leaves the
+	   summary 570 CSS px against a measure of 659.81. So where the page has
+	   claimed the column, the footer returns to where row 16 put it, under the
+	   summary it is a claim about.
+
+	   A day with no leading block has no aside - every committed day before
+	   2026-09-01 is one, because the block did not exist yet - and there the
+	   rail is the only thing standing beside the prose. Retiring it everywhere
+	   would leave those days 466 px of empty card instead of 230. The value
+	   matches frame.breakpoints_px[2]. */
+	@media (min-width: 1400px) {
+		:global(.day:has(> .day-aside)) .item {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		:global(.day:has(> .day-aside)) .item.has-mark {
+			grid-template-columns: var(--zone-mark) minmax(0, 1fr);
+		}
+
+		:global(.day:has(> .day-aside)) .item.has-mark > .item-rail {
+			grid-column: 2;
+		}
+
+		:global(.day:has(> .day-aside)) .item-rail {
+			position: static;
+			margin-inline-start: 0;
 		}
 	}
 </style>
