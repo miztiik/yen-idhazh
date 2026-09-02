@@ -1,0 +1,5 @@
+# The longest matching rule wins, whichever order the two are written in.
+# RFC 9309 section 2.2.2.
+User-agent: *
+Disallow: /docs/
+Allow: /docs/public/

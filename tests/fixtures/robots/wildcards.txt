@@ -1,0 +1,5 @@
+# `*` stands for any run of characters and `$` pins the end of the path.
+# RFC 9309 section 2.2.3.
+User-agent: *
+Disallow: /*.pdf$
+Disallow: /tmp/*/cache/

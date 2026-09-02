@@ -1,0 +1,7 @@
+# A group naming this crawler wins over the wildcard group, and the wildcard
+# group's blanket refusal does not apply to us (Decision 2).
+User-agent: *
+Disallow: /
+
+User-agent: yen-idhazh
+Disallow: /private/

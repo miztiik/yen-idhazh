@@ -1,0 +1,4 @@
+# Equal length, so the allowance wins. RFC 9309 section 2.2.2.
+User-agent: *
+Disallow: /ledger
+Allow: /ledger

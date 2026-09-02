@@ -102,6 +102,42 @@ jobs:
       - name: Every committed day still matches its contracts
         run: python -m idhazh validate-days
 
+  # The one gate `gates` cannot be: it runs on ONE interpreter, and the thing
+  # under test here is whether two of them agree. `robots.txt` is a permission,
+  # and until 2026-09-02 the standard library read one file two ways across the
+  # range `pyproject.toml` declares - so a page this crawler may read depended
+  # on which runner picked up the job. Both ends of that range read the same
+  # committed fixtures here, and a disagreement fails rather than publishes.
+  #
+  # The whole file, not a selection: the address rules and the RFC 9309 status
+  # reading sit beside the fixture matrix and are the same kind of decision.
+  #
+  # Measured on run 33669915697, 2026-09-02: 41 s on 3.12 and 36 s on 3.14,
+  # both alongside `gates` at 1 m 22 s, so the run's wall clock does not move.
+  robots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      # Both legs report. Knowing only that "one of them disagreed" is the
+      # answer this job exists to improve on.
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.14']
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: The robots fixture matrix, on both ends of the supported range
+        run: pytest backend/tests/test_extract.py
+
   site:
     runs-on: ubuntu-latest
     timeout-minutes: 15

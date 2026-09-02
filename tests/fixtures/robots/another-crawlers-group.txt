@@ -1,0 +1,9 @@
+# A group naming somebody else does not bind us. The wildcard group does.
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: *
+Disallow: /private/

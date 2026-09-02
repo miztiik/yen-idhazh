@@ -34,7 +34,6 @@ from datetime import date as date_type
 from pathlib import Path
 from typing import Final, NamedTuple
 from urllib.error import HTTPError
-from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 
@@ -68,7 +67,7 @@ from idhazh.contracts.base import canonical_json, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome, RobotsOutcome
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
 from idhazh.contracts.qualification import (
@@ -230,33 +229,65 @@ def trace_sink(
     return telemetry.FanOut((local, remote))
 
 
-def live_fetcher(settings: config.Settings, *, tracer: telemetry.Tracer | None = None) -> Fetcher:
-    """The real thing: one robots read per host, honoured on every later read.
+def live_fetcher(
+    settings: config.Settings,
+    *,
+    tracer: telemetry.Tracer | None = None,
+    read_address: Fetcher | None = None,
+) -> Fetcher:
+    """The real thing: one robots read per origin, honoured on every later read.
 
     The cache lives in the closure rather than in a module global, so a caller
-    decides its lifetime instead of the interpreter deciding it.
+    decides its lifetime instead of the interpreter deciding it. One of these
+    lives for one run, which is also the recheck cadence a refusal gets: nothing
+    about a refusal is persisted, so the next run asks the host again. That is
+    `collect.robots_denied_recheck_runs` and `robots_unreachable_recheck_runs`
+    at their configured value of one run.
+
+    The document is cached per normalised origin rather than per `netloc`, so
+    one host is asked once however it is spelled across a feed's addresses.
+
+    A target the host refused, or one whose rules nobody could establish, is
+    never requested. The refusal is built here and no address is read.
+
+    `read_address` is how one address is read, and it is injectable because the
+    socket is the one thing here a fixture cannot stand in for. The order - the
+    host's rules first, the target only if they allow it - is the policy this
+    function exists for, and policy is what a test has to be able to get wrong
+    (Rule #7).
 
     `tracer` is what makes the robots read visible, and it is the sub-step no
     ledger column can hold. `fetch_ms` is one number covering both reads, so the
     first item from a host with a slow robots.txt reads as a slow article and
     the next twenty from that host read as fast ones for no stated reason.
     """
-    robots: dict[str, str | None] = {}
+    rules: dict[str, fetch.RobotsRules] = {}
     trace = tracer if tracer is not None else silent_tracer()
+    agent = settings.app.extract.user_agent
+    read_one = read_address if read_address is not None else _permitted_reader(settings)
 
     def read(url: str) -> fetch.FetchResult:
-        host = urlsplit(url).netloc
+        where = fetch.origin(url)
         with trace.span(telemetry.SpanName.ROBOTS) as span:
-            span.set(telemetry.AttrKey.ROBOTS_CACHED, host in robots)
-            if host not in robots:
-                result = fetch.fetch(
-                    fetch.robots_url(url), config=settings.app.extract, robots_txt=""
-                )
+            span.set(telemetry.AttrKey.ROBOTS_CACHED, where in rules)
+            if where not in rules:
                 # A host that answered "no such file" publishes no rules; a host
                 # that did not answer at all stays a refusal (RFC 9309 sec 2.3.1).
-                robots[host] = fetch.robots_from_result(result)
-            span.set(telemetry.AttrKey.ROBOTS_KNOWN, robots[host] is not None)
-        return fetch.fetch(url, config=settings.app.extract, robots_txt=robots[host])
+                rules[where] = fetch.robots_rules(read_one(fetch.robots_url(url)))
+            permission = rules[where].permits(agent, url)
+            span.set(telemetry.AttrKey.ROBOTS_OUTCOME, permission.value)
+        if permission is not RobotsOutcome.ALLOWED:
+            return fetch.refused(permission)
+        return read_one(url)
+
+    return read
+
+
+def _permitted_reader(settings: config.Settings) -> Fetcher:
+    """Read one address we already have permission for. The socket edge."""
+
+    def read(url: str) -> fetch.FetchResult:
+        return fetch.fetch(url, config=settings.app.extract, permission=RobotsOutcome.ALLOWED)
 
     return read
 
