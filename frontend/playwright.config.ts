@@ -110,6 +110,13 @@ export default defineConfig({
 	expect: { timeout: 15_000 },
 	use: {
 		baseURL: `http://127.0.0.1:${PORT}`,
+		// The site ships a service worker, and every spec but one is about the
+		// page rather than about the worker. Left on, the worker would answer a
+		// second request for a day out of its own cache, which is exactly the
+		// request a spec routes to fake a failure - so a passing arm would be
+		// measuring a cache instead of the code under test. `service-worker.spec.ts`
+		// turns them back on for itself.
+		serviceWorkers: 'block',
 		trace: 'retain-on-failure'
 	},
 	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

@@ -21,6 +21,30 @@ export default {
 		adapter: adapter({ fallback: '404.html', strict: false }),
 		paths: { base: process.env.BASE_PATH ?? '' },
 		...(version ? { version } : {}),
+		// `src/service-worker.ts` is built and shipped; registering it is ours.
+		// The framework's own snippet registers on load with no `catch`, so a
+		// browser that refuses - a private window, a policy, a test that blocks
+		// them - turns into an unhandled rejection on every page. Ours is one
+		// call in one module, which is also the one place `serviceWorker` is
+		// named and therefore the one place a test has to read.
+		//
+		// `files` decides what `$service-worker` hands the worker, and the default
+		// is everything under `static/`. That is the wrong default here:
+		// `static/digest/` is staged from the pipeline's own output, so the
+		// default baked the path of every published day and every rendered visual
+		// into the worker - 16,888 bytes of strings on 2026-09-02, growing with
+		// the archive. What is left is the shell's own assets, which is what the
+		// worker keeps for offline reading.
+		serviceWorker: {
+			register: false,
+			/** @param {string} path */
+			files: (path) =>
+				path === 'favicon.svg' ||
+				path === 'manifest.webmanifest' ||
+				// The font itself, not the licence and the provenance note beside it.
+				(path.startsWith('fonts/') && path.endsWith('.woff2')) ||
+				path.startsWith('icons/')
+		},
 		// A dated route has no page until a day is published, and a clone has to
 		// build before its first run. The guard tells that apart from a page that
 		// went missing - see `prerender-guard.js`.
