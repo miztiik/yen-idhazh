@@ -111,6 +111,9 @@ jobs:
   #
   # The whole file, not a selection: the address rules and the RFC 9309 status
   # reading sit beside the fixture matrix and are the same kind of decision.
+  #
+  # Measured on run 33669915697, 2026-09-02: 41 s on 3.12 and 36 s on 3.14,
+  # both alongside `gates` at 1 m 22 s, so the run's wall clock does not move.
   robots:
     runs-on: ubuntu-latest
     timeout-minutes: 10
