@@ -8,6 +8,13 @@ The telemetry fold at the foot of this file is the second thing that deletes,
 and its oracle is stricter for it: the totals recomputed from the aggregate have
 to equal the totals recomputed from the shard it replaced, read straight off the
 CSV text rather than through the code being checked.
+
+The browser's copy of a folded month and the feed-health shards are the third
+and fourth. Neither can be recovered once `prune.yml` has squashed the range it
+was committed in, so the tests below hold the order - write the summary, read it
+back, then unlink - and hold the two failure states that order exists to prevent:
+a copy left behind by a run that died between the two, and a shard deleted on the
+strength of a write nobody checked.
 """
 
 from __future__ import annotations
@@ -23,9 +30,15 @@ from typing import Final
 
 import pytest
 
-from idhazh import ledger
+from idhazh import ledger, publish_telemetry
 from idhazh.cli import main, stage_prune_state, stage_site_weight
-from idhazh.contracts.app_config import CollectConfig, ObservabilityConfig, RetentionConfig
+from idhazh.contracts.app_config import (
+    CollectConfig,
+    ConsoleConfig,
+    ObservabilityConfig,
+    RetentionConfig,
+)
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
@@ -49,10 +62,15 @@ from idhazh.retention import (
     over_budget,
     over_cap,
     prune,
+    prune_feed_health,
     prune_seen,
     prune_telemetry,
     visuals_older_than,
 )
+
+#: The widest span the console's control can select, from the config that owns
+#: it. The prune may never delete a shard a read that wide names.
+CONSOLE_MAX_WINDOW_DAYS: Final = ConsoleConfig().max_window_days
 
 
 def site(root: Path, days: dict[str, list[str]]) -> Path:
@@ -775,6 +793,427 @@ def test_an_empty_state_tree_folds_nothing_and_says_so(tmp_path: Path) -> None:
     result = prune_telemetry(tmp_path / "state", ObservabilityConfig(), TODAY)
     assert result.changed is False
     assert result.rows_folded == 0
+
+
+# --- The browser's copy of a folded month ------------------------------------
+
+
+def a_published_tree(tmp_path: Path) -> tuple[Path, Path]:
+    """A state tree and the browser's copy of every month in it.
+
+    The copy is written by the publisher rather than by this file, so what the
+    prune deletes is the file the pipeline really produces.
+    """
+    state = a_state_tree(tmp_path)
+    public = tmp_path / "frontend" / "public" / "telemetry"
+    publish_telemetry.publish(state_root=state, public_root=public)
+    return state, public
+
+
+def test_the_browser_copy_goes_with_the_month_it_copies(tmp_path: Path) -> None:
+    """One boundary, two trees. A copy nobody can check is worse than no copy.
+
+    `public_telemetry_keep_months` must equal `item_health_full_grain_months`,
+    so the two sets are the same months and the assertion is that both trees end
+    up holding exactly them.
+    """
+    state, public = a_published_tree(tmp_path)
+    config = ObservabilityConfig()
+    kept = oldest_month_kept(TODAY, config.keep_months)
+    assert len(month_shards(public)) == HISTORY_MONTHS
+
+    result = prune_telemetry(state, config, TODAY, public_root=public)
+
+    assert sorted(result.public_deleted) == sorted(result.folded)
+    assert [path.stem for path in month_shards(public)] == [
+        stem for stem in months_back(TODAY, HISTORY_MONTHS) if stem >= kept
+    ]
+    for stem in result.public_deleted:
+        assert not publish_telemetry.shard_path(public, stem).exists()
+
+
+def test_a_copy_whose_source_is_already_gone_is_still_taken(tmp_path: Path) -> None:
+    """The case the fold loop cannot see, because there is nothing left to fold.
+
+    A run that unlinked the shard and then lost its push - or died between the
+    two - leaves a published month with no ledger behind it. It is the one copy
+    a reader can still fetch and nobody can check, so the pass that takes it
+    walks the published tree rather than the shards being folded.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "telemetry"
+    public.mkdir(parents=True)
+    orphan = publish_telemetry.shard_path(public, "2024-01")
+    orphan.write_text(",".join(publish_telemetry.PUBLIC_COLUMNS) + "\n", encoding="utf-8")
+    live = publish_telemetry.shard_path(public, TODAY.strftime("%Y-%m"))
+    live.write_text(",".join(publish_telemetry.PUBLIC_COLUMNS) + "\n", encoding="utf-8")
+
+    result = prune_telemetry(state, ObservabilityConfig(), TODAY, public_root=public)
+
+    assert result.folded == (), "there was no shard to fold"
+    assert result.public_deleted == ("2024-01",)
+    assert result.changed is True, "a deletion is a change even with nothing folded"
+    assert not orphan.exists()
+    assert live.exists()
+
+
+def test_a_dry_run_names_the_copy_it_would_take_and_leaves_it(tmp_path: Path) -> None:
+    """The list a dry run prints is the list a live run removes, file for file.
+
+    That equality is the deliverable: the workflow ships in dry run so a person
+    can read the list before the deletion is switched on, and a list assembled
+    from what the deletion happened to reach could not be read that way.
+    """
+    state, public = a_published_tree(tmp_path)
+    before = {path.name: path.read_bytes() for path in month_shards(public)}
+
+    planned = prune_telemetry(state, ObservabilityConfig(), TODAY, public_root=public, dry_run=True)
+    done = prune_telemetry(state, ObservabilityConfig(), TODAY, public_root=public)
+
+    assert planned.public_deleted == done.public_deleted
+    assert planned.folded == done.folded
+    assert {path.name for path in month_shards(public)} == set(before) - {
+        f"{stem}.csv" for stem in done.public_deleted
+    }
+    for name, content in before.items():
+        copy = public / name
+        if copy.exists():
+            assert copy.read_bytes() == content, f"{name} was rewritten rather than left alone"
+
+
+def test_a_state_tree_with_no_site_beside_it_deletes_no_copy(tmp_path: Path) -> None:
+    """`public_root` is None by default on purpose.
+
+    A caller that names its own state tree and forgets the published one must get
+    nothing, never the committed tree. Deleting a published shard out of a test
+    run is the failure the pairing exists to stop.
+    """
+    state, public = a_published_tree(tmp_path)
+    held = {path.name: path.read_bytes() for path in month_shards(public)}
+
+    result = prune_telemetry(state, ObservabilityConfig(), TODAY)
+
+    assert result.public_deleted == ()
+    assert {path.name: path.read_bytes() for path in month_shards(public)} == held
+
+
+def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing is deleted on the strength of a write nobody checked.
+
+    The aggregate is written, read back and reconciled first. A read-back that
+    disagrees raises, and BOTH files that month owns stay - the private record
+    and the browser's copy of it. Half a deletion is the state nothing can
+    recover from.
+    """
+    state, public = a_published_tree(tmp_path)
+    config = ObservabilityConfig()
+    doomed = [
+        path for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
+        if path.stem < oldest_month_kept(TODAY, config.keep_months)
+    ]
+    assert doomed, "the fixture has to reach past the window or this proves nothing"
+    monkeypatch.setattr(ledger, "load_telemetry_aggregate", lambda _path: [])
+
+    with pytest.raises(ValueError, match="did not read back"):
+        prune_telemetry(state, config, TODAY, public_root=public)
+
+    assert doomed[0].exists(), "the first shard was unlinked after an unverified write"
+    assert publish_telemetry.shard_path(public, doomed[0].stem).exists()
+    assert len(month_shards(public)) == HISTORY_MONTHS
+
+
+# --- The feed-health shards --------------------------------------------------
+
+
+def feed_health_history(state_dir: Path, months: list[str]) -> None:
+    """A real feed-health shard per month, written through the real appender."""
+    for index, month in enumerate(months):
+        day = f"{month}-11"
+        ledger.append_health(
+            state_dir,
+            day,
+            [
+                FeedHealthRow(
+                    version=FeedHealthRow.schema_version(),
+                    run_id=f"{day}-1",
+                    date=day,
+                    feed_id=f"example-{index:02d}",
+                    checked_at=f"{day}T06:00:00Z",
+                    outcome=FetchOutcome.OK,
+                    status=200,
+                    items=3,
+                    detail=None,
+                )
+            ],
+        )
+
+
+def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
+    tmp_path: Path,
+) -> None:
+    """Nothing reads a feed's result from fourteen months ago.
+
+    The quarantine reads 31 days and the console reaches at most
+    `console.max_window_days`, so a summary of an older month would be a shape
+    with no consumer, written for ever. The knob is the store's own, and what
+    survives is asserted against it rather than against a stem this test picked.
+    """
+    state = tmp_path / "state"
+    config = ObservabilityConfig()
+    months = months_back(TODAY, HISTORY_MONTHS)
+    feed_health_history(state, months)
+    boundary = oldest_month_kept(TODAY, config.feed_health_keep_months)
+
+    result = prune_feed_health(state, config, TODAY)
+
+    assert list(result.deleted) == [stem for stem in months if stem < boundary]
+    assert list(result.kept) == [stem for stem in months if stem >= boundary]
+    assert result.bytes_freed > 0
+    assert [path.stem for path in month_shards(state / ledger.HEALTH_DIRNAME)] == list(
+        result.kept
+    )
+    assert not (state / ledger.TELEMETRY_AGGREGATE_DIRNAME).exists(), (
+        "feed health is deleted rather than folded; an aggregate here has no reader"
+    )
+
+
+def test_the_retirement_ledger_is_never_a_candidate(tmp_path: Path) -> None:
+    """It carries no time window, so no age can expire it.
+
+    One row is one address a server reported permanently gone. A run that forgot
+    it would start asking a dead address again, and the evidence that retired it
+    lives in shards this prune is entitled to delete - so the record has to
+    outlive them.
+    """
+    state = tmp_path / "state"
+    feed_health_history(state, months_back(TODAY, HISTORY_MONTHS))
+    retirements = ledger.feed_retirements_path(state)
+    retirements.write_text("header\n", encoding="utf-8")
+
+    result = prune_feed_health(state, ObservabilityConfig(), TODAY)
+
+    assert result.deleted, "the fixture has to reach past the window or this proves nothing"
+    assert retirements.read_text(encoding="utf-8") == "header\n"
+
+
+def test_a_feed_health_file_that_is_not_a_month_shard_is_left_alone(tmp_path: Path) -> None:
+    """A directory this deletes from names what it recognises, never the rest."""
+    directory = tmp_path / "state" / ledger.HEALTH_DIRNAME
+    directory.mkdir(parents=True)
+    strays = ("notes.csv", "2025-1.csv", "2025-13.csv", "README.md", "2025-01.csv.bak")
+    for name in (*strays, "2024-01.csv"):
+        (directory / name).write_text("header\n", encoding="utf-8")
+
+    result = prune_feed_health(tmp_path / "state", ObservabilityConfig(), TODAY)
+
+    assert result.deleted == ("2024-01",)
+    assert sorted(path.name for path in directory.iterdir()) == sorted(strays)
+
+
+def test_a_feed_health_dry_run_names_the_shard_and_leaves_it(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    feed_health_history(state, ["2024-01", TODAY.strftime("%Y-%m")])
+
+    result = prune_feed_health(state, ObservabilityConfig(), TODAY, dry_run=True)
+
+    assert result.deleted == ("2024-01",)
+    assert result.dry_run
+    assert ledger.health_path(state, "2024-01-11").exists()
+
+
+def test_a_feed_health_run_handed_an_older_date_keeps_the_live_shard(tmp_path: Path) -> None:
+    """`--date` takes whatever it is given, so the boundary has to be a floor.
+
+    `prune-state --date <last January>` computes a smaller window, and every
+    shard since is outside it. The rule is "older than the oldest month kept",
+    not "outside the window", so the live shard stays and only the genuinely
+    older one goes. Deleting what is outside would take the shard the next
+    quarantine reads.
+    """
+    state = tmp_path / "state"
+    feed_health_history(state, ["2024-01", "2026-08"])
+
+    result = prune_feed_health(state, ObservabilityConfig(), date(2026, 1, 5))
+
+    assert result.deleted == ("2024-01",)
+    assert result.kept == ("2026-08",)
+    assert ledger.health_path(state, "2026-08-11").exists(), (
+        "the live shard was deleted by a run given an older date"
+    )
+    assert not ledger.health_path(state, "2024-01-11").exists()
+
+
+def test_an_empty_state_tree_deletes_no_feed_health_and_says_so(tmp_path: Path) -> None:
+    result = prune_feed_health(tmp_path / "state", ObservabilityConfig(), TODAY)
+    assert result.changed is False
+    assert result.deleted == ()
+    assert result.bytes_freed == 0
+
+
+# --- The oracle, over fifteen months -----------------------------------------
+
+
+def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summary(
+    tmp_path: Path,
+) -> None:
+    """One month expires and the three stores that hold it agree about it.
+
+    Fifteen months against a fourteen-month age is the tightest fixture that can
+    fail either way: one month expires, so an off-by-one shows up as an empty
+    result or as an emptied tree rather than as a shard on the wrong side.
+
+    What the run has to leave: fourteen full-grain item-health shards, fourteen
+    matching browser copies, fourteen feed-health shards, the expired item month
+    present only as one aggregate whose totals equal the shard it replaced, the
+    expired feed month gone, and a second run that changes no byte.
+    """
+    config = ObservabilityConfig()
+    keep = config.item_health_full_grain_months
+    months = months_back(TODAY, keep + 1)
+    expired, survivors = months[0], months[1:]
+    assert len(survivors) == keep == 14
+
+    state = tmp_path / "state"
+    item_health_history(state, months)
+    feed_health_history(state, months)
+    public = tmp_path / "frontend" / "public" / "telemetry"
+    publish_telemetry.publish(state_root=state, public_root=public)
+    doomed_text = ledger.item_health_path(state, f"{expired}-01").read_text(encoding="utf-8")
+
+    first = stage_prune_state(
+        observability=config,
+        collect=CollectConfig(),
+        today=TODAY,
+        state_dir=state,
+        public_root=public,
+    )
+    assert first == 0
+
+    assert [path.stem for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)] == survivors
+    assert [path.stem for path in month_shards(public)] == survivors
+    assert [path.stem for path in month_shards(state / ledger.HEALTH_DIRNAME)] == survivors
+    assert len(survivors) == 14
+
+    # The expired month survives as one summary, and the summary is checked
+    # against the file it replaced rather than against the code that wrote it.
+    aggregate = ledger.telemetry_aggregate_path(state, expired)
+    assert [path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME)] == [
+        expired
+    ]
+    assert totals_from_aggregate(ledger.load_telemetry_aggregate(aggregate)) == totals_from_shard(
+        doomed_text
+    )
+    assert not publish_telemetry.shard_path(public, expired).exists()
+    assert not ledger.health_path(state, f"{expired}-01").exists()
+
+    # Every window a 366-day console read can select still names a file that is
+    # there. `shards_in_window` is the reader's own helper, so this is the read
+    # itself rather than a restatement of it.
+    for offset in range(31):
+        anchor = (TODAY - timedelta(days=offset)).isoformat()
+        for stem in ledger.shards_in_window(anchor, CONSOLE_MAX_WINDOW_DAYS):
+            if stem < months[0] or stem > months[-1]:
+                continue
+            assert publish_telemetry.shard_path(public, stem).exists(), (
+                f"a {CONSOLE_MAX_WINDOW_DAYS}-day read anchored on {anchor} names "
+                f"{stem}, which this prune deleted"
+            )
+
+    everything = {
+        path.relative_to(tmp_path).as_posix(): path.read_bytes()
+        for path in sorted(tmp_path.rglob("*.csv"))
+    }
+
+    assert (
+        stage_prune_state(
+            observability=config,
+            collect=CollectConfig(),
+            today=TODAY,
+            state_dir=state,
+            public_root=public,
+        )
+        == 0
+    )
+
+    assert {
+        path.relative_to(tmp_path).as_posix(): path.read_bytes()
+        for path in sorted(tmp_path.rglob("*.csv"))
+    } == everything, "a second run over a settled tree must move no byte"
+
+
+def test_the_stage_names_every_file_a_live_run_would_remove(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The dry run's whole deliverable: the paths, not a count.
+
+    This list is what a person reads before turning the deletion on, so it is
+    the POSIX relative path of each file (`CLAUDE.md` section 2) and it says
+    "would remove" rather than "removed" while nothing is being removed.
+    """
+    config = ObservabilityConfig()
+    months = months_back(TODAY, config.item_health_full_grain_months + 1)
+    state = tmp_path / "state"
+    item_health_history(state, months)
+    feed_health_history(state, months)
+    public = tmp_path / "frontend" / "public" / "telemetry"
+    publish_telemetry.publish(state_root=state, public_root=public)
+    expired = months[0]
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=config,
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
+                public_root=public,
+                dry_run=True,
+            )
+            == 0
+        )
+
+    named = sorted(
+        line.split("would remove ", 1)[1]
+        for line in caplog.text.splitlines()
+        if "prune-state would remove " in line and not line.endswith("files:")
+    )
+    assert named == sorted(
+        [
+            f"state/item-health/{expired}.csv",
+            f"state/feed-health/{expired}.csv",
+            f"frontend/public/telemetry/{expired}.csv",
+        ]
+    )
+    assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
+    assert ledger.item_health_path(state, f"{expired}-01").exists()
+    assert publish_telemetry.shard_path(public, expired).exists()
+    assert ledger.health_path(state, f"{expired}-11").exists()
+
+
+def test_the_stage_says_so_when_there_is_nothing_to_remove(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Silence and "nothing expired" read the same, and only one of them is true."""
+    state = tmp_path / "state"
+    day = f"{TODAY:%Y-%m}-04"
+    ledger.append_item_health(
+        state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
+    )
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
+            )
+            == 0
+        )
+
+    assert "prune-state removes no file today" in caplog.text
 
 
 def test_the_stage_reports_what_it_folded(
