@@ -2568,14 +2568,16 @@ def stage_prune_state(
     collect: CollectConfig,
     today: date_type,
     state_dir: Path | None = None,
+    public_root: Path | None = None,
     dry_run: bool = False,
 ) -> int:
-    """Retire what the ledgers no longer answer for: an item-health month, and
-    every seen shard outside the window the planner reads.
+    """Retire what the ledgers no longer answer for: an item-health month and the
+    browser's copy of it, a feed-health month, and every seen shard outside the
+    window the planner reads.
 
-    Two ledgers, one step, because they share the one property that makes this
-    safe: both run after the day is committed, and neither can cost a reader
-    anything it has not already been given.
+    Four stores, one step, because they share the one property that makes this
+    safe: all of it runs after the day is committed, and none of it can cost a
+    reader anything it has not already been given.
 
     Runs after the day is committed, never before. A fold that ran first and then
     failed would leave a month deleted from a tree nothing pushed, and the next
@@ -2585,32 +2587,99 @@ def stage_prune_state(
 
     It reports rather than fails. What this job owes a reader is the published
     day; a fold that will not run must never be the thing that stops one.
+
+    **Every file a live run would remove is named, one line each.** A count says
+    a deletion happened and nothing about what it took, and the workflow ships
+    this in dry run precisely so a person can read that list before the deletion
+    is switched on.
     """
     state = state_dir if state_dir is not None else STATE_ROOT
-    _prune_seen_shards(state, collect, today, dry_run=dry_run)
+    # The published tree only defaults beside the default state tree. A caller
+    # that named its own `state_dir` and left this out gets no browser copy
+    # rather than the committed one - deleting a published shard out of a test
+    # run is the failure this pairing exists to stop.
+    public = public_root
+    if public is None and state_dir is None:
+        public = publish_telemetry.DEFAULT_PUBLIC_ROOT
 
-    result = retention.prune_telemetry(state, observability, today, dry_run=dry_run)
+    removed: list[str] = []
+    removed += _prune_seen_shards(state, collect, today, dry_run=dry_run)
+    removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
+
+    result = retention.prune_telemetry(
+        state, observability, today, public_root=public, dry_run=dry_run
+    )
     if not result.changed:
         LOG.info(
             "telemetry fold: nothing older than %s months, so every month is still at "
             "full grain",
             observability.keep_months,
         )
-        return 0
-    LOG.info(
-        "telemetry fold%s: %s folded %s rows into %s, hard-deleted %s",
-        " (dry run)" if result.dry_run else "",
-        ", ".join(result.folded) or "no month",
-        result.rows_folded,
-        result.aggregate_rows,
-        ", ".join(result.hard_deleted) or "no month",
-    )
+    else:
+        LOG.info(
+            "telemetry fold%s: %s folded %s rows into %s, dropped the browser copy of %s, "
+            "hard-deleted %s",
+            " (dry run)" if result.dry_run else "",
+            ", ".join(result.folded) or "no month",
+            result.rows_folded,
+            result.aggregate_rows,
+            ", ".join(result.public_deleted) or "no month",
+            ", ".join(result.hard_deleted) or "no month",
+        )
+        removed += [ledger.item_health_relpath(f"{stem}-01") for stem in result.folded]
+        removed += [publish_telemetry.shard_relpath(stem) for stem in result.public_deleted]
+        removed += [
+            ledger.telemetry_aggregate_relpath(stem) for stem in result.hard_deleted
+        ]
+
+    _report_removals(sorted(removed), dry_run=dry_run)
     return 0
+
+
+def _report_removals(paths: list[str], *, dry_run: bool) -> None:
+    """Name every file, one line each, in the POSIX form section 2 asks for.
+
+    This list is the deliverable of a dry run: it is what a person reads before
+    turning the deletion on, so it is the paths themselves and never a count.
+    """
+    if not paths:
+        LOG.info("prune-state removes no file today")
+        return
+    verb = "would remove" if dry_run else "removed"
+    LOG.info("prune-state %s %s files:", verb, len(paths))
+    for path in paths:
+        LOG.info("prune-state %s %s", verb, path)
+
+
+def _prune_feed_health_shards(
+    state: Path, observability: ObservabilityConfig, today: date_type, *, dry_run: bool
+) -> list[str]:
+    """Delete the feed-health months no quarantine and no console read reaches.
+
+    Deleted rather than folded: a row here is one feed's result on one run, and
+    a total over a month fourteen months back answers nothing anybody asks.
+    """
+    feed = retention.prune_feed_health(state, observability, today, dry_run=dry_run)
+    if not feed.changed:
+        LOG.info(
+            "feed-health prune: every shard is inside the %s-month window, so none was "
+            "deleted",
+            observability.feed_health_keep_months,
+        )
+        return []
+    LOG.info(
+        "feed-health prune%s: deleted %s, freed %s bytes, kept %s",
+        " (dry run)" if feed.dry_run else "",
+        ", ".join(feed.deleted),
+        feed.bytes_freed,
+        ", ".join(feed.kept) or "no shard",
+    )
+    return [ledger.health_relpath(f"{stem}-01") for stem in feed.deleted]
 
 
 def _prune_seen_shards(
     state: Path, collect: CollectConfig, today: date_type, *, dry_run: bool
-) -> None:
+) -> list[str]:
     """Delete the seen shards `rank` will not read again, and say what went.
 
     Separate from the fold above so a shard that will not delete cannot stop a
@@ -2627,7 +2696,7 @@ def _prune_seen_shards(
             "seen prune: every shard is inside the %s-day window, so none was deleted",
             collect.seen_window_days,
         )
-        return
+        return []
     LOG.info(
         "seen prune%s: deleted %s, freed %s bytes, kept %s",
         " (dry run)" if seen.dry_run else "",
@@ -2635,6 +2704,7 @@ def _prune_seen_shards(
         seen.bytes_freed,
         ", ".join(seen.kept) or "no shard",
     )
+    return [ledger.seen_relpath(f"{stem}-01") for stem in seen.deleted]
 
 
 def stage_assemble(

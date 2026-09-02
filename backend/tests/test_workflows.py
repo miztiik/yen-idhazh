@@ -24,7 +24,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
-from idhazh import ledger
+from idhazh import ledger, publish_telemetry
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 
 WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
@@ -357,16 +357,25 @@ COMMIT_STAGED_PATHS: Final = {
         "state",
         "corpus",
     ],
-    # `state` whole, and deliberately not the two directories the fold touches:
+    # `state` whole, and deliberately not the directories the fold touches:
     # `state/telemetry-aggregate/` does not exist in a fresh checkout, and
     # `git add` on a path that is not there aborts the whole step.
-    "fold": ["state"],
+    # `frontend/public/telemetry` is named beside it because the fold deletes the
+    # browser's copy of a folded month, and `git add` records a removal only for
+    # a path it is handed. That directory IS in every checkout.
+    "fold": ["state", "frontend/public/telemetry"],
 }
 # The step that folds an out-of-window month before the step above commits it.
 # It runs after the day's own commit, so a retirement that loses its push costs
 # one run's bytes and never a published day.
 FOLD_STEP: Final = "Retire the ledger shards the pipeline no longer reads"
 FOLD_COMMAND: Final = "python -m idhazh prune-state"
+# Set on purpose. `prune.yml` force-pushes main on a schedule, so a state file
+# this step deletes stops being recoverable from history once the prune passes
+# over it (CLAUDE.md section 8). The step logs every file a live run would remove
+# and removes nothing; turning the deletion on is a one-line commit of its own,
+# taken after a scheduled run has printed that list.
+FOLD_DRY_RUN_FLAG: Final = "--dry-run"
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.
 RECORD_STEP: Final = "Record what this shard measured"
@@ -2116,6 +2125,44 @@ def test_the_telemetry_fold_runs_only_once_the_day_is_committed() -> None:
         assert step.get("continue-on-error") == TOLERATED, (
             f"{step_name} must never be what costs a reader the day"
         )
+
+
+def test_the_fold_ships_in_dry_run_because_the_history_it_deletes_from_is_rewritten() -> None:
+    """Nothing this step deletes can be recovered once the scheduled prune passes.
+
+    `.github/workflows/prune.yml` squashes and force-pushes `main` on a schedule
+    (CLAUDE.md section 8), so `git revert` is not a recovery path for a state file
+    older than `finetune.prune_keep_days`. The step therefore prints the files a
+    live run would remove and removes none of them, and the flag is what makes
+    that true rather than a comment saying it is.
+
+    Deleting the flag is the one-line commit that turns the deletion on, and it
+    is deliberately a commit somebody has to write and this test has to be
+    changed for.
+    """
+    fold = _step(_load_workflows()["digest.yml"], "assemble", "name", FOLD_STEP)
+
+    assert FOLD_DRY_RUN_FLAG in _script(fold, "assemble fold step")
+
+
+def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
+    """A deletion reaches a commit only for a path `git add` is handed.
+
+    `commit-and-push.sh` runs `git add "$@"` under `set -euo pipefail`. The fold
+    unlinks `frontend/public/telemetry/<YYYY-MM>.csv` in the same step it folds
+    the ledger behind it, so a commit that staged `state` alone would push the
+    fold and leave the published copy of a month whose source is gone - the one
+    state `observability.public_telemetry_keep_months` exists to prevent.
+
+    Both paths are in a fresh checkout, which is the other half: `git add` on a
+    path that is not there aborts the step and takes the fold with it.
+    """
+    staged = COMMIT_STAGED_PATHS["fold"]
+
+    assert publish_telemetry.PUBLIC_TELEMETRY_DIRNAME in "/".join(staged)
+    assert "frontend/public/telemetry" in staged
+    for relative in staged:
+        assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
 
 
 def test_the_corpus_is_committed_but_never_rebuilt() -> None:

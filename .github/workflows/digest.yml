@@ -1142,19 +1142,42 @@ jobs:
       # leave the month deleted in a tree nobody kept, and every later run would
       # fold a shard that had already been folded.
       #
+      # `--dry-run` is set on purpose and is the whole shape of this step today.
+      # `.github/workflows/prune.yml` force-pushes main on a schedule, so a state
+      # file this deletes stops being recoverable from history once the prune
+      # passes over it (CLAUDE.md section 8). So the step logs every file a live
+      # run would remove and removes nothing, and turning the deletion on is a
+      # separate one-line commit taken after a scheduled run has printed that
+      # list. Grep the job log for `prune-state would remove` to read it.
+      #
+      # The flag covers the whole invocation, so it also suspends the seen prune
+      # and the item-health fold, which had been live and had never fired. On
+      # 2026-09-02 the earliest either would have deleted anything is
+      # `state/seen/2026-08.csv` on 2026-11-30 - so removing the flag before then
+      # costs nothing that was already happening, and leaving it on costs nothing
+      # either.
+      #
       # `continue-on-error` on both, for the reason the harvest carries it: what
       # this job owes a reader is the published day, and thirteen-month-old
       # telemetry must never be what stops one. A month it does not fold today it
       # folds on the next run.
       #
-      # It stages `state` whole rather than the two directories it touches.
+      # It stages `state` whole rather than the directories it touches.
       # `git add` runs under `set -euo pipefail` and would abort on a path a
       # fresh checkout does not carry, and `state/telemetry-aggregate/` does not
       # exist until the first fold writes it. `state` always does, and the day's
       # own commit above has already taken everything else in it.
+      #
+      # `frontend/public/telemetry` is named beside it because the fold deletes
+      # the browser's copy of a month in the same step it folds the ledger, and
+      # `git add` records a removal only for a path it is given. The directory is
+      # in every checkout - the day's own commit above stages it - so naming it
+      # cannot abort the step.
       - name: Retire the ledger shards the pipeline no longer reads
         continue-on-error: true
-        run: python -m idhazh prune-state --date "${{ needs.plan.outputs.date }}"
+        run: >-
+          python -m idhazh prune-state
+          --date "${{ needs.plan.outputs.date }}" --dry-run
 
       - name: Commit the folded telemetry
         continue-on-error: true
@@ -1164,7 +1187,7 @@ jobs:
           PUSH_FAILED_MESSAGE: "could not push the folded telemetry after three attempts"
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state
+          state frontend/public/telemetry
 
       # The commit steps above rebase when the push loses a race, and the
       # rebuild there rewrites the day against the tip that won. `frontend/build`

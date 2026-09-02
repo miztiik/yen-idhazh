@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
@@ -54,6 +54,16 @@ HUMAN SOURCE REVIEW (after at least 30 days of evidence)
 It is written **whether the run publishes or not**. The days a source is worth measuring on are the days the run went badly, and a ledger that only records good runs measures nothing.
 
 Monthly shards, because a read looks back 31 days - just enough that a quarantine decided on the first of the month can still see the failures that caused it.
+
+## A month past its age is deleted, and no summary replaces it
+
+`observability.feed_health_keep_months` is 14, and a shard older than that is unlinked by `idhazh prune-state` after the day is committed. Nothing is folded first, and that is the decision rather than an omission: the quarantine reads 31 days and the console reaches at most `console.max_window_days` (366), so no total over a month fourteen months back has a reader - and writing one would persist a shape nothing consumes, for ever. Fourteen for the same reason the item-health window is: a 366-day read walks 367 inclusive days and those days can fall in fourteen calendar month files.
+
+**Older than the oldest month kept, never merely outside a window.** `--date` takes whatever it is handed, so a run given a date in the past draws a smaller window and every shard since falls outside it. Deleting below the window's floor instead means a back-dated run deletes less rather than deleting the shard the next quarantine reads.
+
+**`state/feed-retirements.csv` is never a candidate.** It sits beside this directory rather than in it, and it carries no time window at all: one row is one address a server reported permanently gone. The evidence that retired an address lives in shards this prune is entitled to delete, so the record has to outlive them - a run that forgot it would start asking a dead address again on the day the last 410 row aged out.
+
+**The step ships in dry run.** It logs every file a live run would remove and removes none of them, because `.github/workflows/prune.yml` force-pushes `main` on a schedule and a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a one-line commit taken after a scheduled run has printed the list. Measured on this checkout on 2026-09-02: a live run removes nothing today, and the first shard it would take is `state/feed-health/2026-08.csv` on **2027-10-01**. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
 
 ## One row per feed per run, enforced rather than assumed
 

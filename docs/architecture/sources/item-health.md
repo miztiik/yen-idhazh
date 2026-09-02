@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -19,8 +19,26 @@ The row carries:
 
 `version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap, shard`
 
-The file is append-only and never pruned. The 30-day window is a read-side
-parameter. Monthly shards follow `state/seen/` and `state/feed-health/`.
+The file is append-only inside its own month. It is not kept for ever: a month
+older than `observability.item_health_full_grain_months` (14) is folded to one
+row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv` and the
+full-grain shard is deleted, by `idhazh prune-state` after the day is committed.
+The browser's copy of that same month under `frontend/public/telemetry/` goes in
+the same step. Until 2026-09-03 this page said the ledger was never pruned, which
+was true when it was written and stopped being true when the fold landed.
+
+**The step ships in dry run.** It logs every file a live run would remove and
+removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
+on a schedule and a deleted state file stops being recoverable from history once
+that prune passes over it (`CLAUDE.md` section 8). Turning the deletion on is a
+one-line commit taken after a scheduled run has printed the list. Measured on
+this checkout on 2026-09-02, the earliest a live run would touch this ledger is
+**2027-10-01**, when `state/item-health/2026-08.csv` falls below the window.
+
+The 30-day window on this page is a read-side parameter and is unrelated to that
+age. Monthly shards follow `state/seen/` and `state/feed-health/`. What the fold
+keeps, what it costs and why fourteen is
+[../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
 
 ## The structure
 

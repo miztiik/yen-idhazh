@@ -1,7 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { monthsToFetch, stepPreset, windowOfDays } from '../src/lib/charts/viewport';
+import {
+	monthsInWindow,
+	monthsToFetch,
+	stepPreset,
+	windowOfDays
+} from '../src/lib/charts/viewport';
 import { readCsv } from '../src/lib/server/payload';
 
 /**
@@ -23,7 +28,20 @@ const CONFIG = JSON.parse(
 	console?: {
 		window_presets?: number[];
 		default_window_days?: number;
+		max_window_days?: number;
 		today_anchor?: 'right' | 'centre';
+	};
+};
+
+/** The cleanup ages, from the file that sets them. A published shard older than
+ * `public_telemetry_keep_months` is deleted by `idhazh prune-state`, so the
+ * widest read this control offers has to stay inside what that leaves. */
+const APP = JSON.parse(
+	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
+) as {
+	observability?: {
+		public_telemetry_keep_months?: number;
+		item_health_full_grain_months?: number;
 	};
 };
 
@@ -38,6 +56,26 @@ function minus(date: string, days: number): string {
 	const at = new Date(`${date}T00:00:00Z`);
 	at.setUTCDate(at.getUTCDate() - days);
 	return at.toISOString().slice(0, 10);
+}
+
+/** The month stems the cleanup leaves under `frontend/public/telemetry/`.
+ *
+ * The same arithmetic as `oldest_month_kept` in `backend/idhazh/retention.py`:
+ * the month being written counts as one of them, so 14 on any day of August 2026
+ * keeps 2025-07 through 2026-08. Restated here on purpose - nothing in a browser
+ * can call the writer - so this is the reader's half of the promise and never
+ * the authority on it. The writer's half is
+ * `backend/tests/test_retention.py::test_the_oracle_fifteen_months_leave_...`,
+ * which sweeps the same property through `ledger.shards_in_window`.
+ */
+function monthsKept(today: string, months: number): string[] {
+	const [year, month] = today.split('-').map(Number);
+	const newest = year * 12 + (month - 1);
+	return Array.from({ length: months }, (_, index) => {
+		const total = newest - (months - 1) + index;
+		const stem = String(Math.floor(total / 12)).padStart(4, '0');
+		return `${stem}-${String((total % 12) + 1).padStart(2, '0')}`;
+	});
 }
 
 function dirs(at: string): string[] {
@@ -167,6 +205,31 @@ test('the cost of widening is the months not already in hand, and never a 404', 
 	expect(
 		monthsToFetch({ start: '2026-04-01', end: '2026-08-28' }, available, ['2026-08'])
 	).toEqual(['2026-06', '2026-07']);
+});
+
+test('the widest window this control offers never names a shard the cleanup age took', () => {
+	// `retention.prune_telemetry` deletes the browser's copy of a month past
+	// `observability.public_telemetry_keep_months`, and that knob must equal the
+	// ledger's own window. This is the reader's half of the same promise: over
+	// every anchor a year can offer, the months the widest read selects are all
+	// months the cleanup kept, so widening costs a fetch and never a 404.
+	//
+	// It reads both knobs rather than 366 and 14, because the two configs are
+	// where the pair is set and a test that repeated the numbers would agree with
+	// itself after an edit moved them.
+	const keepMonths = APP.observability?.public_telemetry_keep_months ?? 14;
+	const maxDays = CONFIG.console?.max_window_days ?? 366;
+	expect(keepMonths).toBe(APP.observability?.item_health_full_grain_months ?? 14);
+
+	for (let offset = 0; offset < 366; offset += 1) {
+		const today = minus('2026-12-31', offset);
+		const kept = monthsKept(today, keepMonths);
+		const widest = windowOfDays([today], today, maxDays, 'right');
+		expect(
+			monthsToFetch(widest, kept, []),
+			`a ${maxDays}-day read on ${today} wants a month ${keepMonths} months of cleanup removed`
+		).toEqual(monthsInWindow(widest));
+	}
 });
 
 test('THE ORACLE: every windowed surface reports the day count the control does', async ({

@@ -8,6 +8,10 @@ fetches at runtime.
 The projection's shape is `PublicTelemetryRow`, not a list of names here. This
 module owns *when* a shard is written and *from what*; the contract owns which
 cells may cross and what each one may hold (Rule #3).
+
+It owns *where* a shard sits too, through `shard_path`. `retention.prune_telemetry`
+deletes a copy in the same step that folds the ledger it copies, and it asks here
+for the file to unlink rather than spelling `<month>.csv` a second time.
 """
 
 from __future__ import annotations
@@ -23,16 +27,37 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.public_telemetry import FORBIDDEN_COLUMNS, PublicTelemetryRow
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = PublicTelemetryRow.csv_columns()
-DEFAULT_PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "telemetry"
+#: Where the browser's copy sits under `frontend/public/`.
+PUBLIC_TELEMETRY_DIRNAME: Final = "telemetry"
+DEFAULT_PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / PUBLIC_TELEMETRY_DIRNAME
 
 __all__ = [
     "DEFAULT_PUBLIC_ROOT",
     "FORBIDDEN_COLUMNS",
     "PUBLIC_COLUMNS",
+    "PUBLIC_TELEMETRY_DIRNAME",
     "migrate",
     "publish",
     "read_shard",
+    "shard_path",
+    "shard_relpath",
 ]
+
+
+def shard_path(public_root: Path, month: str) -> Path:
+    """The browser's copy of one item-health month.
+
+    Spelled here and nowhere else, because the step that writes a copy and the
+    step that deletes one have to name the same file. Two spellings of
+    `<month>.csv` would delete a shard nobody published and leave the one that
+    was published behind.
+    """
+    return public_root / f"{month}.csv"
+
+
+def shard_relpath(month: str) -> str:
+    """`frontend/public/telemetry/<YYYY-MM>.csv` - the POSIX form, for a log line."""
+    return f"frontend/public/{PUBLIC_TELEMETRY_DIRNAME}/{month}.csv"
 
 
 def _read(path: Path) -> list[PublicTelemetryRow]:
@@ -85,11 +110,11 @@ def publish(
     written: list[Path] = []
     if source_dir.exists():
         for source in sorted(source_dir.glob("*.csv")):
-            target = public_root / source.name
+            target = shard_path(public_root, source.stem)
             _write(target, _read(source))
             written.append(target)
     if ensure_month is not None and all(path.stem != ensure_month for path in written):
-        target = public_root / f"{ensure_month}.csv"
+        target = shard_path(public_root, ensure_month)
         _write(target, [])
         written.append(target)
     return written

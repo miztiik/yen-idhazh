@@ -40,12 +40,13 @@ grew can be named rather than inferred from one moving sum;
 mix moves and a rate over items does not; and `days_to_alarm` and `days_to_cap`,
 which are the answer the question was always asking for.
 
-**The telemetry fold is the third thing here, and it deletes nothing a reader
-can reach.** `state/item-health/` is the census, and it grew at a measured
-211,742 bytes a published day on 2026-08-30 with nothing bounding it.
+**The telemetry fold is the third thing here, and it takes two files at once.**
+`state/item-health/` is the census, and it grew at a measured 211,742 bytes a
+published day on 2026-08-30 with nothing bounding it.
 `observability.item_health_full_grain_months` is where a month stops being kept
-item by item: past it the month is folded to one row per (date, stage) and the
-full-grain shard is deleted. It is fourteen months because
+item by item: past it the month is folded to one row per (date, stage), the
+full-grain shard is deleted, and the browser's copy of that same month under
+`frontend/public/telemetry/` goes with it. It is fourteen months because
 `console.max_window_days` is 366, `ledger.shards_in_window` walks 367 inclusive
 days, and those days can fall in fourteen calendar months - a window ending on
 the first of a month starts on the last day of another. The aggregate is kept
@@ -56,7 +57,28 @@ null. Both names are read through the properties `keep_months` and
 `hard_delete_after_months`, which is why nothing else in this module moved when
 the ages were named.
 
-**The seen prune is the fourth thing, and it folds nothing on purpose.**
+**The private record and its browser copy go together, in that order.**
+`frontend/public/telemetry/<YYYY-MM>.csv` is the projection a reader's browser
+fetches, and `observability.public_telemetry_keep_months` is its own age - the
+config refuses any value but the ledger's own, so the two can never come apart
+by an edit. A copy that outlived its source would be a published rate nobody
+could check against the rows behind it. The copy is named before anything is
+deleted, so a dry run prints the file a live run removes rather than a list
+assembled from what the deletion happened to reach; and a copy whose source an
+earlier interrupted run already folded away is caught by the same pass, which is
+why that pass walks the published tree rather than the shards it just folded.
+
+**Feed health is deleted rather than folded, and that is the fourth thing.**
+`state/feed-health/` is one row per feed per run. The quarantine reads 31 days
+(`ledger.HEALTH_WINDOW_DAYS`) and the console reaches at most
+`console.max_window_days`, so no summary of a month past
+`observability.feed_health_keep_months` has a reader - and inventing one would
+persist a shape nothing consumes, for ever. `state/feed-retirements.csv` sits
+beside that directory and is never a candidate: it carries no time window at
+all, and a run that forgot a retired address would start asking a dead one
+again.
+
+**The seen prune is the fifth thing, and it folds nothing on purpose.**
 `state/seen/` is a lookup rather than a measurement: `ledger.load_seen` opens
 the shards `shards_in_window(today, collect.seen_window_days)` names and
 nothing else, so a shard outside that set answers no question anybody asks and
@@ -74,7 +96,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger
+from idhazh import ledger, publish_telemetry
 from idhazh.contracts.app_config import ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
@@ -405,11 +427,32 @@ class TelemetryPruneResult:
     rows_folded: int
     aggregate_rows: int
     hard_deleted: tuple[str, ...]
+    #: Months whose browser copy under `frontend/public/telemetry/` went. Named
+    #: apart from `folded` because the two sets come apart: a copy whose source
+    #: month an earlier interrupted run already folded away is deleted here with
+    #: nothing left to fold beside it.
+    public_deleted: tuple[str, ...]
     dry_run: bool
 
     @property
     def changed(self) -> bool:
-        return bool(self.folded or self.hard_deleted)
+        return bool(self.folded or self.hard_deleted or self.public_deleted)
+
+
+def _expired_public_copies(public_root: Path | None, boundary: str) -> tuple[str, ...]:
+    """Every published month below the boundary, named before anything is deleted.
+
+    Read up front so the list a dry run prints is the list a live run removes,
+    file for file. That list is what a person reads before turning the deletion
+    on, so it may not be assembled from what the deletion happened to reach.
+
+    It walks the published tree rather than the shards being folded, which is
+    what catches a copy whose source is already gone. Only `<YYYY-MM>.csv` is
+    recognised - a directory this deletes from names what it knows.
+    """
+    if public_root is None:
+        return ()
+    return tuple(copy.stem for copy in month_shards(public_root) if copy.stem < boundary)
 
 
 def prune_telemetry(
@@ -417,20 +460,29 @@ def prune_telemetry(
     config: ObservabilityConfig,
     today: date,
     *,
+    public_root: Path | None = None,
     dry_run: bool = False,
 ) -> TelemetryPruneResult:
-    """Fold every out-of-window item-health month, then delete the shard it came from.
+    """Fold every out-of-window item-health month, then delete the shard and its copy.
 
     Order matters and it is the whole safety argument: the aggregate is written
-    and read back before the full-grain shard is unlinked, so a fold that cannot
-    be written leaves the shard exactly where it was. Nothing is deleted on the
-    strength of a write nobody checked.
+    and read back before the full-grain shard is unlinked, and the browser's copy
+    of that month is unlinked only after the shard it copies. Nothing is deleted
+    on the strength of a write nobody checked.
+
+    `public_root` is `frontend/public/telemetry/`. None means there is no site
+    beside this state tree, so there is no copy to consider - and it is the
+    default because a caller that names its own state tree and forgets this one
+    must get nothing rather than the committed one.
 
     `hard_delete_after_months` is applied last and defaults to null, which means
     an aggregate is kept forever. Set, it must sit above `keep_months`, which the
     config contract enforces - so a month is never deleted before it is folded.
     """
     keep_from = oldest_month_kept(today, config.keep_months)
+    public_deleted = _expired_public_copies(
+        public_root, oldest_month_kept(today, config.public_telemetry_keep_months)
+    )
     folded: list[str] = []
     rows_folded = 0
     aggregate_rows = 0
@@ -455,6 +507,18 @@ def prune_telemetry(
                 f"was written, so {shard.name} stays"
             )
         shard.unlink()
+        # Only a copy below its own configured age, so the set deleted is exactly
+        # the set named above and never a month the published tree still owes a
+        # reader.
+        if public_root is not None and shard.stem in public_deleted:
+            publish_telemetry.shard_path(public_root, shard.stem).unlink(missing_ok=True)
+
+    # Whatever the loop above did not reach. On the scheduled path this is empty:
+    # every copy below the boundary has a shard beside it, and the pair went
+    # together. It is not empty after a run that stopped between the two.
+    if public_root is not None and not dry_run:
+        for stem in public_deleted:
+            publish_telemetry.shard_path(public_root, stem).unlink(missing_ok=True)
 
     hard_deleted: list[str] = []
     if config.hard_delete_after_months is not None:
@@ -471,6 +535,71 @@ def prune_telemetry(
         rows_folded=rows_folded,
         aggregate_rows=aggregate_rows,
         hard_deleted=tuple(hard_deleted),
+        public_deleted=public_deleted,
+        dry_run=dry_run,
+    )
+
+
+# --- The feed-health shards --------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class FeedHealthPruneResult:
+    """Which feed-health months went, and what they weighed."""
+
+    deleted: tuple[str, ...]
+    bytes_freed: int
+    kept: tuple[str, ...]
+    dry_run: bool
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.deleted)
+
+
+def prune_feed_health(
+    state_dir: Path,
+    config: ObservabilityConfig,
+    today: date,
+    *,
+    dry_run: bool = False,
+) -> FeedHealthPruneResult:
+    """Delete every feed-health month past its own age, and fold nothing.
+
+    A row here is one feed's result on one run. The quarantine reads
+    `ledger.HEALTH_WINDOW_DAYS` (31) and the console reaches at most
+    `console.max_window_days`, so nothing asks a month older than
+    `observability.feed_health_keep_months` for anything - and a summary of what
+    a feed did fourteen months ago would be a shape nothing consumes, persisted
+    for ever.
+
+    **Older than the oldest month kept, never merely outside a window.** The
+    boundary is a floor, so a run handed a date in the past deletes less rather
+    than deleting the live shard. That is the rule `prune_seen` states at length
+    and it is the same rule here.
+
+    `state/feed-retirements.csv` is not in this directory and is never a
+    candidate. It carries no time window: one row is one address a server said
+    was gone, and a run that forgot it would start asking a dead address again.
+    """
+    boundary = oldest_month_kept(today, config.feed_health_keep_months)
+    deleted: list[str] = []
+    kept: list[str] = []
+    freed = 0
+
+    for shard in month_shards(state_dir / ledger.HEALTH_DIRNAME):
+        if shard.stem >= boundary:
+            kept.append(shard.stem)
+            continue
+        deleted.append(shard.stem)
+        freed += shard.stat().st_size
+        if not dry_run:
+            shard.unlink()
+
+    return FeedHealthPruneResult(
+        deleted=tuple(deleted),
+        bytes_freed=freed,
+        kept=tuple(kept),
         dry_run=dry_run,
     )
 
