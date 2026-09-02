@@ -21,7 +21,7 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 import feedparser
 
 from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
 from idhazh.sanitize import sanitize
@@ -210,6 +210,57 @@ def live(feeds: list[FeedDef], vertical_id: str) -> list[FeedDef]:
     ]
 
 
+def settled(history: Iterable[FeedHealthRow]) -> list[FeedHealthRow]:
+    """One result per feed per run, in the order the rows arrived.
+
+    A feed is read once in a run, so two rows under one `(run_id, feed_id)` are
+    two accounts of one event and counting both counts a run twice. They exist
+    because a second attempt at a run cannot see what the first attempt pushed
+    after its checkout, and the union merge keeps both lines.
+
+    `contracts.feed_health.supersedes` picks the winner, and `settled` in
+    `frontend/src/lib/feed-health.ts` is the same reduction over the same rows.
+    The console and the run have to agree about how many times a feed failed, or
+    the page contradicts the run that produced it.
+    """
+    kept: dict[tuple[str, str], FeedHealthRow] = {}
+    for row in history:
+        key = (row.run_id, row.feed_id)
+        held = kept.get(key)
+        if held is None or supersedes(row, held):
+            kept[key] = row
+    return list(kept.values())
+
+
+def streak(rows: list[FeedHealthRow]) -> int:
+    """Failures in a row, ending at the newest read. `rows` are oldest run first.
+
+    Four kinds of evidence and three effects, which is the whole availability
+    rule:
+
+    - blocked, permanent, transient, and a success carrying no entries: one
+      strike each. An empty answer costs the digest exactly what a refusal does.
+    - a robots result and a rest: neither adds a strike nor clears one. Neither
+      one asked the feed whether it still works.
+    - a read that carried entries: the streak is over. The endpoint answers now,
+      and the ledger keeps every old failure for the reliability record, so
+      nothing is forgotten by clearing it.
+
+    Anything this cannot read as evidence ends the streak as well, so an outcome
+    added later leaves a feed asked rather than silently rested.
+
+    `streak` in `frontend/src/lib/feed-health.ts` is this loop in TypeScript.
+    """
+    strikes = 0
+    for row in reversed(rows):
+        if row.preserves:
+            continue
+        if not row.failing:
+            break
+        strikes += 1
+    return strikes
+
+
 def resting(history: Iterable[FeedHealthRow], *, after_failures: int) -> frozenset[str]:
     """Feeds this run should not ask, decided only from what earlier runs recorded.
 
@@ -228,7 +279,7 @@ def resting(history: Iterable[FeedHealthRow], *, after_failures: int) -> frozens
     inventing a second answer.
     """
     by_feed: dict[str, list[FeedHealthRow]] = {}
-    for row in history:
+    for row in settled(history):
         by_feed.setdefault(row.feed_id, []).append(row)
     return frozenset(feed_id for feed_id, rows in by_feed.items() if _rests(rows, after_failures))
 
@@ -243,11 +294,4 @@ def _rests(rows: list[FeedHealthRow], after_failures: int) -> bool:
     if skips >= after_failures:
         return False
 
-    strikes = 0
-    for row in reversed(rows):
-        if not row.attempted:
-            continue  # A rest is transparent: it neither adds a strike nor clears one.
-        if not row.failing:
-            break
-        strikes += 1
-    return strikes >= after_failures
+    return streak(rows) >= after_failures

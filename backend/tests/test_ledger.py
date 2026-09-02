@@ -505,6 +505,11 @@ def test_no_committed_ledger_repeats_a_key_it_says_makes_a_row_unique() -> None:
     item-health keys, because two workflow runs computed that id and neither
     could see what the other had pushed. Summing that run's reading clock over
     the rows gave 19,305.8 seconds against 11,810.3 - 63 percent high.
+
+    Feed-health joined the set on 2026-09-02 and arrived dirtiest of the four:
+    6,577 rows over 6,022 distinct `(run_id, feed_id)` keys, so 555 rows were a
+    second account of an event already on record, and 37 of those keys held rows
+    that disagreed about what the feed did.
     """
     repeated: list[str] = []
     state = REPO_ROOT / "state"
@@ -563,11 +568,12 @@ def test_the_pass_leaves_a_ledger_it_cannot_key_alone(tmp_path: Path) -> None:
 
 
 def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> None:
-    """`state/seen/` and `state/feed-health/` are absent on purpose, not by omission.
+    """`state/seen/` is absent on purpose, not by omission.
 
-    Neither declares a key. A second sight is folded by `load_seen` keeping the
-    earliest, and a feed's row is one verdict per feed per run - which two runs
-    are entitled to write twice, and which nothing here may collapse.
+    It declares no key at all: a second sight is folded by `load_seen` keeping
+    the earliest, so a repeat costs bytes and never moves an age. Everything
+    else here says what makes two of its rows one record, and everything that
+    says so is settled.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
@@ -576,13 +582,92 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
 
-    keyed = {path.name: key for path, key in ledger.keyed_paths(tmp_path)}
+    keyed = [
+        (path.relative_to(tmp_path).as_posix(), key) for path, key in ledger.keyed_paths(tmp_path)
+    ]
 
-    assert keyed == {
-        "runtime-counters.csv": ledger.RUNTIME_COUNTERS_KEY,
-        "feed-retirements.csv": ledger.FEED_RETIREMENT_KEY,
-        f"{DATE[:7]}.csv": ledger.ITEM_HEALTH_KEY,
-    }
+    assert keyed == [
+        ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
+        ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
+        (f"feed-health/{DATE[:7]}.csv", ledger.FEED_HEALTH_KEY),
+        (f"item-health/{DATE[:7]}.csv", ledger.ITEM_HEALTH_KEY),
+    ]
+
+
+# --- One feed, one run, one result ------------------------------------------
+
+
+def account(outcome: FetchOutcome, *, items: int = 0, at: str = "06:00:00") -> FeedHealthRow:
+    """One attempt's account of one run's read of one feed. Always the same key."""
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id=RUN_ID,
+        date=DATE,
+        feed_id="example-feed",
+        checked_at=f"{DATE}T{at}Z",
+        outcome=outcome,
+        status=200,
+        items=items,
+    )
+
+
+def health_rows(state: Path) -> list[FeedHealthRow]:
+    return ledger.load_health(state, today=DATE, within_days=1)
+
+
+def test_a_second_attempt_at_one_run_leaves_one_row_per_feed(tmp_path: Path) -> None:
+    """The write-side half. A run is one read of one feed, however often it is run.
+
+    A second attempt at one execution appends against the file it checked out,
+    which is frozen at the commit the run was triggered at - so the filter that
+    would have caught this cannot see the first attempt's row until the merge.
+    Settling straight after the append is what stops the shard the same job
+    pushes from already holding both.
+    """
+    assert ledger.append_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT)]) == 1
+    retry = [account(FetchOutcome.TRANSIENT, at="07:00:00")]
+    assert ledger.append_health(tmp_path, DATE, retry) == 0
+
+    rows = health_rows(tmp_path)
+    assert len(rows) == 1
+    assert rows[0].checked_at == f"{DATE}T07:00:00Z"
+    assert ledger.repeated_keys(ledger.health_path(tmp_path, DATE), ledger.FEED_HEALTH_KEY) == {}
+
+
+def test_the_attempt_that_carried_articles_wins_however_late_it_ran(tmp_path: Path) -> None:
+    """A retry that got nothing describes the retry, not the feed.
+
+    This is the one ledger here that cannot settle by arrival order. Keeping the
+    first row would leave a failure on record for a run that recovered; keeping
+    the last would throw the recovery away when the retry came back empty.
+    """
+    ledger.append_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
+    ledger.append_health(tmp_path, DATE, [account(FetchOutcome.OK, items=9, at="07:00:00")])
+    assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 9)]
+
+    later = tmp_path / "later"
+    ledger.append_health(later, DATE, [account(FetchOutcome.OK, items=9, at="06:00:00")])
+    ledger.append_health(later, DATE, [account(FetchOutcome.OK, items=0, at="07:00:00")])
+    assert [(row.outcome, row.items) for row in health_rows(later)] == [(FetchOutcome.OK, 9)]
+
+
+def test_the_settlement_reads_the_union_a_merge_leaves_behind(tmp_path: Path) -> None:
+    """The post-merge half, on the shape `merge=union` really produces.
+
+    `state/**/*.csv` never conflicts - it concatenates - so a settled shard comes
+    back repeated with no marker to notice. The pass has to be unconditional,
+    and it has to pick the same winner it picked before the merge.
+    """
+    path = ledger.health_path(tmp_path, DATE)
+    ledger.append_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
+    theirs = account(FetchOutcome.OK, items=4, at="07:00:00").csv_row()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(",".join(theirs[name] for name in FeedHealthRow.csv_columns()) + "\n")
+    assert len(ledger.repeated_keys(path, ledger.FEED_HEALTH_KEY)) == 1
+
+    assert ledger.drop_repeated_rows(path, ledger.FEED_HEALTH_KEY) == 1
+    assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 4)]
+    assert ledger.drop_repeated_rows(path, ledger.FEED_HEALTH_KEY) == 0
 
 
 def test_the_whole_state_tree_settles_in_one_call(tmp_path: Path) -> None:

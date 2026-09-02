@@ -11,6 +11,7 @@ and `feedparser` parses a string with no network of its own.
 
 from __future__ import annotations
 
+import csv
 import re
 from collections import Counter
 from dataclasses import replace
@@ -22,7 +23,7 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from idhazh import config
 from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.base import TIMESTAMP_PATTERN, derive_url_key
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome, RobotsOutcome
 from idhazh.contracts.run_plan import PlannedItem, TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
@@ -34,7 +35,9 @@ from idhazh.discover import (
     live,
     resting,
     salience_urls,
+    settled,
     split_blocked,
+    streak,
 )
 from idhazh.rank import (
     ITEM_ID_DIGITS,
@@ -451,6 +454,180 @@ def test_a_source_that_came_back_is_live_again_immediately() -> None:
 def test_one_sick_feed_never_rests_a_healthy_one() -> None:
     history = health("transient", "transient", "transient") + health("ok", "ok", feed_id="lab-blog")
     assert resting(history, after_failures=REST_AFTER) == {"trade-press"}
+
+
+# --- The evidence table: eight kinds of row, three effects ------------------
+
+
+def only(outcome: str, *, items: int = 0, robots: RobotsOutcome | None = None) -> FeedHealthRow:
+    """One row of one kind, so a case names the evidence and nothing else."""
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id="2026-08-23-9",
+        date="2026-08-23",
+        feed_id="trade-press",
+        checked_at="2026-08-23T06:00:00Z",
+        outcome=FetchOutcome(outcome),
+        items=items,
+        robots_outcome=robots,
+    )
+
+
+@pytest.mark.parametrize(
+    ("row", "adds", "clears"),
+    [
+        (only("ok", items=3), False, True),
+        (only("ok", items=0), True, False),
+        (only("blocked"), True, False),
+        (only("permanent"), True, False),
+        (only("transient"), True, False),
+        (only("robots_denied", robots=RobotsOutcome.DENIED), False, False),
+        (only("robots_denied", robots=RobotsOutcome.UNREACHABLE), False, False),
+        (only("skipped"), False, False),
+    ],
+)
+def test_every_kind_of_evidence_adds_preserves_or_clears(
+    row: FeedHealthRow, adds: bool, clears: bool
+) -> None:
+    """The whole availability rule, one row at a time.
+
+    Three effects and eight kinds of evidence, driven against a streak of two so
+    each arm is visible: adding makes it three, clearing makes it nought, and
+    preserving leaves it at two. A robots result we could not read is here beside
+    a refusal because both are written as `robots_denied` - the difference is in
+    `robots_outcome`, and availability does not care which it was.
+    """
+    before = health("transient", "transient")
+    assert streak(before) == 2
+    after = streak([*before, row])
+    assert after == (3 if adds else 0 if clears else 2)
+
+
+def test_a_refusal_never_launders_a_record() -> None:
+    """The half of the robots rule that is not "no strike".
+
+    A refusal used to end the streak, so a dead address behind a site that says
+    no would have had its record wiped on the run after every failure and could
+    never reach a rest. It carries no evidence about the address either way, so
+    the count picks up where it left off.
+    """
+    assert rests("transient", "transient", "transient", "robots_denied")
+    assert not rests("transient", "transient", "robots_denied", "ok")
+
+
+# --- One result per feed per run --------------------------------------------
+
+
+def account(
+    run: int, outcome: str, *, items: int = 0, at: str = "06:00:00", feed_id: str = "trade-press"
+) -> FeedHealthRow:
+    """One attempt's account of one run's read of one feed."""
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id=f"2026-08-23-{run}",
+        date="2026-08-23",
+        feed_id=feed_id,
+        checked_at=f"2026-08-23T{at}Z",
+        outcome=FetchOutcome(outcome),
+        items=items,
+    )
+
+
+def test_a_run_written_twice_is_one_event() -> None:
+    """Two attempts at one run are two accounts, not two failures.
+
+    This is the whole defect: a job checked out at its trigger commit cannot see
+    what a sibling attempt pushed afterwards, so it appends its own row and the
+    union merge keeps both. Counted raw, one bad run reaches a five-failure rest
+    in three.
+    """
+    twice = [account(n, "transient") for n in (1, 1, 2, 2, 3, 3)]
+    # Counted row by row, three bad runs read as six and clear a five-strike rest.
+    assert streak(twice) == 6
+    # Settled, they are the three runs they were.
+    assert len(settled(twice)) == 3
+    assert streak(settled(twice)) == 3
+    # `resting` settles before it counts, so a rest is decided on runs, not rows.
+    assert resting(twice, after_failures=5) == frozenset()
+
+
+def test_the_attempt_that_carried_articles_wins_however_late_it_ran() -> None:
+    """A retry that got nothing describes the retry, not the feed."""
+    delivered = account(1, "ok", items=9, at="06:00:00")
+    empty_retry = account(1, "ok", items=0, at="07:00:00")
+    assert settled([delivered, empty_retry]) == [delivered]
+    assert settled([empty_retry, delivered]) == [delivered]
+
+
+def test_two_accounts_that_agree_settle_on_the_later_look() -> None:
+    """Neither carried entries, so the row that saw the address last is the answer."""
+    early = account(1, "transient", at="06:00:00")
+    late = account(1, "permanent", at="08:00:00")
+    assert settled([early, late]) == [late]
+    assert settled([late, early]) == [late]
+
+
+def test_a_tie_leaves_the_row_already_on_record() -> None:
+    """Same clock, same answer: nothing to choose, so nothing is chosen."""
+    first = account(1, "transient", at="06:00:00")
+    second = account(1, "blocked", at="06:00:00")
+    assert settled([first, second]) == [first]
+
+
+def test_settling_never_folds_two_different_runs_or_two_different_feeds() -> None:
+    """The key is the run and the feed. A run is entitled to its own row."""
+    rows = [
+        account(1, "transient"),
+        account(2, "transient"),
+        account(1, "transient", feed_id="lab-blog"),
+    ]
+    assert settled(rows) == rows
+
+
+def test_settling_a_clean_history_changes_nothing() -> None:
+    """The ordinary case, and the one a no-op has to stay a no-op on."""
+    clean = health("ok", "transient", "skipped", "ok")
+    assert settled(clean) == clean
+
+
+# --- The oracle: one fixture, two languages ---------------------------------
+
+ORACLE = FIXTURES_DIR / "feed-health" / "one-result-per-run.csv"
+
+
+def oracle_rows() -> list[FeedHealthRow]:
+    """The fixture `frontend/tests/console-feeds.spec.ts` opens as well.
+
+    One feed over seven runs, written down nine times: run 2 recorded twice by
+    two attempts that both failed, run 3 recorded twice by an attempt that
+    carried six articles and a retry that carried none, then a refusal, a rest
+    and a robots.txt we could not read.
+
+    Both reducers read this file and both have to reach the same three numbers.
+    A second copy of the rows in each language is a fixture that drifts, and a
+    page that quietly disagrees with the run that produced it is the whole
+    defect this row exists to close.
+    """
+    with ORACLE.open("r", encoding="utf-8", newline="") as handle:
+        return [FeedHealthRow.from_csv_row(row) for row in csv.DictReader(handle)]
+
+
+def test_the_oracle_reduces_nine_rows_to_seven_events() -> None:
+    rows = oracle_rows()
+    assert len(rows) == 9
+    effective = settled(rows)
+    assert len(effective) == 7
+    assert len({row.run_id for row in effective}) == 7
+    third = next(row for row in effective if row.run_id == "2026-08-30-3")
+    assert third.items == 6, "the attempt that carried articles is the one kept"
+
+
+def test_the_oracle_counts_one_strike_and_two_without_the_settlement() -> None:
+    """Counted row by row, the empty retry of run 3 is a strike no run suffered."""
+    rows = oracle_rows()
+    assert streak(rows) == 2
+    assert streak(settled(rows)) == 1
+    assert resting(rows, after_failures=5) == frozenset()
 
 
 # --- The day's order --------------------------------------------------------

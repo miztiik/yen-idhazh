@@ -293,11 +293,21 @@ jobs:
       # article has, and a feed we never recorded is a feed we cannot quarantine.
       # A bad day is exactly the day worth measuring, so waiting for a successful
       # publish would lose the records that matter most.
+      #
+      # `append_health` settles the shard it wrote, but against the checkout,
+      # which is frozen at the commit this run was triggered at - so a SECOND
+      # ATTEMPT at this same plan cannot see the rows the first attempt pushed
+      # and appends its own verdict for every feed. The union merge then keeps
+      # both, and one bad run reads as two failures.
+      # `DROP_REPEATED_ROWS_COMMAND` is the half that runs after the merge, on
+      # the merged file - the only place the two attempts have ever been
+      # together.
       - name: Commit what the plan saw
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing new to record"
           PUSH_FAILED_MESSAGE: "could not push what the plan saw after three attempts"
+          DROP_REPEATED_ROWS_COMMAND: "python -m idhazh dedupe-ledgers"
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/seen state/feed-health

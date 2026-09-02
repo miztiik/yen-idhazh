@@ -97,6 +97,20 @@ FAILING_OUTCOMES: frozenset[FetchOutcome] = frozenset(
     {FetchOutcome.BLOCKED, FetchOutcome.PERMANENT, FetchOutcome.TRANSIENT}
 )
 
+#: Outcomes that carry no evidence about the address either way, so a streak of
+#: failures runs straight through them. A rest is a choice of ours and a robots
+#: result is a question about permission - neither one asked the feed whether it
+#: still works, so neither may add a strike and neither may clear one. Clearing
+#: on a refusal is the sharper error: it would let a dead address launder its
+#: record every time the site said no.
+#:
+#: `ROBOTS_DENIED` covers both robots answers, because `fetch.refused` writes it
+#: for a refusal and for a robots.txt we could not read. Which of the two it was
+#: is in `robots_outcome`, and availability does not care.
+PRESERVING_OUTCOMES: frozenset[FetchOutcome] = frozenset(
+    {FetchOutcome.ROBOTS_DENIED, FetchOutcome.SKIPPED}
+)
+
 
 class FeedHealthRow(Contract):
     """One feed, one run, one row."""
@@ -212,6 +226,25 @@ class FeedHealthRow(Contract):
         return self.outcome is not FetchOutcome.SKIPPED
 
     @property
+    def answered(self) -> bool:
+        """Did the address itself come back carrying entries?
+
+        The one result that clears a streak, and the one that wins a repeat.
+        `attempted` says we asked and `failing` says the answer counted against
+        the feed; neither of them says the feed delivered, which is what coming
+        back means.
+        """
+        return self.outcome is FetchOutcome.OK and self.items > 0
+
+    @property
+    def preserves(self) -> bool:
+        """Does a streak of failures run through this row untouched?
+
+        True for a rest and for a robots result. See `PRESERVING_OUTCOMES`.
+        """
+        return self.outcome in PRESERVING_OUTCOMES
+
+    @property
     def failing(self) -> bool:
         """Did this read count against the feed?
 
@@ -260,3 +293,29 @@ class FeedHealthRow(Contract):
         and come back from the ledger as the string `""`.
         """
         return tuple(name for name, field in cls.model_fields.items() if field.default is None)
+
+
+def supersedes(later: FeedHealthRow, kept: FeedHealthRow) -> bool:
+    """Does `later` replace `kept` as this run's one result for this feed?
+
+    One feed read once in one run is one event, so two rows under one
+    `(run_id, feed_id)` are two accounts of the same event and one of them has
+    to win. They exist because a second attempt at a run cannot see what the
+    first attempt pushed after its checkout, appends its own answer, and the
+    union merge keeps both lines.
+
+    A read that carried entries wins, whichever row is newer. The attempt that
+    got articles is the attempt that happened, and a later empty retry against
+    an address that had just delivered describes the retry rather than the feed.
+    Between two rows that agree on that, the later `checked_at` wins, because it
+    saw the address last. A tie leaves the row already on record, which is the
+    rule every other ledger here settles by.
+
+    Both readers of this ledger run this: `discover.settled` before the strike
+    count, and `settled` in `frontend/src/lib/feed-health.ts` before the console
+    draws it. Two rules over one file is how a page contradicts the run that
+    produced it.
+    """
+    if later.answered != kept.answered:
+        return later.answered
+    return later.checked_at > kept.checked_at

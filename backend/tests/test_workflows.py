@@ -334,11 +334,14 @@ COMMIT_BASE_ENV: Final = frozenset(
 # settings that make the loop rebuild instead of merge - and only assemble
 # commits rendered assets, so only assemble drops a raced one.
 COMMIT_SCRIPT_ENV: Final = {
-    "plan": COMMIT_BASE_ENV,
-    # The one recording step whose ledgers declare a key. Its filters read a
-    # checkout frozen at the commit this run was triggered at, so a second
-    # attempt cannot see the first attempt's pushed rows and the union keeps
-    # both - which is what the post-merge pass is for.
+    # The plan job records one verdict per feed per run. A second attempt at one
+    # plan writes its own verdict for every feed, against a checkout that cannot
+    # see the first attempt's push, so the union keeps both and one bad run reads
+    # as two failures.
+    "plan": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
+    # Its filters read a checkout frozen at the commit this run was triggered at,
+    # so a second attempt cannot see the first attempt's pushed rows and the
+    # union keeps both - which is what the post-merge pass is for.
     "work": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
     "assemble": COMMIT_BASE_ENV
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
@@ -1231,6 +1234,15 @@ def _run_commit_script(
 ) -> subprocess.CompletedProcess[str]:
     bash = _bash()
     assert bash is not None
+    # The shipped command resolves `state/` off the installed package, which
+    # under a test is this repository rather than the temporary clone. Running it
+    # unchanged would settle the developer's own committed ledgers and report
+    # nothing, so a test that forgets `_settled_in_the_clone` fails here by name.
+    settle = settings.get("DROP_REPEATED_ROWS_COMMAND", "")
+    assert SETTLE_STAND_IN.as_posix() in settle or not settle, (
+        "pass DROP_REPEATED_ROWS_COMMAND through _settled_in_the_clone: "
+        "the shipped one would settle this repository's own state/"
+    )
     return subprocess.run(
         [bash, COMMIT_SCRIPT.as_posix(), *staged_paths],
         cwd=runner,
@@ -2555,6 +2567,7 @@ def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) 
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
     before = _git(origin, env, "rev-parse", "main").strip()
 
     result = _run_commit_script(runner, env, staged_paths, settings)
@@ -2575,6 +2588,7 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
     _write(runner / "runner-noise.txt", "dirty\n")
     _write(runner / "leftover.log", "kept\n")
+    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
@@ -2610,6 +2624,7 @@ def test_a_racing_append_to_the_same_ledger_unions_instead_of_conflicting(
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     _race(tmp_path, env, f"{staged_paths[0]}/ledger.csv", "header\nrow-0\ntheirs\n")
     _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nours\n")
+    settings = _settled_in_the_clone(settings, f"{staged_paths[0]}/ledger.csv", "header")
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
@@ -2644,6 +2659,7 @@ def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path)
     _git(other, env, "commit", "-m", "retire the ledger")
     _git(other, env, "push", "origin", "main")
     _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nours\n")
+    settings = _settled_in_the_clone(settings, f"{staged_paths[0]}/ledger.csv", "header")
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
