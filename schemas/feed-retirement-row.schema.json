@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "RetirementCause": {
+      "description": "Why an address was retired. One member, and adding a second is a design change.\n\nRetiring on anything softer than `410 Gone` eventually removes unique\nprimary or regional reporting over a bad week, and nothing here can put it\nback without a person noticing it went.",
+      "enum": [
+        "http_410"
+      ],
+      "title": "RetirementCause",
+      "type": "string"
+    }
+  },
+  "$id": "feed-retirement-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the feed, the endpoint, the day, the deciding run, the cause and the runs that evidenced it.",
+      "version": "2026-09-02T20:00",
+      "why": "Only a person could stop the pipeline asking a dead address, so a feed the server reported permanently gone was requested on every run until somebody edited curated config. The record has to live outside config/sources.json: a generated commit may not rewrite a file a person curates."
+    }
+  ],
+  "description": "One retired endpoint, one row.",
+  "properties": {
+    "cause": {
+      "$ref": "#/$defs/RetirementCause"
+    },
+    "decided_by_run": {
+      "description": "The run that read the evidence and wrote this row.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Decided By Run",
+      "type": "string"
+    },
+    "endpoint_key": {
+      "description": "The address that was retired, as `feed_health.derive_endpoint_key` spells it.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Endpoint Key",
+      "type": "string"
+    },
+    "evidence_run_ids": {
+      "description": "The distinct runs whose results justify the retirement, oldest first. Space-separated in the CSV cell. Recorded rather than counted, so the decision can be checked against the ledger that produced it.",
+      "items": {
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Run Ids",
+      "type": "array"
+    },
+    "feed_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Feed Id",
+      "type": "string"
+    },
+    "retired_on": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Retired On",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-02T20:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "feed_id",
+    "endpoint_key",
+    "retired_on",
+    "decided_by_run",
+    "cause",
+    "evidence_run_ids"
+  ],
+  "title": "FeedRetirementRow",
+  "type": "object",
+  "version": "2026-09-02T20:00"
+}

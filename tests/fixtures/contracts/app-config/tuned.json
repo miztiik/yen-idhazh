@@ -12,7 +12,10 @@
     "similarity_floor": 0.4
   },
   "collect": {
+    "availability_rest_runs": 3,
+    "availability_strikes_before_rest": 3,
     "blocked_url_markers": [],
+    "feed_http_410_runs_before_retirement": 4,
     "front_page_bonus": 0.25,
     "max_age_hours": 24.0,
     "max_future_hours": 6.0,
@@ -22,6 +25,8 @@
     "recency_half_life_hours": 18.0,
     "recency_weight": 0.6,
     "repetition_weight": 1.5,
+    "robots_denied_recheck_runs": 2,
+    "robots_unreachable_recheck_runs": 1,
     "seen_window_days": 90,
     "settled_failure_codes": [
       "robots_denied",
@@ -35,6 +40,7 @@
       "too_short",
       "unsupported_form"
     ],
+    "source_yield_min_complete_days": 45,
     "tier_weights": {
       "community": 0.2,
       "institution": 1.0,
