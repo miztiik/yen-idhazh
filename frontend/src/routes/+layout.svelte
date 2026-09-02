@@ -1,11 +1,29 @@
 <script lang="ts">
 	import '../styles/app.css';
 	import { afterNavigate } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { restoreAnchor } from '$lib/assist/day';
+	import { startOfflineReader } from '$lib/offline';
+	import { OFFLINE_VERSION } from '$lib/offline.generated';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import SiteHeader from '$lib/components/SiteHeader.svelte';
+	import { onMount } from 'svelte';
 
 	let { data, children } = $props();
+
+	// The one place this site names `serviceWorker`. It starts the offline
+	// reader, which is what lets a day already opened be read again with no
+	// network - or retires it, when the committed switch says every worker at
+	// this version must go. Nothing waits on it: the page is already rendered
+	// when this runs, and a browser that refuses leaves the site as it was.
+	onMount(() => {
+		void startOfflineReader({
+			worker: `${base}/service-worker.js`,
+			switchFile: `${base}/service-worker-kill.json`,
+			version: OFFLINE_VERSION,
+			isDev: import.meta.env.DEV
+		});
+	});
 
 	// A browser honours a fragment once, at load, and a client-side navigation
 	// is not a load. Doing it here rather than per page is what makes a deep

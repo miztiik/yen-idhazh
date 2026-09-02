@@ -83,11 +83,42 @@ test.describe('the web app manifest', () => {
 });
 
 test.describe('what installability may not become', () => {
-	test('nothing in the source touches notifications or push', () => {
-		const offenders = sourceFiles().filter((path) =>
-			/\bNotification\b|\bPushManager\b|\bserviceWorker\b/.test(readFileSync(path, 'utf8'))
-		);
+	test('nothing in the source touches notifications, push or background sync', () => {
+		// The site ships a service worker since 2026-09-02, so this grep widened
+		// rather than relaxed. A worker is the context in which every one of these
+		// names becomes available and every one of them starts to sound
+		// reasonable, and the ban is asserted rather than promised for exactly
+		// that reason. `sourceFiles()` walks `src/`, so `src/service-worker.ts` is
+		// inside it.
+		const banned =
+			/\bNotification\b|\bshowNotification\b|\bPushManager\b|\bpushManager\b|\bPushSubscription\b|\bperiodicSync\b|\bPeriodicSyncManager\b|\bSyncManager\b|registration\.sync\b/;
+		const offenders = sourceFiles().filter((path) => banned.test(readFileSync(path, 'utf8')));
 		expect(offenders, 'the reader decides when to read - CLAUDE.md section 0a').toEqual([]);
+	});
+
+	test('exactly one file registers the worker, and it is not the worker', () => {
+		// `serviceWorker` used to be banned outright, which was the right rule
+		// while there was no worker. What replaced it is narrower and says more:
+		// the registration lives in one module a reviewer can read in full, so
+		// "nothing else in this site reaches for the worker API" is a fact rather
+		// than a hope.
+		const naming = sourceFiles()
+			.filter((path) => /\bnavigator\.serviceWorker\b/.test(readFileSync(path, 'utf8')))
+			.map((path) => path.split(/[\\/]/).slice(-2).join('/'));
+		expect(naming, 'the worker API is reached for in more than one place').toEqual([
+			'lib/offline.ts'
+		]);
+	});
+
+	test('the worker fetches nothing that is not our own origin', () => {
+		const source = readFileSync(resolve(process.cwd(), 'src', 'service-worker.ts'), 'utf8');
+		// Rule #1: a worker runs on the reader's device over files we already
+		// serve. An absolute URL in it would be the one way that stops being true,
+		// and the guard that keeps it true is read back here rather than trusted.
+		expect(source.match(/https?:\/\/[^\s'"`]+/g) ?? [], 'the worker names an origin').toEqual([]);
+		expect(source, 'the worker does not check the origin it is answering for').toContain(
+			'url.origin !== sw.location.origin'
+		);
 	});
 
 	test('the manifest asks for no messaging identity', () => {

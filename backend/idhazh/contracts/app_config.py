@@ -1619,6 +1619,50 @@ class UiConfig(Model):
             "story, which is the state this knob exists to avoid."
         ),
     )
+    offline_version: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "The version the offline reader carries. The site ships a service worker so "
+            "a day already opened can be read again with no network, and this number is "
+            "how a build says which worker it is. It is compared against "
+            "`offline_retired_through`, and nothing else reads it. Raise it by one to "
+            "bring the worker back after a retirement; leave it alone otherwise. Read "
+            "by the build alone, like `shell_seed_items`, so it never rides to a reader."
+        ),
+    )
+    offline_retired_through: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "The switch that turns the offline reader off and cleans up after it. Every "
+            "worker whose `offline_version` is at or below this number unregisters "
+            "itself and deletes every cache it owns, the first time it activates. Zero "
+            "retires none, because the lowest version a worker can carry is one. This "
+            "is the one thing a worker outliving the tab needs and an ordinary page "
+            "does not: a way out that does not depend on the worker being well "
+            "(docs/concepts/ui-shell.md). It is published as `service-worker-kill.json` "
+            "at the site root, so a retirement can be pushed as one file. Read by the "
+            "build alone, so it never rides to a reader."
+        ),
+    )
+    offline_days_kept: int = Field(
+        default=14,
+        ge=1,
+        le=366,
+        description=(
+            "How many opened days the offline reader keeps on the reader's device. The "
+            "worker caches a day only after that day has been fetched once - it never "
+            "prefetches a day nobody asked for - and this is what stops the kept set "
+            "growing with the archive. Fourteen is two weeks, which is twice the seven "
+            "days of read marks a reader already keeps. Measured 2026-09-02 on Intel "
+            "Core i7-1265U / Windows 11 / node 24.12.0 over the 12 served days: a day "
+            "payload is 8,231 to 1,373,593 bytes uncompressed, median 727,622, so the "
+            "full fourteen is about 10 MB at the median and about 19 MB at the largest. "
+            "Arithmetic over committed payloads, so the spread is zero by construction. "
+            "Read by the build alone, so it never rides to a reader."
+        ),
+    )
 
     @field_validator("theme_default", mode="before")
     @classmethod
@@ -1843,6 +1887,27 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02T18:00",
+            change=(
+                "ui.offline_version, ui.offline_retired_through and ui.offline_days_kept "
+                "added, defaulting to 1, 0 and 14. The shape is `UiConfig`, which this "
+                "document and `AppearanceConfig` share, so both schemas moved together. "
+                "Additive with defaults, so a config written before today still "
+                "validates."
+            ),
+            why=(
+                "The site ships a service worker, so a day a reader has already opened "
+                "can be read again with no network. A worker is the only code this "
+                "project ships that outlives the tab, so the switch that turns it off "
+                "is a contract rather than a code edit: `offline_retired_through` "
+                "retires every worker at or below the version it names, and a retired "
+                "worker unregisters itself and deletes every cache it owns. "
+                "`offline_days_kept` bounds what the worker keeps, because a cache that "
+                "grows with the archive is the failure that argued against caching days "
+                "at all (Rule #6, docs/concepts/ui-shell.md)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-02T16:00",
             change=(
