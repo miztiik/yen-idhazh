@@ -302,7 +302,10 @@ npm run build:canary
 npm run test:browser
 ```
 
-432 tests in 28 files (2026-08-30), and nothing skips itself any more. The
+954 tests in 73 files (2026-09-02): 943 passed and 11 skipped, in 19.2 minutes
+on an i7-1265U. Every skip reads a fact the fixture owns rather than a locator
+count - the canary day is eight stories on one desk, so it cannot fill a leading
+block and it never fetches. The
 failure surface has a file of its own, `console-failure.spec.ts`, split by what
 the fixture can reach: the canary records no failure at all, so the two facts
 that need one - a denominator walked down the pipeline, and a rate withheld
@@ -311,6 +314,27 @@ state the fixture does reach is driven in the browser through the controls an
 operator has. A hundred and four of them are pure-function tests over
 `frontend/src/lib/charts/`, run in Node by the same runner. There is no separate
 frontend unit-test runner, so a pure module proves itself here.
+
+**One spec asks a question the canary day cannot answer, and says so.**
+`reading-page.spec.ts` reads the reading surface whole - every reader route at
+360, 801 and 1536 CSS px in both themes, the time rail against the item's
+eyebrow, the aside against the sticky filter panel, and a day whose stories are
+broken at the network. Four of its arms need a day longer than
+`ui.shell_seed_items`, because a document that already carries its whole day
+never fetches, and the canary is eight stories against a seed of fifteen. They
+skip here on a fact the served payload owns and run against the real digest:
+
+```powershell
+npm run build
+npx playwright test tests/reading-page.spec.ts tests/layout-overflow.spec.ts
+```
+
+Take that arm before `build:canary`, which overwrites the same `build/`
+directory. **Two of its arms are expected to fail and are annotated
+`test.fail()`**, because the composed page has two defects nobody has decided
+how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-the-composed-page-gets-wrong-2026-09-02)).
+An expected failure turns the suite red the day it starts passing, which is
+when the annotation comes off.
 
 **A component with no call site proves itself here too.** A shared component
 lands before the sections that render it, so the build tree-shakes it away and

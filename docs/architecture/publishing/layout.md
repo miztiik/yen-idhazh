@@ -30,7 +30,7 @@ state/scores/<YYYY-MM>.csv                              the ledger - one row per
 /<YYYY-MM-DD>/<vertical>/  that day, one vertical - a projection        canonical
 /<YYYY-MM-DD>/#<item id>   an item anchor
 /archive/                  every surviving day                          moving
-/evals/                    the score dashboard                          moving
+/evals/                    a signpost to /console/, where the scores went
 /console/                  the run-health dashboard                     moving
 ```
 
@@ -407,6 +407,32 @@ Almost all of that is the rate rather than the level: the 18.6 MB taken off the 
 **The lever named here has now been pulled, and it moved the date a long way.** The prerendered dated route trees were 50,598,258 bytes and 39.5 percent of the site, and every one was a document a reader who opens some other day never reads. Five of the six a day were topic routes carrying the whole day, and those are now a seed. Measured 2026-09-01 on the same instrument that printed the numbers above, `idhazh site-weight` over 11 days and 4,086 items: **the site went 168.6 MB to 101.9 MB and the runway went 130 published days to 231** (96 to 175 to the 800 MB alarm). Both figures charge `assist/` and `_app/` - 65.6 MB, neither of which grows with a day - to the items, so both are floors, and both are worst-case days at `run.safety_ceiling_per_run`. The date to re-measure by is unchanged: an instrument that says a year is exactly the one nobody checks.
 
 **The sixth document a day followed the same day, and the dated trees are done.** `/<date>/` was the last reading route inlining its whole day. Over the 12 committed days and 4,203 items on the same instrument, **the site went 101.7 MB to 88.1 MB and the runway went 238 published days to 279** (180 to 212 to the alarm). Reading the two rows together, the reading routes cost the site 168.6 MB and now cost 88.1, and the runway went 130 published days to 279 - it more than doubled. **Nothing about that removes the cap**, because the two directories that do not shrink are the ones that dominate: `assist/` at 43.2 MB and `_app/` at 22.4 MB are 74.5 percent of what is left, and neither grows with a day, so both are charged to the items and both make the runway a floor. **The next lever is retention (below), and there is no third document trick left to play.**
+
+## What the composed page gets wrong (2026-09-02)
+
+Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both are on a reader's screen today. Both are recorded here rather than fixed, because each needs a decision about what a shipped surface says.
+
+Measured on the 2026-09-01 day, 627 stories, five desks, five leads, built from the committed tree on an i7-1265U with node 24.12.0.
+
+### The dated document counts the stories in its own hand
+
+`/2026-09-01/` prints **"20 stories."** as the first line under the date. The day published **627**. `/2026-09-01/ai/` prints **"15 stories."**. `/` prints 627, correctly, because it is the one reading route that still reassembles the whole day into its document.
+
+Twenty is the seed of fifteen plus the day's five leads, so the sentence is counting the list `DayNotice` was handed rather than the day the page is about. Two things follow, and the second is worse than the first. With script on, the number ticks from 20 to 627 while the reader is looking at it. With script off - which this page is built to survive - it stays at 20 for ever, four lines above a topic row that reads `All 627` on the same screen.
+
+`DigestList` already solved this for the pill count and its own comment names the hazard: a count taken off the list in hand "would print a number that ticks up while the reader watches". It reads `day.verticals`, which is a bounded fact and does not grow with the seed. `DayNotice` still reads `day.items.length`.
+
+What is not obvious, and is why this is not a one-line fix: the same component draws on `/`, on a dated route, on a topic route and on a day that published nothing. A topic route's notice is labelled "About today" and sits above that topic's own stories, so whether it should say the day's 627 or the desk's count is a content decision, not a repair.
+
+### A story's own address only lands while the pager is showing it
+
+`layout.md` publishes `/<YYYY-MM-DD>/#<item id>` as a canonical reader address, and `restoreAnchor` scrolls and focuses it. On the 2026-09-01 day it resolves for **17 of 627** stories.
+
+The stream pages at twelve. The leading block adds its five, whose stories sit at positions 59, 111, 117, 166 and 206 of the reading order, so those five resolve from a cold load. Every other story - 610 of 627 - is not an element on the page when the fragment is read, so the browser does nothing, `restoreAnchor` returns false, and the reader lands at the top of the day with no story focused and no message.
+
+Measured by walking the reading order: positions 0, 5 and 11 resolve; 12, 13, 20, 50, 300 and 626 do not; the page draws 17 items at every one of them.
+
+**This is not the seed-and-fetch migration.** The pager predates it, and the whole day was never in the document either - so this address has never reached past the pager. What the migration changed is who notices: rows 15 and 26 both made a fragment work for the stories they own, which makes the other 610 look like they work too.
 
 ## Retention
 
