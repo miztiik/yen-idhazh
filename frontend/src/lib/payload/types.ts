@@ -81,7 +81,23 @@ export interface DigestRunRef {
 export interface DigestVerticalRef {
 	id: string;
 	display_name: string;
+	/** Every story the desk published, a duplicate the day grouped behind another
+	 * included - that pass unpublishes nothing, so this is the payload's own count
+	 * and not what the default view draws. */
 	count: number;
+	// Why the desk ran what it ran. Absent on every day published before
+	// 2026-09-02, and the three are absent or present together. Absent means
+	// unknown, never 0, which would claim the sources offered the desk nothing.
+	/** Distinct addresses the sources offered this desk, less what the day had
+	 * already published or already failed on. Not an upper bound on `count`: each
+	 * run counts its own pool and the stories accumulate across runs. */
+	considered?: number | null;
+	/** Of those, how many were older than the pipeline's age gate. */
+	too_old?: number | null;
+	/** Some run today found fewer live sources than this desk's floor. Published
+	 * for the operator surfaces; no reading page draws a sentence from it, because
+	 * how many of our feeds answered is a fact about our pipeline. */
+	below_feed_floor?: boolean | null;
 }
 
 /** One of the day's leading stories, and the sentence saying why it leads.

@@ -496,6 +496,20 @@ percent for a two-letter pair. A first keystroke that redraws the page and
 removes almost nothing is work the reader watches for no answer. The ceiling of
 8 is where a field stops narrowing anything a reader would think to type.
 
+`ui.desk_thin_max` (12) is the most stories a desk may publish and still be
+called thin. A thin desk prints one sentence saying how many stories our sources
+offered it and how many were too old to run; every other desk prints nothing,
+because a shortfall sentence under all five is a column of absences pretending
+to be information. Twelve is one page of the stream - what a reader sees before
+the first `Show more` - so a desk under it is a desk they see the whole of at
+once, which is where "is this broken?" starts. Measured 2026-09-02 over the 12
+committed days and 56 desk-days: 7 sit at or below it, 12.5 percent, and the
+record has a gap with nothing between 4 and 12, so any value from 5 to 12 selects
+the same six startup desk-days and 12 adds the seventh. Arithmetic over committed
+payloads, so the spread is zero by construction. It is a knob rather than a
+literal because it decides whether a page speaks, which is not a number a
+component may hold (Rule #6).
+
 `ui.shell_seed_items` (15) is how many of a day's stories a prerendered document
 carries. It is the one knob in this block a browser is never told: the root
 layout inlines the rest of them into every document, and a build-only number put

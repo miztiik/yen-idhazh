@@ -62,6 +62,48 @@ export function splitPills(
 	};
 }
 
+/** A thin desk's shortfall, in the two numbers its sentence needs. */
+export interface DeskShortfall {
+	/** Distinct stories the sources offered this desk today. */
+	offered: number;
+	/** How many of those were too old to run. */
+	tooOld: number;
+}
+
+/** Why this desk is thin, or null where there is nothing worth saying.
+ *
+ * Three clauses, and all three have to hold. A sentence under every desk is a
+ * column of absences pretending to be information, so the rule has to refuse
+ * more often than it fires.
+ *
+ * 1. **The desk is thin** - at or under `thinMax` stories, which is one page of
+ *    the stream. Above it the reader is scrolling, not wondering.
+ * 2. **Something was rejected for age.** With nothing dropped there is no
+ *    reason to name, and "the sources had three stories" is a fact with no
+ *    explanation attached.
+ * 3. **The sources offered more than the desk ran.** `considered` is counted
+ *    per run and the day's stories accumulate across runs, so it is not an
+ *    upper bound on `count` - and a sentence saying the sources offered fewer
+ *    stories than the page is showing reads as a broken number.
+ *
+ * A day published before the counts existed carries none of them, and absent is
+ * unknown rather than zero: it fires nothing.
+ */
+export function deskShortfall(
+	desk: DigestVerticalRef | undefined,
+	thinMax: number
+): DeskShortfall | null {
+	if (!desk) return null;
+	const offered = desk.considered;
+	const tooOld = desk.too_old;
+	if (offered === undefined || offered === null) return null;
+	if (tooOld === undefined || tooOld === null) return null;
+	if (desk.count > thinMax) return null;
+	if (tooOld < 1) return null;
+	if (offered <= desk.count) return null;
+	return { offered, tooOld };
+}
+
 /** The needle a field is really filtering by, or null while it is too short.
  *
  * One letter narrows nothing - measured 2026-09-01 over the 12 committed days

@@ -458,7 +458,20 @@ def build(target: Path, evaluation: EvaluationConfig) -> DigestDay:
         items_failed=0,
         retention_window_months=-1,
         runs=[DigestRunRef(n=1, at=f"{DATE}T06:00:00Z", items_added=len(items))],
-        verticals=[DigestVerticalRef(id="ai", display_name="AI", count=len(items))],
+        # A deliberately starved desk, so the browser suite has the thin-desk
+        # sentence to read. Eight published against forty offered, thirty-one of
+        # them a back catalogue: the proportions a real AI desk showed on
+        # 2026-08-30, when a one-day age gate kept 32.4 percent of it.
+        verticals=[
+            DigestVerticalRef(
+                id="ai",
+                display_name="AI",
+                count=len(items),
+                considered=40,
+                too_old=31,
+                below_feed_floor=False,
+            )
+        ],
         items=items,
         embeddings=embeddings,
     )
