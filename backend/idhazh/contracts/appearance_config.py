@@ -517,6 +517,33 @@ class AppearanceConfig(Contract):
             ),
         ),
         ChangelogEntry(
+            version="2026-09-01T20:00",
+            change=(
+                "digest.archive_recent_days added, defaulting to 7, bounded at 1 and "
+                "31. The shape is `UiConfig`, which this document and `AppConfig` "
+                "share, so both schemas moved together. Additive with a default, so an "
+                "appearance file written before today still validates."
+            ),
+            why=(
+                "The archive listed every published day as a link and had nothing "
+                "bounding it. At the 700 days this archive reaches in two years that "
+                "is a wall of dates a reader has to scan past to get to the stories. "
+                "It is now the newest few days as rows over one disclosure a month "
+                "and one a year before this one, so the list a reader SEES grows "
+                "twelve rows a year instead of 365. How many days stay out is a "
+                "choice a page may not spell (Rule #6), and the ceiling is what makes "
+                "the knob safe: set to 400 it is the wall again. Read by the build "
+                "alone, so it never rides to a reader. What the DOCUMENT costs did not "
+                "fall to nothing and is not claimed to: measured 2026-09-01 on Intel "
+                "Core i7-1265U / Windows 11 / node 24.12.0, over two fixture archives "
+                "of the same 24 months at 700 and 182 published days, gzip -9 of the "
+                "prerendered /archive/ document, the page grew 11.05 bytes a day "
+                "before and 8.0 after - 27.7 percent slower, not flat, because a link "
+                "for every day is what a reader with no script uses to reach one "
+                "(docs/reference/measurements.md)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01T14:00",
             change=(
                 "digest.filter_min_chars added, defaulting to 2. The shape is "

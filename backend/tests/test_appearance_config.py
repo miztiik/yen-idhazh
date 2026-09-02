@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import AppConfig, ThemeChoice
+from idhazh.contracts.app_config import AppConfig, ThemeChoice, UiConfig
 from idhazh.contracts.appearance_config import (
     DARK_CONFIDENCE_RAMP,
     FRAME_CONSOLE_MIN_PX,
@@ -238,6 +238,23 @@ def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() 
     resolved = AppConfig.model_validate(legacy)
     assert resolved.ui.archive_page_size >= 1
     assert resolved.console.chart_width >= 240
+
+
+def test_the_archive_may_not_list_more_than_a_month_of_days_as_rows() -> None:
+    """The bound is the whole reason this knob is allowed to exist.
+
+    `archive_recent_days` is how many days the archive lists as rows of their
+    own before the month disclosures take over. Set to 400 the block is the
+    wall of dates it replaced, and the design decision the row settled is
+    undone by an edit to one line of config. Set to 0 the page loses its only
+    surface that works with no script at all.
+    """
+    for refused in (0, -1, 32, 400):
+        with pytest.raises(ValidationError, match="archive_recent_days"):
+            UiConfig(archive_recent_days=refused)
+    assert UiConfig(archive_recent_days=1).archive_recent_days == 1
+    assert UiConfig(archive_recent_days=31).archive_recent_days == 31
+    assert UiConfig().archive_recent_days == 7
 
 
 def test_the_default_theme_is_the_one_root_carries() -> None:
