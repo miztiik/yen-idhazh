@@ -1,0 +1,14 @@
+{
+  "code": "http_client_error",
+  "date": "2026-09-01",
+  "item_id": "policy-4410827311",
+  "outcome": "failed",
+  "run_id": "2026-09-01-33484160918",
+  "source_id": "example",
+  "source_words": null,
+  "source_words_before_cap": null,
+  "stage": "fetch",
+  "summary_words": null,
+  "version": "2026-09-02",
+  "vertical": "policy"
+}

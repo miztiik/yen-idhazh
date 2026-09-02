@@ -374,8 +374,12 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | `runtime_counters_scrape` | `true` | The llama-server `GET /metrics` read, and so every row in `state/runtime-counters.csv`. |
 | `tracing_enabled` | `false` | Already off. True builds a span tree under `backend/var/traces/`. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
-| `keep_months` | `13` | Nothing. It is where a month stops being kept at full grain. |
-| `hard_delete_after_months` | `null` | Nothing by default. Null means a downsampled month is never removed. |
+| `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
+| `item_health_aggregate_keep_months` | `null` | Nothing by default. Null means a folded month is never removed. |
+| `feed_health_keep_months` | `14` | Nothing. It is where `state/feed-health/` stops keeping a month. |
+| `scores_full_grain_months` | `14` | Nothing. It is where `state/scores/` stops being kept item by item. |
+| `score_archive_keep_months` | `null` | Nothing by default. Null means a summarised score month is never removed. |
+| `public_telemetry_keep_months` | `14` | Nothing. It is where `frontend/public/telemetry/` stops keeping a shard, and it must equal `item_health_full_grain_months`. |
 | `cost_currency` | `"USD"` | Nothing. It is the ISO 4217 code the console prints a counterfactual cost in. |
 | `cost_input_per_million` | `0.20` | Nothing. It is what a hosted provider would charge for a million prompt tokens. |
 | `cost_output_per_million` | `0.60` | Nothing. The same, for a million written tokens. |
@@ -443,38 +447,106 @@ The draw itself - a digest of the run id, recorded on the run manifest - is
 described once, in
 [../concepts/evaluation.md](evaluation.md#the-scorer-is-sampled-by-run-and-nothing-else-is).
 
-`hard_delete_after_months` defaults to null - never - and that is a decision
-rather than an omission. `console.max_window_days` is 366, so a shard has to stay
-readable for a year, and the downsampled aggregate costs roughly 219 KB a year.
-Set it, and it must sit above `keep_months`, or a month would be deleted before
-it was ever downsampled; the contract refuses the pair otherwise.
+## Every store names its own cleanup age
 
-**What `keep_months` actually governs is `state/item-health/`, and nothing
-else.** Past the window a month is folded to one row per `(date, stage)` in
-`state/telemetry-aggregate/<YYYY-MM>.csv` and the full-grain shard is deleted, by
-`idhazh prune-state` in the assemble job - after the day is committed, never
+Until 2026-09-02 one knob, `observability.keep_months`, decided when a month
+stopped being kept at full grain - and it decided it for `state/item-health/`
+and nothing else. `state/feed-health/`, `state/scores/` and
+`frontend/public/telemetry/` had no cleanup age at all, so three stores grew
+with nothing to stop them while the fourth was tuned by a number that said
+nothing about them.
+
+Six names replace it, one per store, each a knob and not a constant (Rule #6):
+
+| Store | Full grain | Summary after it |
+| --- | --- | --- |
+| `state/item-health/` | `item_health_full_grain_months` (14) | `item_health_aggregate_keep_months` (null) |
+| `state/scores/` | `scores_full_grain_months` (14) | `score_archive_keep_months` (null) |
+| `state/feed-health/` | `feed_health_keep_months` (14) | none - a per-feed-per-run record is not a total worth keeping |
+| `frontend/public/telemetry/` | `public_telemetry_keep_months` (14) | none - it is the browser's copy of the census |
+
+**Null keeps a summary indefinitely, and a finite value must sit above its own
+full-grain window.** The contract refuses any other pair, so a month can never
+be deleted before the thing that replaces it has been written.
+
+**The published copy must last exactly as long as the ledger it copies.** The
+contract refuses `public_telemetry_keep_months != item_health_full_grain_months`
+in both directions: a published month whose source has been folded away is a
+rate nobody can check, and a source month with no published copy is a window the
+console cannot draw.
+
+### Why 14 and not 13
+
+Fourteen is not a year plus one. It is the number of month files a console read
+can open, and the old value was one short.
+
+`console.max_window_days` is 366 and `ledger.shards_in_window` walks **367
+inclusive days** - so a window ending on the first of a month starts on the last
+day of another, and those days fall in **14 calendar months**. Anchor it on
+2026-01-01: the read reaches back to 2024-12-31, which is `2024-12`, and
+`2024-12` through `2026-01` is fourteen shards. At thirteen the fold would delete
+`2024-12` on that day and the console would draw a gap that reads as a day the
+pipeline did nothing.
+
+The retired check compared `keep_months * 30` against `max_window_days` - `390 >
+366` - which is arithmetic about days, not about the files a read selects. A
+month is not thirty days. The check now compares against the shards, and
+`backend/tests/test_contracts.py` sweeps every end date in one 400-year
+Gregorian cycle to prove it. Measured 2026-09-02 over all **146,097** anchor
+dates - arithmetic over the calendar, so the spread is zero by construction:
+fourteen months keeps back at least as far as the console reads on every one of
+them, and it is exactly tight on **3,636** of them, 2.5 percent. Those same
+3,636 dates are where thirteen deletes a shard the console still opens.
+
+### A config still carrying the old names
+
+`keep_months` and `hard_delete_after_months` are read and dropped, and the file
+resolves to the six defaults above (`CLAUDE.md` section 11). The old value is not
+carried forward, because it was chosen against the check that could not answer
+the question - carrying the number forward carries the defect forward. A file
+carrying an old name **beside** its successor is refused outright: two names for
+one age is how an operator's edit stops taking effect.
+
+Both names stay readable in code, as properties on `ObservabilityConfig`
+resolving to `item_health_full_grain_months` and
+`item_health_aggregate_keep_months`. The fold and its log line still ask for
+`keep_months` and get the corrected value, so naming the ages and moving the
+readers are two changes rather than one.
+
+**Validation reads `config/appearance.json`.** That file owns the console window
+the published site really uses, and `AppConfig.console` is the layer under it, so
+`config.load` runs the same check twice - once against each. The appearance
+file's digest is not recorded on the run manifest, because nothing in the run
+reads a value out of it.
+
+`item_health_aggregate_keep_months` defaults to null - never - and that is a
+decision rather than an omission. A shard has to stay readable for a year, and
+the folded aggregate costs a measured 63.8 bytes a row over four stages - about
+93 KB a year against the shard's 77 MB. Set it, and it must sit above
+`item_health_full_grain_months`, or a month would be deleted before it was ever
+folded; the contract refuses the pair otherwise.
+
+**What `item_health_full_grain_months` governs is `state/item-health/`, and
+nothing else.** Past the window a month is folded to one row per `(date, stage)`
+in `state/telemetry-aggregate/<YYYY-MM>.csv` and the full-grain shard is deleted,
+by `idhazh prune-state` in the assemble job - after the day is committed, never
 before it. What survives is every count and every timing total; what goes is the
 per-item detail, which is what the console's failure list offers and no rate
 needs. Folding the committed `state/item-health/2026-08.csv` on 2026-08-30 turned
 4,167 rows and 1,270,452 bytes into 24 rows and 1,531 bytes - **829.8 times
 smaller**, and 93,136 bytes a year against the shard's 77,285,830.
 
-The 219 KB a year the `hard_delete_after_months` description quotes was an
-estimate at five stages and 120 bytes a row. Measured it is **63.8 bytes a row
-over four stages**, because `plan` wrote no row in that month - so 93 KB a year,
-2.4 times cheaper than the estimate. The description keeps the estimate's
-conclusion, which the measurement only strengthens.
+The 219 KB a year the old description quoted was an estimate at five stages and
+120 bytes a row. Measured it is **63.8 bytes a row over four stages**, because
+`plan` wrote no row in that month - so 93 KB a year, 2.4 times cheaper than the
+estimate. The description keeps the estimate's conclusion, which the measurement
+only strengthens.
 
-The two ledgers the fold does not reach were named here rather than left to be
-discovered, and one of them has since been answered. `state/seen/` was 5,166,315
-bytes on 2026-08-30 - 54 percent of `state/` - and `state/scores.csv` was
-2,359,230, against `state/item-health/`'s 1,270,452. On 2026-08-31 `state/seen/`
-took the decision its own shape asked for: it is a lookup rather than a
-measurement, so an out-of-window shard is deleted rather than folded, and the
-address column that no reader opened came off with it - together 49.1 percent of
-the file and a 90-day ceiling where there had been none. `state/scores.csv` is
-still one file with no `stage` and four readers, so it still needs a decision of
-its own. See
+**Naming the age is not deleting anything.** `state/feed-health/`,
+`state/scores/` and `frontend/public/telemetry/` have a number now and no reader
+for it; the fold still covers `state/item-health/` alone. `state/seen/` is not on
+this list because it is a lookup rather than a measurement: an out-of-window
+shard is deleted rather than folded, through `collect.seen_window_days`. See
 [../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree).
 
 ## Reader surface

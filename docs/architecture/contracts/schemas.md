@@ -54,6 +54,7 @@ The shapes, and where each one lives once written:
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
+| `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
 | `RuntimeCountersRow` | `runtime-counters-row` | one appended row of `state/runtime-counters.csv` |
 | `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
@@ -65,7 +66,7 @@ The shapes, and where each one lives once written:
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
-`TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored, and `merge=union` could not tell the copy from the original. What decides when a month is folded is `observability.keep_months`, and what it costs is in [../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
+`TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored, and `merge=union` could not tell the copy from the original. What decides when a month is folded is `observability.item_health_full_grain_months`, and what it costs is in [../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
 
 ### A new row ledger ships with its header, not with its first run
 
@@ -76,6 +77,34 @@ That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). T
 The training corpus ships the same way and for the same reason: `corpus/corpus.jsonl` is committed empty, `corpus/corpus.meta.json` holds a zero census, and `corpus/holdout.txt` is empty. A test asserts all three are tracked.
 
 `state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - before anything writes it. It is also registered in `ledger.keyed_paths` in the same commit, keyed on `endpoint_key` alone, so the post-merge settlement already covers it: `state/**/*.csv` is `merge=union`, and two stale checkouts each appending the same retirement would otherwise leave one address retired twice. Registering the key with the shape rather than with the first writer is what makes the settlement true from the first row rather than from the second.
+
+### The one row contract whose CSV omits `version`
+
+Every other row ledger writes `version` as its first cell, because
+`csv_columns()` is `tuple(cls.model_fields)` and `version` is the first field the
+base contract declares. `PublicTelemetryRow` overrides that and writes eleven
+cells, none of them `version`.
+
+The reason is on the far side of the boundary. `parseTelemetryCsv` in
+`frontend/src/lib/charts/series.ts` checks the header **position by position as a
+prefix**, so a name at position zero shifts every position the console reads and
+blanks its charts on every cached bundle. That check is written for appends and
+against inserts on purpose
+([../publishing/telemetry-series.md](../publishing/telemetry-series.md)), and a
+`version` cell is an insert at the worst possible index.
+
+The stamp is not lost: it is a field of the shape, and
+`schemas/public-telemetry.schema.json` is where a reader of an old shard looks it
+up. What the row loses is the ability to say which *row* predates a change, which
+is the thing `state/scores/` needs and this file does not - the console reads the
+projection for rates and never branches on a row's age.
+
+It is also the only contract here whose forbidden fields are a rule rather than
+an omission. `canonical_url`, `url_key` and `detail` are named in
+`FORBIDDEN_COLUMNS`, and the module raises at **import** if any of them ever
+appears on the model. A trust boundary spelled as a list of strings in the writer
+gains a cell by a one-word edit and nothing refuses it; spelled as a model, the
+edit does not start (Rule #11).
 
 ### Two of these are contracts and are deliberately not migration surfaces
 
@@ -102,7 +131,7 @@ carry a time window?**
 | `state/seen/` | monthly shards | how old is this address? | yes, `collect.seen_window_days` |
 | `state/feed-health/` | monthly shards | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
 | `state/item-health/` | monthly shards | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and fetches month shards |
-| `state/telemetry-aggregate/` | monthly shards | what did a month past `keep_months` do, in totals? | it inherits the shard boundary of the file it replaces |
+| `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published.csv` | one file | have we already published this? | no - published is forever |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
 | `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, but [nothing deletes a month yet](../publishing/layout.md#what-bounds-the-committed-state-tree) |

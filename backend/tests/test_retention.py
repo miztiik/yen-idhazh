@@ -472,10 +472,10 @@ def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:
 # --- The telemetry fold ------------------------------------------------------
 
 #: The day the fold is run against in every test below, and the twenty months of
-#: history it is run over. Twenty rather than thirteen so both sides of the
-#: threshold carry several months: at `keep_months` 13 the fold takes seven and
-#: leaves thirteen, and a threshold off by one shows up as a shard on the wrong
-#: side rather than as an empty result.
+#: history it is run over. Twenty rather than fourteen so both sides of the
+#: threshold carry several months: at `item_health_full_grain_months` 14 the fold
+#: takes six and leaves fourteen, and a threshold off by one shows up as a shard
+#: on the wrong side rather than as an empty result.
 TODAY: Final = date(2026, 8, 30)
 HISTORY_MONTHS: Final = 20
 #: How far down the pipeline each terminal stage got, so a row carries the clocks
@@ -584,7 +584,7 @@ def a_state_tree(tmp_path: Path) -> Path:
     return state
 
 
-def test_the_fold_keeps_thirteen_months_at_full_grain(tmp_path: Path) -> None:
+def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> None:
     """Every shard inside the window is byte-identical, and every shard outside is gone."""
     state = a_state_tree(tmp_path)
     config = ObservabilityConfig()
@@ -596,7 +596,8 @@ def test_the_fold_keeps_thirteen_months_at_full_grain(tmp_path: Path) -> None:
     result = prune_telemetry(state, config, TODAY)
 
     kept = oldest_month_kept(TODAY, config.keep_months)
-    assert kept == "2025-08", "thirteen months ending in August 2026 starts in August 2025"
+    assert config.keep_months == 14, "a 366-day console read can open fourteen month shards"
+    assert kept == "2025-07", "fourteen months ending in August 2026 starts in July 2025"
     assert list(result.folded) == sorted(stem for stem in before if stem < kept)
     assert len(result.folded) == HISTORY_MONTHS - config.keep_months
     for stem, bytes_before in before.items():
@@ -730,12 +731,12 @@ def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(
 ) -> None:
     """The escape hatch, for the day the owner wants the bytes back.
 
-    The config refuses a threshold at or below `keep_months`, so a month is
-    always folded before it can be deleted - this proves the deletion happens at
-    the threshold the config does allow.
+    The config refuses a threshold at or below the full-grain window, so a month
+    is always folded before it can be deleted - this proves the deletion happens
+    at the threshold the config does allow.
     """
     state = a_state_tree(tmp_path)
-    config = ObservabilityConfig(hard_delete_after_months=16)
+    config = ObservabilityConfig(item_health_aggregate_keep_months=16)
     prune_telemetry(state, ObservabilityConfig(), TODAY)
     before = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
 
@@ -792,7 +793,8 @@ def test_the_stage_reports_what_it_folded(
             == 0
         )
     assert "telemetry fold:" in caplog.text
-    assert "2025-07" in caplog.text
+    assert "2025-06" in caplog.text, "the oldest month past the window has to be named"
+    assert "2025-07" not in caplog.text, "the oldest month kept must not be folded"
 
 
 def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
