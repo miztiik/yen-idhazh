@@ -47,7 +47,7 @@ from idhazh.contracts.run_manifest import (
     RunStatus,
     VerticalCount,
 )
-from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource
+from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource, VerticalPlan
 from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.contracts.sources import SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -976,6 +976,48 @@ def rebuild_search_index(*, digest_root: Path, index_root: Path, month: str) -> 
     return index
 
 
+def desk_ref(
+    vertical_id: str,
+    *,
+    display_name: str,
+    count: int,
+    planned: VerticalPlan | None,
+    earlier: DigestVerticalRef | None,
+) -> DigestVerticalRef:
+    """One desk of the day, carrying the strongest shortfall any run recorded.
+
+    The strongest and not the sum. A later run drops what the day has already
+    published before it counts anything, so it sees a smaller pool of the same
+    back-catalogue stories - and adding the runs would count one such story once
+    per run and print a number the feeds never offered.
+
+    A desk this run did not plan keeps what an earlier run said about it, which
+    is how a desk retired from `config/taxonomy.json` mid-day keeps its
+    explanation. A desk no run has ever planned carries nothing, and nothing
+    reads as unknown rather than as zero.
+    """
+    if planned is None:
+        considered = earlier.considered if earlier else None
+        stale = earlier.too_old if earlier else None
+        floored = earlier.below_feed_floor if earlier else None
+    elif earlier is None or earlier.considered is None:
+        considered = planned.considered
+        stale = planned.too_old
+        floored = planned.below_feed_floor
+    else:
+        considered = max(earlier.considered, planned.considered)
+        stale = max(earlier.too_old or 0, planned.too_old)
+        floored = bool(earlier.below_feed_floor) or planned.below_feed_floor
+    return DigestVerticalRef(
+        id=vertical_id,
+        display_name=display_name,
+        count=count,
+        considered=considered,
+        too_old=stale,
+        below_feed_floor=floored,
+    )
+
+
 def build_day(
     *,
     plan: RunPlan,
@@ -1015,6 +1057,9 @@ def build_day(
 
     The duplicate pass is a pure function of the items, their vectors and the
     threshold, so the same day rebuilt reaches the same groups.
+
+    Each desk also carries why it ran what it ran, from this run's plan and
+    whatever an earlier run of the day already said. `desk_ref` owns that rule.
     """
     already = {item.item_id for item in (previous.items if previous else [])}
     fresh = [item for item in items if item.item_id not in already]
@@ -1039,6 +1084,8 @@ def build_day(
 
     names = vertical_names(taxonomy)
     present = sorted({item.vertical for item in combined})
+    this_run = {vertical.id: vertical for vertical in plan.verticals}
+    already_said = {ref.id: ref for ref in (previous.verticals if previous else [])}
     published = len(combined)
     failed = (
         sum(1 for row in item_health_rows if row.outcome is ItemOutcome.FAILED)
@@ -1061,10 +1108,12 @@ def build_day(
         retention_window_months=retention_window_months,
         runs=runs,
         verticals=[
-            DigestVerticalRef(
-                id=vertical_id,
+            desk_ref(
+                vertical_id,
                 display_name=names.get(vertical_id, vertical_id),
                 count=sum(1 for item in combined if item.vertical == vertical_id),
+                planned=this_run.get(vertical_id),
+                earlier=already_said.get(vertical_id),
             )
             for vertical_id in present
         ],

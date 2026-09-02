@@ -522,6 +522,13 @@
           "title": "Archive Recent Days",
           "type": "integer"
         },
+        "desk_thin_max": {
+          "default": 12,
+          "description": "The most stories a desk may publish and still be called thin. A thin desk prints one sentence saying how many stories its sources offered and how many were too old to run; every other desk prints nothing, because a shortfall sentence under all five is a column of absences pretending to be information. Twelve is one page of the stream - what a reader sees before the first `Show more` - so a desk under it is a desk they see the whole of at once, which is where 'is this broken?' starts. Measured 2026-09-02 over the 12 committed days and 56 desk-days: 7 sit at or below it, 12.5 percent, and the record has a gap with nothing between 4 and 12 - so any value from 5 to 12 selects the same six startup desk-days and 12 adds the seventh. Arithmetic over committed payloads, so the spread is zero by construction.",
+          "minimum": 1,
+          "title": "Desk Thin Max",
+          "type": "integer"
+        },
         "filter_min_chars": {
           "default": 2,
           "description": "How many characters a reader types before an in-place filter narrows a list. It binds the day page and the archive, which share one panel since 2026-09-01. Two rather than one because one letter narrows nothing: measured 2026-09-01 over the 12 committed days and 4,203 story titles - arithmetic over committed text, so the spread is zero by construction - the median single letter matches 80.2 percent of them and `e` matches 99.8 percent, against a median 0.8 percent for a two-letter pair. A first keystroke that redraws the page and removes almost nothing is work the reader watches for no answer. Over 8 the field stops narrowing anything a reader would think to type.",
@@ -685,6 +692,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "ui.desk_thin_max added, defaulting to 12, floored at 1. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
+      "version": "2026-09-02T16:00",
+      "why": "A desk now publishes why it ran what it ran, and one sentence under every desk would be a column of absences rather than information. This is the line between a desk that explains itself and a desk that says nothing, and a component may not spell it (Rule #6). Twelve is one page of the stream, so a desk under it is one a reader sees the whole of at once. Measured 2026-09-02 over the 12 committed days and 56 desk-days: 7 sit at or below it, 12.5 percent, and nothing in the record sits between 4 and 12."
+    },
+    {
       "change": "frame.zone_time_rem added, defaulting to 5.5, and ui.rail_group_minutes added, defaulting to 60. The first is `FrameConfig`, which only this document carries; the second is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with defaults, so an appearance file written before today still validates.",
       "version": "2026-09-02T14:00",
       "why": "The day's stories now run newest first down a time rail, which is a fifth column beside the prose and therefore a zone (Rule #6). It is a rem, so `frontend/tests/item-zones.spec.ts` reads the column at a 16px root and again at 22px and fails unless it scaled - measured on the canary build, the rail went 88 to 121 CSS px, which is 22/16. There is no second value for a phone, and that was measured rather than assumed: at 360px the content box is 328 CSS px, the item already spends 40 on the read mark and 32 on its own padding, and a 3.5rem column plus its gap left the summary 186px - about 25 characters, with `Interconnector` broken across two lines in the title. Below the small breakpoint the marker is a rule across the top of its group instead, which costs the reading column nothing."
@@ -810,7 +822,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-02T14:00",
+      "default": "2026-09-02T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -818,5 +830,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-02T14:00"
+  "version": "2026-09-02T16:00"
 }

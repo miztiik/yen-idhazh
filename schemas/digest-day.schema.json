@@ -394,7 +394,35 @@
     },
     "DigestVerticalRef": {
       "additionalProperties": false,
+      "description": "One desk of the day, and why it ran what it ran.\n\n`count` is every story the desk published, including one the duplicate pass\ngrouped behind another - nothing is unpublished by that pass, so the number\nis the payload's own and not what the default view happens to draw.\n\nThe three shortfall fields are the day's strongest reading of each: the\nlargest any run of the day recorded. A later run has already taken what an\nearlier one published, so it sees a smaller pool of the same stories -\nsumming the runs would count one back-catalogue story once per run.\n\nAll three are null together on a day published before they existed, and a\nnull is unknown rather than a zero, which would claim the feeds offered this\ndesk nothing.",
       "properties": {
+        "below_feed_floor": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Some run today found fewer live feeds than this desk's floor, so that run planned nothing for it. Published for the operator surfaces; the reading page never draws a sentence from it, because how many of our feeds answered is a fact about our pipeline rather than about a story.",
+          "title": "Below Feed Floor"
+        },
+        "considered": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Distinct addresses the feeds offered this desk today, less what the day had already published or already failed on. It is not an upper bound on `count`: each run counts its own pool and the day's stories accumulate across runs.",
+          "title": "Considered"
+        },
         "count": {
           "minimum": 0,
           "title": "Count",
@@ -409,6 +437,20 @@
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "title": "Id",
           "type": "string"
+        },
+        "too_old": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Of those, how many were past collect.max_age_hours. A desk fed by a back catalogue thins for this reason and no other, and a thin desk that cannot say why reads as a broken run.",
+          "title": "Too Old"
         }
       },
       "required": [
@@ -551,6 +593,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added considered, too_old and below_feed_floor to each desk of the day.",
+      "version": "2026-09-02T16:00",
+      "why": "A desk that published three stories looked exactly like a desk whose feeds had broken, and the page had nothing to tell them apart with. The planning step already counted what the feeds offered and how much of it was a back catalogue; it wrote both into the run plan and published neither, so the reading page could not say why a desk was thin. Nothing new is computed. Each field is the largest any run of the day recorded rather than the sum, because a later run has already taken what an earlier one published and would count the same back-catalogue story twice. All three are optional, arrive together, and are null on every day published before this - 12 days, 56 desk-days and 4,713 items when this landed, 2026-09-02 - and a null reads as unknown, never as 0, which would claim the feeds offered a desk nothing (section 11)."
+    },
+    {
       "change": "Added leads: the day's leading stories, each with the reason it leads.",
       "version": "2026-09-01T12:30",
       "why": "The page had no first screen. Its opening stories were whichever desk sorted first in run 1, which is an accident rather than an edit, and the reader could not see why any story was there. The block is chosen across the whole day from the ranking signal the item already publishes plus a shared-subject term computed here, and it removes nothing: every lead is still in items, in the published order, and every excluded story still publishes. Additive with an empty default, so every day published before today - 11 days and 4,086 items when this landed, 2026-09-01 - still validates and still renders, with no block (section 11)."
@@ -670,7 +717,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-01T12:30",
+      "default": "2026-09-02T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -695,5 +742,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-01T12:30"
+  "version": "2026-09-02T16:00"
 }

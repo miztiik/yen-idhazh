@@ -35,7 +35,7 @@ from idhazh.contracts.fingerprint import FingerprintRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest, RunRecord
-from idhazh.contracts.run_plan import RunPlan, TimeSource
+from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -1887,6 +1887,133 @@ def test_a_later_run_appends_and_never_reorders() -> None:
     )
     assert [item.item_id for item in second.items] == [item.item_id for item in first.items]
     assert second.runs[-1].items_added == 0, "an item already published is not published twice"
+
+
+def test_a_desk_publishes_why_it_ran_what_it_ran() -> None:
+    """The plan counted what the feeds offered and the day used to throw it away.
+
+    Without it a desk that published three stories and a desk whose feeds broke
+    look identical on the page, and the reader has no way to tell them apart.
+    """
+    settings = config.load(CONFIG_DIR)
+    day = assemble.build_day(
+        plan=plan(),
+        items=[digest_item(run_n=1)],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+
+    desk = next(ref for ref in day.verticals if ref.id == "ai")
+    assert desk.considered == 5, "the day dropped what the plan already counted"
+    assert desk.too_old == 0
+    assert desk.below_feed_floor is False
+
+
+def test_a_desk_no_run_ever_planned_invents_no_shortfall() -> None:
+    """Absent reads as unknown, never as zero.
+
+    A zero would say the feeds offered this desk nothing, which on a desk that
+    published a story is a claim the payload itself contradicts.
+    """
+    settings = config.load(CONFIG_DIR)
+    day = assemble.build_day(
+        plan=plan().model_copy(update={"verticals": []}),
+        items=[digest_item(run_n=1)],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+
+    desk = next(ref for ref in day.verticals if ref.id == "ai")
+    assert desk.considered is None
+    assert desk.too_old is None
+    assert desk.below_feed_floor is None
+
+
+def test_a_desk_keeps_the_strongest_shortfall_any_run_recorded() -> None:
+    """The strongest and not the sum, and this is the case that says why.
+
+    Run 2 drops what run 1 published before it counts anything, so it sees a
+    smaller pool of the same back-catalogue stories. Summing the runs would
+    print a number the feeds never offered.
+    """
+    settings = config.load(CONFIG_DIR)
+    base = plan()
+    wide = base.model_copy(
+        update={
+            "verticals": [
+                VerticalPlan(id="ai", considered=40, planned=5, live_feeds=3, too_old=28)
+            ]
+        }
+    )
+    narrow = base.model_copy(
+        update={
+            "verticals": [
+                VerticalPlan(id="ai", considered=35, planned=0, live_feeds=3, too_old=31)
+            ]
+        }
+    )
+
+    first = assemble.build_day(
+        plan=wide,
+        items=[digest_item(run_n=1)],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    second = assemble.build_day(
+        plan=narrow,
+        items=[digest_item(run_n=1)],
+        previous=first,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T19:00:00Z",
+        retention_window_months=-1,
+    )
+
+    desk = next(ref for ref in second.verticals if ref.id == "ai")
+    assert desk.considered == 40, "the second run's smaller pool overwrote the first"
+    assert desk.too_old == 31, "a run that found more of the day stale must raise the count"
+    assert desk.too_old <= desk.considered, "the sentence would name more dropped than offered"
+
+
+def test_a_desk_retired_mid_day_keeps_the_explanation_it_already_had() -> None:
+    """A desk with items and no entry in today's plan is not a desk with no answer.
+
+    It happens when `config/taxonomy.json` retires a vertical between runs. The
+    stories stay on the day, so the sentence under them has to stay true.
+    """
+    settings = config.load(CONFIG_DIR)
+    base = plan()
+    first = assemble.build_day(
+        plan=base,
+        items=[digest_item(run_n=1)],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    second = assemble.build_day(
+        plan=base.model_copy(update={"verticals": []}),
+        items=[digest_item(run_n=1)],
+        previous=first,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T19:00:00Z",
+        retention_window_months=-1,
+    )
+
+    desk = next(ref for ref in second.verticals if ref.id == "ai")
+    assert desk.considered == 5
+    assert desk.below_feed_floor is False
 
 
 def test_a_run_that_comes_back_as_itself_still_produces_a_day() -> None:

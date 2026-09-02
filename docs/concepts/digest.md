@@ -104,6 +104,42 @@ about the news.
 How a lead is chosen, what a cap costs and where the weight came from is
 [../architecture/sources/discovery.md](../architecture/sources/discovery.md#a-second-order-over-the-same-day-the-leading-stories).
 
+## A thin desk says what did not run
+
+A desk that published three stories and a desk whose sources broke looked
+identical, and the reader had no way to tell them apart. A topic page whose desk
+is thin now carries one sentence under the topic panel:
+
+> Today our sources offered 40 stories on this topic. 31 were too old for
+> today's page.
+
+Both numbers are the day's own. The first is the distinct stories our sources
+offered that desk; the second is how many of them were older than the age gate
+and so could not run. Neither is a claim about the world - we know what we read,
+not what was published.
+
+**It fires on one desk, not on all of them.** Only the desk the reader has
+opened, and only on a topic page. There is no desk being read on the all-topics
+view, and a sentence under every pill would be a column of absences pretending
+to be information.
+
+**Three things all have to be true**, and the rule is arithmetic rather than a
+feeling:
+
+| Clause | Why it is there |
+| --- | --- |
+| The desk published at most `digest.desk_thin_max` stories. | Above one page of the stream the reader is scrolling, not wondering. |
+| At least one story was dropped for age. | With nothing dropped there is no reason to name, and a count with no explanation is worse than silence. |
+| Our sources offered more than the desk ran. | The offered count is taken per run and the day's stories accumulate across runs, so it is not an upper bound on the desk's count. Without this clause a page showing eight stories could say the sources offered five. |
+
+A day published before 2026-09-02 carries none of these counts, and absent reads
+as unknown rather than zero - so those days print nothing at all.
+
+**How many feeds answered is not on this page.** That is a fact about our
+pipeline rather than about a story, and the operator console answers it for the
+one person who asks. The day records it beside the two counts and no reading
+surface draws it.
+
 ## The reader's budget
 
 About two minutes. Ten items a reader can skim beats forty they cannot.

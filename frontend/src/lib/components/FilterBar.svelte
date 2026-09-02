@@ -26,9 +26,15 @@
 	 * The query is untrusted reader text matched against untrusted payload text.
 	 * It is compared as a lowercased substring by the caller and is never
 	 * interpolated into a selector, a URL or markup (Rule #11).
+	 *
+	 * **The thin-desk sentence sits OUTSIDE the panel, not inside it.** At 1024px
+	 * and up the panel is one nowrap band so that it is cheap enough to stick, and
+	 * a third child would be squeezed into that band beside the pills. It belongs
+	 * under the panel anyway: it is a fact about the desk rather than a control,
+	 * so it is read once and then scrolls away.
 	 */
 	import { base } from '$app/paths';
-	import { splitPills } from '$lib/day-shape';
+	import { deskShortfall, splitPills } from '$lib/day-shape';
 	import Icon from '$lib/icons/Icon.svelte';
 	import { ICONS, type IconId } from '$lib/icons/generated';
 	import { dayRoot, verticalHref } from '$lib/links';
@@ -52,7 +58,8 @@
 		onSubmit = null,
 		onType = null,
 		matchNote = '',
-		noscriptNote
+		noscriptNote,
+		deskThinMax = null
 	}: {
 		/** The panel's accessible name. It is a landmark, so it needs one. */
 		label: string;
@@ -80,10 +87,25 @@
 		 * shared with a pill count: they count different things. */
 		matchNote?: string;
 		noscriptNote: string;
+		/** The story count at or under which the topic being read explains itself.
+		 * Null is a surface with no shortfall line at all, which is what the archive
+		 * is: its counts are sums over every published day, so a shortfall taken
+		 * from one day's run would be a number about nothing on the page. */
+		deskThinMax?: number | null;
 	} = $props();
 
 	const root = $derived(dayRoot(base, datePrefix));
 	const split = $derived(splitPills(verticals, active, pillsMax));
+	// The desk the reader is on, and only that one. On the all-topics view there
+	// is no desk being read, and one sentence per desk would be five.
+	const shortfall = $derived(
+		deskThinMax === null || active === null
+			? null
+			: deskShortfall(
+					verticals.find((vertical) => vertical.id === active),
+					deskThinMax
+				)
+	);
 	/** True when something in the panel dies with no script, so the sentence that
 	 * replaces it is worth rendering. Button pills are one of those things. */
 	const scripted = $derived(showField || !linked);
@@ -221,6 +243,14 @@
 		<p class="noscript-note" data-filter-noscript>{noscriptNote}</p>
 	{/if}
 </section>
+
+{#if shortfall}
+	<p class="shortfall" data-desk-shortfall>
+		Today our sources offered {shortfall.offered}
+		{shortfall.offered === 1 ? 'story' : 'stories'} on this topic. {shortfall.tooOld}
+		{shortfall.tooOld === 1 ? 'was' : 'were'} too old for today's page.
+	</p>
+{/if}
 
 <style>
 	.filter-bar {
@@ -363,6 +393,16 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-tertiary);
+	}
+
+	/* Outside `.filter-bar`, so the sticky one-band panel above is untouched. A
+	   fact about the desk rather than a control: it is read once and scrolls
+	   away with the stories it is about. */
+	.shortfall {
+		margin-block-end: var(--space-4);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
 	}
 
 	/* Unscoped on purpose, and it is the whole reason this rule is not the

@@ -380,6 +380,17 @@ three-line diff with a resurrection in it. `git diff` on the config file is the
 check, and it is worth reading line by line rather than for the lines you meant
 to add.
 
+**The opposite rule holds for the fixtures under `tests/fixtures/contracts/`,
+and one new field breaks four of them at once.** A knob added to `UiConfig`
+fails `test_fixture_round_trips_byte_identically` on `app-config/tuned`,
+`appearance-config/committed` and `appearance-config/defaults` together, because
+that gate demands the file bytes equal `to_json()` - so there the model IS the
+right writer. Hand-editing is the trap: the serializer sorts keys, and a field
+on a nested model appears in every fixture carrying that model. Re-serialise
+each failing fixture through `BY_STEM[<folder>].from_json(text).to_json()`, then
+read the diff. Observed 2026-09-02, when a fourth fixture, `digest-day/two-runs`,
+failed in the same run for an unrelated field on the same commit.
+
 **A test's `print()` never reaches you on the default `pytest` run, and `-s`
 does not bring it back.** `addopts` is `-q -n auto`, so every run is distributed
 and a passing worker's output is dropped. A gate that prints the measurement it
