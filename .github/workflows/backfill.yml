@@ -91,13 +91,20 @@ jobs:
 
       # The vectors ride inside the day payloads, and /archive/ inlines every
       # committed day to feed the on-device search - so this job is the one that
-      # can push that page past its configured ceiling or write a payload the
-      # build rejects. Those are two different severities and they sit on
+      # can push that page past its configured ceiling or write a payload no
+      # reader can read. Those are two different severities and they sit on
       # opposite sides of the commit below.
       #
-      # A build failure means the payload is invalid, so those days must not
-      # publish. The build runs BEFORE the commit and stops them. The weight
-      # ratchet runs after. See ../../docs/architecture/publishing/layout.md.
+      # An invalid payload means those days must not publish, so the two checks
+      # that find one run BEFORE the commit and stop them. The weight ratchet
+      # runs after. See ../../docs/architecture/publishing/layout.md.
+      #
+      # `validate-days` is the one that opens every story. A reading document
+      # carries a seed since 2026-09-01, so the build below never reads the
+      # stories past it and cannot fail on one.
+      - name: Every committed day still matches its contracts
+        run: python -m idhazh validate-days
+
       - name: Build the site
         working-directory: frontend
         run: npm run build
