@@ -29,8 +29,22 @@ another agent's `plan/console-charts`, so it carried that agent's unmerged
 commit as its parent. Always name the start-point and take your own worktree:
 
 ```powershell
-git worktree add <absolute path> -b <branch> origin/main
+git worktree add <repo>.worktrees/<name> -b <branch> origin/main
 ```
+
+**Every worktree goes in that one container, never beside the checkout.** They
+accumulate - 38 of them on one box by 2026-09-02 - and scattered siblings bury
+the repository they belong to among directories that are copies of it. One
+container is one entry in the parent directory whatever the count, it needs no
+`.gitignore`, and `git worktree list` reads as a set rather than a search. It
+may NOT go inside the checkout: `ruff check .` and `mypy` walk gitignored paths
+(the recorded `backend/var/**` case), `git grep` and the site-weight gate glob
+the tree, and each worktree carries its own `frontend/node_modules` - so an
+in-repo container means every gate reads several copies of the repository.
+
+Name it for the row it serves, `<plan letter><row number>`, so the directory
+says what it is for without opening it. That is what let a 38-directory sweep be
+attributed row by row from the names alone.
 
 **`origin/main` moves under you without you fetching, because every worktree
 shares one `.git`.** A sibling agent's `git fetch` updates the ref for all of
@@ -68,7 +82,7 @@ Safe pattern when the shared checkout is dirty with work that is not yours:
 
 ```powershell
 git diff --output=.tmp_mine.patch -- <only your paths>
-git worktree add <absolute path> -b <branch> origin/main
+git worktree add <repo>.worktrees/<name> -b <branch> origin/main
 git apply --3way .tmp_mine.patch
 ```
 
@@ -289,6 +303,53 @@ Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<worktree>
 
 Read the exit as "partly done" and re-run the filesystem delete after the holder
 is gone. Do not re-run `git worktree remove`; it has nothing left to deregister.
+
+**Nothing removes a finished worktree on its own, and `git worktree prune` is
+not that thing** - it only clears the administrative entry for a directory that
+has already gone, and never deletes a checkout. Measured 2026-09-02: 38
+abandoned sibling directories holding 156,482 files, every one a row whose pull
+request had merged days earlier, because the closing step that removes a tree is
+the step a worker killed mid-row never reaches. Sweep them:
+
+```powershell
+python backend/utilities/sweep_worktrees.py            # report, change nothing
+python backend/utilities/sweep_worktrees.py --remove   # remove what it named
+```
+
+It keeps a tree unless three signals agree - the pull request is `MERGED`, the
+branch is gone from the remote, and the tree is clean - and prints the reason for
+every one it keeps. All three are needed. A squash merge leaves the branch a
+non-ancestor of `main`, so `git merge-base --is-ancestor` cannot answer whether
+the row landed, and `git branch --merged` is useless here for the same reason;
+that is why the pull request is asked. A branch with no pull request at all is
+pending work rather than stale work - twice here such a branch held a real fix
+nobody had proposed yet. A detached worktree is the one case ancestry settles
+alone. The default is a report because a sibling agent creates a worktree
+between any two commands, so re-read the list rather than trusting one from
+earlier in the session.
+
+**Two process classes hold a dead tree's files, and only one of them is safe to
+kill.** The sweep names the files it could not delete and stops there, because
+the difference is not one an unattended tool should decide.
+
+- An `esbuild` service whose own executable is inside the tree. It keeps running
+  after the row ends; find it by its path (`Get-Process -Name esbuild` and match
+  `.Path` against the directory) and stop it. Fourteen were alive at once here.
+- **The editor's Svelte language server**, which loads
+  `rollup.win32-x64-msvc.node`, `lightningcss.win32-x64-msvc.node` and
+  `tailwindcss-oxide.win32-x64-msvc.node` out of *every* worktree it has ever
+  indexed - fourteen dead trees at once on 2026-09-02, three files each. It runs
+  as `Code.exe`, so a name match hits the editor window; match on the command
+  line instead, which carries `svelte-language-server/bin/server.js`. Stopping
+  it released all forty-two files and VS Code respawned it with the editor and
+  the session untouched. Find any holder by loaded module rather than by
+  executable path:
+
+```powershell
+Get-Process | ForEach-Object {
+  try { $_.Modules | Where-Object { $_.FileName -like '<worktree>*' } } catch { }
+}
+```
 
 **A file you can see in the editor may not be in the repository at all.** The
 editor's workspace is the shared checkout, and `TODO/` there collects untracked
