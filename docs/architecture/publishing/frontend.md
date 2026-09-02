@@ -350,7 +350,7 @@ What it renders now, top to bottom:
 
 - The counts and the retention promise: "6 days, 2237 stories. Nothing here is deleted."
 - **The filter bar** - every topic the archive holds with its whole-archive count, and the search field beside them. Under it, the two sentences about the on-device model: what it would cost, and how far back a search would reach.
-- **The days as one compact row** of short dates. "The whole of Tuesday" is still a real request, and the row grows about 60 bytes a day, but a full date per line is an index rather than reading.
+- **The day list** - the newest `ui.archive_recent_days` days as rows carrying the long date, the story count and a mark when some stories did not finish, then one disclosure a month and one a year for every year before the newest published one. A month row reads `20 of 31 days, 4086 stories` and holds its own days as a wrapped grid of numbers. It was a single wrapped row of every date until 2026-09-01, which is 700 links after two years.
 - **The stories**, newest day first, each a link to its own anchor on the day that published it, with the date and the topic beneath.
 - **`Show 25 more`** - the same explicit control the day list and the console's failure list already use, sized by `ui.archive_page_size`.
 
@@ -358,21 +358,62 @@ What it renders now, top to bottom:
 
 **Nothing the list needs sits under `assist/`.** That path is the on-device encoder, which the bundle must render complete without ([../../../CLAUDE.md](../../../CLAUDE.md) section 0a). Browsing is not a model feature, so the index is served from its own `index/` path and the list works with the whole model directory deleted. `frontend/tests/archive.spec.ts` holds it by failing every request under `/assist/` and asking for the stories anyway.
 
-Four rulings behind the shape, all Jony's:
+Four rulings behind the shape, the first three Jony's and the last one Susan's:
 
 - **No sort control.** Per-reader ordering is forbidden by [layout.md](layout.md) - two people at one URL see one order.
 - **No infinite scroll.** It takes the footer away from the reader and has no resting state.
 - **The header states the retention window**, which the page did not do and which [layout.md](layout.md) requires before anything is deleted.
-- **The per-day story count and the partial flag left the day row.** A count beside every date is what turns a compact row back into a wall, and a day page states its own count. Run health belongs to the console.
+- **The per-day story count and the partial flag came back on 2026-09-01, on the newest seven rows only.** They left the day row in the first place because a count beside every one of 700 dates is what turns a compact row into a wall. That argument holds against 700 rows and not against seven: `ui.archive_recent_days` rows are a list somebody reads, and "how big was Tuesday, and did it finish" is what decides whether to open it. Every older day is a number inside its month and carries neither. Run health in the aggregate still belongs to the console.
 
 The degraded states, and each one is designed rather than discovered:
 
 | State | What ships |
 | --- | --- |
-| No index, or a month that will not load | The day row, and one line: "The story list could not be loaded. Open a day above to read it." |
-| A filter or a topic that matches nothing read so far | The day row, and one line: "No story on this page matches that. Press Search to look through the whole archive." The field narrows what the browser has fetched, so the sentence names that scope and points at the control that reaches past it |
-| JavaScript off | The day row, and two `<noscript>` lines - one saying the list needs it, one saying the search and the topic filters do. The day links are prerendered, so navigation still works |
+| No index, or a month that will not load | The day list, and one line: "The story list could not be loaded. Open a day above to read it." |
+| A filter or a topic that matches nothing read so far | The day list, and one line: "No story on this page matches that. Press Search to look through the whole archive." The field narrows what the browser has fetched, so the sentence names that scope and points at the control that reaches past it |
+| JavaScript off | The day list, and two `<noscript>` lines - one saying the story list needs it, one saying the search and the topic filters do. The day rows and the month disclosures are prerendered and native, so navigation and opening a month both still work |
 | Nothing published at all | "Nothing has been published yet.", as before |
+
+### The day list grows with months on the page and with days in the document
+
+The list a reader meets stopped growing one link a published day. At **700 days
+it is 18 rows** - seven days, nine months of the newest published year, and one
+row each for 2025 and 2024 - against **700 links** before. Opening every year
+still tops out at a row a month.
+
+**The prerendered document is a different number and it did not go flat.** The
+folded day links are what a reader with no script uses to reach a day older than
+a week, so there is still a link per published day in the HTML, and the document
+still grows with days:
+
+| Measured | Before | After |
+| --- | ---: | ---: |
+| `/archive/`, 700 days, gzip -9 | 12,045 B | 10,484 B |
+| `/archive/`, 182 days, gzip -9 | 6,319 B | 6,348 B |
+| Growth per published day | 11.05 B | 8.0 B |
+
+Both fixture archives cover the same 24 months, so the difference between the
+two rows of each column is days and nothing else. Measured 2026-09-01 on Intel
+Core i7-1265U / Windows 11 / node 24.12.0; method and the full numbers in
+[../../reference/measurements.md](../../reference/measurements.md#the-archive-day-list-stops-growing-a-row-a-day).
+
+#### Design rationale
+
+**The oracle for this row asked for a document that grows with months and not
+with days, and the measurement says 8.0 bytes a day.** The design was kept and
+the claim was corrected, because the only way to reach zero is to stop emitting
+a link for each day - and then a reader with no script reaches seven days and no
+more. That reader is the whole reason the day list survived at all: the page's
+own `<noscript>` line says the story list needs a script, and these links are
+what is left when it is off. Two clicks to any date is also what let the row
+refuse a jump-to-date field.
+
+**What the 27.7 percent came from is worth naming, because it is not the
+markup.** The day-list markup is about the same size either way - 106.5 raw
+bytes a day before, 90.6 after. The saving is in the serialised `load` return
+the document carries: a flat list of `{date, items, partial}` objects became a
+list of day-of-month numbers under a month key, which the serialiser dedupes to
+31 values however many months there are.
 
 ## Search reads the same month index, and says how far back it read
 
