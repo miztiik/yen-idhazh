@@ -1500,12 +1500,73 @@ def test_a_push_to_main_never_consults_the_list(tmp_path: Path) -> None:
 
 
 #: Every job that builds the site and then commits what it built, named with the
-#: step that publishes. Both jobs write a day payload the build can reject, so
+#: step that publishes. Both jobs write a day payload that can be invalid, so
 #: both carry the same two-severity order.
 PUBLISHING_SITE_JOBS: Final = (
     ("digest.yml", "assemble", "Commit the day"),
     ("backfill.yml", "backfill", "Commit the repaired days"),
 )
+
+#: The step that opens every story in every committed day. Prerendering used to
+#: do it for free.
+VALIDATE_DAYS_CALL: Final = ("python", "-m", "idhazh", "validate-days")
+
+#: Every job the command has to run in, and what each one buys. The publishing
+#: jobs stop a broken day being pushed; `ci.yml` stops one being merged. The
+#: pipeline's own pushes never start `ci.yml`, so neither job covers the other.
+VALIDATE_DAYS_JOBS: Final = (
+    ("ci.yml", "gates"),
+    ("digest.yml", "assemble"),
+    ("backfill.yml", "backfill"),
+)
+
+
+@pytest.mark.parametrize(("filename", "job_name"), VALIDATE_DAYS_JOBS)
+def test_every_committed_day_is_validated_where_the_build_stopped_doing_it(
+    filename: str, job_name: str
+) -> None:
+    """The guard that replaced the one the migration removed.
+
+    A reading document carried every story its day published until 2026-09-01,
+    so a story the contract refused failed `npm run build` and could not reach a
+    reader. It carries a seed now and the browser fetches the rest, so the build
+    never opens the stories past the seed. Nothing else does either, unless this
+    step is in the job.
+
+    It takes no path. There is exactly one committed digest tree, so unlike
+    `--site-tree` a default here cannot name the wrong one.
+    """
+    steps = _steps(_load_workflows()[filename], job_name)
+    calls = [
+        index
+        for index, step in enumerate(steps)
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+    ]
+    assert calls, f"{filename}/{job_name} never validates the committed days"
+    assert "continue-on-error" not in steps[calls[0]], (
+        "a day that fails its contract is a day no reader can read; the step still fails"
+    )
+
+
+@pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
+def test_the_day_is_validated_before_it_is_published(
+    filename: str, job_name: str, commit_step: str
+) -> None:
+    """Same severity as the build, so the same side of the commit.
+
+    A day whose stories no reader's browser can parse must not publish, and
+    finding that out after the push costs the reader the day either way.
+    """
+    steps = _steps(_load_workflows()[filename], job_name)
+    names = [step.get("name") for step in steps]
+    validated = next(
+        index
+        for index, step in enumerate(steps)
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+    )
+    assert validated < names.index(commit_step), (
+        "a day the contract refuses must never reach a reader"
+    )
 
 
 @pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
@@ -1514,9 +1575,11 @@ def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
 ) -> None:
     """Two severities, and only one of them may cost a reader the day.
 
-    `npm run build` prerenders every route, so a payload that fails its contract
-    fails here instead of in a reader's browser. That day is broken and must not
-    publish, so the build runs before the commit.
+    `npm run build` prerenders every route, so a route that cannot render fails
+    here instead of in a reader's browser. That day is broken and must not
+    publish, so the build runs before the commit. `idhazh validate-days` sits
+    beside it at the same severity and for the same reason - it is what opens
+    the stories a seeded document never serialises.
 
     `npm run bundle-gate` holds each capped page under the ceiling somebody
     priced for it. A page over it still reads correctly - what grew is the
@@ -1545,7 +1608,7 @@ def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
     assert any(
         "npm ci" in str(step.get("run", "")) for step in before_build
     ), "the site must be installed before it is built"
-    assert built < commit, "a payload the build rejects must never reach a reader"
+    assert built < commit, "a route that cannot render must never reach a reader"
     assert commit < gate, "a page over its ceiling loses the ceiling, not the day"
     assert "continue-on-error" not in steps[gate], "the gate publishes the day; it still fails"
 

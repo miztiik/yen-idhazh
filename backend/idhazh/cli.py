@@ -66,6 +66,7 @@ from idhazh.contracts.app_config import (
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
@@ -3023,6 +3024,97 @@ def stage_site_weight(
     return 0
 
 
+# --- validate-days ------------------------------------------------------------
+
+
+def _day_faults(path: Path) -> list[str]:
+    """What is wrong with one committed day, in sentences, or an empty list.
+
+    Both shapes are asked for, because a day has two readers and they read
+    different files. `DigestDay` is what the build opens off disk. `DigestView`
+    is the projection a reader's browser fetches, and a day that is fine on disk
+    can still project to something the served contract refuses - a story with no
+    key point, say, which the build never looked at because that story sits past
+    the document's seed.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"cannot be read: {error.strerror or error}"]
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as error:
+        return [f"is not JSON: {error}"]
+    if not isinstance(parsed, dict):
+        return [f"is a {type(parsed).__name__}, not a day"]
+
+    faults: list[str] = []
+    try:
+        DigestDay.model_validate(parsed)
+    except ValidationError as error:
+        faults.append(f"fails digest-day.schema.json: {error.error_count()} problems\n{error}")
+    try:
+        DigestView.project(parsed)
+    except ValidationError as error:
+        faults.append(f"fails digest-view.schema.json: {error.error_count()} problems\n{error}")
+    except (TypeError, AttributeError, ValueError) as error:
+        # A shape nobody anticipated. It still fails, and it still names the day
+        # - a stack trace on day three of twelve says neither which day nor why.
+        faults.append(f"cannot be projected for serving: {type(error).__name__}: {error}")
+    return faults
+
+
+def stage_validate_days(root: Path) -> int:
+    """Every committed day against the two contracts its readers hold.
+
+    **This exists because prerendering stopped proving it.** Until the reading
+    routes were split on 2026-09-01, every story a day published was serialised
+    into a document at build time, so a story the contract refused took the
+    build down before it could be merged. A reading document now carries a seed
+    and a browser fetches the rest, so the build never opens the stories past
+    the seed and a broken one reaches a reader instead of a log. The guarantee
+    is weaker than it was and it is written down rather than hidden: a broken
+    day can no longer be built, it can only no longer be merged.
+
+    An empty tree fails. A validator that checked nothing prints the same line
+    as one that checked every day, which is the failure `site-weight` already
+    has a rule about.
+    """
+    days = published_days(root)
+    if not days:
+        LOG.error(
+            "validate-days found no digest.json under %s - a run over nothing passes "
+            "every contract",
+            root.as_posix(),
+        )
+        return 1
+
+    broken = 0
+    for path in days:
+        faults = _day_faults(path)
+        broken += bool(faults)
+        for fault in faults:
+            LOG.error("%s %s", _day_of(path), fault)
+
+    if broken:
+        LOG.error(
+            "validate-days: %s of %s committed days do not match the contracts their "
+            "readers hold. A reader's browser fetches this file and cannot be upgraded",
+            broken,
+            len(days),
+        )
+        return 1
+
+    LOG.info("validate-days: %s committed days match both contracts", len(days))
+    return 0
+
+
+def _day_of(path: Path) -> str:
+    """`2026-09-01` out of `.../2026/09/01/digest.json`, for a log line."""
+    parts = path.parts[-4:-1]
+    return "-".join(parts) if len(parts) == 3 else path.as_posix()
+
+
 # --- entry point --------------------------------------------------------------
 
 
@@ -3111,6 +3203,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "qualify-decide",
             "backfill-vectors",
             "site-weight",
+            "validate-days",
         ),
     )
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
@@ -3267,6 +3360,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--digest-root",
+        type=Path,
+        default=PUBLIC_ROOT,
+        help=(
+            "The committed day payloads `validate-days` reads. It defaults to the "
+            "real tree, unlike --site-tree, because there is exactly one committed "
+            "tree and a run against the wrong one cannot silently pass."
+        ),
+    )
+    parser.add_argument(
         "--corpus-dir",
         type=Path,
         default=CORPUS_ROOT,
@@ -3300,6 +3403,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings.app.retention,
             items_per_day=settings.app.run.safety_ceiling_per_run,
         )
+
+    if args.stage == "validate-days":
+        # Above the fetcher for the same reason site-weight is: reading committed
+        # files decides nothing about the open web, and starting a fetcher to do
+        # it would read every host's robots.txt for nothing.
+        return stage_validate_days(args.digest_root)
 
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
