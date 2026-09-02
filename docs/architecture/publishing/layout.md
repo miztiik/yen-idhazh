@@ -174,7 +174,7 @@ desk was thin.
 | --- | --- | --- |
 | `considered` | Distinct addresses our feeds offered that desk, less what the day had already published or already failed on. | **Not an upper bound on `count`.** Each run counts its own pool and the day's stories accumulate across runs, so a five-run day can publish more than any one run considered. |
 | `too_old` | How many of those were past `collect.max_age_hours`. | Not a failure. The age gate working is what this counts. |
-| `below_feed_floor` | Some run today found fewer live feeds than the desk's floor, so that run planned nothing for it. | Not a reader-facing fact. It is published for the operator surfaces and no reading page draws a sentence from it. |
+| `below_feed_floor` | Some run today found fewer feeds it was allowed to ask than the desk's floor, so that run planned nothing for it. | Not a reader-facing fact. It is published for the operator surfaces and no reading page draws a sentence from it. |
 
 **The three arrive together or not at all**, and the contract refuses a desk
 holding two of them. A day published before 2026-09-02 carries none, and absent

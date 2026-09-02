@@ -60,6 +60,24 @@ class VerticalCount(Model):
     below_feed_floor: bool = Field(
         default=False, description="A vertical under its floor is collected but not rendered."
     )
+    eligible_feeds: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Feeds on this desk whose configured address this run was allowed to ask, "
+            "as the plan counted them. Null on a manifest written before the count "
+            "existed, which is unknown rather than a desk with no sources."
+        ),
+    )
+    feed_floor: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The floor that count was measured against, so below_feed_floor can be "
+            "checked against the two numbers that decided it rather than taken on "
+            "trust. Null on a manifest written before it was recorded."
+        ),
+    )
 
     @model_validator(mode="after")
     def _published_fits_inside_planned(self) -> Self:
@@ -224,6 +242,21 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02T23:00",
+            change="Added optional eligible_feeds and feed_floor to each vertical.",
+            why=(
+                "below_feed_floor said a desk was under its floor and neither number "
+                "that decided it, so a reader of a past run could not check the claim "
+                "or see how close a desk came. The plan now counts only the addresses "
+                "a run may lawfully ask, which makes the count a different fact from "
+                "the one the manifest never carried - and recording it beside the "
+                "floor is what lets a later reader tell a desk that went dark from a "
+                "desk that was one source away. Both null on every manifest written "
+                "before today, and null reads as unknown rather than as a desk with "
+                "no sources (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-01T12:00",
             change="Added optional rank_version to a run.",

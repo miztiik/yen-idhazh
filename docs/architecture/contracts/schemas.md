@@ -76,7 +76,7 @@ That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). T
 
 The training corpus ships the same way and for the same reason: `corpus/corpus.jsonl` is committed empty, `corpus/corpus.meta.json` holds a zero census, and `corpus/holdout.txt` is empty. A test asserts all three are tracked.
 
-`state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - before anything writes it. It is also registered in `ledger.keyed_paths` in the same commit, keyed on `endpoint_key` alone, so the post-merge settlement already covers it: `state/**/*.csv` is `merge=union`, and two stale checkouts each appending the same retirement would otherwise leave one address retired twice. Registering the key with the shape rather than with the first writer is what makes the settlement true from the first row rather than from the second.
+`state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - one commit before the plan stage started writing it. It is also registered in `ledger.keyed_paths`, keyed on `endpoint_key` alone, so the post-merge settlement already covers it: `state/**/*.csv` is `merge=union`, and two stale checkouts each appending the same retirement would otherwise leave one address retired twice. Registering the key with the shape rather than with the first writer is what makes the settlement true from the first row rather than from the second.
 
 ### The one row contract whose CSV omits `version`
 
