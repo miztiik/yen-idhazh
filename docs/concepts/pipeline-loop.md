@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-02
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -35,7 +35,7 @@ In order, with what each one owns:
 
 | Stage | Owns | Emits |
 | --- | --- | --- |
-| **Collect** | Which sources are consulted and which candidate links survive the filters, including the address markers that keep a syndicated promotional page out of the pool. Honours `robots.txt`; never touches a paywalled or login-walled source. See [../architecture/sources/discovery.md](../architecture/sources/discovery.md). | The day's candidate list. |
+| **Collect** | Which sources are consulted and which candidate links survive the filters, including the address markers that keep a syndicated promotional page out of the pool. Honours `robots.txt`; never touches a paywalled or login-walled source. It also decides which addresses to stop asking: a rest that lifts itself after repeated failures, and the one permanent answer, an address five distinct runs found reporting `410 Gone`. Both are rows under `state/`; neither edits the curated source list. See [../architecture/sources/discovery.md](../architecture/sources/discovery.md) and [../architecture/sources/health.md](../architecture/sources/health.md). | The day's candidate list. |
 | **Extract** | Turning a page into readable text, and **the trust boundary**. This is where a stranger's bytes are sanitized, exactly once. See [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md). Also where an over-long body is truncated and *flagged* as truncated - never silently dropped. Short or list-shaped text is recorded as a signal and still publishes by default. Publisher-declared paywalls and unsupported forms do not publish. | One article payload per item, including the failure cases and recorded shape signals. |
 | **Summarize** | Turning article text into a summary of a pinned shape, deterministically. The output shape is enforced by the decoder, not requested in the prompt. Also writes the item's title: a headline is written to win a click, so the digest publishes its own. If the local model server is down, Summarize records `model_unreachable` on the item rather than blaming the source or the model reply. See [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md). | One summary payload per item. |
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
@@ -102,12 +102,13 @@ ledger contract sit under `state/`:
 | `state/seen/<YYYY-MM>.csv` | Collect | How old is this article, when its feed gave no date? |
 | `state/published.csv` | Assemble | Have we already published this address? |
 | `state/feed-health/<YYYY-MM>.csv` | Collect | What did every feed do, on every run? |
+| `state/feed-retirements.csv` | Collect | Is this address gone for good? |
 | `state/fingerprints.csv` | not wired; intended single writer is Assemble | Which observed pipeline identities have run? The committed file currently has only its header. |
 | `state/item-health/<YYYY-MM>.csv` | the worker, then Assemble | What did every planned item do in this run? |
 
 Three rules hold for all of them:
 
-- **Append, never rewrite.** A mutable flag would turn an append into a read-modify-write over the whole history, and two runs racing on that lose rows.
+- **Append, never rewrite.** A mutable flag would turn an append into a read-modify-write over the whole history, and two runs racing on that lose rows. It is also why an address that has gone is a new row rather than a status field on the source: the retirement ledger is appended, and `config/sources.json` stays a file a person owns.
 - **The stage that can honestly answer is the stage that writes.** Assemble writes the published ledger, not Collect - until a digest is committed, nothing was published, and a run that dies mid-way must not leave a claim that it finished. It is also why the worker writes the item-health row for an item it settled, as soon as it settles: it can answer for that item, and by the time Assemble runs the answer may already have been thrown away with the run. A row is one planned item on one run, so the two writers cannot count the same item twice.
 - **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
 

@@ -49,6 +49,7 @@ from idhazh import (
     rank,
     retention,
     route,
+    source_health,
     summarize,
     tag,
     telemetry,
@@ -67,7 +68,12 @@ from idhazh.contracts.base import canonical_json, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome, RobotsOutcome
+from idhazh.contracts.feed_health import (
+    FeedHealthRow,
+    FetchOutcome,
+    RobotsOutcome,
+    derive_endpoint_key,
+)
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
 from idhazh.contracts.qualification import (
@@ -124,6 +130,16 @@ from idhazh.render import asset_relpath, render_route
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 LOG: Final = logging.getLogger("idhazh")
+#: Why a feed was not asked, in the one cell a later reader has. A rest ends on
+#: its own and a retirement does not, so the two sentences are different.
+RESTING_DETAIL: Final = "resting after repeated failures"
+RETIRED_DETAIL: Final = "address retired after repeated 410 Gone"
+#: Outcomes that never sent a request to the feed address itself: permission was
+#: refused or unknown, the feed was resting, or the address was one we refuse to
+#: dial. Only the rows outside this set are evidence about the feed.
+_NEVER_ASKED: Final[frozenset[FetchOutcome]] = frozenset(
+    {FetchOutcome.ROBOTS_DENIED, FetchOutcome.SKIPPED, FetchOutcome.BLOCKED}
+)
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
 VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
@@ -345,16 +361,45 @@ def stage_plan(
 
     candidates: list[discover.Candidate] = []
     health: list[FeedHealthRow] = []
-    asleep = discover.resting(
-        ledger.load_health(state, today=date, within_days=ledger.HEALTH_WINDOW_DAYS),
-        after_failures=collect.quarantine_after_failures,
+    history = ledger.load_health(state, today=date, within_days=ledger.HEALTH_WINDOW_DAYS)
+    asleep = discover.resting(history, after_failures=collect.quarantine_after_failures)
+    # Retirement outranks rest, so it is decided first and from its own evidence:
+    # five distinct runs reading `410 Gone` from one address. The ledger is read
+    # before the row is filed and the two are joined, so the run that decides is
+    # also the first run that does not ask.
+    endpoints = source_health.endpoint_records(history)
+    gone = {row.endpoint_key for row in ledger.load_retirements(state)}
+    filed = source_health.retirements(
+        settings.sources.feeds,
+        records=endpoints,
+        already=gone,
+        after_runs=collect.feed_http_410_runs_before_retirement,
+        date=date,
+        run_id=run_id,
     )
+    if filed:
+        ledger.append_retirements(state, filed)
+        gone |= {row.endpoint_key for row in filed}
+        for row in filed:
+            LOG.warning(
+                "feed endpoint retired id=%s cause=%s runs=%s file=%s",
+                row.feed_id,
+                row.cause.value,
+                len(row.evidence_run_ids),
+                ledger.feed_retirements_relpath(),
+            )
+    retired = source_health.retired(settings.sources.feeds, gone)
     read = failed = skipped = 0
     for feed in settings.sources.feeds:
+        if feed.id in retired:
+            skipped += 1
+            LOG.info("feed endpoint retired, not asked id=%s", feed.id)
+            health.append(_rest_row(feed, at=generated_at, run_id=run_id, why=RETIRED_DETAIL))
+            continue
         if feed.id in asleep:
             skipped += 1
             LOG.info("feed resting id=%s", feed.id)
-            health.append(_rest_row(feed, at=generated_at, run_id=run_id))
+            health.append(_rest_row(feed, at=generated_at, run_id=run_id, why=RESTING_DETAIL))
             continue
         result = read_url(feed.url)
         found = discover.candidates_from_feed(feed, result.body) if result.ok else []
@@ -449,6 +494,8 @@ def stage_plan(
         front_page_keys=frozenset(front_page),
         lens_bonuses=lens_bonuses,
         cap=cap,
+        retired_keys=gone,
+        endpoints=endpoints,
     )
 
     items = _dedupe_planned_items(items)
@@ -488,6 +535,8 @@ def stage_plan(
             front_page_keys=frozenset(front_page),
             lens_bonuses=lens_bonuses,
             cap=cap,
+            retired_keys=gone,
+            endpoints=endpoints,
             day_ceiling=rank.DayCeiling(per_source=per_source, carried=dict(day_carried)),
         )
         capped = _dedupe_planned_items(capped)
@@ -532,6 +581,8 @@ def _plan_desks(
     front_page_keys: frozenset[str],
     lens_bonuses: dict[str, float],
     cap: int | None,
+    retired_keys: set[str],
+    endpoints: dict[str, source_health.EndpointRecord],
     day_ceiling: rank.DayCeiling | None = None,
 ) -> tuple[list[VerticalPlan], list[PlannedItem]]:
     """Rank every desk once and return what they offered, desk by desk.
@@ -550,12 +601,17 @@ def _plan_desks(
     summaries: list[VerticalPlan] = []
     items: list[PlannedItem] = []
     for vertical in settings.taxonomy.verticals:
-        live = discover.live(settings.sources.feeds, vertical.id)
+        askable = source_health.eligible(
+            settings.sources.feeds,
+            vertical.id,
+            retired_keys=retired_keys,
+            records=endpoints,
+        )
         summary, planned = rank.plan_vertical(
             vertical,
             [c for c in candidates if c.vertical == vertical.id],
             config=settings.app.collect,
-            live_feeds=len(live),
+            eligible_feeds=len(askable),
             now=now,
             first_seen=first_seen,
             already_published=already_published,
@@ -576,12 +632,17 @@ def _plan_desks(
     return summaries, items
 
 
-def _rest_row(feed: FeedDef, *, at: str, run_id: str) -> FeedHealthRow:
-    """The row a quarantined feed gets. A record that we chose not to ask.
+def _rest_row(feed: FeedDef, *, at: str, run_id: str, why: str) -> FeedHealthRow:
+    """The row a feed we chose not to ask gets. A record, not a measurement.
 
-    Written rather than omitted so the rest can end: a run that left no trace
+    Written rather than omitted so a rest can end: a run that left no trace
     would leave the old failures as the newest thing on record forever, and the
-    feed would never be tried again.
+    feed would never be tried again. A retired address gets one for a different
+    reason - the ledger has to stay one row per feed per run, or the console's
+    denominator counts a desk it never asked.
+
+    `why` is the difference between the two, because a rest lifts itself and a
+    retirement does not.
     """
     return FeedHealthRow(
         version=FeedHealthRow.schema_version(),
@@ -591,7 +652,9 @@ def _rest_row(feed: FeedDef, *, at: str, run_id: str) -> FeedHealthRow:
         checked_at=at,
         outcome=FetchOutcome.SKIPPED,
         items=0,
-        detail="resting after repeated failures",
+        detail=why,
+        endpoint_key=derive_endpoint_key(feed.url),
+        target_attempted=False,
     )
 
 
@@ -603,11 +666,20 @@ def _health_row(
     at: str,
     run_id: str,
 ) -> FeedHealthRow:
-    """This run's verdict on one feed.
+    """This run's verdict on one feed, and on the address it was configured with.
 
     `detail` is our own sentence about the failure - a status name or an
     exception class - and never the response body. A feed is a stranger's text
     and this row lands on a published page (Rule #11).
+
+    `endpoint_key` is what makes a later retirement possible at all: `feed_id`
+    names a line of curated config, so an address that changed and an address
+    that died read identically without it.
+
+    `target_attempted` separates evidence about the feed from evidence about
+    permission. A robots refusal, a rest and an address we refused to dial each
+    left the feed itself un-asked, and only the rows that did ask say anything
+    about whether it still works.
     """
     return FeedHealthRow(
         version=FeedHealthRow.schema_version(),
@@ -619,6 +691,9 @@ def _health_row(
         status=result.status,
         items=found,
         detail=result.detail[:200] if result.detail else None,
+        endpoint_key=derive_endpoint_key(feed.url),
+        robots_outcome=result.robots,
+        target_attempted=result.outcome not in _NEVER_ASKED,
     )
 
 

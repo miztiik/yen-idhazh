@@ -1230,6 +1230,8 @@ def build_manifest(
                     if item.vertical == vertical.id and item.introduced_by_run == run_n
                 ),
                 below_feed_floor=vertical.below_feed_floor,
+                eligible_feeds=vertical.eligible_feeds,
+                feed_floor=vertical.feed_floor,
             )
             for vertical in plan.verticals
         ],

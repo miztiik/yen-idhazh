@@ -25,7 +25,13 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import cli, config, fetch, ledger
 from idhazh.contracts.app_config import AppConfig, RunConfig
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.feed_health import (
+    FeedHealthRow,
+    FetchOutcome,
+    RobotsOutcome,
+    derive_endpoint_key,
+)
+from idhazh.contracts.feed_retirement import RetirementCause
 from idhazh.contracts.item_health import (
     FAILURE_CODE_STAGES,
     FailureCode,
@@ -352,7 +358,7 @@ def test_a_retired_feed_is_never_fetched_and_never_reaches_a_reader() -> None:
     """
     built = plan([TRADE, COMMUNITY, NOTICES], retired=[retire(LAB)])
     assert built.feeds_read == 3, "a retired feed costs no request"
-    assert built.verticals[0].live_feeds == 3
+    assert built.verticals[0].eligible_feeds == 3
     assert built.items, "the live feeds still made a day"
     assert not any(item.source_id == "lab-blog" for item in built.items)
 
@@ -365,12 +371,12 @@ def test_a_retired_feed_does_not_count_toward_the_feed_floor() -> None:
     of bookkeeping.
     """
     dark = plan([LAB, TRADE], retired=[retire(COMMUNITY)])
-    assert dark.verticals[0].live_feeds == 2
+    assert dark.verticals[0].eligible_feeds == 2
     assert dark.verticals[0].below_feed_floor
     assert dark.items == [], "a vertical under its floor plans nothing"
 
     lit = plan([LAB, TRADE, COMMUNITY])
-    assert lit.verticals[0].live_feeds == 3
+    assert lit.verticals[0].eligible_feeds == 3
     assert not lit.verticals[0].below_feed_floor
     assert lit.items, "the same feed, live, is what the floor was waiting for"
 
@@ -381,7 +387,7 @@ def test_a_retired_feed_does_not_count_toward_the_feed_floor() -> None:
 def test_a_vertical_below_its_feed_floor_is_counted_but_renders_nothing() -> None:
     built = plan([LAB, TRADE])
     vertical = built.verticals[0]
-    assert vertical.live_feeds == 2
+    assert vertical.eligible_feeds == 2
     assert vertical.below_feed_floor
     assert vertical.considered > 0, "it is still collected - the desk is built in the open"
     assert vertical.planned == 0
@@ -393,7 +399,7 @@ def test_a_second_vertical_with_no_feeds_still_appears_in_the_plan() -> None:
     energy = VerticalDef(id="energy", display_name="Energy", min_feeds=3)
     built = plan([LAB, TRADE, COMMUNITY], verticals=[AI, energy])
     assert [vertical.id for vertical in built.verticals] == ["ai", "energy"]
-    assert built.verticals[1].live_feeds == 0
+    assert built.verticals[1].eligible_feeds == 0
     assert built.verticals[1].planned == 0
 
 
@@ -1161,6 +1167,308 @@ def test_quarantine_never_touches_the_committed_source_list() -> None:
         run_n=failures_to_rest() + 1,
     )
     assert read_text(CONFIG_DIR / "sources.json") == before
+
+
+# --- retiring an address the server says is gone ------------------------------
+
+
+def seed_gone(state: Path, feed: FeedDef, runs: int) -> None:
+    """A history of nothing but `410 Gone`, one row per run, keyed on the address."""
+    ledger.append_health(
+        state,
+        DATE,
+        [
+            FeedHealthRow(
+                version=FeedHealthRow.schema_version(),
+                run_id=f"{DATE}-{n}",
+                date=DATE,
+                feed_id=feed.id,
+                checked_at=f"2026-08-22T{n:02d}:00:00Z",
+                outcome=FetchOutcome.PERMANENT,
+                status=410,
+                items=0,
+                detail="HTTP 410",
+                endpoint_key=derive_endpoint_key(feed.url),
+                robots_outcome=RobotsOutcome.ALLOWED,
+                target_attempted=True,
+            )
+            for n in range(1, runs + 1)
+        ],
+    )
+
+
+def runs_to_retire() -> int:
+    """The committed threshold, so this test moves when the config does."""
+    return config.load().app.collect.feed_http_410_runs_before_retirement
+
+
+def retire_after_gone(state: Path) -> RunPlan:
+    """The run that reads the evidence. `trade-press` is absent from the fetcher.
+
+    `fetcher_over` raises on an address no fixture covers, so "zero requests to
+    that address" is the harness rather than an assertion nobody would notice
+    going stale. `NOTICES` is here to keep the desk on its floor once the dead
+    address stops counting.
+    """
+    seed_gone(state, TRADE, runs_to_retire())
+    return plan(
+        [LAB, TRADE, COMMUNITY, NOTICES],
+        fetcher=fetcher_over(LAB_URL, COMMUNITY_URL, NOTICES_URL),
+        state=state,
+        run_n=runs_to_retire() + 1,
+    )
+
+
+def test_five_runs_of_gone_retire_the_address_and_stop_asking_it() -> None:
+    """The oracle. One row, no request, and the day still gets made."""
+    state = Path(tempfile.mkdtemp())
+    built = retire_after_gone(state)
+
+    rows = ledger.load_retirements(state)
+    assert len(rows) == 1
+    assert rows[0].feed_id == "trade-press"
+    assert rows[0].endpoint_key == derive_endpoint_key(TRADE_URL)
+    assert rows[0].cause is RetirementCause.HTTP_410
+    assert rows[0].decided_by_run == built.run_id
+    assert len(rows[0].evidence_run_ids) == runs_to_retire()
+    assert built.feeds_skipped == 1
+    assert built.items, "the feeds that answer still make a day"
+
+
+def test_a_retirement_is_filed_once_however_many_runs_read_the_same_evidence() -> None:
+    """The decision is permanent for one address, so it is written down once."""
+    state = Path(tempfile.mkdtemp())
+    retire_after_gone(state)
+    plan(
+        [LAB, TRADE, COMMUNITY, NOTICES],
+        fetcher=fetcher_over(LAB_URL, COMMUNITY_URL, NOTICES_URL),
+        state=state,
+        run_n=runs_to_retire() + 2,
+    )
+    assert len(ledger.load_retirements(state)) == 1
+
+
+def test_a_retired_address_leaves_a_row_that_run_and_says_which_reason() -> None:
+    """One row per feed per run holds, or the console's denominator counts a desk
+    it never asked. The detail is what separates a rest that lifts itself from a
+    retirement that does not."""
+    state = Path(tempfile.mkdtemp())
+    retire_after_gone(state)
+    rows = [row for row in health_after(state) if row.feed_id == "trade-press"]
+    assert rows[-1].outcome is FetchOutcome.SKIPPED
+    assert rows[-1].detail == cli.RETIRED_DETAIL
+    assert not rows[-1].failing
+
+
+def test_four_runs_of_gone_retire_nothing_and_the_address_is_still_asked() -> None:
+    """One short of the rule is not the rule."""
+    state = Path(tempfile.mkdtemp())
+    seed_gone(state, TRADE, runs_to_retire() - 1)
+    built = plan([LAB, TRADE, COMMUNITY], state=state, run_n=runs_to_retire())
+    assert ledger.load_retirements(state) == []
+    assert built.feeds_skipped == 0
+
+
+def test_a_permanent_failure_that_is_not_gone_never_retires_an_address() -> None:
+    """A 404 says something about today. Only `410` says the address is not coming back.
+
+    Retiring on anything softer eventually removes unique primary or regional
+    reporting over one bad week, and nothing here puts it back without a person
+    noticing it went.
+    """
+    state = Path(tempfile.mkdtemp())
+    ledger.append_health(
+        state,
+        DATE,
+        [
+            FeedHealthRow(
+                version=FeedHealthRow.schema_version(),
+                run_id=f"{DATE}-{n}",
+                date=DATE,
+                feed_id="trade-press",
+                checked_at=f"2026-08-22T{n:02d}:00:00Z",
+                outcome=FetchOutcome.PERMANENT,
+                status=404,
+                items=0,
+                endpoint_key=derive_endpoint_key(TRADE_URL),
+            )
+            for n in range(1, runs_to_retire() * 2 + 1)
+        ],
+    )
+    plan([LAB, TRADE, COMMUNITY], state=state, run_n=runs_to_retire() * 2 + 1)
+    assert ledger.load_retirements(state) == []
+
+
+def test_retirement_never_touches_the_committed_source_list() -> None:
+    """The run writes evidence about curation and never writes curation.
+
+    The feed keeps its entry, so every `source_id` a published day carries still
+    resolves to a title. What changed is a row under `state/`.
+    """
+    state = Path(tempfile.mkdtemp())
+    before = read_text(CONFIG_DIR / "sources.json")
+    retire_after_gone(state)
+    assert read_text(CONFIG_DIR / "sources.json") == before
+    assert TRADE.title == "Example Trade Press"
+
+
+def test_editing_the_configured_url_makes_the_feed_askable_again() -> None:
+    """The reversal path, and it is one line of curated config.
+
+    This is `test_a_retirement_outranks_a_rest` with one URL edited, and the
+    opposite answer. Five `410` results are five availability strikes as well,
+    so either way the feed sits out a rest - but a rest ends, and a retirement
+    does not. A changed address inherits neither the retirement nor the strikes
+    against the old one.
+    """
+    state = Path(tempfile.mkdtemp())
+    retire_after_gone(state)
+    moved = TRADE.model_copy(update={"url": QUIET_URL})
+
+    asked = False
+    for run_n in range(runs_to_retire() + 2, runs_to_retire() * 4 + 2):
+        built = plan(
+            [LAB, moved, COMMUNITY, NOTICES],
+            fetcher=fetcher_over(LAB_URL, QUIET_URL, COMMUNITY_URL, NOTICES_URL),
+            state=state,
+            run_n=run_n,
+        )
+        if built.feeds_skipped == 0:
+            asked = True
+            break
+
+    assert asked, "the moved address is asked like any other"
+    assert len(ledger.load_retirements(state)) == 1, "and no second row is filed"
+
+
+def test_a_retirement_outranks_a_rest() -> None:
+    """Both say "not asked"; only one of them ever ends.
+
+    A rest lifts itself after `availability_rest_runs` skips, so an address that
+    is both resting and retired would come back if the rest were the rule that
+    decided. It is not.
+    """
+    state = Path(tempfile.mkdtemp())
+    seed_gone(state, TRADE, runs_to_retire())
+    asked = False
+    for run_n in range(runs_to_retire() + 1, runs_to_retire() * 4 + 2):
+        built = plan(
+            [LAB, TRADE, COMMUNITY, NOTICES],
+            fetcher=fetcher_over(LAB_URL, COMMUNITY_URL, NOTICES_URL),
+            state=state,
+            run_n=run_n,
+        )
+        asked = asked or built.feeds_skipped == 0
+    assert not asked, "a retired address must never be asked again"
+
+
+def test_a_history_with_no_endpoint_key_can_never_retire_anything() -> None:
+    """Every row committed before 2026-09-02 carries an empty cell.
+
+    Backfilling one from today's config was refused when the column landed, so
+    the first automatic retirement can only rest on rows written after the
+    writer started filling it. This is that rule, at the stage that files.
+    """
+    state = Path(tempfile.mkdtemp())
+    ledger.append_health(
+        state,
+        DATE,
+        [
+            FeedHealthRow(
+                version=FeedHealthRow.schema_version(),
+                run_id=f"{DATE}-{n}",
+                date=DATE,
+                feed_id="trade-press",
+                checked_at=f"2026-08-22T{n:02d}:00:00Z",
+                outcome=FetchOutcome.PERMANENT,
+                status=410,
+                items=0,
+            )
+            for n in range(1, runs_to_retire() * 2 + 1)
+        ],
+    )
+    plan([LAB, TRADE, COMMUNITY], state=state, run_n=runs_to_retire() * 2 + 1)
+    assert ledger.load_retirements(state) == []
+
+
+# --- what the plan records about a feed --------------------------------------
+
+
+def test_a_run_records_which_address_it_asked_and_under_what_permission() -> None:
+    """`feed_id` names a line of config, so an address that changed and an address
+    that died read identically without the key beside it."""
+    state = Path(tempfile.mkdtemp())
+    plan([LAB, TRADE, COMMUNITY], state=state)
+    row = next(r for r in health_after(state) if r.feed_id == "lab-blog")
+    assert row.endpoint_key == derive_endpoint_key(LAB_URL)
+    assert row.target_attempted is True
+
+
+def test_a_refusal_records_that_the_feed_itself_was_never_asked() -> None:
+    """Evidence about permission is not evidence about the address."""
+    state = Path(tempfile.mkdtemp())
+    plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=failing(
+            COMMUNITY_URL,
+            fetch.refused(RobotsOutcome.DENIED),
+            LAB_URL,
+            TRADE_URL,
+        ),
+        state=state,
+    )
+    row = next(r for r in health_after(state) if r.feed_id == "community")
+    assert row.robots_outcome is RobotsOutcome.DENIED
+    assert row.target_attempted is False
+    assert row.endpoint_key == derive_endpoint_key(COMMUNITY_URL)
+
+
+def test_an_address_robots_refuses_does_not_count_toward_the_feed_floor() -> None:
+    """The floor counts the sources a desk may lawfully ask.
+
+    `ai` has a floor of three, so refusing one of its three feeds takes the desk
+    under it and the desk plans nothing - which is the same visible cost a
+    curated tombstone has, for the same reason.
+    """
+    state = Path(tempfile.mkdtemp())
+    plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=failing(COMMUNITY_URL, fetch.refused(RobotsOutcome.DENIED), LAB_URL, TRADE_URL),
+        state=state,
+        run_n=1,
+    )
+    built = plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=failing(COMMUNITY_URL, fetch.refused(RobotsOutcome.DENIED), LAB_URL, TRADE_URL),
+        state=state,
+        run_n=2,
+    )
+    assert built.verticals[0].eligible_feeds == 2
+    assert built.verticals[0].feed_floor == 3
+    assert built.verticals[0].below_feed_floor
+    assert built.items == []
+
+
+def test_a_resting_feed_still_counts_toward_the_feed_floor() -> None:
+    """A rest lifts itself, so it may not take a desk dark on its way past."""
+    state = Path(tempfile.mkdtemp())
+    seed_failures(state, "trade-press", failures_to_rest())
+    built = plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=fetcher_over(LAB_URL, COMMUNITY_URL),
+        state=state,
+        run_n=failures_to_rest() + 1,
+    )
+    assert built.feeds_skipped == 1
+    assert built.verticals[0].eligible_feeds == 3
+    assert not built.verticals[0].below_feed_floor
+    assert built.items, "a resting source is still a source the desk has"
+
+
+def test_a_plan_records_the_floor_it_was_measured_against() -> None:
+    """So a payload can be read without the config that produced it."""
+    built = plan([LAB, TRADE, COMMUNITY])
+    assert built.verticals[0].feed_floor == AI.min_feeds
 
 
 # --- sharding ----------------------------------------------------------------

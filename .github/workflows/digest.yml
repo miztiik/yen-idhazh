@@ -294,6 +294,12 @@ jobs:
       # A bad day is exactly the day worth measuring, so waiting for a successful
       # publish would lose the records that matter most.
       #
+      # `state/feed-retirements.csv` is the third, and it is staged on every run
+      # even though most runs add no row: `git add` runs under `set -euo
+      # pipefail`, so a path missing from the checkout aborts the whole step and
+      # costs the two ledgers beside it. The file ships with its header for that
+      # reason.
+      #
       # `append_health` settles the shard it wrote, but against the checkout,
       # which is frozen at the commit this run was triggered at - so a SECOND
       # ATTEMPT at this same plan cannot see the rows the first attempt pushed
@@ -301,7 +307,9 @@ jobs:
       # both, and one bad run reads as two failures.
       # `DROP_REPEATED_ROWS_COMMAND` is the half that runs after the merge, on
       # the merged file - the only place the two attempts have ever been
-      # together.
+      # together. It settles the retirement ledger too, where two stale checkouts
+      # reading the same five 410 results would otherwise retire one address
+      # twice.
       - name: Commit what the plan saw
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
@@ -310,7 +318,7 @@ jobs:
           DROP_REPEATED_ROWS_COMMAND: "python -m idhazh dedupe-ledgers"
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/seen state/feed-health
+          state/seen state/feed-health state/feed-retirements.csv
 
       - uses: actions/upload-artifact@v7
         with:
