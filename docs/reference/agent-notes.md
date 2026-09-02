@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -1038,6 +1038,30 @@ the import itself:
 Run that before any schema regeneration, for a second reason as well: it prints
 which checkout the editable install points at, and an editable install left over
 from the shared checkout answers about a different revision of the package.
+
+**The shared venv can simply be MISSING a declared dependency, and that reads as
+a broken tree rather than a stale environment.** Observed 2026-09-02: `mypy
+--strict backend` reported one error, `Cannot find implementation or library
+stub for module named "protego"` in `fetch.py`, and `pytest` never reached a
+test - it died loading `conftest.py` with `ModuleNotFoundError: No module named
+'protego'`. Both point at a source file, and `protego==0.6.2` had been a
+declared dependency in `pyproject.toml` for weeks. Do not rebuild the venv for
+this, and do not read it as an ABI mismatch - the check above answers that
+question and answers it no.
+
+The one command that separates a stale venv from a broken tree, and it costs a
+download of nothing:
+
+```powershell
+& .\.venv\Scripts\python.exe -m pip install --dry-run <the module pip names>
+```
+
+**If it would install that one distribution and move nothing else, the venv is
+behind `pyproject.toml` and a plain install fixes it.** If it would change a
+version something else pins, stop - that is the `.[faithfulness]` trap recorded
+below, and the answer is a separate venv. Installing the one missing wheel is
+additive, takes seconds, and repairs the venv for every sibling agent sharing
+it.
 
 ## The editor's own search tools
 
