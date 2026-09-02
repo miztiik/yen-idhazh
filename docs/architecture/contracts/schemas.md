@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-02
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -52,6 +52,7 @@ The shapes, and where each one lives once written:
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
+| `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
 | `RuntimeCountersRow` | `runtime-counters-row` | one appended row of `state/runtime-counters.csv` |
@@ -73,6 +74,8 @@ Everything under `state/` is a row contract rather than a file contract, because
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 
 The training corpus ships the same way and for the same reason: `corpus/corpus.jsonl` is committed empty, `corpus/corpus.meta.json` holds a zero census, and `corpus/holdout.txt` is empty. A test asserts all three are tracked.
+
+`state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - before anything writes it. It is also registered in `ledger.keyed_paths` in the same commit, keyed on `endpoint_key` alone, so the post-merge settlement already covers it: `state/**/*.csv` is `merge=union`, and two stale checkouts each appending the same retirement would otherwise leave one address retired twice. Registering the key with the shape rather than with the first writer is what makes the settlement true from the first row rather than from the second.
 
 ### Two of these are contracts and are deliberately not migration surfaces
 
@@ -104,6 +107,7 @@ carry a time window?**
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
 | `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, but [nothing deletes a month yet](../publishing/layout.md#what-bounds-the-committed-state-tree) |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
+| `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
 
 A window turns a shard into a skipped file open. `ledger.shards_in_window`
 walks the days the window can touch and opens only those stems, so a plan run
@@ -149,6 +153,8 @@ Adding a column is the same commit shape as dropping one, and for the same reaso
 What differs is the cell. A column is appended at the end of the row and never filed by meaning, because a cell inserted in the middle shifts every historical value one place right under a reader that maps by position. The new field is nullable, and every row that predates it gets an **empty** cell. Zero, or a value recomputed today, would claim the older run measured something it never looked at - and for a digest that is worse than silence, because the whole point of a digest is that somebody can check it.
 
 The rewrite is small enough to be reviewed as a diff rather than run as a utility: the header gains one name and each row gains one comma, and nothing else in the file moves. `EvalRow` gained `self_repetition` this way on 2026-08-26 and `source_digest` on 2026-08-27. A committed test appends to a byte copy of the real ledger and asserts every historical cell is where it was, which is the check a fork actually needs.
+
+**Past a few thousand rows it stops being reviewable as a diff, and then it is a utility like any other narrowing.** `FeedHealthRow` gained five columns on 2026-09-02 across 6,433 committed rows, so the rewrite is `backend/utilities/migrate_feed_health.py` and it carries the same two-part oracle the narrowing utility does: every cell the old header named is still under that name and in that order, and every rewritten row loads through the contract with the new cells absent. Its own test is stronger than either half, because the pre-migration file no longer exists to compare against - it derives the narrow shape by dropping the five appended columns off the committed shard, proves `require_matching_header` refuses an append onto that, and then proves the utility turns it back into the committed bytes exactly. That is what says the committed bytes are the migration's output rather than a hand edit.
 
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 

@@ -1,9 +1,10 @@
 """Read and append the committed ledgers under `state/`.
 
-Five files, all append-only, all written by CI and read by a later run. They
-exist because the pipeline has no memory of its own: every run starts on a
-fresh machine with a fresh checkout, so anything one run needs to tell the next
-has to be committed (Rule #1).
+Every file here is written by CI and read by a later run. All but one are
+append-only; the exception is named below. They exist because the pipeline has
+no memory of its own: every run starts on a fresh machine with a fresh
+checkout, so anything one run needs to tell the next has to be committed
+(Rule #1).
 
 A ledger shards by month only when the read that consumes it carries a time
 window. A window lets `shards_in_window` skip whole files; without one, every
@@ -42,6 +43,11 @@ looks in one of two places rather than in a directory and a lookup table. It is
 the one file here that is rewritten rather than appended, because every row in
 it is derived from the shard it summarises.
 
+`state/feed-retirements.csv` answers "is this address gone for good?" One row
+per retired feed endpoint, read whole because a retirement has no time bound -
+so it is one file. It is also the smallest: a row is written only when a server
+has reported one address permanently gone on five distinct runs.
+
 No reader fails on a missing file. A fresh clone has no history, and a run with
 no history is a run where nothing was seen, nothing was published and no feed
 has a record yet - which is exactly what an empty result says.
@@ -72,6 +78,7 @@ ITEM_HEALTH_DIRNAME: Final = "item-health"
 TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 PUBLISHED_FILENAME: Final = "published.csv"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
+FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
 #: What makes two item-health rows the same record. One row per planned item per
 #: run, which is what the ledger has always meant - written down here because two
@@ -87,6 +94,13 @@ ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
 #: re-run's items are skipped there too, so the two files stay describing the
 #: same attempt.
 RUNTIME_COUNTERS_KEY: Final = ("date", "run_id", "shard")
+
+#: What makes two retirement rows the same record. The address and nothing else:
+#: a retirement is permanent for one endpoint key, so a second row for it says
+#: nothing the first did not. `feed_id` is deliberately absent - renaming a feed
+#: in curated config must not make its dead address eligible again, and editing
+#: that feed's URL already produces a different key.
+FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
 
 #: How far back a health read looks. Not a policy - just enough history to reach
 #: into last month's shard, so a quarantine decided on the first of the month can
@@ -149,6 +163,15 @@ def runtime_counters_relpath() -> str:
 
 def runtime_counters_path(state_dir: Path) -> Path:
     return state_dir / RUNTIME_COUNTERS_FILENAME
+
+
+def feed_retirements_relpath() -> str:
+    """`state/feed-retirements.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{FEED_RETIREMENTS_FILENAME}"
+
+
+def feed_retirements_path(state_dir: Path) -> Path:
+    return state_dir / FEED_RETIREMENTS_FILENAME
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
@@ -410,9 +433,15 @@ def keyed_paths(state_dir: Path) -> list[tuple[Path, tuple[str, ...]]]:
     key: `load_seen` folds a second sight by keeping the earliest, and a feed's
     row is one verdict per feed per run, which two runs are entitled to write
     twice.
+
+    `state/feed-retirements.csv` is listed before anything writes it, because the
+    settlement runs over whatever it finds and a missing file settles to nothing.
+    Registering it with the shape rather than with its first writer is what stops
+    two stale checkouts leaving one address retired twice.
     """
     return [
         (runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY),
+        (feed_retirements_path(state_dir), FEED_RETIREMENT_KEY),
         *(
             (path, ITEM_HEALTH_KEY)
             for path in sorted((state_dir / ITEM_HEALTH_DIRNAME).glob("*.csv"))
