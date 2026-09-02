@@ -172,6 +172,40 @@ contract (Rule #6). What it is for, and why the control cannot live at the
 faithfulness score, is
 [../architecture/sources/discovery.md](../architecture/sources/discovery.md).
 
+## Source-lifecycle surface
+
+Six `collect` knobs landed on 2026-09-02 with **no reader**, and that is
+deliberate. They name four different questions that
+`collect.quarantine_after_failures` had been answering on its own, so the changes
+that move the behaviour onto them are reviewable as behaviour rather than as a
+knob and a rule at once.
+
+| Knob | Default | What it will decide |
+| --- | --- | --- |
+| `availability_strikes_before_rest` | 5 | Results counting against a feed before a run stops asking it. The successor to `quarantine_after_failures`, named for what it counts. |
+| `availability_rest_runs` | 5 | Runs a rested feed is skipped before it is asked again. |
+| `feed_http_410_runs_before_retirement` | 5 | Distinct runs that must each read `410 Gone` from one address before that address is retired. |
+| `robots_denied_recheck_runs` | 1 | Runs to wait before asking `robots.txt` again after a refusal. |
+| `robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read at all. |
+| `source_yield_min_complete_days` | 30 | Complete days of item-health evidence a per-source yield judgement needs before it may be made. |
+
+`quarantine_after_failures` keeps deciding every rest until a later change moves
+it, and both it and `availability_strikes_before_rest` carry 5, so the emitted
+config says the same thing twice on purpose for now. Removing the old name is a
+removal with a read-side migration behind it (`CLAUDE.md` section 11), which is
+why it is a change of its own rather than a line in this one.
+
+**The two recheck cadences are one number in two knobs, and they still earn
+both.** A refusal is a publisher's stated policy; an unreadable `robots.txt` is
+our own failed read. One name for both means an edit meant for one silently moves
+the other, which is the defect this whole block exists to undo.
+
+**`source_yield_min_complete_days` is a floor on making a judgement, not a
+threshold on yield.** Below it any yield number is an estimate rather than a
+measurement (Rule #10), and no source may be demoted on one. What the window is
+for is
+[../architecture/sources/health.md](../architecture/sources/health.md).
+
 ## Training-corpus surface
 
 The `finetune` block sizes a file CI commits and two schedules that maintain it.

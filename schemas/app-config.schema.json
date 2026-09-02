@@ -82,6 +82,20 @@
     "CollectConfig": {
       "additionalProperties": false,
       "properties": {
+        "availability_rest_runs": {
+          "default": 5,
+          "description": "How many runs a rested feed is skipped before it is asked again. The rest ends on its own, so a source that came back is live on that very run and a source that is still dead costs one request per cycle rather than one per run.",
+          "minimum": 1,
+          "title": "Availability Rest Runs",
+          "type": "integer"
+        },
+        "availability_strikes_before_rest": {
+          "default": 5,
+          "description": "Consecutive results that count against a feed before a run stops asking it. The successor to quarantine_after_failures, named for what it counts: the old name reads as a policy about quarantine and is now one of two different questions. Nothing reads this yet - the strike rule moves onto it in a later change, and both names carry the same 5 until then.",
+          "minimum": 1,
+          "title": "Availability Strikes Before Rest",
+          "type": "integer"
+        },
         "blocked_url_markers": {
           "description": "Case-insensitive substrings of a canonical address that never enter the pool. For the promotional page a working news feed syndicates: an affiliate product review is short declarative prose, so it is trivially entailed and no faithfulness threshold detects it at any cut. Empty by default - the entries are a source list and live in config/ (Rule #6).",
           "items": {
@@ -89,6 +103,13 @@
           },
           "title": "Blocked Url Markers",
           "type": "array"
+        },
+        "feed_http_410_runs_before_retirement": {
+          "default": 5,
+          "description": "Distinct runs that must each read HTTP 410 from one address before that address is retired. Distinct runs and not attempts: one bad afternoon retrying itself is one run's evidence.",
+          "minimum": 1,
+          "title": "Feed Http 410 Runs Before Retirement",
+          "type": "integer"
         },
         "front_page_bonus": {
           "default": 0.4,
@@ -151,6 +172,20 @@
           "title": "Repetition Weight",
           "type": "number"
         },
+        "robots_denied_recheck_runs": {
+          "default": 1,
+          "description": "Runs to wait before asking robots.txt again after a refusal. One, because permission can be granted back at any moment and a refusal costs one small request to re-establish - a longer wait buys nothing measurable and delays a source's return.",
+          "minimum": 1,
+          "title": "Robots Denied Recheck Runs",
+          "type": "integer"
+        },
+        "robots_unreachable_recheck_runs": {
+          "default": 1,
+          "description": "The same, for permission we could not establish at all. Separate from the denial cadence because the two are different facts: one is a publisher's stated policy and the other is our own failed read.",
+          "minimum": 1,
+          "title": "Robots Unreachable Recheck Runs",
+          "type": "integer"
+        },
         "seen_window_days": {
           "default": 90,
           "description": "How far back the first-sight store is consulted. Older shards stay committed and readable; they are just not evidence about today.",
@@ -177,6 +212,13 @@
           },
           "title": "Settled Failure Codes",
           "type": "array"
+        },
+        "source_yield_min_complete_days": {
+          "default": 30,
+          "description": "Complete days of item-health evidence a per-source yield judgement needs before it may be made at all. Below it any yield threshold is an estimate rather than a measurement (Rule #10), and no source may be demoted on one.",
+          "minimum": 1,
+          "title": "Source Yield Min Complete Days",
+          "type": "integer"
         },
         "tier_weights": {
           "$ref": "#/$defs/TierWeights"
@@ -1673,6 +1715,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "collect.availability_strikes_before_rest, collect.availability_rest_runs, collect.feed_http_410_runs_before_retirement, collect.robots_denied_recheck_runs, collect.robots_unreachable_recheck_runs and collect.source_yield_min_complete_days added, defaulting to 5, 5, 5, 1, 1 and 30. Additive with defaults, so a config written before today still validates. Nothing reads them yet, and collect.quarantine_after_failures still decides every rest.",
+      "version": "2026-09-02T20:00",
+      "why": "The source lifecycle is four different questions - may we ask, does the address work today, is the address gone for good, and does the source publish anything worth reading - and one knob answered all of them. Naming each one first means the changes that read them are reviewable as behaviour rather than as a knob and a behaviour at once (docs/architecture/sources/health.md)."
+    },
+    {
       "change": "ui.offline_version, ui.offline_retired_through and ui.offline_days_kept added, defaulting to 1, 0 and 14. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Additive with defaults, so a config written before today still validates.",
       "version": "2026-09-02T18:00",
       "why": "The site ships a service worker, so a day a reader has already opened can be read again with no network. A worker is the only code this project ships that outlives the tab, so the switch that turns it off is a contract rather than a code edit: `offline_retired_through` retires every worker at or below the version it names, and a retired worker unregisters itself and deletes every cache it owns. `offline_days_kept` bounds what the worker keeps, because a cache that grows with the archive is the failure that argued against caching days at all (Rule #6, docs/concepts/ui-shell.md)."
@@ -2084,7 +2131,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-02T18:00",
+      "default": "2026-09-02T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2098,5 +2145,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-02T18:00"
+  "version": "2026-09-02T20:00"
 }

@@ -2,10 +2,15 @@
   "checked_at": "2026-08-23T06:00:00Z",
   "date": "2026-08-23",
   "detail": null,
+  "endpoint_key": null,
   "feed_id": "example-lab-blog",
   "items": 7,
   "outcome": "ok",
+  "robots_checked_at": null,
+  "robots_outcome": null,
+  "robots_status": null,
   "run_id": "2026-08-23-1",
   "status": 200,
+  "target_attempted": null,
   "version": "2026-08-23"
 }
