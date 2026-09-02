@@ -1,0 +1,10 @@
+version,run_id,date,feed_id,checked_at,outcome,status,items,detail,endpoint_key,robots_outcome,robots_checked_at,robots_status,target_attempted
+2026-09-02T20:00,2026-08-30-1,2026-08-30,oracle-feed,2026-08-30T06:00:00Z,ok,200,5,,,allowed,2026-08-30T06:00:00Z,200,True
+2026-09-02T20:00,2026-08-30-2,2026-08-30,oracle-feed,2026-08-30T07:00:00Z,transient,503,0,read timed out,,allowed,2026-08-30T07:00:00Z,200,True
+2026-09-02T20:00,2026-08-30-2,2026-08-30,oracle-feed,2026-08-30T07:30:00Z,transient,503,0,read timed out,,allowed,2026-08-30T07:30:00Z,200,True
+2026-09-02T20:00,2026-08-30-3,2026-08-30,oracle-feed,2026-08-30T08:00:00Z,ok,200,6,,,allowed,2026-08-30T08:00:00Z,200,True
+2026-09-02T20:00,2026-08-30-3,2026-08-30,oracle-feed,2026-08-30T08:30:00Z,ok,200,0,,,allowed,2026-08-30T08:30:00Z,200,True
+2026-09-02T20:00,2026-08-30-4,2026-08-30,oracle-feed,2026-08-30T09:00:00Z,transient,503,0,read timed out,,allowed,2026-08-30T09:00:00Z,200,True
+2026-09-02T20:00,2026-08-30-5,2026-08-30,oracle-feed,2026-08-30T10:00:00Z,robots_denied,200,0,robots.txt disallows this path,,denied,2026-08-30T10:00:00Z,200,False
+2026-09-02T20:00,2026-08-30-6,2026-08-30,oracle-feed,2026-08-30T11:00:00Z,skipped,,0,resting after repeated failures,,,,,False
+2026-09-02T20:00,2026-08-30-7,2026-08-30,oracle-feed,2026-08-30T12:00:00Z,robots_denied,,0,robots.txt could not be reached,,unreachable,2026-08-30T12:00:00Z,,False

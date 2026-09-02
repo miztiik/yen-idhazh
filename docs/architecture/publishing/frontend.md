@@ -1290,7 +1290,11 @@ the number the page prints. A source that failed twelve times in July and
 answered this morning is healthy, and a lifetime total printed beside a rest
 marker is a number the pipeline never used to rest anything. The rule is
 restated on the read side in `frontend/src/lib/feed-health.ts`, which runs the
-same loop `discover._rests` runs, so a test can drive it with rows it made up.
+same loop `discover.streak` runs, so a test can drive it with rows it made up.
+Both read the same evidence as well: `feedResults()` settles the ledger to one
+row per feed per run before any panel counts it, by the same rule
+`discover.settled` uses, so a run a second attempt wrote down twice is one run
+on the page and one run in the pipeline ([../sources/health.md](../sources/health.md)).
 Ranking follows the same fact: nearest to a rest first, then by how much has
 gone wrong in total, because a feed four failures into a five-failure rule is
 one run from being dropped and a feed with more failures spread over a month is

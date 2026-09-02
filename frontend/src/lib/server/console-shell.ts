@@ -191,7 +191,11 @@ function worstOf(candidates: Candidate[]): Candidate | null {
 	return ranked[0] ?? null;
 }
 
-/** How many feeds are resting, and how many are failing without resting yet. */
+/** How many feeds are resting, and how many are failing without resting yet.
+ *
+ * `results` is already one row per feed per run: `feedResults` settles the
+ * ledger once, so nothing here can count a re-run twice.
+ */
 function feedTrouble(results: FeedResult[], quarantineAfter: number) {
 	const byFeed = new Map<string, FeedResult[]>();
 	for (const row of results) {

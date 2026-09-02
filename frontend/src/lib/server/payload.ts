@@ -19,6 +19,7 @@ import { join, resolve } from 'node:path';
 // where no Vite alias exists to resolve one.
 import { dayKey, toDay } from '../charts/viewport';
 import { orderByTime } from '../day-shape';
+import { settled } from '../feed-health';
 import { dropVectors } from '../payload/project';
 import type { DigestDay, DigestItem } from '$lib/payload/types';
 
@@ -405,17 +406,23 @@ export interface FeedResult {
 	runId: string;
 	date: string;
 	feedId: string;
+	checkedAt: string;
 	outcome: string;
 	status: number | null;
 	items: number;
 	detail: string;
 }
 
-/** Every feed result on record, oldest shard first.
+/** Every feed result on record, one per feed per run, oldest shard first.
  *
  * Sharded by month under `state/feed-health/`, so this reads a directory rather
  * than a file. Absent is the ordinary state of a fresh clone: no run has
  * written a record yet, and no record is exactly what an empty list says.
+ *
+ * Settled here, at the one read every console panel shares, rather than in each
+ * panel. A repeat is a second attempt at one run writing a second account of
+ * one event, and a panel that counted both would count that run twice. Doing it
+ * once is also what stops two panels disagreeing about the same feed.
  */
 export function feedResults(): FeedResult[] {
 	const dir = join(STATE_ROOT, 'feed-health');
@@ -429,6 +436,7 @@ export function feedResults(): FeedResult[] {
 				runId: row.run_id ?? '',
 				date: row.date ?? '',
 				feedId: row.feed_id ?? '',
+				checkedAt: row.checked_at ?? '',
 				outcome: row.outcome ?? '',
 				status: row.status ? Number(row.status) : null,
 				items: Number(row.items ?? 0) || 0,
@@ -436,7 +444,7 @@ export function feedResults(): FeedResult[] {
 			});
 		}
 	}
-	return found;
+	return settled(found);
 }
 
 /** One run of one day, as the manifest recorded it. */

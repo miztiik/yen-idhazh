@@ -2457,9 +2457,11 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None) -> int:
     once. `.github/scripts/commit-and-push.sh` calls it there through
     `DROP_REPEATED_ROWS_COMMAND`, between the rebase and the push.
 
-    Three ledgers declare what makes two of their rows the same record and all
-    three are settled here. `state/seen/` and `state/feed-health/` declare
-    nothing and are left alone - see `ledger.keyed_paths`.
+    Every ledger that declares what makes two of its rows the same record is
+    settled here. `state/seen/` declares nothing and is left alone - see
+    `ledger.keyed_paths`. Feed-health is the one whose repeats can disagree, so
+    it is the one settled by a rule rather than by arrival order; the rule is in
+    `contracts.feed_health.supersedes` and travels with the key.
 
     It always returns 0. A repeat it drops is a repair, not a finding, and a
     non-zero exit here would abort the commit step that called it and cost the
