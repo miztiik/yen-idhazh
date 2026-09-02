@@ -409,8 +409,48 @@ test.describe('what the reader sees', () => {
 		});
 	}
 
-	test('a slow day is one sentence and no panel', async ({ page }) => {
+	test('the day that failed offers the days this device still holds', async ({ page }) => {
+		// A reader with no network, on a day they never opened, has been named the
+		// day and handed a button that cannot work. These are the days already on
+		// their own device, so every one of them opens.
 		const paint = await renderer('PayloadState');
+		await show(
+			page,
+			paint({
+				status: 'unreachable',
+				day: '30 August 2026',
+				onRetry: () => {},
+				held: [
+					{ label: '29 August 2026', href: '/yen-idhazh/2026-08-29/' },
+					{ label: '28 August 2026', href: '/yen-idhazh/2026-08-28/' }
+				]
+			}),
+			'dark'
+		);
+
+		const offered = page.locator('.failed-held a');
+		await expect(offered).toHaveCount(2);
+		await expect(offered.first()).toHaveText('29 August 2026');
+		// The base path is the caller's to build, and a link that dropped it is a
+		// 404 for every reader and correct on a developer machine.
+		await expect(offered.first()).toHaveAttribute('href', '/yen-idhazh/2026-08-29/');
+		await expect(page.locator('[data-payload-held]')).toHaveText(
+			'Days you can read with no network:'
+		);
+
+		// And the same state with nothing held says nothing about it, rather than
+		// an empty heading over an empty list.
+		await show(
+			page,
+			paint({ status: 'unreachable', day: '30 August 2026', onRetry: () => {} }),
+			'dark'
+		);
+		await expect(page.locator('.failed-held')).toHaveCount(0);
+		await expect(page.locator('[data-payload-held]')).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+	});
+
+	test('a slow day is one sentence and no panel', async ({ page }) => {		const paint = await renderer('PayloadState');
 		await show(page, paint({ status: 'slow', day: '30 August 2026', onRetry: () => {} }), 'dark');
 
 		const region = page.locator('[data-payload-state]');

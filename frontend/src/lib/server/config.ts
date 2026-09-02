@@ -374,7 +374,10 @@ interface RawConfig {
  * the page draws what it is handed. The six leading-block
  * knobs are read by the pipeline, which decides the block at assemble and
  * publishes the answer on the day - the page draws what it is handed and
- * re-decides nothing. `items_per_topic` is retired and read by nothing at all.
+ * re-decides nothing. The three `offline_` knobs are read by
+ * `scripts/build-worker-switch.mjs`, which bakes them into the service worker
+ * and into the file that retires it. `items_per_topic` is retired and read by
+ * nothing at all.
  */
 const BUILD_ONLY_KEYS = [
 	'shell_seed_items',
@@ -385,7 +388,10 @@ const BUILD_ONLY_KEYS = [
 	'leading_min',
 	'lead_cluster_floor',
 	'lead_shared_subject_weight',
-	'lead_max_yesterday'
+	'lead_max_yesterday',
+	'offline_version',
+	'offline_retired_through',
+	'offline_days_kept'
 ] as const;
 
 /** The `digest` block: everything `UiConfig` holds, plus the knobs
