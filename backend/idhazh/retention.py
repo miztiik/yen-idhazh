@@ -43,13 +43,18 @@ which are the answer the question was always asking for.
 **The telemetry fold is the third thing here, and it deletes nothing a reader
 can reach.** `state/item-health/` is the census, and it grew at a measured
 211,742 bytes a published day on 2026-08-30 with nothing bounding it.
-`observability.keep_months` is where a month stops being kept item by item: past
-it the month is folded to one row per (date, stage) and the full-grain shard is
-deleted. It is thirteen months because `console.max_window_days` is 366, so a
-shard has to answer for a year and a month of it is still being written. The
-aggregate is kept forever by default, because a downsampled year costs
-kilobytes and deleting it would make a year-over-year comparison unanswerable -
-`observability.hard_delete_after_months` is the escape hatch and is null.
+`observability.item_health_full_grain_months` is where a month stops being kept
+item by item: past it the month is folded to one row per (date, stage) and the
+full-grain shard is deleted. It is fourteen months because
+`console.max_window_days` is 366, `ledger.shards_in_window` walks 367 inclusive
+days, and those days can fall in fourteen calendar months - a window ending on
+the first of a month starts on the last day of another. The aggregate is kept
+forever by default, because a downsampled year costs kilobytes and deleting it
+would make a year-over-year comparison unanswerable -
+`observability.item_health_aggregate_keep_months` is the escape hatch and is
+null. Both names are read through the properties `keep_months` and
+`hard_delete_after_months`, which is why nothing else in this module moved when
+the ages were named.
 
 **The seen prune is the fourth thing, and it folds nothing on purpose.**
 `state/seen/` is a lookup rather than a measurement: `ledger.load_seen` opens

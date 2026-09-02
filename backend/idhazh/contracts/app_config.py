@@ -12,14 +12,49 @@ Every knob ships a sane default, so a fresh clone runs unconfigured.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
+from datetime import date as date_type
+from datetime import timedelta
 from enum import StrEnum
-from typing import ClassVar, Literal, Self
+from functools import lru_cache
+from types import MappingProxyType
+from typing import Any, ClassVar, Final, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, CommitSha, Contract, Model, Sha256, Slug
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.route import VisualKind
+
+
+@lru_cache(maxsize=16)
+def months_a_window_can_touch(within_days: int) -> int:
+    """The most `<YYYY-MM>` shards one read of that window can open.
+
+    A window of N days reads N+1 inclusive days - the way
+    `ledger.shards_in_window` walks them - and the answer is how many calendar
+    months those days fall in. It is not `N / 30`. The extreme is a window that
+    ends on the first of a month and starts on the last day of another, which is
+    why the committed 366-day console window reaches **14** shards and a
+    thirteen-month retention is one shard short of what a reader can still ask
+    for.
+
+    Sweeping the month-firsts of one 400-year Gregorian cycle is exact rather
+    than a sample. Moving the end date later inside its month spends days that
+    would otherwise reach back, so the widest span always ends on a first, and
+    the calendar repeats every 400 years.
+    """
+    if within_days < 0:
+        raise ValueError("a window cannot be negative")
+    span = timedelta(days=within_days)
+    widest = 1
+    for year in range(2000, 2400):
+        for month in range(1, 13):
+            end = date_type(year, month, 1)
+            start = end - span
+            reach = (end.year * 12 + end.month) - (start.year * 12 + start.month) + 1
+            widest = max(widest, reach)
+    return widest
 
 
 class LogLevel(StrEnum):
@@ -807,6 +842,17 @@ class LoggingConfig(Model):
     level: LogLevel = LogLevel.INFO
 
 
+#: The retention names this block used to carry, and the knob that governs the
+#: same store now. A config still spelling the old name loads; see
+#: `ObservabilityConfig._read_the_superseded_retention_names`.
+SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "keep_months": "item_health_full_grain_months",
+        "hard_delete_after_months": "item_health_aggregate_keep_months",
+    }
+)
+
+
 class ObservabilityConfig(Model):
     """What the pipeline records about itself, and what an operator may switch off.
 
@@ -825,6 +871,14 @@ class ObservabilityConfig(Model):
     here decides whether a row is written at all; it never changes the shape of a
     row, so a month file stays readable across a day somebody turned something
     off.
+
+    **Every store names its own cleanup age.** One `keep_months` covered
+    `state/item-health/` while `state/feed-health/`, `state/scores/` and
+    `frontend/public/telemetry/` had none, so three of the four grew with nothing
+    to stop them and the fourth was tuned by a number that said nothing about
+    them. The four full-grain windows are checked against the shards a console
+    read can still select, and a summary that replaces a full-grain window must
+    outlive it.
     """
 
     evaluation_enabled: bool = Field(
@@ -896,28 +950,78 @@ class ObservabilityConfig(Model):
             "says."
         ),
     )
-    keep_months: int = Field(
-        default=13,
+    item_health_full_grain_months: int = Field(
+        default=14,
         ge=1,
         description=(
-            "How many months of ledger stay at full grain before a month is "
-            "downsampled to one row per (date, stage). Past this point a reader loses "
-            "the per-item detail - the console's failure list offers no rows for those "
-            "months - and keeps every daily total, so a year-over-year comparison "
-            "still works. Thirteen, so a whole year plus the month being written is "
-            "always readable in full."
+            "How long state/item-health/ stays readable item by item. Past it a month "
+            "is folded to one row per (date, stage) and the full-grain shard goes, so "
+            "a reader keeps every daily total and loses the per-item detail the "
+            "console's failure list offers. Fourteen because console.max_window_days "
+            "is 366, and a 366-day window reads 367 inclusive days, which can fall in "
+            "fourteen calendar months - a window ending on the first of a month starts "
+            "on the last day of another. Thirteen looks like a year plus the month "
+            "being written and is one shard short of what the console can still ask "
+            "for."
         ),
     )
-    hard_delete_after_months: int | None = Field(
+    item_health_aggregate_keep_months: int | None = Field(
         default=None,
         ge=1,
         description=(
-            "Months after which a downsampled month file is removed outright. Null "
-            "means never, and never is the default: console.max_window_days is 366, so "
-            "a shard has to stay readable for a year, and an aggregate costs about "
-            "219 KB a year. Set it and a window reaching past it shows nothing for "
-            "those days rather than a thinner series. It must sit above keep_months, "
-            "or a month would be deleted before it was ever downsampled."
+            "Months after which the folded item-health month is removed outright. Null "
+            "means never, and never is the default: the aggregate costs a measured "
+            "63.8 bytes a row over four stages - about 93 KB a year against the "
+            "shard's 77 MB - and deleting it would make a year-over-year comparison "
+            "unanswerable, which Rule #10 then forbids citing at all. Set, it must sit "
+            "ABOVE item_health_full_grain_months, or a month would be deleted before "
+            "it was ever folded."
+        ),
+    )
+    feed_health_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long state/feed-health/ keeps a month. It is a per-feed-per-run "
+            "record rather than a measurement worth summarising, so its retention is "
+            "one number and there is no aggregate under it. Fourteen for the same "
+            "reason the item-health window is: the console reaches 367 inclusive days "
+            "and those days can fall in fourteen month shards."
+        ),
+    )
+    scores_full_grain_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long state/scores/ stays readable item by item. The eval ledger is "
+            "the only record of how a summary scored, and the console's model panels "
+            "take medians and percentiles over the rows themselves - so this is the "
+            "window inside which a quality question can still be asked of the items "
+            "rather than of a total. Fourteen matches the census it is read beside; a "
+            "shorter one would leave a day whose failures are still readable and whose "
+            "quality is not."
+        ),
+    )
+    score_archive_keep_months: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Months after which a summarised score month is removed outright. Null "
+            "means never, on the same argument as item_health_aggregate_keep_months: a "
+            "summary is kilobytes and it is the only thing that makes a year-over-year "
+            "quality claim citable. Set, it must sit ABOVE "
+            "scores_full_grain_months."
+        ),
+    )
+    public_telemetry_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long frontend/public/telemetry/ keeps a published shard. It must "
+            "EQUAL item_health_full_grain_months and the contract refuses any other "
+            "pair: the projection is the browser's copy of that ledger, so a published "
+            "month whose source has been folded away is a rate nobody can check, and a "
+            "source month with no published copy is a window the console cannot draw."
         ),
     )
     cost_currency: str = Field(
@@ -957,15 +1061,111 @@ class ObservabilityConfig(Model):
         ),
     )
 
-    @model_validator(mode="after")
-    def _the_two_thresholds_are_ordered(self) -> Self:
-        if (
-            self.hard_delete_after_months is not None
-            and self.hard_delete_after_months <= self.keep_months
-        ):
+    @model_validator(mode="before")
+    @classmethod
+    def _read_the_superseded_retention_names(cls, data: Any) -> Any:
+        """Read a config written before each store named its own cleanup age.
+
+        `keep_months` and `hard_delete_after_months` governed `state/item-health/`
+        and nothing else, while three other stores had no age at all. A file that
+        still carries them loads, and resolves to the values documented in
+        `docs/concepts/config.md` - the successor knobs' own defaults.
+
+        The old value is read and dropped rather than carried forward, because it
+        was set against a check that could not answer the question: the check
+        compared `months * 30` against the console window instead of the shards
+        that window selects, so `13` passed while a 366-day read reaches fourteen
+        of them. Carrying the number forward carries the defect forward.
+
+        A file carrying an old name AND its successor is refused. That is a
+        half-migrated file, and picking one of two answers silently is how an
+        operator's edit stops taking effect.
+        """
+        if not isinstance(data, dict):
+            return data
+        carried = [name for name in SUPERSEDED_RETENTION_NAMES if name in data]
+        if not carried:
+            return data
+        both = sorted(name for name in carried if SUPERSEDED_RETENTION_NAMES[name] in data)
+        if both:
+            spelled = ", ".join(f"{name} and {SUPERSEDED_RETENTION_NAMES[name]}" for name in both)
             raise ValueError(
-                "observability.hard_delete_after_months must sit above keep_months, "
-                "or a month is deleted before it is ever downsampled"
+                f"observability carries a superseded name beside its successor ({spelled}). "
+                "Delete the superseded one - two names for one age is how an edit stops "
+                "taking effect"
+            )
+        return {
+            name: value
+            for name, value in data.items()
+            if name not in SUPERSEDED_RETENTION_NAMES
+        }
+
+    @property
+    def keep_months(self) -> int:
+        """The superseded name for the item-health full-grain window.
+
+        Kept readable so the fold and its log line do not have to move in the
+        commit that names the ages. It resolves to
+        `item_health_full_grain_months`, which is the only store the old name
+        ever governed.
+        """
+        return self.item_health_full_grain_months
+
+    @property
+    def hard_delete_after_months(self) -> int | None:
+        """The superseded name for `item_health_aggregate_keep_months`."""
+        return self.item_health_aggregate_keep_months
+
+    def full_grain_months(self) -> Mapping[str, int]:
+        """Every window that has to outlive what a console read can still select."""
+        return MappingProxyType(
+            {
+                "item_health_full_grain_months": self.item_health_full_grain_months,
+                "feed_health_keep_months": self.feed_health_keep_months,
+                "scores_full_grain_months": self.scores_full_grain_months,
+                "public_telemetry_keep_months": self.public_telemetry_keep_months,
+            }
+        )
+
+    def refuse_windows_shorter_than(self, shards: int, *, window_days: int) -> None:
+        """Refuse a config that would delete a shard a console read still opens.
+
+        Checked against the shards the window selects rather than against the
+        window's own length, because a month is not thirty days and the old
+        `months * 30` comparison passed a value that is one shard short.
+        """
+        short = {
+            name: months for name, months in self.full_grain_months().items() if months < shards
+        }
+        if short:
+            spelled = ", ".join(f"observability.{name} is {value}" for name, value in short.items())
+            raise ValueError(
+                f"a {window_days}-day read can select {shards} month shards, so every "
+                f"full-grain window must keep at least {shards}: {spelled}"
+            )
+
+    @model_validator(mode="after")
+    def _a_summary_outlives_the_rows_it_replaces(self) -> Self:
+        for kept, full_grain in (
+            ("item_health_aggregate_keep_months", "item_health_full_grain_months"),
+            ("score_archive_keep_months", "scores_full_grain_months"),
+        ):
+            months: int | None = getattr(self, kept)
+            if months is not None and months <= getattr(self, full_grain):
+                raise ValueError(
+                    f"observability.{kept} must sit above {full_grain}, or a month is "
+                    "deleted before it is ever summarised"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _the_published_copy_lasts_as_long_as_its_source(self) -> Self:
+        if self.public_telemetry_keep_months != self.item_health_full_grain_months:
+            raise ValueError(
+                "observability.public_telemetry_keep_months must equal "
+                "item_health_full_grain_months. The projection is the browser's copy "
+                "of that ledger, so any other pair leaves either a published month "
+                "nothing can check or a window the console cannot draw"
             )
         return self
 
@@ -1945,6 +2145,30 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02T22:00",
+            change=(
+                "observability.keep_months and observability.hard_delete_after_months "
+                "removed, and six named ages added: item_health_full_grain_months 14, "
+                "item_health_aggregate_keep_months null, feed_health_keep_months 14, "
+                "scores_full_grain_months 14, score_archive_keep_months null and "
+                "public_telemetry_keep_months 14. A config still carrying either old "
+                "name loads and resolves to those defaults; carrying an old name "
+                "beside its successor is refused. Every full-grain window is checked "
+                "against the month shards console.max_window_days can select."
+            ),
+            why=(
+                "One name covered state/item-health/ while state/feed-health/, "
+                "state/scores/ and frontend/public/telemetry/ had no cleanup age at "
+                "all, so three stores grew with nothing to stop them. Its value was "
+                "also one shard short: the old check compared months * 30 against the "
+                "console window instead of the shards that window selects, and a "
+                "366-day read walks 367 inclusive days, which can fall in fourteen "
+                "calendar months. The old value is read and dropped rather than "
+                "carried forward, because it was chosen against a check that could not "
+                "answer the question."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-02T20:00",
             change=(
@@ -3283,4 +3507,21 @@ class AppConfig(Contract):
             if named not in roles:
                 spelled = ", ".join(sorted(roles))
                 raise ValueError(f"finetune.{field} must name one of models: {spelled}")
+        return self
+
+    @model_validator(mode="after")
+    def _no_cleanup_age_is_shorter_than_the_console_can_ask_for(self) -> Self:
+        """Every full-grain window outlives the widest read the console offers.
+
+        Checked here because `ObservabilityConfig` cannot see `console`, and the
+        failure is the worst kind: a shard is deleted, a reader pans back to it
+        months later, and the page draws a gap that reads as a day the pipeline
+        did nothing. `config.load` runs the same check again against
+        `config/appearance.json`, which is the file the published console
+        actually reads its window from.
+        """
+        self.observability.refuse_windows_shorter_than(
+            months_a_window_can_touch(self.console.max_window_days),
+            window_days=self.console.max_window_days,
+        )
         return self

@@ -1108,7 +1108,7 @@
     },
     "ObservabilityConfig": {
       "additionalProperties": false,
-      "description": "What the pipeline records about itself, and what an operator may switch off.\n\nFour switches rather than one master switch. Collection, scoring, publishing\nand tracing fail in different ways and a reader has to behave differently\nfor each of them, so one switch would leave nobody able to say which\ninstrument went dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.",
+      "description": "What the pipeline records about itself, and what an operator may switch off.\n\nFour switches rather than one master switch. Collection, scoring, publishing\nand tracing fail in different ways and a reader has to behave differently\nfor each of them, so one switch would leave nobody able to say which\ninstrument went dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.\n\n**Every store names its own cleanup age.** One `keep_months` covered\n`state/item-health/` while `state/feed-health/`, `state/scores/` and\n`frontend/public/telemetry/` had none, so three of the four grew with nothing\nto stop them and the fourth was tuned by a number that said nothing about\nthem. The four full-grain windows are checked against the shards a console\nread can still select, and a summary that replaces a full-grain window must\noutlive it.",
       "properties": {
         "cost_currency": {
           "default": "USD",
@@ -1137,7 +1137,14 @@
           "title": "Evaluation Enabled",
           "type": "boolean"
         },
-        "hard_delete_after_months": {
+        "feed_health_keep_months": {
+          "default": 14,
+          "description": "How long state/feed-health/ keeps a month. It is a per-feed-per-run record rather than a measurement worth summarising, so its retention is one number and there is no aggregate under it. Fourteen for the same reason the item-health window is: the console reaches 367 inclusive days and those days can fall in fourteen month shards.",
+          "minimum": 1,
+          "title": "Feed Health Keep Months",
+          "type": "integer"
+        },
+        "item_health_aggregate_keep_months": {
           "anyOf": [
             {
               "minimum": 1,
@@ -1148,14 +1155,21 @@
             }
           ],
           "default": null,
-          "description": "Months after which a downsampled month file is removed outright. Null means never, and never is the default: console.max_window_days is 366, so a shard has to stay readable for a year, and an aggregate costs about 219 KB a year. Set it and a window reaching past it shows nothing for those days rather than a thinner series. It must sit above keep_months, or a month would be deleted before it was ever downsampled.",
-          "title": "Hard Delete After Months"
+          "description": "Months after which the folded item-health month is removed outright. Null means never, and never is the default: the aggregate costs a measured 63.8 bytes a row over four stages - about 93 KB a year against the shard's 77 MB - and deleting it would make a year-over-year comparison unanswerable, which Rule #10 then forbids citing at all. Set, it must sit ABOVE item_health_full_grain_months, or a month would be deleted before it was ever folded.",
+          "title": "Item Health Aggregate Keep Months"
         },
-        "keep_months": {
-          "default": 13,
-          "description": "How many months of ledger stay at full grain before a month is downsampled to one row per (date, stage). Past this point a reader loses the per-item detail - the console's failure list offers no rows for those months - and keeps every daily total, so a year-over-year comparison still works. Thirteen, so a whole year plus the month being written is always readable in full.",
+        "item_health_full_grain_months": {
+          "default": 14,
+          "description": "How long state/item-health/ stays readable item by item. Past it a month is folded to one row per (date, stage) and the full-grain shard goes, so a reader keeps every daily total and loses the per-item detail the console's failure list offers. Fourteen because console.max_window_days is 366, and a 366-day window reads 367 inclusive days, which can fall in fourteen calendar months - a window ending on the first of a month starts on the last day of another. Thirteen looks like a year plus the month being written and is one shard short of what the console can still ask for.",
           "minimum": 1,
-          "title": "Keep Months",
+          "title": "Item Health Full Grain Months",
+          "type": "integer"
+        },
+        "public_telemetry_keep_months": {
+          "default": 14,
+          "description": "How long frontend/public/telemetry/ keeps a published shard. It must EQUAL item_health_full_grain_months and the contract refuses any other pair: the projection is the browser's copy of that ledger, so a published month whose source has been folded away is a rate nobody can check, and a source month with no published copy is a window the console cannot draw.",
+          "minimum": 1,
+          "title": "Public Telemetry Keep Months",
           "type": "integer"
         },
         "runtime_counters_scrape": {
@@ -1171,6 +1185,27 @@
           "maximum": 1.0,
           "title": "Sample Rate",
           "type": "number"
+        },
+        "score_archive_keep_months": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Months after which a summarised score month is removed outright. Null means never, on the same argument as item_health_aggregate_keep_months: a summary is kilobytes and it is the only thing that makes a year-over-year quality claim citable. Set, it must sit ABOVE scores_full_grain_months.",
+          "title": "Score Archive Keep Months"
+        },
+        "scores_full_grain_months": {
+          "default": 14,
+          "description": "How long state/scores/ stays readable item by item. The eval ledger is the only record of how a summary scored, and the console's model panels take medians and percentiles over the rows themselves - so this is the window inside which a quality question can still be asked of the items rather than of a total. Fourteen matches the census it is read beside; a shorter one would leave a day whose failures are still readable and whose quality is not.",
+          "minimum": 1,
+          "title": "Scores Full Grain Months",
+          "type": "integer"
         },
         "telemetry_publish": {
           "default": true,
@@ -1715,6 +1750,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability.keep_months and observability.hard_delete_after_months removed, and six named ages added: item_health_full_grain_months 14, item_health_aggregate_keep_months null, feed_health_keep_months 14, scores_full_grain_months 14, score_archive_keep_months null and public_telemetry_keep_months 14. A config still carrying either old name loads and resolves to those defaults; carrying an old name beside its successor is refused. Every full-grain window is checked against the month shards console.max_window_days can select.",
+      "version": "2026-09-02T22:00",
+      "why": "One name covered state/item-health/ while state/feed-health/, state/scores/ and frontend/public/telemetry/ had no cleanup age at all, so three stores grew with nothing to stop them. Its value was also one shard short: the old check compared months * 30 against the console window instead of the shards that window selects, and a 366-day read walks 367 inclusive days, which can fall in fourteen calendar months. The old value is read and dropped rather than carried forward, because it was chosen against a check that could not answer the question."
+    },
+    {
       "change": "collect.availability_strikes_before_rest, collect.availability_rest_runs, collect.feed_http_410_runs_before_retirement, collect.robots_denied_recheck_runs, collect.robots_unreachable_recheck_runs and collect.source_yield_min_complete_days added, defaulting to 5, 5, 5, 1, 1 and 30. Additive with defaults, so a config written before today still validates. Nothing reads them yet, and collect.quarantine_after_failures still decides every rest.",
       "version": "2026-09-02T20:00",
       "why": "The source lifecycle is four different questions - may we ask, does the address work today, is the address gone for good, and does the source publish anything worth reading - and one knob answered all of them. Naming each one first means the changes that read them are reviewable as behaviour rather than as a knob and a behaviour at once (docs/architecture/sources/health.md)."
@@ -2131,7 +2171,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-02T20:00",
+      "default": "2026-09-02T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2145,5 +2185,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-02T20:00"
+  "version": "2026-09-02T22:00"
 }
