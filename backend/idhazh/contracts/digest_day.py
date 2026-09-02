@@ -33,6 +33,11 @@ second list: a lead names a story `items` already holds, and an empty `leads`
 is the ordinary state of a day with too few stories worth leading. It is
 chosen after the duplicate pass has run, so the block reads the day the way
 the reader will see it.
+
+`considered`, `too_old` and `below_feed_floor` on a desk are what the planning
+step already knew and threw away. They are why a desk is thin, so a quiet desk
+and a broken feed stop looking identical. All three are null on a day published
+before they existed.
 """
 
 from __future__ import annotations
@@ -82,9 +87,67 @@ class DigestRunRef(Model):
 
 
 class DigestVerticalRef(Model):
+    """One desk of the day, and why it ran what it ran.
+
+    `count` is every story the desk published, including one the duplicate pass
+    grouped behind another - nothing is unpublished by that pass, so the number
+    is the payload's own and not what the default view happens to draw.
+
+    The three shortfall fields are the day's strongest reading of each: the
+    largest any run of the day recorded. A later run has already taken what an
+    earlier one published, so it sees a smaller pool of the same stories -
+    summing the runs would count one back-catalogue story once per run.
+
+    All three are null together on a day published before they existed, and a
+    null is unknown rather than a zero, which would claim the feeds offered this
+    desk nothing.
+    """
+
     id: Slug
     display_name: str = Field(min_length=1)
     count: int = Field(ge=0)
+    considered: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Distinct addresses the feeds offered this desk today, less what the day "
+            "had already published or already failed on. It is not an upper bound on "
+            "`count`: each run counts its own pool and the day's stories accumulate "
+            "across runs."
+        ),
+    )
+    too_old: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Of those, how many were past collect.max_age_hours. A desk fed by a back "
+            "catalogue thins for this reason and no other, and a thin desk that cannot "
+            "say why reads as a broken run."
+        ),
+    )
+    below_feed_floor: bool | None = Field(
+        default=None,
+        description=(
+            "Some run today found fewer live feeds than this desk's floor, so that run "
+            "planned nothing for it. Published for the operator surfaces; the reading "
+            "page never draws a sentence from it, because how many of our feeds "
+            "answered is a fact about our pipeline rather than about a story."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _the_three_shortfall_fields_arrive_together(self) -> Self:
+        absent = [
+            self.considered is None,
+            self.too_old is None,
+            self.below_feed_floor is None,
+        ]
+        if any(absent) and not all(absent):
+            raise ValueError("a desk carries every shortfall field or none of them")
+        if self.considered is not None and self.too_old is not None:
+            if self.too_old > self.considered:
+                raise ValueError("a desk cannot drop more stories than it considered")
+        return self
 
 
 class DigestLead(Model):
@@ -290,6 +353,25 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02T16:00",
+            change="Added considered, too_old and below_feed_floor to each desk of the day.",
+            why=(
+                "A desk that published three stories looked exactly like a desk whose "
+                "feeds had broken, and the page had nothing to tell them apart with. "
+                "The planning step already counted what the feeds offered and how much "
+                "of it was a back catalogue; it wrote both into the run plan and "
+                "published neither, so the reading page could not say why a desk was "
+                "thin. Nothing new is computed. Each field is the largest any run of "
+                "the day recorded rather than the sum, because a later run has already "
+                "taken what an earlier one published and would count the same "
+                "back-catalogue story twice. All three are optional, arrive together, "
+                "and are null on every day published before this - 12 days, 56 "
+                "desk-days and 4,713 items when this landed, 2026-09-02 - and a null "
+                "reads as unknown, never as 0, which would claim the feeds offered a "
+                "desk nothing (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-01T12:30",
             change="Added leads: the day's leading stories, each with the reason it leads.",

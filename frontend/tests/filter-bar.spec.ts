@@ -2,8 +2,8 @@ import { expect, test, type Page, type Request } from '@playwright/test';
 import { readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { filterNeedle, matchItems } from '../src/lib/day-shape';
-import type { DigestItem } from '../src/lib/payload/types';
+import { deskShortfall, filterNeedle, matchItems } from '../src/lib/day-shape';
+import type { DigestItem, DigestVerticalRef } from '../src/lib/payload/types';
 
 /**
  * Row #7's oracle: one panel, and the field never pays for the encoder.
@@ -30,6 +30,13 @@ import type { DigestItem } from '../src/lib/payload/types';
  *   of 15 and no reading route in this build ever fetches
  *   (`docs/how-to/run-the-gates.md`). The archive is where a browser can show
  *   it: its stories arrive a month at a time, always after first paint.
+ *
+ * Row #11's oracle lives here too, because the sentence a thin desk prints is
+ * drawn by this panel. It has two arms and only one of them can be a browser:
+ * the canary day has one desk, deliberately starved, so a real page shows the
+ * line with the real counts - and a healthy desk needs a second desk the
+ * fixture cannot hold, so that arm is driven as a pure function, which is what
+ * `frontend/src/lib/day-shape.ts` exists for.
  */
 
 const BUILD = join(dirname(fileURLToPath(import.meta.url)), '..', 'build');
@@ -118,6 +125,94 @@ test.describe('the filter rule', () => {
 			'the filter narrowed the seed rather than the day that arrived'
 		).toHaveLength(2);
 	});
+});
+
+function desk(count: number, overrides: Partial<DigestVerticalRef> = {}): DigestVerticalRef {
+	return {
+		id: 'ai',
+		display_name: 'AI',
+		count,
+		considered: 40,
+		too_old: 31,
+		below_feed_floor: false,
+		...overrides
+	};
+}
+
+test.describe('the thin-desk rule', () => {
+	test('a thin desk with a reason names both numbers', () => {
+		expect(deskShortfall(desk(3), 12)).toEqual({ offered: 40, tooOld: 31 });
+		// The floor is inclusive: a desk exactly at it is still a desk a reader
+		// sees the whole of at once.
+		expect(deskShortfall(desk(12), 12)).toEqual({ offered: 40, tooOld: 31 });
+	});
+
+	test('a healthy desk says nothing at all', () => {
+		expect(deskShortfall(desk(13), 12)).toBeNull();
+		expect(deskShortfall(desk(216), 12)).toBeNull();
+	});
+
+	test('a day published before the counts existed says nothing', () => {
+		// Absent is unknown, never zero - zero would claim our sources offered
+		// this desk nothing on a day it published three stories.
+		expect(
+			deskShortfall({ id: 'ai', display_name: 'AI', count: 3 }, 12),
+			'a day with no counts on it printed a sentence anyway'
+		).toBeNull();
+		expect(deskShortfall(desk(3, { considered: null, too_old: null }), 12)).toBeNull();
+	});
+
+	test('a thin desk that dropped nothing has no reason to give', () => {
+		// Three offered and three published is a quiet day, not a shortfall. A
+		// sentence here would be a fact with no explanation attached to it.
+		expect(deskShortfall(desk(3, { considered: 3, too_old: 0 }), 12)).toBeNull();
+	});
+
+	test('the sentence never claims fewer stories than the page is showing', () => {
+		// `considered` is counted per run and the day's stories accumulate across
+		// runs, so it is not an upper bound on `count`. Without this clause a page
+		// showing eight stories could say the sources offered five.
+		expect(deskShortfall(desk(8, { considered: 5, too_old: 4 }), 12)).toBeNull();
+		expect(deskShortfall(desk(8, { considered: 8, too_old: 4 }), 12)).toBeNull();
+	});
+
+	test('a desk that is not on the day says nothing', () => {
+		expect(deskShortfall(undefined, 12)).toBeNull();
+	});
+});
+
+test('the starved desk on the canary day says why it is thin', async ({ page }) => {
+	// The fixture's one desk published 8 stories against 40 its sources offered,
+	// 31 of them a back catalogue. Both numbers are read off the page rather
+	// than written here, so the arm fails if the payload stops carrying them.
+	await page.goto(`/${DAY}/ai/`);
+	const line = page.locator('[data-desk-shortfall]');
+	await expect(line, 'the starved desk drew no sentence').toHaveCount(1);
+	const said = (await line.innerText()).replace(/\s+/g, ' ').trim();
+	console.log(`[filter-bar] thin desk says: ${said}`);
+	expect(said).toBe(
+		"Today our sources offered 40 stories on this topic. 31 were too old for today's page."
+	);
+});
+
+test('the all-topics page and the archive draw no shortfall sentence', async ({ page }) => {
+	// One desk being read is one sentence. On a view with no desk being read it
+	// would be one per desk, which is a column of absences rather than
+	// information - so there is no line here even though the day's one desk is
+	// thin and carries the counts.
+	await page.goto(`/${DAY}/`);
+	await expect(page.locator('[data-topic-row]').first()).toBeVisible();
+	await expect(
+		page.locator('[data-desk-shortfall]'),
+		'the all-topics page explained a desk nobody had opened'
+	).toHaveCount(0);
+
+	// The archive's counts are sums over every published day, so a shortfall
+	// taken from one day's run would be a number about nothing on the page.
+	await page.goto('/archive/');
+	await expect(page.locator('[data-topic-row] .pill').first()).toBeVisible();
+	await page.locator('[data-topic-row] .pill').nth(1).click();
+	await expect(page.locator('[data-desk-shortfall]')).toHaveCount(0);
 });
 
 /** Every request the page made, kept whole so a count can be printed. */

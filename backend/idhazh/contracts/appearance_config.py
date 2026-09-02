@@ -514,6 +514,25 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-02T16:00",
+            change=(
+                "ui.desk_thin_max added, defaulting to 12, floored at 1. The shape is "
+                "`UiConfig`, which this document and `AppConfig` share, so both schemas "
+                "moved together. Additive with a default, so an appearance file written "
+                "before today still validates."
+            ),
+            why=(
+                "A desk now publishes why it ran what it ran, and one sentence under "
+                "every desk would be a column of absences rather than information. This "
+                "is the line between a desk that explains itself and a desk that says "
+                "nothing, and a component may not spell it (Rule #6). Twelve is one "
+                "page of the stream, so a desk under it is one a reader sees the whole "
+                "of at once. Measured 2026-09-02 over the 12 committed days and 56 "
+                "desk-days: 7 sit at or below it, 12.5 percent, and nothing in the "
+                "record sits between 4 and 12."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-02T14:00",
             change=(
                 "frame.zone_time_rem added, defaulting to 5.5, and ui.rail_group_minutes "
