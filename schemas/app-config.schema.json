@@ -1387,6 +1387,14 @@
           "title": "Archive Page Size",
           "type": "integer"
         },
+        "archive_recent_days": {
+          "default": 7,
+          "description": "How many of the newest published days the archive lists as rows of their own, each carrying the long date, the story count and whether every story finished. Every other day sits inside a disclosure for its month, so this block is the shortcut and never the only way in. Seven is a week, which is the span a reader who comes back after a break is looking for, and it matches `read_mark_days` for the same reason. The ceiling is a month: above that the block is the wall of dates it replaced, and a month row already reaches any date in two clicks. Read by the build alone, like `shell_seed_items`, so it never rides to a reader.",
+          "maximum": 31,
+          "minimum": 1,
+          "title": "Archive Recent Days",
+          "type": "integer"
+        },
         "filter_min_chars": {
           "default": 2,
           "description": "How many characters a reader types before an in-place filter narrows a list. It binds the day page and the archive, which share one panel since 2026-09-01. Two rather than one because one letter narrows nothing: measured 2026-09-01 over the 12 committed days and 4,203 story titles - arithmetic over committed text, so the spread is zero by construction - the median single letter matches 80.2 percent of them and `e` matches 99.8 percent, against a median 0.8 percent for a two-letter pair. A first keystroke that redraws the page and removes almost nothing is work the reader watches for no answer. Over 8 the field stops narrowing anything a reader would think to type.",
@@ -1627,6 +1635,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ui.archive_recent_days added, defaulting to 7, bounded at 1 and 31. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Additive with a default, so a config written before today still validates.",
+      "version": "2026-09-01T20:00",
+      "why": "The archive listed every published day as a link and had nothing bounding it. At the 700 days this archive reaches in two years that is a wall of dates a reader has to scan past to get to the stories. It is now the newest few days as rows over one disclosure a month and one a year before this one, so the list a reader SEES grows twelve rows a year instead of 365. How many days stay out is a choice a page may not spell (Rule #6), and the ceiling is what makes the knob safe: set to 400 it is the wall again. Read by the build alone, so it never rides to a reader. What the DOCUMENT costs did not fall to nothing and is not claimed to: measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over two fixture archives of the same 24 months at 700 and 182 published days, gzip -9 of the prerendered /archive/ document, the page grew 11.05 bytes a day before and 8.0 after - 27.7 percent slower, not flat, because a link for every day is what a reader with no script uses to reach one (docs/reference/measurements.md)."
+    },
     {
       "change": "page_weight.ceilings_bytes moved /console/ from 251,324 to 276,828, /console/model/ from 29,273 to 37,979 and /console/machine/ from 31,714 to 39,743, in config/idhazh.json. No field moved and no default changed, so a config written before today still validates.",
       "version": "2026-09-01T18:00",
@@ -2019,7 +2032,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-01T18:00",
+      "default": "2026-09-01T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2033,5 +2046,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-01T18:00"
+  "version": "2026-09-01T20:00"
 }

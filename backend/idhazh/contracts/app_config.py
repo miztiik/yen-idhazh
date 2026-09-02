@@ -1570,6 +1570,22 @@ class UiConfig(Model):
             "it opens on the same twenty-five the console's failure list does."
         ),
     )
+    archive_recent_days: int = Field(
+        default=7,
+        ge=1,
+        le=31,
+        description=(
+            "How many of the newest published days the archive lists as rows of their "
+            "own, each carrying the long date, the story count and whether every story "
+            "finished. Every other day sits inside a disclosure for its month, so this "
+            "block is the shortcut and never the only way in. Seven is a week, which "
+            "is the span a reader who comes back after a break is looking for, and it "
+            "matches `read_mark_days` for the same reason. The ceiling is a month: "
+            "above that the block is the wall of dates it replaced, and a month row "
+            "already reaches any date in two clicks. Read by the build alone, like "
+            "`shell_seed_items`, so it never rides to a reader."
+        ),
+    )
 
     @field_validator("theme_default", mode="before")
     @classmethod
@@ -1794,6 +1810,33 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-01T20:00",
+            change=(
+                "ui.archive_recent_days added, defaulting to 7, bounded at 1 and 31. "
+                "The shape is `UiConfig`, which this document and `AppearanceConfig` "
+                "share, so both schemas moved together. Additive with a default, so a "
+                "config written before today still validates."
+            ),
+            why=(
+                "The archive listed every published day as a link and had nothing "
+                "bounding it. At the 700 days this archive reaches in two years that "
+                "is a wall of dates a reader has to scan past to get to the stories. "
+                "It is now the newest few days as rows over one disclosure a month "
+                "and one a year before this one, so the list a reader SEES grows "
+                "twelve rows a year instead of 365. How many days stay out is a "
+                "choice a page may not spell (Rule #6), and the ceiling is what makes "
+                "the knob safe: set to 400 it is the wall again. Read by the build "
+                "alone, so it never rides to a reader. What the DOCUMENT costs did not "
+                "fall to nothing and is not claimed to: measured 2026-09-01 on Intel "
+                "Core i7-1265U / Windows 11 / node 24.12.0, over two fixture archives "
+                "of the same 24 months at 700 and 182 published days, gzip -9 of the "
+                "prerendered /archive/ document, the page grew 11.05 bytes a day "
+                "before and 8.0 after - 27.7 percent slower, not flat, because a link "
+                "for every day is what a reader with no script uses to reach one "
+                "(docs/reference/measurements.md)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-01T18:00",
             change=(
