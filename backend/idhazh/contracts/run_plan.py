@@ -12,7 +12,7 @@ whole day can see that.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -119,7 +119,25 @@ class VerticalPlan(Model):
     id: Slug
     considered: int = Field(ge=0, description="Distinct URLs the feeds offered.")
     planned: int = Field(ge=0)
-    live_feeds: int = Field(ge=0)
+    eligible_feeds: int = Field(
+        ge=0,
+        description=(
+            "Feeds on this desk whose configured address this run may lawfully ask: "
+            "not a curated tombstone, not a retired endpoint, and not one robots.txt "
+            "refused or left unknown. A resting or failing endpoint is counted, "
+            "because the floor measures how many independent sources a desk has "
+            "rather than how many answered today."
+        ),
+    )
+    feed_floor: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The vertical's own min_feeds this count was measured against, so a "
+            "payload can be read without the config that produced it. Null on a plan "
+            "written before the field existed - unknown, never a floor of zero."
+        ),
+    )
     below_feed_floor: bool = Field(
         default=False, description="Under its floor, so it is collected but never rendered."
     )
@@ -132,6 +150,24 @@ class VerticalPlan(Model):
             "and a thin desk that cannot say why reads as a broken run."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _the_old_name_still_reads(cls, data: Any) -> Any:
+        """`live_feeds` was renamed on 2026-09-02. A plan spelling it still loads.
+
+        The count changed meaning as well as name - it excluded a curated
+        tombstone and nothing else - so the old value is carried across as the
+        best answer that payload has, and `feed_floor` stays absent rather than
+        being invented from today's config. The model forbids unknown keys, so
+        without this a plan an earlier build wrote would be refused outright
+        (section 11).
+        """
+        if isinstance(data, dict) and "live_feeds" in data and "eligible_feeds" not in data:
+            migrated = dict(data)
+            migrated["eligible_feeds"] = migrated.pop("live_feeds")
+            return migrated
+        return data
 
     @model_validator(mode="after")
     def _cannot_plan_more_than_it_saw(self) -> Self:
@@ -149,6 +185,31 @@ class RunPlan(Contract):
 
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02T23:00",
+            change=(
+                "live_feeds on a vertical is renamed eligible_feeds and feed_floor is "
+                "added beside it. A plan spelling the old name still reads, and no "
+                "floor is invented for a payload that never carried one. feeds_skipped "
+                "now also covers a feed held back by a retired address."
+            ),
+            why=(
+                "The count decided whether a desk publishes at all, and it counted "
+                "feeds a curator had not retired - so a source robots.txt refuses, an "
+                "address a server reports permanently gone, and a source we may "
+                "actually ask all counted the same. The floor exists to stop a thin "
+                "desk reaching a reader, and padding it with sources we are not "
+                "allowed to ask is how it stops doing that. The new name says what is "
+                "counted; feed_floor beside it means the payload can be read without "
+                "the config that produced it. Measured on this checkout 2026-09-02 "
+                "over the committed ledger: the two counts are identical on every "
+                "desk today - ai 43 against a floor of 35, energy 27 against 21, "
+                "business-economy 25 against 21, world 25 against 21, india 24 "
+                "against 21 - because no committed row records permission or a "
+                "retirement yet. Breaking, and the read migration is in this commit "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-31T10:30",
             change="Added time_source to each planned item.",
@@ -230,7 +291,10 @@ class RunPlan(Contract):
     feeds_skipped: int = Field(
         default=0,
         ge=0,
-        description="Held back by a quarantine. Neither read nor failed - never asked.",
+        description=(
+            "Never asked this run: resting out a quarantine, or configured at an "
+            "address the retirement ledger holds. Neither read nor failed."
+        ),
     )
     verticals: list[VerticalPlan] = Field(default_factory=list)
     items: list[PlannedItem] = Field(default_factory=list)

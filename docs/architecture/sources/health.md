@@ -8,13 +8,14 @@ What every feed did on every run, where that record lives, and how a run decides
 
 An item never enters quarantine or retirement. It either publishes or stops at
 a stage, and its item-health row becomes evidence about the feed. A run may
-rest a feed. Only a person may retire one.
+rest a feed and may retire an address. Only a person may retire a **source**.
 
 ```text
 FEED READ (one feed-health row)
 |
-+-- ok with items -> clear strike streak -> ask next run
-+-- robots_denied -> keep strike streak -> ask next run
++-- ok with items -> clear strike streak, clear 410 streak -> ask next run
++-- 410 Gone -> add one 410 run -> ask next run
++-- robots_denied -> keep strike streak -> ineligible until permission returns
 +-- skipped -> keep strike streak -> count one rested run
 `-- blocked / permanent / transient / ok with zero items -> add one strike
 
@@ -24,6 +25,12 @@ LIMIT CONSECUTIVE STRIKES -> REST FEED
 REST FEED -> write LIMIT skipped rows -> RETRY
 RETRY SUCCEEDS -> clear strike streak -> LIVE NOW
 RETRY FAILS -> REST CYCLE RESUMES
+
+CONFIGURED LIMIT = collect.feed_http_410_runs_before_retirement (currently 5)
+
+LIMIT DISTINCT RUNS READ 410 -> RETIRE ENDPOINT -> never asked again
+RETIREMENT OUTRANKS REST
+CONFIGURED URL EDITED -> NEW ENDPOINT KEY -> eligible from a clean record
 
 PLANNED ITEM (one item-health row)
 |
@@ -65,9 +72,9 @@ Measured on this developer checkout, 2026-09-02, over the committed shards: 6,57
 
 **It changed no decision.** The resting set over the 31-day read is 16 feeds with the repeats and 16 feeds without them, the same 16 either way, and the same 16 under the old strike rule as under the new one. The defect was latent: it would have rested a feed early on the first day a re-run happened to land inside a failing streak. Fixing it is correctness, not the repair of a live outage.
 
-## Fourteen cells, and five of them are empty on every row so far
+## Fourteen cells, and two of them are still empty on every row
 
-The row gained `endpoint_key`, `robots_outcome`, `robots_checked_at`, `robots_status` and `target_attempted` on 2026-09-02. They are appended at the end of the header, and nothing reads any of them yet.
+The row gained `endpoint_key`, `robots_outcome`, `robots_checked_at`, `robots_status` and `target_attempted` on 2026-09-02. They are appended at the end of the header. The plan stage started filling the first, the second and the last of them the same day; the two clock cells are still empty on every row, because the recheck cadence is counted in runs rather than read off a clock ([discovery.md](discovery.md)) and no decision here reads a robots status.
 
 | Cell | What it answers |
 | --- | --- |
@@ -92,6 +99,14 @@ configured URL may have moved since a row was written, and a guessed endpoint
 would file a later retirement against the wrong address. An empty cell says the
 older run never looked, which is the only honest thing it can say.
 
+**So the earliest an address can be retired is five runs after the writer
+started filling the cell**, and not one run sooner. Measured on this checkout on
+2026-09-02, before the writer landed: 6,022 settled rows, **none** carrying an
+`endpoint_key`, and **none** carrying HTTP 410 at all. The retirement rule is
+therefore live and unfired, which is the state it should be in - a lifecycle
+rule that retires something on the day it ships was not measuring, it was
+guessing.
+
 The rewrite is `backend/utilities/migrate_feed_health.py`, and it ran in the same
 commit as the contract change because `ledger.require_matching_header` compares
 the committed header to the contract's column list exactly - a widened contract
@@ -112,14 +127,12 @@ not about today.
 
 ## A run may rest a feed; only an address is ever retired automatically
 
-`state/feed-retirements.csv` is where a run will file an address the server has
-reported permanently gone. It ships with its header and no rows, because the
-commit step stages every path a job owns in one call and a path that is not in
-the checkout aborts the whole step ([../contracts/schemas.md](../contracts/schemas.md)).
-Nothing writes it yet.
-
-One row is one endpoint: the feed, the endpoint key, the day, the run that
-decided, the cause, and the runs whose results evidence it.
+`state/feed-retirements.csv` is where a run files an address the server has
+reported permanently gone. One row is one endpoint: the feed, the endpoint key,
+the day, the run that decided, the cause, and the runs whose results evidence
+it. It ships with its header and no rows, because the plan job's commit step
+stages every path it owns in one call and a path that is not in the checkout
+aborts the whole step ([../contracts/schemas.md](../contracts/schemas.md)).
 
 **`http_410` is the only cause the enum admits**, and that is the design rather
 than a starting point. A 403, a 404, a paywall, a transient failure and an empty
@@ -128,9 +141,87 @@ address is not coming back. Retiring on anything softer removes unique primary o
 regional reporting over one bad week, and nothing here puts it back without a
 person noticing it went.
 
+**Five distinct runs, not five results.** A job that is re-run keeps its run id,
+so a single bad afternoon retrying itself would otherwise retire an address on
+its own. `source_health.endpoint_records` settles the rows before it counts them
+and then counts run ids.
+
+**A read that carried entries clears the count; nothing else does.** An empty
+`200` adds an availability strike and leaves the `410` count exactly where it
+was - it is evidence that the feed is not working and no evidence at all that
+the address is gone. The same holds for a block, a 404, a timeout, a robots
+refusal and a rest.
+
+**Retirement outranks rest.** Both end in a `skipped` row and neither is asked,
+and the difference is that a rest lifts itself after five skips and a retirement
+never does. The plan checks the retirement ledger first, so an address that is
+both never comes back on the rest's own schedule. The two rows differ in their
+`detail`, which is the only cell that can say which rule held the feed back.
+
 The record is keyed on the endpoint and not on the feed, so renaming a feed in
 curated config cannot make its dead address eligible again, and editing that
-feed's URL produces a different key that is eligible from a clean record.
+feed's URL produces a different key that is eligible from a clean record. **That
+is the whole reversal path**: one line of curated config, no flag to clear.
+
+**What the rule costs the run: nothing worth measuring against what it saves.**
+It is one more fold over the rows the rest decision already read, plus one small
+file. Measured on this Windows developer checkout, 2026-09-02, over the 6,022
+settled rows the committed ledger holds, median of 7 samples: the fold takes 1.52
+ms (spread 0.24 ms) and reading the retirement ledger takes 1.2 ms (spread 2.7
+ms), beside the 2.5 ms the rest decision already spends. The plan job spends
+minutes asking feeds, and each retired address removes one of those requests from
+every run for good.
+
+## The feed floor counts the addresses we may ask
+
+A vertical below `min_feeds` publishes nothing at all - the desk does not thin
+out, it goes silent. From 2026-09-02 the count it is compared against is
+`eligible_feeds`, and four different things take an address out of it:
+
+| Not counted | Because |
+| --- | --- |
+| A curated tombstone | A person removed the source. Enforced by the shape of the config rather than by a filter. |
+| A retired endpoint | The server says the address is gone. |
+| A robots refusal | The publisher's stated policy is no. |
+| Permission we could not establish | Unknown fails closed, so the address is never asked. |
+
+**A resting or failing endpoint is still counted**, and that is the load-bearing
+half. A rest lifts itself, so dropping a resting endpoint would let one afternoon
+of outages take a desk dark - and the desk's problem then is that today went
+badly, not that it is under-sourced. The floor asks how many independent sources
+a desk has, which is a question about lawful diversity rather than about today's
+socket results.
+
+**An address nobody has recorded permission for is counted.** Absent is unknown
+and never a refusal; every row written before 2026-09-02 carries an empty cell,
+and reading those as refusals would take every desk under its floor on the day
+the rule landed.
+
+Measured on this developer checkout, 2026-09-02, over the committed config and
+ledger: the two counts are identical on every desk, because no committed row
+records a permission or a retirement yet. Reading committed files is
+deterministic, so the spread is zero.
+
+| Desk | Floor | Feeds a curator left active | Feeds we may ask | Margin |
+| --- | --- | --- | --- | --- |
+| `ai` | 35 | 43 | 43 | 8 |
+| `energy` | 21 | 27 | 27 | 6 |
+| `business-economy` | 21 | 25 | 25 | 4 |
+| `world` | 21 | 25 | 25 | 4 |
+| `india` | 21 | 24 | 24 | 3 |
+
+The margins are what the change costs if it is wrong, and they are thin on
+purpose: `india` is three refusals away from going dark, and going dark is what
+the floor is for. Five feeds' newest committed row is a robots refusal today -
+`anthropic-engineering`, `anthropic-research`, `axios-business`, `cbc-world` and
+`cnbc-top` - and two of the five sit on `ai`, so even if every one of them
+records a typed refusal on the next run, no desk moves under its floor.
+`backend/tests/test_contracts.py::test_every_vertical_clears_its_own_feed_floor`
+is the gate, and it reads the committed ledger rather than a fixture.
+
+The plan payload carries both numbers per desk, and the run manifest carries
+them too - `below_feed_floor` on its own says a desk went dark and neither
+number that decided it, and the manifest is the only committed record of a plan.
 
 ## Six knobs name the questions the one knob used to answer
 
@@ -143,10 +234,13 @@ feed's URL produces a different key that is eligible from a clean record.
 | `collect.robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read. |
 | `collect.source_yield_min_complete_days` | 30 | How many complete days of item-health evidence before a yield judgement may be made at all? |
 
-**Nothing reads any of them yet.** `collect.quarantine_after_failures` still
-decides every rest, and both it and `availability_strikes_before_rest` carry 5.
-The names land before the behaviour so the changes that move the behaviour are
-reviewable as behaviour, rather than as a knob and a rule at once.
+**Three of the six now decide something.**
+`feed_http_410_runs_before_retirement` is the retirement rule above, and the two
+recheck cadences are answered by the run itself: nothing about a refusal is
+persisted, so the next run asks the host again, which is those knobs at their
+configured value of one run. `collect.quarantine_after_failures` still decides
+every rest, and both it and `availability_strikes_before_rest` carry 5;
+`source_yield_min_complete_days` is read by nothing.
 
 The two recheck cadences are separate because they are different facts: a refusal
 is a publisher's stated policy and an unreadable `robots.txt` is our own failed
@@ -221,7 +315,7 @@ window exists, any source-yield threshold is an estimate, not a measurement.
 
 Retirement of a **source** is a person moving a feed into the `retired` key of `config/sources.json`. Quarantine is a run declining to ask, based on rows it wrote itself. Retirement of an **address** is a third thing, and it is a row under `state/` for the same reason quarantine is: a run may write evidence about curation and may never write curation.
 
-Keeping those separate is what makes a bad afternoon survivable. A run that could edit config would, over one bad week, quietly delete sources nobody voted to remove - and the diff would be authored by a robot at 06:20 on a Sunday.
+Keeping those separate is what makes a bad afternoon survivable. A run that could edit config would, over one bad week, quietly delete sources nobody voted to remove - and the diff would be authored by a robot at 06:20 on a Sunday. What the run may do instead is stop asking one address and say in a committed row why, which a person can read, argue with, and reverse by editing one line.
 
 ## Two readers, one record
 
@@ -298,6 +392,12 @@ The self-lifting rest is there because the alternative was tested by imagination
 | Backfilling `endpoint_key` from today's `config/sources.json` | The configured URL may have moved since a row was written, so the guess would file a later retirement against an address that never failed. |
 | Inserting the five new columns beside the ones they relate to | The header guard compares the whole list, and an appended column is what keeps the old header a readable prefix of the new one. A cell inserted in the middle moves every historical value one place right under a reader that maps by position. |
 | Retiring an address on 403, 404, a paywall, an empty feed or zero yield | None of them says the address is permanently gone, and each would eventually remove unique primary or regional reporting. |
+| Retiring an address on five `410` results rather than five distinct runs | A job that is re-run keeps its run id, so one bad afternoon retrying itself would retire an address on its own. |
+| Letting an empty `200` clear the pending `410` count | It is evidence that the feed is broken and no evidence that the address is alive, so it would let a dead server launder its record by returning an empty document. |
+| Dropping every resting endpoint from the feed floor | A rest lifts itself, so one afternoon of outages would take a desk dark for a problem that was over by the evening. |
+| Backfilling an endpoint key so a retirement could rest on older rows | The address may have moved since, so the retirement would be filed against one that never failed. Waiting five runs costs a day and buys a decision that is true. |
+| Persisting a mutable status per feed instead of deriving it | A flag is a read-modify-write over the whole history, and two runs racing on it lose rows. Every state here but the retirement is derived from immutable events, and the retirement is the one that is permanent. |
+| Writing no health row for a retired address | The ledger means one row per feed per run, and the console's denominator reads it. A desk with a silent feed would look like a desk with fewer feeds. |
 | Logging feed results instead of committing them | A log is gone with the run. The next run needs to read what the last four did (Rule #1). |
 | Recording only failures | You cannot tell "failed five times out of five" from "failed five times out of two hundred" without the successes. |
 

@@ -66,6 +66,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
+from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -448,6 +449,43 @@ def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
     month has.
     """
     return {tuple(row[name] for name in ITEM_HEALTH_KEY) for row in _read_rows(path)}
+
+
+def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> int:
+    """Append the addresses this run decided are permanently gone.
+
+    Settled against `FEED_RETIREMENT_KEY` straight after the write, the way
+    `append_health` is, because the two runs that can write one address are two
+    stale checkouts rather than two decisions: each reads the same five `410`
+    results, each files the same row, and `merge=union` keeps both lines. The
+    first row wins - there is nothing for a preference rule to choose between,
+    because a retirement is permanent and a second row for one address says
+    nothing the first did not.
+
+    Returns how many rows the file gained, so a caller can log the count. A row
+    that only repeated one already on record is not a gain.
+    """
+    payloads = [row.csv_row() for row in rows]
+    path = feed_retirements_path(state_dir)
+    landed = _append(path, FeedRetirementRow.csv_columns(), payloads)
+    return landed - drop_repeated_rows(path, FEED_RETIREMENT_KEY)
+
+
+def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
+    """Every retired address, in file order. Never windowed: retirement is forever.
+
+    A row that no longer parses is skipped rather than fatal, and the direction
+    of that failure is the safe one: an unreadable retirement costs one request
+    to an address that is probably still gone, and the next run reads the same
+    evidence and files it again. Refusing to start would cost the reader the day.
+    """
+    rows: list[FeedRetirementRow] = []
+    for raw in _read_rows(feed_retirements_path(state_dir)):
+        try:
+            rows.append(FeedRetirementRow.from_csv_row(raw))
+        except (KeyError, ValueError):
+            continue
+    return rows
 
 
 def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow]) -> int:

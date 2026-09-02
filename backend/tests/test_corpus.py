@@ -255,7 +255,7 @@ def test_a_tier_that_falls_in_one_shard_survives_the_split() -> None:
                 id="energy",
                 considered=len(ordered),
                 planned=len(ordered),
-                live_feeds=1,
+                eligible_feeds=1,
             )
         ],
         items=ordered,

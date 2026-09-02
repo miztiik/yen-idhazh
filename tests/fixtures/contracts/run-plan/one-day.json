@@ -98,16 +98,18 @@
     {
       "below_feed_floor": false,
       "considered": 5,
+      "eligible_feeds": 3,
+      "feed_floor": null,
       "id": "ai",
-      "live_feeds": 3,
       "planned": 5,
       "too_old": 0
     },
     {
       "below_feed_floor": true,
       "considered": 0,
+      "eligible_feeds": 4,
+      "feed_floor": null,
       "id": "energy",
-      "live_feeds": 4,
       "planned": 0,
       "too_old": 0
     }

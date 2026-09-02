@@ -348,7 +348,7 @@ COMMIT_SCRIPT_ENV: Final = {
     "fold": COMMIT_BASE_ENV,
 }
 COMMIT_STAGED_PATHS: Final = {
-    "plan": ["state/seen", "state/feed-health"],
+    "plan": ["state/seen", "state/feed-health", "state/feed-retirements.csv"],
     "work": ["state/item-health", "state/scores", "state/runtime-counters.csv"],
     "assemble": [
         "frontend/public/digest",
@@ -2144,6 +2144,32 @@ def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
         assert (REPO_ROOT / relative).is_file(), f"{relative} must be committed, even when empty"
     tracked = subprocess.run(
         ["git", "ls-files", "--error-unmatch", *CORPUS_SEED],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert tracked.returncode == 0, tracked.stderr.strip()
+
+
+def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
+    """The same rule, for the ledger the plan job gained on 2026-09-02.
+
+    Most runs retire nothing, so `state/feed-retirements.csv` is a file that is
+    named on every run and written on almost none. It ships with its header for
+    exactly that reason - a path that only appears the day a retirement happens
+    would abort the plan's commit step every other day, and take the sight and
+    health ledgers staged beside it.
+
+    The two directories are named rather than derived because `git add` on a
+    directory that does not exist fails the same way, and a fresh clone has both.
+    """
+    named = COMMIT_STAGED_PATHS["plan"]
+    assert ledger.feed_retirements_relpath() in named
+    for relative in named:
+        assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", ledger.feed_retirements_relpath()],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
