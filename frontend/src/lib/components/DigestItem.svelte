@@ -16,9 +16,12 @@
 	 * font weight are announced to nobody.
 	 *
 	 * The item's facts sit in two places and the split is by what they are about.
-	 * Above the title go the four a reader uses to decide whether to read it at
-	 * all - the mark, the desk, who is speaking, and when. Below the summary go
-	 * the claims about the summary itself, and the two things you can do next.
+	 * Above the title go the ones a reader uses to decide whether to read it at
+	 * all - the mark, the desk, and who is speaking. Below the summary go the
+	 * claims about the summary itself, and the two things you can do next. The
+	 * fourth fact, when it happened, moved to the day's own time rail on
+	 * 2026-09-02, because the stream now runs in that order and a time printed
+	 * beside every story as well as down the rail is the same number twice.
 	 */
 	import { KIND_WORTH_SAYING, SOURCE_KINDS } from '$lib/bands';
 	import { shortDate } from '$lib/format';
@@ -103,17 +106,15 @@
 				{#if kindWorthSaying}<span class="kind">{SOURCE_KINDS[item.source_kind]}</span>{/if}
 			</span>
 
-			<!-- A date rather than a clock time, until row 17 of the reading-page
-			     plan puts the time on a rail and names the zone once at the top of
-			     the day. A bare `14:05` on a prerendered page is a time in a zone
-			     nobody stated, and `14:05 UTC` on every item is the suffix that
-			     row refuses to print 359 times. -->
+			<!-- The time is on the day's rail, not here. It was in this line until
+			     2026-09-02, and a time in both places is the duplicate the rail
+			     exists to remove. What survives is the search result's day link:
+			     that list has no rail, and the date is how a reader tells which
+			     day a found story was published on. -->
 			{#if day}
 				<a href={day.href} class="when hover:underline" data-item-day={day.date}>
 					{shortDate(day.date)}
 				</a>
-			{:else if item.published_at}
-				<span class="when">{shortDate(item.published_at.slice(0, 10))}</span>
 			{/if}
 		</p>
 

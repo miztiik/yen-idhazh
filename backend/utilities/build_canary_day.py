@@ -52,6 +52,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.route import Route, SpecFormat, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
+from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import LensId, SourceKind, SourceTier
 from idhazh.embed import Embedder
@@ -317,6 +318,31 @@ def article_for(index: int, canary: dict[str, object], measured: _Measured) -> A
     )
 
 
+#: When each published canary appeared, and which clock said so.
+#:
+#: Every state the day's time rail draws, on a fixture the browser suite can
+#: attack. Without these the canary day carried no time at all, so the rail had
+#: nothing to group and four of its five forms had no test.
+#:
+#: Read down the column: two stamps inside one hour, so the rail proves it draws
+#: one marker for a group rather than one per story; a stamp on the day before,
+#: which is common rather than an edge case - feed-to-arrival reaches 25.7 hours
+#: against a 24-hour age limit; one stamp that is our own first sight of the
+#: address, which is the one case the page must never print as a bare clock
+#: time; one story from months back, whose run recorded no clock at all because
+#: it predates `time_source`; and one with no time anywhere.
+APPEARED: Final[tuple[tuple[str | None, TimeSource | None], ...]] = (
+    (f"{DATE}T14:05:00Z", TimeSource.FEED),
+    (f"{DATE}T14:58:00Z", TimeSource.FEED),
+    (f"{DATE}T09:20:00Z", TimeSource.FEED),
+    (f"{YESTERDAY}T23:40:00Z", TimeSource.FEED),
+    (f"{DATE}T06:20:00Z", TimeSource.FIRST_SEEN),
+    ("2026-06-11T08:15:00Z", None),
+    (None, TimeSource.UNKNOWN),
+    (f"{DATE}T11:00:00Z", TimeSource.FEED),
+)
+
+
 def to_item(
     index: int,
     canary: dict[str, object],
@@ -326,6 +352,7 @@ def to_item(
 ) -> DigestItem:
     raw_text = str(canary["raw_text"])
     source = article_for(index, canary, measured)
+    appeared_at, time_source = APPEARED[index]
     return DigestItem(
         item_id=source.item_id,
         vertical="ai",
@@ -334,6 +361,8 @@ def to_item(
         source_id="canary",
         source_name="Canary fixture",
         source_kind=SourceKind.REPORTING,
+        published_at=appeared_at,
+        time_source=time_source,
         summary=raw_text,
         key_points=[line for line in raw_text.splitlines() if line.strip()][:3] or ["-"],
         band=verdict.band,

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { orderByTime } from '../src/lib/day-shape';
+import type { DigestItem } from '../src/lib/payload/types';
 
 /**
  * Read marks belong to one digest date, and they expire.
@@ -17,10 +19,15 @@ import { join, resolve } from 'node:path';
 const KEY = 'idhazh:read';
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
 
-/** The day this build publishes, discovered rather than hardcoded.
+/** The day this build publishes, and the story the page draws first.
  *
  * The browser suite runs against the canary build, which carries one day. A
  * hardcoded date would pass on an empty 404 page the moment that day moved.
+ *
+ * The first story is the first the PAGE draws, not the first the payload lists:
+ * the stream runs newest first by the time on the item, so the two are only the
+ * same by accident. It is computed through `orderByTime`, the function the page
+ * itself calls, so a change to the order moves this with it.
  */
 function publishedDay(): { date: string; firstItemId: string } {
 	const dirs = (at: string) =>
@@ -32,8 +39,11 @@ function publishedDay(): { date: string; firstItemId: string } {
 	const month = dirs(join(CANARY, year)).at(-1) as string;
 	const day = dirs(join(CANARY, year, month)).at(-1) as string;
 	const raw = readFileSync(join(CANARY, year, month, day, 'digest.json'), 'utf8');
-	const payload = JSON.parse(raw) as { items: { item_id: string }[] };
-	return { date: `${year}-${month}-${day}`, firstItemId: payload.items[0].item_id };
+	const payload = JSON.parse(raw) as { items: DigestItem[] };
+	return {
+		date: `${year}-${month}-${day}`,
+		firstItemId: orderByTime(payload.items)[0].item_id
+	};
 }
 
 const { date: DAY, firstItemId: FIRST } = publishedDay();

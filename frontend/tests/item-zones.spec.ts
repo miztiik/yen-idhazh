@@ -2,11 +2,12 @@
  * Row #18's oracle: the reading page's columns are a zone model, and no zone in
  * it is a pixel count.
  *
- * Four zones, and every one of them is a `rem` knob in `config/appearance.json`
+ * Five zones, and every one of them is a `rem` knob in `config/appearance.json`
  * that `scripts/build-frame-css.mjs` writes into CSS:
  *
  * | zone | token | from |
  * | --- | --- | --- |
+ * | the day's time rail | `--zone-time` | the small breakpoint; below it the marker is a rule across the top of its group and there is no column at all |
  * | the source mark | `--zone-mark` | every width |
  * | the card | `minmax(0, 1fr)`, its text at `--measure` | every width |
  * | the item's footer rail | `--zone-rail` | the middle breakpoint |
@@ -17,8 +18,8 @@
  * each zone has to have moved by the same factor. A `rem` zone moves; a `px`
  * one does not, and a track written as `14rem` today can be written as `224px`
  * tomorrow with no visible difference at the default font size. Measured on
- * this suite's own build: the mark went 28 -> 38.5, the rail 224 -> 308 and the
- * aside 288 -> 396, all 1.375x, which is 22/16.
+ * this suite's own build: the mark went 28 -> 38.5, the rail 224 -> 308, the
+ * aside 288 -> 396 and the time rail 88 -> 121, all 1.375x, which is 22/16.
  *
  * The zone widths are read off the page rather than written here, so this file
  * cannot disagree with the config: a knob moved in `appearance.json` moves the
@@ -71,14 +72,21 @@ const LEADS = day ? leadingStories(day.leads ?? [], day.items).length : 0;
  * 2026-09-01 has no leading block, because the block did not exist yet.
  */
 const BANDS = [
-	{ name: 'below the small breakpoint', width: 360, tracks: 2, trailing: null },
-	{ name: 'between small and middle', width: 801, tracks: 2, trailing: null },
-	{ name: 'between middle and wide', width: 1280, tracks: 3, trailing: '--zone-rail' },
+	{ name: 'below the small breakpoint', width: 360, tracks: 2, trailing: null, railed: false },
+	{ name: 'between small and middle', width: 801, tracks: 2, trailing: null, railed: true },
+	{
+		name: 'between middle and wide',
+		width: 1280,
+		tracks: 3,
+		trailing: '--zone-rail',
+		railed: true
+	},
 	{
 		name: 'at and above wide',
 		width: 1536,
 		tracks: LEADS > 0 ? 2 : 3,
-		trailing: LEADS > 0 ? null : '--zone-rail'
+		trailing: LEADS > 0 ? null : '--zone-rail',
+		railed: true
 	}
 ] as const;
 
@@ -95,6 +103,9 @@ interface Reading {
 	zoneMark: number;
 	zoneRail: number;
 	zoneAside: number;
+	/** The rail's own track, or null below the small breakpoint where the stream
+	 * is not a grid and the marker is a rule across the top of its group. */
+	zoneTime: number | null;
 	frameUsed: number;
 	frameContentBox: number;
 	itemTracks: number[];
@@ -103,6 +114,9 @@ interface Reading {
 	proseMaxWidth: number;
 	asideUsed: number | null;
 	railUsed: number | null;
+	/** The whole leading column of the stream, gap included, so the fill check
+	 * below compares like with like. */
+	timeColumn: number | null;
 	scrollWidth: number;
 	clientWidth: number;
 }
@@ -131,6 +145,14 @@ async function read(page: Page, rootPx: number): Promise<Reading> {
 			parseFloat(getComputedStyle(frame).paddingRight);
 		const item = document.querySelector('article.item') as HTMLElement;
 		const prose = document.querySelector('[data-item-summary]') as HTMLElement;
+		const stream = document.querySelector('[data-time-rail]');
+		const streamStyle = stream ? getComputedStyle(stream) : null;
+		// Below the small breakpoint the stream is not a grid at all, so there is
+		// no leading track to read and the marker is a rule across the group.
+		const railed = streamStyle?.display === 'grid';
+		const railTrack = railed
+			? parseFloat((streamStyle as CSSStyleDeclaration).gridTemplateColumns.split(' ')[0] as string)
+			: null;
 
 		return {
 			rootFontPx: remPx,
@@ -138,6 +160,7 @@ async function read(page: Page, rootPx: number): Promise<Reading> {
 			zoneMark: zone('--zone-mark'),
 			zoneRail: zone('--zone-rail'),
 			zoneAside: zone('--zone-aside'),
+			zoneTime: railTrack,
 			frameUsed: width(frame) as number,
 			frameContentBox: Math.round((frame.getBoundingClientRect().width - framePad) * 100) / 100,
 			itemTracks: getComputedStyle(item)
@@ -148,6 +171,12 @@ async function read(page: Page, rootPx: number): Promise<Reading> {
 			proseMaxWidth: parseFloat(getComputedStyle(prose).maxWidth),
 			asideUsed: width(document.querySelector('.day-aside')),
 			railUsed: width(document.querySelector('.item .item-rail')),
+			timeColumn:
+				railTrack === null
+					? null
+					: Math.round(
+							(railTrack + parseFloat((streamStyle as CSSStyleDeclaration).columnGap)) * 100
+						) / 100,
 			scrollWidth: document.documentElement.scrollWidth,
 			clientWidth: document.documentElement.clientWidth
 		};
@@ -200,23 +229,34 @@ test.describe('the reading page spends its width in named zones', () => {
 				).toBeLessThanOrEqual(reading.proseMaxWidth + 0.5);
 
 				// --- The page uses the box it has -------------------------------
-				// Below the wide breakpoint the item IS the content box. At and
-				// above it the stream and the aside divide the same box, so the
-				// item is narrower on purpose and the aside is what took the rest.
+				// From the small breakpoint the day's time rail takes a leading
+				// column off the content box, and at and above the wide one the aside
+				// takes a trailing one. So what has to fill the box is every zone
+				// together, which is the honest form of the check. Below the small
+				// breakpoint there is no rail column - a 328px content box cannot hold
+				// one and a readable line - and the item is the whole box again.
+				expect(
+					reading.zoneTime !== null,
+					band.railed
+						? `at ${band.width}px the stream should draw a time rail column`
+						: `at ${band.width}px the stream should have no time rail column`
+				).toBe(band.railed);
+				const timeColumn = reading.timeColumn ?? 0;
 				if (band.width >= 1400 && LEADS > 0) {
 					expect(reading.asideUsed, 'the day grows an aside at the wide breakpoint').toBeCloseTo(
 						reading.zoneAside,
 						1
 					);
 					expect(
-						(reading.itemUsed + (reading.asideUsed as number)) / reading.frameContentBox,
-						'the stream and the aside together fill the frame'
+						(reading.itemUsed + timeColumn + (reading.asideUsed as number)) /
+							reading.frameContentBox,
+						'the rail, the stream and the aside together fill the frame'
 					).toBeGreaterThan(0.9);
 				} else {
 					expect(reading.asideUsed, 'the aside is a wide-breakpoint zone only').toBeNull();
 					expect(
-						reading.itemUsed / reading.frameContentBox,
-						'the item fills the frame where nothing stands beside the stream'
+						(reading.itemUsed + timeColumn) / reading.frameContentBox,
+						'the rail and the stream together fill the frame'
 					).toBeGreaterThan(0.9);
 				}
 
@@ -231,6 +271,9 @@ test.describe('the reading page spends its width in named zones', () => {
 			const moved: Record<string, [number, number]> = {
 				'--zone-mark': [small.itemTracks[0], large.itemTracks[0]]
 			};
+			if (band.railed) {
+				moved['--zone-time'] = [small.zoneTime as number, large.zoneTime as number];
+			}
 			if (band.trailing) {
 				moved['--zone-rail'] = [
 					small.itemTracks[small.itemTracks.length - 1],

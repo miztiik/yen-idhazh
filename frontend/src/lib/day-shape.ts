@@ -1,15 +1,16 @@
 /** How a day's items are laid out, as arithmetic.
  *
  * Separate from the component for the same reason the run strip's axis is:
- * the rules here are decisions - which topic pills stay on the row, and which
- * of the day's leads the page can actually reach - and a decision is worth
- * testing without a browser.
+ * the rules here are decisions - which topic pills stay on the row, which of
+ * the day's leads the page can actually reach, and what order the stream runs
+ * in - and a decision is worth testing without a browser.
  *
- * Nothing here removes, hides or re-orders an item. The stream carries the
- * whole day in the published order, and the leading block is a set of anchors
- * into it.
+ * Nothing here removes or hides an item. `orderByTime` re-orders and the set it
+ * returns is the set it was given, which `frontend/tests/time-rail.spec.ts`
+ * asserts over every committed day.
  */
 
+import { railTime, type RailTime } from './format';
 import type { DigestItem, DigestLead, DigestVerticalRef } from './payload/types';
 
 /** One entry of the leading block, as the component draws it. */
@@ -116,4 +117,69 @@ export function leadingStories(leads: DigestLead[], items: DigestItem[]): Leadin
 			title: titles.get(lead.item_id) as string,
 			reason: lead.reason
 		}));
+}
+
+/** The day's stories, newest first by the time the item carries.
+ *
+ * **This is a re-order and never a filter.** The array it returns holds exactly
+ * the items it was handed; a story with no time keeps its place at the end
+ * rather than dropping out, because "we could not date this" is not a reason to
+ * stop publishing it.
+ *
+ * The order it replaces is the published one, which is desk-blocked rather than
+ * ranked - the whole of one desk, then the whole of the next - so a reader
+ * scrolling it met the same desk ninety times before the next one started.
+ * Nothing editorial is lost by re-ordering it: what the day thinks is important
+ * is in the leading block, chosen across the whole day.
+ *
+ * `item_id` breaks a tie, and it is derived from the story's own address, so
+ * two builds of one day agree and nothing about the order can be gamed.
+ */
+export function orderByTime(items: DigestItem[]): DigestItem[] {
+	return [...items].sort((left, right) => {
+		const a = left.published_at;
+		const b = right.published_at;
+		if (a !== b) {
+			if (!a) return 1;
+			if (!b) return -1;
+			return a < b ? 1 : -1;
+		}
+		return left.item_id < right.item_id ? -1 : left.item_id > right.item_id ? 1 : 0;
+	});
+}
+
+/** One row of the day's stream: the story, and the marker above it if it opens
+ * a group. */
+export interface RailRow {
+	item: DigestItem;
+	/** Null on every story but the first of its group. */
+	mark: RailTime | null;
+}
+
+/** The stream with its rail markers, one per time group rather than one per
+ * story.
+ *
+ * A day of 359 stories over four groups is 355 duplicate labels, and a label
+ * repeated ninety times is texture rather than information. So the marker is
+ * drawn on the first story of each run of stories sharing a group, and the
+ * stories under it carry none. Measured 2026-09-02 over the 12 committed days
+ * and 4,713 stories at the 60-minute default: 907 markers rather than 4,713.
+ *
+ * The marker is the first story's own time to the minute, not a rounded one.
+ * The stream runs newest first, so a marker is an upper bound on everything
+ * below it until the next one - which is how a reader already reads a rail.
+ *
+ * `items` must already be in the order the page draws them (`orderByTime`), or
+ * a group that the order split reopens further down. That is the honest
+ * behaviour rather than a bug: a rail over an order it did not sort would print
+ * numbers that jump up and down as the reader scrolls.
+ */
+export function railRows(items: DigestItem[], onDate: string, groupMinutes: number): RailRow[] {
+	let previous: string | null = null;
+	return items.map((item) => {
+		const time = railTime(item.published_at, item.time_source, onDate, groupMinutes);
+		const opens = time.group !== previous;
+		previous = time.group;
+		return { item, mark: opens ? time : null };
+	});
 }

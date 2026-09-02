@@ -574,6 +574,61 @@ The requirement was stated as a decay. Three different features answer to that w
 | 2 | Keep payload order and use time only as a label | A rail whose numbers jump up and down as the reader scrolls, which trains them to stop reading it. | Editor |
 | 3 | Relative time rewritten by script | Two clocks on one page and a wrong one for every reader with script off. A device may add a relative form beside a correct absolute string; it may never replace it. | Editor |
 
+### What shipped, 2026-09-02
+
+Eight of the nine decisions shipped as written. What moved is decision 3's third
+string, and it moved because the payload cannot say what it claims.
+
+- **Decision 1 holds and it is measured.** Re-ordering all 12 committed days -
+  4,713 stories - changes the story set on **none** of them, and
+  `frontend/tests/time-rail.spec.ts` re-runs that over the whole corpus on every
+  build. The leading block is untouched: it resolves by `item_id` against
+  whatever list the page holds.
+- **Decision 3's `31 Aug, no time given` does not render, because "the feed gave
+  a date and no clock" is not a state the payload can express.**
+  `discover._published_at` reads `feedparser`'s parsed struct, which fills
+  `00:00:00` for a date-only feed date - and that is also what a story genuinely
+  published at midnight parses to. 47 of the 4,713 committed stories are stamped
+  exactly `T00:00:00Z`, 1.0 percent, and nothing distinguishes the two inside
+  that number. Reading midnight as "no clock given" would mislabel the real
+  midnight stories, which is the invented-label failure decision 6 names. The
+  string ships in its no-date form, `No time given`, on the one state the
+  payload does express: `time_source: unknown`.
+- **The fifth string is `11 Jun 08:15`, for a story older than yesterday**, with
+  the year added across a year boundary. 776 of the committed 4,713 are in that
+  state and every one of them is on a day published before `time_source`
+  existed; the two days that carry the field reach `-1` and no further.
+- **A story published before `time_source` existed prints its stamp with no
+  attribution and no mark.** That is 3,733 stories, 79.2 percent of everything
+  committed. Claiming either clock would be a claim the run never recorded, and
+  printing nothing would delete a fact from four fifths of the archive.
+- **Decision 8's glyph fires on `first_seen` alone**, which is exactly the case
+  its own reason names: the printed clock is ours. `unknown` draws no glyph
+  because it prints no clock, so there is nothing a reader could misread.
+- **`unknown` is empty across every committed day**, so the canary day now
+  plants one story of every form. Without it the branch that decides whether a
+  story with no time still renders would ship untested.
+- **The item's eyebrow gave the time to the rail.** It is printed once. A search
+  result keeps a date in that slot, because the archive list has no rail.
+- **The rail is a fifth zone in row 18's model**, at `frame.zone_time_rem`, and
+  `frontend/tests/item-zones.spec.ts` was extended rather than duplicated: the
+  fill check is now every zone against the content box, and the rail joins the
+  two-root-font-size pass at 88 -> 121 CSS px.
+- **Decision 7's narrower phone column is refused, and the number is why.** A
+  `3.5rem` column plus its gap took 68 of the 328 CSS px a 360px screen has,
+  leaving the summary **186px** - about 25 characters - and breaking
+  `Interconnector` across two lines in the title. The item already spends 40 on
+  the read mark and 32 on its own padding, so a phone cannot carry a rail
+  column, the mark and a readable line at once. Below the small breakpoint the
+  marker is a rule across the top of its group with the time under it, and the
+  summary is back to 254px. What the reader loses is the label sitting level
+  with the story it opens. The decision predates row 18's measurement of the
+  phone's column budget; the hairline, the grouping and every string are
+  unchanged.
+
+Counts, method and hardware:
+[`docs/reference/measurements.md`](../docs/reference/measurements.md#what-the-time-rail-costs-and-what-it-removes-2026-09-02).
+
 ## 19 - Row #18 - Spend the width: the four-zone column model
 
 - **Scope:** The item's rail breakpoint drops, and the recovered width gets a job at each of the three committed breakpoints.
