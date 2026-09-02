@@ -1384,6 +1384,17 @@ the variable protects the shell you remember to set it in and nothing else.
   duration, which is why a long `pytest` streaming dots outlives a short sleep.
   The only pattern that holds: a `Start-Process pwsh -WindowStyle Hidden` child
   writing a sentinel file, polled by many separate short calls.
+- **A sleeping poll loop is not always killed - sometimes it is detached, and
+  then its output reads back as blank lines.** Observed 2026-09-02 waiting on a
+  13-minute browser suite: a `while` loop sleeping 45 seconds between
+  `Test-Path` probes was moved to a background terminal instead of being cut,
+  and re-reading that terminal returned the command line followed by twenty
+  empty lines. Nothing failed and the sentinel arrived on time, but the poll
+  could not say so. Two things fix it and they are cheap: print one line per
+  iteration (`Write-Host "poll $i size=$((Get-Item $log).Length)"`), which keeps
+  the call in the foreground and shows the log growing; and read the sentinel
+  with the editor's file tool rather than through the shell, because that hits
+  the filesystem and cannot come back blank.
 - **A killed redirect leaves the output file present and EMPTY.** `mypy > file
   2>&1` cut at the idle limit exits 1 with a zero-byte file, so `Test-Path` says
   true and `Get-Content` says nothing - which reads exactly like a gate that
