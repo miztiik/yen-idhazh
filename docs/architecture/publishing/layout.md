@@ -475,14 +475,17 @@ The three levers this page already names - encode efficiently, honour the visual
 | File | Bytes | Share of `state/` | Bounded by |
 | --- | --- | --- | --- |
 | `state/seen/<YYYY-MM>.csv` | 2,904,221 | 37.2 percent | `collect.seen_window_days` |
-| `state/scores/<YYYY-MM>.csv` | 2,700,019 | 34.6 percent | **nothing deletes a month yet** |
-| `state/item-health/<YYYY-MM>.csv` | 1,409,945 | 18.0 percent | `observability.keep_months` |
+| `state/scores/<YYYY-MM>.csv` | 2,700,019 | 34.6 percent | `observability.scores_full_grain_months` - **named 2026-09-02, and nothing deletes a month yet** |
+| `state/item-health/<YYYY-MM>.csv` | 1,409,945 | 18.0 percent | `observability.item_health_full_grain_months` |
 | `state/published.csv` | 384,448 | 4.9 percent | nothing, and deliberately - published is forever |
 | everything else | 416,995 | 5.3 percent | small enough not to ask |
 
 Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists to watch moved inside a day**, and the shares moved further than the bytes did, so the shares are the ones to re-take rather than to quote. Against 2026-08-30: `state/` as a whole fell 17.6 percent, because `state/seen/` shed its address column and fell 43.8 percent from 5,166,315. `state/scores.csv` grew 14.4 percent from 2,359,230 in the same day - so its share went from 24.9 to 34.6 percent while it was the only file nobody had touched, and it is now 204,202 bytes short of being the largest file in the tree.
 
-**The fold covers `state/item-health/` and only that.** A month older than `observability.keep_months` is read whole, folded to one row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv`, and the full-grain shard is deleted - in that order, with the aggregate read back before the shard is unlinked, so a fold that cannot be written leaves the shard where it was. Thirteen months, because `console.max_window_days` is 366 and a shard has to answer for a year with the current month still being written.
+**The fold covers `state/item-health/` and only that.** A month older than `observability.item_health_full_grain_months` is read whole, folded to one row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv`, and the full-grain shard is deleted - in that order, with the aggregate read back before the shard is unlinked, so a fold that cannot be written leaves the shard where it was. Fourteen months, and the fourteenth is not spare: `console.max_window_days` is 366, `ledger.shards_in_window` walks 367 inclusive days, and a window ending on the first of a month starts on the last day of another - so a read can open 14 month files. The knob carried 13 until 2026-09-02, because the check behind it compared `13 * 30` against 366 rather than against the shards that window selects. Measured over all 146,097 end dates of one 400-year Gregorian cycle, 13 deletes a shard the console still opens on 3,636 of them, 2.5 percent ([../../concepts/config.md](../../concepts/config.md#why-14-and-not-13)).
+
+**Three stores gained a cleanup age on 2026-09-02 and no reader.** `observability.feed_health_keep_months`, `observability.scores_full_grain_months` and `observability.public_telemetry_keep_months` all carry 14, and `observability.score_archive_keep_months` carries null beside `item_health_aggregate_keep_months`. Naming the age is not deleting anything: the fold still reaches `state/item-health/` alone, and the changes that read the other three are their own. What the names buy today is that the table above can say what bounds each row rather than saying "nothing".
+
 
 **Measured on this checkout, 2026-08-30.** Folding the committed `state/item-health/2026-08.csv` - 4,167 rows over six published days, 1,270,452 bytes - gives 24 aggregate rows and 1,531 bytes: **829.8 times smaller**, 63.8 bytes an aggregate row, 255.2 bytes a published day, 93,136 bytes a year against the shard's 77,285,830. Four rows a day and not five, because `plan` wrote no row that month.
 
@@ -496,7 +499,7 @@ Three things make it the one ledger the fold reaches, and each of them is why th
 
 **What this does not do, stated plainly: it does not bound the `/console/` document.** That page was linear in items at a measured 50.45 gzipped bytes an item and crossed its 301,580-byte ceiling on published day 16, because the compression scatter inlined every row `state/scores.csv` had ever held. Both halves of that are closed - the plot moved to a windowed seed over the telemetry projection on 2026-08-29, and the scatter itself became a per-day count of three bins on 2026-08-30 - so the page no longer grows a mark an item. The fold was never an answer to it either way: the two problems share a file and share nothing else.
 
-The aggregate is kept forever by default. `observability.hard_delete_after_months` is null, and the contract refuses a value at or below `keep_months` - so a month is never deleted before it has been folded.
+The aggregate is kept forever by default. `observability.item_health_aggregate_keep_months` is null, and the contract refuses a value at or below `item_health_full_grain_months` - so a month is never deleted before it has been folded. `observability.score_archive_keep_months` stands in the same relation to `scores_full_grain_months`, and is null for the same reason.
 
 ### `state/scores/` shards by month, and that bounds nothing on its own (2026-08-31)
 
