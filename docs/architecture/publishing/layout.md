@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -89,6 +89,25 @@ The planning step scores every story before a single model loads ([../sources/di
 **All five are optional, and an absent one reads as unknown.** Every day published before the fields existed omits all five - 11 days and 3,596 items when they landed, counted 2026-08-31 - and not one of them was rewritten (`CLAUDE.md` section 11). A reader of the payload - our own page included - must not fill an absent field with a default, because every plausible default is a false claim: `0` for `carried_by` says no feed carried the story, `false` for `on_front_page` denies a vote that was never counted, and `0.0` for `rank_score` puts the story at the bottom of its desk. `null` is the only honest answer and the contract test over every committed day asserts it.
 
 `time_source` earns its place because the fallback it names is silent. `published_at` is the feed's own date where the feed gave a usable one, and our first sight of the address where it did not ([../sources/freshness.md](../sources/freshness.md)). Both are the same kind of string, so a page printing the time cannot say whose it is without this field. Measured 2026-08-31 on the committed 2026-08-30 payload - the newest day that had finished publishing - 431 items: 305 distinct `HH:mm` values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. **That last figure is an upper bound on the fallback and not a count of it**, because until this field shipped nothing committed recorded the choice, and a feed's own stamp can land near a run by chance. The fallback is rare either way, which is exactly why it needs naming: a reader has no way to spot the 1 percent.
+
+### The rail is what reads it, and what it can and cannot say (2026-09-02)
+
+The day's stream orders by `published_at`, newest first, and prints it on a rail. So `time_source` stopped being a field with no reader and became the thing that decides which of five strings a story gets ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Counted 2026-09-02 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over every committed day - 12 days, 4,713 stories:
+
+| `time_source` | Stories | Share | What the rail prints |
+| --- | --- | --- | --- |
+| `feed` | 970 | 20.6 percent | the clock, unmarked |
+| `first_seen` | 10 | 0.2 percent | `First seen 06:20`, with a mark |
+| `unknown` | 0 | 0 | `No time given` |
+| absent | 3,733 | 79.2 percent | the clock, unattributed and unmarked |
+
+Three things follow from that table and each one moved the design.
+
+**The absent case is the archive, not an edge case.** Four fifths of everything published predates the field. A story there carries a stamp `rank.appeared_at` chose the same way it chooses one today - only the label was thrown away - so the honest render is the stamp with no claim attached. Printing it as a feed time would be a claim the run never recorded; refusing to print it would delete a fact from 3,733 stories and leave the rail blank on ten of twelve committed days.
+
+**`unknown` has never happened**, so the branch is carried by the canary day, which plants one story of every state on purpose. A branch no fixture reaches ships with no test at all, and this one decides whether a story with no time still renders.
+
+**"The feed gave a date and no clock" is not expressible, and no heuristic was invented for it.** `discover._published_at` reads `feedparser`'s parsed struct, which fills 00:00:00 for a date-only feed date - and a story genuinely published at midnight parses to the same thing. 47 of the 4,713 committed stories are stamped exactly `T00:00:00Z`, 1.0 percent, and the payload cannot say which of the two each one is. Reading midnight as "no clock given" would mislabel a real midnight story, which is the invented-label failure the rail exists to avoid. The string stays in the vocabulary for the day a feed's own granularity is recorded; until then it prints only where the payload says there is no time at all.
 
 ## The same story from several sources says so
 

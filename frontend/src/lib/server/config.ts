@@ -39,6 +39,10 @@ export interface UiConfig {
 	 * is why it travels in the prerendered document and `shell_seed_items` does
 	 * not. */
 	payload_slow_ms: number;
+	/** How coarse the day's time rail groups its stories, in minutes. The rail
+	 * draws one marker per group and none on the stories under it, so this is
+	 * what decides how many times a reader is told the time. */
+	rail_group_minutes: number;
 	repo_url: string;
 	site_title: string;
 	tagline: string;
@@ -183,6 +187,10 @@ export interface FrameConfig {
 	zone_mark_rem: number;
 	zone_rail_rem: number;
 	zone_aside_rem: number;
+	/** The day stream's leading column from the small breakpoint, which carries
+	 * the time rail. There is no phone value because there is no phone column:
+	 * below that breakpoint the marker is a rule across the top of its group. */
+	zone_time_rem: number;
 }
 
 /** What the surface is allowed to draw with. */
@@ -235,6 +243,7 @@ const DEFAULTS: UiConfig = {
 	filter_min_chars: 2,
 	topic_pills_max: 8,
 	payload_slow_ms: 1200,
+	rail_group_minutes: 60,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
 	tagline: 'A daily digest that checks its own work.',
@@ -305,7 +314,8 @@ const FRAME_DEFAULTS: FrameConfig = {
 	breakpoints_px: [640, 1024, 1400],
 	zone_mark_rem: 1.75,
 	zone_rail_rem: 14,
-	zone_aside_rem: 18
+	zone_aside_rem: 18,
+	zone_time_rem: 5.5
 };
 const THEME_DEFAULTS: ThemeConfig = {
 	gradient_enabled: true,

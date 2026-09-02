@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { orderByTime } from '../src/lib/day-shape';
+import type { DigestItem } from '../src/lib/payload/types';
 import { shellSeedItems } from '../src/lib/server/config';
 import { dayShell, loadDay, publishedDates } from '../src/lib/server/payload';
 
@@ -92,6 +94,10 @@ interface DayRoute {
 	date: string;
 	/** Every story id the day serves, in published order. */
 	served: string[];
+	/** The same ids in the order the page draws them: newest first by the time on
+	 * the story. Computed through `orderByTime`, the function the page calls, so
+	 * this file cannot disagree with the page about what the order is. */
+	reading: string[];
 	/** Every story id the prerendered document renders, in document order. */
 	rendered: string[];
 	/** Every story id the document's leading block points at. */
@@ -126,7 +132,7 @@ function renderedItems(html: string): string[] {
 }
 
 /** The day the built tree serves at that date - the file the browser fetches. */
-function servedDay(date: string): { items: { item_id: string }[] } | null {
+function servedDay(date: string): { items: DigestItem[] } | null {
 	const [year, month, day] = date.split('-');
 	const path = join(BUILD, 'digest', year, month, day, 'digest.json');
 	if (!existsSync(path)) return null;
@@ -144,6 +150,7 @@ function dayRoutes(): DayRoute[] {
 		found.push({
 			date,
 			served: served.items.map((item) => item.item_id),
+			reading: orderByTime(served.items).map((item) => item.item_id),
 			rendered: renderedItems(document),
 			leads: captured(document, /data-lead="([^"]+)"/g),
 			html
@@ -227,7 +234,11 @@ for (const route of ROUTES) {
 			expect([...held].sort(), 'the page holds a different set of stories').toEqual(
 				[...route.served].sort()
 			);
-			expect(held, 'the stories are not in published order').toEqual(route.served);
+			// And the order, which is the day's own: newest first by the time on the
+			// story, with the rail drawing a marker where it changes.
+			expect(held, 'the stories are not in the order the rail says they are').toEqual(
+				route.reading
+			);
 
 			expect(errors, 'the day page logged an error').toEqual([]);
 			expect(failed, 'the day page asked for something that is not there').toEqual([]);

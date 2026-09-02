@@ -11,9 +11,10 @@
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
-	import { filterNeedle, leadingStories, matchItems } from '$lib/day-shape';
+	import TimeRail from '$lib/components/TimeRail.svelte';
+	import { filterNeedle, leadingStories, matchItems, orderByTime, railRows } from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
-	import type { DigestDay } from '$lib/payload/types';
+	import type { DigestDay, DigestItem } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
 	import { onMount } from 'svelte';
 
@@ -49,9 +50,14 @@
 		read = loadRead(day.date, ui.read_mark_days);
 	});
 
-	// The published order, decided before read-state is consulted.
+	// The order the reader gets, decided before read-state is consulted. Newest
+	// first by the time on the item, which is a re-order and never a filter: the
+	// set here is the set the payload published, and the day's own view of what
+	// matters is in the leading block rather than in this order. `orderByTime` is
+	// idempotent, so a document whose seed the build already ordered pays for it
+	// once and a fetched day is ordered the same way when it lands.
 	const scoped = $derived(
-		vertical ? day.items.filter((item) => item.vertical === vertical) : day.items
+		orderByTime(vertical ? day.items.filter((item) => item.vertical === vertical) : day.items)
 	);
 	// What the day published, not what is in hand. A reading route's document
 	// carries a seed and fetches the rest, so counting the list here would print
@@ -168,15 +174,17 @@
 					You have read everything here today.
 				</p>
 			{:else}
-				{#each paged as item (item.item_id)}
-					<DigestItemView
-						{item}
-						verticalName={verticalNames[item.vertical] ?? item.vertical}
-						showMark={ui.source_mark}
-						read={read.has(item.item_id)}
-						onRead={() => (read = markRead(item.item_id, read, day.date))}
-					/>
-				{/each}
+				<TimeRail rows={railRows(paged, day.date, ui.rail_group_minutes)}>
+					{#snippet story(item: DigestItem)}
+						<DigestItemView
+							{item}
+							verticalName={verticalNames[item.vertical] ?? item.vertical}
+							showMark={ui.source_mark}
+							read={read.has(item.item_id)}
+							onRead={() => (read = markRead(item.item_id, read, day.date))}
+						/>
+					{/snippet}
+				</TimeRail>
 
 				{#if remaining > 0}
 					<button

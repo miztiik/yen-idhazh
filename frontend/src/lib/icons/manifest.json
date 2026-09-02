@@ -7,6 +7,7 @@
     "band-high",
     "band-low",
     "band-medium",
+    "clock-alert",
     "console",
     "external",
     "read-aloud",
