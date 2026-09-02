@@ -163,6 +163,49 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 
 **What is not yet a rule.** Nothing forbids a lead being an item the grouping collapsed, or two members of one group both leading - the source cap does not catch that, because a group is always across sources. Neither costs a reader anything while `same_story_as` is recorded and not drawn. Both become rules to write on the day the collapse is drawn, which is row 24's reachability question above.
 
+## A desk says why it ran what it ran
+
+Each entry of `verticals` on the committed day carries three more fields since
+2026-09-02. The planning step already computed all three, wrote them into the
+run plan and published none of them, so the reading page could not say why a
+desk was thin.
+
+| Field | What it says | What it is not |
+| --- | --- | --- |
+| `considered` | Distinct addresses our feeds offered that desk, less what the day had already published or already failed on. | **Not an upper bound on `count`.** Each run counts its own pool and the day's stories accumulate across runs, so a five-run day can publish more than any one run considered. |
+| `too_old` | How many of those were past `collect.max_age_hours`. | Not a failure. The age gate working is what this counts. |
+| `below_feed_floor` | Some run today found fewer live feeds than the desk's floor, so that run planned nothing for it. | Not a reader-facing fact. It is published for the operator surfaces and no reading page draws a sentence from it. |
+
+**The three arrive together or not at all**, and the contract refuses a desk
+holding two of them. A day published before 2026-09-02 carries none, and absent
+reads as unknown rather than zero - a `0` for `considered` would say the feeds
+offered a desk nothing on a day that published 216 stories from it.
+
+**Each field is the strongest any run of the day recorded, never the sum.**
+`assemble.desk_ref` owns that rule. A later run drops what the day has already
+published before it counts anything, so it sees a smaller pool of the same
+back-catalogue stories - and adding the runs would print a number the feeds
+never offered. A desk this run did not plan keeps what an earlier run said about
+it, which is how a desk retired from `config/taxonomy.json` mid-day keeps the
+explanation under stories it already published.
+
+**`count` is the payload's own number.** It counts every story the desk
+published, including one the duplicate pass grouped behind another - that pass
+unpublishes nothing, so the count is not what the default view happens to draw.
+
+**The sentence lives under the topic panel and outside it.** `FilterBar.svelte`
+draws it, for the active desk only, as a sibling of the panel rather than a
+third child. At 1024px and up that panel is one nowrap band so it is cheap
+enough to stick; a third child would be squeezed in beside the pills. It belongs
+under the panel anyway - a fact about the desk rather than a control, read once
+and then scrolled away. The rule that decides whether it draws at all is
+`deskShortfall` in `frontend/src/lib/day-shape.ts`, which is pure and is tested
+in Node, because the canary day has one desk and a rule about a healthy desk
+needs a second one.
+
+The copy, its three clauses and where the threshold lives are in
+[../../concepts/digest.md](../../concepts/digest.md#a-thin-desk-says-what-did-not-run).
+
 ## The month search index
 
 `frontend/public/assist/index/<YYYY-MM>.json` is one month of published items in published order, and `<YYYY-MM>.bin` is that month's vectors laid end to end as raw int8. The contract is `backend/idhazh/contracts/search_index.py`; the writer is `assemble.rebuild_search_index`. The archive's story list reads the JSON, and on-device search reads both.

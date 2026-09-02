@@ -145,6 +145,7 @@
 			fieldLabel="Filter today's stories"
 			placeholder="Filter today's stories"
 			showField={ui.show_filter}
+			deskThinMax={ui.desk_thin_max}
 			matchNote={filtering ? `${visible.length} of ${total}` : ''}
 			noscriptNote="Filtering needs JavaScript. Every topic above is a link and still works."
 		/>

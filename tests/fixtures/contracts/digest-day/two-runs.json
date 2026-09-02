@@ -153,14 +153,20 @@
   "version": "2026-08-21T06:00",
   "verticals": [
     {
+      "below_feed_floor": false,
+      "considered": 9,
       "count": 2,
       "display_name": "AI",
-      "id": "ai"
+      "id": "ai",
+      "too_old": 6
     },
     {
+      "below_feed_floor": null,
+      "considered": null,
       "count": 1,
       "display_name": "Energy",
-      "id": "energy"
+      "id": "energy",
+      "too_old": null
     }
   ]
 }
