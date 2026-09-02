@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -161,6 +161,8 @@ The title, not the article text, and the asymmetry is deliberate. A plan runs be
 **This reorders every future day and no past one.** A bonus that starts firing is a live ranking change - that was named before it was made, and it is the reason this was an owner decision rather than a defect fix. `state/published.csv` still stops an already-published address being planned again, so no day a reader has already seen moves.
 
 **All thirty are standing organisations, and on 2026-08-31 the registry gained room for something else.** `EntityDef.kind` is `organisation` or `subject`, it defaults to `organisation`, and no committed entry is a subject yet. The reason for the widening is a gap: a company is in the news most weeks, so the time between our own mentions of it is near zero, and a running story goes quiet between instalments. Only the second kind of entry has a gap worth measuring. Nothing reads `kind` yet - it exists so a pandemic or a tournament can enter the vocabulary at all, which an organisation-only registry could not allow. A subject carries no SEC filer id and the contract refuses one.
+
+**Nothing fades a subject's score across days, and one shape of that idea is refused rather than deferred.** What was asked for was a decay, and three different features answer to that word. Keeping a running story visible on a quiet day is the one worth building, and it waits on a registry entry that actually goes quiet - our silence about a name we track runs zero days at the median and three at the worst observed, so a fade rate set anywhere in that range fires on every name every day ([../../reference/measurements.md](../../reference/measurements.md#what-this-settles)). A **running total that a subject adds to every day and a rate then shrinks is refused outright**: it grows for as long as the subject runs, so a two-year story eventually outranks every fresh story permanently, and on a day the subject did produce coverage the shared-subject term above has already counted it. Stopping one subject from leading five days running is a third thing again, and its control is the per-subject cap below rather than a rate - a rate doing that job would have to penalise a subject still producing coverage, which is exactly the case the request was protecting. Authority: Editor, 2026-08-31.
 
 ## Sources are tiered, and the tier is scaled by the feed's own weight
 
