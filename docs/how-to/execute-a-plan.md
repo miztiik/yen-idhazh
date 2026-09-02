@@ -31,10 +31,13 @@ orchestrator (main thread)                 worker subagent (one per row)        
 3. Create an isolated git worktree off `origin/main` + a named branch per row. Never share a worktree between rows or with a parallel agent (worktree contamination silently sweeps one row's edits into another's PR). Fill the Status Reckoner `Worktree`.
 4. Dispatch one worker subagent per row (`runSubagent`, default agent) with a self-contained brief (below). Set `Status = IN-FLIGHT`; fill `Subagent`.
 5. Receive the worker's report. Run the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md); on green gates, AUTO-merge (`gh pr merge --squash --delete-branch`). If checks or publish/deploy jobs are still running for one independent row, keep dispatching other ready rows instead of idling.
-6. Flip `Status = DONE #<pr>`; unblock dependents; [distill](distill-a-plan.md) the closed row.
-7. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
+6. Remove the row's worktree once its pull request is merged: detach it first, then remove it. A merged row's checkout is finished work, and the removal is the orchestrator's because the worker has already returned.
+7. Flip `Status = DONE #<pr>`; unblock dependents; [distill](distill-a-plan.md) the closed row.
+8. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
 The orchestrator does NOT open the row's source files, write its code, or run its inner test loop inline - that is the worker's job. The orchestrator's own edits are limited to the Status Reckoner and the merge.
+
+**Step 6 is the one an interrupted run skips, so it cannot be the only defence.** A worker killed mid-row never reaches its own clean-up, and the orchestrator that would have removed the tree has moved on or died with it. Measured on one box on 2026-09-02: 38 abandoned checkouts holding 156,482 files, every one of them a row whose pull request had merged days earlier. `git worktree prune` does not help - it only clears the admin entry for a directory that is already gone, and never deletes a checkout. Pair this step with a sweep the project can run at any time (below).
 
 **When the orchestrator reports to the user, it translates; it does not forward.** A worker writes in the vocabulary of the subsystem it just changed, which is correct for the doc that row updated and wrong for a person asking what happened. Say what each number means next to the number (`CLAUDE.md` section 0b). Forwarding a worker's phrasing is the single easiest way for an orchestrator to break the voice rule while every row underneath it is green.
 
@@ -84,6 +87,10 @@ AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md sectio
 ## Closure
 
 When every row is `DONE` / `COLLAPSED`: run [distill-a-plan.md](distill-a-plan.md) for each closed row, confirm the Status Reckoner is fully resolved, and delete the plan-doc once fully distilled (git history is the ledger, per [../reference/documentation-structure.md](../reference/documentation-structure.md)).
+
+**Then sweep the worktrees the plan created**, with the tool the project's own worktree notes name. Judge each one on three signals and keep it unless all three agree: its pull request is merged, its branch is gone from the remote, and its own tree is clean. All three are needed. A squash merge leaves the branch a non-ancestor of the trunk, so ancestry cannot answer whether the row landed - which is why the pull request is asked. And a branch with no pull request at all is pending work rather than stale work; twice on this project such a branch held a real fix nobody had proposed yet. A detached worktree is the one case ancestry settles alone.
+
+Remove the checkout and keep the branch whenever the branch still holds a commit the trunk does not. The directory is the disk cost; the branch is free and is the only copy of an unmerged commit.
 
 ## See also
 
