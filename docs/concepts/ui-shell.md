@@ -1,14 +1,13 @@
 # UI Shell
 
 **Last Updated**: 2026-09-02
-
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
 ## The shell is deliberately thin
 
 The whole site is a small number of static pages rendering committed payloads. There is no router-driven application, no session, no client state worth persisting, and nothing to fetch beyond same-origin files that shipped in the same commit (Rule #1).
 
-That means the shell's job is small and worth stating plainly: **load a payload, render it, and be honest when it is missing.**
+That means the shell's job is small and worth stating plainly: **load a payload, render it, and be honest when it is missing.** Since 2026-09-01 a reading page loads its day in two halves - the head of it at build time, the rest from a same-origin file the browser asks for - so "be honest when it is missing" gained a second half too: be honest when the rest of it has not arrived yet, and when it never will.
 
 ## The surfaces
 
@@ -28,29 +27,37 @@ The two operator surfaces are held to a different standard on purpose. They sit 
 ## What the shell provides, once
 
 - **The page frame** - header, footer, and the space scale that separates items. Shared, not re-implemented per page.
-- **The payload loader** - one place that fetches a same-origin committed file, validates it against the generated contract, and hands a typed value to the page. Validation at the boundary is what turns a malformed payload into a designed empty state instead of a stack trace.
+- **The payload loader** - one place that reads a same-origin committed file, validates it against the generated contract, and hands a typed value to the page. Validation at the boundary is what turns a malformed payload into a designed empty state instead of a stack trace. There are two of them since 2026-09-01 and that is a seam rather than a second implementation: `frontend/src/lib/server/payload.ts` reads the committed day at build time, and `frontend/src/lib/assist/day.ts` fetches the served day in the browser. **The build no longer proves every committed day renders**, because it never opens the stories past a document's seed - `idhazh validate-days` opens them instead, in CI and before every publish, and the guarantee is now that a broken day cannot be merged rather than that it cannot be built.
 - **The empty and degraded states** - see below.
 - **The console log** - the browser console is the entire logging surface ([telemetry.md](telemetry.md)). What a page logs is what a reader would need to hand back when something looks wrong: which payload it tried to load, and what was wrong with it.
 - **Reader state, in `localStorage` and nowhere else** - the read mark and the theme choice. Never a cookie: a cookie is sent on every request and would put a reading history into the host's access logs. It is a convenience, so it degrades to nothing under a quota error or private mode, and it is bounded by a window rather than kept forever ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
 
 An item component never fetches. It receives a validated slice and renders it.
 
-## Every page handles four states
+## Every page handles five states
 
 These are designed, not discovered:
 
 1. **Loaded** - the normal case.
 2. **Empty** - the payload exists and has nothing in it. A run can legitimately produce zero items. The page says so.
 3. **Missing** - the payload is not there at all, because the day has not run or the deploy raced. The page says so and offers the archive.
-4. **Degraded** - the payload loaded but individual items are marked low-confidence, truncated, or without a visual. This is the *common* case, not an exception, and it is rendered inline rather than as an error ([digest.md](digest.md)).
+4. **Waiting** - the page has the head of its day and the rest is still coming. It is a reading-route state only, and it stays silent until `ui.payload_slow_ms`, because the first frame is already readable and there is nothing to fill. Past that it is **one sentence**, never a spinner, a skeleton or a bar.
+5. **Unreachable** - the payload exists and the fetch for it failed. The stories already on screen stay exactly as they are, the page names the day that did not arrive, and it offers a retry.
+6. **Degraded** - the payload loaded but individual items are marked low-confidence, truncated, or without a visual. This is the *common* case, not an exception, and it is rendered inline rather than as an error ([digest.md](digest.md)).
 
-**A page that white-screens on missing data is a failure**, and it is an explicit gate in `CLAUDE.md` section 12. States 2 and 3 are the two most often skipped and the two most likely to be seen by a real reader.
+Six entries and five states, because Loaded is the one that is not a failure of any kind.
+
+**Missing is decided at build time and Unreachable in the browser**, so neither has to guess which it is. Telling a reader a day was never published when their train went into a tunnel is a lie they can check.
+
+**A page that white-screens on missing data is a failure**, and it is an explicit gate in `CLAUDE.md` section 12. States 2, 3 and 5 are the most often skipped and the most likely to be seen by a real reader.
+
+**Waiting and Unreachable are new since 2026-09-01**, and they are what a reading route bought by stopping carrying its whole day. Before that a document held every story it published, so there was nothing to wait for and nothing that could fail after the page arrived.
 
 ## The day runs newest first, on a time rail
 
 The stream orders by the time on the story, newest first, down a rail on its leading edge. What it replaced was the published order, which is desk-blocked rather than ranked - the whole of one desk, then the whole of the next - so a reader met the same desk ninety times before the next one began. **Nothing editorial is lost by re-ordering it**: what the day thinks is important is the leading block, chosen across the whole day, and it is unchanged. Measured 2026-09-02 over the 12 committed days and 4,713 stories, the re-ordered set is the published set on every day.
 
-**No relative time, anywhere, ever.** The page is prerendered once and read for the next 24 hours with script optionally off, so `3 hours ago` baked in at 06:20 is wrong by 18:20 and wrong for ever on an archived day. A device may add a relative form beside a correct absolute string; it may never replace one. `Yesterday` is not a relative form - it is relative to the day the page IS, which is printed at the top of that page and never moves.
+**No relative time, anywhere, ever.** A page is rendered once and read for the next 24 hours, and its times are in the document before any script runs and stay there if none ever does - so `3 hours ago` baked in at 06:20 is wrong by 18:20 and wrong for ever on an archived day. A device may add a relative form beside a correct absolute string; it may never replace one. `Yesterday` is not a relative form - it is relative to the day the page IS, which is printed at the top of that page and never moves.
 
 Five strings, and the fourth is the one that matters:
 
@@ -77,7 +84,7 @@ The zone is named once, in one line above the stream: `Times shown in UTC.` Not 
 ## What the shell must never do
 
 - Run anything off the reader's device, report a reader's behaviour anywhere, or load a third-party script that phones home (Rule #1). A static asset is judged on bytes, licence and privacy behaviour, never on hostname - and this project self-hosts its font because the request is the larger cost, not because the origin is forbidden.
-- Show a spinner. There is no network in the loop; if something is slow, the payload is too big and that is a build-time problem.
+- Show a spinner. One reading page in the site waits on anything at all, it waits on a file this site publishes, and the frame the reader already has is readable - so there is nothing for a spinner to fill. Past `ui.payload_slow_ms` the page says one sentence. If a wait is long enough to need more than that, the payload is too big and that is a build-time problem.
 - Ask the reader for anything - no cookie banner, no signup, no notification permission, no rating widget. Every interruption is a reason to close the tab.
 - Recompute a score, re-rank items, or derive anything the pipeline already decided. The page renders; it does not think.
 - Hide a low-confidence item to make the page look better.
@@ -101,7 +108,7 @@ The site is served from a project path on GitHub Pages, not from a domain root. 
 
 **The cross-origin bullet was corrected in the same commit and is an independent fix.** It read "Fetch anything cross-origin: no CDN font, no analytics snippet, no third-party widget", which contradicts `CLAUDE.md` Rule #1 as amended 2026-08-23 - the rule draws its line at a *service*, not at an origin, and explicitly permits a third-party static asset judged on bytes, licence and privacy behaviour. Rule #4 makes the contract win, so this doc was simply stale and was a trap for the next agent reading it. What did not change: this project still self-hosts its font, because the HTTP cache is partitioned per site so the shared-cache argument is dead, and `script-src` and `default-src` are `self` only.
 
-Putting payload loading and validation in exactly one place, rather than in each page, is what makes the four states above a shared implementation rather than three inconsistent ones - and it is the reason a malformed payload degrades instead of white-screening. The rejected alternative, per-page fetching, produces a site where the empty state is correct on the page someone remembered to test. Authority: Fowler (contract shape), Jony (what the states look like).
+Putting payload loading and validation in exactly one place per side of the build, rather than in each page, is what makes the states above a shared implementation rather than five inconsistent ones - and it is the reason a malformed payload degrades instead of white-screening. The rejected alternative, per-page fetching, produces a site where the empty state is correct on the page someone remembered to test. Authority: Fowler (contract shape), Jony (what the states look like).
 
 Keeping the site to three surfaces is a delete-first decision. Per-source views and tag pages are both reachable and neither has a named reader yet; a static page that nobody asked for is rent paid forever. Filtering and search were on that list until the owner overruled it, and what shipped is not a page: they are two controls in one panel above a list that already exists, described in [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md). Authority: Jony, with Reader as the check.
 
@@ -113,7 +120,7 @@ The console is the one surface added since, and it was added for a named person 
 | --- | --- | --- |
 | A client-side router with per-item pages | Multiplies the surface for a reader who skims one page in two minutes, and every generated page is bytes committed forever. | Jony |
 | Fetching the payload per component | Three inconsistent empty states and no single place to validate at the boundary. | Fowler |
-| A loading spinner while the payload parses | There is no network in the loop. A spinner would be an animation apologising for a build-time mistake. | Carmack |
+| A loading spinner while the payload parses | The frame a reader already has is readable, so a spinner would fill nothing. What survives of this ruling after a reading page began fetching is one sentence past `ui.payload_slow_ms`, which is a fact rather than an animation. | Carmack |
 | Client-side filtering or search over the ledger | Moves computation to read time for a surface whose whole premise is that nothing computes at read time. | Carmack |
 | Run health shown on the digest page | The reader is not the operator. A grid of squares above the news answers a question they did not ask. | owner |
 | A cookie for the read mark | Sent on every request, so it would put a reading history into the host's access logs. | Reader |

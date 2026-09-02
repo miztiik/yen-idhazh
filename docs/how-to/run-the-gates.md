@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-02
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -181,7 +181,14 @@ python -m idhazh site-weight --site-tree build
 ```
 
 `check` is `svelte-check`. `build` is the strongest of the three: every route is
-prerendered, so a contract-invalid payload fails the build rather than the page.
+prerendered, so a route that cannot render fails the build rather than the page.
+**It stopped answering for every story on 2026-09-01.** A reading document
+carries `ui.shell_seed_items` stories and the browser fetches the rest, so the
+build never opens the stories past the seed. `python -m idhazh validate-days`
+opens all of them, against the committed shape the build reads and the served
+shape a browser fetches, and it runs in `ci.yml` and before every publish. It
+takes no path - there is one committed digest tree - and a run that finds no day
+at all fails rather than passes.
 
 `site-weight` is the fourth, and it is the only one that measures the whole
 site rather than one page. It sums `frontend/build/` - the directory the Pages

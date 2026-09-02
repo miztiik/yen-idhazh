@@ -14,6 +14,12 @@
  * `entries()` lists the days, this only asks whether any day is there at all.
  * When the two answers disagree the build still fails, and so does any other
  * route that stops being reached.
+ *
+ * **What this guard does NOT say, since the reading routes were split on
+ * 2026-09-01: that every story of every day renders.** It answers for the
+ * document. A reading document carries a seed and the browser fetches the rest,
+ * so a story past the seed is never opened by any build. `idhazh validate-days`
+ * is what opens those, in CI and before every publish.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';

@@ -5,18 +5,25 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compile, preprocess } from 'svelte/compiler';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { render } from 'svelte/server';
-import { build, type Rollup } from 'vite';
+import {
+	BASE,
+	Intercepted,
+	loaderSource,
+	servedDayUrl,
+	type Loader
+} from './support/day-loader';
 
 /**
  * The client loader, the retry, the anchor, and the state a reader meets when
  * the rest of a day never arrives.
  *
- * **No reading route calls this loader yet.** The topic routes move to it next
- * and the day route after that, so the build tree-shakes `PayloadState.svelte`
- * away and nothing on the site fetches a day. A spec that navigated a route and
- * aborted `digest.json` would abort nothing, pass, and mean nothing - which is
- * what a degraded arm reporting zero interceptions always is. So this file
- * drives the real module itself, and prints what it intercepted.
+ * **This drives the module rather than a route, and it still should.** Both
+ * reading routes call this loader now, but only for a day longer than
+ * `ui.shell_seed_items` - and the canary day is eight stories against a seed of
+ * fifteen, so a spec that navigated a route and aborted `digest.json` would
+ * abort nothing, pass, and mean nothing. That is what a degraded arm reporting
+ * zero interceptions always is. So this file drives the real module itself, and
+ * prints what it intercepted.
  *
  * Each step is the real thing rather than a stand-in:
  *
@@ -41,63 +48,30 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const frontend = path.resolve(here, '..');
 const scratch = path.join(frontend, 'test-results', 'payload-state');
 
-/** A project path, the way GitHub Pages serves this site. */
-const BASE = '/yen-idhazh';
 const DATE = '2026-08-30';
 /** What the loader must ask for, spelled out rather than rebuilt from `dayUrl`. */
-const WANTED = `${BASE}/digest/2026/08/30/digest.json`;
+const WANTED = servedDayUrl(DATE);
 const PATTERN = `**${WANTED}`;
 
-/** A day payload that satisfies the loader's one guard: it holds an item list. */
-const PAYLOAD = JSON.stringify({ version: '2026-08-31', items: [{ item_id: 'ai-1' }] });
-
-/** What the bundled module hands the page. */
-interface Loader {
-	watchDay: (
-		date: string,
-		watch: {
-			onStatus: (status: string, day: { items: unknown[] } | null) => void;
-			slowMs: number;
-			again?: boolean;
-		}
-	) => Promise<{ items: unknown[] } | null>;
-	dayUrl: (date: string, root?: string) => string | null;
-	restoreAnchor: (hash?: string) => boolean;
-}
-
-/** The shipped loader, bundled the way the site bundles it.
+/** A day payload holding one story the page can actually render.
  *
- * UMD rather than a bare IIFE, because a UMD wrapper assigns the global itself
- * instead of relying on how an injected script scopes a `var`. `write: false`
- * keeps it in memory; the one file it does write is the alias stub, under
- * `test-results/`, which is gitignored scratch and never ships.
+ * Four names, because the loader keeps a story only when it carries everything
+ * the page reads off it without a guard - a story short of one of them is
+ * dropped and counted, which `malformed-day.spec.ts` is the arm for.
  */
-async function loaderSource(): Promise<string> {
-	mkdirSync(scratch, { recursive: true });
-	const paths = path.join(scratch, 'app-paths.js');
-	writeFileSync(paths, `export const base = ${JSON.stringify(BASE)};\nexport const assets = '';\n`);
-	const built = await build({
-		configFile: false,
-		logLevel: 'silent',
-		resolve: { alias: { '$app/paths': paths, $lib: path.join(frontend, 'src', 'lib') } },
-		build: {
-			write: false,
-			minify: false,
-			lib: {
-				entry: path.join(frontend, 'src', 'lib', 'assist', 'day.ts'),
-				formats: ['umd'],
-				name: 'dayLoader',
-				fileName: () => 'day.js'
-			}
+const PAYLOAD = JSON.stringify({
+	version: '2026-09-01T09:00',
+	items: [
+		{
+			item_id: 'ai-1',
+			title: 'A story',
+			summary: 'A summary long enough to be a summary.',
+			key_points: ['One point.']
 		}
-	});
-	const bundles = (Array.isArray(built) ? built : [built]) as Rollup.RollupOutput[];
-	const chunk = bundles[0]?.output.find((part) => part.type === 'chunk');
-	expect(chunk, 'the loader did not bundle').toBeTruthy();
-	return (chunk as Rollup.OutputChunk).code;
-}
+	]
+});
 
-const LOADER = loaderSource();
+const LOADER = loaderSource('payload-state');
 const primed = new WeakSet<Page>();
 
 /** The loader, live in a page of the real built site.
@@ -135,24 +109,11 @@ async function watch(page: Page, slowMs: number, again = false): Promise<Watched
 	);
 }
 
-/** Every interception, counted and named, so a zero cannot read as a pass. */
-class Intercepted {
-	readonly urls: string[] = [];
-
-	get count(): number {
-		return this.urls.length;
-	}
-
-	take(route: Route): void {
-		this.urls.push(new URL(route.request().url()).pathname);
-	}
-}
-
 test.describe('the day a browser could not read', () => {
 	test('a blocked payload leaves the page readable and offers another try', async ({ page }) => {
 		const blocked = new Intercepted();
 		await page.route(PATTERN, async (route) => {
-			blocked.take(route);
+			blocked.take(route.request().url());
 			await route.abort('connectionfailed');
 		});
 
@@ -199,7 +160,7 @@ test.describe('the day a browser could not read', () => {
 		await page.unroute(PATTERN);
 		const served = new Intercepted();
 		await page.route(PATTERN, async (route) => {
-			served.take(route);
+			served.take(route.request().url());
 			await route.fulfill({ contentType: 'application/json', body: PAYLOAD });
 		});
 		const retried = await watch(page, 30_000, true);
@@ -212,7 +173,7 @@ test.describe('the day a browser could not read', () => {
 	test('a slow payload says one sentence, and a healthy one says nothing', async ({ page }) => {
 		const slow = new Intercepted();
 		await page.route(PATTERN, async (route) => {
-			slow.take(route);
+			slow.take(route.request().url());
 			// Longer than the threshold below by enough that a busy machine cannot
 			// turn this arm into a coin toss.
 			await new Promise((done) => setTimeout(done, 900));
@@ -246,7 +207,7 @@ test.describe('the day a browser could not read', () => {
 		// `**/digest/**` also serves an item's picture, so a wider pattern counts
 		// the page's own assets and the arm fails on a fetch nobody made.
 		await page.route('**/digest/**/digest.json', async (route) => {
-			asked.take(route);
+			asked.take(route.request().url());
 			await route.abort();
 		});
 		await armed(page);
