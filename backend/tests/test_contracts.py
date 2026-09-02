@@ -13,6 +13,7 @@ import json
 import logging
 import re
 from collections import Counter
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -27,15 +28,18 @@ from conftest import (
 )
 from pydantic import ValidationError
 
+from idhazh import ledger
 from idhazh.cli import main, stage_validate_days
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
+    SUPERSEDED_RETENTION_NAMES,
     AppConfig,
     ConsoleConfig,
     EvaluationConfig,
     ObservabilityConfig,
     PageWeightConfig,
     UiConfig,
+    months_a_window_can_touch,
 )
 from idhazh.contracts.appearance_config import ChartConfig
 from idhazh.contracts.article import Article
@@ -64,6 +68,7 @@ from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.fingerprint import text_digest
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
+from idhazh.retention import oldest_month_kept
 from utilities import build_canary_day
 
 BY_STEM: dict[str, type[Contract]] = {c.__schema_stem__: c for c in CONTRACTS}
@@ -506,18 +511,151 @@ def test_a_sample_rate_of_zero_is_refused_because_the_toggle_already_says_off() 
 
 
 def test_a_month_may_not_be_deleted_before_it_has_been_downsampled() -> None:
-    keep = ObservabilityConfig().keep_months
-    for early in (keep, keep - 1):
-        with pytest.raises(ValidationError, match="hard_delete_after_months"):
-            ObservabilityConfig(hard_delete_after_months=early)
-    assert ObservabilityConfig(hard_delete_after_months=keep + 1) is not None
+    """A summary has to outlive the full-grain window it replaces, both times."""
+    fresh = ObservabilityConfig()
+    for summary, full_grain in (
+        ("item_health_aggregate_keep_months", "item_health_full_grain_months"),
+        ("score_archive_keep_months", "scores_full_grain_months"),
+    ):
+        keep = getattr(fresh, full_grain)
+        for early in (keep, keep - 1):
+            with pytest.raises(ValidationError, match=summary):
+                ObservabilityConfig(**{summary: early})
+        assert ObservabilityConfig(**{summary: keep + 1}) is not None
+
+
+def test_every_cleanup_age_outlives_the_shards_a_console_read_selects() -> None:
+    """The check the old `keep_months` never made, and the reason 13 was wrong.
+
+    `console.max_window_days` is 366, and `ledger.shards_in_window` walks 367
+    inclusive days - so a window ending on the first of a month can start on the
+    last day of another and open **14** month files. The retired check compared
+    `months * 30` against the window, which passed 13 while a reader could still
+    ask for a fourteenth shard.
+    """
+    window = ConsoleConfig().max_window_days
+    shards = months_a_window_can_touch(window)
+    assert window == 366
+    assert shards == 14, "a 366-day read reaches fourteen month shards, not thirteen"
+    assert 13 * 30 > window, "the retired check passed 13, which is the whole point"
+
+    fresh = ObservabilityConfig()
+    assert set(fresh.full_grain_months()) == {
+        "item_health_full_grain_months",
+        "feed_health_keep_months",
+        "scores_full_grain_months",
+        "public_telemetry_keep_months",
+    }
+    models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models.model_dump()
+    for name, months in fresh.full_grain_months().items():
+        assert months >= shards, f"observability.{name} is shorter than a console read"
+        short = {name: months - 1}
+        # The projection and its source ledger are held equal by their own rule,
+        # so lowering either one has to lower both to reach this check.
+        if name in {"item_health_full_grain_months", "public_telemetry_keep_months"}:
+            short = {
+                "item_health_full_grain_months": months - 1,
+                "public_telemetry_keep_months": months - 1,
+            }
+        with pytest.raises(ValidationError, match=name):
+            AppConfig.model_validate({"models": models, "observability": short})
+
+
+def test_the_published_copy_lasts_exactly_as_long_as_the_ledger_it_copies() -> None:
+    """Either way round leaves a month nothing can answer for."""
+    for skew in (-1, 1):
+        with pytest.raises(ValidationError, match="public_telemetry_keep_months"):
+            ObservabilityConfig(
+                item_health_full_grain_months=20, public_telemetry_keep_months=20 + skew
+            )
+    assert (
+        ObservabilityConfig(
+            item_health_full_grain_months=20, public_telemetry_keep_months=20
+        ).public_telemetry_keep_months
+        == 20
+    )
+
+
+def test_a_config_still_carrying_the_old_retention_names_reads() -> None:
+    """Section 11's read-side migration, on the two names this row retired.
+
+    The old value is read and dropped rather than carried forward: it was set
+    against a check that compared `months * 30` against the console window
+    instead of the shards that window selects, so carrying it forward would
+    carry the defect forward. The old names stay readable as properties, so the
+    fold and its log line still ask for `keep_months` and get the corrected
+    value.
+    """
+    migrated = ObservabilityConfig.model_validate(
+        {"keep_months": 13, "hard_delete_after_months": 36, "sample_rate": 0.5}
+    )
+
+    assert migrated.item_health_full_grain_months == 14
+    assert migrated.item_health_aggregate_keep_months is None
+    assert migrated.sample_rate == 0.5, "an unrelated knob in the same file is untouched"
+    assert migrated.keep_months == migrated.item_health_full_grain_months
+    assert migrated.hard_delete_after_months == migrated.item_health_aggregate_keep_months
+    assert migrated == ObservabilityConfig(sample_rate=0.5)
+
+    with pytest.raises(ValidationError, match="superseded name beside its successor"):
+        ObservabilityConfig.model_validate(
+            {"keep_months": 13, "item_health_full_grain_months": 20}
+        )
 
 
 def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
-    """`console.max_window_days` is 366, so a shard has to survive a year of asking."""
+    """A summary costs kilobytes and is what makes a year-over-year claim citable."""
     fresh = ObservabilityConfig()
-    assert fresh.hard_delete_after_months is None
-    assert fresh.keep_months * 30 > ConsoleConfig().max_window_days
+    assert fresh.item_health_aggregate_keep_months is None
+    assert fresh.score_archive_keep_months is None
+
+
+def test_the_committed_config_no_longer_emits_the_superseded_retention_names() -> None:
+    emitted = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["observability"]
+    assert not set(emitted) & set(SUPERSEDED_RETENTION_NAMES)
+    assert emitted["item_health_full_grain_months"] == 14
+    assert emitted["public_telemetry_keep_months"] == 14
+
+
+def test_no_configured_age_deletes_a_shard_a_366_day_read_still_selects() -> None:
+    """The oracle: every end date in one 400-year Gregorian cycle.
+
+    A cleanup age is only right if, on every day it could ever run, the oldest
+    month it keeps is at or before the oldest month the reader opens. The
+    calendar repeats every 400 years, so sweeping one cycle is exhaustive rather
+    than a sample - 146,097 end dates, which is every arrangement of leap years,
+    month lengths and weekday offsets that can occur.
+
+    The sweep uses the oldest day the window reaches instead of walking all 367
+    days per date, and the first thousand dates prove the two agree, so the
+    shortcut is checked rather than assumed.
+    """
+    window = ConsoleConfig().max_window_days
+    span = timedelta(days=window)
+    start = date(2000, 1, 1)
+    cycle = (date(2400, 1, 1) - start).days
+    assert cycle == 146_097, "one Gregorian cycle is 146,097 days"
+
+    for offset in range(1000):
+        anchor = start + timedelta(days=offset)
+        walked = min(ledger.shards_in_window(anchor.isoformat(), window))
+        assert walked == (anchor - span).isoformat()[:7]
+
+    kept = ObservabilityConfig().item_health_full_grain_months
+    too_short = 0
+    for offset in range(cycle):
+        anchor = start + timedelta(days=offset)
+        oldest_read = (anchor - span).isoformat()[:7]
+        assert oldest_month_kept(anchor, kept) <= oldest_read, (
+            f"{kept} months on {anchor.isoformat()} keeps back to "
+            f"{oldest_month_kept(anchor, kept)}, and the console still reads {oldest_read}"
+        )
+        if oldest_month_kept(anchor, kept - 1) > oldest_read:
+            too_short += 1
+
+    assert too_short > 0, (
+        "one month less has to fail somewhere, or the value is not the minimum"
+    )
 
 
 def test_a_config_written_before_observability_existed_still_reads() -> None:

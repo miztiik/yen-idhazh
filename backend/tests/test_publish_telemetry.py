@@ -4,9 +4,22 @@ import csv
 import inspect
 from pathlib import Path
 
+import pytest
+from conftest import REPO_ROOT
+from pydantic import ValidationError
+
 from idhazh import cli
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
-from idhazh.publish_telemetry import FORBIDDEN_COLUMNS, PUBLIC_COLUMNS, publish
+from idhazh.contracts.public_telemetry import PublicTelemetryRow
+from idhazh.publish_telemetry import (
+    FORBIDDEN_COLUMNS,
+    PUBLIC_COLUMNS,
+    migrate,
+    publish,
+    read_shard,
+)
+
+COMMITTED_SHARDS = sorted((REPO_ROOT / "frontend" / "public" / "telemetry").glob("*.csv"))
 
 
 def _row(**overrides: object) -> ItemHealthRow:
@@ -131,3 +144,72 @@ def test_the_pipeline_never_writes_the_committed_telemetry_projection(tmp_path: 
 
     assert "publish_telemetry.publish(" in source
     assert "public_root=" in source.split("publish_telemetry.publish(", 1)[1][:200]
+
+
+def test_the_projection_carries_the_contract_header_and_no_version_cell() -> None:
+    """`version` is a field of the shape and never a cell.
+
+    The browser checks the header as a prefix, so a name at position zero would
+    shift every position the console reads and blank its charts on every cached
+    bundle.
+    """
+    assert PUBLIC_COLUMNS == PublicTelemetryRow.csv_columns()
+    assert "version" in PublicTelemetryRow.model_fields
+    assert "version" not in PUBLIC_COLUMNS
+    assert not FORBIDDEN_COLUMNS & set(PublicTelemetryRow.model_fields)
+
+
+def test_every_committed_shard_reads_back_through_the_contract() -> None:
+    """The migration's oracle, on the published files themselves.
+
+    A published shard is the one artifact nobody can re-derive once its source
+    month has been folded away, so "it still parses" is not the question - the
+    question is whether every row loads through the shape that now owns it.
+    """
+    assert COMMITTED_SHARDS, "the committed projection has no shards to migrate"
+    for path in COMMITTED_SHARDS:
+        rows = read_shard(path)
+        assert rows, f"{path.name} published no rows"
+        assert all(isinstance(row, PublicTelemetryRow) for row in rows)
+        assert b"\r" not in path.read_bytes(), f"{path.name} must be LF"
+
+
+def test_migrating_the_committed_shards_changes_no_byte(tmp_path: Path) -> None:
+    """The migration is a read-back, so it must be a no-op on bytes.
+
+    Run against a copy rather than the committed tree: a dirty working tree is
+    what aborts the publish push and discards a day.
+    """
+    public = tmp_path / "telemetry"
+    public.mkdir()
+    before = {path.name: path.read_bytes() for path in COMMITTED_SHARDS}
+    for path in COMMITTED_SHARDS:
+        (public / path.name).write_bytes(before[path.name])
+
+    results = migrate(public)
+
+    assert [path.name for path, _, _ in results] == [path.name for path in COMMITTED_SHARDS]
+    for path, rows, unchanged in results:
+        assert unchanged, f"{path.name} did not survive its own round trip"
+        assert rows > 0
+        assert path.read_bytes() == before[path.name]
+
+
+def test_a_published_failure_without_a_reason_is_refused() -> None:
+    """The console groups failures by code, so a bar it cannot label is not a row."""
+    with pytest.raises(ValidationError, match="failure code"):
+        PublicTelemetryRow.from_csv_row(
+            {
+                "date": "2026-09-01",
+                "run_id": "2026-09-01-1",
+                "item_id": "ai-01",
+                "vertical": "ai",
+                "source_id": "example",
+                "stage": "fetch",
+                "outcome": "failed",
+                "code": "",
+                "source_words": "",
+                "summary_words": "",
+                "source_words_before_cap": "",
+            }
+        )
