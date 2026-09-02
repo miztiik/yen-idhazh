@@ -514,6 +514,27 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-02T18:00",
+            change=(
+                "ui.offline_version, ui.offline_retired_through and ui.offline_days_kept "
+                "added, defaulting to 1, 0 and 14. The shape is `UiConfig`, which this "
+                "document and `AppConfig` share, so both schemas moved together. "
+                "Additive with defaults, so an appearance file written before today "
+                "still validates."
+            ),
+            why=(
+                "The site ships a service worker, so a day a reader has already opened "
+                "can be read again with no network. A worker is the only code this "
+                "project ships that outlives the tab, so the switch that turns it off "
+                "is a contract rather than a code edit: `offline_retired_through` "
+                "retires every worker at or below the version it names, and a retired "
+                "worker unregisters itself and deletes every cache it owns. "
+                "`offline_days_kept` bounds what the worker keeps, because a cache that "
+                "grows with the archive is the failure that argued against caching days "
+                "at all (Rule #6, docs/concepts/ui-shell.md)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-02T16:00",
             change=(
                 "ui.desk_thin_max added, defaulting to 12, floored at 1. The shape is "

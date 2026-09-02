@@ -18,9 +18,11 @@
 	 * stays readable with no script at all.
 	 */
 	import { restoreAnchor, watchDay, type DayStatus } from '$lib/assist/day';
+	import { base } from '$app/paths';
 	import DigestList from '$lib/components/DigestList.svelte';
 	import PayloadState from '$lib/components/PayloadState.svelte';
 	import { longDate } from '$lib/format';
+	import { daysHeldOffline } from '$lib/offline';
 	import type { DigestItem } from '$lib/payload/types';
 	import { tick } from 'svelte';
 
@@ -34,9 +36,17 @@
 	 * about itself: a document short of its day is waiting, and a complete one is
 	 * not. */
 	let reported = $state<DayStatus | null>(null);
+	/** The other days this device still holds. Asked for only when this one
+	 * failed, because it is the only state that has anything to do with it. */
+	let held = $state<{ label: string; href: string }[]>([]);
 
 	const status = $derived(reported ?? (data.awaiting > 0 ? 'loading' : 'ready'));
 	const day = $derived(arrived === null ? data.day : { ...data.day, items: arrived });
+
+	async function offerHeldDays(current: string) {
+		const dates = (await daysHeldOffline()).filter((date) => date !== current);
+		held = dates.map((date) => ({ label: longDate(date), href: `${base}/${date}/` }));
+	}
 
 	function fetchRest(date: string, again: boolean) {
 		watchDay(date, {
@@ -44,6 +54,7 @@
 			again,
 			onStatus: (next, whole) => {
 				reported = next;
+				if (next === 'unreachable') void offerHeldDays(date);
 				if (whole === null) return;
 				// The served day is this day, whole and unfiltered, so there is no
 				// rule to re-apply here - the topic pages are the ones that filter.
@@ -62,6 +73,7 @@
 		const { date, awaiting } = data;
 		arrived = null;
 		reported = null;
+		held = [];
 		if (awaiting > 0) fetchRest(date, false);
 	});
 </script>
@@ -74,6 +86,7 @@
 
 <PayloadState
 	{status}
+	{held}
 	day={longDate(data.date)}
 	onRetry={() => fetchRest(data.date, true)}
 />

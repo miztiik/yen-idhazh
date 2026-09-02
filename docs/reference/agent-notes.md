@@ -1099,6 +1099,36 @@ correct in every ordinary run, because the arm only fires with scripting off.
 Keep `display` off the element the attribute is on and put the layout on a
 child, or the fix becomes an `!important`.
 
+**`$service-worker`'s `files` is every file under `static/`, and here that is
+the archive.** `frontend/static/digest/` is staged from the pipeline's own
+output, so the default baked the path of every published day and every rendered
+visual into `build/service-worker.js` - 16,888 bytes of strings on 2026-09-02,
+growing with every published day. Nothing fails, because the worker filters them
+at run time, and the file size is the only tell. `kit.serviceWorker.files` is
+the filter and it belongs in `svelte.config.js`; the same worker is 4,825 bytes
+with it in place.
+
+**And `build` is not the shell.** Measured 2026-09-02 on this repository: 23.56
+MB across 57 files, of which 21.60 MB is the search encoder's ONNX runtime and
+1.47 MB is two libraries only the console and the search panel load. So the
+first draft everybody writes - `cache.addAll(build)` in the install handler -
+downloads 23.5 MB to a reader who opened one day, and it is a byte cost nothing
+in the build reports.
+
+**A callback option in `svelte.config.js` needs a JSDoc `@param`.** That file is
+type-checked, so `files: (path) => ...` fails `npm run check` with
+`Parameter 'path' implicitly has an 'any' type` - reported against the config
+rather than against any source file, which reads like a broken toolchain instead
+of a missing annotation.
+
+**SvelteKit's own service-worker registration has no `.catch()`.** It is
+`navigator.serviceWorker.register(...)` on `load`, so any browser that refuses -
+a policy, a private window, `serviceWorkers: 'block'` in a Playwright context -
+becomes an unhandled rejection on every page, and every spec that counts console
+errors goes red at once. `kit.serviceWorker.register: false` plus one
+registration call of your own fixes it, and it also leaves exactly one file
+naming the worker API for a test to assert on.
+
 ## Running the gates
 
 - **A `page.route` answering 500 does not simulate a failed download here.**
@@ -1160,6 +1190,22 @@ child, or the fix becomes an `!important`.
   `**/digest/**` catches an item's picture as well as `digest.json`, so an arm
   asserting "this reached the network for nothing" failed at 2 on a fetch nobody
   made. Route the exact shape the code under test builds, and nothing wider.
+- **A service worker makes every `page.route` arm a coin toss, so the suite
+  blocks them.** `serviceWorkers: 'block'` in `playwright.config.ts`'s `use` is
+  what keeps a spec that fakes a failed day from measuring a cached day instead;
+  `frontend/tests/service-worker.spec.ts` turns them back on for itself with
+  `test.use({ serviceWorkers: 'allow' })`. Playwright does not route a request a
+  worker answers, which is the same trap from the other side.
+- **`PerformanceResourceTiming.workerStart` is how you count what a worker
+  answered**, and it needs nothing added to the worker. Read it in the page over
+  `getEntriesByType('navigation')` and `('resource')` and count the entries above
+  zero. A worker arm that cannot print that count is the same null result as a
+  degraded arm that intercepted nothing.
+- **`vite preview` serves `build/` through `sirv` with `dev: true`**, so a file
+  rewritten on disk between two `page.reload()` calls is served on the next
+  request. That is what lets a test publish a different `service-worker-kill.json`
+  without rebuilding the site - and it is also why such a test has to restore the
+  file in a hook rather than at the end of the body.
 - **A client module that imports `$app/paths` as a value cannot be imported by a
   Playwright spec**, and that is what stands between a browser-side module with
   no route call site and a real test. Bundling it in the spec is the way through,

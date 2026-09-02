@@ -28,12 +28,17 @@
 	let {
 		status,
 		day,
-		onRetry
+		onRetry,
+		held = []
 	}: {
 		status: DayStatus;
 		/** The day in the reader's own words, already formatted by the caller. */
 		day: string;
 		onRetry: () => void;
+		/** The days this device still holds, newest first, already named and
+		 * addressed by the caller. Empty on a first visit, in a browser that keeps
+		 * nothing, and whenever the day that failed is the only one kept. */
+		held?: { label: string; href: string }[];
 	} = $props();
 </script>
 
@@ -48,6 +53,19 @@
 			<p class="failed-headline">The rest of {day} did not arrive.</p>
 			<p class="failed-note">The stories above are all here.</p>
 			<button type="button" class="failed-retry" onclick={onRetry}>Try again</button>
+			{#if held.length > 0}
+				<!-- A reader with no network on a day they never opened has been told
+				     what is missing and given a button that cannot work. These are the
+				     days already on their own device, so every one of them opens. -->
+				<p class="failed-note" data-payload-held={held.length}>
+					Days you can read with no network:
+				</p>
+				<ul class="failed-held">
+					{#each held as other (other.href)}
+						<li><a href={other.href}>{other.label}</a></li>
+					{/each}
+				</ul>
+			{/if}
 		</section>
 	{/if}
 </div>
@@ -115,5 +133,23 @@
 
 	.failed-retry:hover {
 		background: var(--tint-accent);
+	}
+
+	/* A list of links and deliberately not a row of buttons. These are ordinary
+	   addresses the reader could have typed, so they look like the rest of the
+	   site's links and behave like them. */
+	.failed-held {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+	}
+
+	.failed-held a {
+		color: var(--color-accent);
 	}
 </style>
