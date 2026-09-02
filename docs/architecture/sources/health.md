@@ -1,8 +1,44 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
+
+## From item outcome to feed rest or retirement
+
+An item never enters quarantine or retirement. It either publishes or stops at
+a stage, and its item-health row becomes evidence about the feed. A run may
+rest a feed. Only a person may retire one.
+
+```text
+FEED READ (one feed-health row)
+|
++-- ok with items -> clear strike streak -> ask next run
++-- robots_denied -> no strike -> ask next run
++-- skipped -> keep strike streak -> count one rested run
+`-- blocked / permanent / transient / ok with zero items -> add one strike
+
+CONFIGURED LIMIT = collect.quarantine_after_failures (currently 5)
+
+LIMIT CONSECUTIVE STRIKES -> REST FEED
+REST FEED -> write LIMIT skipped rows -> RETRY
+RETRY SUCCEEDS -> clear strike streak -> LIVE NOW
+RETRY FAILS -> REST CYCLE RESUMES
+
+PLANNED ITEM (one item-health row)
+|
++-- published ----------------------> positive source-yield evidence
++-- source-owned failure -----------> negative source-yield evidence
+`-- pipeline-owned or neutral ------> does not count against the source
+
+SOURCE-YIELD EVIDENCE -> NO AUTOMATIC ACTION TODAY
+
+HUMAN SOURCE REVIEW (after at least 30 days of evidence)
+|
++-- keep active
++-- lower weight and observe
+`-- move from `feeds` to `retired`; set `status: retired` and `retired_on`
+```
 
 ## Every feed, every run, one row
 

@@ -1,10 +1,12 @@
 # Item Health
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-02
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
-source-grain evidence.
+source-grain evidence. The
+[source lifecycle flow](health.md#from-item-outcome-to-feed-rest-or-retirement)
+shows where item evidence stops and feed quarantine or retirement begins.
 
 ## Every item, every run, one row
 

@@ -375,7 +375,7 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 - **Retire, never delete.** A retired vertical, lens or entity keeps its entry with a retired status and the date. Deleting an id breaks every payload written under it and forces a read-side migration; a tombstone costs one object.
 - **A retired feed moves to its own key.** `config/sources.json` has a `feeds` list and a `retired` list. A tombstone kept in the live list is a tombstone every run has to filter past, and one missed filter is a request to a source we decided to stop asking. Moving it makes the live list mean exactly what it says, and the record survives either way.
 - **A draft status plus a minimum-feed floor** lets a vertical be built in the open over weeks. Below the floor it is not published, so an under-sourced desk never reaches a reader.
-- **Feed health is recorded, not configured.** Repeated failures rest a feed automatically, and nothing in a run ever edits `config/sources.json`. See [health.md](health.md).
+- **Feed health is recorded, not configured.** Repeated failures rest a feed automatically, and nothing in a run ever edits `config/sources.json`. See the [source lifecycle flow](health.md#from-item-outcome-to-feed-rest-or-retirement).
 - **Soft retirement before hard.** Drop a source's weight, watch what changes, then retire it. Reversible in one field.
 
 ## The 2026-08-29 sweep: 40 out, 43 in
