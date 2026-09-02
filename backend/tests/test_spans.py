@@ -9,7 +9,7 @@ accept.
 The oracle: run the real work stage over pages that carry a planted sentinel,
 capture every attribute of every span and generation the instrumentation would
 send, and assert the sentinel appears in none of them. A single leaked character
-fails the row (`TODO/20260830-observability-plan.md`, ESCALATE trigger b).
+is a contract break; the rule it guards is in `docs/concepts/telemetry.md`.
 
 Two sentinels, because one of them alone would be a weaker test:
 
