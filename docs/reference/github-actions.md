@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-02
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -399,15 +399,19 @@ vectors carry an arithmetic the browser's query encoder no longer uses. Topping
 such a day up would leave one block holding two arithmetics for a single query
 to rank against.
 
-**It builds the site before it commits, and weighs the pages after.** The
-vectors ride inside the day payloads, and `/archive/` inlines every committed
-day, so this is the one job that can write a payload the build rejects or push
-that page past the ceiling in `config/idhazh.json`. Those are two severities. A
-build failure means the payload is invalid, so it runs first and stops the
-commit; a page over its recorded weight still reads correctly, so `npm run
-bundle-gate` runs after the commit and fails the job without costing the repair
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-build-stops-a-bad-day-the-weight-ratchet-does-not-2026-08-29)).
-`digest.yml` carries the same order for the same reason.
+**It validates every day and builds the site before it commits, and weighs the
+pages after.** The vectors ride inside the day payloads, and `/archive/` inlines
+every committed day, so this is the one job that can write a payload no reader
+can read or push that page past the ceiling in `config/idhazh.json`. Those are
+two severities. An invalid payload means the day is broken, so `idhazh
+validate-days` and then `npm run build` run first and stop the commit; a page
+over its recorded weight still reads correctly, so `npm run bundle-gate` runs
+after the commit and fails the job without costing the repair
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not-2026-08-29)).
+`digest.yml` carries the same order for the same reason. **The validate step is
+there because the build stopped answering for it**: a reading document has
+carried a seed rather than its whole day since 2026-09-01, so a build never
+opens the stories past it.
 
 ## Display names and files
 

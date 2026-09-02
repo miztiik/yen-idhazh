@@ -335,6 +335,28 @@ gate reports a diff in a file whose content never changed.
 
 ## Gate commands
 
+**A Playwright spec that runs a backend command needs `IDHAZH_PYTHON` in a
+worktree.** `frontend/tests/malformed-day.spec.ts` runs `python -m idhazh
+validate-days` as a process, because half its oracle is the CI step refusing a
+day. It resolves the interpreter as `$IDHAZH_PYTHON`, then a `.venv` at the
+repository root, then whatever `python` is on `PATH` - which covers a runner
+(`pip install -e .`) and the documented local setup, and not a worktree
+borrowing a sibling checkout's venv. There the second and third both miss and
+the arm fails on `No module named idhazh`, which reads like a broken install:
+
+```powershell
+$env:IDHAZH_PYTHON = '<the shared venv>\Scripts\python.exe'
+```
+
+It is the same borrowing that `PYTHONPATH` covers for `pytest`, and it is set
+the same way and for the same reason.
+
+**`git status --porcelain -- schemas/` right after `python -m idhazh.contracts.export`
+looks like every schema changed, and nothing did.** The exporter prints the path
+of every file it wrote, so the two commands' output runs together and reads as
+twenty-nine modified files. `git diff --stat -- schemas/` is the question you
+meant to ask, and empty is the pass. Observed 2026-09-02.
+
 **`git diff --exit-code -- schemas/` is not the drift gate until you have
 committed.** The two-line form on
 [../how-to/run-the-gates.md](../how-to/run-the-gates.md) regenerates `schemas/`

@@ -1,29 +1,31 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
 Concept-level *why* lives in [../../concepts/digest.md](../../concepts/digest.md), [../../concepts/design-system.md](../../concepts/design-system.md) and [../../concepts/ui-shell.md](../../concepts/ui-shell.md). This page is the *shape*, and it records where the owner, Jony and Reader disagreed and how it was settled.
 
-## Everything is prerendered
+## Every document is prerendered
 
-Every route is generated at build time. SvelteKit with `adapter-static`, `prerender = true`, and `entries()` enumerating the committed date directories. Most routes inline their items in the HTML; a topic route inlines the head of its own desk and fetches the served day for the rest. **The document is prerendered either way** - what moved on 2026-09-01 is the item list, not the page.
+Every route is generated at build time. SvelteKit with `adapter-static`, `prerender = true`, and `entries()` enumerating the committed date directories. `/`, `/archive/`, `/404`, `/evals/` and the console inline everything they draw; both reading routes inline the head of the list they draw and fetch the served day for the rest. **The document is prerendered either way** - what moved on 2026-09-01 is the item list, not the page.
 
-Three consequences, and each one removes a whole class of problem:
+Three consequences, and the third one changed shape when the reading routes split:
 
-- **The reading path makes at most one request, and usually none.** A day page and the home page are one document and it is done. A topic page carries the head of its own desk and fetches the served day for the rest, which is one request for a file the site already publishes - well inside the two-request budget. Every one of them renders with JavaScript off; a topic page then shows its seed.
-- **There is one loading state and it is a sentence**, not a spinner and not a skeleton. The first frame is already readable, so there is nothing to fill: past `ui.payload_slow_ms` a topic page says that the rest of the desk is still coming, and a fetch that fails says so and offers a retry ([../../../frontend/src/lib/components/PayloadState.svelte](../../../frontend/src/lib/components/PayloadState.svelte)). The build-time payload loader is still exactly one module under `frontend/src/lib/server/`; the browser's is a second one under `$lib/assist/`, and it reads the served projection rather than the committed day.
-- **A payload that fails its contract fails the build.** What would have been a runtime error a reader discovers becomes a build error nobody ships.
+- **The reading path makes at most one request, and the first screen needs none of it.** A reading page is one document with the head of its day in it; if that day is longer than `ui.shell_seed_items` the browser then asks for one file this same site publishes, which is well inside the two-request budget. `/` is one document and it is done. Every page renders with JavaScript off; a reading page then shows its seed.
+- **There is one loading state and it is a sentence**, not a spinner and not a skeleton. The first frame is already readable, so there is nothing to fill: past `ui.payload_slow_ms` a reading page says that the rest of the day is still coming, and a fetch that fails says so and offers a retry ([../../../frontend/src/lib/components/PayloadState.svelte](../../../frontend/src/lib/components/PayloadState.svelte)). The build-time payload loader is still exactly one module under `frontend/src/lib/server/`; the browser's is a second one under `$lib/assist/`, and it reads the served projection rather than the committed day.
+- **A day that fails its contract cannot be merged, and until 2026-09-01 it could not even be built.** The build serialised every story a day published, so a payload the contract refused failed it. A seeded document does not, so `python -m idhazh validate-days` opens every story of every committed day instead - in `ci.yml`, and immediately before the commit in both publishing jobs, because `ci.yml` never starts from a push the pipeline made. **The guarantee is weaker than the one it replaces and that is stated rather than hidden.**
 
 **Four files are fetched, and one of them is on the reading path.** The
 console reads older telemetry shards when an operator pans back. The archive
 reads the month index behind its story list, that month's sibling vector file
 when a reader asks to search, and the day payload behind a result it is showing.
-Since 2026-09-01 a topic page reads that same day payload for the stories past
-its seed. A day page and the home page still make no request at all. The rule
-was that a reader waits for nothing to read the news, and it is now that they
-wait for nothing to read the first screen of it.
+Since 2026-09-01 both reading routes read that same day payload for the stories
+past their seed - a topic page since that morning, a day page since the same
+afternoon. `/` still makes no request at all, and neither does a reading page
+whose whole list already fits inside the seed. The rule was that a reader waits
+for nothing to read the news, and it is now that they wait for nothing to read
+the first screen of it.
 
 The loader lives under `frontend/src/lib/server/`, which is the framework's own guarantee that it can never be bundled into anything a browser receives.
 
@@ -33,7 +35,9 @@ The loader lives under `frontend/src/lib/server/`, which is the framework's own 
 
 **Whatever the root layout's load returns is inlined into every page beneath it**, so the root layout returns the one fact the footer still prints - `retention_window_months` - and never the day it was read from. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB.
 
-[frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line. It counts a marker only a day payload carries and fails on any page below the layout that has one. It had one exclusion, `/archive/`, which inlined every committed day on purpose to feed the on-device search; the exclusion is gone from 2026-08-27, and the archive now carries an assertion of its own that it holds **zero** day markers.
+[frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line, and since 2026-09-01 a second one. It counts a marker only a day payload carries and fails on any page below the layout that has one. It had one exclusion, `/archive/`, which inlined every committed day on purpose to feed the on-device search; the exclusion is gone from 2026-08-27, and the archive now carries an assertion of its own that it holds **zero** day markers.
+
+**The second line is the guard prerendering used to give free.** A dated route was exempt from the sweep above while it genuinely rendered its whole day, and left exempt after the split it would have gone on passing whatever a reading page inlined - a guard that cannot fail, which [layout.md](layout.md) records as a shape this repository has had twice. So a dated document is now held to its own seed: `ui.shell_seed_items` markers on a topic route, and that plus `ui.leading_stories` on a day route, because a day's seed is the head of the day UNION every story its leading block points at. Both numbers come from config, and `backend/tests/test_contracts.py` fails if either drifts from the contract. `/` is deliberately not held to anything: it keeps the whole day inline for ever, it is one document per build rather than one per published day, and a ceiling there would cap the news.
 
 **The same rule bites a chart, and it is the reason a `load` never returns an
 echarts option.** A chart is drawn to SVG on the server and the sentinel
@@ -51,11 +55,13 @@ the server sends the drawing and the numbers, never a drawing instruction.
 
 | State | When | What ships |
 | --- | --- | --- |
-| Ready | Normal | Prerendered HTML with the items in it |
+| Ready | Normal | Prerendered HTML. The whole day on `/`; the head of it on a reading route, with the rest fetched |
 | Empty | Payload exists, no items | "Nothing was published for *date*", with plain copy that does not point at a notice that may not be on the page |
 | Missing | No payload for that date | A 404 that names the date and offers the archive. **Never a redirect to today** - a reader who cannot tell a dead link from a live one has lost the ability to trust any link |
+| Waiting | A reading page has its seed and the rest is still coming | Nothing at all until `ui.payload_slow_ms`, then one sentence. Never a spinner, a skeleton or a bar |
+| Unreachable | A reading page's fetch for the rest of its day failed | One sentence naming the day, a note that the stories on screen are all there, and a retry. Decided in the browser, where Missing is decided at build time |
 | Unpublished | No day published at all - a fresh clone | The build succeeds. `/` says "No digest has been published yet" and `/archive/` says "Nothing has been published yet". There is no dated page to link to, so neither offers one |
-| Invalid | Payload breaks its contract | The build fails |
+| Invalid | Payload breaks its contract | `idhazh validate-days` fails, in CI and before the publish. The build fails too where the story is inside the document it renders |
 | Degraded | Low band, source-limit sentence, no visual | The common case, rendered inline. Not an error |
 
 The home page uses the newest committed payload as the day it can prove. It never
@@ -2830,7 +2836,9 @@ that shape and came down to 259,908; the section above carries the arms.
 
 ## Design rationale
 
-Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapses four problems into zero: the loading state stops existing, the request budget stops being a budget, a contract-invalid payload becomes a build failure instead of a reader-facing error, and the page keeps working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
+Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapsed four problems into zero: the loading state stopped existing, the request budget stopped being a budget, a contract-invalid payload became a build failure instead of a reader-facing error, and the page kept working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
+
+**Two of those four came back on 2026-09-01, and they were sold rather than lost.** A reading document carries a seed and the browser fetches the rest, so a reading page has a loading state - one sentence past `ui.payload_slow_ms` - and an invalid story past the seed reaches the browser rather than the build, which is why `idhazh validate-days` exists. What was bought is the cap date: the dated route trees were 39.5 percent of the published site, and the site went 168.6 MB to 88.1 MB with the runway from 130 published days to 279 ([layout.md](layout.md)). The other two hold unchanged - the request budget is still one file, and every page still renders with JavaScript off, a reading page down to its seed. Authority: Fowler, plan rows 21 to 27.
 
 Spending the colour per item rather than at the day level is the resolution of a genuine conflict between an owner instruction and a persona's ruling, and it took two passes to land. The owner asked for a colourful confidence signal; Reader argued that per-item confidence badges are the project talking to itself. The first answer put the aggregate at the top and the proportionate signal on the item. The aggregate then had four months of data behind it and never moved, so it was deleted: colour belongs where it varies, and where a reader can click through and check. Authority: owner (section 0), designed by Jony, constrained by Reader.
 
@@ -2981,6 +2989,6 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - the four-run cadence that gives the strip four squares a day.
 - [../../concepts/digest.md](../../concepts/digest.md) - what an item carries and the visual rule.
 - [../../concepts/design-system.md](../../concepts/design-system.md) - typography, tokens and the colour rule.
-- [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shell's obligations and the four states.
+- [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shell's obligations and the five states.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload this renders.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #1, section 0 and section 12.

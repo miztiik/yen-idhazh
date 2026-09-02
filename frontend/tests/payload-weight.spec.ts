@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
-import { shellSeedItems } from '../src/lib/server/config';
+import { leadingStories, shellSeedItems } from '../src/lib/server/config';
 
 /**
- * No page carries a day it does not render.
+ * No page carries a day it does not render, and no reading page carries a day
+ * it no longer renders.
  *
  * The root layout used to return the whole latest day, and whatever a layout
  * load returns is inlined into every prerendered page beneath it. A reader
@@ -13,10 +14,19 @@ import { shellSeedItems } from '../src/lib/server/config';
  * `/evals/`, which draws no data at all. Measured 2026-08-26 over five
  * published days.
  *
+ * **The second rule is the one this file exists for now.** A reading document
+ * carried every story its day published until 2026-09-01. It carries a seed,
+ * and the browser fetches the rest. Left as it was, the sweep below would have
+ * stayed true whatever a reading page inlined, so the guard that used to be
+ * free from prerendering is written out here instead: a dated document is held
+ * to the seed it is allowed, counted rather than weighed.
+ *
  * Counted rather than compared against a second build. A marker count is the
  * same number whatever the published history holds, so the check does not move
  * when the pipeline publishes, and it costs one pass over bytes already on
- * disk.
+ * disk. It is also the only bound a day page can have: `config/idhazh.json`
+ * gives no page ceiling to a route whose weight is whatever the day published,
+ * because the only way under such a ceiling is to publish fewer stories.
  *
  * What a count of markers cannot see, `scripts/bundle-gate.mjs` bounds: it holds
  * the routes named in `config/idhazh.json` under a gzip ceiling. `/archive/`
@@ -126,30 +136,49 @@ test('the archive carries no day payload at all', () => {
 });
 
 /**
- * A topic document carries a seed, not a day.
+ * Every reading document carries a seed, not a day.
  *
- * Five of the six documents a day are topic routes and every one of them used
- * to inline the whole day so a client-side filter could throw most of it away.
- * Since 2026-09-01 the document keeps `ui.shell_seed_items` stories of its own
- * desk and the rest arrive from the served day.
+ * A topic document keeps the head of its own desk. A day document keeps the
+ * head of the day UNION every story its leading block points at, because a lead
+ * is chosen across the whole day and a link into a document that holds only a
+ * prefix lands on nothing. So the two bounds differ by the size of the leading
+ * block, and both come from config rather than from a number written here
+ * (Rule #6).
  *
- * The count is not capped on the day route or on the home page: both render the
- * whole day on purpose, and a ceiling there would cap the news.
+ * **This is the guard prerendering used to give free.** Until 2026-09-01 the
+ * rule above was the whole file, and a dated route was exempt from it because
+ * it genuinely rendered its whole day. Left exempt after the split it would
+ * have gone on passing whatever a reading page inlined, which `layout.md`
+ * records as a failure shape this repository has had twice.
+ *
+ * `/` is deliberately not here. It keeps the whole day inline for ever: it is
+ * one document per build rather than one per published day, so it contributes
+ * nothing to the cap problem, and it leaves one complete, script-free digest on
+ * the site.
  */
-test('a topic document carries no more stories than the seed', () => {
+test('a reading document carries no more stories than its own seed', () => {
 	const seed = shellSeedItems();
-	const topics = pages().filter((page) => TOPIC.test(page.route));
+	const bounds = { topic: seed, day: seed + leadingStories() };
+	const reading = pages().filter((page) => DATED.test(page.route));
 
-	expect(topics.length, 'the build has no topic route, so this proves nothing').toBeGreaterThan(0);
-	const over = topics
-		.filter((page) => page.markers > seed)
-		.map((page) => `${page.route} carries ${page.markers} stories`);
+	expect(reading.length, 'the build has no dated route, so this proves nothing').toBeGreaterThan(
+		0
+	);
+	const over = reading
+		.filter((page) => page.markers > (TOPIC.test(page.route) ? bounds.topic : bounds.day))
+		.map(
+			(page) =>
+				`${page.route} carries ${page.markers}, over the ` +
+				`${TOPIC.test(page.route) ? bounds.topic : bounds.day} it is allowed`
+		);
 	expect(
 		over,
-		`a topic document is inlining more than the ${seed}-story seed:\n` + over.join('\n')
+		`a reading document is inlining more than its seed - ${bounds.topic} stories on a ` +
+			`topic route, ${bounds.day} on a day route:\n` +
+			over.join('\n')
 	).toEqual([]);
 	expect(
-		topics.filter((page) => page.markers > 0).length,
-		'no topic document carries a story at all - the seed is empty, not small'
+		reading.filter((page) => page.markers > 0).length,
+		'no reading document carries a story at all - the seed is empty, not small'
 	).toBeGreaterThan(0);
 });

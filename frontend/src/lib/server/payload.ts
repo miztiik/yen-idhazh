@@ -1,9 +1,16 @@
 /** The one payload loader. Lives under `$lib/server/` so SvelteKit refuses to
  * bundle it into anything a browser receives.
  *
- * Prerendering is what removes the loading state, the spinner and the runtime
- * request all at once: by the time a reader has the page, the items are already
- * in the HTML.
+ * Prerendering removes the wait for the first frame: by the time a reader has
+ * the page, the head of the day is already in the HTML. It stopped removing the
+ * runtime request on 2026-09-01, when the reading routes began carrying a seed
+ * and letting the browser fetch the rest - `$lib/assist/day.ts` is that half,
+ * and `PayloadState.svelte` is the state a reader meets when it fails.
+ *
+ * It stopped proving something else at the same time, and that is the larger
+ * change: a story past the seed is never read here, so it is never checked
+ * here. `idhazh validate-days` opens every story of every committed day, in CI
+ * and before every publish.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -85,10 +92,11 @@ function dirsIn(path: string): string[] {
  * read. Null is a designed state, not an error.
  *
  * **The vectors are dropped here, and this is the only place they can be.**
- * Whatever this returns is inlined into every prerendered document that renders
- * the day. `$lib/payload/project` owns that drop, alongside the allow-list the
- * staging step projects with, so both copies that leave `frontend/public/` are
- * ruled by one module.
+ * What a caller keeps of this is inlined into the document that renders the
+ * day - the whole of it on `/`, the seed alone on a reading route.
+ * `$lib/payload/project` owns that drop, alongside the allow-list the staging
+ * step projects with, so both copies that leave `frontend/public/` are ruled by
+ * one module.
  */
 export function loadDay(date: string, root: string = DIGEST_ROOT): DigestDay | null {
 	const [year, month, day] = date.split('-');

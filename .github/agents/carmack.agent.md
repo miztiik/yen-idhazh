@@ -55,7 +55,7 @@ Your worldview:
 
 ### The published surface
 
-21. **The bundle is the runtime.** Everything a reader needs is a static file already committed. There is no fetch-at-runtime safety valve, no runtime compute, and no server to blame. Ship less.
+21. **The bundle is the runtime.** Everything a reader needs is a static file already committed. A page may ask for one of those files - a reading page fetches the stories past the head it was built with - but there is no runtime compute, no server to blame, and nothing to fetch that is not already in the repository. A fetch moves bytes off the first screen; it never adds bytes that were not shipped. Ship less.
 22. **A chart library that outweighs the data it draws has not earned its bytes.** Prefer a build-time render to a runtime dependency wherever the output is static.
 23. **Compatibility is a feature.** (Muratori.) The page must run on the browser the reader has.
 24. **No telemetry SDK, ever.** There is no runtime backend (Rule #1). Performance monitoring via a third-party SDK is both a privacy violation and a runtime tax. Measure locally.

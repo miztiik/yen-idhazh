@@ -349,7 +349,9 @@ A tinted label is decorative under the rule above, because it repeats a word tha
 
 ### Content on demand is a `<details>`, not a button
 
-A section that leads with a shape and keeps its rows behind a control uses a native `<details>` and `<summary>`. Every page here is prerendered and complete before a script runs, so a button plus a conditional block does not hide the rows - it deletes them for a reader with no script, and the section then makes a claim the reader cannot check. The element is also keyboard-reachable for free and says which state it is in without a second label.
+A section that leads with a shape and keeps its rows behind a control uses a native `<details>` and `<summary>`. **The reason is the element itself: it is keyboard-reachable for free and it says which state it is in without a second label.** A button plus a conditional block has to be given both, and a control that has to be given them is a control somebody can forget to give them to.
+
+The script-less argument is the second reason and it is now narrower than it was. It reads: a page is complete before a script runs, so a conditional block does not hide the rows - it deletes them for a reader with no script, and the section then makes a claim the reader cannot check. That holds **unchanged on `/`, `/archive/`, `/404` and `/evals/`**, which are whole in the document and always will be. On a reading route it holds for the seed the document carries and not for the stories a browser fetches after it, because those are not there to be hidden either way ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). The first reason covers every page equally, which is why it is the first reason.
 
 The other shape is different and stays: `Show N more` on the failed-item list and the day list is a button that extends a list already on the page. Nothing behind it is hidden, so nothing is lost when the button is dead.
 
@@ -401,7 +403,7 @@ What the figure did give back is height. A fixed 16:10 box reserved space the ch
 
 > **A dead input that swallows typing is worse than no input.**
 
-Every page here is prerendered and complete before a script runs, so a control that only works afterwards has to say so. The shape is a `<noscript>` block holding a `<style>` that hides the scripted controls by attribute, and one sentence, hidden by `hidden`, that the same rule un-hides. Nothing is conditionally rendered, so hydration has nothing to reconcile and there is no flash.
+Every page here is rendered whole before a script runs - the stories past a reading route's seed are the one exception, and they are content rather than a control - so a control that only works afterwards has to say so. The shape is a `<noscript>` block holding a `<style>` that hides the scripted controls by attribute, and one sentence, hidden by `hidden`, that the same rule un-hides. Nothing is conditionally rendered, so hydration has nothing to reconcile and there is no flash.
 
 Two details make it work rather than look like it works. The rule inside `<noscript>` is unscoped, and a Svelte scoped class rule outranks it - `.field.svelte-<hash>` is specificity (0,2,0) against (0,1,0) - so the element carrying the attribute must not take a `display` of its own; the layout goes on a child. And the fallback sentence uses `hidden`, which the author rule beats without an `!important`. The trap and its symptom are in [../reference/agent-notes.md](../reference/agent-notes.md).
 
@@ -464,15 +466,26 @@ There is almost no motion here, and that is the correct amount. This is a page a
 - **`prefers-reduced-motion` is a hard kill-switch** - a media query that zeroes durations, and removes a transform an interaction brings on rather than making it instant. A zeroed duration shortens a movement; it does not remove one, so a 2px rise on hover becomes a jump in one frame and a reader who asked for stillness still sees it move. The reset names the elements that take an interaction rather than every element, because a transform that **positions** something - a rotated axis title, a chart readout centred on its own width - is not motion and a blanket reset drops both on the floor.
 - The whole named set: `fadeIn` (content arriving), `shimmer` (skeleton while a payload parses), `toastIn` (the rare notice). Anything beyond these needs an argument.
 
-There is no network in the loop, so **there is no excuse for a spinner.**
+Nothing on the reading path waits on a network for its first frame, so **there is no excuse for a spinner.**
 
-**One control on the whole site does wait on a network, and it still gets no
-spinner.** The archive's search downloads a 43 MB encoder the first time a
+**Two things do wait, and neither gets one.** A reading page fetches the stories
+past its seed. What it shows meanwhile is nothing at all, because the frame the
+reader already has is readable; past `ui.payload_slow_ms` it is one sentence,
+and a fetch that fails is one sentence and a retry. A skeleton there would draw
+boxes where a reader is already reading.
+
+And the archive's search downloads a 43 MB encoder the first time a
 reader uses it. What it shows meanwhile is bytes as type, taken from the
 library's own count of what has arrived - a measurement, not an animation. When
 the weights land that count goes blind, because the runtime behind them reports
 nothing to anybody, so the line stops printing numbers and prints a word. A bar
 that keeps moving on no measurement is a bar that is making it up.
+
+**A day payload gets no byte readout, and that is the same rule read the other
+way.** A compressed response reports its compressed length, so a bar drawn on
+one would print precision the number does not carry - which is a bar making it
+up, exactly as above. The encoder is different because the library counts real
+bytes and because 43 MB is worth naming before a click.
 
 ## A machine's state is a sentence, never a dot
 

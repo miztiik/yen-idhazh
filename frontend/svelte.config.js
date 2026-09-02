@@ -10,8 +10,12 @@ import { handleUnseenRoutes } from './prerender-guard.js';
 // id without editing this file - see docs/reference/agent-notes.md.
 const version = process.env.BUILD_VERSION ? { name: process.env.BUILD_VERSION } : undefined;
 
-// Every page is prerendered, so the reading path makes zero runtime requests
-// (Rule #1) and there is no loading state to design.
+// Every page is prerendered, and since 2026-09-01 that is a statement about the
+// DOCUMENT rather than about the item list inside it. A reading route ships the
+// head of its day and the browser fetches the rest from a file this same site
+// publishes, so the reading path makes at most one same-origin request and the
+// first frame is readable without it (Rule #1). `/`, `/archive/`, `/404` and
+// `/evals/` still make none at all.
 export default {
 	kit: {
 		adapter: adapter({ fallback: '404.html', strict: false }),
@@ -25,6 +29,13 @@ export default {
 		// in every prerendered page. `connect-src 'self'` is the one that matters:
 		// it makes exfiltration from a planted instruction a browser-level
 		// impossibility rather than a property of our own code being careful.
+		//
+		// **The migration made it MORE load-bearing, not less.** The header is
+		// emitted per rendered document, a shell is a rendered document, and a
+		// reading shell now fetches. So the one directive bounds every request the
+		// page can make, wherever in our source the URL was built - which is a
+		// stronger guarantee than a rule about how carefully `assist/day.ts`
+		// assembles a path.
 		csp: {
 			mode: 'auto',
 			directives: {
