@@ -1513,6 +1513,16 @@ the variable protects the shell you remember to set it in and nothing else.
   the call in the foreground and shows the log growing; and read the sentinel
   with the editor's file tool rather than through the shell, because that hits
   the filesystem and cannot come back blank.
+- **Redirecting both streams of one command to the SAME file runs nothing at
+  all, and reports nothing.** `& $py -m ruff check . 1>> $log 2>> $log` opens the
+  file twice, the second open fails, and under `$ErrorActionPreference =
+  'Continue'` the whole call is skipped in silence - so every step of a detached
+  gate script is stepped over and the sentinel reads `RUFF= MYPY= EXPORT=` with
+  empty values beside an 83-byte log. Observed twice on 2026-09-02, and it reads
+  exactly like a broken interpreter. An empty exit code is a shell fault, the
+  same tell the npm entry above describes. Give each command its own
+  `1> <step>.out 2> <step>.err` pair; never point `1>` and `2>` at one path, and
+  never use `2>&1` inside a detached script when you also want the exit code.
 - **A killed redirect leaves the output file present and EMPTY.** `mypy > file
   2>&1` cut at the idle limit exits 1 with a zero-byte file, so `Test-Path` says
   true and `Get-Content` says nothing - which reads exactly like a gate that
@@ -1849,6 +1859,14 @@ the variable protects the shell you remember to set it in and nothing else.
   `Network.setCacheDisabled`), or the second reload is served from memory.
   Expect `vite preview` to die with an unhandled `ENOENT` when a file it is
   streaming disappears; that is the server, not the page.
+- **A second `page.goto` to a URL that differs only in its fragment navigates
+  nothing, so a repeated arm measures nothing.** Timing a deep link into a
+  627-story day on 2026-09-02, three visits to `/<date>/#<id>` on one page read
+  680, 26 and 30 ms - and the 26 is not a fast page, it is a same-document
+  navigation that did no work at all. The two later readings look like the
+  first one was a cold-cache outlier, which is the wrong conclusion. Alternate
+  the arms and give every visit its own browser context: the same pair then read
+  850, 818 and 811 ms against a plain visit's 399, 235 and 230.
 - **Two builds of one unchanged tree do not agree on bytes unless
   `kit.version.name` is pinned.** It defaults to `Date.now()`, which reaches the
   `__sveltekit_<id>` global every prerendered document names and, through that,
