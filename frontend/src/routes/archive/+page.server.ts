@@ -1,5 +1,6 @@
 import { indexMonths, loadDay, publishedDates } from '$lib/server/payload';
-import { assistConfig } from '$lib/server/config';
+import { archiveRecentDays, assistConfig } from '$lib/server/config';
+import { archiveCalendar, type ArchiveDay } from '$lib/archive-calendar';
 import type { DigestDay, DigestVerticalRef } from '$lib/payload/types';
 
 export const prerender = true;
@@ -32,12 +33,22 @@ export function load() {
 			count: verticalCounts[id] as number
 		}));
 
+	const days: ArchiveDay[] = loaded.map((day) => ({
+		date: day.date,
+		items: day.items.length,
+		partial: day.partial
+	}));
+
 	return {
-		days: loaded.map((day) => ({
-			date: day.date,
-			items: day.items.length,
-			partial: day.partial
-		})),
+		// The newest few days, as rows carrying the date, the story count and
+		// whether every story finished. A shortcut into the calendar below and never
+		// the only way in - the same days sit inside their month as well.
+		recent: days.slice(0, archiveRecentDays()),
+		// Every published day, grouped by month and then by year. What a reader sees
+		// grows by one row a month; what the document carries for a day is a
+		// day-of-month number and a short link, where it used to be a dated row.
+		calendar: archiveCalendar(days),
+		dayCount: days.length,
 		// The months a browser may ask for, and how many stories they hold between
 		// them. Both grow per month and per day, never per story, which is what
 		// keeps this page a fixed size while the archive grows.

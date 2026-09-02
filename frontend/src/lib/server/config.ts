@@ -344,13 +344,16 @@ interface RawConfig {
  *
  * Whatever `uiConfig()` returns is inlined into every prerendered document, so
  * a number no component opens would ride to every reader on every page for
- * ever. `shell_seed_items` is read by the build alone. The six leading-block
+ * ever. `shell_seed_items` is read by the build alone, and so is
+ * `archive_recent_days` - the archive's day list is decided in its `load` and
+ * the page draws what it is handed. The six leading-block
  * knobs are read by the pipeline, which decides the block at assemble and
  * publishes the answer on the day - the page draws what it is handed and
  * re-decides nothing. `items_per_topic` is retired and read by nothing at all.
  */
 const BUILD_ONLY_KEYS = [
 	'shell_seed_items',
+	'archive_recent_days',
 	'items_per_topic',
 	'leading_stories',
 	'leading_per_desk',
@@ -433,6 +436,25 @@ const SHELL_SEED_ITEMS = 15;
 
 export function shellSeedItems(): number {
 	return appearance().digest?.shell_seed_items ?? raw().ui?.shell_seed_items ?? SHELL_SEED_ITEMS;
+}
+
+/** How many of the newest published days the archive lists as rows of their own.
+ *
+ * Read on its own for the same reason `shell_seed_items` is: the archive's
+ * `load` decides the day list at build time and hands the page the answer, so
+ * a browser is never told the number. Every other day is inside its month.
+ *
+ * The fallback is the same number `UiConfig.archive_recent_days` defaults to,
+ * and `backend/tests/test_contracts.py` fails if the two copies drift.
+ */
+const ARCHIVE_RECENT_DAYS = 7;
+
+export function archiveRecentDays(): number {
+	return (
+		appearance().digest?.archive_recent_days ??
+		raw().ui?.archive_recent_days ??
+		ARCHIVE_RECENT_DAYS
+	);
 }
 
 export function runConfig(): RunConfig {

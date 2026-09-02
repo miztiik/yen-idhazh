@@ -330,6 +330,21 @@ def test_the_seed_the_shell_carries_is_a_knob_the_frontend_agrees_with() -> None
     assert int(mirrored.group(1)) == UiConfig().shell_seed_items
 
 
+def test_the_days_the_archive_lists_are_a_knob_the_frontend_agrees_with() -> None:
+    """The same two-copies problem, on the other digest knob a browser never sees.
+
+    `archive_recent_days` decides how many days the archive lists as rows of
+    their own before the months take over, so the build reads it on its own
+    rather than through `uiConfig()`. A drift here would put a different number
+    of days on the page than the contract bounds, and on a clone with no
+    `config/` there is nothing else to catch it.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"const ARCHIVE_RECENT_DAYS = (\d+);", reader)
+    assert mirrored is not None, "the frontend dropped its archive_recent_days fallback"
+    assert int(mirrored.group(1)) == UiConfig().archive_recent_days
+
+
 def test_the_wait_worth_a_sentence_is_a_knob_the_frontend_agrees_with() -> None:
     """The two-copies problem on the one digest knob only a browser reads.
 

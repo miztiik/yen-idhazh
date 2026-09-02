@@ -1383,6 +1383,59 @@ exists rather than a reason to leave the corpus empty: before the backfill,
 1,175 of the 1,614 items a reader can search for had no vector at all, so the
 page was heavy AND could not find them.
 
+### The archive day list stops growing a row a day
+
+Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0. Date: 2026-09-01.
+Method: two fixture archives generated under `$env:TEMP` and read through
+`DIGEST_ROOT`, so nothing under `frontend/public/` moved. Both cover the **same
+24 calendar months**, 2 October 2024 to 1 September 2026, one at 700 published
+days and one at 182 - so the difference between the two is days and nothing
+else. Each arm is one `npm run build` and `gzip -9` over
+`build/archive/index.html`. The before arm is `origin/main`'s own archive
+source, checked out in place over this branch's and copied back afterwards, in
+the worktree that built the after arm.
+
+| Arm | Published days | `gzip -9` of `/archive/` | Day-list markup, raw | Day links |
+| --- | ---: | ---: | ---: | ---: |
+| Before, 700 days | 700 | 12,045 | 74,621 | 700 |
+| Before, 182 days | 182 | 6,319 | 19,457 | 182 |
+| After, 700 days | 700 | 10,484 | 73,385 | 707 |
+| After, 182 days | 182 | 6,348 | 26,460 | 189 |
+
+Growth per published day, over the 518 days between the two arms of each pair:
+
+| | Bytes a day, `gzip -9` | Day-list markup, raw bytes a day |
+| --- | ---: | ---: |
+| Before | 11.05 | 106.5 |
+| After | **8.0** | 90.6 |
+
+**The document still grows with days, 27.7 percent more slowly.** The row that
+produced this asked for a document growing with months and not with days, and
+that is not what the measurement says. The design was kept and the claim was
+corrected: reaching zero means not emitting a link for each published day, and a
+reader with no script would then reach seven days and no further
+([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-day-list-grows-with-months-on-the-page-and-with-days-in-the-document)).
+
+**What a reader sees is the number that did change.** At 700 days the list is
+**18 rows** - seven days, nine months of the newest published year, and one row
+each for 2025 and 2024 - against 700 links before. Opening every year tops out
+at a row a month.
+
+**The saving is in the serialised data, not the markup.** At 700 days the
+document went 115,563 -> 88,925 raw bytes while the day-list markup barely moved
+(74,621 -> 73,385). A flat list of `{date, items, partial}` objects became a list
+of day-of-month numbers under a month key, and the serialiser holds the 31
+distinct numbers once however many months there are.
+
+**11.05 cross-checks the 12.21 in the next section**, which was taken a
+different way - one built page grown k days in place, on a six-day corpus, on
+2026-08-27. That table's own marginal rate falls with size and reads 11.47 at
+730 days, so the two methods agree to within 4 percent at the same scale. The
+committed archive is 12 days, so the `/archive/` ceiling derivation below is
+untouched by this row; what changes is that its headroom now shrinks about 8
+bytes a publish instead of about 12, so the year it was sized for gets longer
+rather than shorter.
+
 ### The archive stops carrying the corpus
 
 Hardware: Intel Core i7-1265U, Windows, node 24.12.0. Date: 2026-08-27. Method:
