@@ -70,6 +70,8 @@ ZONE_RAIL_MIN_REM: Final = 8.0
 ZONE_RAIL_MAX_REM: Final = 24.0
 ZONE_ASIDE_MIN_REM: Final = 12.0
 ZONE_ASIDE_MAX_REM: Final = 27.0
+ZONE_TIME_MIN_REM: Final = 2.0
+ZONE_TIME_MAX_REM: Final = 9.0
 
 #: A six-digit CSS hex, lower case. The one form `frontend/src/styles/tokens.css`
 #: writes and the one form `tokens.spec.ts` reads back off it.
@@ -216,6 +218,22 @@ class FrameConfig(Model):
             "leading stories beside the stream instead of above it. One trailing "
             "column at a time: a 68-character measure plus both this and the item's "
             "own rail does not fit inside `reading_max_px`."
+        ),
+    )
+    zone_time_rem: float = Field(
+        default=5.5,
+        ge=ZONE_TIME_MIN_REM,
+        le=ZONE_TIME_MAX_REM,
+        description=(
+            "The day stream's leading column from the small breakpoint, which carries "
+            "the time rail. It is the widest label the rail prints that decides this "
+            "number, not the shortest: `Yesterday 23:40` and `First seen 06:20` both "
+            "wrap in less. In rem, so the column grows with a reader who set their "
+            "browser text larger and the label keeps the same number of lines. There "
+            "is no phone value because there is no phone column: 328 CSS px of content "
+            "box cannot hold a rail, the read mark and a readable line at once, so "
+            "below the small breakpoint the marker is a rule across the top of its "
+            "group instead."
         ),
     )
 
@@ -495,6 +513,30 @@ class AppearanceConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02T14:00",
+            change=(
+                "frame.zone_time_rem added, defaulting to 5.5, and ui.rail_group_minutes "
+                "added, defaulting to 60. The first is `FrameConfig`, which only this "
+                "document carries; the second is `UiConfig`, which this document and "
+                "`AppConfig` share, so both schemas moved together. Additive with "
+                "defaults, so an appearance file written before today still validates."
+            ),
+            why=(
+                "The day's stories now run newest first down a time rail, which is a "
+                "fifth column beside the prose and therefore a zone (Rule #6). It is a "
+                "rem, so `frontend/tests/item-zones.spec.ts` reads the column at a 16px "
+                "root and again at 22px and fails unless it scaled - measured on the "
+                "canary build, the rail went 88 to 121 CSS px, which is 22/16. There is "
+                "no second value for a phone, and that was measured rather than "
+                "assumed: at 360px the content box is 328 CSS px, the item already "
+                "spends 40 on the read mark and 32 on its own padding, and a 3.5rem "
+                "column plus its gap left the summary 186px - about 25 characters, with "
+                "`Interconnector` broken across two lines in the title. Below the small "
+                "breakpoint the marker is a rule across the top of its group instead, "
+                "which costs the reading column nothing."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-02",
             change=(

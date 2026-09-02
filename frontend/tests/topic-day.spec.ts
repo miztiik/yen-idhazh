@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { orderByTime } from '../src/lib/day-shape';
+import type { DigestItem } from '../src/lib/payload/types';
 
 /**
  * Row #25's oracle: a topic page holds the stories it used to inline.
@@ -42,6 +44,9 @@ interface TopicRoute {
 	vertical: string;
 	/** The stories the day published under this topic, in published order. */
 	published: string[];
+	/** The same ids in the order the page draws them: newest first by the time on
+	 * the story. Computed through `orderByTime`, the function the page calls. */
+	reading: string[];
 	/** What the prerendered document carries. */
 	seeded: number;
 	html: string;
@@ -56,7 +61,7 @@ function dirsIn(at: string): string[] {
 }
 
 /** The day the pipeline committed for that date, read the way the build reads it. */
-function committedDay(date: string): { items: { item_id: string; vertical: string }[] } | null {
+function committedDay(date: string): { items: DigestItem[] } | null {
 	const [year, month, day] = date.split('-');
 	const path = join(CANARY, year, month, day, 'digest.json');
 	if (!existsSync(path)) return null;
@@ -72,12 +77,12 @@ function topicRoutes(): TopicRoute[] {
 		for (const vertical of dirsIn(join(BUILD, date))) {
 			const html = join(BUILD, date, vertical, 'index.html');
 			if (!existsSync(html)) continue;
+			const own = day.items.filter((item) => item.vertical === vertical);
 			found.push({
 				date,
 				vertical,
-				published: day.items
-					.filter((item) => item.vertical === vertical)
-					.map((item) => item.item_id),
+				published: own.map((item) => item.item_id),
+				reading: orderByTime(own).map((item) => item.item_id),
 				// The same marker `payload-weight.spec.ts` counts: on every published
 				// item and on nothing else this site serialises.
 				seeded: readFileSync(html, 'utf8').split('key_points').length - 1,
@@ -147,9 +152,12 @@ for (const route of ROUTES) {
 			expect([...held].sort(), 'the page holds a different set of stories').toEqual(
 				[...route.published].sort()
 			);
-			// And the order, which is the published one. A topic page is the day
-			// filtered, so the day decides the sequence.
-			expect(held, 'the stories are not in published order').toEqual(route.published);
+			// And the order, which is the day's own: a topic page is the day
+			// filtered, so the day decides the sequence and the day runs newest
+			// first by the time on the story.
+			expect(held, 'the stories are not in the order the rail says they are').toEqual(
+				route.reading
+			);
 
 			expect(errors, 'the topic page logged an error').toEqual([]);
 			expect(failed, 'the topic page asked for something that is not there').toEqual([]);
