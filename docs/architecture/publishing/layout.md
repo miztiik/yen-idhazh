@@ -408,11 +408,11 @@ Almost all of that is the rate rather than the level: the 18.6 MB taken off the 
 
 **The sixth document a day followed the same day, and the dated trees are done.** `/<date>/` was the last reading route inlining its whole day. Over the 12 committed days and 4,203 items on the same instrument, **the site went 101.7 MB to 88.1 MB and the runway went 238 published days to 279** (180 to 212 to the alarm). Reading the two rows together, the reading routes cost the site 168.6 MB and now cost 88.1, and the runway went 130 published days to 279 - it more than doubled. **Nothing about that removes the cap**, because the two directories that do not shrink are the ones that dominate: `assist/` at 43.2 MB and `_app/` at 22.4 MB are 74.5 percent of what is left, and neither grows with a day, so both are charged to the items and both make the runway a floor. **The next lever is retention (below), and there is no third document trick left to play.**
 
-## What the composed page got wrong (2026-09-02)
+## What the composed page got wrong, and what shipped (2026-09-02)
 
-Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both were on a reader's screen. The first is fixed below; the second is still recorded rather than fixed.
+Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both were on a reader's screen. Both are fixed, and the two arms that named them are ordinary assertions now rather than arms written to fail.
 
-Measured 2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 and Chromium at 1536x900, on the 2026-09-01 day, 627 stories over five desks with five leads.
+Measured 2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 and Chromium at 1536x900. The count is read on the 2026-09-01 day, 627 stories over five desks with five leads; the pager is priced on the busiest day the site serves, 2026-08-24 at 731 stories, which is the worst case the committed corpus holds.
 
 ### The dated document states the day's count, not the list in its hand
 
@@ -424,15 +424,19 @@ Measured 2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 and Chrom
 
 Measured after the fix on the same day: `/2026-09-01/` states 627 before hydration and 627 after, and `/2026-09-01/ai/` states 55 against that desk's own published 55. The prerendered figure is the one that mattered - it is what a reader with no script gets and never sees change.
 
-### A story's own address only lands while the pager is showing it
+### A story's own address lands wherever it sits in the day
 
-`layout.md` publishes `/<YYYY-MM-DD>/#<item id>` as a canonical reader address, and `restoreAnchor` scrolls and focuses it. On the 2026-09-01 day it resolves for **17 of 627** stories.
+`layout.md` publishes `/<YYYY-MM-DD>/#<item id>` as a canonical reader address, and `restoreAnchor` scrolls and focuses it. On the 2026-09-01 day it resolved for **17 of 627** stories. The stream pages at twelve and the leading block adds its five, whose stories sit at positions 59, 111, 117, 166 and 206 of the reading order, so those seventeen resolved from a cold load. Every other story - 610 of 627 - was not an element on the page when the fragment was read, so the browser did nothing, `restoreAnchor` returned false, and the reader landed at the top of the day with no story focused and no message.
 
-The stream pages at twelve. The leading block adds its five, whose stories sit at positions 59, 111, 117, 166 and 206 of the reading order, so those five resolve from a cold load. Every other story - 610 of 627 - is not an element on the page when the fragment is read, so the browser does nothing, `restoreAnchor` returns false, and the reader lands at the top of the day with no story focused and no message.
+**This was never the seed-and-fetch migration.** The pager predates it and the whole day was never in the document either, so this address had never reached past the pager. What the migration changed is who notices: rows 15 and 26 both made a fragment work for the stories they own, which made the other 610 look like they worked too.
 
-Measured by walking the reading order: positions 0, 5 and 11 resolve; 12, 13, 20, 50, 300 and 626 do not; the page draws 17 items at every one of them.
+**The pager now reaches the story the address named.** `DigestList` reads the fragment on mount and on `hashchange`, finds that story's position in the order it is drawing, and pages far enough to draw it - then restores the anchor once, after the element exists. Everything else is untouched: with no fragment the reach is zero, so the prerendered document draws the same twelve it always drew and so does every reader who followed an ordinary link. A lead is zero too, because the seed already carries it and paging the stream down to its position is work a click never needed.
 
-**This is not the seed-and-fetch migration.** The pager predates it, and the whole day was never in the document either - so this address has never reached past the pager. What the migration changed is who notices: rows 15 and 26 both made a fragment work for the stories they own, which makes the other 610 look like they work too.
+**Nothing about the published documents moved.** A control build of `main`'s source beside this one, both on the same tree back to back with `BUILD_VERSION` pinned so the two are comparable: the busiest committed day, `/2026-08-24/` at 731 stories, drew **twelve stories in the document on both arms**, and its `__data.json` twin was byte-identical at 29,278. The document itself read 74,187 raw bytes against 74,189 - **two bytes**, and the two decompose exactly. The live region the fix adds is 73 characters; 71 come back because the reading page now carries 25 preload links rather than 26, since `DigestList` imports the day loader its own route was already loading and a chunk merged. Gzipped at level 9 the document read 15,408 against 15,434. The seed-and-fetch saving above is intact, because none of this runs at build time.
+
+**What it costs is one visit, and only the visit that asked for it.** Following a link to the last story of that 731-story day draws the whole day rather than twelve. Three alternated visits each in a fresh browser context: a plain visit settles in **235 ms** (399, 235, 230) drawing 12 stories on a 5,550 px page, and the deep-linked visit scrolls and focuses in **818 ms** (850, 818, 811) drawing 731 on a 310,781 px page. About six tenths of a second more, on the longest day the corpus holds, for the one reader who followed the link - and nothing at all for anybody else.
+
+**A fragment naming a story the day never held now says so.** `PayloadState` was the state to check first and it does not cover this: it is about the day's arrival, and it lives on the two dated routes, so `/` would still have had no way to say anything. The sentence is one line in `DigestList`'s own live region, and it waits until the list in hand is the whole list - a story still on its way is not a story that was never here.
 
 ## Retention
 

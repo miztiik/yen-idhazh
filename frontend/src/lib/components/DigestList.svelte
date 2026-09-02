@@ -12,23 +12,30 @@
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
 	import TimeRail from '$lib/components/TimeRail.svelte';
+	import { restoreAnchor } from '$lib/assist/day';
 	import { filterNeedle, leadingStories, matchItems, orderByTime, railRows } from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
 	import type { DigestDay, DigestItem } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 
 	let {
 		day,
 		vertical = null,
 		datePrefix = '',
 		latest = null,
+		settled = true,
 		ui
 	}: {
 		day: DigestDay;
 		vertical?: string | null;
 		datePrefix?: string;
 		latest?: string | null;
+		/** Whether the list in hand is everything this page will ever hold. False
+		 * while a reading route is still fetching the stories past its seed, which
+		 * is the one moment a story that is on its way looks like a story that was
+		 * never here. */
+		settled?: boolean;
 		ui: UiConfig;
 	} = $props();
 
@@ -36,11 +43,28 @@
 	let read = $state(new Set<string>());
 	let hideRead = $state(false);
 	let shownCount = $state(0);
+	/** The story a reader's own address named, or the empty string.
+	 *
+	 * Read here rather than passed in, because the pager is the only thing that
+	 * can reach it: a browser honours a fragment once and a story past the first
+	 * page is not an element when it looks, so the reader lands at the top of the
+	 * day with nothing focused. Empty on the server, so a prerendered document is
+	 * exactly what it always was.
+	 */
+	let wanted = $state('');
+	/** The last fragment already scrolled to. Deliberately not `$state`: it stops
+	 * the page yanking itself back to the same story every time the list is
+	 * re-derived, and nothing renders it. */
+	let restored = '';
 
 	const PAGE = 12;
 
 	onMount(() => {
 		hideRead = loadHideRead();
+		const readHash = () => (wanted = window.location.hash.replace(/^#/, ''));
+		readHash();
+		window.addEventListener('hashchange', readHash);
+		return () => window.removeEventListener('hashchange', readHash);
 	});
 
 	// Marks are per digest date, and this component is reused when a reader moves
@@ -96,13 +120,49 @@
 	// only the head is a block whose links land on nothing. They keep their own
 	// published positions and the set never holds one twice: past the last lead
 	// this is exactly the prefix it always was.
+	//
+	// And it reaches the story a reader's own address named. `/<date>/#<item id>`
+	// is a published reader address, so a pager that stops at twelve makes every
+	// story past the first page unaddressable - measured 2026-09-02 on the
+	// 627-story day of 2026-09-01, 610 of 627 addresses landed the reader at the
+	// top of the day with nothing focused. Nothing else sees this: `reach` is
+	// zero with no fragment, so the server draws the same twelve it always drew
+	// and so does every reader who followed an ordinary link. A lead is zero too,
+	// because the line above already draws it - reaching for one would page the
+	// whole stream down to its position for a click that never needed it.
+	const reach = $derived(
+		wanted === '' || leading.has(wanted)
+			? 0
+			: visible.findIndex((item) => item.item_id === wanted) + 1
+	);
+	const shown = $derived(Math.max(shownCount || PAGE, reach));
 	const paged = $derived(
-		visible.filter((item, index) => index < (shownCount || PAGE) || leading.has(item.item_id))
+		visible.filter((item, index) => index < shown || leading.has(item.item_id))
 	);
 	const remaining = $derived(Math.max(visible.length - paged.length, 0));
+	// A fragment naming a story this page never draws. `scoped` rather than
+	// `visible`, so a story the reader has hidden or filtered out is not reported
+	// as absent - it is here, and the controls to bring it back are on screen.
+	// Only once the list in hand is the whole list: a story still on its way is
+	// not a story that was never here.
+	const missing = $derived(
+		settled && wanted !== '' && !scoped.some((item) => item.item_id === wanted)
+	);
 	const verticalNames = $derived(
 		Object.fromEntries(day.verticals.map((ref) => [ref.id, ref.display_name]))
 	);
+
+	// The pager has just drawn a story the browser already looked for and did not
+	// find, so the fragment is honoured again now that the element exists. Once
+	// per fragment: a reader who then hides what they have read must not be thrown
+	// back up the page.
+	$effect(() => {
+		if (reach === 0 || restored === wanted) return;
+		const target = wanted;
+		void tick().then(() => {
+			if (restoreAnchor(`#${target}`)) restored = target;
+		});
+	});
 
 	function toggleHide() {
 		hideRead = !hideRead;
@@ -190,7 +250,7 @@
 				{#if remaining > 0}
 					<button
 						type="button"
-						onclick={() => (shownCount = (shownCount || PAGE) + PAGE)}
+						onclick={() => (shownCount = shown + PAGE)}
 						class="min-h-11 w-full py-6 text-base text-accent hover:underline"
 					>
 						Show {remaining} more
@@ -215,6 +275,18 @@
 
 <div class="day">
 	<div class="day-head">
+		<!-- A link that named a story this page does not have. The region is here on
+		     every page, empty ones included: a live region has to be in the document
+		     before its text changes or nothing announces it. Silence was the old
+		     answer - the reader was dropped at the top of the day with no story
+		     focused and nothing said. -->
+		<div aria-live="polite" data-anchor-missing={missing ? 'yes' : 'no'}>
+			{#if missing}
+				<p class="pb-4 text-sm text-text-secondary">
+					The story that link names is not on this page.
+				</p>
+			{/if}
+		</div>
 		{#each headBefore as section (section)}
 			{@render part(section)}
 		{/each}
