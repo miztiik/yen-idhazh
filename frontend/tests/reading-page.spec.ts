@@ -40,15 +40,12 @@
  * What the canary cannot reach is measured on the committed digest instead,
  * with hardware and date, in `docs/reference/measurements.md`.
  *
- * **Two arms at the end are expected to fail, and say so.** Composing the rows
- * broke two things, neither of them fixable without deciding what a shipped
- * surface should say, so they are written as assertions rather than described
- * in a comment: the dated document counts the stories in its own hand instead
- * of the day's, and a story's own address only lands while the pager is already
- * showing it. Both are recorded in
- * `docs/architecture/publishing/layout.md`. An arm marked this way turns the
- * suite red the day the defect is fixed, which is when the annotation comes
- * off.
+ * **Two arms at the end were written failing and now pass.** Composing the rows
+ * broke two things: the dated document counted the stories in its own hand
+ * instead of the day's, and a story's own address only landed while the pager
+ * was already showing it. Both were fixed on 2026-09-02 and both arms are now
+ * ordinary assertions, which is what keeps them fixed. What they measure is in
+ * `docs/architecture/publishing/layout.md`.
  */
 
 import { expect, test, type Page } from '@playwright/test';
@@ -436,50 +433,134 @@ test.describe('where two rows meet', () => {
 });
 
 /**
- * Two things the composed page gets wrong. Both are recorded here as arms that
- * are expected to fail, so the file names the defect, carries the measurement,
- * and turns red the day somebody fixes it - which a comment could not do and a
- * skip would hide.
+ * The two things composing the rows got wrong, held so they stay fixed.
  *
- * Neither is fixed here. Both need a decision about what a shipped surface says
- * or how far a pager reaches, and this row's job is to find them rather than to
- * redesign another row inside itself.
+ * Both were written here failing on 2026-09-02 and both are ordinary assertions
+ * now. What each one measures is in `docs/architecture/publishing/layout.md`.
  */
-test.describe('known defects in the composed page', () => {
-	test('the dated document says how many stories the day published', () => {
+test.describe('the count and the address', () => {
+	/** The story count a built document states, before a browser runs anything.
+	 *
+	 * Read off the file rather than off a rendered page, because the half that
+	 * was wrong is the half a reader with no script gets and never sees change.
+	 * The line is stripped of Svelte's own markers rather than matched through
+	 * them, so a change in how the compiler emits an `{#if}` cannot quietly turn
+	 * this into a test that matches nothing.
+	 */
+	function printedCount(...parts: string[]): number {
+		const at = readFileSync(join(BUILD, ...parts, 'index.html'), 'utf8');
+		const opens = at.indexOf('notice-count');
+		expect(opens, `/${parts.join('/')}/ draws no story-count line at all`).toBeGreaterThan(-1);
+		const line = at
+			.slice(at.indexOf('>', opens) + 1, at.indexOf('</p>', opens))
+			.replace(/<!--.*?-->/g, '')
+			.replace(/<[^>]*>/g, '')
+			.replace(/\s+/g, ' ')
+			.trim();
+		const printed = /^(\d+) stor/.exec(line);
+		expect(printed, `/${parts.join('/')}/ opens with "${line}" and states no count`).not.toBeNull();
+		return Number(printed![1]);
+	}
+
+	test('the dated document says how many stories the day published', async ({ page }) => {
 		test.skip(!PAST_SEED, `${DAY} carries its whole day, so its seed IS its count`);
-		test.fail();
 
 		// The day's own bounded count, which is the number the topic row prints a
 		// few lines below this sentence on the same screen.
 		const published = (FACTS?.verticals ?? []).reduce((sum, ref) => sum + ref.count, 0);
-		const html = readFileSync(join(BUILD, DAY, 'index.html'), 'utf8');
-		const printed = /notice-count[^>]*>(?:<!--[^>]*-->)?(\d+) stor/.exec(html);
-		expect(printed, 'the dated document prints no story count at all').not.toBeNull();
+		const before = printedCount(DAY);
+
+		await open(page, 'dark', `/${DAY}/`, 1536);
+		const settled = (await page.locator('p.notice-count').first().textContent()) ?? '';
+		const after = Number(/(\d+)\s+stor/.exec(settled.replace(/\s+/g, ' '))?.[1]);
+
+		console.log(
+			`[reading-page] /${DAY}/ counts ${before} before hydration, ${after} after, ` +
+				`on a day that published ${published}`
+		);
 		expect(
-			Number(printed![1]),
-			`the first line under the date claims ${printed![1]} stories on a day that published ` +
+			before,
+			`the first line under the date claims ${before} stories on a day that published ` +
 				`${published}. It counts the list in hand rather than the day's own total, so a ` +
 				`prerendered document states the seed of ${SEED} plus its leads and a reader with ` +
 				'no script never sees another number'
 		).toBe(published);
+		expect(
+			after,
+			`the count ticked from ${before} to ${after} while the reader was looking at it`
+		).toBe(before);
+	});
+
+	test('a topic document says how many stories that desk published', () => {
+		const desk = FACTS?.verticals.find((ref) => ref.id === TOPIC);
+		expect(desk, `${DAY} serves /${TOPIC}/ and its payload names no such desk`).toBeDefined();
+
+		const printed = printedCount(DAY, TOPIC);
+		console.log(`[reading-page] /${DAY}/${TOPIC}/ counts ${printed} of the desk's ${desk!.count}`);
+		expect(
+			printed,
+			`the topic page claims ${printed} stories on a desk that published ${desk!.count}. A ` +
+				'topic page is about one desk, so the desk is the number it owes the reader'
+		).toBe(desk!.count);
 	});
 
 	test('every story the day published has an address that lands', async ({ page }) => {
 		test.skip(!PAST_SEED, `${DAY} carries its whole day, so no story is below the seed`);
-		test.fail();
 
 		const items = orderByTime(FACTS!.items);
-		const target = items.at(-1)!.item_id;
-		await open(page, 'dark', `/${DAY}/#${target}`, 1536);
+		// A lead is already in the document, so a lead would prove nothing about a
+		// pager. The nearest story that is not one stands in for it.
+		const leads = new Set(
+			leadingStories(FACTS!.leads ?? [], items).map((story) => story.item_id)
+		);
+		const notALead = (from: number): number => {
+			for (let at = from; at < items.length; at += 1) if (!leads.has(items[at].item_id)) return at;
+			for (let at = from - 1; at >= 0; at -= 1) if (!leads.has(items[at].item_id)) return at;
+			return from;
+		};
+		// One past the pager's first page, one deep in the middle, and the last
+		// story of the day - which is the address furthest from anything the
+		// document carries.
+		const walk = [...new Set([12, 300, items.length - 1].filter((at) => at < items.length))]
+			.map(notALead)
+			.sort((a, b) => a - b);
+		expect(walk.length, `${DAY} is too short to walk past its own pager`).toBeGreaterThan(0);
 
-		const drawn = await page.locator('article.item').count();
+		for (const position of walk) {
+			const target = items[position].item_id;
+			await open(page, 'dark', `/${DAY}/#${target}`, 1536);
+
+			const story = page.locator(`article.item[id="${target}"]`);
+			const drawn = await page.locator('article.item').count();
+			await expect(
+				story,
+				`position ${position} of ${items.length}: the stream drew ${drawn} stories and none ` +
+					'of them was the one the address named'
+			).toHaveCount(1, { timeout: 15_000 });
+			await expect(
+				story,
+				`position ${position} of ${items.length} was drawn but not scrolled to`
+			).toBeInViewport();
+			await expect(
+				story,
+				`position ${position} of ${items.length} was scrolled to but not focused`
+			).toBeFocused();
+			console.log(
+				`[reading-page] position ${position} of ${items.length}: resolved, in view, focused`
+			);
+		}
+	});
+
+	test('an address for a story this day never held says so', async ({ page }) => {
+		await open(page, 'dark', `/${DAY}/#no-such-story-on-this-day`, 1536);
+
+		const region = page.locator('[data-anchor-missing]');
+		await expect(region, 'the page carries no region to say it in').toHaveCount(1);
 		await expect(
-			page.locator(`article.item[id="${target}"]`),
-			`the stream draws ${drawn} of the day's ${items.length} stories - the first twelve plus ` +
-				`its ${LEADS} leads - so every other story's own address scrolls a reader to the top ` +
-				'of the day instead'
-		).toHaveCount(1, { timeout: 5_000 });
+			region,
+			'a link to a story this day never held drops the reader at the top with nothing said'
+		).toHaveAttribute('data-anchor-missing', 'yes');
+		await expect(region).toContainText('not on this page');
 	});
 });
 
