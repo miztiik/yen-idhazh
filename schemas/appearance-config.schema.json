@@ -323,6 +323,30 @@
           "minimum": 960,
           "title": "Reading Max Px",
           "type": "integer"
+        },
+        "zone_aside_rem": {
+          "default": 18.0,
+          "description": "The day's trailing column from the wide breakpoint, which carries the leading stories beside the stream instead of above it. One trailing column at a time: a 68-character measure plus both this and the item's own rail does not fit inside `reading_max_px`.",
+          "maximum": 27.0,
+          "minimum": 12.0,
+          "title": "Zone Aside Rem",
+          "type": "number"
+        },
+        "zone_mark_rem": {
+          "default": 1.75,
+          "description": "The reading item's leading column, which carries the source monogram at every width. In rem, never pixels: the mark says whether the story has been read, so it grows with a reader who set their browser text larger.",
+          "maximum": 4.0,
+          "minimum": 1.0,
+          "title": "Zone Mark Rem",
+          "type": "number"
+        },
+        "zone_rail_rem": {
+          "default": 14.0,
+          "description": "The reading item's trailing column, which carries the item footer from the middle breakpoint to the wide one. It retires at the wide breakpoint, where the day's aside becomes the page's trailing column instead.",
+          "maximum": 24.0,
+          "minimum": 8.0,
+          "title": "Zone Rail Rem",
+          "type": "number"
         }
       },
       "title": "FrameConfig",
@@ -645,6 +669,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "frame.zone_mark_rem, frame.zone_rail_rem and frame.zone_aside_rem added, defaulting to 1.75, 14 and 18. The shape is `FrameConfig`, which only this document carries. Additive with defaults, so an appearance file written before today still validates.",
+      "version": "2026-09-02",
+      "why": "The reading page's column widths were literals in one component's style block, so an operator could move the frame and the measure but not the furniture between them (Rule #6). Naming them is also what makes them checkable: every zone is a rem, so raising the root font size moves all of them, and a browser check now reads the used width of each zone at 16px and at 22px and fails if one did not scale. Measured 2026-09-02 at a 1536px viewport on the committed digest: the frame's content box is 1216px, the item used all 1216 of it, and the summary used 659.81 - so 230.19px stood empty beside the prose on every item, which the day's aside now spends."
+    },
+    {
       "change": "digest.archive_recent_days added, defaulting to 7, bounded at 1 and 31. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
       "version": "2026-09-01T20:00",
       "why": "The archive listed every published day as a link and had nothing bounding it. At the 700 days this archive reaches in two years that is a wall of dates a reader has to scan past to get to the stories. It is now the newest few days as rows over one disclosure a month and one a year before this one, so the list a reader SEES grows twelve rows a year instead of 365. How many days stay out is a choice a page may not spell (Rule #6), and the ceiling is what makes the knob safe: set to 400 it is the wall again. Read by the build alone, so it never rides to a reader. What the DOCUMENT costs did not fall to nothing and is not claimed to: measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over two fixture archives of the same 24 months at 700 and 182 published days, gzip -9 of the prerendered /archive/ document, the page grew 11.05 bytes a day before and 8.0 after - 27.7 percent slower, not flat, because a link for every day is what a reader with no script uses to reach one (docs/reference/measurements.md)."
@@ -760,7 +789,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-01T20:00",
+      "default": "2026-09-02",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -768,5 +797,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-01T20:00"
+  "version": "2026-09-02"
 }

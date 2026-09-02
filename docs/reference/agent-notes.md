@@ -335,6 +335,29 @@ gate reports a diff in a file whose content never changed.
 
 ## Gate commands
 
+**`git diff --exit-code -- schemas/` is not the drift gate until you have
+committed.** The two-line form on
+[../how-to/run-the-gates.md](../how-to/run-the-gates.md) regenerates `schemas/`
+and then asks git whether the tree moved - which is the right question on a
+clean tree and the wrong one while a legitimate contract change is still
+uncommitted. On 2026-09-02 it returned 1 on a branch whose only schema change
+was the one the branch exists to make, which reads exactly like a hand-edited
+schema. The gate that answers the real question in either state is
+`test_committed_schemas_match_the_models` in `backend/tests/test_contracts.py`:
+it exports into a temp directory and compares against `schemas/`, so it does not
+care what HEAD holds. Run the git form before you push and the pytest form at
+any time.
+
+**Round-tripping a committed config through its model puts back the fields
+somebody deliberately deleted.** `AppearanceConfig.model_validate(raw).to_json()`
+is the obvious way to add a knob to `config/appearance.json` in the exact byte
+form the fixture round-trip gate wants. It also writes every defaulted field,
+including `digest.items_per_topic`, which was retired on 2026-09-01 and dropped
+from the committed file on purpose - so a two-line config edit arrived as a
+three-line diff with a resurrection in it. `git diff` on the config file is the
+check, and it is worth reading line by line rather than for the lines you meant
+to add.
+
 **A test's `print()` never reaches you on the default `pytest` run, and `-s`
 does not bring it back.** `addopts` is `-q -n auto`, so every run is distributed
 and a passing worker's output is dropped. A gate that prints the measurement it

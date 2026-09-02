@@ -102,9 +102,26 @@
 		hideRead = !hideRead;
 		setHideRead(hideRead);
 	}
+
+	// The day is drawn in parts so the leads can be painted beside the stream at
+	// the wide breakpoint without leaving their place in the document. Every
+	// part renders its own sections in `digest.sections` order and the parts
+	// themselves are in that order too, so reordering the page is still a config
+	// edit and a narrow screen sees exactly what config asked for.
+	//
+	// The aside stands beside the STREAM, never beside the day's controls: the
+	// filter panel sticks only where it is one band, and one band needs the
+	// whole content box. So it needs the leads to come before the items; any
+	// other order and the day stays one column at every width.
+	const leadsAt = $derived(ui.sections.indexOf('leads'));
+	const streamAt = $derived(ui.sections.indexOf('items'));
+	const split = $derived(leads.length > 0 && leadsAt >= 0 && streamAt > leadsAt);
+	const headBefore = $derived(split ? ui.sections.slice(0, leadsAt) : ui.sections);
+	const headAfter = $derived(split ? ui.sections.slice(leadsAt + 1, streamAt) : []);
+	const stream = $derived(split ? ui.sections.slice(streamAt) : []);
 </script>
 
-{#each ui.sections as section (section)}
+{#snippet part(section: string)}
 	{#if section === 'notice'}
 		<DayNotice {day} />
 	{:else if section === 'leads'}
@@ -185,4 +202,28 @@
 			{/if}
 		{/if}
 	{/if}
-{/each}
+{/snippet}
+
+<div class="day">
+	<div class="day-head">
+		{#each headBefore as section (section)}
+			{@render part(section)}
+		{/each}
+	</div>
+
+	{#if split}
+		<div class="day-aside">
+			<LeadingStories stories={leads} />
+		</div>
+		<div class="day-head">
+			{#each headAfter as section (section)}
+				{@render part(section)}
+			{/each}
+		</div>
+		<div class="day-stream">
+			{#each stream as section (section)}
+				{@render part(section)}
+			{/each}
+		</div>
+	{/if}
+</div>

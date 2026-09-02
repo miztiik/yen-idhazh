@@ -32,6 +32,9 @@ const DEFAULTS = {
 	measure_ch: 68,
 	gutter_min_px: 16,
 	gutter_max_px: 32,
+	zone_mark_rem: 1.75,
+	zone_rail_rem: 14,
+	zone_aside_rem: 18,
 	duration_fast_ms: 120,
 	duration_base_ms: 200,
 	movement_good_light: '#2f6f5e',
@@ -61,6 +64,9 @@ const css = `/* Generated from config/appearance.json by scripts/build-frame-css
 	--measure: ${frame.measure_ch}ch;
 	--gutter-min: ${frame.gutter_min_px}px;
 	--gutter-max: ${frame.gutter_max_px}px;
+	--zone-mark: ${frame.zone_mark_rem}rem;
+	--zone-rail: ${frame.zone_rail_rem}rem;
+	--zone-aside: ${frame.zone_aside_rem}rem;
 	--dur-fast: ${fast}ms;
 	--dur-base: ${base}ms;
 }

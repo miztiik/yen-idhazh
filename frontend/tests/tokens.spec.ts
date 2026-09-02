@@ -32,7 +32,7 @@ const APP = readFileSync(join(FRONTEND, 'src', 'styles', 'app.css'), 'utf8');
  * They are declared in their own `:root` block outside both theme blocks, so a
  * dark override would be a second copy of the same number.
  */
-const THEME_INDEPENDENT = /^--(space|text|leading|frame|measure|gutter|radius|dur|ease)/;
+const THEME_INDEPENDENT = /^--(space|text|leading|frame|measure|gutter|radius|dur|ease|zone)/;
 
 /** Tokens with no Tailwind utility, because nothing would ever write one.
  *
@@ -420,7 +420,15 @@ test.describe('the token layer', () => {
 		// render nothing, to get one config value into CSS.
 		expect(APP).toContain("@import './frame.generated.css'");
 		const generated = readFileSync(join(FRONTEND, 'src', 'styles', 'frame.generated.css'), 'utf8');
-		for (const token of ['--frame-reading', '--frame-console', '--measure', '--gutter-min']) {
+		for (const token of [
+			'--frame-reading',
+			'--frame-console',
+			'--measure',
+			'--gutter-min',
+			'--zone-mark',
+			'--zone-rail',
+			'--zone-aside'
+		]) {
 			expect(generated, `${token} missing from the generated frame css`).toContain(token);
 		}
 		const layout = readFileSync(join(FRONTEND, 'src', 'routes', '+layout.svelte'), 'utf8');

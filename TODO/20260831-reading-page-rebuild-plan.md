@@ -92,7 +92,7 @@ The requirement was stated as a decay. Three different features answer to that w
 | 16 | Split the item's meta line | 12 | D | PENDING | - | - | - |
 | 26 | The day route fetches its day | 25 | E | IN-FLIGHT | yi-p26 | #352 | worker |
 | 15 | The day's leading stories | 4, 8 | E | DONE | yi-p15 | #347 | worker |
-| 18 | Spend the width: the four-zone column model | 16 | E | PENDING | - | - | - |
+| 18 | Spend the width: the four-zone column model | 16 | E | DONE | yi-p18 | #360 | worker |
 | 19 | Key points on long items only | 16 | E | PENDING | - | - | - |
 | 17 | The time rail, and copy that stays true tomorrow | 4, 15 | F | PENDING | - | - | - |
 | 27 | Invert the guards and correct every doc | 26 | F | PENDING | - | - | - |
@@ -599,6 +599,47 @@ The requirement was stated as a decay. Three different features answer to that w
 | 1 | Widen the measure | A wide paragraph is where a skim turns into work. The whole reason the measure exists. | Susan |
 | 2 | Raise `--frame-reading` past 1280px | The frame is not the constraint. The constraint is that nothing stands beside the prose. | Susan |
 | 3 | Cite 624px or 40.6 percent as the current state | Both are dead. 624px was a stale local bundle carrying a layout cap that is gone; 40.6 percent was measured on 2026-08-28 before it was removed. They are the reason the sufficiency gate exists, not a current finding. | Susan |
+
+### What the measurement changed, 2026-09-02
+
+Decision 4 was taken first and it moved three of the other five. The four
+numbers, at a 1536px viewport on the built committed digest: the frame's content
+box **1,216px**, the frame's used width **1,280px**, the item's used width
+**1,216px**, the summary's used width **659.81px**. So the item wasted nothing
+of the page and the card wasted **230.19px of itself**, beside the prose, on
+every story. Method, hardware and the after-numbers:
+[`docs/reference/measurements.md`](../docs/reference/measurements.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02).
+
+- **Zone 4 shipped and paid for the row.** The day is a stream with an `18rem`
+  sticky aside from the wide breakpoint, carrying the leading stories. Empty
+  width beside the summary falls 230.19 -> 146.19px, and the leads stop taking
+  the whole first screen.
+- **Zone 4 does not carry the pills.** Row 7's filter panel is already sticky
+  and already one band, and a sticky control that is not one band is refused by
+  [`docs/concepts/design-system.md`](../docs/concepts/design-system.md). At the
+  896px a two-column split leaves, its pills wrap under its field. So the day's
+  controls span both columns and the aside starts level with the stream. The
+  control was moved nowhere and duplicated nowhere.
+- **Zone 3 - the visual column - is refused, and the arithmetic is why.** The
+  committed charts are 825 x 437px SVGs with 25 labels at 10px. Across the card
+  body they draw at 10.8 CSS px; in a 20rem column at **3.9**. And the column
+  does not fit: with the aside taking the one trailing slot the frame can spare,
+  a 20rem column beside the measure would leave 130px. Decision 6's own sentence
+  is the condition - the render spec has to take the column width first - so
+  `digest.visual_side` stays unread and decision 5 is not met. What the figure
+  did give back is 85px of empty letterbox per visual, and only 5.4 percent of
+  items carry one (249 of 4,598 over twelve days).
+- **Decision 3 is refused.** A 14rem rail from the small breakpoint leaves the
+  summary **262.8px at 640 and 411px at 801** - 26 and 42 characters against a
+  68-character measure, and against a contract floor of 52. And its reason was
+  already gone: row 16 took the deciding facts above the title on 2026-09-01, so
+  nothing interrupts the read at any width.
+- **Zone 1 is at every width, not from the small breakpoint.** Row 12 put the
+  read state on the monogram and ruled it must stay beside the title it
+  qualifies at every width. Not undone.
+- **The time rail is not placed.** Row 17 has not shipped and
+  `TimeRail.svelte` does not exist, so zone 1 of decision 1 has nothing to
+  place. The zone model leaves room for it and names its token.
 
 ## 20 - Row #19 - Key points on long items only
 
