@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -91,13 +91,35 @@ not. **Do not tighten the check to an equality.** Equality is what the test
 deliberately does not assert - it would break every cached bundle on the next
 append, which is the one case the prefix exists for.
 
-**How long a shard is kept is now a knob of its own.**
+**How long a shard is kept is a knob of its own, and it is now spent.**
 `observability.public_telemetry_keep_months` is 14, and the contract refuses any
 value that is not equal to `observability.item_health_full_grain_months`: this
 file is the browser's copy of that ledger, so a published month whose source has
 been folded away is a rate nobody can check, and a source month with no published
-copy is a window the console cannot draw. Nothing deletes a shard yet
+copy is a window the console cannot draw. Since 2026-09-03 the two files go
+together: `retention.prune_telemetry` folds the ledger month, unlinks the shard,
+and unlinks this copy of it in the same step
 ([../../concepts/config.md](../../concepts/config.md#every-store-names-its-own-cleanup-age)).
+
+Three things about that deletion are worth stating on this page rather than only
+on the pruner's:
+
+- **It ships in dry run.** The step logs the files a live run would remove and
+  removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
+  on a schedule and a deleted file stops being recoverable once that prune passes
+  over it (`CLAUDE.md` section 8). Measured 2026-09-02 on this checkout, a live
+  run would take nothing today; the first shard it takes is `2026-08.csv` on
+  **2027-10-01**.
+- **A copy is never deleted before its source.** The aggregate is written and
+  read back, then the ledger shard is unlinked, then this copy. A run that dies
+  between the last two leaves a published month with nothing behind it, and the
+  next run takes it - that pass walks this directory rather than the shards being
+  folded, which is the only way it can see a copy whose source is already gone.
+- **The reader never asks for one that went.** `telemetryMonths()` lists this
+  directory at build time and `monthsToFetch` filters on that list, so a deleted
+  month is absent from `data.telemetryMonths` and no widening ever names it.
+  `frontend/tests/console-window.spec.ts` holds that over every anchor a year
+  offers, at `console.max_window_days`.
 
 **The sharp edge is the round trip, not the parse.** `telemetryCsv()`
 re-serializes from `TELEMETRY_COLUMNS` as well, so a column the parser ignored

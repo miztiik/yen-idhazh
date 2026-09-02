@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -381,7 +381,7 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
 | `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
 | `item_health_aggregate_keep_months` | `null` | Nothing by default. Null means a folded month is never removed. |
-| `feed_health_keep_months` | `14` | Nothing. It is where `state/feed-health/` stops keeping a month. |
+| `feed_health_keep_months` | `14` | Nothing. It is where `state/feed-health/` stops keeping a month, and past it the month is deleted rather than summarised. |
 | `scores_full_grain_months` | `14` | Nothing. It is where `state/scores/` stops being kept item by item. |
 | `score_archive_keep_months` | `null` | Nothing by default. Null means a summarised score month is never removed. |
 | `public_telemetry_keep_months` | `14` | Nothing. It is where `frontend/public/telemetry/` stops keeping a shard, and it must equal `item_health_full_grain_months`. |
@@ -547,12 +547,34 @@ The 219 KB a year the old description quoted was an estimate at five stages and
 estimate. The description keeps the estimate's conclusion, which the measurement
 only strengthens.
 
-**Naming the age is not deleting anything.** `state/feed-health/`,
-`state/scores/` and `frontend/public/telemetry/` have a number now and no reader
-for it; the fold still covers `state/item-health/` alone. `state/seen/` is not on
-this list because it is a lookup rather than a measurement: an out-of-window
-shard is deleted rather than folded, through `collect.seen_window_days`. See
-[../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree).
+**Three of the six now decide something, and the same step spends them.** From
+2026-09-03 `idhazh prune-state` folds `state/item-health/` past
+`item_health_full_grain_months`, unlinks the browser's copy of that month past
+`public_telemetry_keep_months`, and deletes `state/feed-health/` past
+`feed_health_keep_months`. `scores_full_grain_months` and its archive age still
+have no reader; `state/scores/` grows with nothing to stop it, which the table in
+[../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree)
+says out loud.
+
+**Feed health is deleted and never summarised.** Its rows are per-feed-per-run
+evidence, the quarantine reads 31 days, and the console reaches at most 366 - so
+no older total has a reader, and writing one would persist a shape nothing
+consumes. That is why the table above gives it a full-grain age and no summary
+beside it. `state/seen/` is not on that list at all because it is a lookup rather
+than a measurement: an out-of-window shard is deleted through
+`collect.seen_window_days`.
+
+**And the step ships in dry run.** It prints every file a live run would remove
+and removes none of them. `.github/workflows/prune.yml` squashes and force-pushes
+`main` on a schedule, so a state file deleted here stops being recoverable from
+history once that prune passes over it (`CLAUDE.md` section 8) - which makes
+"read the list first" the only safe order. Turning the deletion on is a one-line
+commit of its own. Measured on this checkout on 2026-09-02: a live run today
+removes nothing, the first file any store loses is `state/seen/2026-08.csv` on
+**2026-11-30**, and the first files this fold takes are
+`state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv` and
+`state/feed-health/2026-08.csv`, together, on **2027-10-01**. Reading committed
+files against a fixed calendar is deterministic, so the spread is zero.
 
 ## Reader surface
 

@@ -43,7 +43,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 3 | One result per feed per run, and an honest strike rule | 2 | C | DONE #376 | `yi-s03` | 376 | worker |
 | 4 | Retire gone endpoints and count only askable feeds | 3 | D | DONE #377 | `yi-s04` | 377 | worker |
 | 5 | Name a cleanup age for every record | 1 | B | DONE #375 | `yi-s05` | 375 | worker |
-| 6 | Delete the private record and its browser copy together | 4, 5 | E | PENDING | - | - | - |
+| 6 | Delete the private record and its browser copy together | 4, 5 | E | DONE #381 | `yi-s06` | 381 | worker |
 | 7 | Summarise old scores, then delete only what was summarised | 6 | F | PENDING | - | - | - |
 | 8 | Publish the source-health scorecard | 4, 7 | G | PENDING | - | - | - |
 | 9 | Remove the legacy names | 8 | H | PENDING | - | - | - |

@@ -12,11 +12,14 @@ from idhazh import cli
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.publish_telemetry import (
+    DEFAULT_PUBLIC_ROOT,
     FORBIDDEN_COLUMNS,
     PUBLIC_COLUMNS,
     migrate,
     publish,
     read_shard,
+    shard_path,
+    shard_relpath,
 )
 
 COMMITTED_SHARDS = sorted((REPO_ROOT / "frontend" / "public" / "telemetry").glob("*.csv"))
@@ -104,6 +107,27 @@ def test_publish_telemetry_can_seed_an_empty_month(tmp_path: Path) -> None:
 
     assert [path.name for path in written] == ["2026-08.csv"]
     assert written[0].read_text(encoding="utf-8") == ",".join(PUBLIC_COLUMNS) + "\n"
+
+
+def test_the_writer_and_the_deleter_name_one_file(tmp_path: Path) -> None:
+    """`retention.prune_telemetry` deletes a copy through `shard_path`.
+
+    Two spellings of `<month>.csv` would delete a shard nobody published and
+    leave the one that was published behind, so the publish is asked what it
+    wrote rather than told. `shard_relpath` is the POSIX form the log line and
+    the workflow's staged path both use (`CLAUDE.md` section 2).
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "telemetry"
+    _write_item_health(state, [_row()])
+
+    written = publish(state_root=state, public_root=public)
+
+    assert written == [shard_path(public, "2026-08")]
+    assert shard_relpath("2026-08") == "frontend/public/telemetry/2026-08.csv"
+    assert shard_path(DEFAULT_PUBLIC_ROOT, "2026-08").relative_to(
+        REPO_ROOT
+    ).as_posix() == shard_relpath("2026-08")
 
 
 def test_publish_telemetry_carries_both_word_counts(tmp_path: Path) -> None:
