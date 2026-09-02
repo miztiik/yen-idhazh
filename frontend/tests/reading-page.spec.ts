@@ -40,15 +40,12 @@
  * What the canary cannot reach is measured on the committed digest instead,
  * with hardware and date, in `docs/reference/measurements.md`.
  *
- * **Two arms at the end are expected to fail, and say so.** Composing the rows
- * broke two things, neither of them fixable without deciding what a shipped
- * surface should say, so they are written as assertions rather than described
- * in a comment: the dated document counts the stories in its own hand instead
- * of the day's, and a story's own address only lands while the pager is already
- * showing it. Both are recorded in
- * `docs/architecture/publishing/layout.md`. An arm marked this way turns the
- * suite red the day the defect is fixed, which is when the annotation comes
- * off.
+ * **One arm at the end is expected to fail, and says so.** Composing the rows
+ * broke a story's own address: it only lands while the pager is already showing
+ * it, and it is written as an assertion rather than described in a comment.
+ * Both defects are recorded in `docs/architecture/publishing/layout.md`. An arm
+ * marked this way turns the suite red the day the defect is fixed, which is
+ * when the annotation comes off - which is what happened to the count above it.
  */
 
 import { expect, test, type Page } from '@playwright/test';
@@ -436,33 +433,78 @@ test.describe('where two rows meet', () => {
 });
 
 /**
- * Two things the composed page gets wrong. Both are recorded here as arms that
- * are expected to fail, so the file names the defect, carries the measurement,
- * and turns red the day somebody fixes it - which a comment could not do and a
- * skip would hide.
+ * What the composed page said about how much it was holding, held so it stays
+ * fixed, and the one thing it still gets wrong.
  *
- * Neither is fixed here. Both need a decision about what a shipped surface says
- * or how far a pager reaches, and this row's job is to find them rather than to
- * redesign another row inside itself.
+ * The count arms were written failing on 2026-09-02 and are ordinary assertions
+ * now. The address arm below is still expected to fail: a story's own address
+ * only lands while the pager is already showing it. What each one measures is
+ * in `docs/architecture/publishing/layout.md`.
  */
-test.describe('known defects in the composed page', () => {
-	test('the dated document says how many stories the day published', () => {
+test.describe('the count and the address', () => {
+	/** The story count a built document states, before a browser runs anything.
+	 *
+	 * Read off the file rather than off a rendered page, because the half that
+	 * was wrong is the half a reader with no script gets and never sees change.
+	 * The line is stripped of Svelte's own markers rather than matched through
+	 * them, so a change in how the compiler emits an `{#if}` cannot quietly turn
+	 * this into a test that matches nothing.
+	 */
+	function printedCount(...parts: string[]): number {
+		const at = readFileSync(join(BUILD, ...parts, 'index.html'), 'utf8');
+		const opens = at.indexOf('notice-count');
+		expect(opens, `/${parts.join('/')}/ draws no story-count line at all`).toBeGreaterThan(-1);
+		const line = at
+			.slice(at.indexOf('>', opens) + 1, at.indexOf('</p>', opens))
+			.replace(/<!--.*?-->/g, '')
+			.replace(/<[^>]*>/g, '')
+			.replace(/\s+/g, ' ')
+			.trim();
+		const printed = /^(\d+) stor/.exec(line);
+		expect(printed, `/${parts.join('/')}/ opens with "${line}" and states no count`).not.toBeNull();
+		return Number(printed![1]);
+	}
+
+	test('the dated document says how many stories the day published', async ({ page }) => {
 		test.skip(!PAST_SEED, `${DAY} carries its whole day, so its seed IS its count`);
-		test.fail();
 
 		// The day's own bounded count, which is the number the topic row prints a
 		// few lines below this sentence on the same screen.
 		const published = (FACTS?.verticals ?? []).reduce((sum, ref) => sum + ref.count, 0);
-		const html = readFileSync(join(BUILD, DAY, 'index.html'), 'utf8');
-		const printed = /notice-count[^>]*>(?:<!--[^>]*-->)?(\d+) stor/.exec(html);
-		expect(printed, 'the dated document prints no story count at all').not.toBeNull();
+		const before = printedCount(DAY);
+
+		await open(page, 'dark', `/${DAY}/`, 1536);
+		const settled = (await page.locator('p.notice-count').first().textContent()) ?? '';
+		const after = Number(/(\d+)\s+stor/.exec(settled.replace(/\s+/g, ' '))?.[1]);
+
+		console.log(
+			`[reading-page] /${DAY}/ counts ${before} before hydration, ${after} after, ` +
+				`on a day that published ${published}`
+		);
 		expect(
-			Number(printed![1]),
-			`the first line under the date claims ${printed![1]} stories on a day that published ` +
+			before,
+			`the first line under the date claims ${before} stories on a day that published ` +
 				`${published}. It counts the list in hand rather than the day's own total, so a ` +
 				`prerendered document states the seed of ${SEED} plus its leads and a reader with ` +
 				'no script never sees another number'
 		).toBe(published);
+		expect(
+			after,
+			`the count ticked from ${before} to ${after} while the reader was looking at it`
+		).toBe(before);
+	});
+
+	test('a topic document says how many stories that desk published', () => {
+		const desk = FACTS?.verticals.find((ref) => ref.id === TOPIC);
+		expect(desk, `${DAY} serves /${TOPIC}/ and its payload names no such desk`).toBeDefined();
+
+		const printed = printedCount(DAY, TOPIC);
+		console.log(`[reading-page] /${DAY}/${TOPIC}/ counts ${printed} of the desk's ${desk!.count}`);
+		expect(
+			printed,
+			`the topic page claims ${printed} stories on a desk that published ${desk!.count}. A ` +
+				'topic page is about one desk, so the desk is the number it owes the reader'
+		).toBe(desk!.count);
 	});
 
 	test('every story the day published has an address that lands', async ({ page }) => {

@@ -129,7 +129,7 @@
 
 {#snippet part(section: string)}
 	{#if section === 'notice'}
-		<DayNotice {day} />
+		<DayNotice {day} count={total} />
 	{:else if section === 'leads'}
 		<LeadingStories stories={leads} />
 	{:else if section === 'topics' && day.verticals.length > 0}

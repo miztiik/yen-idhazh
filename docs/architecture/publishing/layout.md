@@ -408,21 +408,21 @@ Almost all of that is the rate rather than the level: the 18.6 MB taken off the 
 
 **The sixth document a day followed the same day, and the dated trees are done.** `/<date>/` was the last reading route inlining its whole day. Over the 12 committed days and 4,203 items on the same instrument, **the site went 101.7 MB to 88.1 MB and the runway went 238 published days to 279** (180 to 212 to the alarm). Reading the two rows together, the reading routes cost the site 168.6 MB and now cost 88.1, and the runway went 130 published days to 279 - it more than doubled. **Nothing about that removes the cap**, because the two directories that do not shrink are the ones that dominate: `assist/` at 43.2 MB and `_app/` at 22.4 MB are 74.5 percent of what is left, and neither grows with a day, so both are charged to the items and both make the runway a floor. **The next lever is retention (below), and there is no third document trick left to play.**
 
-## What the composed page gets wrong (2026-09-02)
+## What the composed page got wrong (2026-09-02)
 
-Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both are on a reader's screen today. Both are recorded here rather than fixed, because each needs a decision about what a shipped surface says.
+Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both were on a reader's screen. The first is fixed below; the second is still recorded rather than fixed.
 
-Measured on the 2026-09-01 day, 627 stories, five desks, five leads, built from the committed tree on an i7-1265U with node 24.12.0.
+Measured 2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 and Chromium at 1536x900, on the 2026-09-01 day, 627 stories over five desks with five leads.
 
-### The dated document counts the stories in its own hand
+### The dated document states the day's count, not the list in its hand
 
-`/2026-09-01/` prints **"20 stories."** as the first line under the date. The day published **627**. `/2026-09-01/ai/` prints **"15 stories."**. `/` prints 627, correctly, because it is the one reading route that still reassembles the whole day into its document.
+`/2026-09-01/` printed **"20 stories."** as the first line under the date on a day that published **627**, and `/2026-09-01/ai/` printed **"15 stories."**. Twenty is the seed of fifteen plus the day's five leads, so the sentence counted the list `DayNotice` was handed rather than the day the page is about. With script on the number ticked from 20 to 627 while the reader was looking at it. With script off - which this page is built to survive - it stayed at 20 for ever, four lines above a topic row reading `All 627` on the same screen. `/` was always right, because it is the one reading route that still reassembles the whole day into its document.
 
-Twenty is the seed of fifteen plus the day's five leads, so the sentence is counting the list `DayNotice` was handed rather than the day the page is about. Two things follow, and the second is worse than the first. With script on, the number ticks from 20 to 627 while the reader is looking at it. With script off - which this page is built to survive - it stays at 20 for ever, four lines above a topic row that reads `All 627` on the same screen.
+**`DayNotice` now prints a count it is handed and never one it takes off `day.items`.** `DigestList` had already solved exactly this for the topic row, and its own comment names the hazard: a count taken off the list in hand "would print a number that ticks up while the reader watches". That figure - the day's total across `day.verticals`, or one desk's `count` on a topic route - is a bounded fact that does not grow with the seed, and it is now the number both halves of the same screen state.
 
-`DigestList` already solved this for the pill count and its own comment names the hazard: a count taken off the list in hand "would print a number that ticks up while the reader watches". It reads `day.verticals`, which is a bounded fact and does not grow with the seed. `DayNotice` still reads `day.items.length`.
+**A topic page states its own desk.** The same component draws on `/`, on a dated route, on a topic route and on a day that published nothing, so which number a topic route owes the reader was a content decision rather than a repair. A page about one desk owes that desk's number: the reader chose the desk, the stories under the sentence are that desk's, and the whole day is one pill away on the same row.
 
-What is not obvious, and is why this is not a one-line fix: the same component draws on `/`, on a dated route, on a topic route and on a day that published nothing. A topic route's notice is labelled "About today" and sits above that topic's own stories, so whether it should say the day's 627 or the desk's count is a content decision, not a repair.
+Measured after the fix on the same day: `/2026-09-01/` states 627 before hydration and 627 after, and `/2026-09-01/ai/` states 55 against that desk's own published 55. The prerendered figure is the one that mattered - it is what a reader with no script gets and never sees change.
 
 ### A story's own address only lands while the pager is showing it
 
