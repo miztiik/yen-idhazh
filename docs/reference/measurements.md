@@ -1481,6 +1481,159 @@ them: the four a reader uses to decide whether to read at all went above the
 title, and the claims about our own summary went below it. Nothing interrupts
 the read at any width now, so no breakpoint has to move to fix it.
 
+## Whether an item's key points repeat its own summary, 2026-09-02
+
+Hardware: Intel Core i7-1265U, Windows 11, Python 3.14.2. Date: 2026-09-02.
+Method: read every `frontend/public/digest/**/digest.json` and every
+`state/scores/*.csv`, keep the items the eval ledger puts in the top two summary
+bands, draw twenty of them, and read all ninety of their key points against
+their own summaries.
+
+**Spread is two different things here and they must not be reported as one.**
+The population counts are committed bytes and a join, so they repeat exactly.
+The ninety verdicts are one person's reading against a rule written down before
+the sample was drawn; another reader would not land on the same ninety. The
+mechanical word overlap at the end is the part that does repeat, and it is
+reported as a cross-check rather than as the answer.
+
+This is the measurement [row #19 of the reading-page
+plan](../../TODO/20260831-reading-page-rebuild-plan.md) demanded before any
+feature code was written, and the answer closed the row.
+
+### The rule, written before the sample was drawn
+
+- **Restates** - the point's main claim, meaning its subject plus what is said
+  about it and any figure, name or date the claim turns on, is already in the
+  summary in some wording. A different order, a shorter form and a longer form
+  all still restate.
+- **Adds** - the main claim is absent from the summary. A reader who read only
+  the summary would not know it.
+- **Borderline** - counted in neither column and reported separately. Three
+  shapes qualify: the summary carries the point's subject but not the specific
+  thing said about it; the claim is there only by implication; or the point
+  makes no checkable claim at all.
+
+Two clarifications, both fixed before counting. An attribution is not a claim,
+so a point that names the outlet a figure came from, where the summary already
+carries the figure, still restates. A fact is, so a point that repeats a summary
+clause and carries one new fact beside it counts as an addition.
+
+### The population and the sample
+
+An item is eligible when its eval row's `source_word_count` - the article length
+before the truncation cap, which is the count that picks the band - is 2,000
+words or more, and it has at least one key point. That is `summarize.bands[3]`
+and `bands[4]` in `config/idhazh.json`, which ask for 110 to 200 and 150 to 230
+words.
+
+| Quantity | Value |
+| --- | --- |
+| items in the 12 committed days | 4,713 |
+| eligible | **110** |
+| ... band 3, source 2,000 to 2,999 words | 66 |
+| ... band 4, source 3,000 words and over | 44 |
+| eligible summary length | median 154 words, 34 to 223 |
+| sampled | 20 items, 90 key points |
+
+The sample is the eligible list sorted by `item_id` - a content hash, so that
+order is arbitrary with respect to day, source and length - taking the twenty
+evenly spaced positions `round(i * 109 / 19)`. No seed and no hand-picking, so a
+re-run draws the same twenty.
+
+### Seven points in eight restate: 78 of 89
+
+| Verdict | Points | Share |
+| --- | --- | --- |
+| **Restates** | **78** | **87.6 percent of the 89 clear verdicts** |
+| Adds | 11 | 12.4 percent of the 89 |
+| ... a claim the summary does not carry at all | 6 | 6.7 percent of all 90 points |
+| ... a summary claim carrying one new fact | 5 | - |
+| Borderline | 1 | counted in neither column |
+
+**Thirteen of the twenty items add nothing at all.** Every point on them is a
+sentence the reader has already read one paragraph higher. Four of the twenty
+carry a claim a summary-only reader would not have, and six points out of ninety
+is the whole of what those four items are worth.
+
+On all thirteen the points are a strict subset: the summary carries facts the
+points drop, and never the other way round. One is worth naming. Its summary
+reports a pilot emissions market that cut factory pollution by 20 to 30 percent,
+and not one of its four key points mentions it - so a reader given only the
+points would be worse informed than one given only the summary.
+
+### The summary's own length does not predict it
+
+This is the finding that kills the row's premise, which was that a long article
+compressed hard leaves things the points have to carry.
+
+| Group | Items | Median summary |
+| --- | --- | --- |
+| carries at least one addition | 7 | 154 words |
+| carries none | 13 | 146 words |
+
+Eight words apart on a sample of twenty. The longest summary drawn, at 210
+words, produced one addition and it was a restated claim with one fact beside
+it.
+
+**The one item where the points did real work has the shortest summary in the
+sample, not the longest.** It is a 3,195-word source in band 4, which asks for
+150 to 230 words, and its summary is **49 words** - a third of the floor. Three
+of its four points carry claims the summary never made. The points were doing
+the summary's job because the summary did not do it, which is a summarizer
+defect and not an argument for a second list under every item.
+
+That defect is not rare. Across the 110 eligible items, **20 summaries, 18.2
+percent, are shorter than their own band's floor**, and 13 of those 20 are band
+4 items that came back under 150 words.
+
+### The mechanical cross-check
+
+Word overlap between a point and its summary, stop words removed, as a share of
+the point's own words. It is not the verdict - every point was read - but it
+separates the two columns cleanly enough to say the reading was not arbitrary:
+
+| Ruled | Mean | Median | Min | Max |
+| --- | --- | --- | --- | --- |
+| Restates | 0.77 | 0.79 | 0.29 | 1.00 |
+| Adds | 0.36 | 0.36 | 0.08 | 0.69 |
+
+Thirteen of the ninety points score 1.00, meaning every word of the point that
+is not a stop word is already in the summary. Every one of the thirteen was
+ruled a restatement.
+
+### The twenty, one row each
+
+`R` restates, `A` adds, `B` borderline. The `item_id` is what a re-run resolves
+against, so a later reader can pull the same summary and the same points out of
+the committed tree and disagree with the verdict on the record.
+
+| # | `item_id` | Band | Source words | Summary words | Points | R | A | B |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `ai-0329024737` | 3 | 2,629 | 77 | 5 | 4 | 1 | 0 |
+| 2 | `ai-2515174690` | 3 | 2,619 | 140 | 5 | 4 | 0 | 1 |
+| 3 | `ai-3641201508` | 4 | 3,391 | 157 | 4 | 4 | 0 | 0 |
+| 4 | `ai-6396054327` | 4 | 3,271 | 121 | 5 | 5 | 0 | 0 |
+| 5 | `ai-8527189458` | 3 | 2,792 | 154 | 4 | 4 | 0 | 0 |
+| 6 | `ai-9972825170` | 3 | 2,617 | 136 | 5 | 5 | 0 | 0 |
+| 7 | `business-economy-1212338099` | 3 | 2,236 | 172 | 4 | 4 | 0 | 0 |
+| 8 | `business-economy-4950988149` | 3 | 2,111 | 128 | 4 | 3 | 1 | 0 |
+| 9 | `business-economy-7456600394` | 4 | 3,525 | 131 | 4 | 4 | 0 | 0 |
+| 10 | `business-economy-9869346526` | 4 | 3,195 | **49** | 4 | 1 | **3** | 0 |
+| 11 | `energy-1156799945` | 4 | 4,362 | 210 | 4 | 3 | 1 | 0 |
+| 12 | `energy-2492116826` | 3 | 2,718 | 170 | 5 | 5 | 0 | 0 |
+| 13 | `energy-5655925703` | 3 | 2,955 | 165 | 4 | 4 | 0 | 0 |
+| 14 | `india-3097742416` | 3 | 2,264 | 172 | 5 | 5 | 0 | 0 |
+| 15 | `india-5125363799` | 3 | 2,021 | 138 | 5 | 5 | 0 | 0 |
+| 16 | `india-8172647558` | 3 | 2,271 | 182 | 4 | 1 | **3** | 0 |
+| 17 | `world-3624247373` | 4 | 3,218 | 130 | 5 | 5 | 0 | 0 |
+| 18 | `world-6133886535` | 4 | 5,314 | 154 | 5 | 4 | 1 | 0 |
+| 19 | `world-7086417611` | 3 | 2,524 | 146 | 4 | 4 | 0 | 0 |
+| 20 | `world-9654915186` | 3 | 2,252 | 161 | 5 | 4 | 1 | 0 |
+
+Rows 10 and 16 are the only two where the points carry more than one thing the
+summary does not, and they are 49 and 182 summary words - the shortest in the
+sample and the second longest. Nothing about the length sorts them.
+
 ## Published payload size
 
 ### Prose compression

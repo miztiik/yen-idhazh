@@ -1,6 +1,6 @@
 # Reading-page rebuild - a page that earns two minutes, and a ranking that knows what it covered
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-02
 **Level**: 5 (widens two published contracts, mints a state surface, changes the default theme, moves a day's items to a runtime fetch, and restructures the reading surface)
 
 Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 4; honour the ESCALATE triggers in section 0.
@@ -715,6 +715,34 @@ every story. Method, hardware and the after-numbers:
 | --- | --- | --- | --- |
 | 1 | Key points on every item | The same content twice at half the items per screen, which is the case the standing refusal tested. | Jony |
 | 2 | Key points instead of the summary | The summary is the product. The points add; they do not replace. | Editor |
+
+### COLLAPSED by decision 3's own measurement, 2026-09-02
+
+Decision 3 said to count first and collapse the row if most points restate.
+**78 of 89 clear verdicts restate - seven in eight.** No feature code was
+written.
+
+- Twenty items drawn from the two longest summary bands, ninety key points read
+  one at a time against a rule written down before the sample was drawn.
+  Thirteen of the twenty add nothing at all, and on all thirteen the points are
+  a strict subset of the summary.
+- **Decision 1's premise is what failed.** Length does not discriminate: items
+  with an addition have a median summary of 154 words against 146 for items with
+  none, and the longest summary drawn produced one addition.
+- **The one item whose points did real work has the shortest summary in the
+  sample**, at 49 words against a band that asks for 150 to 230. Its points were
+  covering for a summary that came back a third of its floor, and 20 of the 110
+  eligible items are under their own band's floor. That is a summarizer defect,
+  and building this row would have hidden it behind a feature.
+- Decision 2's disclosure shape and the two rejected options were never built,
+  so nothing here has tested them.
+
+The count, the rule, the sample method and the per-item table are in
+[docs/reference/measurements.md](../docs/reference/measurements.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02).
+The refusal now lives with its number in
+[docs/concepts/digest.md](../docs/concepts/digest.md#the-key-points-stay-off-the-item-and-the-count-is-why),
+and the prompt line the count contradicts is flagged in
+[docs/architecture/summarize/prompt.md](../docs/architecture/summarize/prompt.md).
 
 ## 21 - Row #20 - The full-day browser smoke
 

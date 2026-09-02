@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -27,6 +27,8 @@ An item is the unit a reader consumes. It carries, at minimum:
 | **A visual, or deliberately none** | See below. |
 
 Everything else earns its place by surviving a deletion attempt.
+
+**The item's key points are not on it, and that is now measured rather than asserted.** The summarizer writes two to five key points per item and the published payload carries them, but no reading surface draws them. The reason used to be a judgement about screen space. Since 2026-09-02 it is a count: over twenty items drawn from the two longest summary bands, 78 of 89 key points restate a claim the summary already makes - seven in eight ([Design rationale](#the-key-points-stay-off-the-item-and-the-count-is-why) below).
 
 ## The visual rule
 
@@ -113,6 +115,20 @@ That is a design target for the page, not a cap on the pipeline. What a day carr
 The page must also render when its data file is absent or empty. That is a normal state, designed on purpose, not an error discovered as a white screen ([../../CLAUDE.md](../../CLAUDE.md) section 12).
 
 ## Design rationale
+
+### The key points stay off the item, and the count is why
+
+**Measured 2026-09-02: 78 of 89 key points restate a claim the item's own summary already makes.** Twenty items drawn from the two longest summary bands, ninety points read one at a time against a rule written before the sample was drawn. Thirteen of the twenty add nothing whatever, and on all thirteen the points are a strict subset - the summary carries facts the points drop, never the reverse. Six points in ninety, on four items of twenty, carry a claim a summary-only reader would not have. Hardware, method, the rule and the per-item table are in [../reference/measurements.md](../reference/measurements.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02).
+
+The idea the measurement was taken against was that length is the discriminator: a 30-to-45-word brief has no room for its points to differ, but a 3,000-word article compressed to 200 words leaves things only the points can carry. **The count says length does not discriminate.** Items with an addition have a median summary of 154 words and items with none 146 - eight words apart on a sample of twenty - and the longest summary drawn, at 210 words, produced one addition.
+
+**The one item where the points did real work is the shortest summary in the sample, not the longest.** A 3,195-word source in a band that asks for 150 to 230 words came back with a 49-word summary, and three of its four points carry claims the summary never made. The points were doing the summary's job because the summary did not. That is a defect in the summary and it is not rare: 20 of the 110 eligible items, 18.2 percent, are shorter than their own band's floor, 13 of them in the longest band. Adding a second list under every item would hide that failure behind a feature instead of fixing it, and it would cost the other 87 percent of items the same words twice.
+
+So the refusal holds at every length, and the fix the count actually points at is the length floor on a long article's summary, not a new element on the page ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
+
+**What a reader loses** (guardrails: a veto names the loss). On four items in twenty they lose one fact each, and on one item in twenty they lose three. What they keep is an item they can skim in one pass instead of two, and a summary that is still the only thing on the item claiming to be complete.
+
+The field stays in the published payload. It is nine tenths of the twenty-three-field projection's added weight and the in-page filter reads it, so removing it is a contract change rather than a rendering one ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#two-projections-and-what-one-day-costs)).
 
 ### The cut sentence carries the scale
 
