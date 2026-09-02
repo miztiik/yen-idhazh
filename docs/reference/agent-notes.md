@@ -564,6 +564,45 @@ document instead and does not race:
 await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 ```
 
+**A page that carries a `meta refresh` makes three different Playwright calls
+lie, and only the third one looks like a bug in the page.** `/evals/` is a
+signpost to `/console/` and redirects itself. Observed 2026-09-02, in order:
+`page.goto('/evals/')` rejected with
+`net::ERR_ABORTED; maybe frame was detached?`, because the document retired the
+navigation that delivered it while `goto` was still waiting for `load`. A
+locator reading that document then timed out with `element(s) not found`, having
+logged `navigated to .../console/` - the page had already left. And a walk of
+several routes reported a `requestfailed` on `/console/` from every arm, which
+reads exactly like a dead link in the footer. The recipe that holds:
+
+```typescript
+await page.goto('/evals/', { waitUntil: 'commit' }).catch(() => {});
+await expect.poll(() => page.url()).toMatch(/\/console\/$/);
+```
+
+`page.url()` is a property rather than an evaluate, so polling it does not race
+the way the entry above does. In a multi-route walk, ignore a **document**
+request whose failure is `net::ERR_ABORTED`: that is one navigation superseded
+by another and never a file the page could not get. A page whose own navigation
+really did fail loses every other assertion in the arm anyway.
+
+**Walking the reading page's pager on a real day runs past the test timeout.**
+`Show N more` adds twelve stories and re-renders the list, so a 627-story day is
+52 clicks over a list that grows to 627 nodes. Measured 2026-09-02: 1.3 minutes
+on a quiet machine and past the 180 s timeout on a loaded one, for a comparison
+the control's own label answers in one read - it counts the whole day rather
+than the part on screen, so a day of a different length or order changes that
+number. Read the label; do not press it 52 times.
+
+**`npm ci` can report every bin present and the next process still not find
+it.** Observed 2026-09-02 in a fresh worktree: the install exited 0,
+`Test-Path node_modules\.bin\svelte-kit.cmd` answered True, and `npm run check`
+in a new process still died with `'svelte-kit' is not recognized`. A minute
+later the identical command passed. `svelte-kit sync` itself failed once in
+between with an `rmSync` traceback out of `write_types`, and succeeded on the
+next run with no change. Neither is a broken lockfile. Do not diagnose a
+toolchain from the first run after an install in a new checkout.
+
 **The integrated browser's page can be hidden, and then every Playwright click
 times out on an element that is plainly there.** Observed 2026-09-01: `click`,
 `scrollIntoViewIfNeeded` and `screenshot(ref)` all failed with
