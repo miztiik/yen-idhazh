@@ -1,0 +1,1187 @@
+# Visual Planner - Pseudo-Plan and Decision Record
+
+**Last Updated**: 2026-09-02
+**Status**: PSEUDO-PLAN. Not execution-ready. Not a plan-doc under `docs/how-to/author-a-plan.md`.
+**Level**: 5 (core design, four persisted contracts, the model pick, the trust boundary)
+**Companion**: [`20260902-yen-idhazh-visual-planning-architecture.md`](20260902-yen-idhazh-visual-planning-architecture.md) - "the proposal" throughout. Section references like `P.3.4.3` mean that document's section 3.4.3; `P.L28` means its litigation row L28; `P.D1` a decision; `P.R7` a risk.
+
+## 0. What this document is, and how to validate it
+
+This is the single carrier of a long design conversation held on 2026-09-02, written so the context survives a session boundary. It holds every decision, every persona ruling, every correction to the proposal's own unverified claims, and a coverage matrix that maps **every** numbered item in the proposal to a work item here.
+
+**Nothing in the proposal is descoped.** An earlier draft of this record used "v1" to defer six areas. The owner rejected that outright. Section 5 lists every one of those deferrals and reverses it.
+
+To validate this document, check three things:
+
+1. **Section 12** claims full coverage of the proposal. Verify every `P.D*`, `P.L*`, `P.R*`, `P.Q*` and every section of the proposal appears there with a disposition.
+2. **Section 2** claims the proposal's description of the current code is wrong in named places. Verify each row against the file and line cited.
+3. **Section 4** claims seven persona advisors ruled. Verify each ruling names what the reader loses (`docs/agents/guardrails.md`).
+
+---
+
+## 1. The architectural change, in one paragraph
+
+The visual stops being "a chart" and becomes **a visual that complements the article at high information compression**. Read the article with code first, so every fact is real and traceable to a character span. Then ask one capable model to understand the story, extract its entities and events, and decide what visual would genuinely help - but only let it point at material the code already found, never let it author a number or a claim. Then let code check the choice and render it.
+
+> The model decides what the visual **means**. Code decides what the visual **contains** and how it is **rendered**.
+
+Two consequences drive everything below. The weak router model is retired and the strong model does the semantic work. And `route.py` is replaced by `visual_planner.py`, because "route" names a dispatch decision and the thing being built is a planning decision.
+
+---
+
+## 2. Corrections to the proposal's account of the current code
+
+The proposal states in its own provenance warning that every claim it makes about the existing implementation is second-hand. It is wrong or misleading in the following places. Each row below was read directly.
+
+| # | Proposal says | Truth | Evidence |
+|---|---|---|---|
+| C1 | `RouteDraft` is the routing contract | `RouteDraft` and `ChartPoint` live in `route.py`, **not** in `contracts/`, so they are unversioned and free to rename. The persisted contract is `Route` in `contracts/route.py` | [backend/idhazh/route.py](backend/idhazh/route.py#L190) |
+| C2 | Elements are span-anchored | **No span exists.** `NumericFact` is `value, raw, unit, context`. The regex already computes `match.start()` and `match.end()` and discards them when it builds `context` | [backend/idhazh/route.py](backend/idhazh/route.py#L89) |
+| C3 | The renderer is a hard-coded bar | True, and worse: `chart_spec()` hard-codes `"color": "#4c6ef5"` and `"labelFont": "sans-serif"`, which is a live Rule #6 violation | [backend/idhazh/route.py](backend/idhazh/route.py#L437) |
+| C4 | The diagram path is unbuilt | It is built - `diagram_spec()` emits Mermaid and `render/diagram.py` draws it with a hand-written layout. It is switched **off** in `visuals.enabled_kinds` | [backend/idhazh/render/diagram.py](backend/idhazh/render/diagram.py) |
+| C5 | Rendering happens in the frontend | Digest visuals render in the **backend** via `vl-convert` (Rust, no browser). ECharts renders **console** charts in the frontend build. Two separate paths | [backend/idhazh/render/chart.py](backend/idhazh/render/chart.py#L35) |
+| C6 | Interactivity needs a new JS payload | The console already prerenders SVG then fetches a CSV at runtime and re-renders. The pattern exists and is tested | [frontend/src/routes/console/+page.svelte](frontend/src/routes/console/+page.svelte#L136) |
+| C7 | Theming is an open question | The console solved it: draw with sentinel colours `#ff00NN`, swap for `var(--chart-N)` in the emitted SVG. Both themes resolve through CSS with no JavaScript | [frontend/src/lib/charts/theme.ts](frontend/src/lib/charts/theme.ts#L74) |
+| C8 | Labels are gitignored | `state/labels.csv` is **not** gitignored. It is committed-eligible and has simply never been written | [backend/idhazh/evals/labels.py](backend/idhazh/evals/labels.py#L39) |
+| C9 | Per-item timing is missing | It exists for summarize: `prefill_ms`, `decode_ms`, `input_tokens`, `output_tokens`, `cached_tokens`. What is missing is a **visual stage** - `ItemStage` is PLAN/FETCH/EXTRACT/SUMMARIZE/PUBLISH | [backend/idhazh/contracts/item_health.py](backend/idhazh/contracts/item_health.py#L32) |
+| C10 | The site cap is a knob | `retention.site_budget_mb` 800 is the **alarm**. `PAGES_HARD_CAP_MB = 1024` is a `Final` in code, deliberately not editable | [backend/idhazh/retention.py](backend/idhazh/retention.py#L79) |
+| C11 | Assemble de-duplicates the day | **It groups. It removes nothing.** The docstring says so outright: "Nothing is removed. Every item stays in the published order it was in" | [backend/idhazh/assemble.py](backend/idhazh/assemble.py#L383) |
+| C12 | `carried_by` gives cross-source repetition before the model runs | Only for an **identical URL**. `merge()` groups by `url_key`, so two outlets writing the same story at two addresses are two items with `carried_by` 1 each - and both pay a full model call | [backend/idhazh/rank.py](backend/idhazh/rank.py#L441) |
+
+### 2.1 The root cause of the unreadable dark theme
+
+This is the single most important finding of the review, and neither the proposal nor the owner's first diagnosis had it.
+
+[frontend/src/lib/components/ItemVisual.svelte](frontend/src/lib/components/ItemVisual.svelte#L25) renders `<figure><img src="...svg"></figure>`. **An SVG inside an `img` element is a separate document and cannot read the host page's CSS custom properties.** Two defects compound:
+
+- The hex is baked into the SVG by the backend, so CSS could not reach it even if the carrier allowed it.
+- The carrier is an `img`, so swapping the chart engine changes nothing on its own. Sentinels would resolve to nothing and the chart would lose colour entirely.
+
+**The fix is to inline the SVG into the item.** Every other rendering decision depends on this one.
+
+### 2.2 The legibility failure, measured
+
+Committed charts are 825 x 437 px inside an 890px card body ([frontend/src/lib/components/ItemVisual.svelte](frontend/src/lib/components/ItemVisual.svelte#L11), measured 2026-09-02). On a 390 CSS px phone the drawing scales to roughly 0.31x, so **10px axis labels draw at about 3.1 CSS px**. That is below `--text-xs` (12px) at every supported width. This is not a taste complaint; it is a chart whose labels nobody can read.
+
+---
+
+## 3. Owner decisions
+
+Numbered for citation. Each names the proposal section it settles.
+
+| # | Decision | Settles |
+|---|---|---|
+| O1 | The visual **complements** the article at high information compression. Not "a chart" | P.1.1, P.4.4.1 |
+| O2 | New module `backend/idhazh/visual_planner.py`. **`route.py` is not edited.** Every producer and consumer moves. The word "route" is scrubbed from this domain - modules, classes, enums, config keys, CLI verbs, file suffixes, prompt filenames, workflow jobs | P.D-renames |
+| O3 | One strong model, two calls, inside the existing sharded work job. The separate visual CI job is retired | P.D1, P.D15, P.L1 |
+| O4 | Vega-Lite and `vl-convert` are dropped | P.4.4.3 |
+| O5 | **d3 is the single rendering engine for digest visuals.** Not ECharts. See section 7 | P.L18, P.4.4.3 |
+| O6 | Items per worker falls to 20 by setting `run.safety_ceiling_per_run` to **80**, leaving `max_parallel` at 4. See section 8.2 | P.L14 |
+| O7 | `PAGES_HARD_CAP_MB` moves into `config/idhazh.json`, bounded `le=1024` so config can lower it and never raise it | P.6.2 |
+| O8 | `retention.image_months` = 13 and `retention.dry_run` = false, **after** the new renderer lands | P.6.4 |
+| O9 | The cleanup utility keeps the name `retention.py`. The **design concept** it implements is documented as adaptive pruning in `docs/` - see section 9 | P.6.4 |
+| O10 | Feed selection tightens on measured quality. Reliability becomes a multiplier inside `authority()` | not in proposal |
+| O11 | Visual-stage telemetry reaches the operator console. Every existing eval metric that is not yet on the console goes there too | P.6.2 |
+| O12 | Model-assisted labelling is **approved**. `CLAUDE.md` section 0a is amended in the same commit with a narrow exception for visual labels | P.D12, P.L30, P.6.3 |
+| O13 | Quote cards are **approved**, restricted to quotes identified by the semantic pass, not applied to every article | P.3.4.3, P.L32 |
+| O14 | Visual asset base URL is config-driven. `raw.githubusercontent.com` is proven to work for SVG - see section 6 | P.4.4.4 |
+| O15 | Features default **on** in code behind one `disabled_features` list. No config key per feature | not in proposal |
+| O16 | **Nothing in the proposal is descoped.** No "v1" gate on any capability | P, all |
+| O17 | The 4B router model is retired **completely** - config entry, workflow job, cache role, env vars, prompt, tests. No half job | P.D1 |
+| O18 | The page uses the full width available on every medium - phone, tablet, desktop. No fixed canvas, no fixed pixel constraint | P.4.4.1 |
+| O19 | Per-item colour may be derived from entity or brand identity by the model, degrading to the token palette when it cannot | P.4.4.1 |
+| O20 | Caption is optional and rendered when present | P.3.1.1 |
+| O21 | A visual is **earned**, never granted. Merit is justified by a machine-checkable gate, not by availability | P.3.3, P.4.1 |
+| O22 | `n_ctx` rises to **16384** with `flash_attention` **on**, in one change. 32768 and above are refused - see section 11.2 | P.5.3 |
+| O23 | `observability.tracing_enabled` becomes **true**. The file sink stays the only sink CI runs; a **derived per-shard aggregate** is committed and shown on the console, never the raw spans - see section 14.4 | P.6.1, P.6.2 |
+| O24 | Six memory and context fields are added to `RuntimeCountersRow` from data the job **already collects and throws away** - see section 13.3 | P.5.3 |
+| O25 | Duplicate collapse moves to the **plan stage**, before the safety ceiling and before sharding. No separate cross-shard dedup job - see section 14.2 | not in proposal |
+| O26 | `pyproject.toml` gains pytest markers so a PR can run only what it touched. `page_weight.ceilings_bytes` is **kept** and re-baselined with headroom - see section 14.1 | not in proposal |
+| O27 | Plan-stage dedup is **semantic**, using the ONNX encoder already in the dependency set, over a 48-hour window with decay. A pure title-string comparison is refused - see section 14.2 | not in proposal |
+| O28 | A **prompt-iteration loop** ships: write, critique, revise, three rounds, two judges, and a deterministic gate that decides. `CLAUDE.md` section 0a is amended to permit it offline - see section 16.2 | not in proposal |
+| O29 | `publish_telemetry.PUBLIC_COLUMNS` is widened by eight already-committed columns and every month republished, which **backfills the console for every past run** - see section 14.4b | P.6.2 |
+| O30 | The span rollup lands in `state/span-rollup/`, **not** `state/telemetry-aggregate/`, which is taken by the item-health fold - see section 14.4a | P.6.1 |
+
+---
+
+## 4. Persona rulings - the freeze table
+
+Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE.md` section 14). **SIGNED** means the owner of that altitude ruled and no other persona contradicts.
+
+### 4.A Data model and extraction
+
+| # | Title | Owner | Ruling | Proposal ref |
+|---|---|---|---|---|
+| 1 | Spans on the element | Fowler | Add `span_start`, `span_end`, `span_excerpt`. The regex already computes both offsets. `raw` cannot serve as the excerpt - it is whitespace-cleaned and drops the magnitude word and unit | P.2.1.1 |
+| 2 | Span-drift invariant, three parts | Fowler | Write-time validator; read-time re-slice that degrades **that item** only (section 1a); CI contract test over canary fixtures. Not one build-failing gate | P.2.1.4, P.R5 |
+| 3 | Per-element `source_text_hash` is dropped | Fowler | Redundant. If the text moved, `text[span] == span_excerpt` fails on the first moved element. One hash per article, reusing the existing content fingerprint | P.2.1.4 |
+| 4 | **Code authors spans, never the model** | Andre | A model has no character-level view and cannot count. The model emits the verbatim surface string; code finds it by exact search over the hashed normalised text. No exact match, no element | P.2.1.1 |
+| 5 | All six element kinds are in scope | Andre, Fowler | `quantity`, `entity`, `date`, `quote`, `claim`, `place`. Sequenced by risk, not by scope: `claim` lands last behind the verbatim-span validator | P.2.1, P.L31 |
+| 6 | Open label vocabulary | Andre | Accept. Span-anchored, `label_source` stamped, `measure_canonical` emitted beside `measure` | P.D3, P.L4 |
+| 7 | Corpus alias ledger is in scope | Andre | With `ledger_version` stamped on every computed score, and never compared across versions without re-scoring | P.2.2.3, P.R6 |
+| 8 | Canonicalisation stays conservative | Andre | Over-merging is the silent direction. Log every merge, report `merge_rate`, prefer rejection when uncertain | P.2.2.2, P.R4 |
+
+### 4.B The planner, the prompt, the model
+
+| # | Title | Owner | Ruling | Proposal ref |
+|---|---|---|---|---|
+| 9 | **Extraction call runs first, summary second** | Owner, overriding Andre | See section 10. Andre proposed summary-then-plan; the owner rejected it because a lossy summary as the planner's source is the defect that produced this proposal | P.1.2 |
+| 10 | The two calls are adjacent per item | Carmack | `n_parallel` is 1, so there is one cache slot. Batching all call-1s then all call-2s evicts the prefix and destroys reuse with no error | P.5.3.1 |
+| 11 | Assert `cached_tokens`, not a `prefill_ms` ratio | Carmack, Andre | A ratio confounds cache reuse with delta length and reads as partial success when the prompt was built in the wrong order | P.L27 |
+| 12 | Field order is decode order | Andre | Measured on this codebase: with `kind` first, `reason` became a rationalisation of a choice already made. Labels must be committed before the type is chosen | P.3.1.1 |
+| 13 | Output budget rises from 400 | Andre | Derived from the schema's own bounds, re-derived whenever a bound changes. Never picked. See section 11.3 | P.3.1.1 |
+| 14 | Bound every array and string in the contract | Andre | Makes the worst-case reply length arithmetic. Alarm on `finish_reason == "length"` | P.3.2 |
+| 15 | Flat role map, all keys required | Andre | Optional arrays produced "a confident chart with no bars in it, twice, on the first live run". Not an 18-branch discriminated union | P.3.2 |
+| 16 | Retire the 4B completely | Carmack, Owner O17 | Config entry, cache role, workflow job, env vars, prompt file, tests. Frees 2.33 GiB; repo cache falls from about 82 to 57 percent of the 10 GB ceiling | P.D1 |
+| 17 | Retries perturb the rejection reason only | Andre | `seed: 0` and `temperature: 0.0` are a determinism contract. Temperature jitter makes a re-run not a re-run | P.R9 |
+| 18 | `confidence` moves after `type`, or is deleted | Andre | Second in the field list means it conditions every field after it. Record, never gate | P.L23 |
+| 19 | Carry the drop-the-minority lesson forward | Fowler | `same_unit_bars` records a live failure: a 4B picked three correct megawatt bars then appended a headcount. The behaviour becomes a committed fixture, not a comment | P.4.1 |
+| 20 | Graceful degradation on context overflow | Andre, Owner | `context_exceeded` must degrade to a chunked read, not to nothing. See section 11.4 | P.1a |
+
+### 4.C Rendering and the page
+
+| # | Title | Owner | Ruling | Proposal ref |
+|---|---|---|---|---|
+| 21 | **Inline the SVG. Delete the `img` carrier** | Jony | Root cause of the unreadable dark theme. Swapping engines without this fixes nothing | P.4.4.2 |
+| 22 | Progressive enhancement | Jony, Susan, Carmack | Build-time SVG, hydrate on point-or-focus. Hydration off by default per type; any hydrated route earns a `page_weight` entry before it merges | P.L21 |
+| 23 | d3 is the single digest engine | Jony, Owner O5 | See section 7 for the type-to-module matrix | P.L18 |
+| 24 | Exact-pin every d3 module | Carmack | A caret range lets a patch bump change pixels with no diff to review. Record in `renderer_version` | P.R17 |
+| 25 | No fixed canvas | Susan, Owner O18 | The box is a function of what is encoded and of the space available. Retires `visuals.canvas_width`/`canvas_height` as a fixed pair | P.4.4.1 |
+| 26 | Legibility floor | Susan, Jony | The smallest drawn string clears `--text-xs` (12px) **after** the scale-to-fit, at every supported width. Today it draws at 3.1 CSS px | P.4.4.1 |
+| 27 | Density floor, renamed | Susan, Owner | Susan proposed a marks-per-height floor and called it information compression. The owner rejects the name: a size ratio carries no semantics and says nothing about faithfulness. It ships as **`density_floor`**, and the semantic measure keeps the name `information_delta` | P.5.2.1 |
+| 28 | Token contract, with a derived-palette escape | Susan, Jony, Owner O19 | The compiler emits against the closed token set by default. The model **may** propose an entity-derived palette; it degrades to the token ramp when it cannot, and the derived colours are still contrast-checked in both themes | P.4.4.1 |
+| 29 | The figure renders a caption when present | Susan, Owner O20 | `ItemVisual.svelte` renders `figure > img` and nothing else today, so `title` and `caption` have no home | P.3.1.1 |
+| 30 | One mark lands first | Susan | `annotations` non-empty and drawn differently from its siblings. Eight bars of equal weight have no reading order | P.3.1.1 |
+| 31 | Hydration is pixel-identical | Jony | A chart that redraws on hydrate is this project's first spinner in all but name | P.4.4.2 |
+| 32 | Motion tokenised, bounded, killable | Susan | The largest committed day carries 621 items (2026-08-26). 621 entrance animations is a page that never settles | not in proposal |
+| 33 | Keyboard route to every fact | Susan, Reader | No fact exists only on hover. The dominant device has no hover | P.4.3.2 |
+| 34 | Empty is nothing | Susan | No placeholder, no reserved slot, no skeleton. Already true; written down so the downgrade ladder cannot reintroduce it | P.4.2 |
+| 35 | A renderer bump re-renders whole days or none | Jony | Otherwise one page shows two drawing styles in one scroll, which reads as a broken site | P.R17 |
+| 36 | Per-visual byte cap; over-cap degrades to `none` | Jony | There is no per-item route, so the visual lives on a list that reached 621 items | P.4.4 |
+| 37 | The reading page is two contexts | Jony | Seed items are prerendered; past-seed items are drawn by the browser after a fetch. The compiled spec travels in the day payload and one code path draws both | not in proposal |
+
+### 4.D Vocabulary
+
+**Every type in P.3.4 ships.** The rulings below govern *how* and *in what order*, never *whether*.
+
+| # | Type | Owner | Ruling | Proposal ref |
+|---|---|---|---|---|
+| 38 | `comparison` | Editor, Jony, Reader | Ships first of the infographic family. The only one whose compression argument survives contact with the page. Reader named it one of two they would actually want | P.3.4.3 |
+| 39 | `quotecard` | Owner O13, Editor, Reader | Ships, restricted to quotes the semantic pass identified, capped at `summarize.max_verbatim_words`. Jony dissents on craft grounds; the owner overrules. Reader named it the other of the two they want | P.3.4.3, P.L32 |
+| 40 | `callout` | **Editor** (P.L28 was assigned to Editor by name) | Ships under a three-part gate, all checkable with no model call: primary class `singular`; the figure is carried by our own title or standfirst; **and** either a span-anchored significance qualifier from a versioned list within one sentence, **or** the figure is the only quantity in the article. "Only" is admitted where "biggest" is refused - biggest is a fact about our sort order, not the world | P.L28, P.R20 |
+| 41 | `whowhat` | Jony, Editor | Ships as a one-attribute `comparison` grid rather than a separate template. Each cell pairs an entity span and a claim span from the same sentence, or the cell is empty | P.3.4.3 |
+| 42 | `keyfacts` | Andre, overruling four earlier vetoes | **Ships, and the objection was aimed at the wrong thing.** Two things share a name: `key_points` is the 3-5 summary bullets and nobody proposed removing them; `keyfacts` is the infographic that draws them bigger. The 7-in-8 restatement rate is a **prompt defect**, not a model-capability defect - see section 10.5. The kill criterion changes from a type-level veto that cannot fire without human labels to a **per-item gate: `keyfacts` may not render on an item whose new-fact rate is below the floor.** Machine-checkable on committed data, needs no labels, and is exactly O21 | P.3.4.3, P.L33 |
+| 43 | `pie` | Jony, Owner | Ships as a declarable and buildable type under the P.3.4.1 gate: composition purpose, five parts or fewer, a **declared** whole never a summed one, one `measure_canonical`, one unit. Jony's stacked-bar routing is retained as the **downgrade target**, not as a replacement | P.L3 |
+| 44 | `bubble` | Jony, Reader | Ships under the P.3.4.1 gate and the section 4.C legibility floor. Reader's objection is recorded: three numbers judged by circle area on a 360px screen | P.3.4.1 |
+| 45 | `histogram` and derived values | Fowler, Owner | Ships. The Derived Value contract (P.2.3) is built with its closed allow-list `count`, `sum`, `share_of_declared_whole`, deterministic versioned binning, and a complete provenance chain | P.2.3, P.L22 |
+| 46 | Diagram family | Editor, Jony | Ships. Gated behind the deterministic `processual` classifier so it never costs a non-process item a model call. Measured 2026-08-25: with diagrams enabled, 145 of 145 items reached the model and the stage spent its whole budget on 10 of 11 runs | P.3.4.2, P.L9 |
+| 47 | Span-anchored edges, no exception | Editor | An unanchored arrow is an ordering or causal claim the article did not make. Reader: "wrong once, and I stop believing every summary on the page" | P.L19, P.R10 |
+| 48 | Template order follows observed frequency | Jony | Not the fixed wave order in P.4.3.1. P.D2 makes the order derivable from `planned_type`, so guessing it is an unmeasured number justifying a design (Rule #10) | P.4.3.1, P.L2 |
+| 49 | One day may not publish one shape | Susan | A day publishing a single rendered type is a recorded defect, read jointly with keep rate. Not a diversity target - the demand side of the P.R1 capitulation pair | P.L11, P.R18 |
+| 50 | Downgrade ladder ships | Owner O16 | With the three invariance rules (element set unchanged, purpose survives, escalating floor), floors computed from depth-0 published visuals only, and the `VISUAL_DOWNGRADE` flag | P.4.2, P.D6, P.L7 |
+
+### 4.E Selection, retention, measurement
+
+| # | Title | Owner | Ruling | Proposal ref |
+|---|---|---|---|---|
+| 51 | `safety_ceiling_per_run` is the honest knob | Editor, Carmack, Owner O6 | See section 8.2. Halving the ceiling is an editorial decision and must be presented as one, not as throughput | P.L14 |
+| 52 | Cut duplicates first, never a desk's only story | Editor | Score is authority x carriers, so a single-carrier story scores lowest by construction. A straight top-N cut is a systematic cut of the exclusive story | not in proposal |
+| 53 | Feed reliability multiplier | Editor, Owner O10 | Multiplicative inside `authority()`, never an added bonus - additive lets a feed buy its way across a tier. Trailing window no shorter than 30 days, clamped to a floor above zero and a ceiling of 1.0, and it may **only ever reduce**. All 191 `weight` values in `config/sources.json` are 1.0, so the manual lever has never been pulled | not in proposal |
+| 54 | Add `ItemStage.VISUAL` | Fowler | Additive, one changelog entry, no migration. Today "no visual was possible" and "the visual stage broke" are the same row | not in proposal |
+| 55 | `state/visuals/` ledger | Fowler | One appended row per published visual, sharded monthly, same shape as `state/item-health/`. No query surface - there is no server (Rule #1) | P.R12 |
+| 56 | Every rate is reported per potential class | Andre, Editor | Without a denominator of what was possible, 4 percent on narrative and 4 percent on chartable are the same number | P.2.4, P.L35 |
+| 57 | `narrative` records **why** it is narrative | Editor | Otherwise an extraction outage reads as a quiet month of unvisualisable news, and P.R2 hides inside the residue class | P.2.4.2 |
+| 58 | A quote-led potential class is added | Editor | The safest type in the system has no denominator in P.2.4 as written | P.2.4.2 |
+| 59 | Widen `retention.py`; do not create a module | Fowler, Owner O9 | It already reasons about all four policies: the alarm, the visual prune, the telemetry fold, the seen prune | P.6.4 |
+| 60 | `PAGES_HARD_CAP_MB` to config with `le=1024` | Carmack, Fowler, Owner O7 | Config can lower it and cannot raise it, so Rule #2's "the budget is the platform, not a preference" stays enforceable | P.6.2 |
+| 61 | `dry_run = false` lands **after** the new renderer | Fowler, Owner O8 | Flipping the delete fuse while the old Vega-Lite SVGs are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound | P.6.4 |
+| 62 | Cleanup records `candidates_found` and `skipped_by_fuse` | Carmack | `deleted` is capped at 200, so `deleted` alone can never show whether the backlog is shrinking | P.6.4 |
+| 63 | Delete `VisualKind.IMAGE` and `SpecFormat.IMAGE_PROMPT` | Fowler | No renderer, never exercised, skipped unconditionally. Check the committed corpus first - it is a published enum | not in proposal |
+| 64 | Wire in the existing faithfulness scorer | Fowler, Andre | The eval ledger, `ConfidenceBand` and `BandReason` already exist and `LabelRow` already imports `ConfidenceBand`. Do not build a second scorer (Rule #8) | P.L25, P.Q8 |
+| 65 | Never show `why` to a reviewer | Andre | `LabelRow` already hides the machine score from the labeller for the same reason | P.R14 |
+| 66 | Call it offline paired evaluation | Andre | "A/B testing" names a mechanism Rule #1 forbids, and the numbers would eventually be quoted as if readers produced them | P.L26, P.6.3.4 |
+| 67 | Weight fitting, pairwise mode and the timed arm all ship | Owner O16 | Andre and Carmack proposed deferring them because 0 of 60 drawn rows carry a human label as of 2026-08-28. The owner overrules on scope; the labelling-capacity risk is recorded as M6 in section 13 | P.5.2.3, P.5.4.3, P.L34 |
+| 68 | Rejected plans are recorded and rendered | Andre, Owner O16 | Recorded as JSON immediately (near-free); rendered into `review/` for labelling. Renders are build artifacts under the 500 MB artifact ceiling, never committed, never under `frontend/public/` | P.D12, P.L30, P.R3 |
+| 69 | `run.route_budget_minutes` must be re-derived | Fowler, Carmack | It exists because the old job ran 51-60 minutes against a 60-minute bound. Folding into `work` invalidates the number | P.5.3 |
+| 70 | Every existing eval metric reaches the console | Owner O11 | `ConfidenceBand`, `BandReason`, `verbatim_run`, faithfulness, lead coverage and the new visual metrics all get a panel. Stored sharded under `state/` | P.6.2 |
+
+---
+
+## 5. Reversals - everything wrongly scoped, now restored
+
+An earlier draft of this record deferred the following. **All are in scope.** Recorded so the omission cannot recur.
+
+| # | Was deferred as | Restored scope | Proposal ref |
+|---|---|---|---|
+| RV1 | Element kinds `quantity` + `date` only | All six kinds: `quantity`, `entity`, `date`, `quote`, `claim`, `place` | P.2.1 |
+| RV2 | Corpus alias ledger dropped | Built, with `ledger_version` stamping and conservative merge logging | P.2.2.3 |
+| RV3 | Derived values, `histogram`, `pie` "contract written, not built" | Built, with the closed function allow-list and provenance chains | P.2.3 |
+| RV4 | `d3-force` out | In. It is the layout for the node-edge graph family | P.3.4.2 |
+| RV5 | Weight fitting, pairwise page, timed comprehension arm deferred | All built | P.5.2.3, P.5.4.3 |
+| RV6 | Rejected-plan renders deferred | Built | P.D12 |
+| RV7 | `keyfacts` killed | Built, with the kill criterion attached | P.3.4.3 |
+| RV8 | Downgrade ladder unmentioned | Built behind `VISUAL_DOWNGRADE` | P.4.2 |
+| RV9 | Diagram family deferred behind infographic | Both ship; the ordering is a dependency, not a scope cut | P.3.4.2 |
+| RV10 | `bubble` pushed to "wave 3 at the earliest" | Built under its gate | P.3.4.1 |
+| RV11 | Article Visual Potential classifier implied optional | Built. Every rate depends on it | P.2.4 |
+| RV12 | Draco named only as "a candidate worth evaluating" | Evaluated explicitly as a validator component, with a written verdict | P.4.4.5 |
+
+---
+
+## 6. Serving visual bytes off the Pages bundle
+
+**Measured 2026-09-02**, `Invoke-WebRequest -Method Head` against
+`https://raw.githubusercontent.com/miztiik/yen-idhazh/refs/heads/main/frontend/src/lib/icons/svg/archive.svg`:
+
+```
+STATUS = 200
+Content-Type: image/svg+xml
+Cache-Control: max-age=300
+Access-Control-Allow-Origin: *
+Cross-Origin-Resource-Policy: cross-origin
+Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox
+X-Content-Type-Options: nosniff
+```
+
+**SVG works.** The concern that this host serves SVG as `text/plain` is withdrawn - it serves `image/svg+xml`, so an `img` tag renders it.
+
+Three consequences, and one of them is a genuine conflict.
+
+| Finding | Consequence |
+|---|---|
+| `Content-Type: image/svg+xml` | The remote carrier is viable. Bytes leave the Pages 1 GB cap |
+| `Cache-Control: max-age=300` | Five minutes. A repeat reader refetches. The Pages CDN caches far longer, so this is a real cost on a slow connection |
+| **An SVG in an `img` still cannot read the page's custom properties** | The remote carrier and CSS theming are mutually exclusive **for the `img` path** |
+
+### 6.1 The resolution
+
+| Path | Carrier | Themed | Counts against Pages | Use |
+|---|---|---|---|---|
+| Seed items (prerendered) | **Inline SVG** in the HTML | Yes | Yes, gzipped | Default. Row 21 |
+| Past-seed items (already fetched by the browser) | Fetch the SVG and inline it into the DOM | Yes | **No** | The long tail, where the byte pressure actually is |
+| Raster fallback, archives | `img` with the config base URL | No | No | Anything not themed |
+
+This gives themed visuals everywhere and moves the growing tail off the Pages cap. It works because the reading page is already two contexts (row 37) - past-seed items already require a fetch.
+
+**Config shape**: `visuals.asset_base_url`, defaulting to same-origin. Pointing it at `raw.githubusercontent.com` in this repo, then at another branch, repo or Pages site later, is one config edit. Branch-based raw URLs survive the `prune.yml` force-push because the prune squashes history and leaves the working tree intact; only commit-SHA-pinned URLs break.
+
+### 6.2 What still needs measuring
+
+- Repository pack growth per published day, from two dates differenced. The prune bounds the past; it does nothing about a growing present.
+- Checkout cost with and without a blob filter. At 4 workers plus plan and assemble that is six checkouts a day of a tree carrying every visual ever published.
+- Throttle behaviour on `raw.githubusercontent.com` under a burst at the page's real image count. The limit is undocumented, so the degraded state must be explicit.
+
+---
+
+## 7. The d3 matrix - one engine for the digest
+
+**Decision O5: d3 alone. ECharts is not used for digest visuals.**
+
+### 7.1 Why
+
+The owner's complaint is that the current visuals are "extremely ugly", static, and that ECharts is doing a bad job. The diagnosis in section 2.1 shows the carrier is the primary cause - but the engine choice still matters for what O1, O18 and O19 ask for:
+
+| Requirement | ECharts | d3 |
+|---|---|---|
+| Brand or entity-derived colour per mark (O19) | Fights you; series colour is a chart-level concept | Native; every mark is authored |
+| Non-standard marks (a car glyph sized by units) | Effectively not available | Native |
+| Full-width responsive with no fixed canvas (O18) | Container-driven, resize handler needed | Pure function of width; recompute and re-emit |
+| Node-edge graph | `graph` series, tuned for exploratory network layout | `d3-force`, `d3-hierarchy`, `d3-dag` - the reference implementations |
+| Bytes shipped to a reader | Full engine if hydrated | Only the modules used, and zero if not hydrated |
+| Code we own | Less | More |
+
+The cost of d3 is stated plainly: **more code to write, and axis, legend and tooltip behaviour we author rather than inherit.** That is the trade the owner is buying, and it is the right one when the goal is a visual that looks made rather than generated.
+
+### 7.2 Type to module matrix
+
+This matrix is the record of the decision and moves into `docs/architecture/publishing/` when the plan executes.
+
+| Visual type | Purpose | d3 modules | Notes |
+|---|---|---|---|
+| `bar` | ranking, category comparison | `d3-scale` (band, linear), `d3-shape`, `d3-axis` | Baseline. Horizontal by default at narrow widths |
+| `dot` | ranking | `d3-scale`, `d3-shape` (symbol) | Cleveland-McGill preferred form for ranking |
+| `line` | trend | `d3-scale` (time, linear), `d3-shape` (line, curve) | |
+| `area` | cumulative magnitude | `d3-shape` (area) | Gated to stock or cumulative measures, never a rate |
+| `scatter` | relationship | `d3-scale`, `d3-shape` (symbol) | |
+| `bubble` | relationship, 3 channels | `d3-scale` (sqrt for size), `d3-shape` | `scaleSqrt` is mandatory - a linear radius misstates area |
+| `slope` | before/after | `d3-scale`, `d3-shape` (line) | No axis; two labelled columns |
+| `stacked_bar` | composition | `d3-shape` (stack), `d3-scale` | Also the `pie` downgrade target |
+| `pie` | composition, declared whole | `d3-shape` (pie, arc) | Under the P.3.4.1 gate |
+| `histogram` | distribution | `d3-array` (bin), `d3-scale` | Binning rule is versioned config, not model-chosen |
+| `timeline` | sequence of dated events | `d3-scale` (time), `d3-axis` | |
+| `table` | precise multi-dimensional | none - typeset HTML | Not an SVG artefact |
+| `flow` (diagram) | process | **`d3-force`** or `d3-hierarchy`, plus `d3-shape` (link) | Force for genuinely branching graphs; `d3-hierarchy` (tree) for a chain or tree |
+| `comparison` | qualitative grid | none - typeset HTML | |
+| `callout` | one striking figure | none - typography in the item's own scale | |
+| `quotecard` | attributed statement | none - typography | |
+| `whowhat` | actors and roles | none - one-attribute `comparison` | |
+| `keyfacts` | 3-5 takeaways | none - typography | |
+
+Shared across all SVG types: `d3-scale`, `d3-array`, `d3-format` (number formatting), `d3-time-format` (date labels), `d3-selection` **only in the hydrated path** - the build step emits markup as strings, so no DOM is needed at build time.
+
+### 7.3 `d3-force` determinism
+
+`d3-force` is used for the node-edge graph and nothing else. The non-determinism people hit is the **wall-clock timer**, not the algorithm: d3 places nodes on a deterministic phyllotaxis spiral when `x`/`y` are unset, and its jiggle uses a constant-seeded generator. The recipe:
+
+1. Construct with the simulation stopped. Never let the internal timer run.
+2. Sort nodes and links by `element_id` before construction - iteration order changes the result.
+3. Never carry `x`/`y` in from a previous run or a cached plan.
+4. Run exactly N ticks in a synchronous loop, N from `config/` (Rule #6). N = 300 matches the default schedule, where alpha reaches `alphaMin` 0.001.
+5. Round output coordinates to a fixed precision so float drift is not a diff.
+6. Exact-pin `d3-force` and record it in `renderer_version`.
+7. Test: same input rendered twice in one process and once in a fresh process, byte-identical after rounding.
+
+Cost is an estimate, not a measurement: roughly 5-20 ms per graph on 4 vCPU at a 30-node cap. At the current visual rate that is about a second of build time a day.
+
+### 7.4 The console is not migrated by this plan
+
+The console keeps ECharts. It has 23 test files, a working sentinel bridge, and no complaint against it. Migrating it to d3 is a separate decision and a separate plan-doc if it is ever wanted.
+
+---
+
+## 8. Scale, sharding and the runner
+
+### 8.1 Model download - the answer to the bandwidth concern
+
+The weights are **not** downloaded once per shard. `actions/cache@v6` holds `backend/models` and `backend/bin` under the key `llm-<file>-<revision>-<build>-v4`, and the Hugging Face fetch runs only `if: steps.weights.outputs.cache-hit != 'true'` ([.github/workflows/digest.yml](.github/workflows/digest.yml#L411)). Every shard shares one key, so **raising the shard count adds cache restores, never downloads.**
+
+What the shard log shows as "downloading" is the cache *restore* printing byte progress. That is a real cost - a 5.29 GiB restore per worker - but it is internal to GitHub, not Hugging Face, and it does not consume an external bandwidth budget.
+
+The 10 GB per-repo cache ceiling is the real pressure: 5.29 (summarizer) + 2.33 (router) + the llama.cpp build is roughly 8.18 GB, about 82 percent. **Retiring the router (O17) drops that to about 57 percent.**
+
+### 8.2 `shard_size` vs `max_parallel` vs `safety_ceiling_per_run`
+
+The three are not interchangeable and the naming misleads.
+
+```
+shards = max(1, min(ceil(items / shard_size), max_parallel))
+```
+[backend/idhazh/cli.py](backend/idhazh/cli.py#L709)
+
+| Knob | What it actually is | Value |
+|---|---|---|
+| `run.max_parallel` | **The number of worker jobs.** Each appears as `shard-{N}` and commits under that name | 4 |
+| `run.shard_size` | URLs per worker VM, sized by model-load amortisation. **Above 20 items a day it never binds** - the `ceil` term always exceeds `max_parallel` | 5 |
+| `run.safety_ceiling_per_run` | **What sizes a run.** Items per worker is this divided by the worker count | 160 |
+
+Where 160 came from, quoted from its own field description: it began as a crash guard against a mis-parsed feed, supply overtook it, and `items_planned` has been exactly 160 on every run since 2026-08-25. Owner decision 2026-08-29 kept it at 160.
+
+**The owner's instruction resolves to one edit.** To get 20 items per worker with 4 workers:
+
+| Knob | Today | Becomes | Effect |
+|---|---|---|---|
+| `run.safety_ceiling_per_run` | 160 | **80** | 80 / 4 = 20 items per worker |
+| `run.max_parallel` | 4 | **unchanged** | Still 4 cache restores per run, not 8 |
+| `run.shard_size` | 5 | **unchanged** | It does not bind; changing it is noise |
+
+This is cheaper than raising `max_parallel` to 8, which would keep 160 items but double the 5.29 GiB restores. It is an **editorial** decision - the day publishes half as many items - and Editor's ruling (row 52) governs which half is lost: duplicates first, never a desk's only story.
+
+All three knobs are in `config/idhazh.json` under `run`.
+
+### 8.3 Measured shard cost and memory
+
+Read from the whole of [state/runtime-counters.csv](state/runtime-counters.csv) on 2026-09-02, not from a sample. 104 rows; 80 carry `job_seconds`; 72 carry `peak_rss_bytes`.
+
+| Metric | n | Distribution | What it means |
+|---|---|---|---|
+| `job_seconds` at 40 items | 80 | min 1,584 s, p50 4,711 s, p90 6,101 s, p95 6,380 s, **max 8,124 s** | 26.4 min, **78.5 min median**, 101.7 min, 106.3 min, **135.4 min worst**. The worst shard used **90.3 percent of the 150-minute timeout**. The median used 52 percent |
+| `peak_rss_bytes` | 72 | min 10.06 GiB, p50 12.60 GiB, **max 13.29 GiB** | Against 16 GB (14.90 GiB usable) the worst shard left **1.61 GiB free** |
+| `model_load_ms` | 72 | 2,336 to 4,166 ms | Opening 5.29 GiB of weights costs 2.3 to 4.2 s |
+| `n_tokens_max` | 29 | 2,549 to 5,516 | The largest prompt ever seen is 5,516 tokens, **67 percent of the 8192 window** |
+| `prompt_tokens_cached_total` / `prompt_tokens_total` | 29 | 0.72 to 0.90 | Prefix caching already works |
+
+**Two corrections to earlier drafts of this document, both mine.** An earlier version read only the first 30 lines of the ledger, which are its oldest, and reported that `peak_rss_bytes` and `model_load_ms` were empty in every row and that a shard runs 46 to 70 minutes. Neither is true. Memory has been measured since 2026-08-30 and the worst shard is nearly twice as slow as I said. The lesson is recorded because it changed two rulings: **a ledger is sorted oldest-first, so a head read measures the past.**
+
+At 20 items the base work roughly halves - median about 39 minutes, worst about 68 - which leaves the margin the second call spends. The margin is real but it is not luxurious: sizing from the worst case rather than the median is the whole of Rule #2 here, and the worst case is 135.4 minutes, not 70.
+
+### 8.4 Per-feed context routing - worth building
+
+The owner's idea: route consistently long-form feeds to a worker started with a larger context, and short-form feeds to a worker with a smaller one.
+
+This is implementable and cheap, because the pieces exist. The `plan` job already computes the shard matrix and emits it as an output. `server_argv` already reads `n_ctx` from config. `item-health` already records `source_words_before_cap`, so **which feeds are consistently truncated is already measurable from committed data.**
+
+Shape: a `long_form` flag per feed derived from a trailing window of `source_words_before_cap`, the plan job partitions items into a long-context shard set and a short-context set, and each worker starts its server with the `n_ctx` its partition needs. Gains headroom for the two-call design without raising memory everywhere.
+
+Blocked on the memory measurement in section 13 (M1).
+
+---
+
+## 9. Adaptive pruning - the design concept
+
+Decision O9 keeps the module name `retention.py`. What follows is the **design concept** the module implements, to be written into `docs/concepts/adaptive-pruning.md` so a coding agent has a target to comply with. The names "intelligent pruner" and "intelligent compaction" were rejected: "intelligent" and "adaptive" claim a property the code does not have when it merely reads a date, and "compaction" is borrowed from log-structured storage where it means something else (section 0b).
+
+### 9.1 The five properties
+
+| Property | What it means | Why it is not optional |
+|---|---|---|
+| **Config-driven** | Every window, fuse and cutoff is a knob in `config/idhazh.json` behind a Pydantic model. No literal dates, no literal counts | Rule #6 |
+| **Atomic** | One deletion or fold is one file, written temp-then-rename where it rewrites. A failed unit never damages a sibling | Section 1a |
+| **Shard-aligned** | Cleanup operates on the same monthly shards the writers produce, so a fold reads one file and writes one file | A cleanup that must read a year to delete a day cannot finish in a job |
+| **Fused** | No run may delete more than `max_deletes_per_run`, and the run reports the backlog it did not clear | An off-by-one in a date parse must not eat the archive |
+| **Heuristic-ready** | The policy that selects candidates is a named, testable predicate, so an age rule, a size rule or a value rule are interchangeable | Age is the only honest rule today; that will not always be true |
+
+### 9.2 The four policies, and what each does
+
+| Policy | Acts on | Rule | Knob |
+|---|---|---|---|
+| **Alarm** | The **built** bundle, never the payload tree | Measures and reports; deletes nothing | `retention.site_budget_mb`, `PAGES_HARD_CAP_MB` |
+| **Asset prune** | Rendered visuals under the digest tree | **Age only, never size.** A size-triggered prune deletes most on the day the reader has most to read | `retention.image_months`, `max_deletes_per_run`, `dry_run` |
+| **Ledger fold** | `state/item-health/`, `state/scores/`, and every new ledger | Past the window a month folds to one row per group and the full-grain shard is deleted. The aggregate is kept forever | `observability.keep_months`, `hard_delete_after_months` |
+| **Lookup prune** | `state/seen/` | Deletes without folding. A lookup outside its read window answers no question, so folding it would invent a total nobody reads | `collect.seen_window_days` |
+
+**The rule that decides which policy applies: a ledger folds, an asset deletes, a lookup deletes.**
+
+### 9.3 The compliance register
+
+Every artefact this project writes declares which policy governs it. This table is the register and lives in the doc.
+
+| Artefact | Grain | Policy | Window |
+|---|---|---|---|
+| `frontend/public/digest/<Y>/<M>/<D>/*.svg` | file | asset prune | `image_months` |
+| `frontend/public/digest/<Y>/<M>/<D>/*.json` | file | **never deleted** - the record that a day happened | - |
+| `state/item-health/<YYYY-MM>.csv` | monthly shard | ledger fold | `keep_months` |
+| `state/scores/<YYYY-MM>.csv` | monthly shard | ledger fold | `keep_months` |
+| `state/feed-health/<YYYY-MM>.csv` | monthly shard | ledger fold | `keep_months` |
+| `state/telemetry-aggregate/<YYYY-MM>.csv` | monthly shard | kept forever | - |
+| `state/runtime-counters.csv` | append-only | ledger fold | `keep_months` |
+| `state/seen/<YYYY-MM>.csv` | monthly shard | lookup prune | `seen_window_days` |
+| `state/published.csv` | append-only | **never deleted** | - |
+| `state/labels.csv` | append-only | **never deleted** - the only ground truth | - |
+| `state/visuals/<YYYY-MM>.csv` (new) | monthly shard | ledger fold | `keep_months` |
+| `corpus/corpus.jsonl` | rolling window | rewritten by `prune.yml` | `prune_keep_days` |
+| `frontend/public/telemetry/<YYYY-MM>.csv` | monthly shard | published projection; follows its source | `keep_months` |
+| `review/` renders | build artifact | deleted after labelling; never committed | artifact retention |
+
+### 9.4 Sharding enables the cleanup, and the cleanup enables the sharding
+
+The relationship the owner named, stated plainly so the doc records it: monthly sharding is what makes a fold an atomic single-file operation, and an atomic fold is what makes cleanup safe enough to enable at all. A ledger written as one growing file could only be cleaned by rewriting the whole thing, which is neither atomic nor bounded. **This is why `dry_run` can move to false: not because the policy got smarter, but because the storage shape makes each unit small and reversible.**
+
+### 9.5 What the run must record
+
+One row per cleanup run, so the operator sees the backlog rather than guessing:
+
+`candidates_found`, `deleted`, `skipped_by_fuse`, `fuse_tripped`, `cutoff_date`, `oldest_kept`, `bytes_reclaimed`, `site_bytes_before`, `site_bytes_after`, `dry_run`, `policy`.
+
+`deleted` is capped at `max_deletes_per_run`, so **`skipped_by_fuse` is the only field that shows whether the backlog is shrinking.** The console panel is that series over time.
+
+---
+
+## 10. The prompt flow - the owner's ordering
+
+Andre proposed: call 1 = summary, call 2 = plan against that summary. **The owner rejected it**, and the rejection is correct on the project's own evidence: using a lossy summary as the planner's source is the defect that produced this proposal. Summarisation is extractive, padded and unsatisfactory today; planning on top of it inherits every one of those failures.
+
+### 10.1 The ordering that ships
+
+```
+CALL 1 - READ AND EXTRACT
+  in:  [system: extraction + semantic rules]
+       [user:   title + <UNTRUSTED>full article text</UNTRUSTED>]
+  out: { elements:  [ {kind, surface, measure, entity, time, dimension}, ... ],
+         entities:  [ {name, type, salience}, ... ],
+         events:    [ {action, actor, object, when}, ... ],
+         relations: [ {from, to, relation, sentence_index}, ... ] }
+       -> code finds every `surface` by exact search, attaches spans,
+          rejects anything it cannot find. No spans from the model.
+
+CALL 2 - UNDERSTAND AND DECIDE          <- appends to call 1's message array
+  in:  [ ...everything above, unchanged... ]
+       [assistant: call-1 JSON]
+       [user: summarise + plan the visual, given the elements you just found]
+  out: { summary: {title, standfirst, key_points},
+         visual:  {decision, purpose, type, encodings, element_ids,
+                   labels, annotations, caption, alt_text, why} }
+```
+
+### 10.2 What "call 2 appends to call 1's message array" means
+
+The tokens the server sees on call 2 are, in order:
+
+```
+[chat template header]                 <- identical
+[system: extraction + semantic rules]  <- identical    | REUSED FROM CACHE
+[user: title + full article]           <- identical    | (the expensive part)
+[assistant: call-1 JSON]               <- NEW, but short
+[user: summarise + plan]               <- NEW, short
+```
+
+llama-server reuses the **longest common prefix** of the tokenised prompt. Because the system turn and the article are byte-identical and come first, the article is prefilled **once**. Only the call-1 output and the second instruction block are new. That is the entire mechanism.
+
+If instead call 2 carried a *different* system prompt, the common prefix would be the template header alone and the whole article would re-prefill - the "case (b)" that costs roughly double.
+
+Two conditions make the reuse real:
+- `n_parallel` is 1, so there is one cache slot. The two calls must be **adjacent for one item**. Running all call-1s then all call-2s evicts the prefix every time.
+- The assertion is `cached_tokens` on call 2, not a timing ratio.
+
+### 10.3 Why this ordering is also better on quality
+
+- The planner sees the **article**, not a compression of it. No fact reaches the planner only if the summariser happened to keep it.
+- The summariser sees the **element table** it just produced, so key points can be grounded in extracted facts rather than re-derived from prose.
+- Entity and event extraction is stored for reuse regardless of whether a visual is drawn.
+- Field order is decode order: the model commits to what it found before it decides what to say about it.
+
+The cost, stated: the summariser's input changes, so `summary_faithfulness` is not comparable across the cutover. The owner accepts that explicitly - the current summaries are unsatisfactory and comparability with them is not worth protecting. The discontinuity is marked in the metric series (P.6.4.2 step 5).
+
+### 10.4 Summary quality is a named work item
+
+The owner's assessment: summaries are extractive at times, do not focus on key ideas, and pad. `finetune.student` is `route` and `finetune.teacher` is `summarize` today, which is a distillation setup for the model being retired. **That configuration is dead once O17 lands and must be re-pointed**, and fine-tuning the summariser becomes a real candidate. Recorded here so it is not lost; it is a separate plan-doc.
+
+### 10.5 Why key points restate the summary, and the fix
+
+The owner asked whether the 7-in-8 restatement rate is a prompt defect or a model-capability defect. **It is a prompt defect, and the prior is strongly against a model swap.**
+
+Three mechanical reasons the current prompt cannot work:
+
+1. **Decode order.** `SummaryDraft` decodes `title`, then `summary`, then `key_points` ([backend/idhazh/summarize.py](backend/idhazh/summarize.py#L100)). The model is asked to write something *unlike* the text it has just written, which is the least likely continuation.
+2. **The rule is a complaint, not a constraint.** "A key point that restates the summary is a wasted line" gives the model no definition of "restates" that it can compute.
+3. **Nothing measures it.** `METRICS_VERSION` 3 names no key-point redundancy metric, so the defect has run unseen for as long as the field has existed.
+
+And one structural cause that is nobody's fault: **`key_points_max` is 5 for every band**, and it sits on `SummarizeConfig` rather than `SummaryBand`. Asking for five key points on top of a 40-word summary of a 60-word post is asking for facts that are not in the article. **Redundancy is structurally guaranteed at the shortest band.**
+
+The fix, in cost order:
+
+| # | Change | Cost |
+|---|---|---|
+| 1 | Decode key points **before** the summary, so facts are found first and prose connects them. Under the two-call design they become "state the highest-salience elements, one sentence each, with attribution" | Field reorder |
+| 2 | Make the anti-restatement rule a deterministic check in `to_summary` that **drops the offending key point, not the item** - the `verbatim_run` pattern this codebase already uses, with a ceiling in `config/` | One function |
+| 3 | Move `key_points_max` onto `SummaryBand`, so the shortest band gets 0-1 and the longest gets 5 | One contract field |
+| 4 | One worked good-or-bad pair in the system prompt - about 30 tokens, prefix-cached across the shard, so free after the first item | 30 tokens |
+
+**The instrument**: new-fact rate, the share of key points stating a fact the summary does not contain. Baseline is **11 of 89, 12.4 percent**, reported per band. The two-call design unlocks a strictly better version - **element-id disjointness**: a key point whose span-anchored element ids are all already cited by the summary is a restatement by construction, with no lexical false positives.
+
+**The standing trap, and it would quietly destroy the measurement: never use new-fact rate to select.** Best-of-N against it produces key points optimised for lexical difference from the summary, which is the Goodhart form of this exact metric, and the alarm then stops being able to detect the thing it was built for.
+
+On swapping the model: re-run the same twenty items on the same weights through the fixed prompt first. If the rate does not move, it becomes a model question. **Fine-tuning before the prompt fix trains a model to reproduce a prompt defect.**
+
+### 10.6 What else call 1 extracts
+
+The currency, measured 2026-08-23 on AMD EPYC 9V74, 4 vCPU: **100 extra output tokens in call 1 costs 26.8 s per item** - 16.6 s to write at 6.01 tok/s decode plus 10.2 s to read back on call 2 at 9.84 tok/s prefill. At 20 items that is **8.9 minutes of shard wall clock per 100 tokens.** The binding constraint is output tokens, not context.
+
+| Signal | What it buys | Tokens | Shard cost | Verdict |
+|---|---|---|---|---|
+| **Salience rank per element** | Decides which mark lands first (row 30), which facts become key points, and search ranking | ~40 | 3.6 min | **TAKE.** Decoded *after* the element list, so it is an observation and not a prior |
+| **Attribution type per claim** (self-reported / named / anonymous / unattributed) | Makes the prompt's attribution rule mechanical instead of aspirational | ~15 | 1.3 min | **TAKE.** Cheapest quality win available |
+| **Hedge marker per claim** | Closes the loop with the hedge lexicon already in `backend/idhazh/evals/metrics.py` | ~15 | 1.3 min | **TAKE.** Same lexicon, or the two decouple |
+| **Topical keyphrases**, 5-8, verbatim | The only search surface that needs no embedding model. Also an archive facet | ~50 | 4.5 min | **TAKE.** Verbatim and span-anchored, or not at all |
+| **Lede and quote sentence indices** | Feeds `quotecard` (row 39) and the existing `lead_coverage` metric | ~20 | 1.8 min | **TAKE** indices only |
+| Numeric-unit normalisation | A converted figure the source never stated | 0 | - | **NO.** Code does arithmetic; `measure_canonical` sits beside the surface unit |
+| Coreference chains | Within-article entity merging | ~40 | 3.6 min | **NO.** Exact and prefix matching over spans code already holds does most of it, and the model's version cannot be span-validated (Rule #8) |
+| Question-answer pairs | Genuinely the strongest retrieval surface | ~105 | 9.3 min | **NO, not in call 1.** The only candidate that asks the model to **author** rather than to find. If it ships it is a third call on a subset |
+| Sentiment or tone | Nothing this project consumes | ~10 | 0.9 min | **NO.** A tone label invites a tinted card, which is an editorial judgement the digest does not make |
+| Embedding vectors | Vectors for search | n/a | - | **NO.** Floats through a JSON decoder are hallucinated floats. A small sentence encoder over the committed summaries at build time is the honest route, and it costs the model nothing |
+
+Accepted total is about **140 tokens, 12.5 minutes of shard wall clock** at 20 items.
+
+Three things dilute the primary jobs, named so they can be watched for: **mixing an author-task into a find-task** teaches the model that inventing is in scope for call 1, and the span validator then starts rejecting real elements for reasons nobody can trace; **any field decoded before the thing it describes** becomes a rationalisation, which this codebase has already measured once (row 12); and **any field with no named consumer** costs 26.8 s per 100 tokens per item, forever.
+
+---
+
+## 11. Context, tokens and degradation
+
+### 11.1 `--no-context-shift`
+
+The server is started with `--no-context-shift` ([backend/idhazh/llm/server.py](backend/idhazh/llm/server.py#L123)). The reason is written next to it:
+
+> Without this the server silently drops the middle of an oversized prompt and answers about a document it no longer holds, which scores as a hallucination and names the wrong cause. Refusing is the signal.
+
+So an oversized prompt returns an error instead of a plausible answer about a document that was never read. Keep it.
+
+### 11.2 Raising `n_ctx` - settled
+
+**Ruling: `n_ctx` goes to 16384 with `flash_attention` on, in one change. 32768 and above are refused.**
+
+#### The architecture, from the model card fetched 2026-09-02
+
+These are model-card claims, not our measurements, and they are labelled as such wherever they are used.
+
+| Property | Value |
+|---|---|
+| Native context | **262,144 tokens**, extensible to 1,010,000 with YaRN |
+| Layers | 32, hidden dimension 4096 |
+| Layout | `8 x ( 3 x (Gated DeltaNet -> FFN) -> 1 x (Gated Attention -> FFN) )` |
+| **Consequence** | **Only 8 of 32 layers carry a growing KV cache.** The other 24 are linear-attention layers with a fixed-size recurrent state per sequence |
+| Gated Attention | 16 Q heads, **4 KV heads**, head dimension 256 |
+| Sampling the card recommends, non-thinking | temperature 0.7, top_p 0.8, top_k 20. **We use 0.0 / 1.0 / seed 0** - determinism wins, deliberately |
+| Thinking | On by default. `enable_thinking: false` is a chat-template variable |
+
+The expert's `--ctx-size 131072` is defensible on the card and wrong on this runner. It is also internally inconsistent: the same proposal narrows `--ubatch-size` to 128, which is only needed to pay for a huge window that this pipeline cannot fill.
+
+#### KV cache arithmetic
+
+Per full-attention layer per token: `4 KV heads x 256 head dim x 2 (K and V) = 2,048 elements`. Across 8 layers:
+
+| Cache type | Bytes per token | 8,192 | 16,384 | 32,768 | 131,072 |
+|---|---|---|---|---|---|
+| f16 | 32.0 KiB | 0.25 GiB | 0.50 GiB | 1.00 GiB | 4.00 GiB |
+| q8_0 | 17.0 KiB | 0.13 GiB | 0.27 GiB | 0.53 GiB | 2.13 GiB |
+
+The hybrid layout is why this is affordable: a dense 32-layer model of this size would cost roughly four times as much per token.
+
+#### Against the measured baseline
+
+Measured peak resident memory is **13.29 GiB worst over 72 shards**, on a 14.90 GiB usable runner - **1.61 GiB free.** Arithmetic accounts for only about 5.6 GiB of that 13.29, so **no pure-arithmetic extrapolation is trustworthy on its own**; only the delta is, because just two terms move with `n_ctx` - the KV cache, and the attention score buffer that flash attention removes.
+
+| n_ctx | KV | flash-attn | Projected worst peak | Free | Verdict |
+|---|---|---|---|---|---|
+| 8,192 | f16 | off | 13.29 GiB (measured) | 1.61 GiB | today |
+| **16,384** | **f16** | **on** | **about 13.29 GiB** | **about 1.61 GiB** | **ship** |
+| 16,384 | f16 | off | about 13.54 GiB | 1.36 GiB | works, and pays a bill it need not |
+| 32,768 | f16 | on | about 13.79 GiB | 0.86 GiB | **refused** |
+| 131,072 | f16 | on | about 16.8 GiB | negative | dead |
+
+**Flash attention on pays for the entire doubling of the window.** It removes a term that scales as `ubatch x n_ctx`, which is exactly what the larger KV costs.
+
+#### Why 32768 is refused even though it fits
+
+It buys nothing. The largest prompt ever seen is 5,516 tokens and `extract.truncation_cap_tokens` is 5,000, so a 32K window is more than five times what this pipeline can put into it - and it would spend 1 GiB of a 1.61 GiB margin doing so. Rule #2: the budget is the platform, not a preference.
+
+And 131,072 fails on wall clock before it fails on memory. Filling it once at the measured prefill rate of 9.84 tok/s takes **13,320 seconds, or 222 minutes for a single article**, against a 150-minute shard timeout. It can never be filled.
+
+#### Why 16384 is the right number
+
+The two-call worst case is about 8,580 tokens: 880 system + 5,000 article cap + about 1,200 call-1 output + about 300 call-2 instructions + about 1,200 call-2 output. That is **105 percent of 8192** - the design does not fit in today's window. 16384 gives 1.9x headroom over that worst case and costs nothing once flash attention is on.
+
+### 11.2a The full settings comparison
+
+| Setting | Today | Expert proposes | Andre's verdict | Why |
+|---|---|---|---|---|
+| `--ctx-size` | 8192 | 131072 | **16384** | Two-call worst case is 105 percent of today's window. 131072 takes 222 minutes to fill once |
+| `--flash-attn` | unset | `on` | **Take it, own commit** | Lowest-cost item on the list and the precondition for quantised V-cache. Assert `flash_attn = 1` from the startup line rather than trusting the flag took |
+| `--jinja` | absent | present | **Highest-value item. Needs a new digested config field** | Without it the server may apply its own template instead of the model's, and `enable_thinking: false` is a variable only the model's template consumes - so the thinking-off control may never have reached it. The fingerprint cannot see this today |
+| `--cache-type-k` | f16 | `q8_0` | **Measure first. Not in the same commit as `n_ctx`** | Halves KV bytes but changes how partial sums accumulate, so it changes the words. It is folded into the fingerprint for that reason. The fallback, not a default |
+| `--cache-type-v` | f16 | `q8_0` | **Measure first, coupled to `-fa`** | llama.cpp gates V-cache quantisation on flash attention. Setting it without `-fa` errors or is silently ignored depending on build |
+| `--ubatch-size` | 512 | 128 | **Reject. Keep 512** | Exists only to pay for the 131072 proposal. Prefill is 63 percent of model time and a 512-column matrix already saturates 4 threads |
+| `--threads-batch` | unset | 4 | **Reject as a config edit** | llama.cpp falls back to `--threads` when absent, so on 4 vCPU this spells existing behaviour - but writing `4` where `null` sits **invalidates every prior work identity for zero change in output** |
+| `--batch-size` | 512 | 512 | No-op | Already 512 |
+| `--threads` | 4 | 4 | No-op | Already 4, and there are 4 vCPU |
+| `--parallel` | 1 | 1 | **No-op, and load-bearing** | One slot is what makes call 2 reuse call 1's prefix. Two slots evict it silently. Measured 2026-08-25: two sequences bought 1.055x aggregate decode - 5.5 percent faster where the gate wanted 40 percent |
+
+**Determinism is not at risk**: nothing above touches `temperature` 0.0, `top_p` 1.0 or `seed` 0. What five of them break is **comparability across the change**, because flash attention, both cache types, ubatch and threads-batch alter float accumulation order. `n_ctx` alone invalidates every prior work identity, so absorb it in the same commit as the two-call cutover, which section 10.3 already accepts as a discontinuity.
+
+### 11.3 The output budget
+
+`visuals.max_output_tokens` is **400** today. A reply that hits it becomes `none` with "the routing reply was cut off by the output budget" ([backend/idhazh/route.py](backend/idhazh/route.py#L520)) - and the owner has already observed the router cutting off in practice.
+
+Under strict JSON-schema decoding a reply that hits `max_tokens` is an **unparseable prefix**, so a cut costs the whole reply, not the tail. The two-call design puts elements, entities, events, relations, the summary and the plan through that ceiling.
+
+**The budget is not picked. It is derived** from the contract's own bounds: every array gets `maxItems`, every string gets `maxLength`, and the worst-case reply length is then arithmetic. It is re-derived whenever a bound changes, and the derivation is committed beside the number. Roughly 1,200 tokens is the order of magnitude for call 2 given 16-24 labelled elements plus the plan, but the arithmetic is what sets it, not that figure.
+
+### 11.4 Degrading on `context_exceeded`
+
+Today `FailureCode.CONTEXT_EXCEEDED` exists and is recorded, and the item gets no summary at all. Under the two-call design the longest articles - which are also the most chartable - are exactly the ones that would fail.
+
+**Ruling: chunked degradation, and the constants already exist.** `evaluation.chunk_words` (900) and `chunk_overlap_words` (150) are used by the scorer. The same shape applies: when the article does not fit, read it in overlapping chunks, extract elements per chunk, merge on span, and plan over the merged table. Element extraction is naturally chunkable because an element is local to its span. The summary over a chunked read is marked as such, and the item carries the existing source-limit sentence.
+
+This is Andre's ruling in the one case the owner asked about, and it is strictly better than the current behaviour, which is to publish nothing.
+
+---
+
+## 12. Proposal coverage matrix
+
+Every numbered item in the proposal, with its disposition here. **This is the section to audit.**
+
+### 12.1 Owner decisions P.D1 - P.D15
+
+| P.D | Subject | Disposition |
+|---|---|---|
+| D1 | Two calls, one model | Accepted, **ordering reversed** - section 10 |
+| D2 | Full vocabulary declared, templates in waves | Accepted; wave order follows observed frequency (row 48) |
+| D3 | Open element labels | Accepted (row 6) |
+| D4 | Per-type encoding roles | Accepted (row 15, flat map with all keys required) |
+| D5 | No invented metric weights | Accepted; weights learned (row 67) |
+| D6 | Downgrade ladder | Accepted (row 50) |
+| D7 | Numerals in prose enforced | Accepted; allow-list minimal and versioned, `allowlist_hits` reported |
+| D8 | Feedback captured out-of-band | Accepted, amended by O12 |
+| D9 | Paired comparisons across config versions | Accepted; visual-vs-no-visual is the standing arm, config A/B rides on top (Editor, P.L16) |
+| D10 | `none` arm is a config ratio | Accepted with a floor above zero and a frozen window (Editor, P.L12) |
+| D11 | Diagram path ships | Accepted (row 46) |
+| D12 | Rejected plans labelled | Accepted (row 68) |
+| D13 | Extraction is measured | Accepted (Carmack, P.L29 - zero runner cost) |
+| D14 | Trusted Element, not Trusted Fact | Accepted, all six kinds (row 5) |
+| D15 | Principle amended to "all semantic analysis" | Accepted |
+
+### 12.2 Litigation rows P.L1 - P.L35
+
+| P.L | Verdict | Owner | Where |
+|---|---|---|---|
+| L1 | AMEND - two calls, ordering reversed | Andre / Owner | 10.1 |
+| L2 | AMEND - declared set is config; wasted-decode rate reported | Carmack, Fowler | row 48 |
+| L3 | AMEND - `pie` ships gated; stacked bar is its downgrade | Jony / Owner | row 43 |
+| L4 | ACCEPT - open vocabulary with canonicalisation | Andre | row 6 |
+| L5 | ACCEPT - equal weights, then learned | Andre | row 67 |
+| L6 | ACCEPT - two tiers, structurally nested | Fowler | 4.A |
+| L7 | ACCEPT - downgrade ladder behind the flag | Owner | row 50 |
+| L8 | AMEND - D7 on visual-owned strings; `key_points` included since call 2 now sees elements | Andre / Owner | 10.3 |
+| L9 | AMEND - diagram ships behind the `processual` classifier | Editor | row 46 |
+| L10 | AMEND - invariant degrades the item, contract test fails CI | Fowler | row 2 |
+| L11 | AMEND - observe only; single-shape day is a defect | Jony, Susan | row 49 |
+| L12 | AMEND - ratio with a floor, frozen in a window | Editor | 12.1 D10 |
+| L13 | ACCEPT - both modes behind `REVIEW_MODE`, `mode` field mandatory | Andre | P.6.3.6 |
+| L14 | AMEND - budget is per shard, not per article | Carmack | 8.2, 8.3 |
+| L15 | AMEND - versions are **date-stamps**, never integers (section 11) | Fowler | 13 M7 |
+| L16 | AMEND - visual-vs-no-visual is the standing arm | Editor | 12.1 D9 |
+| L17 | ACCEPT - thresholds from observed percentiles | Carmack | 13 M5 |
+| L18 | **CLOSED - d3** | Jony / Owner O5 | section 7 |
+| L19 | ACCEPT - span-anchored edges, no exception | Editor | row 47 |
+| L20 | AMEND - bound by legibility, not a node count | Susan, Carmack | row 26 |
+| L21 | **CLOSED - progressive enhancement** | Jony, Susan, Carmack | row 22 |
+| L22 | ACCEPT - derived values built with the closed allow-list | Owner O16 | row 45 |
+| L23 | AMEND - `confidence` moves after `type` or is deleted | Andre | row 18 |
+| L24 | ACCEPT - principle amended | Andre | 12.1 D15 |
+| L25 | ACCEPT - wire in the existing scorer | Fowler, Andre | row 64 |
+| L26 | ACCEPT - offline paired evaluation | Andre | row 66 |
+| L27 | AMEND - assert `cached_tokens`, not a ratio | Carmack, Andre | row 11 |
+| L28 | **RESOLVED by Editor** - the three-part gate | Editor | row 40 |
+| L29 | ACCEPT - extraction is measured | Carmack | 12.1 D13 |
+| L30 | ACCEPT - rejected plans labelled; `review/` outside `frontend/public/` | Fowler, Andre | row 68 |
+| L31 | ACCEPT - all six kinds | Fowler / Owner | row 5 |
+| L32 | AMEND - verbatim only, capped at `max_verbatim_words` | Andre / Owner O13 | row 39 |
+| L33 | **OVERRULED** - `keyfacts` ships with its kill criterion | Owner O16 | row 42 |
+| L34 | ACCEPT - timed comprehension arm ships | Owner O16 | row 67 |
+| L35 | ACCEPT - every rate per potential class | Andre, Editor | row 56 |
+
+### 12.3 Risks P.R1 - P.R20
+
+| P.R | Disposition |
+|---|---|
+| R1 | Rejection rate and `planned_type_entropy` alarmed as a **pair**, read per `plan_version` not per day - decoding is `temperature 0.0, seed 0`, so entropy cannot drift daily (Andre) |
+| R2 | Closed by D13; extraction metrics ship |
+| R3 | Closed by row 68 |
+| R4 | Closed by row 8 |
+| R5 | Closed by row 2 |
+| R6 | Managed by `ledger_version` stamping (row 7) |
+| R7 | **Reframed.** Andre's structural defence assumed summary-first. Under section 10's ordering the summariser sees the element table, so stripping numbers from prose does not raise `information_delta` - it is measured against elements, not against the summary's own scarcity. `summary_informativeness` still ships as the counterweight |
+| R8 | Closed - floors from depth-0 published visuals only |
+| R9 | Closed by row 17 |
+| R10 | Disclosed - edges are Tier 2 with a span; the decision procedure is published and edges are sampled for audit |
+| R11 | Closed - alt text generated deterministically by the compiler, inside D7 |
+| R12 | Closed by row 55 |
+| R13 | Closed - `queue_position` on every label |
+| R14 | Closed by row 65 |
+| R15 | `evaluation_cost` reported separately **and** a sample-rate cap in config enforced inside the shard budget (Carmack) |
+| R16 | Closed - `none_arm_ratio` set from a reviewer-hours budget, recorded on the queue |
+| R17 | Closed by rows 24 and 35 |
+| R18 | Closed by row 49 plus Editor's rule: a running story's visual repeats only when its numbers moved |
+| R19 | Closed by row 56 |
+| R20 | Closed by row 40 |
+
+### 12.4 Open questions P.Q1 - P.Q10
+
+| P.Q | Answer |
+|---|---|
+| Q1 | Classifier thresholds live in `config/idhazh.json` behind a Pydantic model, stamped by that file's existing top-level `version`. No bespoke version field, no named owner (Fowler) |
+| Q2 | Extend `visuals.min_chart_points` into a map keyed by the type enum. `table` does **not** bypass it - a one-row table is a sentence (Fowler) |
+| Q3 | `information_delta` is deterministic: plan `element_ids` whose `raw` string does not appear in the summary, over all plan `element_ids`. Relationship extraction from prose would need a model, which would make the metric share the failure modes of the thing it measures (Andre) |
+| Q4 | Normalised types with the surface form preserved. `time` carries `normalised` plus `granularity`; the Tier 1 guarantee is the verbatim surface form |
+| Q5 | Sampling rate, reviewer count and agreement target are set from a reviewer-hours budget; `inter_reviewer_agreement` is published beside every keep rate or the keep rate is not quotable |
+| Q6 | The edge decision procedure is published, edges are sampled for human audit, and edge anchoring is never described as deterministic |
+| Q7 | The canary mechanism extends to element-table fixtures. Zero runner cost; the only condition is that the fixture set stays small enough that six checkouts do not pay for it (Carmack, Fowler) |
+| Q8 | **Yes.** The eval ledger, `ConfidenceBand`, `BandReason`, `verbatim_run` and the faithfulness extra all exist. Wire in, build nothing (row 64) |
+| Q9 | One rule: **a ledger folds, an asset deletes, a lookup deletes.** Section 9.2 |
+| Q10 | Alias-ledger additions are reviewed in the PR that adds them; the model never writes to it unreviewed (row 7) |
+
+### 12.5 Proposal sections
+
+| P section | Disposition |
+|---|---|
+| 1.1 Governing principle + ownership boundary | Accepted, with D15's amendment |
+| 1.2 End-to-end flow | Accepted, **with the call ordering reversed** - section 10 |
+| 1.3 What changes | Accepted; the "today" column corrected by section 2 |
+| 1.4 Non-goals | Accepted. Note: "no more than ~10 chart types" is explicitly replaced by rules-per-type |
+| 1.5 Compliance audit | Accepted; deviations A and B carried openly |
+| 2.1 Trusted Element | All six kinds (row 5), spans by code (row 4) |
+| 2.2 Open label vocabulary | Accepted with canonicalisation and the alias ledger (rows 6, 7, 8) |
+| 2.3 Derived values | Built (row 45) |
+| 2.4 Article Visual Potential | Built, plus a quote-led class (row 58) and a `narrative` reason (row 57) |
+| 3.1 Plan contract | Accepted; `confidence` repositioned (row 18) |
+| 3.2 Encoding roles | Accepted as a flat map with all keys required (row 15) |
+| 3.3 What planning decides | Accepted |
+| 3.4.1 Chart vocabulary | All 12 types ship (rows 43, 44, 45) |
+| 3.4.2 Diagram vocabulary | Ships (rows 46, 47); `flow` first, then `hierarchy`, `state`, `mindmap` each with their own validator rules |
+| 3.4.3 Infographic vocabulary | All five ship (rows 38-42) |
+| 3.5 Worked example | Adopted as the implementer reference, updated for the new call ordering |
+| 3.6 Schema lineage | Accepted |
+| 4.1 Validator | Accepted; nine current predicates carried forward, `same_unit_bars` behaviour preserved as a fixture (row 19) |
+| 4.2 Downgrade ladder | Ships (row 50) |
+| 4.3 Compiler | Ships; `planned_type` and `rendered_type` both recorded |
+| 4.4 Rendering | **Closed**: d3, progressive enhancement, inline SVG (rows 21-23) |
+| 4.4.5 Draco | Evaluated with a written verdict (RV12) |
+| 5.1 Upstream metrics | Ships, three validation tiers |
+| 5.2 Machine quality | Ships; `structural_efficiency` renamed `density_floor` where it measures size (row 27) |
+| 5.3 Cost | Ships; `compile_ms` and `render_ms` split from the start |
+| 5.4 Human instrument | Ships, Q1-Q5 plus Q4b, plus the timed arm (row 67) |
+| 5.5 KPI set | Ships, per potential class and per vertical (Editor) |
+| 5.6 The two loops | Accepted |
+| 6.1 Telemetry event | Ships as the canonical schema; `state/visuals/` is its store (row 55) |
+| 6.2 Console | Ships, plus every existing eval metric not yet on the console (row 70) |
+| 6.3 Feedback without a server | Ships, amended by O12 |
+| 6.4 Versioning and migration | Ships; **versions are date-stamps, not integers** (P.L15) |
+| 7.1 Risk register | Section 12.3 |
+| 7.2 Litigation | Section 12.2 |
+| 7.3 Open questions | Section 12.4 |
+| 7.4 References | Retained |
+
+---
+
+## 13. Measurements that must be taken
+
+Rule #10: an unmeasured number may not justify a design. Each row blocks something named.
+
+| # | Measurement | Cost | Verdict | Blocks |
+|---|---|---|---|---|
+| M1 | Memory headroom on the runner | **already taken** | **CLOSED.** 72 rows, peak 13.29 GiB worst on a 14.90 GiB box. Write it into `docs/reference/measurements.md` | Was blocking `n_ctx`; no longer |
+| M2 | **Marginal MB per published day** | **one command** | **TAKE TODAY.** The two available readings differ by 18x - 3.90 MB/day from the per-item figure, 70.2 MB/day from the built-to-payload ratio, which is 172 days to the alarm or 9.6. Difference `retention.measure()` on two committed dates | `image_months`, off-Pages hosting, the coverage target, E3 |
+| M10 | Repository pack growth per day | **one command** | **TAKE WITH M2.** Pack size at two commits, differenced. Rides along free | Whether the remote carrier trades a hard cap for a worse soft one |
+| M7 | How often an article states a whole | **one command** over the committed corpus | Take it - nearly free - but it gates the vocabulary doc only, not the critical path | `pie` and `stacked_bar` template value |
+| M11 | **Duplicate rate at plan time** | **one command** | **TAKE WITH M2.** The committed day payloads already carry `also_covered_by`; that count is the upper bound on what a plan-time cut would save | The dedup threshold - section 14.2 |
+| M3 | Summarizer cross-host spread | 10 full runs | **SKIP - you already have it.** The ledger spans five CPU models and `job_seconds` 1,584 to 8,124 s, a **5.1x spread on real production work**, which is better evidence than ten synthetic shards | `shard_timeout_minutes`; conservative default below |
+| M5 | Console alarm thresholds | one corpus month | **SKIP.** Ship every alarm in record-only mode with no threshold. An alarm set on a guess is worse than no alarm | Every console alarm |
+| M9 | `raw.githubusercontent.com` under burst | scripted, hits a third party | **SKIP for now.** Keep `visuals.asset_base_url` same-origin. The number is not needed until M2 says bytes must move off Pages | The degraded state for the remote carrier |
+| M4 | Call-2 `cached_tokens` | cannot precede the code | **Not a measurement campaign - a test.** Assert `cached_tokens >= call-1 input + output` inside the two-call path, same commit | Whether the two-call design is affordable |
+| M8 | Build-time render cost per visual | cannot precede the code | Same. Time the d3 emitters when they exist, 20 repetitions, median and interquartile range | The corpus re-render path |
+| M6 | Human labelling cadence | needs a person | Gates the review plan-doc only. **Do not let it block anything earlier.** Start labelling in parallel; the rate reveals itself | Weight fitting, pairwise, the timed arm |
+
+### 13.1 The shortest path - three commands, then one dispatch
+
+1. **M2** - difference `retention.measure()` on two committed dates. Unblocks `image_months`, off-Pages hosting and E3.
+2. **M10** - pack size at two commits. Unblocks whether the remote carrier is a trade or a loss.
+3. **M11** - count `also_covered_by` over the committed day payloads. Unblocks the dedup threshold.
+
+Then land `n_ctx` 16384 **and** `flash_attention` on together, on one manual dispatch, and read the KV-buffer and compute-buffer lines out of `llama-server.log`. That single run closes the 7.7 GiB gap between arithmetic and measured memory, and is the only thing standing between the project and 32768 if it is ever wanted.
+
+**Nothing else blocks the first plan-doc.**
+
+### 13.2 The conservative default that replaces M3
+
+Worst measured shard is **8,124 s = 135.4 minutes at 40 items, which is 90.3 percent of the 150-minute timeout.** The median is 78.5 minutes, 52 percent.
+
+**Keep `shard_timeout_minutes` at 150.** Do not lower it to reclaim the halved item count. Size from the worst case, not the median - the margin between 78.5 and 135.4 minutes is exactly what the second call spends, and the worst case is the one that loses all 20 of a worker's items.
+
+### 13.3 Six memory fields to add, all from data already collected
+
+`peak_rss_bytes` is llama-server's high-water mark alone, so every headroom figure above is an **upper bound on headroom** - the unsafe direction. All six below are optional additive fields on `RuntimeCountersRow`: one changelog entry, `version` stamped, no read-side migration.
+
+| Field | Source | Already collected? | What it unblocks |
+|---|---|---|---|
+| `kv_cache_bytes` | `llama-server.log` KV-buffer line at load | yes, already passed as `--server-log` | Closes the gap between 5.6 GiB of arithmetic and 13.29 GiB measured |
+| `compute_buffer_bytes` | same log | yes | The only other term that moves with `n_ctx`. Proves or kills the flash-attention saving |
+| `n_ctx_configured` | same log | yes | The row says which window produced its memory number |
+| `model_buffer_bytes` | same log | yes | Proves the weights on disk are the weights in memory |
+| `python_peak_rss_bytes` | `rss-samples.tsv` column `python_vmrss_kb` | **yes, and thrown away** | llama-server is not the whole job |
+| `cgroup_peak_bytes` | `memory-peak.txt` | **yes, and only echoed to a 2-day artifact** | The number the runner counts against the limit. The only authoritative one |
+
+One collection defect to fix with them: the sampler reads `VmHWM` for llama-server but `VmRSS` for python. `VmRSS` is instantaneous, so a 15-second sampler can miss a spike and the recorded python peak is a **lower** bound. Read `VmHWM` for both.
+
+---
+
+## 14. Answers to standing questions
+
+### 14.1 `page_weight.ceilings_bytes` - why it exists and why PRs keep failing
+
+It is a **gzip size ceiling per prerendered route**, enforced by `frontend/scripts/bundle-gate.mjs` reading `config/idhazh.json`.
+
+Why it matters: a prerendered HTML page that quietly grows is a page that quietly gets slower on a phone on a slow connection, and nothing else in the project would notice. `/console/` is at 276,828 bytes gzipped - a quarter of a megabyte of HTML before a single script.
+
+Why it keeps failing PRs, in the config's own words: the three `/console/` ceilings "grow with the ledger their panels read, so each ceiling carries a measured few days and **expires by design**". **These ceilings are meant to be re-baselined.** A failure is usually the gate doing its job on a page that legitimately grew, not a defect.
+
+Two things fix the friction without losing the gate:
+
+1. **Re-baselining is routine, not an incident.** Record the new number and the date in the same commit. A page that renders a day is already never capped - only `/` and `/<date>/` are exempt, because the only way under such a ceiling is to publish fewer items.
+2. **Give the visual work headroom before it starts.** Re-baseline every `/console/` ceiling once, at the top of the work, with a stated buffer sized from measured growth rather than raised reactively when a PR goes red. A ceiling raised in the PR that broke it is a ceiling nobody is enforcing.
+
+#### Test filtering - there is none today
+
+`pyproject.toml` has `[tool.pytest.ini_options]` with `testpaths = ["backend/tests"]` and `addopts = "-q -n auto"` and **no `markers` list at all.** Every local run is the whole suite.
+
+Add markers for the whole project, not only the visual work:
+
+| Marker | Covers | Why it earns a name |
+|---|---|---|
+| `contract` | Schema generation, drift, round-trip | The gate that must run on every contract change and almost nothing else |
+| `visual` | The planner, the validator, the compiler, the renderer | The new surface. Lets a renderer change run in seconds |
+| `slow` | Anything over a second - canary sweeps, corpus scans, the span leak guard | The set a developer skips locally and CI never does |
+| `workflow` | The YAML contract tests and the shell-script tests | Only relevant when `.github/` changes |
+
+CI keeps running everything. The markers exist so a developer can run the ten tests their change can break, and so the six-minute local suite stops being the reason a gate gets skipped. On the route tests specifically: they move with the module, but `same_unit_bars`' behaviour becomes a committed fixture (row 19) rather than being deleted - it records a real live model failure.
+
+### 14.2 How duplicates are found today - and the correction
+
+**Assemble does not de-duplicate. It groups, and removes nothing.** `collapse_same_story()` clusters by embedding similarity at 0.94 with a weakest-link rule, and its own docstring states the outcome: "Nothing is removed. Every item stays in the published order it was in" ([backend/idhazh/assemble.py](backend/idhazh/assemble.py#L383)). It is a display decision.
+
+**And `carried_by` only sees an identical URL.** `merge()` groups by `url_key`, so two outlets writing the same story at two addresses are two items with `carried_by` 1 each ([backend/idhazh/rank.py](backend/idhazh/rank.py#L441)).
+
+So the owner's instinct is right and the gap is real: **a same-story-different-URL duplicate is fetched, summarised, scored and published today, and the assemble grouping saves not one model call.**
+
+#### The proposed cross-shard dedup worker is refused
+
+| Cost | Figure |
+|---|---|
+| A runner slot | One more job, plus a 5.29 GiB cache restore if it needs the model |
+| Serial position | It cannot start until the slowest shard finishes, so it **adds its whole duration after 135 measured minutes**. It overlaps nothing |
+| **What it saves** | **Zero.** By the time every shard has finished, every model call has already been spent |
+
+#### Where dedup belongs: the plan stage, and it must be semantic
+
+**A pure string comparison of titles is refused.** Only syndicated wire copy shares a title. When a significant event happens almost every outlet writes its own headline, so a string match finds the one case that `url_key` already catches and misses the case that matters.
+
+The encoder to do it properly is already a hard dependency. `onnxruntime` is pinned exactly in `pyproject.toml` and measured at **16 ms to embed three summaries** (Windows 11, 8 vCPU, 2026-08-22). Embedding 80 titles-plus-leads is therefore well under a second, needs no model call, and reaches no network.
+
+```
+PLAN STAGE, before the safety ceiling and before sharding
+
+  1. candidates <- everything collected today, each with title + feed lead
+  2. collapse exact url_key            (this already happens)
+  3. vectors <- encode(title + " " + lead[:200]) for each candidate
+  4. recent  <- vectors for everything published in the last
+                collect.dedup_window_hours (48), read from state/published.csv
+  5. for each candidate, in descending rank score:
+       a. if max cosine(candidate, kept) >= dedup_similarity_min
+            and the match is from a DIFFERENT source
+          -> mark as duplicate of the kept item, do not plan it
+       b. else if max cosine(candidate, recent) >= dedup_similarity_min
+          -> it is a re-run of a story already published; apply
+             a recency decay to its score rather than cutting it,
+             because a story that developed is not a duplicate
+       c. else keep
+  6. Editor's rule binds: never cut a desk's only story of the day
+  7. write what was cut, and what it was cut against, to the run record
+```
+
+| Property | Value |
+|---|---|
+| Compute at 80 items | 80 x 79 / 2 = 3,160 comparisons plus the 48-hour window. Sub-second |
+| Saved per duplicate cut | Roughly 3 to 4 minutes of shard wall clock under the two-call design - **5 percent of a worker's job** |
+| Runner slots added | **zero** |
+| New config | `collect.dedup_window_hours`, `collect.dedup_similarity_min`, `collect.dedup_decay_half_life_hours` |
+| Window maintenance | The 48-hour window reads `state/published.csv`, which the seen prune already bounds at `collect.seen_window_days`. No new retention surface |
+
+**Record-only on the first run**: compute the collapse, log what it would have cut and what it matched against, cut nothing. A cut at plan time is irreversible where the assemble grouping is reversible and visible.
+
+The rate is measurable now with no run: the committed day payloads already carry `also_covered_by`, and that count is the upper bound on what a plan-time cut could save. That is measurement M11.
+
+### 14.3 How quotes are identified today
+
+**They are not.** There is no quote extraction anywhere. `evals/metrics.verbatim_run()` measures the share of the summary's 4-grams that appear verbatim in the source - an **anti-copying** metric - and `summarize.max_verbatim_words` (20) caps how much of the source a summary may echo.
+
+So quote identification is entirely new work, and it is the `quote` element kind: the model names the sentence, code finds it by exact search, and the span proves it. That is why O13's restriction matters - a quote card fires only when the semantic pass identified a genuine attributed statement, never on every article.
+
+### 14.4 Tracing and Langfuse - what ships
+
+**Today: the code supports it, and it is off.** `backend/idhazh/telemetry.py` has a `langfuse_sink()` that activates only when `LANGFUSE_HOST` and its key pair are all set. `observability.tracing_enabled` is `false`. CI installs neither the extra nor a key. The default sink writes one JSON line per span to `backend/var/traces/`, which is gitignored.
+
+The doctrine is settled in [docs/concepts/telemetry.md](docs/concepts/telemetry.md) (2026-08-31): **a local file by default, a host opt-in.** The owner's recollection is correct.
+
+#### What changes
+
+| # | Change | Note |
+|---|---|---|
+| T1 | `observability.tracing_enabled` -> **true** | The span tree becomes the default, not a developer toggle |
+| T2 | The **file sink stays the only sink that runs in CI** | No `LANGFUSE_HOST`, no key, no third party. Rule #1 is untouched. The Langfuse host stays available to a developer who names it |
+| T3 | Spans for the new stages: `extract_elements`, `plan_visual`, `compile_visual`, `render_visual`, and a `model_call` generation per call with its token counts | `telemetry.AttrKey` is a closed vocabulary; each new name is added in the commit that emits it |
+| T4 | **A per-shard span rollup is appended to `state/span-rollup/<YYYY-MM>.csv`** and published to the console | **Not** `state/telemetry-aggregate/` - that directory is taken by the folded item-health ledger, with its own contract and schema. See 14.4a |
+| T5 | Every existing eval metric that is not yet on the console gets a panel: `ConfidenceBand`, `BandReason`, `verbatim_run`, faithfulness, lead coverage, plus the new visual metrics | O11 |
+| T6 | **Widen `publish_telemetry.PUBLIC_COLUMNS` by eight columns** | The largest win in the whole telemetry effort, and it needs no spans at all. See 14.4b |
+
+#### The one collision, and how it resolves
+
+[docs/concepts/telemetry.md](docs/concepts/telemetry.md) records a rejected alternative: **"Making a span a committed record - a fourth record of the same run, free to disagree with the other three." Authority: Fowler, 2026-08-30.** Committing raw spans would reverse that ruling.
+
+It does not need reversing. **Commit an aggregate, not the spans.** At the end of a shard, fold the span tree into a handful of numbers - time in each stage, count per stage, the model-call token totals - and append that as one row per shard, in the shape `state/runtime-counters.csv` already uses. The raw spans stay in the gitignored file and the two-day artifact.
+
+That keeps the rule the doc is protecting: the ledgers stay the record, a span stays evidence, and there is no fourth record free to disagree - because the committed row is *derived from* the spans rather than being a second account of the same events.
+
+**Rule #11 rides with it unchanged**: the attribute vocabulary is closed, every value is a digest, a count, a flag or a closed name, `telemetry.attribute` refuses a string over 64 characters, and `backend/tests/test_spans.py` plants a sentinel and fails the build if a single character of it reaches an attribute. Turning tracing on does not relax any of that - it makes the guard run on every CI job instead of on a developer's box.
+
+### 14.4a The clearing condition, sharpened
+
+"Derived from spans" is **not** sufficient on its own. `ItemHealthRow` already carries `fetch_ms`, `extract_ms`, `summarize_ms`, `prefill_ms`, `decode_ms`, `input_tokens`, `output_tokens` and `cached_tokens` **per item, per run**. A rollup restating any of those is exactly the fourth record the ruling refused: two code paths computing one number, free to diverge.
+
+> **The committed rollup may carry only what no ledger column holds.**
+
+| | Ruling |
+|---|---|
+| Committed | Count and duration for **five spans only**: `robots`, `tag`, `render_prompt`, `parse_reply`, `item`. Plus the new visual stages when they land |
+| **Not** committed | `fetch`, `extract`, `summarize`, `score` durations; any token count; any digest; any id; any per-item cell. Item-health holds every one |
+| Grain | One row per `(date, run_id, shard, span_name)` - the same shard-by-run grain `state/runtime-counters.csv` uses |
+| File | `state/span-rollup/<YYYY-MM>.csv`, contract `SpanRollupRow`, schema stem `span-rollup-row` |
+| The test that makes it binding | **Contract tier**: assert the rollup's column set and item-health's column set are disjoint outside the key. That turns the ruling into a machine check instead of a promise |
+
+**Flipping `tracing_enabled` before the fold exists buys nothing.** The file sink writes into `backend/var/`, which dies with the checkout. Spans in CI with no fold are runner seconds spent writing a file nobody opens. The toggle flips **after** the fold lands, not before.
+
+### 14.4b Telemetry for yesterday's code - the answer is better than expected
+
+**Eight numeric columns are already committed per item per run, and the console has never been shown any of them.** `publish_telemetry.PUBLIC_COLUMNS` is eleven columns wide and stops at `source_words_before_cap`. Everything below is in `state/item-health/` today and invisible to the console:
+
+`fetch_ms`, `extract_ms`, `summarize_ms`, `prefill_ms`, `decode_ms`, `input_tokens`, `output_tokens`, `cached_tokens`
+
+Widening the projection and republishing every existing month from `state/` **backfills the console for every past run, in one commit, with no spans, no package and no new stage.** Every added cell is an integer, so `FORBIDDEN_COLUMNS` and Rule #11 do not move.
+
+| Operator question | Past runs answer it? | From |
+|---|---|---|
+| How many items failed, at which stage, with which code | Yes, already published | `state/item-health/` |
+| Per-item fetch, extract and summarize time | **Yes - console cannot see it** | `state/item-health/`, absent from `PUBLIC_COLUMNS` |
+| Per-item tokens read, written and reused from cache | **Yes - console cannot see it** | same |
+| What llama-server counted, per shard | Yes | `state/runtime-counters.csv` |
+| Processor busy, peak memory, model load time | Yes, since 2026-08-30 | `state/runtime-counters.csv` |
+| Faithfulness, band and band reason | Yes, build-time read | `state/scores/` |
+| **Time inside the `robots.txt` read, the tag pass, prompt building, the verbatim check** | **No** | **gone forever for every run before the flip** |
+
+Two consequences. **There is no backfill for those five and no invented one is acceptable** - an instrument that did not run writes an empty cell, never a zero. And **the flip date is a discontinuity every new panel must name**, or a sub-step series starting that day, drawn beside a fetch-time series reaching back a year, reads as "robots suddenly got slow".
+
+### 14.5 How a visual is earned
+
+O21 says a visual is earned, never granted. The gate is five machine-checkable conditions, all of which must hold:
+
+1. **Reachability.** A pre-model predicate proves some choice over this article's elements could survive validation. Below that, the model is never asked - it is already 21 measured seconds saved per item.
+2. **Potential class.** The article's class admits the family. `narrative` admits none.
+3. **Validation.** Every element exists, roles match the type, units are compatible, no duplicate element in a role, no literal value, no authored text, every numeral matched.
+4. **Novelty.** `information_delta` above its floor - at least one element the summary prose does not already state.
+5. **The sufficiency bar.** Legibility floor, density floor, both themes resolve, a caption when present, one annotated mark, no sideways scroll, keyboard route to every fact.
+
+Fail any one and the answer is `none`, and `none` remaining common is not a defect. Susan's warning, recorded verbatim in substance: **the proposal measures 33 things about a visual and not one of them is whether a person would choose to look at it.** Every binding gate is integrity or cost, and a plain grey bar chart passes all of them. The sufficiency bar must be a compiler oracle, not a review item - a check a person can skip is the check skipped on the day it would have bitten.
+
+### 14.6 Escalations, resolved
+
+| # | Issue | Resolution |
+|---|---|---|
+| E1 | Model-assisted labelling vs `CLAUDE.md` section 0a | **Approved (O12).** Section 0a is amended in the same commit with a narrow exception for **visual** labels only. Machine verdicts carry `label_source` and `model_id`, land in a separate ledger, are never pooled with human rows, and never select what publishes. Summary faithfulness labelling stays human-only |
+| E2 | `quotecard` vs the republishing non-goal | **Approved (O13).** Restricted to quotes the semantic pass identifies, capped at `summarize.max_verbatim_words`. Not applied to every article |
+| E3 | The 18x uncertainty in bytes per day | **Measure before deleting (M2).** No early deletion. `image_months` 13 deletes nothing until 2027-09-17, so it buys time and is not a cap defence. If the pessimistic reading holds, the site hits the cap and **the deploy fails** - the digest stops publishing entirely. Recommendation: take M2 immediately, and land the config-driven asset base URL early so the release valve exists before it is needed |
+| E4 | Retention does not protect the Pages cap | **Agreed.** The defences that act on the right timescale are: the coverage rate itself, the per-visual byte cap (row 36), and the off-bundle base URL (section 6). Age-based retention is an archive policy, not a cap defence |
+
+---
+
+## 15. Proposed plan-doc split
+
+Sequenced so each is verifiable before the next depends on it. Reader-before-writer for every contract change. **The application may be partly broken between docs; that is accepted.**
+
+| Doc | Owns | Depends on |
+|---|---|---|
+| **P0 - telemetry the console is already owed** | Widen `PUBLIC_COLUMNS` by eight columns and republish every month; console panels for them; panels for every eval metric already committed but never shown; pytest markers; `page_weight` re-baseline with headroom | none. **Costs zero runner seconds and backfills every past run** |
+| **P1 - measurement and the span rollup** | M2, M10, M11 taken and recorded; `SpanRollupRow` contract and ledger seam; the end-of-shard fold; `tracing_enabled` flipped **after** the fold exists; `ItemStage.VISUAL`; `state/visuals/`; the six memory fields of 13.3 | P0 |
+| **P2 - the element table** | Spans, all six kinds, two tiers, canonicalisation, alias ledger, the re-slice invariant, extraction metrics, the potential classifier | P1 |
+| **P3 - the planner and the scrub** | `visual_planner.py`, the plan contract, the validator, the two-call flow, chunked degradation, `n_ctx` 16384 with flash attention, the full "route" rename, **complete retirement of the 4B and its CI job** | P2 |
+| **P4 - rendering** | Inline SVG, d3 engine, the token bridge, the sufficiency bar as a build gate, config-driven asset base URL, full-width adaptive layout | P3 |
+| **P5 - the vocabulary** | Every chart type, the diagram family, every infographic type, derived values, the downgrade ladder | P4 |
+| **P6 - retention and cleanup** | `PAGES_HARD_CAP_MB` to config, widened `retention.py`, `docs/concepts/adaptive-pruning.md` and the compliance register, `image_months` 13 and `dry_run` false **last** | P4 |
+| **P7 - selection quality** | Feed reliability multiplier, semantic plan-stage dedup with the 48-hour window and decay, `safety_ceiling_per_run` to 80 | P1 |
+| **P8 - prompt quality** | The iteration loop of 16.2, the section 0a amendment, the new-fact rate metric, `key_points_max` onto `SummaryBand`, key points decoded before the summary | P3 |
+| **P9 - measurement and review** | Console panels for every new visual metric, the review harness, paired evaluation, weight fitting, the timed arm | P5, P6 |
+| **P10 - summariser fine-tuning** | Re-point `finetune.student`/`teacher` after the 4B retires; fine-tune only if P8 shows the prompt fix was not enough | P8 |
+
+---
+
+## 16. Standing questions, answered - round 3
+
+Every row here was asked on 2026-09-03 and is answered against the code, not against the proposal.
+
+| # | Question | Answer |
+|---|---|---|
+| Q1 | Is the pruning design documented so a coding agent can comply? | **Yes - section 9.** It names five properties (config-driven, atomic, shard-aligned, fused, heuristic-ready), the four policies, the rule that decides which applies (**a ledger folds, an asset deletes, a lookup deletes**), a 14-row compliance register naming every artefact this project writes, and the reason sharding is what makes atomic pruning possible at all. It becomes `docs/concepts/adaptive-pruning.md` with `retention.py` named as the doer |
+| Q2 | Is the app made wider and adaptive, reflowing rather than pinned to sizes? | **Yes.** O18 and row 25 retire `visuals.canvas_width`/`canvas_height` as a fixed pair. The visual's box becomes a function of what it encodes and the space available. Row 26 is the counterweight so "wider" never means "unreadable": the smallest drawn string must clear `--text-xs` after the scale-to-fit, at every supported width |
+| Q3 | Is max articles per shard config driven, and what value? | **Yes, one knob.** `run.safety_ceiling_per_run` goes 160 -> **80**. `max_parallel` stays 4, so 4 workers x 20 items. `shard_size` does not bind above 20 items a day and is left alone. All three are in `config/idhazh.json` under `run` |
+| Q4 | Are new visual-planner KPIs planned - deterministic and model execution, chart generation, failure, justification, degradation? | **Yes.** The canonical telemetry event is proposal section 6.1 and it is adopted whole: `planned_type` and `rendered_type` both recorded, `decision`, `purpose`, `confidence`, `downgrade_depth`, `downgrade_reason`, `downgrade_edge`, `gate_floor_applied`, typed `rejection_reason` and `rejection_stage`, `validation_result`, `allowlist_hits`, the six quality components, the integrity invariants, and the full cost family split by call. Row 54 adds `ItemStage.VISUAL`; row 55 adds `state/visuals/` as the store |
+| Q5 | How is a chart earning its place measured? | **Section 14.5** - five gates, all machine-checkable: reachability before the model is asked, potential class, validation, `information_delta` above its floor, and the sufficiency bar. Susan's warning stands: the bar must be a compiler oracle, not a review item |
+| Q6 | Where are the two pairwise-testing places? | **Two consumers, one instrument.** (a) Proposal section 5.2.3 - weight learning fits a linear ranking model on pairwise preferences, because absolute ratings are unstable across reviewers. (b) Proposal section 6.3.6 - `REVIEW_MODE = absolute \\| pairwise \\| comprehension`, the reviewer-facing mode that produces those pairs, with D9 and L16 deciding what the second candidate is. Both ship (row 67); Andre and Carmack proposed deferring them and were overruled by O16 |
+| Q7 | Is it full scope, no v1? | **Yes.** Section 5 lists twelve deferrals and reverses every one. Section 12 maps all 15 decisions, 35 litigation rows, 20 risks, 10 open questions and every proposal section to a disposition |
+
+### 16.1 How "6 sources said this" is counted today
+
+**Two different counts exist and they mean different things.** Both are already semantic where it matters.
+
+| Field | What it counts | How | Where |
+|---|---|---|---|
+| `carried_by` | Syndication of **one address** | `merge()` groups candidates by `url_key`. Exact match only | [backend/idhazh/rank.py](backend/idhazh/rank.py#L441) |
+| `also_covered_by` | **Other sources telling the same story** | Cosine similarity over the embedding vectors the day payload already carries, weakest-link clustering at `assemble.duplicate_similarity_min` = 0.94, **across sources only** | [backend/idhazh/assemble.py](backend/idhazh/assemble.py#L375) |
+
+The reader-facing sentence fires at `carried_by >= 2`. Two properties of `also_covered_by` are deliberate and documented in the code: a group is **always across sources**, because one outlet publishing twice is a different problem with a different control; and the encoder is least trustworthy on same-source text, where two press releases from one desk score 0.9867 against each other and are two different documents.
+
+So the semantic machinery already exists and is well reasoned. What it does **not** do is run early enough to save a model call - it runs at assemble, over vectors that only exist after summarisation. That is exactly the gap section 14.2 closes.
+
+### 16.2 Improving the prompts - the iteration loop
+
+The owner wants a loop that writes a prompt, judges it, iterates about three times, and commits the winner - for the summarizer, the visual planner and the extraction pass.
+
+**This needs a rule amendment and the amendment is narrow.** `CLAUDE.md` section 0a bans LLM-as-judge: *"a judge that shares the failure modes of the thing judged is not a measurement."* That ban is about **evaluating published output**. Using a model to critique a **prompt** at development time, offline, with a human committing the result, is a different act - nothing it produces reaches a reader, and its output is a candidate prompt that then faces the existing deterministic evals.
+
+| Element | Ruling |
+|---|---|
+| Scope of the amendment | Extends O12's exception to cover **offline prompt iteration**. Still banned: an LLM judging a published summary, a published visual, or anything that selects what publishes |
+| Where it runs | `backend/utilities/`, on a developer machine or a manual dispatch. **Never in the daily pipeline** |
+| The loop | Write a candidate -> critique against a rubric -> revise -> repeat, bounded by `finetune.prompt_iterations` (3) |
+| Two judges, not one | A model judge **and** the Editor persona rubric. A single judge that shares the writer's failure modes is the thing section 0a warns about; two disagreeing judges surface it |
+| **The gate is deterministic, not the judge** | A candidate prompt only wins if it beats the incumbent on the **existing scorers** over a frozen article set: HHEM faithfulness, `verbatim_run`, `lead_coverage`, `hedge_dropped`, and the new-fact rate from section 10.5. The model judge proposes; the deterministic suite disposes |
+| Frozen set | The committed canary corpus, so the comparison is reproducible and touches no network (Rule #7) |
+| What is committed | The winning prompt, the rubric, the scores of every candidate, and the seed. Not the transcripts |
+| Word limits | The owner's instruction stands: **do not add hard word limits to the rubric.** `summarize.bands` already sizes prose by source length; the rubric judges whether a line earns its place, not how many words it has |
+
+### 16.3 Other llama-server settings worth testing
+
+Two beyond the settings table in 11.2a. Both are **candidates, not rulings** - neither has been verified against the pinned build b10598, and `server_argv` is the only place a flag may be spelled (Rule #6), so each needs a config field before it can be tried.
+
+| Candidate | What it would buy | Why it is not a ruling |
+|---|---|---|
+| Partial prefix reuse on a cache miss | Today a prefix either matches or the prompt re-prefills whole. Partial reuse would salvage the shared head when only the tail differs - which is the exact shape of two items sharing one system prompt | The flag name and its behaviour on b10598 must be read from `llama-server --help` on the pinned build, not from memory |
+| Slot save and restore to disk | The system prompt is re-prefilled once per shard at startup. Persisting the warmed slot would remove that cost from every shard after the first | Same verification, plus it interacts with `--no-context-shift` and would need a measurement, not an assumption |
+
+What is already known and needs no flag: **prefix caching is working.** `prompt_tokens_cached_total / prompt_tokens_total` is 0.72 to 0.90 across 29 shard rows. The two-call design is built to keep it that way, and row 11's `cached_tokens` assertion is what proves it did.
+
+### 16.4 Room left in the model budget
+
+Halving the day from 160 items to 80 roughly halves the base model work per shard. Section 10.6 spends about 140 output tokens of that on extraction signals - **12.5 minutes of shard wall clock at 20 items** against a margin measured at 78.5 minutes median and 135.4 minutes worst against a 150-minute timeout.
+
+| Candidate use of the remaining margin | Verdict |
+|---|---|
+| The five accepted extraction signals in 10.6 | **Taken.** 140 tokens, 12.5 min |
+| A self-critique pass on the summary, same call | **Worth testing after 16.2.** If the prompt loop fixes the restatement rate, this is unnecessary; if it does not, this is the next lever |
+| Question-answer pairs for later retrieval | **Not in call 1.** The only candidate that asks the model to author rather than find. A third call on a sampled subset, or nothing |
+| Raising `truncation_cap_tokens` above 5,000 | **Only after M2.** More article read is more summary quality, and it is the single largest quality lever nobody has pulled - but it is also linear in prefill, which is 63 percent of model time |
+| More items instead | Refused by O6. The owner chose depth over count, and Editor's row 52 governs which items are lost |
+
+**The honest framing: the margin is not spare, it is the buffer that absorbs a slow host.** The worst measured shard used 90.3 percent of its timeout. Spend the margin on quality per item, not on filling it.
+
+### 16.5 Summary evaluation - what exists, what is published, what is missing
+
+There is a real eval suite. It is better than the console shows.
+
+| Instrument | What it measures | Where |
+|---|---|---|
+| HHEM-2.1-Open | Faithfulness, on CPU, locally, at a pinned revision | [backend/idhazh/evals/hhem.py](backend/idhazh/evals/hhem.py) |
+| `verbatim_run` | Share of the summary's 4-grams appearing verbatim in the source - the anti-copying counterweight | [backend/idhazh/evals/metrics.py](backend/idhazh/evals/metrics.py#L224) |
+| `hedge_dropped` | A rumour becoming a fact. A faithfulness scorer cannot see this | same |
+| `lead_coverage` | Whether the summary covers the article's own opening | same |
+| `unsupported_number` | A figure in the summary that is not in the source | same |
+| `ConfidenceBand`, `BandReason` | The published verdict and **why** it was reached | [backend/idhazh/evals/score.py](backend/idhazh/evals/score.py) |
+| `faithfulness_floor` | A qualification gate, and it refuses to score if the instrument was not pinned | [backend/idhazh/evals/qualify.py](backend/idhazh/evals/qualify.py#L500) |
+| leaderboard vs measured | Whether HHEM performs here as its leaderboard claims | [backend/idhazh/evals/validation.py](backend/idhazh/evals/validation.py) |
+
+**What is missing is not instruments - it is the projection.** `publish_telemetry.PUBLIC_COLUMNS` is eleven columns wide and carries **no eval column at all**. The band distribution and the doubt readout reach `/console/model/` through a build-time read of `state/scores/`; nothing eval-related reaches the runtime viewport the console fetches.
+
+| Gap | Fix |
+|---|---|
+| Eight per-item timing and token columns invisible to the console | Widen `PUBLIC_COLUMNS`, republish every month - section 14.4b |
+| No eval column in the published projection | A second projection over `state/scores/` with the same forbidden-column guard |
+| No key-point redundancy metric anywhere | New-fact rate, section 10.5. Baseline 11 of 89, 12.4 percent |
+| No visual-stage metric at all | Rows 54, 55 and the proposal's section 6.1 event |
+| Nothing measures whether pursuing a visual degraded the summary | `summary_faithfulness` and `summary_informativeness` reported beside the visual metrics - row 64 |
+
+### 16.6 Committed size and growth - the measurement that must be exact
+
+Bytes per published day is the number four decisions rest on, and the two available readings differ by **18x**. It is measurement M2 and it is one command.
+
+What the measurement must record, so it cannot be misread later:
+
+| Field | Why |
+|---|---|
+| Built-bundle bytes and payload-tree bytes, **separately** | Measured 2026-08-27 they were 128,064,853 and 7,027,075 - a ratio of 18.2, and it was 21 the day before. One cannot stand in for the other |
+| Bytes by top-level directory | One moving sum cannot say whether visuals grew or telemetry did |
+| Published item count in the **same** tree | Pairing a byte total with a count from a different tree is the whole lesson of `retention.py` |
+| Bytes per published item | The stable unit. The day rate moved by a factor of six across seven days while the item rate held at 24,378 with a spread of 23,066 to 26,538 |
+| Repository pack size | M10. The prune bounds history; it does nothing about a growing present |
+| Two dates, differenced | A level is not a rate, and only a rate answers "when" |
+
+
+
+- [`20260902-yen-idhazh-visual-planning-architecture.md`](20260902-yen-idhazh-visual-planning-architecture.md) - the proposal this record disposes of, section by section.
+- [`../CLAUDE.md`](../CLAUDE.md) - the engineering contract. Sections 0a, 0b, 6, 9, 11, 13 and 14 are load-bearing throughout.
+- [`../docs/agents/guardrails.md`](../docs/agents/guardrails.md) - the authority table behind every ruling in section 4.
+- [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - what section 15's plan-docs must become before they can be executed.
