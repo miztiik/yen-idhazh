@@ -421,6 +421,20 @@ is one line and the failure it prevents is worse than the failure it allows -
 but nobody may now claim the behaviour is intact. Nothing in the pipeline reads
 this count, and one hand count is not a gate.
 
+**The same reading found a defect in the summaries themselves, and it is the
+larger of the two.** Of the 110 items eligible for that draw, **20 came back
+shorter than the word floor of their own band - 18.2 percent**, and 13 of the 20
+are in the longest band. The worst is a 3,195-word source in a band asking for
+150 to 230 words that produced a 49-word summary, about a third of its floor.
+The band floors above are what that number is measured against, so this page is
+where the defect belongs. **Nothing catches it today.** The decoder floor in the
+next section is `summary_words_min x 5` characters, which is far below real
+English and is there to stop a summary ending after two sentences - it is not
+the band's word target, and a summary a third of its band clears it easily. No
+eval column scores a summary against its own band either. The count is one hand
+reading and it names the gap; closing it needs a rule about which band a source
+of that length should have drawn, and nobody has written one.
+
 ## Cost
 
 **Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), LF line endings. Tokenization is deterministic, so the spread is zero. Recorded in
