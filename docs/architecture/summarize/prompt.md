@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-09-02
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -410,6 +410,17 @@ down rather than discovered later. Each survives on a sibling line rather than
 on a measurement, and a human spot-check is the only thing that would catch the
 drift.
 
+**One of the three has now had that spot-check, and the line is not being
+obeyed.** Measured 2026-09-02 over twenty items drawn from the two longest
+summary bands, ninety key points read one at a time: **78 of 89 clear verdicts
+restate a claim the summary already makes**, and thirteen of the twenty items
+add nothing at all
+([../../reference/measurements.md](../../reference/measurements.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02)).
+The instruction survives the terseness pass on the same argument as before - it
+is one line and the failure it prevents is worse than the failure it allows -
+but nobody may now claim the behaviour is intact. Nothing in the pipeline reads
+this count, and one hand count is not a gate.
+
 ## Cost
 
 **Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), LF line endings. Tokenization is deterministic, so the spread is zero. Recorded in
@@ -463,7 +474,11 @@ two has an obvious name.
 
 **Why a key point must add something.** Three restatements of the summary are
 three lines a reader skips, and they cost decode time on the slowest stage in the
-pipeline.
+pipeline. That is also what the model does most of the time: seven key points in
+eight restate, measured 2026-09-02 on ninety points from twenty long-source
+items. The published item does not draw them, so today the cost is decode time
+rather than reader time - which is why the reading page refuses to render them
+([../../concepts/digest.md](../../concepts/digest.md#the-key-points-stay-off-the-item-and-the-count-is-why)).
 
 **Why the title is rewritten rather than cleaned up.** A repaired clickbait
 headline is still the clickbait writer's framing. "A major move in the nuclear
