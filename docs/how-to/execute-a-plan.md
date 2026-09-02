@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the orchestrator contract)
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-02
 
 The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it. The autonomy POLICY (AUTO by default, when to ESCALATE) lives in [../agents/bootstrap.md](../agents/bootstrap.md); this doc is the HOW.
 
@@ -66,6 +66,8 @@ Drop the `AUTHOR-AND-STOP ...` clause once the user authorizes execution.
 ## Parallel fan-out
 
 Rows in the same `Parallel-group` are mutually independent and dispatched concurrently, up to `Parallel N` workers, each in its own worktree. A ready row dispatches as soon as its `Depends-on` entries are `DONE`; it does not wait for sibling checks, nor for a long publish or deploy gate on another PR. The orchestrator parallelizes the WORK but serializes the MERGE - one PR at a time, re-checking the next worker's branch against the advanced `main` before its merge - so a green worker never lands on a stale base.
+
+**A plan claiming its parallel rows touch different files is a claim, not a fact.** Compose every wave by diffing the rows' own `Files touched` lists, never by trusting a sentence that asserts they are disjoint. A 33-row plan stated the rule outright and was wrong on its first wave: three rows shared one stylesheet and three components, two more shared one config file, and a sixth row needed a component a row in a later group had not created yet. The evidence was in the plan the whole time - the file lists disagreed with the sentence above them. Where two ready rows do share a file, serialise them and write the new `Depends-on` into the Status Reckoner, so the next wave reads it instead of re-deriving it.
 
 ### The workers are parallel; the machine is not
 

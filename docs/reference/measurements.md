@@ -1251,11 +1251,10 @@ summary 659.81, and the strip between the summary and the item's 224 px footer
 rail stood empty on every one of the day's stories. That is 18.9 percent of the
 content box, at every width from 1,280 px up.
 
-This is the number [the plan row](../../TODO/20260831-reading-page-rebuild-plan.md)
-asked for before a layout was chosen, and it moved the design twice. It killed
-the idea that the frame is the problem: at 801 px the frame is 789 and the item
-725, which is 91.9 percent, and at 1536 the item takes all 1,216 px it is
-offered. And it sized what could be spent, which is one column of at most
+This number was taken before a layout was chosen, and it moved the design twice.
+It killed the idea that the frame is the problem: at 801 px the frame is 789 and
+the item 725, which is 91.9 percent, and at 1536 the item takes all 1,216 px it
+is offered. And it sized what could be spent, which is one column of at most
 27.1 rem once a 68-character measure and a 1.75 rem mark are paid for.
 
 ### After: an aside takes 288 px of it, and the measure never moves
@@ -1476,10 +1475,10 @@ eye returns too often. A 26-character line is not a narrower measure, it is a
 broken one - the same rule that refuses a wide paragraph, failing the other way.
 
 **And the reason the decision existed is already gone.** It wanted the item's
-facts out of the middle of the read. Row 16 did that on 2026-09-01 by splitting
-them: the four a reader uses to decide whether to read at all went above the
-title, and the claims about our own summary went below it. Nothing interrupts
-the read at any width now, so no breakpoint has to move to fix it.
+facts out of the middle of the read. Splitting the meta line did that on
+2026-09-01: the four facts a reader uses to decide whether to read at all went
+above the title, and the claims about our own summary went below it. Nothing
+interrupts the read at any width now, so no breakpoint has to move to fix it.
 
 ## Whether an item's key points repeat its own summary, 2026-09-02
 
@@ -1496,9 +1495,10 @@ the sample was drawn; another reader would not land on the same ninety. The
 mechanical word overlap at the end is the part that does repeat, and it is
 reported as a cross-check rather than as the answer.
 
-This is the measurement [row #19 of the reading-page
-plan](../../TODO/20260831-reading-page-rebuild-plan.md) demanded before any
-feature code was written, and the answer closed the row.
+This measurement was taken before any feature code was written, and the answer
+is what stopped the feature: key points on long items were dropped rather than
+built
+([../concepts/digest.md](../concepts/digest.md#the-key-points-stay-off-the-item-and-the-count-is-why)).
 
 ### The rule, written before the sample was drawn
 
