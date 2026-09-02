@@ -25,11 +25,19 @@
 	 * many did not finish belongs beside it because it changes that number's
 	 * meaning. Which run wrote the page is provenance, and it goes quieter and
 	 * last. All four in one paragraph gave the block no order to be read in.
+	 *
+	 * **The count arrives as a prop and is never taken off `day.items`.** A
+	 * reading document carries a seed of the day and fetches the rest, so a count
+	 * of the list in hand states the seed - it ticks up while the reader watches
+	 * with script on, and stays wrong for ever with script off, four lines above a
+	 * topic row printing the day's real total on the same screen. The caller reads
+	 * a bounded fact off the payload instead: the whole day's total, or one desk's,
+	 * depending on which page this is.
 	 */
 	import { clockUtc, longDate } from '$lib/format';
 	import type { DigestDay } from '$lib/payload/types';
 
-	let { day }: { day: DigestDay } = $props();
+	let { day, count }: { day: DigestDay; count: number } = $props();
 
 	const laterAdded = $derived(
 		day.runs.filter((run) => run.n > 1).reduce((total, run) => total + run.items_added, 0)
@@ -43,11 +51,11 @@
 	</h1>
 
 	<p class="notice-count">
-		{#if day.items.length === 0}
+		{#if count === 0}
 			No stories today.
 		{:else}
-			{day.items.length}
-			{day.items.length === 1 ? 'story' : 'stories'}.
+			{count}
+			{count === 1 ? 'story' : 'stories'}.
 		{/if}
 		{#if day.partial}
 			{day.items_failed} did not finish, because we could not read enough of the page to summarize

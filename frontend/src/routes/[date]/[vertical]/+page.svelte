@@ -90,6 +90,7 @@
 	vertical={data.vertical}
 	datePrefix="{data.date}/"
 	latest={data.latest}
+	settled={status === 'ready'}
 	ui={data.ui}
 />
 

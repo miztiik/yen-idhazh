@@ -82,7 +82,13 @@
 	<title>{longDate(data.date)} &mdash; {data.ui.site_title}</title>
 </svelte:head>
 
-<DigestList {day} datePrefix="{data.date}/" latest={data.latest} ui={data.ui} />
+<DigestList
+	{day}
+	datePrefix="{data.date}/"
+	latest={data.latest}
+	settled={status === 'ready'}
+	ui={data.ui}
+/>
 
 <PayloadState
 	{status}
