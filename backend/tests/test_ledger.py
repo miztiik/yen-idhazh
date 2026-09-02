@@ -13,12 +13,14 @@ from idhazh import cli, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
 from utilities import migrate_score_ledger as migrate
+from utilities.migrate_feed_health import NARROW_COLUMNS, widen
 from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
 
@@ -378,6 +380,102 @@ def test_the_committed_published_ledger_has_the_shape_the_contract_writes() -> N
     assert header == PublishedRow.csv_columns()
 
 
+def narrowed(text: str) -> str:
+    """The wide shard as it stood before 2026-09-02, built from the committed bytes.
+
+    The pre-migration file itself is gone from the working tree, so the fixture
+    for it is derived rather than pasted: drop the five appended columns off the
+    committed shard and the result is the header every scheduled run appended to
+    until this change landed.
+    """
+    out = io.StringIO(newline="")
+    writer = csv.DictWriter(out, fieldnames=NARROW_COLUMNS, lineterminator="\n")
+    writer.writeheader()
+    with io.StringIO(text, newline="") as handle:
+        for row in csv.DictReader(handle):
+            writer.writerow({name: row[name] for name in NARROW_COLUMNS})
+    return out.getvalue()
+
+
+def test_the_committed_feed_health_shards_have_the_shape_the_contract_writes() -> None:
+    """The read-side migration for the widened row is the files themselves.
+
+    `require_matching_header` stops the append when the two disagree, so a
+    contract widened without the shards being rewritten would take down the next
+    scheduled run at its first stage (CLAUDE.md section 11). Every row is also
+    read back, because a header that matches over cells that do not parse is a
+    ledger nothing can use.
+    """
+    shards = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))
+    assert shards, "no committed feed-health shard - the read is broken"
+
+    read = 0
+    for path in shards:
+        assert ledger.read_header(path) == FeedHealthRow.csv_columns(), path.name
+        assert b"\r\n" not in path.read_bytes(), f"{path.name} carries CRLF"
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                parsed = FeedHealthRow.from_csv_row(row)
+                assert parsed.endpoint_key is None, "a legacy row must not claim an identity"
+                assert parsed.robots_outcome is None, "a legacy row never checked permission"
+                assert parsed.target_attempted is None, "absent is not False"
+                read += 1
+    assert read > 0
+
+
+def test_the_widening_restores_the_committed_bytes_and_the_guard_forces_it(
+    tmp_path: Path,
+) -> None:
+    """The Oracle, both halves, over a real shard rather than a hand-written one.
+
+    The narrow file is the committed shard with its five appended columns taken
+    off again, so it is the exact shape every run wrote until 2026-09-02.
+    Appending to it is refused, which is what put the migration in the same
+    commit as the contract; and running the migration over it reproduces the
+    committed bytes, which is what proves those bytes are the migration's output
+    and not a hand edit.
+    """
+    committed = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))[-1]
+    wide = committed.read_text(encoding="utf-8")
+    stale = ledger.health_path(tmp_path / "state", DATE)
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text(narrowed(wide), encoding="utf-8", newline="\n")
+
+    with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
+        ledger.append_health(tmp_path / "state", DATE, [health_row()])
+
+    assert widen(stale.read_text(encoding="utf-8")).text == wide
+
+
+def test_widening_an_already_wide_feed_health_shard_is_refused() -> None:
+    """Re-running the migration on a migrated shard must not rewrite it a second time.
+
+    That is what makes it the tool for the merge conflict this change is
+    guaranteed to hit: take the upstream file whole and run this over it. A
+    utility that widened a wide file would add five more empty columns.
+    """
+    committed = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))[-1]
+
+    with pytest.raises(ValueError, match="already the wide shape"):
+        widen(committed.read_text(encoding="utf-8"))
+
+
+def test_the_retirement_ledger_exists_in_a_fresh_checkout() -> None:
+    """`git add` on a path that is not there aborts the whole commit step.
+
+    The plan job stages its ledgers in one `git add "$@"` under
+    `set -euo pipefail`, so a retirement file that only appears on the first run
+    that retires something would cost that job the sight and health ledgers
+    staged beside it. The header ships with the contract instead, exactly as
+    `state/runtime-counters.csv` does.
+    """
+    path = ledger.feed_retirements_path(REPO_ROOT / "state")
+
+    assert path.exists(), "the retirement ledger must exist before the first retirement"
+    assert ledger.read_header(path) == FeedRetirementRow.csv_columns()
+    assert ledger.feed_retirements_relpath() == "state/feed-retirements.csv"
+
+
 def test_committed_state_csv_rows_match_their_headers() -> None:
     mismatches: list[str] = []
     for path in sorted((REPO_ROOT / "state").rglob("*.csv")):
@@ -482,6 +580,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
 
     assert keyed == {
         "runtime-counters.csv": ledger.RUNTIME_COUNTERS_KEY,
+        "feed-retirements.csv": ledger.FEED_RETIREMENT_KEY,
         f"{DATE[:7]}.csv": ledger.ITEM_HEALTH_KEY,
     }
 

@@ -48,6 +48,87 @@ It is written **whether the run publishes or not**. The days a source is worth m
 
 Monthly shards, because a read looks back 31 days - just enough that a quarantine decided on the first of the month can still see the failures that caused it.
 
+## Fourteen cells, and five of them are empty on every row so far
+
+The row gained `endpoint_key`, `robots_outcome`, `robots_checked_at`, `robots_status` and `target_attempted` on 2026-09-02. They are appended at the end of the header, and nothing reads any of them yet.
+
+| Cell | What it answers |
+| --- | --- |
+| `endpoint_key` | Which address was asked. The sha256 of the configured feed URL, so a feed whose URL is edited is a different endpoint with no inherited record. |
+| `robots_outcome` | What the site's own `robots.txt` said: `allowed`, `denied`, or `unreachable` when we could not establish permission at all. |
+| `robots_checked_at` | When permission was established, so a recheck cadence has a clock. |
+| `robots_status` | What `robots.txt` itself answered with, when there was a status. |
+| `target_attempted` | Whether the feed address itself was requested. False for a run that stopped at `robots.txt` or rested the feed. |
+
+**The record could not previously say which address it asked.** `feed_id` names a
+line of curated config, not a URL, so an address that changed and an address that
+died looked the same to every later read - and a run cannot stop asking a dead
+address without being able to say which address it means.
+
+**And a refusal read as a failed read.** `robots_denied` says the site declined,
+but the row carried no evidence of the check itself, so nothing downstream could
+tell "the site said no" apart from "we did not get that far".
+
+**Every one of the 6,433 rows written before that day carries five empty cells.**
+Not a zero, and not an identity recomputed from today's `config/sources.json`: the
+configured URL may have moved since a row was written, and a guessed endpoint
+would file a later retirement against the wrong address. An empty cell says the
+older run never looked, which is the only honest thing it can say.
+
+The rewrite is `backend/utilities/migrate_feed_health.py`, and it ran in the same
+commit as the contract change because `ledger.require_matching_header` compares
+the committed header to the contract's column list exactly - a widened contract
+against an unmigrated shard stops the next scheduled run at its first append. It
+is safe to re-run: a shard already on the wide header is reported and skipped.
+
+Measured on this Windows developer checkout, 2026-09-02: 6,433 rows across two
+shards, 585,437 bytes before the widening and 617,756 after, so five empty cells
+per row cost 32,319 bytes - 5.5 percent of the ledger. Reading a committed file
+is deterministic, so the spread is zero.
+
+## A run may rest a feed; only an address is ever retired automatically
+
+`state/feed-retirements.csv` is where a run will file an address the server has
+reported permanently gone. It ships with its header and no rows, because the
+commit step stages every path a job owns in one call and a path that is not in
+the checkout aborts the whole step ([../contracts/schemas.md](../contracts/schemas.md)).
+Nothing writes it yet.
+
+One row is one endpoint: the feed, the endpoint key, the day, the run that
+decided, the cause, and the runs whose results evidence it.
+
+**`http_410` is the only cause the enum admits**, and that is the design rather
+than a starting point. A 403, a 404, a paywall, a transient failure and an empty
+feed all say something about today; only `410 Gone` is the server saying the
+address is not coming back. Retiring on anything softer removes unique primary or
+regional reporting over one bad week, and nothing here puts it back without a
+person noticing it went.
+
+The record is keyed on the endpoint and not on the feed, so renaming a feed in
+curated config cannot make its dead address eligible again, and editing that
+feed's URL produces a different key that is eligible from a clean record.
+
+## Six knobs name the questions the one knob used to answer
+
+| Knob | Default | The question |
+| --- | --- | --- |
+| `collect.availability_strikes_before_rest` | 5 | How much evidence before a run stops asking? |
+| `collect.availability_rest_runs` | 5 | How long is a rest? |
+| `collect.feed_http_410_runs_before_retirement` | 5 | How many distinct runs must read `410` before an address is retired? |
+| `collect.robots_denied_recheck_runs` | 1 | How long before asking `robots.txt` again after a refusal? |
+| `collect.robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read. |
+| `collect.source_yield_min_complete_days` | 30 | How many complete days of item-health evidence before a yield judgement may be made at all? |
+
+**Nothing reads any of them yet.** `collect.quarantine_after_failures` still
+decides every rest, and both it and `availability_strikes_before_rest` carry 5.
+The names land before the behaviour so the changes that move the behaviour are
+reviewable as behaviour, rather than as a knob and a rule at once.
+
+The two recheck cadences are separate because they are different facts: a refusal
+is a publisher's stated policy and an unreadable `robots.txt` is our own failed
+read. One number for both would mean an edit meant for one silently moved the
+other.
+
 ## Six outcomes, deliberately coarser than HTTP
 
 What a later decision needs is whether the address is worth asking again. `403` and `404` answer that the same way; `503` answers it differently.
@@ -97,7 +178,7 @@ window exists, any source-yield threshold is an estimate, not a measurement.
 
 ## The run never edits the source list
 
-Retirement is a person moving a feed into the `retired` key of `config/sources.json`. Quarantine is a run declining to ask, based on rows it wrote itself.
+Retirement of a **source** is a person moving a feed into the `retired` key of `config/sources.json`. Quarantine is a run declining to ask, based on rows it wrote itself. Retirement of an **address** is a third thing, and it is a row under `state/` for the same reason quarantine is: a run may write evidence about curation and may never write curation.
 
 Keeping those separate is what makes a bad afternoon survivable. A run that could edit config would, over one bad week, quietly delete sources nobody voted to remove - and the diff would be authored by a robot at 06:20 on a Sunday.
 
@@ -168,6 +249,9 @@ The self-lifting rest is there because the alternative was tested by imagination
 | Counting a robots refusal as a failure | Punishing a site for saying no, and quarantining a source that is behaving correctly. |
 | Treating a zero-item `200` as success | The most common way a feed dies would be invisible, and the ledger would only catch the failures that were already obvious. |
 | A separate knob for "skips before retry" | Two numbers answering one question. When they drift apart nobody remembers which was meant. |
+| Backfilling `endpoint_key` from today's `config/sources.json` | The configured URL may have moved since a row was written, so the guess would file a later retirement against an address that never failed. |
+| Inserting the five new columns beside the ones they relate to | The header guard compares the whole list, and an appended column is what keeps the old header a readable prefix of the new one. A cell inserted in the middle moves every historical value one place right under a reader that maps by position. |
+| Retiring an address on 403, 404, a paywall, an empty feed or zero yield | None of them says the address is permanently gone, and each would eventually remove unique primary or regional reporting. |
 | Logging feed results instead of committing them | A log is gone with the run. The next run needs to read what the last four did (Rule #1). |
 | Recording only failures | You cannot tell "failed five times out of five" from "failed five times out of two hundred" without the successes. |
 
@@ -178,5 +262,5 @@ The self-lifting rest is there because the alternative was tested by imagination
 - [item-health.md](item-health.md) - the item-grain ledger that records planned item outcomes.
 - [trust-boundary.md](trust-boundary.md) - what happens to the bytes a healthy feed returns.
 - [../publishing/frontend.md](../publishing/frontend.md) - the console that renders this record.
-- [../../concepts/config.md](../../concepts/config.md) - where `quarantine_after_failures` lives.
+- [../../concepts/config.md](../../concepts/config.md) - where `quarantine_after_failures` and the six knobs beside it live.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - degrade rather than fail, which is why a dead feed never fails a run.
