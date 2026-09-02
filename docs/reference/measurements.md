@@ -4028,6 +4028,25 @@ every hand-over to cover a case that needs a gate still running 7,200 s in -
 **6.6x the longest gate ever measured here** - and with twenty callers spinning
 it took a hand-over from 0.7 s to about 10 s.
 
+## What a reader route costs on a real day (2026-09-02)
+
+What a browser fetches before a reader does anything: the prerendered document, plus every `_app/immutable` asset the document itself names. gzip -9, which is what a static host serves. Taken on an i7-1265U, 12 threads, 31.8 GB, node 24.12.0, over the twelve committed days to 2026-09-01. The heaviest instance of each route class stands for the class, which is how the bundle gate reads the same tree.
+
+| route | document | JavaScript | CSS | first load | assets | heaviest instance |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `/` | 310,901 | 57,683 | 9,329 | **377,913** | 30 | the newest day, 627 stories inline |
+| `/<date>/` | 23,389 | 58,244 | 9,282 | **90,915** | 31 | `2026-09-01`, 627 stories, 20 seeded |
+| `/<date>/<topic>/` | 17,729 | 58,349 | 9,282 | **85,360** | 31 | `2026-08-30/energy` |
+| `/archive/` | 5,008 | 59,286 | 8,707 | **73,001** | 28 | twelve days |
+| `/evals/` | 3,114 | 43,268 | 6,806 | **53,188** | 23 | the signpost to the console |
+| `/404` | 1,604 | 42,396 | 6,806 | **50,806** | 21 | the fallback shell |
+
+**The spread is the build's own noise and nothing else.** Two builds of one unchanged tree, back to back in the same worktree, moved each route's first load by **10 to 19 bytes** - `/` +19, `/<date>/` +18, `/<date>/<topic>/` +16, `/archive/` +12, `/evals/` +10, `/404` +10. Every document moved by 1 byte or less; all of it is JavaScript. That is `kit.version.name` defaulting to `Date.now()`, which lands in the content hash of every chunk filename ([agent-notes.md](agent-notes.md#gate-commands)). The version was deliberately **not** pinned to take these two arms: the pin stops every page hydrating when `BUILD_VERSION` is unset, which costs more than the noise it removes. 64 bytes remains the working tolerance, and 19 is well inside it.
+
+**Two numbers here carry the design, and they point opposite ways.** `/` costs a reader **377,913 bytes** because it is the one reading route that still puts a whole day in its document, and the day it drew published 627 stories. `/<date>/` costs **90,915** for the same day, because its document carries the seed of fifteen plus the day's five leads and the browser fetches the rest. The dated route is **4.2 times lighter** than the home page on identical content, and the gap grows with every story a day publishes.
+
+**`/` is uncapped on purpose and this is what that costs.** The bundle gate caps `/404`, `/archive/`, `/evals/` and the three console routes, and deliberately caps neither `/` nor a dated route, because the only way under such a ceiling is to publish fewer items ([../how-to/run-the-gates.md](../how-to/run-the-gates.md)). What holds those two is the marker count in `frontend/tests/payload-weight.spec.ts`. This table is the level that count has no opinion about, and it has a date on it.
+
 ## Retired measurements
 
 Twenty-three sections moved to
