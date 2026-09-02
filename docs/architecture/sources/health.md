@@ -14,7 +14,7 @@ rest a feed. Only a person may retire one.
 FEED READ (one feed-health row)
 |
 +-- ok with items -> clear strike streak -> ask next run
-+-- robots_denied -> no strike -> ask next run
++-- robots_denied -> keep strike streak -> ask next run
 +-- skipped -> keep strike streak -> count one rested run
 `-- blocked / permanent / transient / ok with zero items -> add one strike
 
@@ -47,6 +47,23 @@ HUMAN SOURCE REVIEW (after at least 30 days of evidence)
 It is written **whether the run publishes or not**. The days a source is worth measuring on are the days the run went badly, and a ledger that only records good runs measures nothing.
 
 Monthly shards, because a read looks back 31 days - just enough that a quarantine decided on the first of the month can still see the failures that caused it.
+
+## One row per feed per run, enforced rather than assumed
+
+`(run_id, feed_id)` is what makes two rows the same record - `ledger.FEED_HEALTH_KEY`. A feed is read once in a run, so two rows under one key are two accounts of one event.
+
+**Two runs are entitled to a row each and always get one**, because a run id carries the identity of the execution that made it. What repeats the key is one execution attempted twice: the second attempt appends against a checkout frozen at the commit its run was triggered at, so it cannot see what the first attempt pushed, and `merge=union` on `state/**/*.csv` concatenates rather than conflicting. Counted raw, one bad run reads as two failures and a five-strike rest arrives in three runs.
+
+So the shard is settled twice, and the second pass is the one that matters:
+
+- **Before the push.** `ledger.append_health` settles the shard it just wrote. That catches a repeat inside one checkout and nothing else.
+- **After the merge.** `python -m idhazh dedupe-ledgers`, run by both recording commit steps through `DROP_REPEATED_ROWS_COMMAND`, on the merged file - the only artefact that has ever held both attempts at once.
+
+**Where two accounts conflict, the read that carried entries wins**, whichever row is newer: the attempt that got articles is the attempt that happened, and an empty retry against an address that had just delivered describes the retry rather than the feed. Between two rows that agree on that, the later `checked_at` wins. A tie leaves the row already on record. The rule is `contracts.feed_health.supersedes`, and it is the one key here settled by a rule instead of by arrival order - everywhere else a repeat is one attempt written down twice, so the two rows agree.
+
+Measured on this developer checkout, 2026-09-02, over the committed shards: 6,577 rows carried 6,022 distinct `(run_id, feed_id)` keys, so **555 rows were a second account of an event already on record** - 8.4 percent of the ledger - and 37 of those keys held rows that disagreed about what the feed did. Four keys were settled in favour of the later attempt, each because that attempt carried articles the earlier one had not. Reading a committed file is deterministic, so the spread is zero.
+
+**It changed no decision.** The resting set over the 31-day read is 16 feeds with the repeats and 16 feeds without them, the same 16 either way, and the same 16 under the old strike rule as under the new one. The defect was latent: it would have rested a feed early on the first day a re-run happened to land inside a failing streak. Fixing it is correctness, not the repair of a live outage.
 
 ## Fourteen cells, and five of them are empty on every row so far
 
@@ -143,17 +160,34 @@ What a later decision needs is whether the address is worth asking again. `403` 
 | Outcome | What it means | Counts against the feed |
 | --- | --- | --- |
 | `ok` | The feed answered and parsed | **Only if it returned zero items** |
-| `robots_denied` | `robots.txt` said no | No |
+| `robots_denied` | `robots.txt` said no, or could not be read | No |
 | `blocked` | We were refused | Yes |
 | `permanent` | Gone, and staying gone | Yes |
 | `transient` | Timed out, or the host was briefly unwell | Yes |
 | `skipped` | We did not ask - the feed was resting | No |
 
-Two of those rows carry the whole design.
+## Eight kinds of evidence, three effects
+
+"Counts against the feed" is two questions, and separating them is what the availability rule turns on. A row can add a strike, leave the streak where it is, or end it.
+
+| Evidence | Effect on the streak |
+| --- | --- |
+| A success carrying entries | **Ends it.** The address answers now. |
+| A success carrying nothing | Adds one strike |
+| `blocked` | Adds one strike |
+| `permanent` | Adds one strike |
+| `transient` | Adds one strike |
+| A robots refusal | Leaves it where it is |
+| A `robots.txt` we could not read | Leaves it where it is |
+| A rest | Leaves it where it is |
+
+Three of those rows carry the whole design.
 
 **A `200` that parses to no entries counts as a failure.** The most common way a feed dies is not a 500. It is a silent reshape that still returns 200 and an empty list. An empty answer costs the digest exactly the articles a refusal would, so it is measured the same way.
 
-**A robots refusal never counts.** The source is working exactly as it asked to be treated. Quarantining it would be us punishing a site for saying no, and the pipeline honouring `robots.txt` is the pipeline working correctly.
+**A robots result adds no strike and clears none.** The first half is old: the source is working exactly as it asked to be treated, and resting it would be us punishing a site for saying no. The second half was missing until 2026-09-02, and it was the sharper bug. A refusal used to end the streak, so a dead address behind a site that says no had its record wiped on the run after every failure and could never reach a rest at all. Neither robots answer asked the feed whether it still works, so neither is evidence about the address either way.
+
+**Only a read that carried entries clears the streak, and it clears the whole streak at once.** The streak answers one question - is this endpoint broken now - and a source that just delivered articles is not broken. Decrementing one success at a time was rejected: it would leave a feed that recovered on the fifth day still resting on the ninth, for failures it has already answered. Nothing is forgotten by clearing it, because the ledger keeps every failure it ever recorded and the reliability record is read over the whole file.
 
 ## Quarantine is a rest, not a retirement
 
@@ -161,7 +195,7 @@ A feed that has failed its last `quarantine_after_failures` (5) attempts is not 
 
 **The rest ends on its own.** Once a feed has been skipped five times it is asked again regardless of its record. A source that came back is live on that very run; a source that is still dead costs one request per cycle instead of one per run.
 
-**A rest is transparent.** A `skipped` row neither adds a strike nor clears one, so the count picks up where it left off when the feed is next asked. Without that, a rest would erase the evidence that caused it.
+**A rest is transparent.** A `skipped` row neither adds a strike nor clears one, so the count picks up where it left off when the feed is next asked. Without that, a rest would erase the evidence that caused it. A robots result is transparent for the same reason and by the same rule - see the evidence table above.
 
 Both counters read the same knob because there is only one question here - how much evidence is enough. A second number would be a second answer to it.
 
@@ -194,7 +228,7 @@ Keeping those separate is what makes a bad afternoon survivable. A run that coul
 - **The planning step** reads the recent tail to decide which feeds to skip this run.
 - **The console** reads the same rows to show which sources are broken. It names only feeds that failed at least once; a list that names all seventy sources hides the four that matter. See [../publishing/frontend.md](../publishing/frontend.md).
 
-They read the same file so they can never disagree about what a feed did.
+They read the same file so they can never disagree about what a feed did - and, since 2026-09-02, they reduce it the same way as well. `discover.settled` and `settled` in `frontend/src/lib/feed-health.ts` are one rule in two languages, and so are `discover.streak` and `streak` beside it. Both pairs are driven from one committed fixture, `tests/fixtures/feed-health/one-result-per-run.csv`: nine rows, seven runs, one strike. A second copy of those rows in each language is a fixture that drifts, and a page that quietly disagrees with the run that produced it is the defect the shared rule exists to remove.
 
 ## The broken list needs its denominator
 
@@ -254,6 +288,11 @@ The self-lifting rest is there because the alternative was tested by imagination
 | A run that edits `config/sources.json` | A robot deleting sources a person curated, in a commit nobody reviewed. |
 | A quarantine only a human can lift | A deletion with extra steps. A source that recovers stays dead until someone reads a CSV. |
 | Counting a robots refusal as a failure | Punishing a site for saying no, and quarantining a source that is behaving correctly. |
+| Letting a robots result clear the streak | A dead address behind a site that says no would launder its record on the run after every failure, and could never reach a rest. It is not evidence either way. |
+| Decrementing the streak one success at a time | A feed that recovered on the fifth day would still be resting on the ninth, for failures it has already answered. The streak asks whether the endpoint is broken now. |
+| Deduplicating in Collect only, and leaving the committed shards as they were | The 555 repeats already on record would keep being read, and every reader of the file assumes the key is unique. |
+| Settling repeats only before the write | The write reads a checkout frozen at the commit the run was triggered at, so it cannot see what a sibling attempt pushed afterwards. That is precisely the case that makes the repeats. |
+| One credibility score across permission, availability, yield and editorial value | Four different questions with four different remedies. A single number tells an operator something is wrong and nothing about what to do. |
 | Treating a zero-item `200` as success | The most common way a feed dies would be invisible, and the ledger would only catch the failures that were already obvious. |
 | A separate knob for "skips before retry" | Two numbers answering one question. When they drift apart nobody remembers which was meant. |
 | Backfilling `endpoint_key` from today's `config/sources.json` | The configured URL may have moved since a row was written, so the guess would file a later retirement against an address that never failed. |
