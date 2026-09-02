@@ -1043,14 +1043,21 @@ jobs:
 
       # The day just written rides inside frontend/public, and /archive/ inlines
       # every committed day for the on-device search - so this job is the one
-      # that can push a page past its ceiling or a payload the build rejects.
+      # that can push a page past its ceiling or a payload no reader can read.
       # Those are two different severities and they now sit on opposite sides of
       # the commit below.
       #
-      # A build failure means the payload is invalid. Prerendering turns what
-      # would be a reader's runtime error into a failure here, and that day must
-      # not publish - so the build runs BEFORE the commit and stops it. The
-      # weight ratchet runs after. See ../../docs/architecture/publishing/layout.md.
+      # An invalid payload means the day must not publish, so the two checks that
+      # find one run BEFORE the commit and stop it. The weight ratchet runs
+      # after. See ../../docs/architecture/publishing/layout.md.
+      #
+      # `validate-days` is the first of the two and it is the one that opens
+      # every story. Since the reading routes split on 2026-09-01 a document
+      # carries a seed and a browser fetches the rest, so the build below never
+      # looks at the stories past the seed and cannot fail on one.
+      - name: Every committed day still matches its contracts
+        run: python -m idhazh validate-days
+
       - name: Build the site
         working-directory: frontend
         run: npm run build

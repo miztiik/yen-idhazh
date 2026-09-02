@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -499,20 +499,23 @@ removes almost nothing is work the reader watches for no answer. The ceiling of
 `ui.shell_seed_items` (15) is how many of a day's stories a prerendered document
 carries. It is the one knob in this block a browser is never told: the root
 layout inlines the rest of them into every document, and a build-only number put
-there would ride to every reader on every page for ever. It decides nothing
-today, because the reading routes put the seed and the remainder straight back
-together and prerender the whole day. It decides everything once the remainder
-arrives by fetch: measured 2026-09-01
+there would ride to every reader on every page for ever. **It has decided what a
+reading document holds since 2026-09-01**, when the topic routes and then the day
+route stopped inlining their lists and began fetching the remainder: measured
+2026-09-01
 on the 431-story day of 2026-08-30, `gzip -9`, the first fifteen stories cost a
 dated route 20,302 bytes across the two documents it emits, against 420,074 for
 all 431.
 
-**It is a floor and not the whole answer, and the row that moves the item list
-to a fetch owns the rest.** Fifteen covers the twelve a flat list pages at and
+**It is a floor and not the whole answer, and the day route spends the rest.**
+Fifteen covers the twelve a flat list pages at and
 the five the leading block draws. But a lead is chosen across the WHOLE day, so
 it is not inside any prefix: measured 2026-09-01 on the 601-story day of
 2026-08-31, the five sat at positions 249, 285, 337, 344 and 493. The document
-has to carry those five as well as the seed, or their anchors land on nothing.
+carries those five as well as the seed, or their anchors land on nothing - so a
+day document is bounded at `shell_seed_items` plus `leading_stories` and a topic
+document at `shell_seed_items` alone, which is what
+`frontend/tests/payload-weight.spec.ts` holds them to.
 
 `ui.payload_slow_ms` (1200) is the exact opposite knob, and the pair is worth
 reading together. It is how long a reader may wait for the rest of a day before

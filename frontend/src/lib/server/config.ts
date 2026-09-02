@@ -458,6 +458,26 @@ export function shellSeedItems(): number {
 	return appearance().digest?.shell_seed_items ?? raw().ui?.shell_seed_items ?? SHELL_SEED_ITEMS;
 }
 
+/** How many stories the day's leading block draws.
+ *
+ * Read on its own for the same reason `shell_seed_items` is: the pipeline
+ * decides the block at assemble and publishes the answer on the day, so no
+ * browser is ever told the number.
+ *
+ * The day route's seed is the head of the day UNION its leads, because a lead
+ * is chosen across the whole day and need not sit inside a prefix. So this is
+ * the second term of what a dated document may carry, and
+ * `frontend/tests/payload-weight.spec.ts` is the guard that reads it.
+ *
+ * The fallback is the same number `UiConfig.leading_stories` defaults to, and
+ * `backend/tests/test_contracts.py` fails if the two copies drift.
+ */
+const LEADING_STORIES = 5;
+
+export function leadingStories(): number {
+	return appearance().digest?.leading_stories ?? raw().ui?.leading_stories ?? LEADING_STORIES;
+}
+
 /** How many of the newest published days the archive lists as rows of their own.
  *
  * Read on its own for the same reason `shell_seed_items` is: the archive's

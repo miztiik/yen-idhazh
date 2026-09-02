@@ -61,6 +61,35 @@ export function loadDay(date: string, fetcher: typeof fetch = fetch): Promise<Di
 	return pending;
 }
 
+/** Whether a story carries everything the page reads off it without a guard.
+ *
+ * **This is the boundary the build stopped covering.** Every story used to be
+ * serialised into a document, so a story that failed its contract failed the
+ * build. A reading document carries a seed now and these arrive by fetch, so
+ * the only check between a malformed story and a reader is this one.
+ *
+ * Four names, and each is here because something dereferences it directly:
+ * `item_id` is the element id a deep link and the leading block both aim at,
+ * and `title`, `summary` and `key_points` are what the in-page filter reads on
+ * every keystroke. A story missing `key_points` renders and then throws a
+ * `TypeError` the first time a reader types - a page that broke on an action
+ * rather than on arrival, which is the worst shape this failure has.
+ *
+ * It is deliberately not a schema. A browser validating twenty-three fields
+ * would need a validator on the reading path (Rule #1, Rule #8), and the
+ * contract is checked where it can be checked properly: `idhazh validate-days`
+ * opens every story of every committed day in CI and before every publish.
+ */
+function renderable(item: DigestItem): boolean {
+	return (
+		typeof item?.item_id === 'string' &&
+		item.item_id !== '' &&
+		typeof item.title === 'string' &&
+		typeof item.summary === 'string' &&
+		Array.isArray(item.key_points)
+	);
+}
+
 async function readDay(date: string, fetcher: typeof fetch): Promise<DigestDay | null> {
 	const url = dayUrl(date);
 	if (url === null) return null;
@@ -71,7 +100,20 @@ async function readDay(date: string, fetcher: typeof fetch): Promise<DigestDay |
 			return null;
 		}
 		const payload = (await response.json()) as DigestDay;
-		return Array.isArray(payload?.items) ? payload : null;
+		if (!Array.isArray(payload?.items)) return null;
+		// Degrade, do not fail (`CLAUDE.md` section 1a). One story the page cannot
+		// render must not cost a reader the other three hundred, so it is dropped
+		// and counted. The console is the whole logging surface (section 1b), so
+		// the count goes there - a reader can hand it back, and nothing they could
+		// do would fix it.
+		const items = payload.items.filter(renderable);
+		if (items.length !== payload.items.length) {
+			console.warn(
+				`[digest] ${date}: ${payload.items.length - items.length} of ${payload.items.length} ` +
+					'stories are not readable and were dropped'
+			);
+		}
+		return { ...payload, items };
 	} catch (error) {
 		console.warn(`[digest] the stories of ${date} could not be read`, error);
 		return null;

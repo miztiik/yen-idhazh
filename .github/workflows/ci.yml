@@ -88,6 +88,20 @@ jobs:
           python -m idhazh.contracts.export
           git diff --exit-code -- schemas/
 
+      # What prerendering used to give free. Until the reading routes were split
+      # on 2026-09-01 every story was serialised into a document at build time,
+      # so a story the contract refused failed the build. A reading document now
+      # carries a seed and a browser fetches the rest, so no build ever opens the
+      # stories past it. This opens all of them, against the committed shape the
+      # build reads and the served shape a reader's browser fetches.
+      #
+      # The guarantee is weaker than the one it replaces, and that is stated
+      # rather than hidden: a broken day can no longer be built, it can only no
+      # longer be MERGED. The publishing jobs run the same command before their
+      # own commit, which is what covers a day the pipeline pushes on its own.
+      - name: Every committed day still matches its contracts
+        run: python -m idhazh validate-days
+
   site:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -121,8 +135,10 @@ jobs:
         working-directory: frontend
         run: npm run check
 
-      # A payload that fails its contract never reaches a reader: prerendering
-      # turns what would be a runtime error into a build failure.
+      # Every route still has to render. What the build no longer proves is that
+      # every STORY does: a reading document carries a seed and the browser
+      # fetches the rest, so the stories past the seed are never serialised here.
+      # The `gates` job runs `idhazh validate-days` for those.
       - name: Build the site
         working-directory: frontend
         run: npm run build

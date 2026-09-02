@@ -43,7 +43,8 @@ payload ever written.
 
 from __future__ import annotations
 
-from typing import ClassVar, Self
+from collections.abc import Mapping
+from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -224,6 +225,40 @@ class DigestView(Contract):
     )
 
     items: list[DigestViewItem]
+
+    @classmethod
+    def project(cls, day: Mapping[str, Any]) -> Self:
+        """A committed day narrowed the way `frontend/src/lib/payload/project.ts` narrows it.
+
+        The field list is read off the models rather than written out again, so
+        this and the projector cannot name two different shapes - and a contract
+        test reads the arrays out of `project.ts` and fails when they drift.
+
+        An absent key becomes an explicit null rather than being left out, which
+        is what makes every served item the same shape whichever day it was
+        published on.
+
+        **A day whose item list is not a list of objects is handed to the model
+        as it arrived.** Narrowing it here would throw a `TypeError`, and the
+        one caller that matters is a validator over every committed day: a
+        stack trace on day three tells nobody which day is broken or why, where
+        the model reports both.
+        """
+        written = day.get("items")
+        if not isinstance(written, list) or not all(isinstance(item, Mapping) for item in written):
+            return cls.model_validate({"version": cls.schema_version(), "items": written})
+        visual_names = list(DigestViewVisual.model_fields)
+        items: list[dict[str, Any]] = []
+        for item in written:
+            served: dict[str, Any] = {name: item.get(name) for name in DigestViewItem.model_fields}
+            visual = item.get("visual")
+            served["visual"] = (
+                {name: visual.get(name) for name in visual_names}
+                if isinstance(visual, Mapping)
+                else None
+            )
+            items.append(served)
+        return cls.model_validate({"version": cls.schema_version(), "items": items})
 
     @model_validator(mode="after")
     def _the_published_order_survives_the_projection(self) -> Self:

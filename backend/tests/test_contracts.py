@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import json
+import logging
 import re
 from collections import Counter
 from pathlib import Path
@@ -25,6 +26,7 @@ from conftest import (
 )
 from pydantic import ValidationError
 
+from idhazh.cli import main, stage_validate_days
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
     AppConfig,
@@ -330,8 +332,23 @@ def test_the_seed_the_shell_carries_is_a_knob_the_frontend_agrees_with() -> None
     assert int(mirrored.group(1)) == UiConfig().shell_seed_items
 
 
+def test_the_leading_block_is_a_knob_the_frontend_agrees_with() -> None:
+    """The third digest knob a browser never sees, and the newest of the three.
+
+    A dated document's seed is the head of the day UNION its leads, because a
+    lead is chosen across the whole day and need not sit inside a prefix. So
+    this number is the second term of what that document may carry, and
+    `frontend/tests/payload-weight.spec.ts` reads it as the bound. A drift here
+    would bound a dated document at a count the contract never agreed to.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"const LEADING_STORIES = (\d+);", reader)
+    assert mirrored is not None, "the frontend dropped its leading_stories fallback"
+    assert int(mirrored.group(1)) == UiConfig().leading_stories
+
+
 def test_the_days_the_archive_lists_are_a_knob_the_frontend_agrees_with() -> None:
-    """The same two-copies problem, on the other digest knob a browser never sees.
+    """The same two-copies problem, on another digest knob a browser never sees.
 
     `archive_recent_days` decides how many days the archive lists as rows of
     their own before the months take over, so the build reads it on its own
@@ -1736,6 +1753,91 @@ def test_the_published_tree_holds_days_to_migrate() -> None:
     assert committed_days(), "no digest.json under frontend/public/digest"
 
 
+# --- the guard that replaced the one prerendering used to give free ---------
+
+
+def a_day_that_validates() -> dict[str, Any]:
+    """A committed day, taken off the real tree rather than written here.
+
+    A day composed by hand drifts from the one the pipeline writes, and the
+    guard under test is about the real file.
+    """
+    day: dict[str, Any] = json.loads(read_text(committed_days()[-1]))
+    return day
+
+
+def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = "2026-08-30") -> Path:
+    """One committed day on disk, in the layout `published_days` globs for."""
+    year, month, dom = date.split("-")
+    where = tmp_path / "digest" / year / month / dom
+    where.mkdir(parents=True)
+    (where / "digest.json").write_text(json.dumps(day), encoding="utf-8")
+    return tmp_path / "digest"
+
+
+def test_every_committed_day_passes_the_gate_that_replaced_the_build(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The CI step, run here so it is not first seen on a runner.
+
+    Until the reading routes were split on 2026-09-01 every story was serialised
+    into a document at build time, so a story the contract refused took the
+    build down. A reading document now carries a seed, so the build never opens
+    the stories past it. This is what took that over.
+    """
+    with caplog.at_level(logging.INFO):
+        assert stage_validate_days(REPO_ROOT / "frontend" / "public" / "digest") == 0
+    assert "committed days match both contracts" in caplog.text
+
+
+def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The exact hole the migration opened, and the reason a step replaced a build.
+
+    The story is broken at the END of a day longer than `ui.shell_seed_items`,
+    so no prerendered document carries it and no build would ever open it. A
+    reader's browser fetches it. The gate has to find it there.
+    """
+    day = a_day_that_validates()
+    seed = UiConfig().shell_seed_items
+    assert len(day["items"]) > seed, "a day no longer than the seed proves nothing here"
+    day["items"][-1]["key_points"] = []
+
+    root = a_tree_holding(tmp_path, day)
+    with caplog.at_level(logging.ERROR):
+        assert stage_validate_days(root) == 1
+    assert "2026-08-30" in caplog.text, "the failing day has to be named"
+    assert "digest-view.schema.json" in caplog.text, "which contract refused it"
+
+
+def test_a_day_that_is_not_json_at_all_is_named_rather_than_thrown(tmp_path: Path) -> None:
+    """Degrade, do not fail: one unreadable file must not stop the other days."""
+    root = a_tree_holding(tmp_path, a_day_that_validates(), date="2026-08-29")
+    broken = root / "2026" / "08" / "30"
+    broken.mkdir(parents=True)
+    (broken / "digest.json").write_text("{ not json", encoding="utf-8")
+
+    assert stage_validate_days(root) == 1
+
+
+def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -> None:
+    """A run over nothing prints the same line as a run over every day."""
+    empty = tmp_path / "digest"
+    empty.mkdir()
+    assert stage_validate_days(empty) == 1
+
+
+def test_the_gate_defaults_to_the_one_committed_tree() -> None:
+    """Unlike `--site-tree`, which has no default because there are two trees.
+
+    There is exactly one committed digest tree, so a default cannot point at the
+    wrong one - and a step nobody has to give a path to is a step nobody gets
+    wrong in a workflow.
+    """
+    assert main(["validate-days"]) == 0
+
+
 def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
     """The read-side migration (`CLAUDE.md` section 11), over the real payloads.
 
@@ -1859,23 +1961,6 @@ def without_description(shape: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in shape.items() if key != "description"}
 
 
-def serve(payload: dict[str, Any]) -> dict[str, Any]:
-    """Narrow a committed day the way `project.ts` does, driven by the model.
-
-    An absent key becomes an explicit null rather than being left out, which is
-    what makes every served item the same shape whichever day it was published
-    on.
-    """
-    visual_names = list(DigestViewVisual.model_fields)
-    items: list[dict[str, Any]] = []
-    for item in payload["items"]:
-        served = {name: item.get(name) for name in DigestViewItem.model_fields}
-        visual = item.get("visual")
-        served["visual"] = {name: visual.get(name) for name in visual_names} if visual else None
-        items.append(served)
-    return {"version": DigestView.schema_version(), "items": items}
-
-
 def test_the_projector_writes_exactly_the_shape_the_contract_names() -> None:
     """Rule #3, across a language boundary.
 
@@ -1936,7 +2021,7 @@ def test_every_committed_day_serves_a_view_that_validates() -> None:
     absent = 0
     for path in committed_days():
         written = json.loads(read_text(path))
-        view = DigestView.model_validate(serve(written))
+        view = DigestView.project(written)
         days += 1
         for payload, item in zip(written["items"], view.items, strict=True):
             items += 1
