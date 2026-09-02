@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -24,6 +24,29 @@ These source-ledger columns never cross to the browser:
 
 This is a trust-boundary rule, not a size trick. `detail` is diagnostic free
 text, and the URL fields are not needed to draw failure rates or compression.
+
+**The shape is a contract, since 2026-09-02.** `PublicTelemetryRow` in
+`backend/idhazh/contracts/public_telemetry.py` owns which cells may cross and
+what each one may hold; the module above owns only when a shard is written and
+from what. Before that the whole boundary was a tuple of eleven strings and a set
+of three more, both readable code and neither a contract - so the one payload a
+reader's browser downloads had no schema, no version stamp and no changelog while
+every other persisted surface had all three (Rule #3). `FORBIDDEN_COLUMNS` is
+checked at **import**, so a forbidden field on the model stops the process rather
+than reaching the published tree.
+
+Two consequences worth stating plainly:
+
+- **`version` is a field of the shape and never a cell.** The header check below
+  is a prefix, so a twelfth name at position zero would shift every position the
+  console reads. `schemas/public-telemetry.schema.json` is where the stamp lives.
+- **A published shard has to load, not merely parse.** `publish_telemetry
+  --migrate` reads every committed shard back through the contract and rewrites
+  it, and a test runs the same round trip on a copy of the committed files. Run
+  2026-09-02 on this checkout: `2026-08.csv` 5,227 rows and `2026-09.csv` 1,094
+  rows, 461,564 and 107,360 bytes, unchanged to the byte either side. Unchanged
+  is the result the migration wanted - it says the committed bytes already are
+  the contract's own output.
 
 `source_words_before_cap` joined the projection on 2026-08-28. It is a word
 count of our own extraction, the same class of cell as `source_words`, which
@@ -67,6 +90,14 @@ to 2026-08-29 the shard carried `source_words_before_cap` and the reader did
 not. **Do not tighten the check to an equality.** Equality is what the test
 deliberately does not assert - it would break every cached bundle on the next
 append, which is the one case the prefix exists for.
+
+**How long a shard is kept is now a knob of its own.**
+`observability.public_telemetry_keep_months` is 14, and the contract refuses any
+value that is not equal to `observability.item_health_full_grain_months`: this
+file is the browser's copy of that ledger, so a published month whose source has
+been folded away is a rate nobody can check, and a source month with no published
+copy is a window the console cannot draw. Nothing deletes a shard yet
+([../../concepts/config.md](../../concepts/config.md#every-store-names-its-own-cleanup-age)).
 
 **The sharp edge is the round trip, not the parse.** `telemetryCsv()`
 re-serializes from `TELEMETRY_COLUMNS` as well, so a column the parser ignored
