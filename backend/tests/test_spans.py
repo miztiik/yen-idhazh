@@ -431,7 +431,9 @@ def test_the_robots_read_is_a_span_inside_the_fetch() -> None:
     robots, fetch_span = sink.written
     assert robots.parent_id == fetch_span.span_id
     assert robots.attributes["robots_cached"] is False
-    assert robots.attributes["robots_known"] is False
+    # Nobody answered for a loopback address, so permission stays unknown and
+    # the target is never asked. The span says which of the three it was.
+    assert robots.attributes["robots_outcome"] == "unreachable"
 
     with tracer.trace("2026-08-30-1-ai-02"), tracer.span(telemetry.SpanName.FETCH):
         read("http://127.0.0.1:9/another")

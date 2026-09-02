@@ -713,7 +713,18 @@ def _runtime_cache_keys(workflow: dict[str, object]) -> list[tuple[str, str]]:
     return keys
 
 
+#: A `python-version` that names a matrix key rather than a version.
+_MATRIX_PIN: Final = re.compile(r"^\$\{\{\s*matrix\.([A-Za-z0-9_-]+)\s*\}\}$")
+
+
 def _setup_python_versions(workflow: dict[str, object]) -> list[tuple[str, str]]:
+    """Every interpreter a workflow sets up, with a matrix expanded to its values.
+
+    A job that sets one up names a version; a job that sets two up names a
+    matrix key, and the versions are in `strategy.matrix`. Reading the literal
+    alone would let a matrix pin anything at all, which is the one place two
+    versions can arrive.
+    """
     versions: list[tuple[str, str]] = []
     for job_name in _mapping(workflow.get("jobs"), "jobs"):
         for step in _steps(workflow, job_name):
@@ -723,8 +734,23 @@ def _setup_python_versions(workflow: dict[str, object]) -> list[tuple[str, str]]
             with_block = _mapping(step.get("with"), f"job {job_name} setup-python 'with'")
             version = with_block.get("python-version")
             assert isinstance(version, str), f"job {job_name} must pin python-version"
-            versions.append((job_name, version))
+            for pinned in _matrix_values(workflow, job_name, version):
+                versions.append((job_name, pinned))
     return versions
+
+
+def _matrix_values(workflow: dict[str, object], job_name: str, version: str) -> list[str]:
+    """One pin, or every value the matrix key it names carries."""
+    named = _MATRIX_PIN.fullmatch(version)
+    if named is None:
+        return [version]
+    key = named.group(1)
+    strategy = _mapping(_job(workflow, job_name).get("strategy"), f"job {job_name} strategy")
+    matrix = _mapping(strategy.get("matrix"), f"job {job_name} matrix")
+    values = matrix.get(key)
+    assert isinstance(values, list), f"job {job_name} names matrix.{key}, which lists nothing"
+    assert values, f"job {job_name} names matrix.{key}, which is empty"
+    return [str(value) for value in values]
 
 
 def _script(step: dict[str, object], description: str) -> str:

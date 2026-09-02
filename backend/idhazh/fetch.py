@@ -21,16 +21,29 @@ from typing import Final, Protocol
 from urllib import request
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.robotparser import RobotFileParser
+
+from protego import Protego
 
 from idhazh.contracts.app_config import ExtractConfig
-from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 
-#: Bumped when fetch policy changes. A body that arrived under different rules
-#: is a different input, and the fingerprint has to be able to say so.
-FETCHER_VERSION: Final = "idhazh-fetch-1"
+#: Bumped when fetch policy changes. `-2` reads robots.txt with `protego`
+#: rather than `urllib.robotparser`, which changes what some files mean - see
+#: `robots_allows`. Nothing digests this yet: `PipelineInputs` carries the
+#: extractor and the sanitizer versions and not this one, so a fetch-policy
+#: change does not move `pipeline_fingerprint`.
+FETCHER_VERSION: Final = "idhazh-fetch-2"
+
+#: Why a target was not asked for, written once. `telemetry` reads these back to
+#: type the failure, so a reworded reason cannot quietly become an untyped one.
+ROBOTS_REFUSALS: Final[dict[RobotsOutcome, str]] = {
+    RobotsOutcome.DENIED: "robots.txt disallows this path",
+    RobotsOutcome.UNREACHABLE: "robots.txt could not be reached",
+}
 
 ALLOWED_SCHEMES: Final[frozenset[str]] = frozenset({"http", "https"})
+#: The port each scheme means when an address does not spell one.
+DEFAULT_PORTS: Final[dict[str, int]] = {"http": 80, "https": 443}
 # Names that resolve inward on almost every host, and the suffixes that do the
 # same on a corporate or container network.
 _LOOPBACK_NAMES: Final[frozenset[str]] = frozenset({"localhost", "ip6-localhost", "ip6-loopback"})
@@ -45,10 +58,25 @@ class FetchResult:
     body: bytes = b""
     detail: str | None = None
     body_truncated: bool = False
+    #: The permission this read was made under, as a value rather than a
+    #: sentence. `None` on a result nobody established permission for.
+    robots: RobotsOutcome | None = None
 
     @property
     def ok(self) -> bool:
         return self.outcome is FetchOutcome.OK
+
+
+#: Every reason this module refuses an address outright. `telemetry` types the
+#: failure from this set, so a new reason cannot arrive as an untyped one.
+BLOCKED_REASONS: Final[frozenset[str]] = frozenset(
+    {
+        "no host in address",
+        "port is not a number",
+        "address resolves inward",
+        "address is not on the public internet",
+    }
+)
 
 
 def address_is_dialable(url: str) -> tuple[bool, str | None]:
@@ -63,6 +91,14 @@ def address_is_dialable(url: str) -> tuple[bool, str | None]:
     host = (parts.hostname or "").lower()
     if not host:
         return False, "no host in address"
+    try:
+        _ = parts.port
+    except ValueError:
+        # `urlsplit` parses the port lazily, so a feed entry spelling one
+        # nobody can read raises the first time anything asks - which used to
+        # be inside `origin`, several frames from here and after the address
+        # had already been accepted.
+        return False, "port is not a number"
     if host in _LOOPBACK_NAMES or host.endswith(_INTERNAL_SUFFIXES):
         return False, "address resolves inward"
     try:
@@ -72,6 +108,25 @@ def address_is_dialable(url: str) -> tuple[bool, str | None]:
     if not literal.is_global:
         return False, "address is not on the public internet"
     return True, None
+
+
+def origin(url: str) -> str:
+    """The scheme, host and port that one robots.txt governs, spelled one way.
+
+    RFC 9309 section 2.3 scopes a robots file to its own authority, so
+    `HTTPS://Example.COM:443/a` and `https://example.com/b` are one document and
+    `https://example.com:8443/c` is a different one. Lower-casing and dropping
+    the default port is what stops a run asking one host twice.
+    """
+    parts = urlsplit(url)
+    scheme = parts.scheme.lower()
+    host = (parts.hostname or "").lower()
+    if ":" in host:  # an IPv6 literal, which `hostname` hands back unbracketed
+        host = f"[{host}]"
+    port = parts.port
+    if port is None or port == DEFAULT_PORTS.get(scheme):
+        return f"{scheme}://{host}"
+    return f"{scheme}://{host}:{port}"
 
 
 def resolves_to_public(host: str) -> bool:
@@ -84,18 +139,48 @@ def resolves_to_public(host: str) -> bool:
 
 
 def robots_allows(robots_txt: str, user_agent: str, url: str) -> bool:
-    """Read the host's own answer. An unreadable robots file is a no, decided by the caller."""
-    parser = RobotFileParser()
-    parser.parse(robots_txt.splitlines())
-    return parser.can_fetch(user_agent, url)
+    """Read the host's own answer, the same way on every Python we support.
+
+    `protego` rather than `urllib.robotparser`, because the standard library
+    disagrees with itself across the supported range: 3.12 takes the first
+    matching group and the first matching rule, 3.14 merges repeated groups and
+    applies longest-match with `*` and `$`. One file can therefore be read as
+    allowed on one runner and refused on another, which makes our own crawling
+    unreproducible. `protego` is one implementation of RFC 9309 for both.
+
+    `Protego.can_fetch` takes the URL first and the agent second, the opposite
+    order to the standard library's `RobotFileParser.can_fetch`. A swap is
+    silent - it answers every question the same way - so the fixtures assert an
+    allowance and a denial rather than only exercising the call.
+    """
+    return bool(Protego.parse(robots_txt).can_fetch(url, user_agent))
+
+
+@dataclass(frozen=True, slots=True)
+class RobotsRules:
+    """One host's rules, parsed once and asked about every path separately.
+
+    A document of `None` is "nobody answered", which is not the same fact as
+    "the host publishes no rules" - that one parses to an empty document that
+    permits everything (RFC 9309 section 2.3.1.3).
+    """
+
+    document: Protego | None
+
+    def permits(self, user_agent: str, url: str) -> RobotsOutcome:
+        """What this host said about this exact path. Unknown fails closed."""
+        if self.document is None:
+            return RobotsOutcome.UNREACHABLE
+        if self.document.can_fetch(url, user_agent):
+            return RobotsOutcome.ALLOWED
+        return RobotsOutcome.DENIED
 
 
 def robots_url(url: str) -> str:
-    parts = urlsplit(url)
-    return f"{parts.scheme}://{parts.netloc}/robots.txt"
+    return f"{origin(url)}/robots.txt"
 
 
-def robots_from_result(result: FetchResult) -> str | None:
+def robots_rules(result: FetchResult) -> RobotsRules:
     """Read what one robots.txt response means, per RFC 9309 section 2.3.1.
 
     The standard splits the failures in two, and so do we:
@@ -112,14 +197,29 @@ def robots_from_result(result: FetchResult) -> str | None:
 
     `classify_status` already draws that line: 429 and 5xx are TRANSIENT
     because they are worth asking again, and the other 4xx are PERMANENT
-    because they are not. An empty robots file parses as allow-all, which is
-    exactly what "the host publishes no rules" means.
+    because they are not.
+
+    The document is parsed here and kept, rather than the text being kept and
+    re-parsed per path, because a host is asked once and its pages are asked
+    about many times.
     """
     if result.ok:
-        return result.body.decode("utf-8", "replace")
+        return RobotsRules(Protego.parse(result.body.decode("utf-8", "replace")))
     if result.outcome is FetchOutcome.PERMANENT:
-        return ""
-    return None
+        return RobotsRules(Protego.parse(""))
+    return RobotsRules(None)
+
+
+def refused(permission: RobotsOutcome) -> FetchResult:
+    """The answer for a target the host did not permit. No request is made.
+
+    A refusal and an unestablished permission are different facts and become
+    different `robots` values, but neither is evidence about the address: we
+    never asked it anything.
+    """
+    return FetchResult(
+        FetchOutcome.ROBOTS_DENIED, detail=ROBOTS_REFUSALS[permission], robots=permission
+    )
 
 
 def backoff_delays(config: ExtractConfig) -> list[float]:
@@ -155,28 +255,36 @@ def read_capped(response: Readable, limit: int) -> tuple[bytes, bool]:
     return body, False
 
 
-def fetch(url: str, *, config: ExtractConfig, robots_txt: str | None) -> FetchResult:
-    """The one function here that opens a socket.
+def fetch(url: str, *, config: ExtractConfig, permission: RobotsOutcome) -> FetchResult:
+    """The one function here that opens a socket, and only with permission.
 
-    `robots_txt` of None means the host's robots file could not be reached at
-    all, which is a refusal rather than a permission - assuming consent from
-    silence is how a polite crawler becomes an impolite one. A host that
-    answered and simply publishes no rules is an empty string, not None; see
-    `robots_from_result` for which response is which.
+    `permission` is what the host's own robots.txt said about this exact path,
+    established by the caller from a document it read once for the whole origin
+    (`RobotsRules.permits`). Anything but `allowed` returns before a socket
+    exists. The caller normally stops earlier still and never calls this at all
+    for a target it may not have; the branch is here so that a caller which
+    forgets cannot turn a refusal into a request.
+
+    Reading `/robots.txt` itself is always permitted, so the caller passes
+    `allowed` for that read.
     """
     dialable, why = address_is_dialable(url)
     if not dialable:
-        return FetchResult(FetchOutcome.BLOCKED, detail=why)
-    if robots_txt is None:
-        return FetchResult(FetchOutcome.ROBOTS_DENIED, detail="robots.txt could not be reached")
-    if not robots_allows(robots_txt, config.user_agent, url):
-        return FetchResult(FetchOutcome.ROBOTS_DENIED, detail="robots.txt disallows this path")
+        return FetchResult(FetchOutcome.BLOCKED, detail=why, robots=permission)
+    if permission is not RobotsOutcome.ALLOWED:
+        return refused(permission)
     host = urlsplit(url).hostname or ""
     if not resolves_to_public(host):
-        return FetchResult(FetchOutcome.BLOCKED, detail="address is not on the public internet")
+        return FetchResult(
+            FetchOutcome.BLOCKED,
+            detail="address is not on the public internet",
+            robots=permission,
+        )
 
     outbound = request.Request(url, headers={"User-Agent": config.user_agent})
-    last: FetchResult = FetchResult(FetchOutcome.TRANSIENT, detail="never attempted")
+    last: FetchResult = FetchResult(
+        FetchOutcome.TRANSIENT, detail="never attempted", robots=permission
+    )
     for delay in [0.0, *backoff_delays(config)]:
         if delay:
             _sleep(delay)
@@ -184,15 +292,23 @@ def fetch(url: str, *, config: ExtractConfig, robots_txt: str | None) -> FetchRe
             with request.urlopen(outbound, timeout=config.request_timeout_seconds) as response:
                 body, truncated = read_capped(response, config.max_body_bytes)
                 return FetchResult(
-                    FetchOutcome.OK, status=response.status, body=body, body_truncated=truncated
+                    FetchOutcome.OK,
+                    status=response.status,
+                    body=body,
+                    body_truncated=truncated,
+                    robots=permission,
                 )
         except HTTPError as error:
             outcome = classify_status(error.code)
-            last = FetchResult(outcome, status=error.code, detail=f"HTTP {error.code}")
+            last = FetchResult(
+                outcome, status=error.code, detail=f"HTTP {error.code}", robots=permission
+            )
             if outcome is FetchOutcome.PERMANENT:
                 return last
         except (URLError, TimeoutError, OSError) as error:
-            last = FetchResult(FetchOutcome.TRANSIENT, detail=type(error).__name__)
+            last = FetchResult(
+                FetchOutcome.TRANSIENT, detail=type(error).__name__, robots=permission
+            )
     return last
 
 
