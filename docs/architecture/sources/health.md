@@ -69,7 +69,7 @@ address without being able to say which address it means.
 but the row carried no evidence of the check itself, so nothing downstream could
 tell "the site said no" apart from "we did not get that far".
 
-**Every one of the 6,433 rows written before that day carries five empty cells.**
+**Every row written before that day carries five empty cells.**
 Not a zero, and not an identity recomputed from today's `config/sources.json`: the
 configured URL may have moved since a row was written, and a guessed endpoint
 would file a later retirement against the wrong address. An empty cell says the
@@ -80,11 +80,18 @@ commit as the contract change because `ledger.require_matching_header` compares
 the committed header to the contract's column list exactly - a widened contract
 against an unmigrated shard stops the next scheduled run at its first append. It
 is safe to re-run: a shard already on the wide header is reported and skipped.
+That is not a nicety. `state/**/*.csv` is `merge=union`, so an append that lands
+while the migration is in review does not conflict - it concatenates, and the
+result is one file with two headers. Taking the upstream shards whole and running
+the utility over them again is the resolution, and re-running it is how that is
+done.
 
-Measured on this Windows developer checkout, 2026-09-02: 6,433 rows across two
-shards, 585,437 bytes before the widening and 617,756 after, so five empty cells
-per row cost 32,319 bytes - 5.5 percent of the ledger. Reading a committed file
-is deterministic, so the spread is zero.
+Measured on this Windows developer checkout, 2026-09-02, over the shards this
+change committed: 6,577 rows across two shards, 599,497 bytes before the widening
+and 632,536 after, so five empty cells per row cost 33,039 bytes - 5.5 percent of
+the ledger. Reading a committed file is deterministic, so the spread is zero. The
+file grows several times an hour, so the count is a fact about that commit and
+not about today.
 
 ## A run may rest a feed; only an address is ever retired automatically
 
