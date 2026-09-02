@@ -1,6 +1,6 @@
 # Retired measurements, August 2026
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-03
 
 Moved out of [../reference/measurements.md](../reference/measurements.md) on
 2026-08-30. Every number here was true when it was taken, on the hardware and
@@ -2210,11 +2210,15 @@ about a quarter. **That pair is the finding**: a readout whose text grows one
 clause per run of the day has no bound, so a length rule belongs on the rendered
 box rather than on the sentence.
 
-It is recorded rather than patched. The console's chart engine is being decided
-in [the design-system reset plan](../../TODO/20260829-design-system-reset-plan.md),
-and whichever engine wins owns the readout - so a fix to the current component
-would be written twice. Jony's ruling that a readout is pinned to the top of the
-plot and never to the pointer is not what is wrong here and stands.
+It was recorded rather than patched, because the console's chart engine was
+being decided at the time and whichever engine won would own the readout. The
+engine landed days later and the rule landed with it: `chart.readout_max_share`
+in `config/appearance.json` holds a readout to 0.33 of the plot it sits on,
+measured on the rendered box, so it binds a hand-written strip and the engine's
+own tooltip alike. The run medians left the caption in the same change. Jony's
+ruling that a readout is pinned to the top of the plot and never to the pointer
+was not what was wrong here and stands. The rule as it stands today is in
+[../concepts/design-system.md](../concepts/design-system.md).
 
 
 ## What the design-system reset cost, and what a page uses of the screen (2026-08-29)
