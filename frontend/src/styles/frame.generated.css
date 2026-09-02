@@ -6,6 +6,9 @@
 	--measure: 68ch;
 	--gutter-min: 16px;
 	--gutter-max: 32px;
+	--zone-mark: 1.75rem;
+	--zone-rail: 14rem;
+	--zone-aside: 18rem;
 	--dur-fast: 120ms;
 	--dur-base: 200ms;
 }

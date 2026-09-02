@@ -367,6 +367,31 @@ Two shapes replace it. A row of variable-width labels **wraps**, and the overflo
 
 The filter bar is the case. It sticks from `frame.breakpoints_px[1]` (1024px) up, where the pills sit on the left and the field on the right in a single band. Below that it can run to several wrapped lines plus a field, and a control holding a third of a phone screen for the whole scroll is screen the reader paid for. A media query cannot read a custom property, so the number is written twice - in `config/appearance.json` and in the component - which is the one place this duplication is unavoidable and is already true of the item's side rail.
 
+**This rule is why the day's aside stands beside the stream and not beside the day's controls.** The first arrangement of the two-column day put the leads in column two from the top of the page, which narrowed everything below them to 896px - and at 896px the filter bar's six pills wrap under its field, so a two-band panel then followed the reader down the page. The controls keep the whole content box and the aside starts level with the first story.
+
+### The reading page spends its width in four named zones
+
+> **No zone is a pixel count.** Every column the reading page draws beside its prose is a `rem` knob in `config/appearance.json`, so it grows with a reader who set their browser text larger.
+
+| Zone | Token | Default | Drawn from |
+| --- | --- | --- | --- |
+| the source mark | `--zone-mark` | `1.75rem` | every width - the read state has to stay beside the title it qualifies |
+| the card | `minmax(0, 1fr)`, text at `--measure` | `68ch` | every width |
+| the item's footer rail | `--zone-rail` | `14rem` | the middle breakpoint, and it retires at the wide one |
+| the day's aside | `--zone-aside` | `18rem`, sticky | the wide breakpoint |
+
+**The frame's content box holds a measure plus exactly one trailing column.** Measured 2026-09-02 at 1536px, that box is 1,216px and the item filled all of it, while the summary used 659.81 - so 230.19px stood empty beside the prose on every story. What that buys is one column of at most 27.1rem once the measure and the mark are paid for. Both the item's rail and the day's aside want it, and keeping both leaves the summary 570px, so the day's column wins at the width it appears and the item gives its rail back. The footer then returns to where the item's own split put it, under the summary it is a claim about.
+
+**The measure never moves.** A wide card holding a 68-character paragraph is not wasted space; a wide paragraph is what the measure exists to prevent, and widening it was refused before the layout was chosen. What the aside spends is the space the measure does not want.
+
+**A `rem` zone is only a `rem` zone if something checks.** `14rem` and `224px` look identical at the default font size and diverge the moment a reader changes it, and no screenshot tells them apart. `frontend/tests/item-zones.spec.ts` reads every zone's used width with the root font size at 16px and again at 22px and fails unless each one scaled by 22/16 - measured on its own build, the mark went 28 to 38.5, the rail 224 to 308 and the aside 288 to 396. It prints both numbers in the failure, so the assertion cannot pass on a layout it never measured. Numbers and method: [../reference/measurements.md](../reference/measurements.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02).
+
+### A chart's column is set by what the chart was drawn at
+
+An item's visual has no column of its own, and the reason is arithmetic rather than taste. The committed charts are 825 x 437px SVGs carrying 25 labels at 10px. Across the card body at 890px those labels draw at 10.8 CSS px; in a 20rem column they draw at 3.9. That is the same rule as [the Sankey above](#a-diagram-a-narrow-column-cannot-hold-becomes-a-list-never-a-smaller-diagram) - a chart engine scales its marks with the container and its type with nothing at all - so the figure keeps the card's width until the render spec is handed the width it will occupy. `digest.visual_side` stays unread until then, because a knob whose only setting draws an illegible chart is worse than a knob nothing reads.
+
+What the figure did give back is height. A fixed 16:10 box reserved space the chart never used: an 825 x 437 chart inside an 890 x 556 box left 85px of empty band above and below it. An SVG carries its own width and height, so `width: 100%; height: auto` reserves the right box from the markup and still cannot shift the page as the image loads.
+
 ### A control that needs a script is not left on the page without one
 
 > **A dead input that swallows typing is worse than no input.**
