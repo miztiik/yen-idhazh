@@ -55,6 +55,7 @@
     "leading_per_desk": 2,
     "leading_stories": 5,
     "payload_slow_ms": 1200,
+    "rail_group_minutes": 60,
     "read_mark_days": 7,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [
@@ -85,7 +86,8 @@
     "reading_max_px": 1280,
     "zone_aside_rem": 18.0,
     "zone_mark_rem": 1.75,
-    "zone_rail_rem": 14.0
+    "zone_rail_rem": 14.0,
+    "zone_time_rem": 5.5
   },
   "icons": {
     "size_px": 16,

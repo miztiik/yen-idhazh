@@ -347,6 +347,14 @@
           "minimum": 8.0,
           "title": "Zone Rail Rem",
           "type": "number"
+        },
+        "zone_time_rem": {
+          "default": 5.5,
+          "description": "The day stream's leading column from the small breakpoint, which carries the time rail. It is the widest label the rail prints that decides this number, not the shortest: `Yesterday 23:40` and `First seen 06:20` both wrap in less. In rem, so the column grows with a reader who set their browser text larger and the label keeps the same number of lines. There is no phone value because there is no phone column: 328 CSS px of content box cannot hold a rail, the read mark and a readable line at once, so below the small breakpoint the marker is a rule across the top of its group instead.",
+          "maximum": 9.0,
+          "minimum": 2.0,
+          "title": "Zone Time Rem",
+          "type": "number"
         }
       },
       "title": "FrameConfig",
@@ -580,6 +588,14 @@
           "title": "Payload Slow Ms",
           "type": "integer"
         },
+        "rail_group_minutes": {
+          "default": 60,
+          "description": "How coarse the day's time rail groups its stories. The rail draws one marker per group and none on the stories under it, so this is what decides how many times a reader is told the time. Measured 2026-09-02 over the 12 committed days and 4,713 stories, at 60 minutes: 907 markers instead of 4,713, so 80.8 percent of the labels are duplicates the rail does not draw. Sixty is the hour, which is the unit a reader already reads a clock in; 1440 is a whole day and 1 is a marker on almost every story, which is the state this knob exists to avoid.",
+          "maximum": 1440,
+          "minimum": 1,
+          "title": "Rail Group Minutes",
+          "type": "integer"
+        },
         "read_mark_days": {
           "default": 7,
           "description": "How many digest days of read marks the browser keeps. Marks are held per digest date, so a mark made on one day can never grey out a different day's article. Every page load keeps the newest days up to this number and drops the rest, which bounds the store without trusting the device clock. One week covers a reader who comes back after a break.",
@@ -668,6 +684,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "frame.zone_time_rem added, defaulting to 5.5, and ui.rail_group_minutes added, defaulting to 60. The first is `FrameConfig`, which only this document carries; the second is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with defaults, so an appearance file written before today still validates.",
+      "version": "2026-09-02T14:00",
+      "why": "The day's stories now run newest first down a time rail, which is a fifth column beside the prose and therefore a zone (Rule #6). It is a rem, so `frontend/tests/item-zones.spec.ts` reads the column at a 16px root and again at 22px and fails unless it scaled - measured on the canary build, the rail went 88 to 121 CSS px, which is 22/16. There is no second value for a phone, and that was measured rather than assumed: at 360px the content box is 328 CSS px, the item already spends 40 on the read mark and 32 on its own padding, and a 3.5rem column plus its gap left the summary 186px - about 25 characters, with `Interconnector` broken across two lines in the title. Below the small breakpoint the marker is a rule across the top of its group instead, which costs the reading column nothing."
+    },
     {
       "change": "frame.zone_mark_rem, frame.zone_rail_rem and frame.zone_aside_rem added, defaulting to 1.75, 14 and 18. The shape is `FrameConfig`, which only this document carries. Additive with defaults, so an appearance file written before today still validates.",
       "version": "2026-09-02",
@@ -789,7 +810,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-02",
+      "default": "2026-09-02T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -797,5 +818,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-02"
+  "version": "2026-09-02T14:00"
 }

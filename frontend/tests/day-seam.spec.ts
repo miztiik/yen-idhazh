@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { resolve } from 'node:path';
+import { orderByTime } from '../src/lib/day-shape';
 import { dayShell, loadDay, publishedDates, wholeDay } from '../src/lib/server/payload';
-import type { DigestItem } from '../src/lib/payload/types';
+import type { DigestDay, DigestItem } from '../src/lib/payload/types';
 
 /**
  * Row #23's oracle, as a function rather than as a build, and row #25's seed
@@ -22,6 +23,13 @@ import type { DigestItem } from '../src/lib/payload/types';
  * And split, it must lose nothing. A topic's seed comes from the topic's own
  * list, and a story named in `keep` is in the seed whatever its position - the
  * head is a prefix and a leading story is not inside one.
+ *
+ * **The list the seam splits is the reading order, not the published one.** The
+ * stream runs newest first by the time on the story, so a seed taken off the
+ * desk-blocked payload would put one desk in the document and then shuffle it
+ * the moment the rest of the day arrived. The expectations below therefore go
+ * through `orderByTime` - the same function the shell and the page call - so
+ * this file cannot disagree with either about what the head of the day is.
  */
 
 const ROOT = resolve(process.cwd(), '..');
@@ -30,6 +38,11 @@ const CANARY = resolve(ROOT, 'backend', 'var', 'canary', 'digest');
 /** Every split worth trying: nothing seeded, a partial seed, the exact length,
  * and a seed longer than the day. */
 const SEEDS = [0, 1, 3, 8, 500];
+
+/** The day as a route renders it: the loader's day, in the order the page draws. */
+function reading(day: DigestDay): DigestDay {
+	return { ...day, items: orderByTime(day.items) };
+}
 
 test.describe('the reading routes load a day in two halves', () => {
 	test('the halves put back together are the day the loader read', () => {
@@ -44,15 +57,24 @@ test.describe('the reading routes load a day in two halves', () => {
 				expect(
 					JSON.stringify(wholeDay(shell!)),
 					`${date} at a seed of ${seed} rebuilt a different day`
-				).toBe(JSON.stringify(whole));
+				).toBe(JSON.stringify(reading(whole!)));
+				// And the set is the set, whatever the order: a sort that dropped a
+				// story would otherwise only fail the line above, which reads as a key
+				// order problem.
+				expect(
+					wholeDay(shell!)
+						.items.map((item) => item.item_id)
+						.sort(),
+					`${date} at a seed of ${seed} lost or doubled a story`
+				).toEqual(whole!.items.map((item) => item.item_id).sort());
 			}
 		}
 	});
 
-	test('the seed is the head of the published order and the rest is the tail', () => {
+	test('the seed is the head of the reading order and the rest is the tail', () => {
 		const date = publishedDates(CANARY).find((d) => (loadDay(d, CANARY)?.items.length ?? 0) > 1);
 		expect(date, 'no canary day carries more than one story').toBeDefined();
-		const items = loadDay(date!, CANARY)!.items;
+		const items = orderByTime(loadDay(date!, CANARY)!.items);
 		const shell = dayShell(date!, 3, { root: CANARY })!;
 		expect(shell.seed.map((item) => item.item_id)).toEqual(
 			items.slice(0, 3).map((item) => item.item_id)
@@ -75,18 +97,22 @@ test.describe('the reading routes load a day in two halves', () => {
 	});
 });
 
-/** The newest canary day carrying more than one story, and a topic it holds. */
+/** The newest canary day carrying more than one story, and a topic it holds.
+ *
+ * `items` is in the order the page draws, so every expectation built from it is
+ * about the list the seam actually splits. */
 function busiest(): { date: string; vertical: string; items: DigestItem[] } {
 	for (const date of publishedDates(CANARY)) {
 		const day = loadDay(date, CANARY);
 		if (!day || day.items.length < 2) continue;
-		return { date, vertical: day.items[0].vertical, items: day.items };
+		const items = orderByTime(day.items);
+		return { date, vertical: items[0].vertical, items };
 	}
 	throw new Error('no canary day carries more than one story');
 }
 
 test.describe('a topic route splits its own list', () => {
-	test('the seed and the rest together are exactly the topic, in published order', () => {
+	test('the seed and the rest together are exactly the topic, in reading order', () => {
 		const { date, vertical, items } = busiest();
 		const own = items.filter((item) => item.vertical === vertical).map((item) => item.item_id);
 		expect(own.length, `${date} published nothing under ${vertical}`).toBeGreaterThan(0);

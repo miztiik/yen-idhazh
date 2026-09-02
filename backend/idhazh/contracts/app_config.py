@@ -1586,6 +1586,21 @@ class UiConfig(Model):
             "`shell_seed_items`, so it never rides to a reader."
         ),
     )
+    rail_group_minutes: int = Field(
+        default=60,
+        ge=1,
+        le=1440,
+        description=(
+            "How coarse the day's time rail groups its stories. The rail draws one "
+            "marker per group and none on the stories under it, so this is what "
+            "decides how many times a reader is told the time. Measured 2026-09-02 "
+            "over the 12 committed days and 4,713 stories, at 60 minutes: 907 markers "
+            "instead of 4,713, so 80.8 percent of the labels are duplicates the rail "
+            "does not draw. Sixty is the hour, which is the unit a reader already "
+            "reads a clock in; 1440 is a whole day and 1 is a marker on almost every "
+            "story, which is the state this knob exists to avoid."
+        ),
+    )
 
     @field_validator("theme_default", mode="before")
     @classmethod
@@ -1810,6 +1825,26 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02T14:00",
+            change=(
+                "ui.rail_group_minutes added, defaulting to 60, bounded at 1 and 1440. "
+                "The shape is `UiConfig`, which this document and `AppearanceConfig` "
+                "share, so both schemas moved together. Additive with a default, so a "
+                "config written before today still validates."
+            ),
+            why=(
+                "The day's stories now run newest first down a time rail, and the rail "
+                "draws one marker per group of stories rather than one per story. How "
+                "coarse a group is decides how many times a reader is told the time, "
+                "and a page may not spell that (Rule #6). Measured 2026-09-02 on Intel "
+                "Core i7-1265U / Windows 11 / Python 3.14.2 over the 12 committed days "
+                "and 4,713 stories, at the 60-minute default: 907 markers rather than "
+                "4,713, so the rail leaves out 80.8 percent of the labels a "
+                "marker-per-story rail would print. The busiest day, 2026-09-01, draws "
+                "33 markers over 627 stories."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-01T20:00",
             change=(

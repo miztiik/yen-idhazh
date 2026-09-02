@@ -370,12 +370,17 @@
 	--gutter-max: 32px;
 	--gutter: clamp(var(--gutter-min), 4vw, var(--gutter-max));
 
-	/* The three column zones the reading page draws beside its prose. In rem,
+	/* The column zones the reading page draws beside its prose. In rem,
 	   never pixels: a reader who set their browser text larger needs the
 	   furniture beside the text to grow with it, and `14rem` and `224px` are
 	   the same number at the default font size, so only a check at two root
-	   sizes can tell them apart (frontend/tests/item-zones.spec.ts). */
+	   sizes can tell them apart (frontend/tests/item-zones.spec.ts).
+
+	   The time rail has no phone value because it has no phone column: 328 CSS
+	   px cannot hold a rail, the read mark and a readable line at once, so below
+	   the small breakpoint the marker is a rule across the top of its group. */
 	--zone-mark: 1.75rem;
 	--zone-rail: 14rem;
 	--zone-aside: 18rem;
+	--zone-time: 5.5rem;
 }
