@@ -125,28 +125,32 @@ def test_gutters_are_ordered() -> None:
 
 
 def test_the_column_zones_are_relative_and_bounded() -> None:
-    """Every zone the reading page draws beside its prose is a rem, and it has a
-    floor and a ceiling.
-
-    The floor is what the zone must hold - a 1.75rem ring, a footer sentence
-    plus two controls, five story titles. The ceiling is what the frame can
-    spare once a 68-character measure is paid for, which is 27.1rem at the
-    committed defaults, so a wider zone would squeeze the prose instead.
-    """
+    """Every zone the reading page draws beside its prose is a rem, and the
+    committed defaults are the ones the layout was measured at."""
     assert FrameConfig().zone_mark_rem == 1.75
     assert FrameConfig().zone_rail_rem == 14.0
     assert FrameConfig().zone_aside_rem == 18.0
 
-    for field, value in [
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
         ("zone_mark_rem", ZONE_MARK_MIN_REM - 0.1),
         ("zone_mark_rem", ZONE_MARK_MAX_REM + 0.1),
         ("zone_rail_rem", ZONE_RAIL_MIN_REM - 0.1),
         ("zone_rail_rem", ZONE_RAIL_MAX_REM + 0.1),
         ("zone_aside_rem", ZONE_ASIDE_MIN_REM - 0.1),
         ("zone_aside_rem", ZONE_ASIDE_MAX_REM + 0.1),
-    ]:
-        with pytest.raises(ValidationError, match=field):
-            FrameConfig(**{field: value})
+    ],
+)
+def test_a_column_zone_outside_its_bounds_is_refused(field: str, value: float) -> None:
+    """The floor is what the zone must hold - a 1.75rem ring, a footer sentence
+    plus two controls, five story titles. The ceiling is what the frame can
+    spare once a 68-character measure is paid for, which is 27.1rem at the
+    committed defaults, so a wider zone would squeeze the prose instead.
+    """
+    with pytest.raises(ValidationError, match=field):
+        FrameConfig.model_validate({field: value})
 
 
 def test_the_days_aside_may_not_be_narrower_than_the_item_rail() -> None:
