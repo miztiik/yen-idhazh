@@ -1461,6 +1461,14 @@
           "title": "Payload Slow Ms",
           "type": "integer"
         },
+        "rail_group_minutes": {
+          "default": 60,
+          "description": "How coarse the day's time rail groups its stories. The rail draws one marker per group and none on the stories under it, so this is what decides how many times a reader is told the time. Measured 2026-09-02 over the 12 committed days and 4,713 stories, at 60 minutes: 907 markers instead of 4,713, so 80.8 percent of the labels are duplicates the rail does not draw. Sixty is the hour, which is the unit a reader already reads a clock in; 1440 is a whole day and 1 is a marker on almost every story, which is the state this knob exists to avoid.",
+          "maximum": 1440,
+          "minimum": 1,
+          "title": "Rail Group Minutes",
+          "type": "integer"
+        },
         "read_mark_days": {
           "default": 7,
           "description": "How many digest days of read marks the browser keeps. Marks are held per digest date, so a mark made on one day can never grey out a different day's article. Every page load keeps the newest days up to this number and drops the rest, which bounds the store without trusting the device clock. One week covers a reader who comes back after a break.",
@@ -1635,6 +1643,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ui.rail_group_minutes added, defaulting to 60, bounded at 1 and 1440. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Additive with a default, so a config written before today still validates.",
+      "version": "2026-09-02T14:00",
+      "why": "The day's stories now run newest first down a time rail, and the rail draws one marker per group of stories rather than one per story. How coarse a group is decides how many times a reader is told the time, and a page may not spell that (Rule #6). Measured 2026-09-02 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over the 12 committed days and 4,713 stories, at the 60-minute default: 907 markers rather than 4,713, so the rail leaves out 80.8 percent of the labels a marker-per-story rail would print. The busiest day, 2026-09-01, draws 33 markers over 627 stories."
+    },
     {
       "change": "ui.archive_recent_days added, defaulting to 7, bounded at 1 and 31. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Additive with a default, so a config written before today still validates.",
       "version": "2026-09-01T20:00",
@@ -2032,7 +2045,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-01T20:00",
+      "default": "2026-09-02T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2046,5 +2059,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-01T20:00"
+  "version": "2026-09-02T14:00"
 }

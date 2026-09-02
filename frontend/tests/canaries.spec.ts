@@ -192,13 +192,17 @@ test.describe('the visual path', () => {
 
 	test('every visual carries alt text that repeats its numbers', async ({ page }) => {
 		// The visual is never the only carrier of a fact.
+		//
+		// The set rather than the positions: the stream runs newest first by the
+		// time on the story, so which of the two figures the page draws first is
+		// the day's business and not this file's.
 		await page.goto('/2026-08-20/');
-		const alts = await page.locator('main figure img').evaluateAll((nodes) =>
-			nodes.map((node) => node.getAttribute('alt') ?? '')
-		);
+		const alts = await page
+			.locator('main figure img')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('alt') ?? ''));
 		expect(alts).toHaveLength(2);
-		expect(alts[0]).toContain('15,400');
-		expect(alts[1]).toContain('Filed');
+		expect(alts.filter((alt) => alt.includes('15,400'))).toHaveLength(1);
+		expect(alts.filter((alt) => alt.includes('Filed'))).toHaveLength(1);
 	});
 
 	test('the rendered SVG decoded as an image, not as a broken frame', async ({ page }) => {

@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -1298,6 +1298,131 @@ the same 1.375x:
 width at both root sizes and fails if one did not scale, and it prints both
 numbers in the failure so the assertion cannot pass on a layout it never
 measured.
+
+## What the time rail costs and what it removes, 2026-09-02
+
+Hardware: Intel Core i7-1265U, Windows 11, Python 3.14.2. Date: 2026-09-02.
+Method: read every `frontend/public/digest/**/digest.json`, re-order each day by
+`published_at` descending with `item_id` breaking a tie, then walk the result
+counting the group changes at the committed 60-minute grouping. Spread is zero
+by construction: the input is committed bytes and the arithmetic is a sort and a
+scan.
+
+### The re-order keeps the day, on every day
+
+| Days | Stories | Days whose story set changed |
+| --- | --- | --- |
+| 12 | 4,713 | **0** |
+
+That is the claim the row rests on and it is the one worth checking rather than
+asserting: a sort that drops a story looks exactly like a day that published
+fewer, and nothing on the page would say which. `frontend/tests/time-rail.spec.ts`
+re-runs it over every committed day on every build.
+
+### The rail draws 907 labels where a label per story would draw 4,713
+
+| Day | Stories | Markers | Labels not drawn |
+| --- | --- | --- | --- |
+| 2026-08-21 | 4 | 4 | 0 |
+| 2026-08-22 | 10 | 4 | 6 |
+| 2026-08-23 | 147 | 56 | 91 |
+| 2026-08-24 | 731 | 209 | 522 |
+| 2026-08-25 | 724 | 208 | 516 |
+| 2026-08-26 | 621 | 146 | 475 |
+| 2026-08-27 | 334 | 76 | 258 |
+| 2026-08-28 | 117 | 26 | 91 |
+| 2026-08-29 | 366 | 75 | 291 |
+| 2026-08-30 | 431 | 34 | 397 |
+| 2026-08-31 | 601 | 36 | 565 |
+| 2026-09-01 | 627 | 33 | 594 |
+| **total** | **4,713** | **907** | **3,806** |
+
+**80.8 percent of the labels a marker-per-story rail would print are duplicates
+the rail leaves out.** The two newest days are the ones to read: 2026-09-01
+draws 33 markers over 627 stories, so a reader scrolling the busiest day meets a
+time about every nineteen stories rather than beside every one.
+
+The older days draw more markers per story, and the reason is a fact about the
+feeds rather than about the rail: before 2026-08-31 the day carried stories
+whose feed stamps run years back, so the hour groups are sparse. 2026-08-24 has
+275 stories dated before the day it published on, spread over 1,978 days.
+
+### Which clock, over every committed day
+
+| `time_source` | Stories | Share |
+| --- | --- | --- |
+| `feed` | 970 | 20.6 percent |
+| `first_seen` | 10 | 0.2 percent |
+| `unknown` | 0 | 0 |
+| absent (published before the field existed) | 3,733 | 79.2 percent |
+
+And which of the rail's five strings each story gets:
+
+| Form | Stories | Share |
+| --- | --- | --- |
+| `14:05` - the day being read | 3,547 | 75.3 percent |
+| `11 Jun 08:15` - older than yesterday | 776 | 16.5 percent |
+| `Yesterday 23:40` | 380 | 8.1 percent |
+| `First seen 06:20` - our clock, marked | 10 | 0.2 percent |
+| `No time given` | 0 | 0 |
+
+**`unknown` is empty and that is why the canary day plants one.** A branch no
+fixture reaches ships with no test, and this one decides whether a story with no
+time at all still renders rather than throwing. The canary carries one story of
+every form.
+
+**47 of the 4,713 stories are stamped exactly `T00:00:00Z`**, 1.0 percent, which
+is what a date-only feed date parses to and also what a story genuinely
+published at midnight parses to. That figure is why the rail does not print
+`no time given` on a midnight stamp: it would mislabel the real midnight stories
+inside the same 1.0 percent, and the payload cannot say which they are
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-rail-is-what-reads-it-and-what-it-can-and-cannot-say-2026-09-02)).
+
+### A phone gets no rail column, and this is the number that decided it
+
+Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0, Chromium headless
+through Playwright 1.62. Date: 2026-09-02. Method: the canary build served by
+`vite preview`, one page load per viewport and per root font size, reading
+`getBoundingClientRect().width` off the stream grid, the first item and its
+summary. Spread is zero by construction.
+
+The rail was first drawn as a `3.5rem` column at every width. At 360px that is
+what it cost:
+
+| Quantity | Rail as a phone column | Rail as a rule above the group |
+| --- | --- | --- |
+| the frame's content box | 328 px | 328 px |
+| the rail column plus its gap | 68 px | **0** |
+| the item's used width | 260 px | **328 px** |
+| the summary's used width | **186 px** | **254 px** |
+
+**186px is about 25 characters, and it broke `Interconnector` across two lines
+in the title.** The item already spends 40px on the read mark and its gap and
+32px on its own padding, so a phone cannot carry a rail column, the mark and a
+readable line at once. Below the small breakpoint the marker is a rule across
+the top of its group with the time under it, which costs the reading column
+nothing. What the reader loses is the label sitting level with the story it
+opens.
+
+From the small breakpoint the column is a `rem` and it scales:
+
+| Viewport | Root 16 px | Root 22 px | Factor | Summary at 16 px |
+| --- | --- | --- | --- | --- |
+| 360 | no column | no column | - | 254 px |
+| 801 | 88 px | 121 px | 1.375 | 559 px |
+| 1280 | 88 px | 121 px | 1.375 | 659.81 px |
+| 1536 | 88 px | 121 px | 1.375 | 659.81 px |
+
+**The measure did not move at any width above the small breakpoint**: the
+summary is 659.81px with the rail, which is what it was without it. The rail
+takes its 104px from the item's own empty width rather than from the prose.
+
+On the canary day - eight stories planted to carry every state - the rail draws
+**7 markers and one glyph** at every one of those widths, in this order:
+`14:58`, `11:00`, `09:20`, `First seen 06:20`, `Yesterday 23:40`,
+`11 Jun 08:15`, `No time given`. The eighth story is at `14:05`, inside the
+first marker's hour, so it carries no label - which is the grouping doing its
+job on a fixture small enough to read by eye.
 
 ### Why the visual did not get a column
 

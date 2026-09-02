@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-01
+**Last Updated**: 2026-09-02
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -918,6 +918,17 @@ Get-Content <path> | Select-Object -Skip 274 -First 3
 
 A hit you cannot reproduce with `Select-String` or `Get-Content` is not there.
 
+**The file-reading tool can hand back the PREVIOUS contents of a file a detached
+script has just rewritten.** Observed 2026-09-02, twice in one session: a gate
+script deletes its sentinel, appends `BUILD=0 / GATE=0 / WEIGHT=0 / DONE`, and
+`Start-Process -Wait` returns - and the file tool still returns the `CHECK=0 /
+DONE` a previous run wrote. `Get-Content` on the same path in the same second
+returned the new bytes. The failure is silent and reads as "the script did not
+run", which is the wrong conclusion and sends you round the loop again. **Read a
+sentinel a background job just wrote with `Get-Content` from a terminal, not
+with the file tool.** The file tool is still the right way to read a large
+output file the job wrote minutes earlier.
+
 **The editor's replace tool deletes whatever the old text held and the new text
 drops, and reports success.** It is a literal swap, so a line that sits inside
 the matched block and is missing from the replacement is gone with no warning
@@ -1574,6 +1585,17 @@ the variable protects the shell you remember to set it in and nothing else.
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
   ```
+
+- **`page.screenshot()` times out on the reading page built from the committed
+  digest, and `clip` does not save it.** Observed 2026-09-02: `/` on the real
+  build carries 627 stories, and every form of the call - viewport, `fullPage:
+  false`, a 1000x900 `clip`, `animations: 'disabled'` - times out after logging
+  `fonts loaded`. Eight sequential `page.goto` calls on the same page never
+  returned either. The screenshot in `CLAUDE.md` section 12 is a check on the
+  layout, not on the day, so take it on the canary build - eight stories, and it
+  carries a planted instance of every state the page draws. `npm run build` for
+  a byte or weight measurement, `npm run build:canary` for anything that looks
+  at the page.
 
 - **This browser runs at a device scale of 1.25, so `setViewportSize` does not
   give you the CSS width you asked for.** `{ width: 1024 }` produced

@@ -11,6 +11,7 @@ import { join, resolve } from 'node:path';
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
 import { dayKey, toDay } from '../charts/viewport';
+import { orderByTime } from '../day-shape';
 import { dropVectors } from '../payload/project';
 import type { DigestDay, DigestItem } from '$lib/payload/types';
 
@@ -179,9 +180,15 @@ export function dayShell(
 ): DayShell | null {
 	const day = loadDay(date, split.root ?? DIGEST_ROOT);
 	if (!day) return null;
+	// The head has to be the head of the order the PAGE draws, not of the
+	// published one. The stream runs newest first, so a seed taken off the
+	// desk-blocked payload would put one desk's stories in the document and then
+	// shuffle them the moment the rest of the day arrived - a first screen that
+	// rewrites itself while the reader is on it.
+	const ordered = orderByTime(day.items);
 	const items = split.vertical
-		? day.items.filter((item) => item.vertical === split.vertical)
-		: day.items;
+		? ordered.filter((item) => item.vertical === split.vertical)
+		: ordered;
 	const kept = new Set(split.keep ?? []);
 	const head = new Set(items.slice(0, seedItems).map((item) => item.item_id));
 	const seeded = (item: DigestItem): boolean => head.has(item.item_id) || kept.has(item.item_id);
