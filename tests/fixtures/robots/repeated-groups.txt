@@ -1,0 +1,6 @@
+# Two groups for the same agent are one group. RFC 9309 section 2.2.1.
+User-agent: *
+Disallow: /alpha/
+
+User-agent: *
+Disallow: /beta/

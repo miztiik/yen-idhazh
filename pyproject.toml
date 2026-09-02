@@ -45,6 +45,32 @@ dependencies = [
     # A range here means two runners may disagree about the same day.
     "onnxruntime==1.29.0",
     "tokenizers>=0.21",
+    # One reading of robots.txt on every interpreter we support. The standard
+    # library's `urllib.robotparser` disagrees with itself across the declared
+    # range: 3.12 takes the first matching group and the first matching rule,
+    # 3.14 merges repeated groups and applies longest-match with `*` and `$`.
+    # One committed file can therefore be read as allowed on one runner and
+    # refused on another, which makes our own crawling unreproducible - and
+    # this is the control Rule #11 rests on, so it may not be version-dependent.
+    #
+    # Pinned exactly, not floored, for the same reason `onnxruntime` is: the
+    # answer is a permission, and a patch release that changed one precedence
+    # rule would silently move which pages a run may read.
+    #
+    # From the package index, 2026-09-02: a 10,296-byte pure-Python wheel,
+    # BSD-3-Clause, from the Scrapy organisation, no declared dependencies,
+    # requires-python >= 3.10. Measured 2026-09-02 on `ubuntu-latest`
+    # (Linux 6.17.0-1022-azure x86_64, 4 vCPU, 16 GB), CPython 3.12.14, in a
+    # throwaway workflow off `main`: 0.661 / 0.449 / 0.454 s to install
+    # (n=3, mean 0.521, spread 0.212 - sample 1 downloads the wheel and the
+    # other two read pip's cache) and 53,292 installed bytes over 17 files. It
+    # adds one line to `pip list` and moves no version that was already there,
+    # so this is not a repeat of `.[faithfulness]`. It ships `py.typed`, so
+    # `mypy --strict` needs no override. Full method and the developer-box
+    # contrast in docs/reference/measurements.md.
+    #
+    # Beneficiary: one reading of robots.txt on every interpreter we support.
+    "protego==0.6.2",
 ]
 
 [project.optional-dependencies]

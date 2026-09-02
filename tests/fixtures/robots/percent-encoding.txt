@@ -1,0 +1,5 @@
+# An unreserved character stays the same character whether the file or the
+# address spells it encoded. A reserved one does not. RFC 9309 section 2.2.2.
+User-agent: *
+Disallow: /%7Earchive/
+Disallow: /reports/a%2Fb
