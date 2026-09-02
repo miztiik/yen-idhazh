@@ -23,17 +23,29 @@ looks it up. A new cell is appended at the end, never inserted
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Final, Self
+from typing import Annotated, Any, ClassVar, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, ItemId, RunId, Slug
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, Slug
 from idhazh.contracts.item_health import FailureCode, ItemOutcome, ItemStage
 
 #: The three source-ledger cells that may never reach a browser. `detail` is
 #: diagnostic free text and the two address fields identify the page rather than
 #: the measurement, so none of them is needed to draw a rate or a compression.
 FORBIDDEN_COLUMNS: Final[frozenset[str]] = frozenset({"canonical_url", "url_key", "detail"})
+
+#: The item's address, carried as an OPAQUE key rather than as `ItemId`.
+#:
+#: Item identity is minted once, by `ItemHealthRow`, and no other writer reaches
+#: this file - so re-spelling the grammar here would put it in two contracts and
+#: buy nothing. It would also cost something real: a published shard is a file
+#: with no writer left, so the day the id grammar moves, every shard already
+#: published would stop loading, and a payload an earlier run wrote that today's
+#: build cannot read is a release blocker (`CLAUDE.md` section 11). Bounded and
+#: non-empty is what the console needs of it: the id is a join key on the page
+#: and never a path segment.
+PublicItemKey = Annotated[str, StringConstraints(min_length=1, max_length=128)]
 
 
 class PublicTelemetryRow(Contract):
@@ -55,14 +67,17 @@ class PublicTelemetryRow(Contract):
                 "stamp and no changelog while every other persisted surface has all "
                 "three (Rule #3). Typing it also gives the migration something to read "
                 "a committed shard back through, which is what proves a published file "
-                "still loads rather than merely still parses."
+                "still loads rather than merely still parses. item_id is the one cell "
+                "carried as an opaque key: identity is minted by ItemHealthRow, and a "
+                "published shard has no writer left to re-mint it if that grammar "
+                "moves."
             ),
         ),
     )
 
     date: DateStamp
     run_id: RunId
-    item_id: ItemId
+    item_id: PublicItemKey
     vertical: Slug
     source_id: Slug
     stage: ItemStage
