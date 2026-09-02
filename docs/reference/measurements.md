@@ -1223,6 +1223,139 @@ This is why the weights are cached rather than committed: GitHub hard-rejects
 any file over 100 MB, and both files sit inside the 10 GB repository cache with
 under 3 GB to spare.
 
+## What the reading page does with a wide screen, 2026-09-02
+
+Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0, Chromium headless
+through Playwright 1.62. Date: 2026-09-02. Method: `npm run build` on the
+committed digest, then `vite preview`, then one page load per width and per
+root font size, reading `getBoundingClientRect().width` off the frame, the
+first item, and the item's summary. The route is `/`, which carries the whole
+day inline - a dated route seeds 15 stories and fetches the rest, so a layout
+measured on its first paint is a layout measured on a seed. Spread is zero by
+construction: a used width is a layout fact and repeats exactly.
+
+### Before: the item did not waste the page, and the card wasted 230 px of itself
+
+At a 1536 px viewport, on `origin/main` at `06ddd84a`:
+
+| Quantity | Value | Share |
+| --- | --- | --- |
+| the frame's content box | **1,216 px** | - |
+| the frame's used width | **1,280 px** | 83.3 percent of the viewport |
+| the item's used width | **1,216 px** | 100 percent of the content box |
+| the summary's used width | **659.81 px** | 54.3 percent of the content box |
+
+**So the page-level waste was zero and the card-level waste was 230.19 px.** The
+item filled the content box exactly; inside it the card body was 890 px and the
+summary 659.81, and the strip between the summary and the item's 224 px footer
+rail stood empty on every one of the day's stories. That is 18.9 percent of the
+content box, at every width from 1,280 px up.
+
+This is the number [the plan row](../../TODO/20260831-reading-page-rebuild-plan.md)
+asked for before a layout was chosen, and it moved the design twice. It killed
+the idea that the frame is the problem: at 801 px the frame is 789 and the item
+725, which is 91.9 percent, and at 1536 the item takes all 1,216 px it is
+offered. And it sized what could be spent, which is one column of at most
+27.1 rem once a 68-character measure and a 1.75 rem mark are paid for.
+
+### After: an aside takes 288 px of it, and the measure never moves
+
+Same method, same widths, on the branch:
+
+| Quantity | Before | After |
+| --- | --- | --- |
+| the frame's content box | 1,216 px | **1,216 px** |
+| the frame's used width | 1,280 px | **1,280 px** |
+| the item's used width | 1,216 px | **896 px** |
+| the summary's used width | 659.81 px | **659.81 px** |
+
+The item is narrower because the day's leading stories now stand beside it in an
+18 rem column instead of above it: 896 + 32 gap + 288 aside = 1,216, so the
+content box is still full. Empty width beside the summary falls from 230.19 px
+to 146.19 px, and the width that carries something rises from 872 px
+(659.81 summary + 212 rail) to 948 px (659.81 summary + 288 aside), which is
+71.7 percent to 78.0 percent of the content box.
+
+**The measure did not move, at any width.** That was the constraint: a wide card
+holding a 68-character paragraph is not wasted space, and widening the paragraph
+is what the measure exists to prevent.
+
+### No zone is a pixel count, and this is how that was checked
+
+Every zone is a `rem` knob in `config/appearance.json`. Raising the root font
+size from 16 px to 22 px - the reader's own setting, not a browser zoom, which
+would scale the CSS pixel and move a hardcoded zone too - moves all of them by
+the same 1.375x:
+
+| Zone | Token | At a 16 px root | At a 22 px root | Factor |
+| --- | --- | --- | --- | --- |
+| the source mark | `--zone-mark` | 28 px | 38.5 px | 1.375 |
+| the item's footer rail | `--zone-rail` | 224 px | 308 px | 1.375 |
+| the day's aside | `--zone-aside` | 288 px | 396 px | 1.375 |
+| the gap between them | `--space-6` | 32 px | 44 px | 1.375 |
+
+`frontend/tests/item-zones.spec.ts` is the memory. It reads each zone's used
+width at both root sizes and fails if one did not scale, and it prints both
+numbers in the failure so the assertion cannot pass on a layout it never
+measured.
+
+### Why the visual did not get a column
+
+Row 18's zone model called for a 20 rem to 24 rem column holding an item's
+chart. It is not built, and the arithmetic is why.
+
+**A chart draws at the size the column gives it.** The committed charts are
+825 x 437 px SVGs carrying 25 text labels at 10 px - measured 2026-09-02 over
+`frontend/public/digest/2026/08/24/ai-04.svg`. Today the figure takes the card
+body, so at 890 px it draws those labels at 10.8 CSS px. In a 20 rem column it
+draws them at **3.9 px**, and in a 24 rem column at **4.7 px**.
+
+**And the column does not fit anyway.** The item's content row at 1,280 px and
+up is 1,166 px. A 68-character measure is 659.81, the mark is 28 and the gaps
+are 12 each, so a trailing column can be 454 px at most - and only if it is the
+*only* trailing column. With the day's aside taking that slot, the card body at
+1536 px is 806 px and a 20 rem column beside the measure would leave 130 px.
+
+**What would change it**: `chart.width_px` becoming the column's width rather
+than a fixed 760, which is row 18's own decision 6 and belongs to whichever row
+owns the render spec. Until then `digest.visual_side` stays unread, because a
+knob whose only setting draws an illegible chart is worse than a knob nothing
+reads.
+
+Two things the row did fix for a visual: the figure no longer reserves a 16:10
+box the chart does not fill - measured 2026-09-02, an 825 x 437 chart inside an
+890 x 556 box left **85 px of empty band above and below** every one of them -
+and only **5.4 percent of published items carry a rendered visual at all**, 249
+of 4,598 over the twelve committed days, which is why this was never the zone
+that decided the layout.
+
+### Why the item's rail did not drop to the small breakpoint
+
+Row 18's decision 3 moved the item's footer rail from the middle breakpoint
+(1024 px) to the small one (640 px). It is refused, and the arithmetic is the
+reason.
+
+The item's content row is the frame's content box less 50 px of padding and
+border. Take the 1.75 rem mark, its 12 px gap, and a 14 rem rail with its own
+12 px gap, and what is left for the summary is:
+
+| Viewport | Content box | Card body with a rail | As characters |
+| --- | --- | --- | --- |
+| 640 px | 588.8 px | **262.8 px** | about 26 |
+| 801 px | 737 px | **411 px** | about 42 |
+| 1024 px | 960 px | 634 px | about 65 |
+| 1280 px | 1,216 px | 890 px | 68, the measure |
+
+`frame.measure_ch` is bounded at 52 to 80 characters because below about 50 the
+eye returns too often. A 26-character line is not a narrower measure, it is a
+broken one - the same rule that refuses a wide paragraph, failing the other way.
+
+**And the reason the decision existed is already gone.** It wanted the item's
+facts out of the middle of the read. Row 16 did that on 2026-09-01 by splitting
+them: the four a reader uses to decide whether to read at all went above the
+title, and the claims about our own summary went below it. Nothing interrupts
+the read at any width now, so no breakpoint has to move to fix it.
+
 ## Published payload size
 
 ### Prose compression
