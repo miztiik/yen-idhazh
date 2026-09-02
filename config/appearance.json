@@ -80,7 +80,10 @@
     "gutter_max_px": 32,
     "gutter_min_px": 16,
     "measure_ch": 68,
-    "reading_max_px": 1280
+    "reading_max_px": 1280,
+    "zone_aside_rem": 18.0,
+    "zone_mark_rem": 1.75,
+    "zone_rail_rem": 14.0
   },
   "icons": {
     "size_px": 16,

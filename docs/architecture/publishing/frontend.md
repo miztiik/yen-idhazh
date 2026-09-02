@@ -603,6 +603,59 @@ The arithmetic lives in
 [frontend/src/lib/day-shape.ts](../../../frontend/src/lib/day-shape.ts), the way
 the run strip's axis does, so the rules can be tested without a browser.
 
+## The day is a stream with an aside, and the aside is a zone rather than a width
+
+From `frame.breakpoints_px[2]` (1400px) the day page is two columns: the story
+stream at `minmax(0, 1fr)` and an `18rem` sticky column carrying the leading
+stories. Below that width nothing changes - the block draws above the stream
+exactly where `digest.sections` puts it.
+
+**Why it happens there and not sooner.** Measured 2026-09-02 at a 1536px
+viewport on the committed digest, the frame's content box is 1,216px, the item
+took all 1,216 of it, and the summary took 659.81 - so 230.19px of every card
+stood empty beside the prose, at every width from 1,280px up. The frame is not
+the problem and was not widened: at 801px the item already takes 91.9 percent of
+the frame. What is spendable is one column of at most 27.1rem, once a
+68-character measure and a 1.75rem source mark are paid for
+([../../reference/measurements.md](../../reference/measurements.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02)).
+
+**One trailing column at a time.** The item's own footer rail wants the same
+slot, and keeping both leaves the summary 570px against a measure of 659.81. So
+the item retires its rail at the same breakpoint and its footer returns under
+the summary - which is where the item's own split puts it anyway, because the
+confidence sentence is a claim about the summary and the rail painted it level
+with the title.
+
+**The aside stands beside the stream, never beside the day's controls.** The day
+is rendered in four parts - the sections before the leads, the leads, the
+sections between the leads and the stream, and the stream - and the two control
+parts span both columns. That is not a preference: the filter panel sticks only
+where it is one band, and at the 896px a two-column split leaves, its pills wrap
+under its field. Each part renders its own sections in `digest.sections` order
+and the parts are in that order too, so the document order a narrow screen and a
+reader with no script see is exactly what config asked for, and reordering the
+page is still a config edit.
+
+The aside needs the leads to come before the items in `digest.sections`. Any
+other order and the day is one column at every width, because an aside beside
+the day's controls is the arrangement the rule above refuses.
+
+### The zones are config, and a browser check proves they are relative
+
+`frame.zone_mark_rem`, `frame.zone_rail_rem` and `frame.zone_aside_rem` are read
+by [scripts/build-frame-css.mjs](../../../frontend/scripts/build-frame-css.mjs)
+and written into `--zone-mark`, `--zone-rail` and `--zone-aside`, the same way
+the frame width and the measure already are - a column width has to be right on
+the first painted frame, so it cannot be injected from a layout.
+
+They are `rem` because a reader who set their browser text larger needs the
+furniture beside the text to grow with it. That is the one property of this
+layout no screenshot can check: `14rem` and `224px` are the same number at the
+default font size. [frontend/tests/item-zones.spec.ts](../../../frontend/tests/item-zones.spec.ts)
+reads each zone's used width with the root font size at 16px and again at 22px
+and fails unless every one of them scaled by 22/16, printing both numbers so a
+pass cannot be vacuous.
+
 ## The day notice is one line, and one divider marks the later runs
 
 The notice states the day as facts and never as a judgement: the count, the

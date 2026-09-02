@@ -56,6 +56,21 @@ FRAME_READING_MAX_PX: Final = 1600
 FRAME_CONSOLE_MIN_PX: Final = 1100
 FRAME_CONSOLE_MAX_PX: Final = 2000
 
+#: The reading item's column widths, in rem. Every zone is relative because a
+#: reader who set their browser text larger needs the furniture beside the text
+#: to grow with it - measured 2026-09-02, a root font size of 22px moved the
+#: mark column 28 -> 38.5px and the item rail 224 -> 308px, both exactly 1.375x.
+#: The floors are what the zone must hold: the mark is a 1.75rem ring, the item
+#: rail carries a sentence plus two controls, and the day's aside carries five
+#: story titles. The ceilings are what `reading_max_px` can spare once a
+#: 68-character measure is paid for - 27.1rem at the committed defaults.
+ZONE_MARK_MIN_REM: Final = 1.0
+ZONE_MARK_MAX_REM: Final = 4.0
+ZONE_RAIL_MIN_REM: Final = 8.0
+ZONE_RAIL_MAX_REM: Final = 24.0
+ZONE_ASIDE_MIN_REM: Final = 12.0
+ZONE_ASIDE_MAX_REM: Final = 27.0
+
 #: A six-digit CSS hex, lower case. The one form `frontend/src/styles/tokens.css`
 #: writes and the one form `tokens.spec.ts` reads back off it.
 HEX_COLOUR: Final = r"^#[0-9a-f]{6}$"
@@ -172,11 +187,48 @@ class FrameConfig(Model):
             "`auto-fit` with a minimum is what replaces it."
         ),
     )
+    zone_mark_rem: float = Field(
+        default=1.75,
+        ge=ZONE_MARK_MIN_REM,
+        le=ZONE_MARK_MAX_REM,
+        description=(
+            "The reading item's leading column, which carries the source monogram at "
+            "every width. In rem, never pixels: the mark says whether the story has "
+            "been read, so it grows with a reader who set their browser text larger."
+        ),
+    )
+    zone_rail_rem: float = Field(
+        default=14.0,
+        ge=ZONE_RAIL_MIN_REM,
+        le=ZONE_RAIL_MAX_REM,
+        description=(
+            "The reading item's trailing column, which carries the item footer from "
+            "the middle breakpoint to the wide one. It retires at the wide breakpoint, "
+            "where the day's aside becomes the page's trailing column instead."
+        ),
+    )
+    zone_aside_rem: float = Field(
+        default=18.0,
+        ge=ZONE_ASIDE_MIN_REM,
+        le=ZONE_ASIDE_MAX_REM,
+        description=(
+            "The day's trailing column from the wide breakpoint, which carries the "
+            "leading stories beside the stream instead of above it. One trailing "
+            "column at a time: a 68-character measure plus both this and the item's "
+            "own rail does not fit inside `reading_max_px`."
+        ),
+    )
 
     @model_validator(mode="after")
     def _frame_and_gutters_are_ordered(self) -> Self:
         if self.gutter_min_px > self.gutter_max_px:
             raise ValueError("frame.gutter_min_px must not exceed gutter_max_px")
+        if self.zone_aside_rem < self.zone_rail_rem:
+            raise ValueError(
+                "frame.zone_aside_rem must not be narrower than zone_rail_rem: the "
+                "day's aside replaces the item's rail at the wide breakpoint, so a "
+                "narrower aside would give a wider screen less beside the prose"
+            )
         if self.console_max_px < self.reading_max_px:
             raise ValueError(
                 "frame.console_max_px must not be narrower than reading_max_px: "
@@ -443,6 +495,27 @@ class AppearanceConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02",
+            change=(
+                "frame.zone_mark_rem, frame.zone_rail_rem and frame.zone_aside_rem "
+                "added, defaulting to 1.75, 14 and 18. The shape is `FrameConfig`, "
+                "which only this document carries. Additive with defaults, so an "
+                "appearance file written before today still validates."
+            ),
+            why=(
+                "The reading page's column widths were literals in one component's "
+                "style block, so an operator could move the frame and the measure but "
+                "not the furniture between them (Rule #6). Naming them is also what "
+                "makes them checkable: every zone is a rem, so raising the root font "
+                "size moves all of them, and a browser check now reads the used width "
+                "of each zone at 16px and at 22px and fails if one did not scale. "
+                "Measured 2026-09-02 at a 1536px viewport on the committed digest: "
+                "the frame's content box is 1216px, the item used all 1216 of it, and "
+                "the summary used 659.81 - so 230.19px stood empty beside the prose "
+                "on every item, which the day's aside now spends."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-01T14:00",
             change=(
