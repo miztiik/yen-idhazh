@@ -17,13 +17,23 @@ from pathlib import Path
 from typing import Any, Final, Protocol
 
 from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.feed_health import RobotsOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.fetch import BLOCKED_REASONS, ROBOTS_REFUSALS
 from idhazh.sanitize import sanitize
 
 _FORMULA_PREFIXES: Final = ("=", "+", "-", "@", "\t", "\r")
 _HTTP_DETAIL = re.compile(r"^HTTP (?P<status>[0-9]{3})$")
+
+#: Which typed failure each robots refusal is. The reasons are `fetch`'s own
+#: strings rather than copies, so a reworded one cannot quietly become
+#: `unknown` here while every gate stays green.
+_ROBOTS_FAILURE: Final[dict[str, FailureCode]] = {
+    ROBOTS_REFUSALS[RobotsOutcome.DENIED]: FailureCode.ROBOTS_DENIED,
+    ROBOTS_REFUSALS[RobotsOutcome.UNREACHABLE]: FailureCode.ROBOTS_UNREACHABLE,
+}
 
 #: Envelope version. It rides every record so a reader can evolve its parsing.
 ENVELOPE_VERSION: Final = "1"
@@ -173,7 +183,7 @@ class AttrKey(StrEnum):
     HTTP_STATUS = "http_status"
     BODY_BYTES = "body_bytes"
     BODY_TRUNCATED = "body_truncated"
-    ROBOTS_KNOWN = "robots_known"
+    ROBOTS_OUTCOME = "robots_outcome"
     ROBOTS_CACHED = "robots_cached"
     SOURCE_DIGEST = "source_digest"
     SOURCE_CHARS = "source_chars"
@@ -820,15 +830,10 @@ def _classify_article(article: Article) -> tuple[FailureCode, ItemStage, int | N
         )
 
     if article.status is ArticleStatus.ROBOTS_DENIED:
-        if detail == "robots.txt disallows this path":
-            return FailureCode.ROBOTS_DENIED, ItemStage.FETCH, None, None
-        if detail == "robots.txt could not be reached":
-            return FailureCode.ROBOTS_UNREACHABLE, ItemStage.FETCH, None, None
-        if detail in {
-            "address resolves inward",
-            "address is not on the public internet",
-            "no host in address",
-        } or detail.startswith("scheme "):
+        refusal = _ROBOTS_FAILURE.get(detail)
+        if refusal is not None:
+            return refusal, ItemStage.FETCH, None, None
+        if detail in BLOCKED_REASONS or detail.startswith("scheme "):
             return FailureCode.BLOCKED_ADDRESS, ItemStage.FETCH, None, None
         return (
             FailureCode.UNKNOWN,

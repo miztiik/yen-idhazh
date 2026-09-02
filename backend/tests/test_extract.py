@@ -2,24 +2,31 @@
 
 Every fetch decision worth getting wrong is a pure function over a status code,
 a robots file or an address, so all of them are tested and none of them needs a
-socket. The one function that opens a connection is a thin wrapper and is not
-exercised here - there is no mock standing in for it (Rule #7).
+socket. The function that opens the connection is a thin wrapper; where the
+order of two reads is the thing under test, the socket edge is supplied as a
+reader over a committed capture rather than mocked (Rule #7).
 
 The extraction tests are about the trust boundary and about the failures that
 are supposed to degrade rather than raise.
+
+CI runs this whole file on both ends of the interpreter range `pyproject.toml`
+declares, because the robots corpus below has to read the same way on each.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+from typing import NamedTuple
 
 import pytest
-from conftest import FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
+from idhazh import cli, config
 from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
@@ -33,13 +40,17 @@ from idhazh.extract import (
     truncate_to_tokens,
 )
 from idhazh.fetch import (
+    ROBOTS_REFUSALS,
     FetchResult,
+    RobotsRules,
     address_is_dialable,
     backoff_delays,
     classify_status,
+    fetch,
+    origin,
     read_capped,
-    robots_allows,
-    robots_from_result,
+    refused,
+    robots_rules,
     robots_url,
 )
 
@@ -125,29 +136,189 @@ def test_an_ordinary_public_address_is_dialable(url: str) -> None:
 
 # --- Asking the host -------------------------------------------------------
 
+ROBOTS = FIXTURES_DIR / "robots"
+AGENT = "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
+HOST = "https://x.example"
 
-def test_a_disallowed_path_is_refused() -> None:
-    robots = "User-agent: *\nDisallow: /private/\n"
-    assert not robots_allows(robots, "yen-idhazh/1.0", "https://x.example/private/a")
-    assert robots_allows(robots, "yen-idhazh/1.0", "https://x.example/public/a")
+#: Every path the corpus is asked about, in the order the digest below covers.
+ROBOTS_PATHS = (
+    "/",
+    "/public/a",
+    "/private/a",
+    "/alpha/x",
+    "/beta/x",
+    "/gamma/x",
+    "/docs/public/a",
+    "/docs/private/a",
+    "/ledger",
+    "/a/b.pdf",
+    "/a/b.pdf?x=1",
+    "/tmp/1/cache/z",
+    "/tmp/1/keep/z",
+    "/~archive/x",
+    "/%7Earchive/x",
+    "/reports/a%2Fb",
+    "/reports/a/b",
+    "/orphan/a",
+    "/nocolon/a",
+)
+
+#: What the whole corpus answers, as one value. Recorded 2026-09-02 against
+#: protego 0.6.2 over 10 files and 19 paths, on CPython 3.14.2. CI runs this
+#: file on 3.12 and 3.14, so an interpreter that reads one rule differently
+#: moves this digest and fails.
+ROBOTS_GRID_DIGEST = "2fe013ae24d46ba4ac7fb6b276dbca15c9d3f792597d5c74834ca000b132a3eb"
 
 
-def test_a_blanket_disallow_is_refused() -> None:
-    assert not robots_allows(
-        "User-agent: *\nDisallow: /\n", "yen-idhazh/1.0", "https://x.example/a"
+class RobotsCase(NamedTuple):
+    """One committed file, what it is here to cover, and both of its answers."""
+
+    fixture: str
+    covers: str
+    allowed: tuple[str, ...]
+    denied: tuple[str, ...]
+
+
+ROBOTS_CASES = (
+    RobotsCase(
+        "crawler-specific-group.txt",
+        "a group naming this crawler beats the wildcard group",
+        ("/", "/public/a"),
+        ("/private/a",),
+    ),
+    RobotsCase(
+        "another-crawlers-group.txt",
+        "a group naming somebody else does not bind us, and the wildcard group does",
+        ("/", "/public/a"),
+        ("/private/a",),
+    ),
+    RobotsCase(
+        "repeated-groups.txt",
+        "two groups for one agent are one group",
+        ("/gamma/x",),
+        ("/alpha/x", "/beta/x"),
+    ),
+    RobotsCase(
+        "longest-match.txt",
+        "the longest matching rule wins, whichever order the two are written in",
+        ("/docs/public/a",),
+        ("/docs/private/a",),
+    ),
+    RobotsCase(
+        "wildcards.txt",
+        "a star spans anything and a dollar pins the end of the path",
+        ("/a/b.pdf?x=1", "/tmp/1/keep/z"),
+        ("/a/b.pdf", "/tmp/1/cache/z"),
+    ),
+    RobotsCase(
+        "percent-encoding.txt",
+        "an unreserved character survives encoding, and a reserved one is a different path",
+        ("/reports/a/b",),
+        ("/~archive/x", "/%7Earchive/x", "/reports/a%2Fb"),
+    ),
+    RobotsCase(
+        "malformed.txt",
+        "a rule before any group, a line with no colon, and a field nobody defined",
+        ("/orphan/a", "/nocolon/a"),
+        ("/private/a",),
+    ),
+)
+
+
+def rules_for(fixture: str) -> RobotsRules:
+    """Read a committed file the way a run reads a served one."""
+    return robots_rules(FetchResult(FetchOutcome.OK, status=200, body=(ROBOTS / fixture).read_bytes()))
+
+
+@pytest.mark.parametrize("case", ROBOTS_CASES, ids=lambda case: case.fixture)
+def test_a_committed_robots_file_permits_and_refuses_exactly_what_it_says(
+    case: RobotsCase,
+) -> None:
+    """One file, both answers, so a swapped call cannot pass.
+
+    `Protego.can_fetch` takes the URL first and the agent second, the opposite
+    order to the standard library's `RobotFileParser.can_fetch`. A swap is
+    silent: it answers every question the same way, so a case that only ever
+    expected a refusal would pass with the arguments the wrong way round. Every
+    case here carries at least one of each.
+    """
+    assert case.allowed and case.denied, f"{case.fixture} must cover both answers"
+    rules = rules_for(case.fixture)
+    for path in case.allowed:
+        assert rules.permits(AGENT, HOST + path) is RobotsOutcome.ALLOWED, case.covers
+    for path in case.denied:
+        assert rules.permits(AGENT, HOST + path) is RobotsOutcome.DENIED, case.covers
+
+
+def test_an_allowance_wins_a_tie_and_a_blanket_refusal_still_refuses() -> None:
+    """RFC 9309 section 2.2.2, with its control beside it.
+
+    One path and two files, so a call that answered every question the same way
+    fails here whichever constant it returned.
+    """
+    assert rules_for("allow-on-tie.txt").permits(AGENT, f"{HOST}/ledger") is RobotsOutcome.ALLOWED
+    assert (
+        rules_for("blanket-disallow.txt").permits(AGENT, f"{HOST}/ledger") is RobotsOutcome.DENIED
     )
 
 
-def test_an_unreachable_robots_file_is_a_refusal_not_a_permission() -> None:
-    """Assuming consent from silence is how a polite crawler becomes an impolite one."""
-    result = fetch_without_network()
-    assert result.outcome is FetchOutcome.ROBOTS_DENIED
+def test_a_file_that_publishes_no_rules_permits_every_path() -> None:
+    rules = rules_for("no-rules.txt")
+    for path in ROBOTS_PATHS:
+        assert rules.permits(AGENT, HOST + path) is RobotsOutcome.ALLOWED
 
 
-def fetch_without_network() -> FetchResult:
-    from idhazh.fetch import fetch
+def test_a_group_naming_another_crawler_does_not_bind_us() -> None:
+    """Our identity carries a contact address, and it is what we are judged as.
 
-    return fetch("https://example.org/a", config=ExtractConfig(), robots_txt=None)
+    The same file refuses a crawler with no group of its own, which is what
+    says the wildcard group is being read rather than ignored.
+    """
+    rules = rules_for("crawler-specific-group.txt")
+    assert rules.permits(AGENT, f"{HOST}/") is RobotsOutcome.ALLOWED
+    assert rules.permits("GPTBot", f"{HOST}/") is RobotsOutcome.DENIED
+
+
+def test_the_whole_corpus_reads_the_same_way_on_every_supported_python() -> None:
+    """The oracle CI runs twice: one digest over every file and every path.
+
+    `robots.txt` is a permission, and until 2026-09-02 the standard library
+    read one file two ways across the range `pyproject.toml` declares - 3.12
+    takes the first matching group and the first matching rule, 3.14 merges
+    repeated groups and applies longest-match. Which pages this crawler may
+    read is not allowed to depend on which runner picked up the job.
+    """
+    names = sorted(path.name for path in ROBOTS.glob("*.txt"))
+    assert len(names) == len(ROBOTS_CASES) + 3, "every fixture is named by a case or its own test"
+    grid = "\n".join(
+        f"{name} {path} {rules_for(name).permits(AGENT, HOST + path).value}"
+        for name in names
+        for path in ROBOTS_PATHS
+    )
+    assert len(grid.splitlines()) == len(names) * len(ROBOTS_PATHS)
+    assert hashlib.sha256(grid.encode("utf-8")).hexdigest() == ROBOTS_GRID_DIGEST
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://x.example/deep/path?q=1", "https://x.example"),
+        ("HTTPS://X.Example/a", "https://x.example"),
+        ("https://x.example:443/a", "https://x.example"),
+        ("http://x.example:80/a", "http://x.example"),
+        ("https://x.example:8443/a", "https://x.example:8443"),
+        ("http://[2606:4700:4700::1111]/a", "http://[2606:4700:4700::1111]"),
+    ],
+)
+def test_one_host_is_one_document_however_its_address_is_spelled(
+    url: str, expected: str
+) -> None:
+    """RFC 9309 section 2.3 scopes a robots file to its own authority."""
+    assert origin(url) == expected
+
+
+def test_robots_is_looked_for_at_the_host_root() -> None:
+    assert robots_url("https://X.example/deep/path?q=1") == "https://x.example/robots.txt"
 
 
 # --- What one robots.txt response means (RFC 9309 section 2.3.1) ------------
@@ -155,37 +326,125 @@ def fetch_without_network() -> FetchResult:
 
 def test_a_served_robots_file_is_the_rules() -> None:
     body = b"User-agent: *\nDisallow: /private/\n"
-    assert robots_from_result(FetchResult(FetchOutcome.OK, status=200, body=body)) == body.decode()
+    rules = robots_rules(FetchResult(FetchOutcome.OK, status=200, body=body))
+    assert rules.permits(AGENT, f"{HOST}/private/a") is RobotsOutcome.DENIED
+    assert rules.permits(AGENT, f"{HOST}/public/a") is RobotsOutcome.ALLOWED
 
 
 @pytest.mark.parametrize("status", [401, 403, 404, 410, 451])
-def test_a_host_that_publishes_no_rules_is_allow_all(status: int) -> None:
+def test_a_host_that_publishes_no_rules_permits_the_target(status: int) -> None:
     """RFC 9309 sec 2.3.1.3: a 4xx other than 429 means the crawler may access anything.
 
     Ten of our feeds sit on hosts that serve no robots.txt at all. Reading that
     as a refusal was us inventing a rule the host never wrote.
     """
-    rules = robots_from_result(FetchResult(classify_status(status), status=status))
-    assert rules == ""
-    assert robots_allows(rules or "", "yen-idhazh/1.0", "https://x.example/a")
+    rules = robots_rules(FetchResult(classify_status(status), status=status))
+    assert rules.permits(AGENT, f"{HOST}/a") is RobotsOutcome.ALLOWED
 
 
 @pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
-def test_a_host_that_did_not_answer_stays_a_refusal(status: int) -> None:
-    """RFC 9309 sec 2.3.1.4: unreachable means the rules are unknown, so assume disallow."""
-    assert robots_from_result(FetchResult(classify_status(status), status=status)) is None
+def test_a_host_that_did_not_answer_leaves_permission_unknown(status: int) -> None:
+    """RFC 9309 sec 2.3.1.4: unreachable means the rules are unknown, so nothing is asked."""
+    rules = robots_rules(FetchResult(classify_status(status), status=status))
+    assert rules.permits(AGENT, f"{HOST}/a") is RobotsOutcome.UNREACHABLE
 
 
-def test_a_network_failure_stays_a_refusal() -> None:
-    assert robots_from_result(FetchResult(FetchOutcome.TRANSIENT, detail="TimeoutError")) is None
+@pytest.mark.parametrize("failure", ["TimeoutError", "ConnectionResetError", "URLError"])
+def test_a_transport_failure_leaves_permission_unknown(failure: str) -> None:
+    rules = robots_rules(FetchResult(FetchOutcome.TRANSIENT, detail=failure))
+    assert rules.permits(AGENT, f"{HOST}/a") is RobotsOutcome.UNREACHABLE
 
 
-def test_a_blocked_address_stays_a_refusal() -> None:
-    assert robots_from_result(FetchResult(FetchOutcome.BLOCKED, detail="resolves inward")) is None
+def test_a_blocked_address_leaves_permission_unknown() -> None:
+    rules = robots_rules(FetchResult(FetchOutcome.BLOCKED, detail="address resolves inward"))
+    assert rules.permits(AGENT, f"{HOST}/a") is RobotsOutcome.UNREACHABLE
 
 
-def test_robots_is_looked_for_at_the_host_root() -> None:
-    assert robots_url("https://x.example/deep/path?q=1") == "https://x.example/robots.txt"
+# --- What a permission costs the target -------------------------------------
+
+
+@pytest.mark.parametrize("permission", [RobotsOutcome.DENIED, RobotsOutcome.UNREACHABLE])
+def test_a_target_without_permission_reaches_no_socket(permission: RobotsOutcome) -> None:
+    """Assuming consent from silence is how a polite crawler becomes an impolite one.
+
+    A refusal and an unestablished permission are different facts, and the
+    result says which as a value rather than only as a sentence.
+    """
+    result = fetch("https://example.org/a", config=ExtractConfig(), permission=permission)
+    assert result.outcome is FetchOutcome.ROBOTS_DENIED
+    assert result.robots is permission
+    assert result.detail == ROBOTS_REFUSALS[permission]
+    assert result == refused(permission)
+
+
+def served(body: str) -> FetchResult:
+    return FetchResult(FetchOutcome.OK, status=200, body=body.encode("utf-8"))
+
+
+class Recorder:
+    """The socket edge, standing in for a real one and remembering what it was asked.
+
+    This is not a mock of our own logic: it is one implementation of the same
+    `Fetcher` signature every stage already takes, answering from a committed
+    capture. The order of the two reads is the policy under test, and policy is
+    what a test has to be able to get wrong (Rule #7).
+    """
+
+    def __init__(self, answer: FetchResult) -> None:
+        self.answer = answer
+        self.asked: list[str] = []
+
+    def __call__(self, url: str) -> FetchResult:
+        self.asked.append(url)
+        if url.endswith("/robots.txt"):
+            return self.answer
+        return served("<html><body><p>the article body</p></body></html>")
+
+
+def test_a_refused_target_is_never_asked_and_the_next_run_asks_again() -> None:
+    """The whole order, in the two runs it takes to see it.
+
+    Nothing about a refusal is persisted and the cache lives inside one
+    `live_fetcher`, so the next run starts with an empty one and asks the host
+    again. That is `collect.robots_denied_recheck_runs` at its configured value
+    of one run, and it costs no stored state to honour.
+    """
+    settings = config.load(CONFIG_DIR)
+    target = f"{HOST}/private/a"
+
+    refusing = Recorder(served(read_text(ROBOTS / "crawler-specific-group.txt")))
+    refusal = cli.live_fetcher(settings, read_address=refusing)(target)
+    assert refusing.asked == [f"{HOST}/robots.txt"]
+    assert refusal.outcome is FetchOutcome.ROBOTS_DENIED
+    assert refusal.robots is RobotsOutcome.DENIED
+
+    permitting = Recorder(served(read_text(ROBOTS / "no-rules.txt")))
+    allowed = cli.live_fetcher(settings, read_address=permitting)(target)
+    assert permitting.asked == [f"{HOST}/robots.txt", target]
+    assert allowed.outcome is FetchOutcome.OK
+
+
+def test_a_target_whose_rules_nobody_answered_for_is_never_asked() -> None:
+    settings = config.load(CONFIG_DIR)
+    silent = Recorder(FetchResult(FetchOutcome.TRANSIENT, status=503, detail="HTTP 503"))
+    result = cli.live_fetcher(settings, read_address=silent)(f"{HOST}/a")
+    assert silent.asked == [f"{HOST}/robots.txt"]
+    assert result.outcome is FetchOutcome.ROBOTS_DENIED
+    assert result.robots is RobotsOutcome.UNREACHABLE
+
+
+def test_one_host_is_asked_for_its_rules_once_a_run() -> None:
+    """However many of its pages a run reads, and however the addresses are spelled."""
+    settings = config.load(CONFIG_DIR)
+    recorder = Recorder(served(read_text(ROBOTS / "no-rules.txt")))
+    read = cli.live_fetcher(settings, read_address=recorder)
+    read(f"{HOST}/one")
+    read("HTTPS://X.Example:443/two")
+    assert recorder.asked == [
+        f"{HOST}/robots.txt",
+        f"{HOST}/one",
+        "HTTPS://X.Example:443/two",
+    ]
 
 
 # --- Retry budget -----------------------------------------------------------

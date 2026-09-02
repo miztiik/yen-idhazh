@@ -1,0 +1,13 @@
+# Everything a real robots.txt gets wrong, in one file: a rule before any
+# group, a line with no colon, a value that is not a number, a field nobody
+# defined, and a sitemap. None of it may raise, and the one good group still
+# has to bind. RFC 9309 section 2.2.4.
+Disallow: /orphan/
+User-agent yen-idhazh
+Disallow /nocolon/
+Crawl-delay: soon
+# a comment
+User-agent: *
+Disallow: /private/
+Unknown-Field: whatever
+Sitemap: https://x.example/sitemap.xml

@@ -1,0 +1,1 @@
+# This host publishes a file and no rules in it. Everything is permitted.

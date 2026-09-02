@@ -19,11 +19,11 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from idhazh import cli, config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
-from idhazh.fetch import FetchResult
+from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
 from idhazh.llm.server import Completion
 
 
@@ -71,14 +71,14 @@ def row_for(code: FailureCode) -> ItemHealthRow:
         case FailureCode.ROBOTS_DENIED:
             failed = extract.to_article(
                 item(),
-                FetchResult(FetchOutcome.ROBOTS_DENIED, detail="robots.txt disallows this path"),
+                refused(RobotsOutcome.DENIED),
                 config=settings.app.extract,
                 fetched_at="2026-08-21T06:00:00Z",
             )
         case FailureCode.ROBOTS_UNREACHABLE:
             failed = extract.to_article(
                 item(),
-                FetchResult(FetchOutcome.ROBOTS_DENIED, detail="robots.txt could not be reached"),
+                refused(RobotsOutcome.UNREACHABLE),
                 config=settings.app.extract,
                 fetched_at="2026-08-21T06:00:00Z",
             )
@@ -346,6 +346,47 @@ def test_every_failure_code_has_a_real_fixture_writer(code: FailureCode) -> None
     else:
         assert row.outcome is ItemOutcome.FAILED
     assert row.code is code
+
+
+@pytest.mark.parametrize("permission", [RobotsOutcome.DENIED, RobotsOutcome.UNREACHABLE])
+def test_every_refusal_the_fetcher_writes_arrives_here_typed(
+    permission: RobotsOutcome,
+) -> None:
+    """The two modules spell the reason once, in `fetch`, and read it back here.
+
+    They used to hold a literal each. Rewording either one turned a refusal
+    into `unknown` with a diagnostic sentence in the ledger, and every gate
+    stayed green because both sides still compiled.
+    """
+    settings = config.load(CONFIG_DIR)
+    article = extract.to_article(
+        item(),
+        refused(permission),
+        config=settings.app.extract,
+        fetched_at="2026-08-21T06:00:00Z",
+    )
+    row = telemetry.classify_item(
+        planned=item(), article=article, summary=None, date=plan().date, run_id="2026-08-21-1"
+    )
+    assert row.code is not FailureCode.UNKNOWN
+    assert row.stage is ItemStage.FETCH
+    assert row.detail is None
+
+
+@pytest.mark.parametrize("reason", sorted(BLOCKED_REASONS))
+def test_every_address_the_fetcher_blocks_arrives_here_typed(reason: str) -> None:
+    """The same drift, one branch along: `fetch` owns the reasons and this reads them."""
+    settings = config.load(CONFIG_DIR)
+    article = extract.to_article(
+        item(),
+        FetchResult(FetchOutcome.BLOCKED, detail=reason),
+        config=settings.app.extract,
+        fetched_at="2026-08-21T06:00:00Z",
+    )
+    row = telemetry.classify_item(
+        planned=item(), article=article, summary=None, date=plan().date, run_id="2026-08-21-1"
+    )
+    assert row.code is FailureCode.BLOCKED_ADDRESS
 
 
 def test_a_finished_item_reaches_publish_ok() -> None:
