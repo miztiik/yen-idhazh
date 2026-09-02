@@ -131,6 +131,64 @@ class RunConfig(Model):
 
 class CollectConfig(Model):
     quarantine_after_failures: int = Field(default=5, ge=1)
+    availability_strikes_before_rest: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Consecutive results that count against a feed before a run stops asking "
+            "it. The successor to quarantine_after_failures, named for what it counts: "
+            "the old name reads as a policy about quarantine and is now one of two "
+            "different questions. Nothing reads this yet - the strike rule moves onto "
+            "it in a later change, and both names carry the same 5 until then."
+        ),
+    )
+    availability_rest_runs: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "How many runs a rested feed is skipped before it is asked again. The rest "
+            "ends on its own, so a source that came back is live on that very run and a "
+            "source that is still dead costs one request per cycle rather than one per "
+            "run."
+        ),
+    )
+    feed_http_410_runs_before_retirement: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Distinct runs that must each read HTTP 410 from one address before that "
+            "address is retired. Distinct runs and not attempts: one bad afternoon "
+            "retrying itself is one run's evidence."
+        ),
+    )
+    robots_denied_recheck_runs: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Runs to wait before asking robots.txt again after a refusal. One, because "
+            "permission can be granted back at any moment and a refusal costs one small "
+            "request to re-establish - a longer wait buys nothing measurable and delays "
+            "a source's return."
+        ),
+    )
+    robots_unreachable_recheck_runs: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "The same, for permission we could not establish at all. Separate from the "
+            "denial cadence because the two are different facts: one is a publisher's "
+            "stated policy and the other is our own failed read."
+        ),
+    )
+    source_yield_min_complete_days: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "Complete days of item-health evidence a per-source yield judgement needs "
+            "before it may be made at all. Below it any yield threshold is an estimate "
+            "rather than a measurement (Rule #10), and no source may be demoted on one."
+        ),
+    )
     watchlist_max_entities: int = Field(default=30, ge=1)
     settled_failure_codes: tuple[FailureCode, ...] = Field(
         default=(
@@ -1887,6 +1945,27 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-02T20:00",
+            change=(
+                "collect.availability_strikes_before_rest, collect.availability_rest_runs, "
+                "collect.feed_http_410_runs_before_retirement, "
+                "collect.robots_denied_recheck_runs, "
+                "collect.robots_unreachable_recheck_runs and "
+                "collect.source_yield_min_complete_days added, defaulting to 5, 5, 5, 1, 1 "
+                "and 30. Additive with defaults, so a config written before today still "
+                "validates. Nothing reads them yet, and collect.quarantine_after_failures "
+                "still decides every rest."
+            ),
+            why=(
+                "The source lifecycle is four different questions - may we ask, does the "
+                "address work today, is the address gone for good, and does the source "
+                "publish anything worth reading - and one knob answered all of them. "
+                "Naming each one first means the changes that read them are reviewable "
+                "as behaviour rather than as a knob and a behaviour at once "
+                "(docs/architecture/sources/health.md)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-02T18:00",
             change=(

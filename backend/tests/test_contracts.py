@@ -8,6 +8,7 @@ No mocks and no network (Rule #7): every input here is a file in
 from __future__ import annotations
 
 import ast
+import csv
 import json
 import logging
 import re
@@ -43,6 +44,8 @@ from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestVerticalRef
 from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.export import CONTRACTS, expected_filenames, export
+from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
 from idhazh.contracts.item_health import (
     FAILURE_CODE_STAGES,
     SOURCE_NEUTRAL_FAILURE_CODES,
@@ -61,6 +64,7 @@ from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.fingerprint import text_digest
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
+from utilities import build_canary_day
 
 BY_STEM: dict[str, type[Contract]] = {c.__schema_stem__: c for c in CONTRACTS}
 CONFIG_FILES: dict[str, type[Contract]] = {
@@ -711,6 +715,62 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
     )
 
 
+def test_the_feed_health_ledger_columns_are_defined_once() -> None:
+    """The five columns of 2026-09-02 are appended, so the old header is still a prefix.
+
+    `ledger.require_matching_header` compares the whole list, so a column filed
+    beside the one it relates to would put every historical value one place to
+    the right under a reader that maps by position. Appending is what keeps the
+    narrow header readable as the head of the wide one.
+    """
+    assert FeedHealthRow.csv_columns() == (
+        "version",
+        "run_id",
+        "date",
+        "feed_id",
+        "checked_at",
+        "outcome",
+        "status",
+        "items",
+        "detail",
+        "endpoint_key",
+        "robots_outcome",
+        "robots_checked_at",
+        "robots_status",
+        "target_attempted",
+    )
+
+
+def test_a_retirement_names_distinct_runs_and_only_one_cause() -> None:
+    """Five failures inside one run is one run's evidence, not five runs' worth.
+
+    `http_410` is the only cause the enum admits, and that is the design rather
+    than a starting point: nothing softer than `410 Gone` says the address is
+    not coming back (docs/architecture/sources/health.md).
+    """
+    assert [cause.value for cause in RetirementCause] == ["http_410"]
+
+    row = FeedRetirementRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "feed-retirement-row" / "gone.json")
+    )
+    repeated = row.model_dump(mode="json") | {"evidence_run_ids": ["2026-08-23-1"] * 5}
+
+    with pytest.raises(ValidationError, match="distinct runs"):
+        FeedRetirementRow.model_validate(repeated)
+
+
+def test_a_retirement_row_survives_the_ledger_round_trip() -> None:
+    """The evidence list is one cell, so the header cannot grow with the evidence."""
+    row = FeedRetirementRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "feed-retirement-row" / "gone.json")
+    )
+    cells = row.csv_row()
+
+    assert cells["evidence_run_ids"].count(" ") == len(row.evidence_run_ids) - 1
+    assert "," not in cells["evidence_run_ids"], "a comma would need quoting in a union merge"
+    assert FeedRetirementRow.from_csv_row(cells) == row
+
+
 def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None:
     """The canary's own copy of the header, held against the contract.
 
@@ -740,6 +800,24 @@ def test_the_canary_writes_every_column_the_counters_ledger_defines() -> None:
     declared = re.search(r"const COUNTER_COLUMNS = \[(.*?)\];", source, re.DOTALL)
     assert declared is not None, "build-canary.mjs no longer declares a COUNTER_COLUMNS array"
     assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == RuntimeCountersRow.csv_columns()
+
+
+def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path: Path) -> None:
+    """Every column filled by at least one canary feed, not merely present in the header.
+
+    The browser suite runs against this ledger, so a column no canary row fills
+    is a console state that suite cannot reach - which is how the five columns
+    added on 2026-09-02 would ship drawn only in their empty state.
+    """
+    build_canary_day.health(tmp_path)
+    path = tmp_path / "feed-health" / f"{build_canary_day.DATE[:7]}.csv"
+    with path.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert tuple(rows[0]) == FeedHealthRow.csv_columns()
+    unfilled = [name for name in FeedHealthRow.csv_columns() if not any(row[name] for row in rows)]
+    assert unfilled == [], "a canary column nothing fills is a console state no test can reach"
+    assert {row["robots_outcome"] for row in rows} == {"allowed", "denied", ""}
 
 
 def test_the_frontend_names_every_live_lens_and_no_retired_one() -> None:

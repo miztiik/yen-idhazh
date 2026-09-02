@@ -12,12 +12,27 @@
       ],
       "title": "FetchOutcome",
       "type": "string"
+    },
+    "RobotsOutcome": {
+      "description": "What `robots.txt` said about this address, as a decision and never a body.\n\nThree answers because three are actionable. A host that publishes no rules\nand a host whose rules allow us are the same permission, so they are one\nmember; a refusal and a robots file we could not read are different, because\nthe first is a publisher's stated policy and the second is our own failure\nto establish one. Neither of the last two says anything about whether the\nfeed itself works, so neither is evidence about availability.",
+      "enum": [
+        "allowed",
+        "denied",
+        "unreachable"
+      ],
+      "title": "RobotsOutcome",
+      "type": "string"
     }
   },
   "$id": "feed-health-row.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "endpoint_key, robots_outcome, robots_checked_at, robots_status and target_attempted appended, every one of them nullable. The committed shards are rewritten onto the wider header in the same commit by backend/utilities/migrate_feed_health.py, and every rewritten row carries five empty cells.",
+      "version": "2026-09-02T20:00",
+      "why": "The record could say what a feed answered and not which address was asked, whether the site allowed the request, or whether the request was made at all. A run cannot retire a dead address without knowing the address, and a robots refusal reads as a failed read without the permission beside it. Empty rather than backfilled: the configured URL may have moved since a row was written, and a guessed identity would retire the wrong address later."
+    },
     {
       "change": "outcome gains `skipped`, for a run that held a quarantined feed back.",
       "version": "2026-08-23T12:00",
@@ -55,6 +70,20 @@
       "description": "Our own one-line reason. Never the response body (Rule #11).",
       "title": "Detail"
     },
+    "endpoint_key": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The sha256 of the configured feed URL this run asked, from derive_endpoint_key. It identifies the address rather than the feed, so a feed whose URL is edited starts a fresh record. Empty on a row written before the column existed.",
+      "title": "Endpoint Key"
+    },
     "feed_id": {
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "title": "Feed Id",
@@ -69,6 +98,47 @@
     },
     "outcome": {
       "$ref": "#/$defs/FetchOutcome"
+    },
+    "robots_checked_at": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When permission was established, so a recheck cadence has a clock.",
+      "title": "Robots Checked At"
+    },
+    "robots_outcome": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RobotsOutcome"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What robots.txt said about this address. Empty on a row written before the column existed, which is not the same fact as allowed."
+    },
+    "robots_status": {
+      "anyOf": [
+        {
+          "maximum": 599,
+          "minimum": 100,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The status robots.txt itself answered with, when there was one.",
+      "title": "Robots Status"
     },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
@@ -90,8 +160,21 @@
       "description": "The HTTP status, when the request got far enough to have one.",
       "title": "Status"
     },
+    "target_attempted": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did this run request the feed address itself? False for a run that stopped at robots.txt or rested the feed, so evidence about the feed can be told apart from evidence about permission. The cell is spelled True or False, as every other boolean cell under state/ is.",
+      "title": "Target Attempted"
+    },
     "version": {
-      "default": "2026-08-23T12:00",
+      "default": "2026-09-02T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -106,5 +189,5 @@
   ],
   "title": "FeedHealthRow",
   "type": "object",
-  "version": "2026-08-23T12:00"
+  "version": "2026-09-02T20:00"
 }

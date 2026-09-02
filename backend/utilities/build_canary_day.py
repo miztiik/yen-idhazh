@@ -49,7 +49,12 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.feed_health import (
+    FeedHealthRow,
+    FetchOutcome,
+    RobotsOutcome,
+    derive_endpoint_key,
+)
 from idhazh.contracts.route import Route, SpecFormat, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.run_plan import TimeSource
@@ -631,17 +636,26 @@ def _health(
     status: int | None = None,
     items: int = 0,
     detail: str | None = None,
+    robots: RobotsOutcome | None = RobotsOutcome.ALLOWED,
+    robots_status: int | None = 200,
+    attempted: bool = True,
 ) -> FeedHealthRow:
+    checked_at = f"{date}T{n * 6:02d}:01:00Z"
     return FeedHealthRow(
         version=FeedHealthRow.schema_version(),
         run_id=f"{date}-{n}",
         date=date,
         feed_id=feed,
-        checked_at=f"{date}T{n * 6:02d}:01:00Z",
+        checked_at=checked_at,
         outcome=outcome,
         status=status,
         items=items,
         detail=detail,
+        endpoint_key=derive_endpoint_key(f"https://{feed}.example.com/feed.xml"),
+        robots_outcome=robots,
+        robots_checked_at=None if robots is None else checked_at,
+        robots_status=robots_status,
+        target_attempted=attempted,
     )
 
 
@@ -667,10 +681,28 @@ def health(state: Path) -> int:
                     status=503,
                     detail="read timed out after 20 s",
                 ),
-                # Said no in robots.txt. Not a failure - honouring it is the job.
-                _health(date, n, "canary-polite", FetchOutcome.ROBOTS_DENIED, status=200),
-                # Never asked, so it can neither pass nor fail.
-                _health(date, n, "canary-quiet", FetchOutcome.SKIPPED),
+                # Said no in robots.txt. Not a failure - honouring it is the job,
+                # and the address itself was never asked.
+                _health(
+                    date,
+                    n,
+                    "canary-polite",
+                    FetchOutcome.ROBOTS_DENIED,
+                    status=200,
+                    robots=RobotsOutcome.DENIED,
+                    attempted=False,
+                ),
+                # Never asked, so it can neither pass nor fail. A resting feed's
+                # permission is not rechecked either, so no robots cell is filled.
+                _health(
+                    date,
+                    n,
+                    "canary-quiet",
+                    FetchOutcome.SKIPPED,
+                    robots=None,
+                    robots_status=None,
+                    attempted=False,
+                ),
             ]
     # Answered, but with nothing. The same cost to the digest as a refusal.
     rows += [_health(DATE, n, "canary-empty", FetchOutcome.OK, status=200, items=0) for n in (2, 3)]

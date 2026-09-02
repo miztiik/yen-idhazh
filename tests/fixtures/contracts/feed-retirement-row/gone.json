@@ -1,0 +1,15 @@
+{
+  "cause": "http_410",
+  "decided_by_run": "2026-08-27-3",
+  "endpoint_key": "021aca22b06ea64c9ba65f809c52a4e7f11cff40bfd975095c06720e5c88147f",
+  "evidence_run_ids": [
+    "2026-08-23-1",
+    "2026-08-24-2",
+    "2026-08-25-1",
+    "2026-08-26-4",
+    "2026-08-27-3"
+  ],
+  "feed_id": "example-lab-blog",
+  "retired_on": "2026-08-27",
+  "version": "2026-09-02T20:00"
+}

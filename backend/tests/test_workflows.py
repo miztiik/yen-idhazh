@@ -24,6 +24,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
+from idhazh import ledger
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 
 WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
@@ -2331,6 +2332,28 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     ).stdout.splitlines()
 
     assert answered == [f"{path}: merge: union" for path in written.values()]
+
+
+def test_the_retirement_ledger_needs_no_gitattributes_edit() -> None:
+    """`state/**/*.csv` already answers union, so the new ledger inherits the driver.
+
+    Asked of git rather than of a pattern matcher written here, for the same
+    reason the test above is: `.gitattributes` is the file that decides. Two
+    stale checkouts can each append the same retirement, and the union keeps both
+    lines - which is why the file is also registered in `ledger.keyed_paths`, so
+    the post-merge settlement collapses them to one.
+    """
+    relative = ledger.feed_retirements_relpath()
+
+    answered = subprocess.run(
+        ["git", "check-attr", "merge", "--", relative],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+
+    assert answered == [f"{relative}: merge: union"]
 
 
 @requires_bash

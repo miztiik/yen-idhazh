@@ -14,7 +14,7 @@
 | Chosen strategy | Expand, migrate, then contract. Keep permission, current availability, publication yield and editorial value as four separate facts; derive every reversible state from immutable events; persist only HTTP-410 endpoint retirement; summarise before deleting. Ruled by Fowler with Editor on source policy, Carmack on runtime and robots, and Andre on score evidence, 2026-09-02. |
 | Execution | autonomous orchestrator per `docs/how-to/execute-a-plan.md`. Parallel N = 2. Each row is its own worktree off `origin/main` and its own PR. |
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 2; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 2; honor the ESCALATE triggers in section 0.
 
 **Deletion is the one irreversible act in this plan.** `.github/workflows/prune.yml` squashes and force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a state file deleted by rows 6 and 7 stops being recoverable from history once the prune passes over it. Both rows therefore ship with the existing `prune-state --dry-run` flag set in the workflow, log exactly what they would remove, and a separate one-line commit turns live deletion on after one scheduled run has printed that list.
 
@@ -38,7 +38,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Widen the health record and name the knobs | - | A | PENDING | - | - | - |
+| 1 | Widen the health record and name the knobs | - | A | DONE #373 | `yi-s01` | 373 | worker |
 | 2 | Read robots rules identically on every supported Python | 1 | B | PENDING | - | - | - |
 | 3 | One result per feed per run, and an honest strike rule | 2 | C | PENDING | - | - | - |
 | 4 | Retire gone endpoints and count only askable feeds | 3 | D | PENDING | - | - | - |
