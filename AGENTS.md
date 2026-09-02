@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-02
 
 Derived pointer for coding agents. Not authoritative - if this disagrees with `docs/`, docs win (CLAUDE.md section 5).
 
@@ -37,4 +37,4 @@ Two rules carry an exception and there are only these two. `.github/workflows/pr
 - [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md) - the environment, every gate command, and the browser smoke.
 - [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) - environment and tool quirks that make a command lie.
 - [`docs/how-to/fine-tune-a-model.md`](docs/how-to/fine-tune-a-model.md) - the training corpus, its two schedules, and what the prune costs.
-- [`TODO/20260815-digest-pipeline-plan.md`](TODO/20260815-digest-pipeline-plan.md) - the active build plan.
+- [`TODO/`](TODO/) - the plan-docs. Every row of [`20260815-digest-pipeline-plan.md`](TODO/20260815-digest-pipeline-plan.md) has landed or been descoped, so it is the record of how the pipeline was built rather than a queue of work. Open work is in [`20260823-known-defects-plan.md`](TODO/20260823-known-defects-plan.md) and [`20260827-summarizer-fine-tuning-plan.md`](TODO/20260827-summarizer-fine-tuning-plan.md).
