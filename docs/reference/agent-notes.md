@@ -818,9 +818,17 @@ merge. Only `gh`'s local post-merge cleanup was skipped.
 **The same command from a DETACHED worktree exits 1 with
 `could not determine current branch: failed to run git: not on any branch`, and
 both the merge and the branch delete succeeded.** Seen three times on
-2026-08-31. Detaching before merging is still right - it is what stops the
-branch delete failing - so this exit code is the normal outcome of doing the
-right thing, not a fault.
+2026-08-31 and again on 2026-09-02, so the exit code is not the fault.
+
+**But do not detach a row's worktree in order to free its branch - remove the
+worktree instead.** Detaching does free the branch, and it also throws the branch
+away, which is the only signal `backend/utilities/sweep_worktrees.py` can judge a
+leftover checkout on. A detached tree whose branch was squash-merged is not an
+ancestor of `main`, so it reads as `detached at a commit the trunk does not
+carry` and is kept for ever. Measured 2026-09-02 on this repository's own merge
+of that sweep: the tree it was built in had to be removed by hand. Remove the
+worktree first and the merge's own `--delete-branch` succeeds, because nothing
+holds the branch any more.
 
 **And the merge can be invisible for a few seconds after it lands.** Also
 2026-08-31: `gh pr merge` exited 0, and `gh pr view <n> --json state,mergeCommit`
