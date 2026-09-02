@@ -66,8 +66,6 @@ const BUILD = resolve(process.cwd(), 'build');
 const COMMITTED = resolve(process.cwd(), 'public', 'digest');
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 function subdirectories(at: string): string[] {
 	if (!existsSync(at)) return [];
 	return readdirSync(at, { withFileTypes: true })
@@ -76,9 +74,57 @@ function subdirectories(at: string): string[] {
 		.sort();
 }
 
-/** The newest day the built site serves. Never a date written here: a
- * hardcoded one passes on an empty page the moment the fixture moves. */
-const DAY = subdirectories(BUILD).filter((name) => DATE.test(name)).at(-1) as string;
+/** Every day the built site serves, and how many stories each one carries. */
+function servedDays(): { date: string; items: number }[] {
+	const root = join(BUILD, 'digest');
+	const found: { date: string; items: number }[] = [];
+	for (const year of subdirectories(root)) {
+		for (const month of subdirectories(join(root, year))) {
+			for (const day of subdirectories(join(root, year, month))) {
+				const file = join(root, year, month, day, 'digest.json');
+				if (!existsSync(file)) continue;
+				const served = JSON.parse(readFileSync(file, 'utf8')) as { items: unknown[] };
+				found.push({ date: `${year}-${month}-${day}`, items: served.items.length });
+			}
+		}
+	}
+	return found;
+}
+
+/** The BUSIEST day the built site serves that also earned a leading block.
+ *
+ * Every other spec here takes the newest, which is right for them: they ask
+ * whether a page renders, and the newest day is what a reader opens. This one
+ * asks whether it holds up under a day's worth of stories - a rail and a card
+ * that read well at twelve and become a wall at several hundred is the failure
+ * this page has had once already - and what the pipeline happened to publish
+ * this morning is not that. On 2026-09-02 the newest day carried 128 stories
+ * and the busiest carried 731.
+ *
+ * The leading block is the tie-break rather than the axis, because it is what
+ * puts an aside on the page and the aside is one of the three things this file
+ * checks for a collision. Every day published before 2026-09-01 predates the
+ * block, so today the corpus straddles it; once it does not, the two rules pick
+ * the same day and this line stops doing anything.
+ *
+ * Never a date written here: a hardcoded one passes on an empty page the moment
+ * the fixture moves.
+ */
+function chosen(): { date: string; items: number } {
+	const busiest = servedDays().sort((a, b) => b.items - a.items || b.date.localeCompare(a.date));
+	if (busiest.length === 0) throw new Error('the built site serves no day at all');
+	const committed = new Set(publishedDates(COMMITTED));
+	const withLeads = busiest.find(
+		(day) =>
+			(loadDay(day.date, committed.has(day.date) ? COMMITTED : CANARY)?.leads ?? []).length > 0
+	);
+	return withLeads ?? busiest[0];
+}
+
+const BUSIEST = chosen();
+const DAY = BUSIEST.date;
+/** How many stories the served file carries, which is what a browser gets. */
+const SERVED_ITEMS = BUSIEST.items;
 
 /** The day's own facts.
  *
@@ -89,13 +135,6 @@ const DAY = subdirectories(BUILD).filter((name) => DATE.test(name)).at(-1) as st
  */
 const SOURCE = publishedDates(COMMITTED).includes(DAY) ? COMMITTED : CANARY;
 const FACTS = loadDay(DAY, SOURCE);
-
-/** How many stories the served file carries, which is what a browser gets. */
-const SERVED_ITEMS: number = (
-	JSON.parse(
-		readFileSync(join(BUILD, 'digest', ...DAY.split('-'), 'digest.json'), 'utf8')
-	) as { items: unknown[] }
-).items.length;
 
 /** A topic of that day, taken from the tree rather than named. */
 const TOPIC = subdirectories(join(BUILD, DAY)).at(0) as string;
