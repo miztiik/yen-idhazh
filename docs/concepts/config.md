@@ -180,14 +180,19 @@ deliberate. They name four different questions that
 that move the behaviour onto them are reviewable as behaviour rather than as a
 knob and a rule at once.
 
-| Knob | Default | What it will decide |
+**Three of the six now have one.** `feed_http_410_runs_before_retirement`
+decides when an address is retired, and the two recheck cadences are answered by
+the run itself - nothing about a refusal is persisted, so the next run asks the
+host again. The other three are still named and unread.
+
+| Knob | Default | What it decides |
 | --- | --- | --- |
-| `availability_strikes_before_rest` | 5 | Results counting against a feed before a run stops asking it. The successor to `quarantine_after_failures`, named for what it counts. |
-| `availability_rest_runs` | 5 | Runs a rested feed is skipped before it is asked again. |
+| `availability_strikes_before_rest` | 5 | Results counting against a feed before a run stops asking it. The successor to `quarantine_after_failures`, named for what it counts. Unread. |
+| `availability_rest_runs` | 5 | Runs a rested feed is skipped before it is asked again. Unread. |
 | `feed_http_410_runs_before_retirement` | 5 | Distinct runs that must each read `410 Gone` from one address before that address is retired. |
 | `robots_denied_recheck_runs` | 1 | Runs to wait before asking `robots.txt` again after a refusal. |
 | `robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read at all. |
-| `source_yield_min_complete_days` | 30 | Complete days of item-health evidence a per-source yield judgement needs before it may be made. |
+| `source_yield_min_complete_days` | 30 | Complete days of item-health evidence a per-source yield judgement needs before it may be made. Unread. |
 
 `quarantine_after_failures` keeps deciding every rest until a later change moves
 it, and both it and `availability_strikes_before_rest` carry 5, so the emitted

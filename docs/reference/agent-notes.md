@@ -418,6 +418,24 @@ of every file it wrote, so the two commands' output runs together and reads as
 twenty-nine modified files. `git diff --stat -- schemas/` is the question you
 meant to ask, and empty is the pass. Observed 2026-09-02.
 
+**`Sources` refuses two feeds at one URL, so a test fixture built by copying a
+feed fails at config load rather than at its assertion.** `settings_for` in
+`backend/tests/test_plan.py` builds a real `Sources`, which validates that feed
+urls are distinct across `feeds` and `retired`. A test that copies a feed to
+change one field, or points one feed at a sibling's address, dies with
+`feed urls must be distinct across feeds and retired` several frames above the
+line under test. Give the copy an address of its own out of `BODIES`. Observed
+2026-09-02.
+
+**A hand-written CSV line for a ledger test needs the `version` cell first, and
+one cell short raises where the reader cannot catch it.** `csv_columns()` is
+`tuple(cls.model_fields)` and `version` is declared on `Contract`, so it is
+column 0 on every ledger here. A line with the wrong number of cells gives
+`DictReader` a `None`, and a contract whose `from_csv_row` indexes rather than
+`.get`s then raises `AttributeError` - which `load_health` and
+`load_retirements` do not catch, because they catch `KeyError` and `ValueError`.
+The row you meant to write is malformed, not truncated. Observed 2026-09-02.
+
 **`git diff --exit-code -- schemas/` is not the drift gate until you have
 committed.** The two-line form on
 [../how-to/run-the-gates.md](../how-to/run-the-gates.md) regenerates `schemas/`
