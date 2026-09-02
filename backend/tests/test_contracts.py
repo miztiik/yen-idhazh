@@ -39,7 +39,7 @@ from idhazh.contracts.app_config import (
 from idhazh.contracts.appearance_config import ChartConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
-from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestVisual
+from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestVerticalRef, DigestVisual
 from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.export import CONTRACTS, expected_filenames, export
@@ -1738,6 +1738,7 @@ def test_a_day_written_before_the_revision_field_still_loads() -> None:
 #: The five the planning step computes and the day payload started carrying on
 #: 2026-08-31. Every day published before that omits all five.
 RANKING_SIGNAL = ("carried_by", "watchlist_hit", "on_front_page", "rank_score", "time_source")
+DESK_SHORTFALL = ("considered", "too_old", "below_feed_floor")
 
 
 def committed_days() -> list[Path]:
@@ -1868,6 +1869,81 @@ def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
 
     assert items, "the loop above must have had something to read"
     assert absent, "every committed item carries all five, so nothing here reads an absent field"
+
+
+def test_every_committed_day_revalidates_with_no_shortfall_counts() -> None:
+    """The read-side migration for the desk shortfall (`CLAUDE.md` section 11).
+
+    Every day published before 2026-09-02 carries a desk as three keys - id,
+    name and count - so the three counts appended today have to be absent and
+    have to come back as `None`. A `0` for `considered` would say the sources
+    offered that desk nothing, which is the opposite of what a day with 216
+    stories on it means.
+
+    The oracle reads the raw payload beside the parsed day, so it keeps working
+    from the first run that publishes with the new writer: it judges only a key
+    the file does not carry.
+    """
+    days = 0
+    desks = 0
+    absent = 0
+    for path in committed_days():
+        text = read_text(path)
+        written = json.loads(text)["verticals"]
+        day = DigestDay.from_json(text)
+        days += 1
+        for payload, desk in zip(written, day.verticals, strict=True):
+            desks += 1
+            for name in DESK_SHORTFALL:
+                if name in payload:
+                    continue
+                absent += 1
+                assert getattr(desk, name) is None, f"{path.name} {desk.id}: {name} invented"
+
+    assert days, "no committed day was read, so this proved nothing"
+    assert desks, "the committed days carry no desks to read"
+    assert absent, "every committed desk carries all three, so nothing read an absent field"
+
+
+def test_a_desk_carries_every_shortfall_count_or_none_of_them() -> None:
+    """Three fields written by one step, so a desk holding two is a writer bug.
+
+    It also keeps the read side simple: a page asks whether the desk knows why
+    it is thin, not whether it knows two thirds of it.
+    """
+    with pytest.raises(ValueError, match="every shortfall field or none"):
+        DigestVerticalRef(id="ai", display_name="AI", count=3, considered=40)
+
+    whole = DigestVerticalRef(
+        id="ai", display_name="AI", count=3, considered=40, too_old=31, below_feed_floor=False
+    )
+    assert whole.considered == 40
+
+
+def test_a_desk_cannot_drop_more_stories_than_it_considered() -> None:
+    """The same bound `VerticalPlan` carries, kept on the field a reader sees.
+
+    The sentence names both numbers, so a payload where the second exceeds the
+    first prints a page saying more stories were too old than were ever offered.
+    """
+    with pytest.raises(ValueError, match="more stories than it considered"):
+        DigestVerticalRef(
+            id="ai", display_name="AI", count=1, considered=3, too_old=4, below_feed_floor=False
+        )
+
+
+def test_the_thin_desk_floor_is_a_knob_the_frontend_agrees_with() -> None:
+    """The two-copies problem again, on the knob that decides whether a desk speaks.
+
+    The rule runs in the browser off the frontend's own default, so a fresh
+    clone with no `config/` resolves it there. Let the two drift and the page
+    explains a desk the contract would call healthy, or stays silent on one it
+    would call thin - and nothing else would catch it.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"desk_thin_max:\s*(\d+),", reader)
+    assert mirrored is not None, "the frontend dropped its desk_thin_max default"
+    assert int(mirrored.group(1)) == UiConfig().desk_thin_max
 
 
 def test_a_published_item_that_names_a_clock_must_carry_a_time() -> None:

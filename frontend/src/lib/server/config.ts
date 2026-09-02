@@ -34,6 +34,10 @@ export interface UiConfig {
 	filter_min_chars: number;
 	/** How many topic pills stay on the row before the rest go in a disclosure. */
 	topic_pills_max: number;
+	/** The most stories a desk may publish and still be called thin. A thin desk
+	 * prints one sentence saying what its sources offered and how much of it was
+	 * too old; every other desk prints nothing. */
+	desk_thin_max: number;
 	/** How long a reader may wait for the rest of a day before the page says one
 	 * sentence about it. The one knob in this block ONLY a browser reads, which
 	 * is why it travels in the prerendered document and `shell_seed_items` does
@@ -242,6 +246,7 @@ const DEFAULTS: UiConfig = {
 	show_filter: true,
 	filter_min_chars: 2,
 	topic_pills_max: 8,
+	desk_thin_max: 12,
 	payload_slow_ms: 1200,
 	rail_group_minutes: 60,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
