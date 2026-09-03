@@ -1,0 +1,48 @@
+{
+  "complete_dates": 2,
+  "first_date": "2026-08-18",
+  "generated_at": "2026-08-20T06:20:00Z",
+  "last_date": "2026-08-19",
+  "min_complete_days": 30,
+  "run_id": "2026-08-20-1",
+  "sources": [
+    {
+      "availability": "answering",
+      "opportunities": 3,
+      "permission": "allowed",
+      "publications": 2,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 1,
+      "source_id": "allowed-wire",
+      "title": "Allowed Wire",
+      "vertical": "ai"
+    },
+    {
+      "availability": "never_asked",
+      "opportunities": 0,
+      "permission": "denied",
+      "publications": 0,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 0,
+      "source_id": "refused-wire",
+      "title": "Refused Wire",
+      "vertical": "world"
+    },
+    {
+      "availability": "never_asked",
+      "opportunities": 0,
+      "permission": "unrecorded",
+      "publications": 0,
+      "retired": true,
+      "retired_on": "2026-08-11",
+      "source_failures": 0,
+      "source_id": "retired-wire",
+      "title": "Retired Wire",
+      "vertical": "energy"
+    }
+  ],
+  "version": "2026-09-03T09:00",
+  "yield_readable": false
+}

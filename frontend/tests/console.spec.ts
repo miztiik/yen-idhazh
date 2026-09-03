@@ -11,7 +11,7 @@ import { axisLabels, centreOffset, spanLabel } from '../src/lib/charts/run-histo
 import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/lib/charts/viewport';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
-import { failing, reliability, skipped, type FeedRecord } from '../src/lib/feed-health';
+import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -689,23 +689,34 @@ function feedLedger(root: string): FeedRecord[] {
 	return rows;
 }
 
-/** The clean count, the denominator and the span, computed here from scratch. */
+/** The clean count, the denominator and the span, computed here from scratch.
+ *
+ * A read is a row that asked the feed. A rest and a robots answer are neither -
+ * neither one asked whether the feed still works - so a source the pipeline has
+ * only ever been refused by is in neither count. Until 2026-09-03 a refusal was
+ * counted as an ask, which reported a source we have never read as one that had
+ * never failed.
+ */
 function recordByHand(rows: FeedRecord[]) {
-	const asked = new Map<string, FeedRecord[]>();
+	const read = new Map<string, FeedRecord[]>();
+	const seen = new Set<string>();
 	for (const row of rows) {
-		if (skipped(row)) continue;
-		asked.set(row.feedId, [...(asked.get(row.feedId) ?? []), row]);
+		seen.add(row.feedId);
+		if (preserves(row)) continue;
+		read.set(row.feedId, [...(read.get(row.feedId) ?? []), row]);
 	}
 	const clean: string[] = [];
 	const broken: string[] = [];
-	for (const [feedId, reads] of asked) {
+	for (const [feedId, reads] of read) {
 		if (reads.some(failing)) broken.push(feedId);
 		else clean.push(feedId);
 	}
+	const byName = (a: string, b: string) => a.localeCompare(b);
 	return {
-		clean: clean.sort((a, b) => a.localeCompare(b)),
-		broken: broken.sort((a, b) => a.localeCompare(b)),
-		checked: asked.size,
+		clean: clean.sort(byName),
+		broken: broken.sort(byName),
+		checked: read.size,
+		ineligible: [...seen].filter((feedId) => !read.has(feedId)).sort(byName),
 		runs: new Set(rows.map((row) => row.runId)).size
 	};
 }

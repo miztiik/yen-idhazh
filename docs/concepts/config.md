@@ -192,7 +192,7 @@ host again. The other three are still named and unread.
 | `feed_http_410_runs_before_retirement` | 5 | Distinct runs that must each read `410 Gone` from one address before that address is retired. |
 | `robots_denied_recheck_runs` | 1 | Runs to wait before asking `robots.txt` again after a refusal. |
 | `robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read at all. |
-| `source_yield_min_complete_days` | 30 | Complete days of item-health evidence a per-source yield judgement needs before it may be made. Unread. |
+| `source_yield_min_complete_days` | 30 | Complete days of item-health evidence a per-source yield judgement needs before it may be made - and, since 2026-09-03, how far back the published source-health record reads. |
 
 `quarantine_after_failures` keeps deciding every rest until a later change moves
 it, and both it and `availability_strikes_before_rest` carry 5, so the emitted
@@ -207,8 +207,10 @@ the other, which is the defect this whole block exists to undo.
 
 **`source_yield_min_complete_days` is a floor on making a judgement, not a
 threshold on yield.** Below it any yield number is an estimate rather than a
-measurement (Rule #10), and no source may be demoted on one. What the window is
-for is
+measurement (Rule #10), and no source may be demoted on one. Since 2026-09-03 it
+is also the span the published source-health record reads, because how far back
+to look and how much is enough are one question, and a second knob would be a
+second answer to it. What the window is for is
 [../architecture/sources/health.md](../architecture/sources/health.md).
 
 ## Training-corpus surface

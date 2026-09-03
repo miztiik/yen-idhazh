@@ -1304,6 +1304,18 @@ naming the worker API for a test to assert on.
 
 ## Running the gates
 
+- **`vite build` on its own is not the build, and a page measured that way is
+  both lighter and noisier.** `npm run build` runs `build-icons.mjs`,
+  `build-frame-css.mjs`, `build-worker-switch.mjs` and `copy-visuals.mjs` first,
+  and `vite build` folds their output into the bundle. Skipping them uses
+  whatever the last build happened to leave in `static/`, which is a different
+  tree each time. Measured 2026-09-03 on `/console/`: three builds through the
+  full chain came out 163,494 / 163,493 / 163,486, a spread of 8 bytes; three
+  builds of the same tree with `vite build` alone came out 163,284 / 163,286 /
+  163,457, a spread of 173 bytes and about 200 bytes light. Neither number is
+  wrong-looking on its own, which is the hazard: a ceiling recorded from the
+  second set is recorded from a tree nobody ships.
+
 - **A `page.route` answering 500 does not simulate a failed download here.**
   transformers.js only treats a *404* from a same-origin path as a miss. Any
   other status is read as the file: it takes the error body as the model, fires
@@ -2053,6 +2065,16 @@ the variable protects the shell you remember to set it in and nothing else.
   branch the "this must FAIL without my fix" arm and the "this must PASS with
   it" arm both build the old file, so the second one fails and reads as a fix
   that does not work. Commit first; `HEAD` is then your change.
+- **The control arm's restore step DELETES any uncommitted edit on those paths,
+  and reports success.** Same command, different damage. On 2026-09-03 a control
+  arm ran over five frontend files, four of which carried string fixes a browser
+  smoke had just produced and nothing had committed. `git checkout HEAD --` put
+  the committed version back, `git status --porcelain` came out empty - which is
+  exactly what a clean restore looks like - and the fixes were gone. Nothing
+  failed for two hours; the tell was a `Select-String` for a class name that
+  should have been there. The whole arm is a `checkout`, so **commit every edit
+  on every path the arm names before you start it**, and re-read one changed
+  string from disk afterwards rather than trusting an empty `git status`.
 - **`git diff --numstat <file>` is not a restore check for a file your own
   change modified.** It compares against `HEAD`, so it is non-empty by design
   and says nothing about whether the temporary patch came back out. Take a

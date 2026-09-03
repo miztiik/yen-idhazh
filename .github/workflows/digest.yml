@@ -1122,6 +1122,7 @@ jobs:
             ${{ needs.plan.outputs.day_dir }}/run.json
             frontend/public/telemetry
             frontend/public/assist/index
+            frontend/public/source-health.json
             state/published.csv
             state/scores
             state/item-health
@@ -1134,7 +1135,8 @@ jobs:
             --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          frontend/public/digest frontend/public/telemetry frontend/public/assist/index state corpus
+          frontend/public/digest frontend/public/telemetry frontend/public/assist/index
+          frontend/public/source-health.json state corpus
 
       # After the day is committed and never before it. The fold deletes a
       # committed file, so it may only run once the thing it might collide with

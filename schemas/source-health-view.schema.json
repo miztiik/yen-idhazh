@@ -1,0 +1,197 @@
+{
+  "$defs": {
+    "SourceAvailability": {
+      "description": "Whether the address is answering now, by the rule the run rests on.\n\nDerived from `discover.streak` and `discover.resting` over the settled\nledger, which is the same loop the quarantine uses. Two reducers would be\ntwo answers, and a page that disagrees with the run that produced it is\nworse than a page with no answer.",
+      "enum": [
+        "answering",
+        "failing",
+        "resting",
+        "never_asked"
+      ],
+      "title": "SourceAvailability",
+      "type": "string"
+    },
+    "SourceHealthRow": {
+      "additionalProperties": false,
+      "description": "One configured address, as a page is allowed to read it.\n\nA nested shape rather than a contract of its own: nothing writes a row on\nits own and nothing reads one out of context, so it travels inside the view\nand is inlined under that schema's `$defs`.",
+      "properties": {
+        "availability": {
+          "$ref": "#/$defs/SourceAvailability"
+        },
+        "opportunities": {
+          "description": "Distinct addresses this source had planned on a complete date, inside the window. One address on one date counts once however many runs of that date attempted it.",
+          "minimum": 0,
+          "title": "Opportunities",
+          "type": "integer"
+        },
+        "permission": {
+          "$ref": "#/$defs/SourcePermission"
+        },
+        "publications": {
+          "description": "Those addresses that reached publish on any attempt of their date. Never more than `opportunities`, which is enforced rather than assumed.",
+          "minimum": 0,
+          "title": "Publications",
+          "type": "integer"
+        },
+        "retired": {
+          "description": "Has a run stopped asking this address for good? True only when the retirement ledger holds its endpoint. The console renders this decision and never re-derives it.",
+          "title": "Retired",
+          "type": "boolean"
+        },
+        "retired_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day the retirement was filed. Absent unless `retired`.",
+          "title": "Retired On"
+        },
+        "source_failures": {
+          "description": "Opportunities lost to a failure this source owns - a refusal, a bad status, no text, a paywall. Reported beside the ratio and never subtracted from it, so one lost article is counted once.",
+          "minimum": 0,
+          "title": "Source Failures",
+          "type": "integer"
+        },
+        "source_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "vertical": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Vertical",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "title",
+        "vertical",
+        "permission",
+        "availability",
+        "retired",
+        "opportunities",
+        "publications",
+        "source_failures"
+      ],
+      "title": "SourceHealthRow",
+      "type": "object"
+    },
+    "SourcePermission": {
+      "description": "What the site's own `robots.txt` said about this address.\n\nFour members where the ledger's `RobotsOutcome` has three, and the fourth is\nthe one that matters: a row written before the column existed carries an\nempty cell, and that is not the same fact as `allowed`. Reading absence as a\nrefusal would take every desk under its feed floor on the day the column\nlanded; reading it as permission would claim a check nobody ran.",
+      "enum": [
+        "allowed",
+        "denied",
+        "unreachable",
+        "unrecorded"
+      ],
+      "title": "SourcePermission",
+      "type": "string"
+    }
+  },
+  "$id": "source-health-view.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the run that wrote it, the window the publishing record covers, whether that window is deep enough to read as a rate, and one row per configured address.",
+      "version": "2026-09-03T09:00",
+      "why": "Permission, availability, retirement and yield were derived in four places and published in none, so the console re-derived what it could in TypeScript and simply could not see the rest. A typed projection gives the page one answer to render and keeps every private cell out of the published tree by construction (Rule #11)."
+    }
+  ],
+  "description": "Every address the run may ask, and what the committed record says about it.",
+  "properties": {
+    "complete_dates": {
+      "description": "Complete UTC dates the census actually covered, capped at `min_complete_days`. Today is never one of them: a run is still going, so its date has opportunities nobody has attempted yet.",
+      "minimum": 0,
+      "title": "Complete Dates",
+      "type": "integer"
+    },
+    "first_date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Oldest complete date in the census. Absent when there is none.",
+      "title": "First Date"
+    },
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "last_date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Newest complete date in the census. Absent when there is none.",
+      "title": "Last Date"
+    },
+    "min_complete_days": {
+      "description": "`collect.source_yield_min_complete_days`. It is both how far back the publishing record reads and how much of that record is enough to read as a rate, because there is one question here - how many complete days does a yield judgement need - and a second number would be a second answer to it.",
+      "exclusiveMinimum": 0,
+      "title": "Min Complete Days",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "sources": {
+      "description": "One row per address a curator left active, ordered by source id. Every row carries exactly one permission state, so the states sum to the number of addresses by construction rather than by a page adding them up.",
+      "items": {
+        "$ref": "#/$defs/SourceHealthRow"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-09-03T09:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "yield_readable": {
+      "description": "Is the record deep enough to read as a rate? Carried rather than left to the page, so the page and this file cannot answer it differently.",
+      "title": "Yield Readable",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "generated_at",
+    "run_id",
+    "min_complete_days",
+    "complete_dates",
+    "yield_readable",
+    "sources"
+  ],
+  "title": "SourceHealthView",
+  "type": "object",
+  "version": "2026-09-03T09:00"
+}
