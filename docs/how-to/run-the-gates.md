@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -374,6 +374,18 @@ for the compression plot rather than picked at random - eight items from 38 to
 zone has a mark under it, and two items carry the truncation flag that draws a
 diamond. A chart state the fixture does not reach is a chart state this suite
 cannot test.
+
+**Known defect: the canary item ids do not satisfy the item-id grammar.**
+`frontend/scripts/build-canary.mjs` writes ids like `tail-1-0` and `cut-a-0`,
+and `ITEM_ID_PATTERN` in `backend/idhazh/contracts/base.py` needs at least two
+trailing digits - so 76 of the 87 canary rows would be refused by `ItemHealthRow`
+if anything validated them. Nothing does: the browser suite reads the CSV
+directly, and the published projection carries `item_id` as an opaque key on
+purpose, because a committed shard has no writer left to re-mint an id if that
+grammar moves. Found independently while shipping two rows on 2026-09-02 and
+2026-09-03, and left alone both times. It bites the day something validates the
+canary rows through the contract. Fixing it means padding the index in the two
+id builders and re-running the builder; nothing else reads those ids.
 
 **The preview port derives from the checkout, so two worktrees cannot share one
 server.** `playwright.config.ts` hashes its own directory into a port between
