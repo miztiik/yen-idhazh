@@ -33,19 +33,18 @@ from pathlib import Path
 from typing import Final, NamedTuple
 
 from idhazh.contracts.label_row import LabelRow
+
+# `DECILES` and `decile_of` are the archive contract's, not this module's. A
+# decile is a persisted shape now - `ScoreCohort.hhem_deciles` is ten counts -
+# and two definitions of a bucket boundary is how a draw and an archive come to
+# describe different populations. The `as` spelling is a re-export, so every
+# caller that already reads `labels.DECILES` keeps working under strict typing.
+from idhazh.contracts.score_archive import DECILES as DECILES
+from idhazh.contracts.score_archive import decile_of as decile_of
 from idhazh.ledger import read_header as _read_header
 from idhazh.ledger import require_matching_header
 
 LEDGER_RELPATH: Final = "state/labels.csv"
-
-#: Ten `hhem` deciles: [0.0,0.1), [0.1,0.2) ... [0.9,1.0]. A score of exactly
-#: 1.0 belongs to the last one rather than to an eleventh bucket of its own.
-DECILES: Final = 10
-
-
-def decile_of(hhem: float) -> int:
-    """Which decile a score falls in, with 1.0 in the top one."""
-    return min(int(hhem * DECILES), DECILES - 1)
 
 
 def label_id(record: Mapping[str, str], *, draw_id: str) -> str:

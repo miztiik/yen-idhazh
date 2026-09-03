@@ -2,6 +2,8 @@
   "band_at_label": "high",
   "date": "2026-08-24",
   "draw_id": "2026-08-24-decile-6",
+  "extraction_suspect": false,
+  "hedge_dropped": true,
   "hhem_at_label": 0.87,
   "label_id": "b81d0e4a2c795f36",
   "labelled_at": "2026-08-24T12:07:38Z",
@@ -16,7 +18,8 @@
   "source_url": "https://example.com/rate-decision",
   "summary_word_count": 88,
   "tag": "overstated",
+  "unsupported_numbers": 0,
   "url_key": "2222222222222222222222222222222222222222222222222222222222222222",
   "verdict": "unsupported",
-  "version": "2026-08-24"
+  "version": "2026-09-03"
 }

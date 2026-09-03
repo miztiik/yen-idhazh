@@ -2,6 +2,8 @@
   "band_at_label": "high",
   "date": "2026-08-24",
   "draw_id": "2026-08-24-decile-6",
+  "extraction_suspect": null,
+  "hedge_dropped": null,
   "hhem_at_label": 0.93,
   "label_id": "3f2a91c4d8e0b567",
   "labelled_at": "2026-08-24T12:04:11Z",
@@ -16,6 +18,7 @@
   "source_url": "https://example.com/plant-output",
   "summary_word_count": 96,
   "tag": "none",
+  "unsupported_numbers": null,
   "url_key": "9999999999999999999999999999999999999999999999999999999999999999",
   "verdict": "supported",
   "version": "2026-08-24"
