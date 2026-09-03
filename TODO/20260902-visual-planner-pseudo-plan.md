@@ -104,6 +104,9 @@ Numbered for citation. Each names the proposal section it settles.
 | O31 | **Raw spans are committed** to `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl` on a short rolling window, so the console can drill into a recent run. A lookup, so it deletes rather than folds | P.6.1 |
 | O32 | `run.shard_timeout_minutes` rises 150 -> **200**. Free: Actions minutes are unmetered on a public repo, a timeout is a ceiling not an allocation, and the retired visual job returns its slot - see section 13.2 | P.5.3 |
 | O33 | The prompt loop's primary targets are `unsupported_number`, `lead_missing` and `hedge_dropped` - deterministic and computable today. HHEM is the backstop, not the steering wheel. A regex cross-check of `unsupported_number` against the source over the committed test set ships with it, to verify **the checker** | not in proposal |
+| O34 | **`band_reason` gets a console panel.** The five sentences a reader sees have never been plotted, so nobody can say whether summaries are improving or which defect dominates. This is the single most actionable eval gap on the project | P.5.5 |
+| O35 | The visual moves **below** the summary. `ui.visual_side` is `above` today; Reader ruled that an 800px drawing above the text pushes the sentence they came for off a phone screen | P.4.4 |
+| O36 | Susan's **19-row sufficiency bar** is lifted into `docs/concepts/design-system.md` as a build-failing oracle, not a review item. Rows 26 to 37 here are the subset already ruled; the full bar is the gate | P.4.4.1 |
 
 ---
 
@@ -210,8 +213,23 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 
 ---
 
-## 5. Reversals - everything wrongly scoped, now restored
+### 4.F Where the personas disagreed, and how it was settled
 
+Most of section 4 is unanimous. These seven are not, and a ruling that hides a real disagreement is worth less than one that names it.
+
+| Subject | The disagreement | Settled how |
+|---|---|---|
+| `keyfacts` | Editor, Jony, Susan and Reader all voted to kill it. Reader: *"a 3-to-5 bullet box next to a summary that already has 2 to 5 key points is the same thing printed twice."* Andre disagreed with all four | **Andre wins on diagnosis.** The four aimed at the wrong target: `key_points` is the summary field and `keyfacts` is the infographic. The 7-in-8 restatement rate is a prompt defect (section 10.5), not evidence against the type. Ships with a per-item gate instead of a type-level veto |
+| `quotecard` | Jony rejects it as "one sentence in a bigger font with a border". Reader named it one of only two types they actually want. Editor accepts it. Andre flagged it against the republishing non-goal | **Owner ruled (O13).** Ships, restricted to quotes the semantic pass identifies, capped at `summarize.max_verbatim_words` |
+| Visual placement | Jony assumed the visual keeps its slot. Reader said it is *"in the way"* and pushes the sentence off a phone screen | **Reader wins.** O35 moves it below the summary |
+| `pie` | Jony would build no pie template at all, routing composition to a stacked bar. The owner wants the type | **Both.** Pie ships under its gate; the stacked bar becomes its downgrade target rather than its replacement |
+| Prompt-loop target | Andre built the loop around HHEM and an incumbent comparison. The owner said that over-complicates it | **Owner wins.** The three deterministic checks steer; HHEM is the backstop (O33) |
+| Call ordering | Andre ruled summary first, then plan. The owner rejected it outright | **Owner wins.** Extraction first. A lossy summary as the planner's source is the defect that produced this work (section 10) |
+| Scope deferrals | Andre and Carmack both proposed deferring the fitter, the pairwise page and the timed arm on the grounds that zero labels exist | **Owner overrules (O16).** All ship; the labelling-capacity risk is recorded as M6 rather than used as a scope cut |
+
+**One warning that no persona contradicted, recorded because it is the failure mode this project has already had once.** Susan: the design measures 33 things about a visual and not one of them is whether a person would choose to look at it. Every binding gate is integrity or cost, and a plain grey bar chart passes all of them. Making the sufficiency bar advisory is how this ships as another minimum-that-passes-every-veto.
+
+## 5. Reversals - everything wrongly scoped, now restored
 An earlier draft of this record deferred the following. **All are in scope.** Recorded so the omission cannot recur.
 
 | # | Was deferred as | Restored scope | Proposal ref |
@@ -1059,7 +1077,7 @@ That keeps the rule the doc is protecting: the ledgers stay the record, a span s
 
 **"Republish" touches no article data.** `frontend/public/telemetry/<YYYY-MM>.csv` is a projection of the **operational ledger** - one row per planned item per run carrying stage, outcome, failure code and timings. It is rewritten whole on every publish already. Widening it adds columns to that metrics file. No article text, no summary, no payload is regenerated.
 
-### 14.4c The five eval labels, and where they are not shown
+### 14.4d The five eval labels, and where they are not shown
 
 These are reader-facing today, one sentence per reason, from [frontend/src/lib/bands.ts](frontend/src/lib/bands.ts#L24):
 
@@ -1078,6 +1096,8 @@ Plus three band labels: `high` "Matches the source" (drawn on no item), `medium`
 **Consequence for section 16.2: the loop's primary targets are not HHEM.** They are `unsupported_number`, `lead_missing` and `hedge_dropped` - three deterministic, model-free checks that need no scorer, no labels and no judge, and that are computable on committed data today. HHEM is the slow backstop, not the steering wheel.
 
 One instrument to add with them: **a regex cross-check of `unsupported_number` against the source over the committed test set.** That tests the checker rather than the summary, and nothing has ever verified the checker.
+
+**This gap is O34 and it is worth stating on its own.** The five sentences a reader sees on an item have never been plotted anywhere. Today nobody can say whether summaries are getting better, or which of the five defects dominates, or whether a prompt change helped. Every other measurement in this document is downstream of being able to see that.
 
 ### 14.4b Telemetry for yesterday's code - the answer is better than expected
 
@@ -1122,23 +1142,86 @@ Fail any one and the answer is `none`, and `none` remaining common is not a defe
 
 ---
 
-## 15. Proposed plan-doc split
+## 15. The plan-doc split
 
-Sequenced so each is verifiable before the next depends on it. Reader-before-writer for every contract change. **The application may be partly broken between docs; that is accepted.**
+Twelve plan-docs. The organising principle is **functional isolation over dependency order**: each doc delivers something that works and is worth having on its own, and each owns a disjoint set of files so parallel agents do not collide. Many PRs is fine; overlapping PRs is not.
 
-| Doc | Owns | Depends on |
+### 15.1 The twelve
+
+| # | Plan-doc | Delivers, on its own | Primary files it owns |
+|---|---|---|---|
+| **A** | **Console owes you telemetry** | Every number already committed becomes visible, for every past run. Eight per-item timing and token columns, the five band reasons plotted over time, faithfulness and lead coverage panels | `backend/idhazh/publish_telemetry.py`, `frontend/src/routes/console/**`, `frontend/src/lib/console/**` |
+| **B** | **Developer speed** | A PR runs only the tests it can break; page-weight ceilings get headroom instead of failing reactively | `pyproject.toml`, `backend/tests/conftest.py`, `config/idhazh.json` -> `page_weight` |
+| **C** | **The span tree earns its keep** | Tracing on, raw traces on a rolling window, a per-shard rollup, and the first answer to "is the model idle for most of a shard" | `backend/idhazh/telemetry.py`, `contracts/span_rollup.py`, `ledger.py`, `.github/workflows/digest.yml` |
+| **D** | **Fewer, better articles** | Feed reliability enters the score, semantic dedup cuts a duplicate before it costs a model call, the run drops to 80 items | `backend/idhazh/rank.py`, `discover.py`, `config/idhazh.json` -> `collect` and `run` |
+| **E** | **Retention that actually runs** | `docs/concepts/adaptive-pruning.md`, the compliance register, the cap in config, deletion switched on with a visible backlog | `backend/idhazh/retention.py`, `docs/concepts/adaptive-pruning.md`, `config/idhazh.json` -> `retention` |
+| **F** | **Better summaries** | The prompt loop, key points decoded first, per-band key-point caps, the new-fact rate, the regex check on the checker | `backend/idhazh/summarize.py`, `backend/idhazh/prompts/summarize.txt`, `backend/utilities/prompt_loop.py`, `backend/idhazh/evals/metrics.py` |
+| **G** | **The element table** | Span-anchored elements of all six kinds, the re-slice invariant, extraction metrics, the potential classifier | `backend/idhazh/extract.py`, `contracts/element.py`, `backend/idhazh/elements.py` |
+| **H** | **The visual planner** | `visual_planner.py`, the plan contract, the validator, the two-call flow, `n_ctx` 16384 with flash attention, the 4B retired completely, every trace of "route" gone | `backend/idhazh/visual_planner.py`, `contracts/visual.py`, `backend/idhazh/cli.py`, `backend/idhazh/llm/server.py` |
+| **I** | **Visuals a reader can read** | Inline SVG, d3, both themes resolving, full-width reflow, the visual moved below the summary, the sufficiency bar as a build gate | `frontend/src/lib/charts/**`, `frontend/src/lib/components/ItemVisual.svelte`, `frontend/src/lib/server/visual-render.ts` |
+| **J** | **The vocabulary** | Each visual type, one at a time, each independently shippable | `frontend/src/lib/charts/types/<type>.ts`, one file per type |
+| **K** | **The visual is measured** | The section 6.1 telemetry event, `state/visuals/`, `ItemStage.VISUAL`, the console panels that read them | `contracts/visual_telemetry.py`, `frontend/src/routes/console/visual/**` |
+| **L** | **Human judgement** | The `review/` harness, paired evaluation, weight fitting, the timed arm | `review/**`, `backend/idhazh/evals/labels.py`, `backend/utilities/review_queue.py` |
+
+### 15.2 What each one is worth alone
+
+This is the test that matters. A plan-doc that only pays off when a later one lands is a phase, not a plan.
+
+| # | If nothing else ever ships, you still got |
+|---|---|
+| A | An operator who can see per-item cost and which summary defect dominates. **Backfilled over every past run** |
+| B | A faster PR loop for every future change on the project |
+| C | The answer to whether more shards is the right lever |
+| D | A better digest from the same runner budget |
+| E | A site that does not fill up, and a documented cleanup contract |
+| F | Better summaries. **This alone may be the largest reader-visible win in the whole programme** |
+| G | A queryable fact table over every article, reusable by search later |
+| H | One model instead of two, a 2.33 GiB cache saving, and honest naming |
+| I | Charts that are readable in dark mode - today's most visible defect |
+| J | One more way to say something. Each type is its own PR |
+| K | The ability to tell whether the visual work worked |
+| L | Ground truth |
+
+### 15.3 Dependency edges - only the real ones
+
+```
+B ----------------------------------------> (independent, do first, helps all)
+A ---------------------------------> K      (K reuses A's console patterns)
+C ---------------------------------> K      (K reuses C's ledger seam)
+D ---------------------------------> (independent)
+E ---------------------------------> (independent)
+F ---------------------------------> (independent)
+G ------> H ------> I ------> J
+                    I ------> K
+                              K ------> L
+```
+
+**Only one chain is real: G -> H -> I -> J.** The element table must exist before the planner can point at it; the planner must emit a plan before a renderer can draw it; the renderer must exist before a type can be added to it. Everything else is independent and can run in parallel from day one.
+
+### 15.4 The hot files, and how the collisions are avoided
+
+**A plan claiming its rows touch different files is a claim, not a fact.** Three files are touched by many docs, and each needs a rule.
+
+| Hot file | Touched by | The rule |
 |---|---|---|
-| **P0 - telemetry the console is already owed** | Widen `PUBLIC_COLUMNS` by eight columns and republish every month; console panels for them; panels for every eval metric already committed but never shown; pytest markers; `page_weight` re-baseline with headroom | none. **Costs zero runner seconds and backfills every past run** |
-| **P1 - measurement and the span rollup** | M2, M10, M11 taken and recorded; `SpanRollupRow` contract and ledger seam; the end-of-shard fold; `tracing_enabled` flipped **after** the fold exists; `ItemStage.VISUAL`; `state/visuals/`; the six memory fields of 13.3 | P0 |
-| **P2 - the element table** | Spans, all six kinds, two tiers, canonicalisation, alias ledger, the re-slice invariant, extraction metrics, the potential classifier | P1 |
-| **P3 - the planner and the scrub** | `visual_planner.py`, the plan contract, the validator, the two-call flow, chunked degradation, `n_ctx` 16384 with flash attention, the full "route" rename, **complete retirement of the 4B and its CI job** | P2 |
-| **P4 - rendering** | Inline SVG, d3 engine, the token bridge, the sufficiency bar as a build gate, config-driven asset base URL, full-width adaptive layout | P3 |
-| **P5 - the vocabulary** | Every chart type, the diagram family, every infographic type, derived values, the downgrade ladder | P4 |
-| **P6 - retention and cleanup** | `PAGES_HARD_CAP_MB` to config, widened `retention.py`, `docs/concepts/adaptive-pruning.md` and the compliance register, `image_months` 13 and `dry_run` false **last** | P4 |
-| **P7 - selection quality** | Feed reliability multiplier, semantic plan-stage dedup with the 48-hour window and decay, `safety_ceiling_per_run` to 80 | P1 |
-| **P8 - prompt quality** | The iteration loop of 16.2, the section 0a amendment, the new-fact rate metric, `key_points_max` onto `SummaryBand`, key points decoded before the summary | P3 |
-| **P9 - measurement and review** | Console panels for every new visual metric, the review harness, paired evaluation, weight fitting, the timed arm | P5, P6 |
-| **P10 - summariser fine-tuning** | Re-point `finetune.student`/`teacher` after the 4B retires; fine-tune only if P8 shows the prompt fix was not enough | P8 |
+| `config/idhazh.json` | B, D, E, H, I, K | **Each doc owns a disjoint top-level block.** B owns `page_weight`; D owns `collect` and `run`; E owns `retention` and `observability`; H owns `models` and `visuals`; I owns `ui` and `appearance`. A doc never edits a block it does not own |
+| `backend/idhazh/contracts/app_config.py` | same set | **Append-only, one field group per doc, never a reorder.** A rename or a reorder here is what turns a clean merge into a silent revert |
+| `backend/idhazh/cli.py` | C, G, H | **H owns it.** C and G add their call sites through helper modules that `cli.py` imports once. If C or G must edit `cli.py` directly, they serialise behind H |
+| `.github/workflows/digest.yml` | C, D, H | **C owns it.** D's change is a config value with no workflow edit; H's job removal serialises after C |
+| `docs/concepts/telemetry.md` | C only | C owns the doctrine edit outright |
+
+### 15.5 Suggested first wave
+
+Four docs, fully parallel, zero shared files, and every one delivers something on its own:
+
+| Doc | Why it goes first |
+|---|---|
+| **B** | Cheapest, and it speeds up every doc after it |
+| **A** | Zero runner cost, backfills every past run, and gives you the eval visibility the rest of the programme is steered by |
+| **D** | Independent, and it frees the runner budget the two-call design needs |
+| **F** | Independent, and summary quality is the loudest reader-visible defect that is not the dark-theme chart |
+
+**Deliberately not in the first wave:** G, because it is the root of the only real chain and deserves the attention a wave of four would dilute; and E, because `dry_run = false` must land after the new renderer, not before it.
 
 ---
 
@@ -1181,7 +1264,7 @@ The owner wants a loop that writes a prompt, judges it, iterates about three tim
 | Where it runs | `backend/utilities/`, on a developer machine or a manual dispatch. **Never in the daily pipeline** |
 | The loop | Write a candidate -> critique against a rubric -> revise -> repeat, bounded by `finetune.prompt_iterations` (3) |
 | Two judges, not one | A model judge **and** the Editor persona rubric. A single judge that shares the writer's failure modes is the thing section 0a warns about; two disagreeing judges surface it |
-| **The gate is deterministic, not the judge** | A candidate prompt only wins if it beats the incumbent on the **existing scorers** over a frozen article set: HHEM faithfulness, `verbatim_run`, `lead_coverage`, `hedge_dropped`, and the new-fact rate from section 10.5. The model judge proposes; the deterministic suite disposes |
+| **The gate is deterministic, not the judge** | A candidate prompt only wins if it beats the incumbent on the **existing deterministic scorers** over a frozen article set. **The primary targets are `unsupported_number`, `lead_missing` and `hedge_dropped`** - see 14.4c - because all three are model-free, need no labels, and are computable on committed data today. `verbatim_run` and the new-fact rate join them. HHEM is the slow backstop, not the steering wheel. The model judge proposes; the deterministic suite disposes |
 | Frozen set | The committed canary corpus, so the comparison is reproducible and touches no network (Rule #7) |
 | What is committed | The winning prompt, the rubric, the scores of every candidate, and the seed. Not the transcripts |
 | Word limits | The owner's instruction stands: **do not add hard word limits to the rubric.** `summarize.bands` already sizes prose by source length; the rubric judges whether a line earns its place, not how many words it has |
