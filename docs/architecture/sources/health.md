@@ -1,7 +1,6 @@
 # Feed Health and Quarantine
 
 **Last Updated**: 2026-09-03
-
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -242,15 +241,16 @@ number that decided it, and the manifest is the only committed record of a plan.
 | `collect.feed_http_410_runs_before_retirement` | 5 | How many distinct runs must read `410` before an address is retired? |
 | `collect.robots_denied_recheck_runs` | 1 | How long before asking `robots.txt` again after a refusal? |
 | `collect.robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read. |
-| `collect.source_yield_min_complete_days` | 30 | How many complete days of item-health evidence before a yield judgement may be made at all? |
+| `collect.source_yield_min_complete_days` | 30 | How many complete days of item-health evidence before a yield judgement may be made at all - and how far back the published record reads? |
 
-**Three of the six now decide something.**
-`feed_http_410_runs_before_retirement` is the retirement rule above, and the two
-recheck cadences are answered by the run itself: nothing about a refusal is
+**Four of the six now decide something.**
+`feed_http_410_runs_before_retirement` is the retirement rule above, the two
+recheck cadences are answered by the run itself (nothing about a refusal is
 persisted, so the next run asks the host again, which is those knobs at their
-configured value of one run. `collect.quarantine_after_failures` still decides
-every rest, and both it and `availability_strikes_before_rest` carry 5;
-`source_yield_min_complete_days` is read by nothing.
+configured value of one run), and `source_yield_min_complete_days` became the
+publishing record's span and its readability bar on 2026-09-03.
+`collect.quarantine_after_failures` still decides every rest, and both it and
+`availability_strikes_before_rest` carry 5.
 
 The two recheck cadences are separate because they are different facts: a refusal
 is a publisher's stated policy and an unreadable `robots.txt` is our own failed
@@ -309,17 +309,111 @@ Feed health cannot explain why a planned article failed after discovery. That
 belongs to the item-health ledger, which records one row per planned item per
 run. See [item-health.md](item-health.md).
 
-## Per-source yield is not measurable yet
+## Four facts about one address, published as four facts
 
-Feed health can say whether a source answered. It cannot yet say whether that
-source yields publishable items over time. That denominator is different: one
-source can answer cleanly and still produce planned items that fail at fetch,
-extract or summarize.
+Permission, availability, retirement and the publishing record are decided in
+four places and were published in none, so the console re-derived the two it
+could reach in TypeScript and simply could not see the other two. Since
+2026-09-03 the run writes them together, once, to
+`frontend/public/source-health.json` through
+`backend/idhazh/publish_source_health.py`.
 
-Per-source item yield needs at least 30 days of `state/item-health/` rows. The
-ledger started on 2026-08-23, so the rubric is blocked until that window exists.
-Do not retire or demote a source by item-yield rule before then. Until the
-window exists, any source-yield threshold is an estimate, not a measurement.
+| Column | What it answers | Where it is decided |
+| --- | --- | --- |
+| Permission | What did the site's own `robots.txt` say? | `robots_outcome` on the health row |
+| Reading | Is the address answering now? | `discover.streak` and `discover.resting` |
+| Retirement | Has a run stopped asking this address for good? | `state/feed-retirements.csv` |
+| Publishing record | What has it been offered, and what did it publish? | `state/item-health/` |
+
+**No column combines two of them.** A single credibility score across the four
+was refused for the reason it was refused everywhere else on this page: four
+questions with four remedies, and one number that says something is wrong and
+nothing about what to do.
+
+**Every state names what the reader loses while it holds.** A refusal withholds
+that source until a later run reads its rules again, a rest withholds it until
+the probe, and a retirement withholds that address until its configured URL
+changes. A state named and not costed is a state nobody can weigh, so the
+console prints the cost beside the count.
+
+**The file is a projection and never control state.** Nothing in the pipeline
+reads it back; Collect keeps deriving every decision from the private ledgers.
+Delete it and the console loses a section while the run behaves exactly as it
+did. That is also why the console renders it rather than re-deriving retirement
+in TypeScript - two reducers over one record are two answers, and the page and
+the run cannot both be the one that is right.
+
+**The private cells are absent by construction rather than by filtering.**
+`SourceHealthView` has no field that could hold a feed URL, an item URL, a
+`url_key`, an `endpoint_key`, a ledger `detail` cell or a robots body, and an
+import guard in the contract fails where such a field would be written. A
+projection spelled as a dict of names gains a cell by a one-word edit and
+nothing refuses it (Rule #11).
+
+### The publishing record counts addresses, not rows
+
+**An opportunity is one distinct address on a complete UTC date.** A date runs
+up to five times and a retried address writes a row on each attempt, so
+counting rows would multiply both sides of the ratio by however often the
+schedule fired. A publication is that same address reaching publish on any
+attempt of that date.
+
+**Today is never a complete date.** The run is still working, so its addresses
+have not all been attempted, and counting them would report every source as
+having failed work it has not reached.
+
+**A source-owned loss is reported beside the two counts and never subtracted
+from either.** `ItemHealthRow.counts_against_source` decides what the source
+owns; a model that would not answer and a prompt that would not fit are ours.
+Subtracting a loss from the opportunities and then reporting it would count one
+lost article twice.
+
+**Below `collect.source_yield_min_complete_days` the page prints counts and
+says the record is too short to read as a rate.** That knob is both how far
+back the record reads and how much of it is enough, because there is one
+question here and a second number would be a second answer to it. Until this
+row it was read by nothing.
+
+Measured on this developer checkout, 2026-09-03, over the committed record:
+**144 addresses**, 44,736 bytes of published view, **310.6 bytes an address**.
+Permission is `unrecorded` on all 144, because no committed health row carries
+a `robots_outcome` cell yet - the writer landed on 2026-09-02 and no run has
+committed a filled row. Availability is 141 answering, 1 failing and 2 resting.
+Retirement is 0, for the same reason it is 0 everywhere on this page: no
+committed row carries an endpoint identity, so no address can be retired yet.
+The record is **9 complete days of the 30** it needs, over 4,811 addresses
+offered and 4,552 published, with 235 lost to a failure a source owns. Reading
+committed files is deterministic, so the spread is zero, and the file grows
+several times an hour, so these are facts about that commit.
+
+**The census counts the addresses a curator left active, and that is not the
+same population the broken list reads.** Twenty-four sources in the item ledger
+are curated tombstones; over the same window they were offered 560 addresses
+and published **none**, so leaving them out costs the numerator nothing and
+stops the denominator counting sources nobody may ask. The section says so in
+one line, because the feeds list directly below it does read the whole record
+and its counts are therefore larger.
+
+## Per-source yield is measured, and it is not yet a judgement
+
+Feed health can say whether a source answered. It cannot say whether that
+source yields publishable items over time, and the counts above are not that
+judgement. The denominator is different: one source can answer cleanly and
+still produce planned items that fail at fetch, extract or summarize.
+
+A yield judgement needs at least `collect.source_yield_min_complete_days`
+complete days of `state/item-health/` rows. The ledger started on 2026-08-23
+and the record is nine complete days deep on 2026-09-03, so the rubric is still
+blocked. Do not retire or demote a source by item-yield rule before the window
+exists. **Publishing the counts is what makes the wait honest rather than
+silent** - the page prints what has been offered and what was published and
+says in the same sentence that the record is too short to read as a rate, which
+is the shape Rule #10 asks for. A threshold taken over nine days would be an
+estimate wearing a measurement's clothes.
+
+**And a yield number reaches no decision, by design.** It is not a rank input,
+not a weight, and not a lifecycle input. It is published so a person can read
+it.
 
 ## The run never edits the source list
 
@@ -347,15 +441,30 @@ disclosure.
 the same `failing()` the quarantine reads, so the two halves of the section
 cannot disagree about what a failure is. Three facts it settles:
 
-- **A feed nobody has asked is in neither count.** A record of nothing but
-  `skipped` rows is a rest, not a clean run of reads, and counting it as clean
-  is how a dead feed joins the reliable list.
+- **A feed nobody has read is in neither count.** A record of nothing but
+  `skipped` rows is a rest, and a record of nothing but robots answers is a
+  refusal - neither one asked the feed whether it still works, so neither can
+  make it clean or broken. The predicate is `preserves`, the same one the
+  strike rule runs on, so an ask means one thing on this page and in the
+  quarantine.
 - **A polite refusal is not a failure**, here as everywhere else. A source
-  honouring its own `robots.txt` has not broken.
+  honouring its own `robots.txt` has not broken. It has not delivered either,
+  which is the other half and the half that was missing.
 - **The span is the whole record, not the page's window.** The streak beside
   each feed is already read that way, because the pipeline rests on the whole
   count. Two spans in one section is the defect the shared window exists to
   remove.
+
+**A refusal used to count as an ask, and that put a source we have never read
+in the reliable column.** Measured on this developer checkout, 2026-09-03, over
+the committed shards: 184 feeds and 44 runs. The old rule read **157 of 184
+have never failed**; the rule above reads **152 of 179**, with **5 feeds named
+as never read** - `anthropic-engineering`, `anthropic-research`,
+`axios-business`, `cbc-world` and `cnbc-top`. Every one of the five has only
+ever returned a robots answer, so not one of them has ever given the digest an
+article, and every one of them was counted among the sources that never failed.
+The five are named behind their own disclosure rather than counted into either
+side. Reading a committed file is deterministic, so the spread is zero.
 
 **A shallow record says so instead of printing a claim.** Two runs deep, "has
 never failed" means "did not fail twice". Under `console.min_attempts_for_rate`
@@ -397,6 +506,9 @@ The self-lifting rest is there because the alternative was tested by imagination
 | Deduplicating in Collect only, and leaving the committed shards as they were | The 555 repeats already on record would keep being read, and every reader of the file assumes the key is unique. |
 | Settling repeats only before the write | The write reads a checkout frozen at the commit the run was triggered at, so it cannot see what a sibling attempt pushed afterwards. That is precisely the case that makes the repeats. |
 | One credibility score across permission, availability, yield and editorial value | Four different questions with four different remedies. A single number tells an operator something is wrong and nothing about what to do. |
+| Shipping the raw ledgers to the browser so the page can derive the four itself | The page needs derived states and counts, not private addresses, keys and diagnostics - and a second reducer over one record is a second answer. |
+| Hiding the publishing record until thirty complete days exist | A record nobody can see is one nobody notices is short. Printing the counts and saying they are not a rate is the honest shape, and it is the shape Rule #10 asks for. |
+| Fetching the source-health view at read time | It is small, the console needs it on first paint, and every other panel on that page is already prerendered. Nothing fetches it, so nothing stages it into the served bundle. |
 | Treating a zero-item `200` as success | The most common way a feed dies would be invisible, and the ledger would only catch the failures that were already obvious. |
 | A separate knob for "skips before retry" | Two numbers answering one question. When they drift apart nobody remembers which was meant. |
 | Backfilling `endpoint_key` from today's `config/sources.json` | The configured URL may have moved since a row was written, so the guess would file a later retirement against an address that never failed. |

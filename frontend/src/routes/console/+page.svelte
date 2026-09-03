@@ -893,7 +893,9 @@
 			wrong and nothing about what to do. The run decides all four from the private record and
 			publishes them here, so this section renders a decision rather than making a second one.
 			None of it follows the window control above - permission, answering and retirement are read
-			over the whole record, and the publishing record has a fixed span of its own.
+			over the whole record, and the publishing record has a fixed span of its own. This counts
+			only the addresses a curator has left active, so it is a smaller list than the feeds below,
+			which read every feed the ledger has ever carried.
 		</p>
 
 		<div class="console-table mt-3" data-source-health="states">
@@ -917,7 +919,7 @@
 					{/each}
 					{#each data.sourceHealth.availability as fact (fact.id)}
 						<tr class="border-b border-rule" data-source-state="availability-{fact.id}">
-							<td class="py-2">Answering</td>
+							<td class="py-2">Reading</td>
 							<td class="py-2">{fact.label}</td>
 							<td class="py-2 text-end tabular-nums" data-source-state-count>{fact.count}</td>
 							<td class="py-2 text-text-secondary">{fact.withheld ?? 'nothing'}</td>
@@ -949,7 +951,9 @@
 			>
 				<p class="feeds-note">
 					The sources held back, loudest state first. Retirement and a refusal come before a rest,
-					because a rest lifts itself and neither of those does.
+					because a rest lifts itself and neither of those does. The two counts span the same
+					complete days as the record below, and a dash means the source was offered nothing in
+					that span.
 				</p>
 				<table class="w-full text-[0.8125rem]">
 					<thead class="text-text-tertiary">
@@ -964,11 +968,18 @@
 					<tbody>
 						{#each data.sourceHealth.notes as note (note.sourceId)}
 							<tr class="border-b border-rule" data-source-note={note.sourceId}>
-								<td class="py-2">{note.title}</td>
+								<td class="py-2"
+									>{note.title}<span class="source-note-id" data-source-note-id>{note.sourceId}</span
+									></td
+								>
 								<td class="py-2 text-text-secondary">{note.vertical}</td>
 								<td class="py-2 text-text-secondary" data-source-note-withheld>{note.withheld}</td>
-								<td class="py-2 text-end tabular-nums">{grouped(note.opportunities)}</td>
-								<td class="py-2 text-end tabular-nums">{grouped(note.publications)}</td>
+								<td class="py-2 text-end tabular-nums"
+									>{note.opportunities === 0 ? '-' : grouped(note.opportunities)}</td
+								>
+								<td class="py-2 text-end tabular-nums"
+									>{note.opportunities === 0 ? '-' : grouped(note.publications)}</td
+								>
 							</tr>
 						{/each}
 					</tbody>
@@ -1432,6 +1443,16 @@ color: var(--color-text-secondary);
 
 .feeds-note {
 margin: 0 0 var(--space-3);
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
+
+/* Two feeds in this repository are both titled "Anthropic", and the thing an
+   operator edits is one configured address. Without the id the table drew two
+   identical rows and neither said which one to go and fix. */
+.source-note-id {
+display: block;
 font-size: var(--text-xs);
 line-height: var(--leading-xs);
 color: var(--color-text-tertiary);
