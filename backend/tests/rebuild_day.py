@@ -147,6 +147,15 @@ def rebuild(root: Path, date: str) -> None:
     _write_json(index_dir / f"{month}.json", {"month": month, "entries": entries})
     (index_dir / f"{month}.bin").write_bytes(bytes(len(entries)))
 
+    # The source-health view is a projection of `state/`, rewritten whole every
+    # run for the reason the telemetry shard is: a merge of two of them is a
+    # census of neither. It is a named file rather than a directory, which is
+    # what `_seed_ledger` in the harness has to know about it.
+    _write_json(
+        root / "frontend" / "public" / "source-health.json",
+        {"date": date, "sources": sorted({row["item_id"] for row in health})},
+    )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Rebuild one day of the scripted digest.")

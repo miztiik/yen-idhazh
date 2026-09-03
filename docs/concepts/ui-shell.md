@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
 ## The shell is deliberately thin
@@ -16,7 +16,7 @@ That means the shell's job is small and worth stating plainly: **load a payload,
 | **Digest** | The day's items, grouped by topic when the day has more than one, and the run-level notice when a run was partial. | The published digest payload. |
 | **Archive** | Reaching a previous day. A reader who missed a day wants to catch up, not start over ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md)). | The index of published days. |
 | **Dashboard** | The eval ledger rendered as a trend - band counts over time. It never recomputes a score ([evaluation.md](evaluation.md)). | The committed CSV. |
-| **Console** | Whether the pipeline itself is working: a chronological strip of runs and the feeds that failed. An operator surface, not a reading one ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Since 2026-08-30 it is one surface on three prerendered routes - `/console/` (Pipelines), `/console/model/` (Summaries) and `/console/machine/` (Hardware) - sharing a navigation strip of real anchors, a standing band under it and one window control under that. | The committed run manifests and the feed-health ledger. |
+| **Console** | Whether the pipeline itself is working: a chronological strip of runs and the feeds that failed. An operator surface, not a reading one ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Since 2026-08-30 it is one surface on three prerendered routes - `/console/` (Pipelines), `/console/model/` (Summaries) and `/console/machine/` (Hardware) - sharing a navigation strip of real anchors, a standing band under it and one window control under that. | The committed run manifests, the feed-health ledger, and since 2026-09-03 the source-health view the run publishes - the four facts about every address a curator has left active. |
 
 Four surfaces is the whole site, and only two of them are for a reader. A fifth needs an argument.
 

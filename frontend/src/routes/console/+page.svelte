@@ -867,6 +867,163 @@
 		{/if}
 	</div>
 
+	<h2 class="console-h2">Sources we may ask, and what they yield</h2>
+
+	{#if data.sourceHealth === null}
+		<p class="mt-2 text-[0.9375rem] text-text-secondary" data-source-health="absent">
+			No run has published a source census yet, so there is nothing to draw here. It fills on the
+			next run that publishes a day.
+		</p>
+	{:else}
+		<p
+			class="mt-2 text-[0.9375rem] text-text"
+			data-source-health-lead
+			data-source-health-sources={data.sourceHealth.sources}
+			data-source-health-withheld={data.sourceHealth.withheld}
+		>
+			{data.sourceHealth.sources} sources sit on the desks that publish, and {data.sourceHealth
+				.withheld}
+			{data.sourceHealth.withheld === 1 ? 'of them is' : 'of them are'} held back right now.
+		</p>
+
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-window-exempt="source-health">
+			Four separate facts, and none of them is averaged into the others: whether the site's own
+			rules let us ask, whether the address is answering, whether a run has stopped asking it for
+			good, and what it has published. A single score across the four would tell you something is
+			wrong and nothing about what to do. The run decides all four from the private record and
+			publishes them here, so this section renders a decision rather than making a second one.
+			None of it follows the window control above - permission, answering and retirement are read
+			over the whole record, and the publishing record has a fixed span of its own. This counts
+			only the addresses a curator has left active, so it is a smaller list than the feeds below,
+			which read every feed the ledger has ever carried.
+		</p>
+
+		<div class="console-table mt-3" data-source-health="states">
+			<table class="w-full text-[0.8125rem]">
+				<thead class="text-text-tertiary">
+					<tr class="border-b border-rule">
+						<th class="py-2 text-start font-normal">Fact</th>
+						<th class="py-2 text-start font-normal">State</th>
+						<th class="py-2 text-end font-normal">Sources</th>
+						<th class="py-2 text-start font-normal">What it withholds</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.sourceHealth.permission as fact (fact.id)}
+						<tr class="border-b border-rule" data-source-state="permission-{fact.id}">
+							<td class="py-2">Permission</td>
+							<td class="py-2">{fact.label}</td>
+							<td class="py-2 text-end tabular-nums" data-source-state-count>{fact.count}</td>
+							<td class="py-2 text-text-secondary">{fact.withheld ?? 'nothing'}</td>
+						</tr>
+					{/each}
+					{#each data.sourceHealth.availability as fact (fact.id)}
+						<tr class="border-b border-rule" data-source-state="availability-{fact.id}">
+							<td class="py-2">Reading</td>
+							<td class="py-2">{fact.label}</td>
+							<td class="py-2 text-end tabular-nums" data-source-state-count>{fact.count}</td>
+							<td class="py-2 text-text-secondary">{fact.withheld ?? 'nothing'}</td>
+						</tr>
+					{/each}
+					<tr class="border-b border-rule" data-source-state="retirement-retired">
+						<td class="py-2">Retirement</td>
+						<td class="py-2">the server said the address is gone</td>
+						<td class="py-2 text-end tabular-nums" data-source-state-count
+							>{data.sourceHealth.retired}</td
+						>
+						<td class="py-2 text-text-secondary"
+							>no run asks this address again until its configured address changes</td
+						>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		{#if data.sourceHealth.notes.length === 0}
+			<p class="mt-3 text-[0.9375rem] text-text-secondary" data-source-health="clear">
+				Every source is allowed to be asked and answering, so there is nothing to name.
+			</p>
+		{:else}
+			<div
+				class="console-table mt-3"
+				data-source-health="notes"
+				data-source-health-drawn={data.sourceHealth.notes.length}
+			>
+				<p class="feeds-note">
+					The sources held back, loudest state first. Retirement and a refusal come before a rest,
+					because a rest lifts itself and neither of those does. The two counts span the same
+					complete days as the record below, and a dash means the source was offered nothing in
+					that span.
+				</p>
+				<table class="w-full text-[0.8125rem]">
+					<thead class="text-text-tertiary">
+						<tr class="border-b border-rule">
+							<th class="py-2 text-start font-normal">Source</th>
+							<th class="py-2 text-start font-normal">Desk</th>
+							<th class="py-2 text-start font-normal">What is holding it back</th>
+							<th class="py-2 text-end font-normal">Offered</th>
+							<th class="py-2 text-end font-normal">Published</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each data.sourceHealth.notes as note (note.sourceId)}
+							<tr class="border-b border-rule" data-source-note={note.sourceId}>
+								<td class="py-2"
+									>{note.title}<span class="source-note-id" data-source-note-id>{note.sourceId}</span
+									></td
+								>
+								<td class="py-2 text-text-secondary">{note.vertical}</td>
+								<td class="py-2 text-text-secondary" data-source-note-withheld>{note.withheld}</td>
+								<td class="py-2 text-end tabular-nums"
+									>{note.opportunities === 0 ? '-' : grouped(note.opportunities)}</td
+								>
+								<td class="py-2 text-end tabular-nums"
+									>{note.opportunities === 0 ? '-' : grouped(note.publications)}</td
+								>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+
+			{#if data.sourceHealth.hidden > 0}
+				<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-source-health-more>
+					{data.sourceHealth.hidden} more {data.sourceHealth.hidden === 1 ? 'source is' : 'sources are'}
+					held back, none by a louder state than the last row here.
+				</p>
+			{/if}
+		{/if}
+
+		<p
+			class="mt-3 text-[0.9375rem] text-text"
+			data-source-health-record={data.sourceHealth.record.readable ? 'measured' : 'short'}
+			data-source-health-days={data.sourceHealth.record.completeDates}
+		>
+			{#if data.sourceHealth.record.completeDates === 0}
+				No day has finished with a planned article on it, so there is no publishing record yet.
+			{:else}
+				Over {data.sourceHealth.record.completeDates}
+				complete {data.sourceHealth.record.completeDates === 1 ? 'day' : 'days'}, {data
+					.sourceHealth.record.firstDate} to {data.sourceHealth.record.lastDate}, these sources
+				were offered {grouped(data.sourceHealth.record.opportunities)} addresses and published {grouped(
+					data.sourceHealth.record.publications
+				)}. {grouped(data.sourceHealth.record.sourceFailures)}
+				of those addresses were lost to a failure the source itself owns.
+				{#if !data.sourceHealth.record.readable}
+					The record is under the {data.sourceHealth.record.minCompleteDays} complete days a yield
+					judgement needs, so these are counts and not a rate.
+				{/if}
+			{/if}
+		</p>
+
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-health-basis>
+			An offer is one address planned on a day that has finished, counted once however many runs of
+			that day tried it. Today is never counted: the run is still working, so its addresses have
+			not all been attempted. A lost address is reported beside the two counts and never subtracted
+			from either, so one lost article is counted once.
+		</p>
+	{/if}
+
 	<h2 class="console-h2">Feeds that failed</h2>
 
 	{#if data.feedRecord.runs === 0}
@@ -879,6 +1036,7 @@
 			data-feed-reliability={feedRecordReadable ? 'measured' : 'shallow'}
 			data-feed-clean={data.feedRecord.clean.length}
 			data-feed-checked={data.feedRecord.checked}
+			data-feed-ineligible={data.feedRecord.ineligible.length}
 			data-feed-runs={data.feedRecord.runs}
 		>
 			{#if feedRecordReadable}
@@ -891,7 +1049,32 @@
 				{data.feedRecord.runs === 1 ? 'run' : 'runs'} deep, under the {data.console
 					.min_attempts_for_rate} this page prints a rate on, so it is too early to read that as reliability.
 			{/if}
+			{#if data.feedRecord.ineligible.length > 0}
+				{data.feedRecord.ineligible.length} more {data.feedRecord.ineligible.length === 1
+					? 'feed has'
+					: 'feeds have'} never been read at all - a rest or the site's own rules held
+				{data.feedRecord.ineligible.length === 1 ? 'it' : 'them'} back on every run - so
+				{data.feedRecord.ineligible.length === 1 ? 'it is' : 'they are'} in neither count.
+			{/if}
 		</p>
+
+		{#if data.feedRecord.ineligible.length > 0}
+			<details class="console-disclosure mt-2" data-feed-ineligible-list>
+				<summary class="console-summary" data-feed-ineligible-toggle>
+					Name the {data.feedRecord.ineligible.length} the pipeline has never read
+				</summary>
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-feed-ineligible-note>
+					A source honouring its own <code>robots.txt</code> has not failed, and neither has one the
+					pipeline was resting. Neither has delivered anything either, so counting them among the
+					feeds that never failed reported a source we have never read as a reliable one.
+				</p>
+				<ul class="feed-clean-names" data-feed-ineligible-names>
+					{#each data.feedRecord.ineligible as feedId (feedId)}
+						<li data-feed-ineligible-name={feedId}>{feedId}</li>
+					{/each}
+				</ul>
+			</details>
+		{/if}
 
 		{#if data.feedRecord.clean.length > 0}
 			<details class="console-disclosure mt-2" data-feed-clean-list>
@@ -1260,6 +1443,16 @@ color: var(--color-text-secondary);
 
 .feeds-note {
 margin: 0 0 var(--space-3);
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
+
+/* Two feeds in this repository are both titled "Anthropic", and the thing an
+   operator edits is one configured address. Without the id the table drew two
+   identical rows and neither said which one to go and fix. */
+.source-note-id {
+display: block;
 font-size: var(--text-xs);
 line-height: var(--leading-xs);
 color: var(--color-text-tertiary);

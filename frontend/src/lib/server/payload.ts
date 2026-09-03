@@ -63,6 +63,20 @@ export const INDEX_ROOT = process.env.DIGEST_ROOT
 	? resolve(process.env.DIGEST_ROOT, '..', 'assist', 'index')
 	: join(process.cwd(), 'public', 'assist', 'index');
 
+/** Where the source-health view is read from.
+ *
+ * Derived from the digest root rather than given a switch of its own, the way
+ * `INDEX_ROOT` is: a canary build has to read the canary's own view or the
+ * console would draw fixture runs beside the real source census.
+ *
+ * Read at build time and never fetched. The view is small, the console needs it
+ * on first paint, and every other console panel is already prerendered - so it
+ * is not staged into `static/` and no page asks for it over the network.
+ */
+export const SOURCE_HEALTH_PATH = process.env.DIGEST_ROOT
+	? resolve(process.env.DIGEST_ROOT, '..', 'source-health.json')
+	: join(process.cwd(), 'public', 'source-health.json');
+
 const DATE_PART = /^\d{2,4}$/;
 
 /** Every published date, newest first. Read from the committed tree, not an index file. */
@@ -445,6 +459,63 @@ export function feedResults(): FeedResult[] {
 		}
 	}
 	return settled(found);
+}
+
+/** What the pipeline published about one source. Mirrors `SourceHealthRow` in
+ * `backend/idhazh/contracts/source_health_view.py`, which is the shape that
+ * decides what may cross - there is no field here that could hold an address,
+ * a key or a diagnostic, because there is none there. */
+export interface SourceHealthRow {
+	source_id: string;
+	title: string;
+	vertical: string;
+	permission: 'allowed' | 'denied' | 'unreachable' | 'unrecorded';
+	availability: 'answering' | 'failing' | 'resting' | 'never_asked';
+	retired: boolean;
+	retired_on: string | null;
+	opportunities: number;
+	publications: number;
+	source_failures: number;
+}
+
+/** The published source-health view, as the console reads it. */
+export interface SourceHealthView {
+	generated_at: string;
+	run_id: string;
+	min_complete_days: number;
+	complete_dates: number;
+	yield_readable: boolean;
+	first_date: string | null;
+	last_date: string | null;
+	sources: SourceHealthRow[];
+}
+
+/** The view, or null when the pipeline has not written one or it cannot be read.
+ *
+ * Null is a designed state, exactly as it is for a day payload: a console
+ * section drops out and the page renders. The alternative is a build that dies
+ * because one projection is malformed, which costs every other panel too.
+ *
+ * The guard is the same one `loadDay` uses and for the same reason - `null`, a
+ * list and an object with no source list all parse cleanly and all three reach
+ * the page as a section rendering nothing.
+ */
+export function sourceHealthView(path: string = SOURCE_HEALTH_PATH): SourceHealthView | null {
+	if (!existsSync(path)) return null;
+	try {
+		const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+		if (
+			!parsed ||
+			typeof parsed !== 'object' ||
+			!Array.isArray((parsed as SourceHealthView).sources)
+		) {
+			throw new TypeError('the view holds no source list');
+		}
+		return parsed as SourceHealthView;
+	} catch (cause) {
+		console.warn(`[source-health] view unreadable, section dropped - ${String(cause)}`);
+		return null;
+	}
 }
 
 /** One run of one day, as the manifest recorded it. */

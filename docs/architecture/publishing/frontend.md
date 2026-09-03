@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -1280,7 +1280,25 @@ a fill value has to land in.
 
 **A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
 
-Beneath the strip, the section leads with its own denominator: **how many feeds have never failed, out of how many were asked, over how many runs** - 156 of 182 across 34 runs, measured 2026-09-01. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "has never failed" means "did not fail twice". The rule is `reliability()` in `frontend/src/lib/feed-health.ts`, reading the same `failing()` the quarantine reads ([../sources/health.md](../sources/health.md)).
+Beneath the strip, the section leads with its own denominator: **how many feeds have never failed, out of how many the pipeline has read, over how many runs** - 152 of 179 across 44 runs, measured 2026-09-03. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "has never failed" means "did not fail twice". The rule is `reliability()` in `frontend/src/lib/feed-health.ts`, reading the same `failing()` the quarantine reads ([../sources/health.md](../sources/health.md)).
+
+**A refusal is not an ask, and until 2026-09-03 it was.** A row that preserves the strike streak - a rest, or a robots answer - never asked the feed whether it still works, so it can make the feed neither clean nor broken. The old rule dropped only the rests, so a source the pipeline has been refused by on every single run sat in the clean count and the page reported it as reliable delivery. Measured over the committed ledger that day, **5 feeds of 184** were in that state and every one had given the digest nothing: `anthropic-engineering`, `anthropic-research`, `axios-business`, `cbc-world`, `cnbc-top`. They are now a third count with their own disclosure, and the predicate that decides it is `preserves` - the same one the strike rule runs on, so an ask means one thing in both places. The section's own explanatory paragraph already said "a feed nobody has asked is in neither count"; the code was what disagreed with it.
+
+## Four facts about every source we may ask
+
+Above the failure list sits the census the list needs: **one row per state, per fact, over the addresses a curator has left active**. Permission, reading, retirement and the publishing record, and no cell combines two of them. It is drawn from `frontend/public/source-health.json`, which the run writes once a day, and the page renders that decision rather than making a second one ([../sources/health.md](../sources/health.md)).
+
+- **A table of states, not a chart.** Four categorical facts over 144 addresses, most of them in one state, is a tally - and a tally is a table. Every state is drawn whether or not it is empty, because a census that hides its empty states is a sample. The oracle asserts the drawn counts sum to the census, so a state that stopped being drawn cannot pass as a state nothing is in.
+- **Every state says what it withholds while it holds.** `denied` withholds that source until a later run reads its rules, `unreachable` means the address is not asked at all, a rest withholds it until the probe, and a retirement withholds that address until its configured URL changes. A count with no cost beside it is a number nobody can weigh.
+- **Then the sources held back, loudest state first.** Retirement and a refusal come before a rest, because a rest lifts itself and neither of those does. Capped at `console.source_rows`, with the tail in one sentence, exactly as the failure list is.
+- **The curated title is not unique, so the row carries the id too.** Two feeds in this repository are both titled `Anthropic`, and the thing an operator edits is one configured address. The title alone drew two identical rows.
+- **The publishing record is counts and never a rate while the record is short.** `collect.source_yield_min_complete_days` is 30 and the ledger is nine complete days deep, so the sentence prints what was offered, what was published and what a source lost, and says in the same breath that this is too short to read as a rate.
+- **It does not follow the window control.** Permission, reading and retirement are read over the whole record, and the publishing record has a fixed span of its own. It declares no `data-windowed` surface for that reason, and its own spec asserts the span instead.
+- **Its population is smaller than the failure list's, and it says so.** The census counts the addresses a run may ask; the list below reads the whole ledger, tombstoned feeds included. Measured 2026-09-03, the 24 tombstoned sources in the item ledger were offered 560 addresses over the window and published none, so the smaller population loses no publication and stops the denominator counting sources nobody may ask.
+
+**Nothing fetches it, so nothing stages it.** `frontend/public/source-health.json` is read at build time by `sourceHealthView()` in `frontend/src/lib/server/payload.ts` and never by a browser, so it is not copied into `frontend/static/` and `frontend/scripts/copy-visuals.mjs` is untouched. Its path is derived from `DIGEST_ROOT` the way `INDEX_ROOT` is, so a canary build reads the canary's own census.
+
+**A missing or malformed view is a named absence, not a blank page.** The reader is the same guard `loadDay` uses - `null`, a list, and an object with no source list all parse cleanly and all three would reach the page as a section rendering nothing - and a view that cannot be read costs one section and logs one line.
 
 Then comes **every feed that failed at least once, nearest to a rest first**, capped at `console.feed_rows` with the remainder in one sentence. A feed with a clean record is not in that list: the operator came here to find what is broken, and a list naming all 182 sources hides the 26 that are. The cap is applied on the server, because this list is inlined into the prerendered document and the rows it drops cost the page nothing; the list publishes `data-feeds-drawn` and `data-feeds-hidden` so an oracle can check that the cap counted what it dropped. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
 
@@ -1389,6 +1407,7 @@ Three surfaces do not simply follow the span, and each says so on the page:
 | Surface | What it does | Why |
 | --- | --- | --- |
 | `Feeds that failed` | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
+| `Sources we may ask, and what they yield` | Permission, reading and retirement read every run on record; the publishing record reads `collect.source_yield_min_complete_days` complete days | It renders the run's own decisions, and the run rests on the whole count. The publishing record has a fixed span because that span is also its readability bar - one question, one number. |
 | `Site size` | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
 | `Minutes per visual` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
@@ -1909,6 +1928,7 @@ an answer. Where a drawing chart's span holds no boundary it says so in type
 | Summary length against the length asked for | Pipelines | **yes** | The length a summary comes out at is decided by the prompt and the model, and the stamp covers both. |
 | What one more article costs | Pipelines | no | Bytes an article are what got published, not how it was written. |
 | Feeds that failed | Pipelines | no | A feed answered or it did not, before any summary existed. |
+| Sources we may ask | Pipelines | no | Permission, a rest and a retirement are all decided before a summary is written. |
 | Charts drawn for articles | Pipelines | no | The chart arm is a different model call, judged on its own retirement rule. |
 | Time to write one summary | Summaries | no | A change moves every bar on it. The axis is seconds, so the window is pooled into one distribution and a day has no position to draw at. |
 | Prompt cache | Hardware | no | A change moves it - the prompt is in the stamp - and its engine-drawn axis carries no rule yet. |

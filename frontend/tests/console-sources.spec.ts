@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { rangeMarks } from '../src/lib/charts/series';
 import { sourceCuts, SOURCE_CUT_ROWS } from '../src/lib/server/model-work';
@@ -533,4 +533,193 @@ test('a row is placed on the axis, and the lost span is held inside it', () => {
 
 	// No cut in the window at all. Same answer, and no rule to clamp against.
 	expect(rangeMarks({ min: 100, median: 200, max: 900 }, null, identity).past).toBe(false);
+});
+
+/**
+ * The source-health scorecard: four facts, kept apart.
+ *
+ * The oracle reads `backend/var/canary/source-health.json` - the projection the
+ * pipeline wrote and the page rendered - rather than re-deriving permission,
+ * availability or retirement in the test. Re-deriving them here would be a
+ * third reducer over the same evidence, and the row's whole argument is that
+ * two are already one too many.
+ */
+interface ViewRow {
+	source_id: string;
+	title: string;
+	vertical: string;
+	permission: string;
+	availability: string;
+	retired: boolean;
+	retired_on: string | null;
+	opportunities: number;
+	publications: number;
+	source_failures: number;
+}
+
+interface View {
+	min_complete_days: number;
+	complete_dates: number;
+	yield_readable: boolean;
+	first_date: string | null;
+	last_date: string | null;
+	sources: ViewRow[];
+}
+
+function view(): View {
+	return JSON.parse(readFileSync(join(CANARY, 'source-health.json'), 'utf8')) as View;
+}
+
+function tallyOf(rows: ViewRow[], of: (row: ViewRow) => string): Map<string, number> {
+	const found = new Map<string, number>();
+	for (const row of rows) found.set(of(row), (found.get(of(row)) ?? 0) + 1);
+	return found;
+}
+
+async function counts(page: Page, prefix: string): Promise<Map<string, number>> {
+	const cells = await page
+		.locator(`[data-source-state^="${prefix}-"]`)
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				state: node.getAttribute('data-source-state') ?? '',
+				count: Number(node.querySelector('[data-source-state-count]')?.textContent ?? 'x')
+			}))
+		);
+	return new Map(cells.map(({ state, count }) => [state.slice(prefix.length + 1), count]));
+}
+
+test('THE ORACLE: every state the view holds is drawn, and the states sum to the census', async ({
+	page
+}) => {
+	const published = view();
+	expect(published.sources.length, 'the canary view names no source').toBeGreaterThan(0);
+	await page.goto('/console/');
+
+	for (const [prefix, of] of [
+		['permission', (row: ViewRow) => row.permission],
+		['availability', (row: ViewRow) => row.availability]
+	] as const) {
+		const expected = tallyOf(published.sources, of);
+		const drawn = await counts(page, prefix);
+		// Every state the fixture reaches is on the page with the count the file
+		// gives it. A state the fixture cannot reach is still drawn, at zero,
+		// because a census that hides its empty states is a sample.
+		for (const [state, count] of expected) {
+			expect(drawn.get(state), `${prefix} ${state} is not drawn`).toBe(count);
+		}
+		const total = [...drawn.values()].reduce((sum, count) => sum + count, 0);
+		expect(total, `the ${prefix} states do not sum to the census`).toBe(
+			published.sources.length
+		);
+		expect(expected.size, `the fixture reaches only one ${prefix} state`).toBeGreaterThan(1);
+	}
+
+	const lead = page.locator('[data-source-health-lead]');
+	await expect(lead).toHaveAttribute('data-source-health-sources', String(published.sources.length));
+	const retired = await counts(page, 'retirement');
+	expect(retired.get('retired')).toBe(published.sources.filter((row) => row.retired).length);
+});
+
+test('THE ORACLE: every source held back is named, with what it withholds', async ({ page }) => {
+	const published = view();
+	const held = published.sources.filter(
+		(row) =>
+			row.retired ||
+			row.permission === 'denied' ||
+			row.permission === 'unreachable' ||
+			row.availability !== 'answering'
+	);
+	expect(held.length, 'the canary holds nothing back, so this asserts nothing').toBeGreaterThan(0);
+
+	await page.goto('/console/');
+	await expect(page.locator('[data-source-health-lead]')).toHaveAttribute(
+		'data-source-health-withheld',
+		String(held.length)
+	);
+
+	const drawn = await page
+		.locator('[data-source-note]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				id: node.getAttribute('data-source-note') ?? '',
+				withheld: (node.querySelector('[data-source-note-withheld]')?.textContent ?? '').trim()
+			}))
+		);
+	const table = page.locator('[data-source-health="notes"]');
+	const cap = Number(await table.getAttribute('data-source-health-drawn'));
+	expect(drawn.length).toBe(cap);
+	expect(new Set(drawn.map((row) => row.id)).size).toBe(drawn.length);
+	for (const row of drawn) {
+		expect(held.map((entry) => entry.source_id)).toContain(row.id);
+		// Every automatic state says what the reader loses while it holds. A
+		// state named and not costed is a state nobody can weigh.
+		expect(row.withheld.length, `${row.id} names no cost`).toBeGreaterThan(10);
+	}
+	// The loudest state leads, because a rest lifts itself and a retirement
+	// never does.
+	const retiredAt = drawn.findIndex((row) =>
+		published.sources.some((entry) => entry.source_id === row.id && entry.retired)
+	);
+	if (retiredAt >= 0) expect(retiredAt).toBe(0);
+});
+
+test('THE ORACLE: the publishing record prints counts, and says when it is too short', async ({
+	page
+}) => {
+	const published = view();
+	const offered = published.sources.reduce((sum, row) => sum + row.opportunities, 0);
+	const won = published.sources.reduce((sum, row) => sum + row.publications, 0);
+	// The identity a rate can break and a pair of counts cannot.
+	expect(won, 'a yield numerator beat its own denominator').toBeLessThanOrEqual(offered);
+	for (const row of published.sources) {
+		expect(row.publications).toBeLessThanOrEqual(row.opportunities);
+		expect(row.source_failures).toBeLessThanOrEqual(row.opportunities);
+	}
+
+	await page.goto('/console/');
+	const record = page.locator('[data-source-health-record]');
+	await expect(record).toHaveAttribute(
+		'data-source-health-days',
+		String(published.complete_dates)
+	);
+	await expect(record).toHaveAttribute(
+		'data-source-health-record',
+		published.yield_readable ? 'measured' : 'short'
+	);
+	const text = (await record.innerText()).replace(/\s+/g, ' ');
+	expect(text).toContain(String(published.first_date));
+	expect(text).toContain(String(published.last_date));
+	// No rate anywhere in the sentence while the record is short. A share over
+	// nine days presented as a yield is an estimate wearing a measurement's
+	// clothes.
+	if (!published.yield_readable) {
+		expect(text).toContain('counts and not a rate');
+		expect(text).not.toMatch(/\d%/);
+	}
+});
+
+test('the scorecard fits a phone without pushing the page sideways', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/console/');
+	const overflow = await page
+		.locator('[data-source-health="states"], [data-source-health="notes"]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				scroll: node.scrollWidth,
+				client: node.clientWidth,
+				right: node.getBoundingClientRect().right
+			}))
+		);
+	expect(overflow.length, 'the scorecard drew no table at all').toBeGreaterThan(0);
+	for (const box of overflow) {
+		// A framed table may scroll inside its own frame; what it may not do is
+		// push the document sideways, which is what makes every other section
+		// unreadable on the same screen.
+		expect(box.right).toBeLessThanOrEqual(391);
+	}
+	const document = await page.evaluate(() => ({
+		scroll: window.document.documentElement.scrollWidth,
+		width: window.innerWidth
+	}));
+	expect(document.scroll).toBeLessThanOrEqual(document.width + 1);
 });

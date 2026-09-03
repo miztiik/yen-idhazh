@@ -231,8 +231,8 @@ export function resultLabel(row: FeedRead): string {
 	return row.outcome;
 }
 
-/** How many feeds have never failed, out of how many were asked, over how many
- * runs.
+/** How many feeds have never failed, out of how many the pipeline has read,
+ * over how many runs.
  *
  * The console lists only the feeds that broke, which is the right list and half
  * an answer: four broken feeds out of eight is a collapse and four out of two
@@ -241,17 +241,28 @@ export function resultLabel(row: FeedRead): string {
  * acts on is how many are named below, not a percentage.
  */
 export interface Reliability {
-	/** Feed ids with at least one read and no failing one, alphabetically.
-	 * Alphabetical because there is no order: a feed is read once a run, so
-	 * every clean feed has the same record. */
+	/** Feed ids with at least one read of the feed and no failing one,
+	 * alphabetically. Alphabetical because there is no order: a feed is read
+	 * once a run, so every clean feed has the same record. */
 	clean: string[];
-	/** Feeds the pipeline has actually asked. A feed the ledger has only ever
-	 * rested was never asked, so it can be neither clean nor broken and belongs
-	 * in neither number. */
+	/** Feeds the pipeline has actually read. A rest and a robots answer are both
+	 * absent from this count, and for one reason: neither of them asked the feed
+	 * whether it still works, so neither can make it clean or broken. */
 	checked: number;
 	/** Feeds with at least one failing read. `clean.length + failed` is
 	 * `checked`, always. */
 	failed: number;
+	/** Feeds on record that the pipeline has never actually read - held back by
+	 * a rest or by a robots answer on every run. Alphabetically, for the same
+	 * reason `clean` is.
+	 *
+	 * They are named rather than counted into either side because a source
+	 * honouring its own `robots.txt` has not failed and has not delivered
+	 * either. Until 2026-09-03 a refusal counted as an ask, so a source that has
+	 * never once given us an article was reported as one that had never failed -
+	 * measured over the committed ledger that day, 5 feeds of 184. That is the
+	 * one number this section existed to get right. */
+	ineligible: string[];
 	/** Runs the ledger holds. This is the span "never failed" is read over, and
 	 * a shallow record is why the page has a third sentence: two runs deep,
 	 * "never failed" means "did not fail twice". */
@@ -265,23 +276,31 @@ export interface Reliability {
  * is the defect the shared window exists to remove.
  */
 export function reliability(rows: readonly FeedRecord[]): Reliability {
-	const asked = new Map<string, FeedRecord[]>();
+	const read = new Map<string, FeedRecord[]>();
+	const seen = new Set<string>();
 	for (const row of rows) {
-		if (skipped(row)) continue;
-		asked.set(row.feedId, [...(asked.get(row.feedId) ?? []), row]);
+		seen.add(row.feedId);
+		// `preserves` is the same predicate the streak runs on, and it is the
+		// right one here for the same reason: a rest and a robots answer are not
+		// evidence about the address either way. Reusing it is what stops this
+		// sentence and the quarantine disagreeing about what an ask is.
+		if (preserves(row)) continue;
+		read.set(row.feedId, [...(read.get(row.feedId) ?? []), row]);
 	}
 
 	const clean: string[] = [];
 	let failed = 0;
-	for (const [feedId, reads] of asked) {
+	for (const [feedId, reads] of read) {
 		if (reads.some(failing)) failed += 1;
 		else clean.push(feedId);
 	}
 
+	const byName = (a: string, b: string) => a.localeCompare(b);
 	return {
-		clean: clean.sort((a, b) => a.localeCompare(b)),
-		checked: asked.size,
+		clean: clean.sort(byName),
+		checked: read.size,
 		failed,
+		ineligible: [...seen].filter((feedId) => !read.has(feedId)).sort(byName),
 		runs: new Set(rows.map((row) => row.runId)).size
 	};
 }

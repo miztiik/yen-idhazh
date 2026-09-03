@@ -45,7 +45,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 5 | Name a cleanup age for every record | 1 | B | DONE #375 | `yi-s05` | 375 | worker |
 | 6 | Delete the private record and its browser copy together | 4, 5 | E | DONE #381 | `yi-s06` | 381 | worker |
 | 7 | Summarise old scores, then delete only what was summarised | 6 | F | DONE #382 | `yi-s07` | 382 | worker |
-| 8 | Publish the source-health scorecard | 4, 7 | G | PENDING | - | - | - |
+| 8 | Publish the source-health scorecard | 4, 7 | G | DONE #383 | `yi-s08` | 383 | worker |
 | 9 | Remove the legacy names | 8 | H | PENDING | - | - | - |
 
 **Wave composition, checked by diffing the file lists rather than asserted.** Rows 2 and 5 are the only pair that ever runs concurrently, and their `Files touched` lists are disjoint: row 1 owns every `config/idhazh.json` and `docs/concepts/config.md` edit for the collect knobs, so row 2 needs neither. Every other row shares at least `backend/idhazh/cli.py`, `backend/idhazh/ledger.py` or `backend/idhazh/retention.py` with its predecessor and is serialised for that reason. Row 8 depends on row 4 semantically and on row 7 only because both write `backend/idhazh/cli.py`.

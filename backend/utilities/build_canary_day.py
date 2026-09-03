@@ -33,7 +33,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import config
+from idhazh import config, publish_source_health
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
@@ -55,10 +55,12 @@ from idhazh.contracts.feed_health import (
     RobotsOutcome,
     derive_endpoint_key,
 )
+from idhazh.contracts.item_health import FailureCode as ItemFailureCode
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.route import Route, SpecFormat, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.run_plan import TimeSource
-from idhazh.contracts.sources import SourceForm
+from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LensId, SourceKind, SourceTier
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
@@ -659,7 +661,7 @@ def _health(
     )
 
 
-def health(state: Path) -> int:
+def _health_rows() -> list[FeedHealthRow]:
     """One feed of each kind the console has to tell apart.
 
     Two dates, because a feed is rested after five failures and a single day of
@@ -703,6 +705,32 @@ def health(state: Path) -> int:
                     robots_status=None,
                     attempted=False,
                 ),
+                # Retired: a run stopped asking this address for good, and the
+                # `410` results that decided it are older than this window. What
+                # is left on record is a skip a rest can never lift.
+                _health(
+                    date,
+                    n,
+                    "canary-retired",
+                    FetchOutcome.SKIPPED,
+                    detail="the address is retired",
+                    robots=None,
+                    robots_status=None,
+                    attempted=False,
+                ),
+                # Its robots.txt could not be read at all, which is our own
+                # failed read rather than the publisher's answer. Unknown fails
+                # closed, so the address was never asked either.
+                _health(
+                    date,
+                    n,
+                    "canary-unruled",
+                    FetchOutcome.ROBOTS_DENIED,
+                    status=None,
+                    robots=RobotsOutcome.UNREACHABLE,
+                    robots_status=503,
+                    attempted=False,
+                ),
             ]
     # Answered, but with nothing. The same cost to the digest as a refusal.
     rows += [_health(DATE, n, "canary-empty", FetchOutcome.OK, status=200, items=0) for n in (2, 3)]
@@ -713,7 +741,12 @@ def health(state: Path) -> int:
     rows.append(
         _health(DATE, 1, "canary-gone", FetchOutcome.PERMANENT, status=404, detail="not found"),
     )
+    return rows
 
+
+def health(state: Path) -> int:
+    """Append the canary's feed results, one shard a date."""
+    rows = _health_rows()
     for date in (YESTERDAY, DATE):
         append_health(state, date, [row for row in rows if row.date == date])
     return len(rows)
@@ -722,6 +755,135 @@ def health(state: Path) -> int:
 def _fixture_digest(*parts: str) -> str:
     """A stable stand-in for a field a real run fills with a real digest."""
     return hashlib.sha256("|".join(("canary", *parts)).encode("utf-8")).hexdigest()
+
+
+#: The canary's own source list. Six of them are the feeds `health` writes rows
+#: for; `canary-retired` is the seventh and is the one state the health ledger
+#: cannot show on its own - a run stopped asking that address for good, and the
+#: `410` results that decided it are older than the window this fixture holds
+#: (`docs/architecture/sources/health.md`).
+CANARY_FEEDS: Final[tuple[tuple[str, str, str], ...]] = (
+    ("canary-empty", "Canary Empty Wire", "ai"),
+    ("canary-flaky", "Canary Flaky Press", "ai"),
+    ("canary-gone", "Canary Gone Gazette", "world"),
+    ("canary-polite", "Canary Polite Journal", "world"),
+    ("canary-quiet", "Canary Quiet Bulletin", "energy"),
+    ("canary-retired", "Canary Retired Register", "energy"),
+    ("canary-steady", "Canary Steady Times", "ai"),
+    ("canary-unruled", "Canary Unruled Herald", "world"),
+)
+
+#: Complete days the canary's publishing record covers. Three of the configured
+#: thirty, so the fixture drives the state the committed data is in today: a
+#: record too short to read as a rate, printed as counts and said so.
+CENSUS_DAYS: Final = 3
+
+#: What each canary source was offered and what it published, per complete day.
+#: `canary-polite` and `canary-quiet` are offered nothing at all, because a run
+#: that never asks an address never plans one from it.
+CENSUS: Final[dict[str, tuple[int, int, int]]] = {
+    "canary-steady": (6, 5, 0),
+    "canary-empty": (4, 2, 2),
+    "canary-flaky": (3, 0, 3),
+    "canary-gone": (2, 1, 1),
+    "canary-polite": (0, 0, 0),
+    "canary-quiet": (0, 0, 0),
+    "canary-retired": (0, 0, 0),
+    "canary-unruled": (0, 0, 0),
+}
+
+
+def _feed_defs() -> list[FeedDef]:
+    """The canary source list, in the shape the fold reads."""
+    return [
+        FeedDef(
+            id=feed_id,
+            vertical=vertical,
+            title=title,
+            url=f"https://{feed_id}.example.com/feed.xml",
+            tier=SourceTier.TRADE_PRESS,
+            kind=SourceKind.REPORTING,
+            form=SourceForm.ARTICLE,
+        )
+        for feed_id, title, vertical in CANARY_FEEDS
+    ]
+
+
+def _census_rows() -> list[ItemHealthRow]:
+    """A planned-item census for the canary's own sources.
+
+    Built in memory and handed straight to the fold rather than appended to the
+    canary ledger: `frontend/scripts/build-canary.mjs` owns
+    `state/item-health/`, and two writers of one file is a fixture that depends
+    on which of them ran last.
+    """
+    rows: list[ItemHealthRow] = []
+    start = calendar_date.fromisoformat(DATE) - timedelta(days=CENSUS_DAYS)
+    for offset in range(CENSUS_DAYS):
+        day = (start + timedelta(days=offset)).isoformat()
+        for source_id, (offered, published, lost) in CENSUS.items():
+            for index in range(offered):
+                url = f"https://{source_id}.example.com/{day}/{index}"
+                won = index < published
+                # Three kinds of row, because the census counts three things. A
+                # loss the source owns is `no_text` - what an extractor says
+                # when a page came back with nothing in it. Anything else the
+                # run lost is ours, and `model_unreachable` says so: it is on
+                # the neutral list, so it costs the source nothing.
+                owned = not won and index < published + lost
+                rows.append(
+                    ItemHealthRow(
+                        version=ItemHealthRow.schema_version(),
+                        date=day,
+                        run_id=f"{day}-1",
+                        item_id=f"{source_id}-{index:04d}",
+                        url_key=derive_url_key(url),
+                        canonical_url=url,
+                        vertical=next(v for i, _t, v in CANARY_FEEDS if i == source_id),
+                        stage=(
+                            ItemStage.PUBLISH
+                            if won
+                            else (ItemStage.EXTRACT if owned else ItemStage.SUMMARIZE)
+                        ),
+                        source_id=source_id,
+                        outcome=ItemOutcome.OK if won else ItemOutcome.FAILED,
+                        code=(
+                            None
+                            if won
+                            else (
+                                ItemFailureCode.NO_TEXT
+                                if owned
+                                else ItemFailureCode.MODEL_UNREACHABLE
+                            )
+                        ),
+                    )
+                )
+    return rows
+
+
+def source_health(target: Path) -> int:
+    """Write the canary's source-health view through the fold the pipeline uses.
+
+    Seven sources cover every state a page has to draw: permission allowed,
+    refused and unrecorded; answering, failing, resting and never read; one
+    retired address; and a publishing record too short to read as a rate.
+    """
+    view = publish_source_health.build(
+        feeds=_feed_defs(),
+        collect=config.load().app.collect,
+        health=_health_rows(),
+        items=_census_rows(),
+        retired_on={
+            derive_endpoint_key("https://canary-retired.example.com/feed.xml"): YESTERDAY
+        },
+        date=DATE,
+        run_id=f"{DATE}-1",
+        generated_at=f"{DATE}T06:20:00Z",
+    )
+    path = target / publish_source_health.PUBLIC_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(view.to_json(), encoding="utf-8", newline="\n")
+    return len(view.sources)
 
 
 def _scorer_version(evaluation: EvaluationConfig) -> str:
@@ -829,6 +991,7 @@ def main() -> int:
     day = build(args.out, evaluation)
     runs = manifest(args.out, len(day.items))
     checks = health(args.state)
+    census = source_health(args.out.parent)
     scored = scores(args.state, day.items, evaluation)
     # Every writer of a committed day payload owes its month a rebuild
     # (docs/architecture/publishing/layout.md). The archive browses this tree in
@@ -847,6 +1010,10 @@ def main() -> int:
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
+    print(
+        f"wrote {(args.out.parent / publish_source_health.PUBLIC_FILENAME).as_posix()}: "
+        f"{census} sources"
+    )
     print(f"wrote {writer.ledger_path(args.state, DATE).as_posix()}: {scored} scored items")
     print(
         f"wrote {index_root.as_posix()}: {len(indexed)} month(s), "
