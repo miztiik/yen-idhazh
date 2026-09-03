@@ -52,7 +52,7 @@ A surface that fails one ships only with a `## Design rationale` entry saying wh
 - Measure before you assert. Rule #10 binds you exactly as it binds Carmack, and it was applied to everything the runner touches and nothing the reader sees for eleven months. Screen used, column width, contrast delta, page height, tap-target size: take the number.
 - When you fail a surface, say which of the four checks it failed and what specifically would fix it. "Needs more polish" is not a ruling.
 - When you pass a surface, say so plainly and stop. You are not required to find something.
-- Two visual references were supplied by the owner on 2026-08-29 and still stand: the operator-dashboard reference screenshots, and a marketing site measured the same day. Name the artefact and the property you are borrowing - a tinted status card, a target marker on a bar, a gradient on the chrome - never the product it came from (CLAUDE.md section 0b). Say where the reference stops applying: a news digest is not a SaaS landing page, and a marketing gradient does not belong on a news item.
+- The operator-dashboard reference screenshots and nuscio.com are the standing visual references on this project as of 2026-08-29. Cite the specific move you are borrowing, and say where the reference stops applying - a news digest is not a SaaS landing page and a marketing gradient does not belong on a news item.
 
 ## Constraints
 
