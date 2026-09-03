@@ -21,9 +21,237 @@ To validate this document, check three things:
 
 ## 1. The architectural change, in one paragraph
 
-The visual stops being "a chart" and becomes **a visual that complements the article at high information compression**. Read the article with code first, so every fact is real and traceable to a character span. Then ask one capable model to understand the story, extract its entities and events, and decide what visual would genuinely help - but only let it point at material the code already found, never let it author a number or a claim. Then let code check the choice and render it.
+The visual stops being "a chart" and becomes **a visual that complements the article at high information compression**. Code reads the article first and finds deterministically every quantity it can, with the character offsets that prove where each one came from. Then one capable model reads the same article and does the work only a model can do: it labels those numbers, names the entities and places, points at the quotes and the claims, proposes any figure the regex missed, and decides what visual would genuinely help. Code then anchors everything the model pointed at back into the article's own bytes, drops whatever will not anchor, checks the choice and renders it. **The model finds the meaning; code cuts the characters.**
 
 > The model decides what the visual **means**. Code decides what the visual **contains** and how it is **rendered**.
+
+That slogan is the readable version. The **defensible** version is the one the proposal narrows it to in P.1.5.2, and it is the one that binds:
+
+> Deterministic code controls every displayed value and every displayed string. Model judgement is confined to selection and labelling, and is span-anchored throughout.
+
+Section 10.1a reaches the same rule from the other direction - code finds and cuts every character a reader will see. The split is not clean by stage; it is decided kind by kind. Section 10.1a rules it, section 10.1b draws it.
+
+---
+
+## 1a. The flow, end to end
+
+The proposal's section 1.2 draws the target architecture. This is the same flow **with every ruling in this document folded in** - the reachability gate, the retired second model, the sufficiency oracle, the per-attempt ledger, the re-validating ladder, and the console panels. Where the two disagree, this drawing wins, because the proposal predates the rulings in section 3 and section 4.
+
+Plain ASCII, not box-drawing characters: `CLAUDE.md` section 5 is ASCII-only for every file in this repository and a diagram is not an exception.
+
+```
+   +======================================================================+
+   |  STAGE 1 - EXTRACT                     zoomed in at section 10.1b    |
+   +======================================================================+
+
+                            +---------------------+
+                            |       ARTICLE       |
+                            +----------+----------+
+                                       |
+              call 0 (code)  ->  call 1 (model)  ->  anchoring (code)
+              finds numbers      labels, names,      one rule per shape,
+              mints element_id   points at spans     drops what will not
+                                                     anchor
+                                       |
+                                       v
+                        +-------------------------------+
+                        |       TRUSTED ELEMENTS        |
+                        |  TIER 1  byte-exact, never    |
+                        |          model-authored       |
+                        |  TIER 2  model-assigned,      |
+                        |          span-anchored        |
+                        +---+-----------------------+---+
+                            |                       |
+                            |                       v
+                            |        +---------------------------+
+                            |        |     ARTICLE POTENTIAL     |
+                            |        |      (deterministic)      |
+                            |        |  chartable     singular   |
+                            |        |  processual    narrative  |
+                            |        |  comparative              |
+                            |        +-------------+-------------+
+                            |                      |
+                            |          the denominator for EVERY
+                            |          rate in stage 4. Without it,
+                            |          4 percent on narrative and
+                            |          4 percent on chartable are
+                            |          the same number.      (row 56)
+                            v
+   +======================================================================+
+   |  STAGE 2 - DECIDE                                                    |
+   +======================================================================+
+
+              +---------------------------+
+              |     REACHABILITY GATE     |     no
+              |     code, no model        |----------> none: not_reachable
+              |  Could ANY plan over      |            the cheapest gate,
+              |  these elements survive   |            and therefore the
+              |  validation at all?       |            most common outcome
+              +-------------+-------------+
+                            | yes
+                            v
+              +---------------------------+
+              |      SEMANTIC MODEL       |
+              |  ONE model. The 4B router |
+              |  is retired outright.     |
+              |  call 2, appended to      |
+              |  call 1's message array,  |
+              |  so the article prefills  |
+              |  once.          (O17, 10.2)
+              +---------------------------+
+              | understand the story      |
+              | summarise            ->  summary
+              | identify key facts   ->  key_points
+              | assess visual need   ->  decision
+              | choose the form      ->  purpose + type
+              | select elements      ->  element_ids
+              | explain the choice   ->  why
+              +-------------+-------------+
+                            |
+                 constrained semantic JSON
+                            v
+              +---------------------------+     decision = none
+              |        VISUAL PLAN        |----------> none: model_declined
+              | decision  purpose  type   |
+              | encodings  element_ids    |
+              | labels  annotations  why  |
+              | title  caption  alt_text  |
+              | confidence  plan_version  |
+              +---------------------------+
+              | NO geometry               |
+              | NO literal values         |
+              | NO authored text          |
+              +-------------+-------------+
+                            |
+   +======================================================================+
+   |  STAGE 3 - CHECK, DRAW, PUBLISH                                      |
+   +======================================================================+
+                            v
+              +---------------------------+
+              |     VISUAL VALIDATOR      |
+              |      (deterministic)      |
+              | elements exist            |
+              | semantically compatible   |
+              | units compatible          |
+              | roles valid for the type  |
+              | enough data               |
+              | no duplicate in a role    |
+              | no invented values        |
+              | numerals matched          |
+              +------+-------------+------+
+                fail |             | pass
+                     v             |
+        +----------------------+   |
+        |   DOWNGRADE LADDER   |   |
+        |  depth 1  median     |   |
+        |  depth 2  p75 + note |   |
+        |  depth 3  refuse     |---+------> none: downgrade_exhausted
+        +----------+-----------+   |
+                   |               |
+     a downgraded plan RE-ENTERS   |
+     the same validator and the    |
+     same compiler. It never goes  |
+     around either.        (G8)    |
+                   |               |
+                   +------>>-------+
+                                   v
+              +---------------------------+
+              |      VISUAL COMPILER      |
+              |  one template per type,   |
+              |  -> renderable spec       |
+              |  planned_type AND         |
+              |  rendered_type both kept  |
+              +-------------+-------------+
+                            v
+              +---------------------------+
+              |   RENDER - d3, one engine |
+              |  INLINE SVG in the item.  |
+              |  No img carrier - an SVG  |
+              |  inside img cannot read   |
+              |  the page's tokens, and   |
+              |  that is the whole of the |
+              |  dark-theme defect (row 21)
+              +-------------+-------------+
+                            v
+              +---------------------------+     fail
+              |     SUFFICIENCY BAR       |----------> none: insufficient
+              |  a COMPILER ORACLE, not   |
+              |  a review item     (O36)  |
+              | legibility floor, 12 px   |
+              | density floor             |
+              | both themes resolve       |
+              | one annotated mark        |
+              | keyboard route to a fact  |
+              | per-visual byte cap       |
+              +-------------+-------------+
+                            | pass
+                            v
+              +---------------------------+
+              |     PUBLISHED VISUAL      |
+              |  below the summary (O35)  |
+              +-------------+-------------+
+                            |
+   +======================================================================+
+   |  EVERY path above - published, downgraded, refused, none - writes    |
+   |  ONE ROW to state/visuals/, one row per ATTEMPT.                     |
+   |                                                                      |
+   |    decision      published | downgraded | none | rejected            |
+   |    none_reason   which gate refused it, or that call 2 was cut short |
+   |    rejection_reason, rejection_stage, downgrade_depth,               |
+   |    downgrade_reason, downgrade_edge, gate_floor_applied,             |
+   |    planned_type, rendered_type, compile_ms, render_ms                |
+   |                                                                      |
+   |  There is no silent path to `none`.       (row 55, 12.7 G7, G11, E5) |
+   +===================================+==================================+
+                                       |
+   +======================================================================+
+   |  STAGE 4 - THE TWO LOOPS                                             |
+   +======================================================================+
+                                       |
+             +-------------------------+-------------------------+
+             |                                                   |
+             v                                                   v
+   +----------------------------+              +----------------------------+
+   |       MACHINE LOOP         |              |        HUMAN LOOP          |
+   |  every article, automatic  |              |  periodic, sampled, costly |
+   |  free                      |              |                            |
+   |  ** GATES PUBLICATION **   |              |  ** GATES NOTHING **       |
+   +----------------------------+   sampled    +----------------------------+
+   | plan -> validation ->      |   queue      | published + rejected +     |
+   | metrics -> diagnostics     |------------->| config-B + `none` arm,     |
+   +-------------+--------------+              | all four populations       |
+                 |                             +-------------+--------------+
+                 v                                           v
+   +----------------------------+              +----------------------------+
+   |          CONSOLE           |              |  review/                   |
+   |  rejection reason over time|              |  a BUILD ARTIFACT.         |
+   |  keep rate by downgrade    |              |  Never committed, never    |
+   |    depth                   |              |  under frontend/public/    |
+   |  planned_type against      |              +-------------+--------------+
+   |    rendered_type           |                            v
+   |  plus every existing eval  |              +----------------------------+
+   |  metric, incl. band_reason |              |  quality baseline ->       |
+   |                     (O11,  |              |  LEARNED WEIGHTS           |
+   |                      O34)  |              |                            |
+   +----------------------------+              |  A DIAGNOSTIC. Never a     |
+                                               |  gate - not until          |
+                                               |  information_delta is      |
+                                               |  measured against          |
+                                               |  visual_keep_rate.   (G9)  |
+                                               +----------------------------+
+```
+
+**The four things this drawing asserts that the proposal's does not.**
+
+| | Where it is ruled |
+|---|---|
+| A **reachability gate** runs before the model is ever called, so an article that cannot be visualised costs no inference | Section 14.5 gate 1 |
+| The ladder **re-enters** the validator and the compiler rather than routing around them | Section 12.7 G8, row 50 |
+| The **sufficiency bar is a compiler oracle**, so a visual can fail for being too little, not only for being wrong | O36, Susan's mandate in `CLAUDE.md` section 14 |
+| Every attempt writes a row, so a refusal is **legible rather than an absence** | Row 55, section 12.7 G7 |
+
+---
+
 
 Two consequences drive everything below. The weak router model is retired and the strong model does the semantic work. And `route.py` is replaced by `visual_planner.py`, because "route" names a dispatch decision and the thing being built is a planning decision.
 
@@ -47,6 +275,9 @@ The proposal states in its own provenance warning that every claim it makes abou
 | C10 | The site cap is a knob | `retention.site_budget_mb` 800 is the **alarm**. `PAGES_HARD_CAP_MB = 1024` is a `Final` in code, deliberately not editable | [backend/idhazh/retention.py](backend/idhazh/retention.py#L79) |
 | C11 | Assemble de-duplicates the day | **It groups. It removes nothing.** The docstring says so outright: "Nothing is removed. Every item stays in the published order it was in" | [backend/idhazh/assemble.py](backend/idhazh/assemble.py#L383) |
 | C12 | `carried_by` gives cross-source repetition before the model runs | Only for an **identical URL**. `merge()` groups by `url_key`, so two outlets writing the same story at two addresses are two items with `carried_by` 1 each - and both pay a full model call | [backend/idhazh/rank.py](backend/idhazh/rank.py#L441) |
+| C13 | `ChartPoint {label, fact_index}` is replaced because "positional indexes break silently" | Half right, and the half it drops is the safety property. A list *position* is fragile and should become a stable `element_id` - which is what the proposal's own D14 rename asks for. What must not be dropped is that the field is a **reference, not a value**: `RouteDraft`'s docstring records what that buys - the contract carries "no free numeric field anywhere, so the worst an injection can do is pick the wrong bars" | [backend/idhazh/route.py](backend/idhazh/route.py#L187), [backend/idhazh/route.py](backend/idhazh/route.py#L193) |
+| C14 | (implied by both documents) `numeric_facts()` is a sound candidate source for a chart | **It deletes exactly the series a chart exists to show.** It dedupes on `(value, unit)`, so twelve percent in one quarter and twelve percent in another collapse into one candidate. Its own docstring states the intent - "the same figure repeated in a lead and a body paragraph is one" - and the intent is right for a fact and wrong for a series. It also drops any magnitude at or below 2 with no unit, nulls a unit word on a stop-list, and stops at 16 facts | [backend/idhazh/route.py](backend/idhazh/route.py#L165), [backend/idhazh/route.py](backend/idhazh/route.py#L163), [backend/idhazh/route.py](backend/idhazh/route.py#L176) |
+| C15 | Code can extract dates today | **No date extractor exists.** `numeric_facts()` finds quantities and actively drops a bare four-digit year in 1900-2100, because a year is a label and not a bar height. So the `date` kind is new work in plan-doc G, not a rename of something that ships | [backend/idhazh/route.py](backend/idhazh/route.py#L158) |
 
 ### 2.1 The root cause of the unreadable dark theme
 
@@ -107,6 +338,9 @@ Numbered for citation. Each names the proposal section it settles.
 | O34 | **`band_reason` gets a console panel.** The five sentences a reader sees have never been plotted, so nobody can say whether summaries are improving or which defect dominates. This is the single most actionable eval gap on the project | P.5.5 |
 | O35 | The visual moves **below** the summary. `ui.visual_side` is `above` today; Reader ruled that an 800px drawing above the text pushes the sentence they came for off a phone screen | P.4.4 |
 | O36 | Susan's **19-row sufficiency bar** is lifted into `docs/concepts/design-system.md` as a build-failing oracle, not a review item. Rows 26 to 37 here are the subset already ruled; the full bar is the gate | P.4.4.1 |
+| O37 | **Close authorship, never close discovery.** Code finds and cuts every character a reader will see; the model points at where to cut and says what the cut means. A quantity is discovered by regex by default, and the model may propose one the regex missed by naming its sentence, for code to re-parse from the article's own bytes. An entity name is a Tier 2 grouping key that is never drawn, anchored through per-sentence mentions. A quote or a claim is emitted as sentence indices, never as text. Section 1 and an earlier section 10.1 both got this wrong, in opposite directions - see section 10.1a | P.2.1.1, P.3.5 |
+| O38 | **The pipeline is model-neutral; `InferenceConfig` is not, and the document must say which is which.** Every setting in sections 11.2 and 11.2a is a property of the entry `models.summarize` names plus this runner, not a constant of the design, and is quoted with that entry and that date. A model swap re-derives the whole block - see section 11.0 | P rule 1 |
+| O39 | **The canonical glossary binds identifiers, not prose.** A module, class, contract field, telemetry value, config key or schema stem uses the proposal's glossary term verbatim; a plan-doc's prose keeps the plain register of section 0b - see section 15.4a | P rule 2 |
 
 ---
 
@@ -121,7 +355,7 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 | 1 | Spans on the element | Fowler | Add `span_start`, `span_end`, `span_excerpt`. The regex already computes both offsets. `raw` cannot serve as the excerpt - it is whitespace-cleaned and drops the magnitude word and unit | P.2.1.1 |
 | 2 | Span-drift invariant, three parts | Fowler | Write-time validator; read-time re-slice that degrades **that item** only (section 1a); CI contract test over canary fixtures. Not one build-failing gate | P.2.1.4, P.R5 |
 | 3 | Per-element `source_text_hash` is dropped | Fowler | Redundant. If the text moved, `text[span] == span_excerpt` fails on the first moved element. One hash per article, reusing the existing content fingerprint | P.2.1.4 |
-| 4 | **Code authors spans, never the model** | Andre | A model has no character-level view and cannot count. The model emits the verbatim surface string; code finds it by exact search over the hashed normalised text. No exact match, no element | P.2.1.1 |
+| 4 | **Code cuts every character a reader sees; the model points and names** | Andre, Owner O37 | Authorship is closed, discovery is not. A model has no character-level view and cannot count, so it never types a value: for a `quantity` it labels an `element_id` call 0 minted, or proposes a missed figure by sentence index for code to re-parse from the article's own bytes. For an `entity` or a `place` the model's `name` is a Tier 2 grouping key that is never drawn; code anchors the element through `mentions`, each verified inside its own named sentence. For a `quote` or a `claim` the model emits sentence indices and no text at all, and code slices the bytes - exact search over a long string rejects a real quote over one changed word, silently, which is worse than no check. Section 10.1a | P.2.1.1 |
 | 5 | All six element kinds are in scope | Andre, Fowler | `quantity`, `entity`, `date`, `quote`, `claim`, `place`. Sequenced by risk, not by scope: `claim` lands last behind the verbatim-span validator | P.2.1, P.L31 |
 | 6 | Open label vocabulary | Andre | Accept. Span-anchored, `label_source` stamped, `measure_canonical` emitted beside `measure` | P.D3, P.L4 |
 | 7 | Corpus alias ledger is in scope | Andre | With `ledger_version` stamped on every computed score, and never compared across versions without re-scoring | P.2.2.3, P.R6 |
@@ -137,9 +371,9 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 | 12 | Field order is decode order | Andre | Measured on this codebase: with `kind` first, `reason` became a rationalisation of a choice already made. Labels must be committed before the type is chosen | P.3.1.1 |
 | 13 | Output budget rises from 400 | Andre | Derived from the schema's own bounds, re-derived whenever a bound changes. Never picked. See section 11.3 | P.3.1.1 |
 | 14 | Bound every array and string in the contract | Andre | Makes the worst-case reply length arithmetic. Alarm on `finish_reason == "length"` | P.3.2 |
-| 15 | Flat role map, all keys required | Andre | Optional arrays produced "a confident chart with no bars in it, twice, on the first live run". Not an 18-branch discriminated union | P.3.2 |
+| 15 | Flat role map, all keys required | Andre | Optional arrays produced "a confident chart with no bars in it, twice, on the first live run". Not an 18-branch discriminated union. **Disambiguated 2026-09-03**, because P.D4 defines a different required set per type and one flat map of all-required roles would make a `bar` emit `quantity_x`, `size` and `bins`: every role name is a key, every key sits in the schema's `required` list so the decoder cannot omit one, and an inapplicable role is emitted as an **empty array**. The validator's existing "roles valid for the type" check enforces the per-type set and decides whether empty is legal there. Section 12.8 X2 | P.3.2 |
 | 16 | Retire the 4B completely | Carmack, Owner O17 | Config entry, cache role, workflow job, env vars, prompt file, tests. Frees 2.33 GiB; repo cache falls from about 82 to 57 percent of the 10 GB ceiling | P.D1 |
-| 17 | Retries perturb the rejection reason only | Andre | `seed: 0` and `temperature: 0.0` are a determinism contract. Temperature jitter makes a re-run not a re-run | P.R9 |
+| 17 | **A retry that perturbs nothing is refused, not budgeted** | Andre | P.R9's remedy is "perturb the rejection reason or the temperature", and on this design neither is available. Temperature jitter breaks the `seed: 0`, `temperature: 0.0` determinism contract - a re-run stops being a re-run. And there is no rejection reason to feed back, because P.L7 chose the downgrade ladder **over** a repair retry, so no validator failure ever re-calls the model. The only retry left is a **schema** retry, which fires before the validator has run and so has no reason to carry. Under greedy decoding a schema retry against identical input is bit-identical, making it a guaranteed-identical failure that costs a full decode. Ruling: a retry must perturb the **input** - drop the candidate table's tail, tighten the grammar, or raise `max_output_tokens` when `finish_reason == "length"` - and where no input perturbation applies, **do not retry at all**. `schema_retry_count` going bimodal is the symptom P.R9 named and marked addressed; a remedy that cannot fire does not address it | P.R9, P.L7, P.5.3.2 |
 | 18 | `confidence` moves after `type`, or is deleted | Andre | Second in the field list means it conditions every field after it. Record, never gate | P.L23 |
 | 19 | Carry the drop-the-minority lesson forward | Fowler | `same_unit_bars` records a live failure: a 4B picked three correct megawatt bars then appended a headcount. The behaviour becomes a committed fixture, not a comment | P.4.1 |
 | 20 | Graceful degradation on context overflow | Andre, Owner | `context_exceeded` must degrade to a chunked read, not to nothing. See section 11.4 | P.1a |
@@ -184,7 +418,7 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 | 47 | Span-anchored edges, no exception | Editor | An unanchored arrow is an ordering or causal claim the article did not make. Reader: "wrong once, and I stop believing every summary on the page" | P.L19, P.R10 |
 | 48 | Template order follows observed frequency | Jony | Not the fixed wave order in P.4.3.1. P.D2 makes the order derivable from `planned_type`, so guessing it is an unmeasured number justifying a design (Rule #10) | P.4.3.1, P.L2 |
 | 49 | One day may not publish one shape | Susan | A day publishing a single rendered type is a recorded defect, read jointly with keep rate. Not a diversity target - the demand side of the P.R1 capitulation pair | P.L11, P.R18 |
-| 50 | Downgrade ladder ships | Owner O16 | With the three invariance rules (element set unchanged, purpose survives, escalating floor), floors computed from depth-0 published visuals only, and the `VISUAL_DOWNGRADE` flag | P.4.2, P.D6, P.L7 |
+| 50 | Downgrade ladder ships | Owner O16 | With **four** invariance rules - element set unchanged, purpose survives, escalating floor, and re-validation: a downgraded plan re-enters the same validator and the same compiler, and a depth that fails re-validation falls to the next depth rather than publishing (section 12.7 G8). Floors computed from depth-0 published visuals only, behind the `VISUAL_DOWNGRADE` flag | P.4.2, P.D6, P.L7 |
 
 ### 4.E Selection, retention, measurement
 
@@ -194,7 +428,7 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 | 52 | Cut duplicates first, never a desk's only story | Editor | Score is authority x carriers, so a single-carrier story scores lowest by construction. A straight top-N cut is a systematic cut of the exclusive story | not in proposal |
 | 53 | Feed reliability multiplier | Editor, Owner O10 | Multiplicative inside `authority()`, never an added bonus - additive lets a feed buy its way across a tier. Trailing window no shorter than 30 days, clamped to a floor above zero and a ceiling of 1.0, and it may **only ever reduce**. All 191 `weight` values in `config/sources.json` are 1.0, so the manual lever has never been pulled | not in proposal |
 | 54 | Add `ItemStage.VISUAL` | Fowler | Additive, one changelog entry, no migration. Today "no visual was possible" and "the visual stage broke" are the same row | not in proposal |
-| 55 | `state/visuals/` ledger | Fowler | One appended row per published visual, sharded monthly, same shape as `state/item-health/`. No query surface - there is no server (Rule #1) | P.R12 |
+| 55 | `state/visuals/` ledger | Fowler | One appended row per **visual attempt**, not per published visual, sharded monthly, same shape as `state/item-health/`. `decision` separates published, downgraded, `none` and rejected. A per-publication ledger would leave every refusal, every `none` and every typed rejection reason uncommitted, and the machine loop would stop being auditable while still being the gate - section 12.7 G7. No query surface; there is no server (Rule #1) | P.R12 |
 | 56 | Every rate is reported per potential class | Andre, Editor | Without a denominator of what was possible, 4 percent on narrative and 4 percent on chartable are the same number | P.2.4, P.L35 |
 | 57 | `narrative` records **why** it is narrative | Editor | Otherwise an extraction outage reads as a quiet month of unvisualisable news, and P.R2 hides inside the residue class | P.2.4.2 |
 | 58 | A quote-led potential class is added | Editor | The safest type in the system has no denominator in P.2.4 as written | P.2.4.2 |
@@ -474,6 +708,7 @@ Every artefact this project writes declares which policy governs it. This table 
 | `corpus/corpus.jsonl` | rolling window | rewritten by `prune.yml` | `prune_keep_days` |
 | `frontend/public/telemetry/<YYYY-MM>.csv` | monthly shard | published projection; follows its source | `keep_months` |
 | `review/` renders | build artifact | deleted after labelling; never committed | artifact retention |
+| `state/rejected-plans/<YYYY>/<MM>/<DD>.jsonl` (new) | daily file | lookup prune - a rejected plan body answers no question outside its review window, so folding it would invent a total nobody reads | short rolling window, section 12.7 G10 |
 
 ### 9.4 Sharding enables the cleanup, and the cleanup enables the sharding
 
@@ -496,15 +731,57 @@ Andre proposed: call 1 = summary, call 2 = plan against that summary. **The owne
 ### 10.1 The ordering that ships
 
 ```
-CALL 1 - READ AND EXTRACT
+CALL 0 - CODE READS THE ARTICLE          no model, no network, microseconds
+  in:  sanitized article text
+  out: candidates: [ {element_id, kind, surface, span_start, span_end,
+                      value, unit, sentence_index, extractor}, ... ]
+       -> every quantity the number pattern can find, with the offsets that
+          prove where it came from and the magnitude already multiplied
+          out. `numeric_facts()` does this today. `extractor` is "regex".
+       -> two holes, both recorded as corrections C14 and C15. The dedup is
+          on (value, unit), so a figure repeated across two periods
+          collapses to one - call 1's `proposed` is what recovers it. And
+          there is no date extractor at all, so `date` is new work in
+          plan-doc G rather than a rename of something that ships.
+
+CALL 1 - LABEL, NAME AND POINT
   in:  [system: extraction + semantic rules]
-       [user:   title + <UNTRUSTED>full article text</UNTRUSTED>]
-  out: { elements:  [ {kind, surface, measure, entity, time, dimension}, ... ],
-         entities:  [ {name, type, salience}, ... ],
+       [user:   title
+                + <UNTRUSTED>full article text</UNTRUSTED>
+                + candidate table, indexed by element_id]
+  out: { labels:    [ {element_id, measure, entity, dimension, time,
+                       salience, attribution, hedge}, ... ],
+         proposed:  [ {sentence_index, surface}, ... ],
+         entities:  [ {name, entity_type, salience,
+                       mentions: [{sentence_index, surface}, ...]}, ... ],
+         places:    [ {name, geo_hint,
+                       mentions: [{sentence_index, surface}, ...]}, ... ],
+         quotes:    [ {sentence_start, sentence_end, speaker_mention}, ... ],
+         claims:    [ {sentence_start, sentence_end, attribution, hedge}, ... ],
          events:    [ {action, actor, object, when}, ... ],
          relations: [ {from, to, relation, sentence_index}, ... ] }
-       -> code finds every `surface` by exact search, attaches spans,
-          rejects anything it cannot find. No spans from the model.
+
+  what code does with each - and it is a DIFFERENT check per kind:
+
+    labels   -> may cite only an element_id call 0 minted. An unknown id is
+                dropped. No field here accepts a number, so authorship is
+                impossible by grammar rather than caught by a check.
+    proposed -> the escape hatch for a figure the regex missed. Code searches
+                ONLY the named sentence, demands exactly one hit, and
+                re-parses value and unit with the same number pattern over
+                the article's own bytes. Stamped extractor="model_proposed",
+                capped per article. A spelled-out number and a relative
+                change ("doubled") stay refused - there is nothing to parse.
+    entities -> `name` is Tier 2. It is a grouping key for the alias ledger
+      places    and it is NEVER drawn. Each mention's `surface` must occur
+                exactly once inside its own named sentence, and that mention
+                is the span. Zero surviving mentions drops the element. The
+                drawn label is the longest surviving mention, never `name`.
+    quotes   -> indices only, no text. Code slices the bytes. Exact search
+      claims    over a long string rejects a real quote over one changed
+                word, silently, which is worse than no check at all. This is
+                the same instrument section 10.6 already bought for the lede
+                and quote indices.
 
 CALL 2 - UNDERSTAND AND DECIDE          <- appends to call 1's message array
   in:  [ ...everything above, unchanged... ]
@@ -515,16 +792,172 @@ CALL 2 - UNDERSTAND AND DECIDE          <- appends to call 1's message array
                    labels, annotations, caption, alt_text, why} }
 ```
 
+### 10.1a Who finds what
+
+**One sentence governs all six kinds:**
+
+> Code finds and cuts every character a reader will see. The model points at where to cut, and says what the cut means.
+
+#### Rejected alternatives
+
+Each is the natural over-correction of the other, so both are recorded. Authority: Andre, 2026-09-03.
+
+| Rejected | Why |
+|---|---|
+| **The model emits a verbatim surface for every element, numbers included, adjudicated afterwards by exact search** | A number the model types is a number the model authored. Exact search cannot tell a real number from a real number pointed at the wrong sentence, and the span it mints is valid either way |
+| **Only the regex may discover a quantity, and an entity name must exact-match the article** | Closing authorship is right; closing discovery is not. The regex deletes the series a trend chart exists to show, and an entity name is a label, not a location. Both are shown below |
+
+**Why the regex cannot be the only discoverer.** `numeric_facts()` is lossy by design, and its losses land on exactly the articles a chart would serve. It dedupes on `(value, unit)` ([backend/idhazh/route.py](backend/idhazh/route.py#L165)), so twelve percent in one quarter and twelve percent in another become one candidate - it deletes the series a trend chart exists to show. It drops any magnitude at or below 2 with no unit ([backend/idhazh/route.py](backend/idhazh/route.py#L163)), drops a bare four-digit year ([backend/idhazh/route.py](backend/idhazh/route.py#L158)), nulls a unit word on a stop-list ([backend/idhazh/route.py](backend/idhazh/route.py#L144)) and stops at 16 ([backend/idhazh/route.py](backend/idhazh/route.py#L176)). Every one of those is a correct call for its original job - picking a few bars - and a wrong call for a candidate set. `proposed` is the recovery, and it stays safe because code, not the model, does the parsing: the model names a sentence, code re-parses the bytes.
+
+**Why an entity name is not searched.** Exact search confuses a location with a label. An article writes "Vestas Wind Systems A/S" once and "Vestas" four times, and the canonical name may appear nowhere verbatim. Entity resolution is precisely what a semantic model is good at and string matching is bad at. The proposal's own Tier 1 / Tier 2 split answers it: the **mention** is Tier 1 and gets anchored per sentence, the **name** is Tier 2, is a grouping key for the alias ledger (row 7), and is never drawn. The same reasoning retires exact search for `quote` and `claim` - a long string rejected over one changed word fails silently, and a sentence index cannot.
+
+**What the model never does.** It never types a value. `RouteDraft`'s docstring already records why that matters: the contract carries "no free numeric field anywhere, so the worst an injection can do is pick the wrong bars" ([backend/idhazh/route.py](backend/idhazh/route.py#L193)). `numeric_facts()` computes `match.start()` and `match.end()` ([backend/idhazh/route.py](backend/idhazh/route.py#L126)), `fact_menu()` prints them indexed ([backend/idhazh/route.py](backend/idhazh/route.py#L232)), and `ChartPoint.fact_index` is an index, never a value ([backend/idhazh/route.py](backend/idhazh/route.py#L187)). That reference survives as a stable `element_id` (correction C13).
+
+**Two failures the design still has to watch, because no anchoring check sees either.**
+
+| Failure | Caught by? | Control |
+|---|---|---|
+| **Mis-pointing** - the model means one `"5"`, the anchor lands on another | No. The span is real, so `text[span] == span_excerpt` passes, the write-time validator passes and the read-time re-slice passes | The per-sentence rule. A surface is searched inside one named sentence and must hit exactly once, so ambiguity is a rejection rather than a coin toss |
+| **Mis-labelling** - right number, wrong `measure`, `unit` or `entity` | No. These are Tier 2 and no string search reaches them | An id-cited label is checkable against that id's own unit and magnitude. A label attached to a free string is checkable against nothing. This is the whole reason `labels` cites ids |
+
+**What it costs, stated rather than implied.** The candidate table is extra prefill on call 1, and prefill runs at 9.84 tok/s on this runner (measured 2026-08-23, AMD EPYC 9V74, 4 vCPU). It is partly repaid, because labelling by id decodes fewer output tokens than re-typing every surface, and output is the expensive direction at 6.01 tok/s. The net is arithmetic over the bounded table size and is derived with the output budget in section 11.3, in the same commit. It is not guessed here.
+
+### 10.1b Step 1 drawn - what code does, and what the model does
+
+Section 1a draws the whole pipeline. This is its stage 1 zoomed in: the proposal draws ARTICLE -> TRUSTED ELEMENTS as a single edge labelled "deterministic extraction + model labelling", and this is that edge opened up. It is the drawing plan-doc G carries into `docs/architecture/extraction/` when the plan is decomposed.
+
+Plain ASCII, for the reason given in section 1a.
+
+```
+                     +---------------------------------+
+                     |             ARTICLE             |
+                     |  sanitized text + title         |
+                     |  text_hash over the normalised  |
+                     |  bytes that every span indexes  |
+                     +----------------+----------------+
+                                      |
+                                      v
+   +======================================================================+
+   |  CALL 0 - CODE READS FIRST         no model, no network, no tokens   |
+   +======================================================================+
+   |  FINDS   every quantity the number pattern matches, and emits        |
+   |          element_id  kind=quantity  surface  span_start  span_end    |
+   |          value  unit  sentence_index  extractor="regex"              |
+   |                                                                      |
+   |  MISSES  by design. Each was a correct call for picking a few bars   |
+   |          and is the wrong call for a candidate set:                  |
+   |            - a figure repeated across two periods    (dedup, C14)    |
+   |            - a bare four-digit year                                  |
+   |            - any magnitude <= 2 carrying no unit                     |
+   |            - a number whose following word is on the stop-list       |
+   |            - everything past the 16th figure                         |
+   |            - ANY date. No date extractor exists yet   (C15)          |
+   +===================================+==================================+
+                                       |
+                      candidates[], indexed by element_id
+                                       |
+                                       v
+   +======================================================================+
+   |  CALL 1 - MODEL READS THE SAME ARTICLE                               |
+   |  in: system + title + <UNTRUSTED>article</UNTRUSTED> + candidates    |
+   +======================================================================+
+   |  CANNOT EMIT a span, a character offset, a value, a unit or a count. |
+   |  No field of the schema accepts one, so the grammar refuses it at    |
+   |  decode time and nothing downstream has to check for it. (Rule #11)  |
+   +===================================+==================================+
+                                       |
+                                       v
+   +======================================================================+
+   |  ANCHORING - CODE ADJUDICATES           a DIFFERENT rule per shape   |
+   +==================+===================================================+
+   | labels[]         | Cites element_id and nothing else. An unknown id  |
+   |   element_id     | is dropped. No numeric field exists here at all.  |
+   |   measure entity |                                                   |
+   |   dimension time | -> TIER 2 on an element call 0 already minted     |
+   |   salience       |                                                   |
+   |   attribution    |                                                   |
+   |   hedge          |                                                   |
+   +------------------+---------------------------------------------------+
+   | proposed[]       | The escape hatch for a figure call 0 missed.      |
+   |   sentence_index | Search ONLY the named sentence. Exactly one hit,  |
+   |   surface        | or dropped. Re-parse value and unit from the      |
+   |                  | ARTICLE'S OWN BYTES with the same number pattern, |
+   |                  | never from the reply. Capped per article.         |
+   |                  | A spelled-out number and a relative change        |
+   |                  | ("doubled") stay refused - nothing to parse.      |
+   |                  |                                                   |
+   |                  | -> TIER 1 quantity, extractor="model_proposed"    |
+   +------------------+---------------------------------------------------+
+   | entities[]       | `name` is TIER 2 - a grouping key for the alias   |
+   | places[]         | ledger, and it is NEVER drawn on a page.          |
+   |   name           | Each mention.surface must occur exactly once      |
+   |   entity_type    | inside its OWN named sentence, and that           |
+   |   geo_hint       | occurrence is the span. Zero surviving mentions   |
+   |   salience       | drops the element. The drawn label is the         |
+   |   mentions[]     | longest surviving mention, never `name`.          |
+   |     sentence_idx |                                                   |
+   |     surface      | -> TIER 1 mentions + TIER 2 name                  |
+   +------------------+---------------------------------------------------+
+   | quotes[]         | INDICES ONLY. No text crosses from the reply.     |
+   | claims[]         | Code slices the article's bytes between them.     |
+   |   sentence_start | Exact search over a long string is refused: it    |
+   |   sentence_end   | rejects a real quote over one changed word, and   |
+   |   speaker_mention| it does so silently.                              |
+   |   attribution    |                                                   |
+   |   hedge          | -> TIER 1 span + TIER 2 attribution and hedge     |
+   +------------------+---------------------------------------------------+
+   | events[]         | Every actor and object must resolve to a          |
+   | relations[]      | surviving entity element, or the row is dropped.  |
+   |                  | An edge carries sentence_index with no exception  |
+   |                  | (row 47): an unanchored arrow is a causal claim   |
+   |                  | the article did not make.                         |
+   +==================+===================================================+
+                                       |
+                        every survivor carries a span
+                                       |
+                                       v
+                     +---------------------------------+
+                     |        TRUSTED ELEMENTS         |
+                     |        (source of truth)        |
+                     +---------------------------------+
+                     | TIER 1 - byte-exact, and never  |
+                     |   model-authored                |
+                     |   element_id  kind  surface     |
+                     |   span_start  span_end          |
+                     |   span_excerpt  value  unit     |
+                     |   sentence_index  extractor     |
+                     +---------------------------------+
+                     | TIER 2 - model-assigned,        |
+                     |   span-anchored, validated      |
+                     |   entity  time  measure         |
+                     |   measure_canonical  dimension  |
+                     |   salience  attribution  hedge  |
+                     |   label_source  ledger_version  |
+                     +----------------+----------------+
+                                      |
+                    +-----------------+-----------------+
+                    |                                   |
+                    v                                   v
+          to the SEMANTIC MODEL,              to ARTICLE POTENTIAL
+          call 2 - section 10.1               deterministic - section 12.6 G5
+```
+
+**Three invariants the drawing encodes. A plan-doc may not relax any of them.**
+
+1. **A Tier 1 field is never model-authored.** Each one comes from call 0, or from code slicing bytes the model only pointed at. `extractor` records which, on every element, so a later run can measure the two paths apart.
+2. **A Tier 2 field is never drawn without its Tier 1 anchor.** `name` groups; the mention draws. This is the rule that makes an alias ledger safe (row 7) and it is the one an implementer is most likely to lose, because rendering `name` is easier and looks tidier.
+3. **A rejection is per element, never per article.** A mention that will not anchor drops one element and leaves the article's other elements standing - section 1a, degrade rather than fail. An article that ends with zero elements is `narrative`, and row 57 makes it record why.
+
 ### 10.2 What "call 2 appends to call 1's message array" means
 
 The tokens the server sees on call 2 are, in order:
 
 ```
-[chat template header]                 <- identical
-[system: extraction + semantic rules]  <- identical    | REUSED FROM CACHE
-[user: title + full article]           <- identical    | (the expensive part)
-[assistant: call-1 JSON]               <- NEW, but short
-[user: summarise + plan]               <- NEW, short
+[chat template header]                    <- identical
+[system: extraction + semantic rules]     <- identical    | REUSED FROM CACHE
+[user: title + article + candidate table] <- identical    | (the expensive part)
+[assistant: call-1 JSON]                  <- NEW, but short
+[user: summarise + plan]                  <- NEW, short
 ```
 
 llama-server reuses the **longest common prefix** of the tokenised prompt. Because the system turn and the article are byte-identical and come first, the article is prefilled **once**. Only the call-1 output and the second instruction block are new. That is the entire mechanism.
@@ -543,6 +976,24 @@ Two conditions make the reuse real:
 - Field order is decode order: the model commits to what it found before it decides what to say about it.
 
 The cost, stated: the summariser's input changes, so `summary_faithfulness` is not comparable across the cutover. The owner accepts that explicitly - the current summaries are unsatisfactory and comparability with them is not worth protecting. The discontinuity is marked in the metric series (P.6.4.2 step 5).
+
+### 10.3a What the planner's source actually is
+
+Two things are true at once and they are easy to run together. This section exists so nobody has to guess which.
+
+**The planner's source is the article and the element table. It is not the summary.** Call 2 carries the full article in the same user turn call 1 read, plus the anchored element table, and `element_ids` may cite only an anchored element. Nothing the summary says can reach a visual unless it is already an element. **The summary can neither introduce material to the plan nor hide material from it.**
+
+**And the summary is nevertheless in the planner's context**, because decoding is autoregressive and `summary` decodes before `visual` inside call 2's object. E5 requires that order - it is what makes the summary recoverable when the output budget cuts the reply.
+
+So the summary **conditions** the plan without **sourcing** it, and that is a different thing from what section 10 refused:
+
+| | Refused (P.D1's original ordering) | Ships |
+|---|---|---|
+| What the planner reads | the summary, and nothing else | the article, the element table, **and** the summary |
+| Can the planner see a fact the summary dropped? | No | Yes. The article is right there |
+| Can a sentence in the summary put a number on a chart? | Yes, and that is the defect that produced this work | No. Only an anchored `element_id` can |
+
+**The cost, named rather than implied.** With prose decoded first, a plan can drift toward illustrating the sentences rather than the elements. That is a row-12-shaped risk and it is real. Two things bound it: `element_ids` makes the drift unable to invent anything, and `information_delta` measures it directly - it counts plan elements the summary does not already state (section 12.4 Q3), so a plan that only illustrates the prose scores zero there by construction. **If `information_delta` collapses after the cutover, this ordering is the first suspect.**
 
 ### 10.4 Summary quality is a named work item
 
@@ -600,6 +1051,22 @@ Three things dilute the primary jobs, named so they can be watched for: **mixing
 
 ## 11. Context, tokens and degradation
 
+### 11.0 Model neutrality - what is pinned to a model, and what is not
+
+The proposal's first rule is that model neutrality is mandatory. This document has to be read against that rule in two directions, because it obeys the rule in one and would break it in the other if the distinction were left unwritten.
+
+**The pipeline is neutral and stays neutral.** The weights are named in exactly one place - `models.<role>` in `config/idhazh.json` - and every stage downstream reads `model.id` off the config it was handed. No module name, class name, contract field, telemetry value, prompt filename, config key or schema stem carries a parameter count, a vendor or a revision. `visual_planner.py` is named for what it does, which is the whole of O2. Retiring the 4B (O17) is a config edit and the removal of a role, not a rewrite. Nothing in section 15's twelve plan-docs may put a model's identity back into a name (section 15.4a).
+
+**The runtime settings are not neutral, and pretending otherwise is the hazard.** Every number in section 11.2 - 16384, flash attention on, ubatch 512, parallel 1, the KV table, the 1.61 GiB margin - was derived from one model's architecture on one runner. The architecture is the load-bearing half: the model card records 32 layers of which only 8 carry a growing KV cache, 4 KV heads and a head dimension of 256. A dense model of similar size at the same window costs roughly four times the KV per token, so 16384 would not fit the measured margin. **The window is a measurement about a named config entry, not a property of the design**, and the same is true of every other flag in 11.2a. They are tuned against the entry in play from its model card, from published guidance and from what this runner measured - not read off a default.
+
+**And the structure hides that today.** `ModelsConfig` carries `summarize`, `route` and **one shared** `inference: InferenceConfig` ([backend/idhazh/contracts/app_config.py](backend/idhazh/contracts/app_config.py#L536)). Change `models.summarize` and the new weights silently inherit the previous model's window, cache types, batch shape and attention flags. Nothing raises. The run comes back slower, or out of memory, or with different words, and the config diff shows one repository string.
+
+Three consequences bind every plan-doc in section 15:
+
+1. **Any llama-server setting quoted anywhere carries the model entry it was derived against, the runner and the date.** That is Rule #10 applied to a setting rather than to a throughput figure. A bare `n_ctx: 16384` in a plan-doc is an unmeasured number justifying a design.
+2. **A model swap re-derives the whole `InferenceConfig` block, not only `n_ctx`.** `-fa`, `-ctk`, `-ctv`, `--ubatch-size`, `--threads-batch` and `--jinja` are each ruled on in 11.2a for the entry in play today and for no other entry.
+3. **The silent inheritance gets closed.** Whether the block moves onto `ModelRef` so a swap cannot inherit, or stays shared behind a qualification gate that refuses a pairing nothing has measured, is plan-doc H's call. What is not open is leaving it silent.
+
 ### 11.1 `--no-context-shift`
 
 The server is started with `--no-context-shift` ([backend/idhazh/llm/server.py](backend/idhazh/llm/server.py#L123)). The reason is written next to it:
@@ -611,6 +1078,8 @@ So an oversized prompt returns an error instead of a plausible answer about a do
 ### 11.2 Raising `n_ctx` - settled
 
 **Ruling: `n_ctx` goes to 16384 with `flash_attention` on, in one change. 32768 and above are refused.**
+
+Every number in this subsection and in 11.2a is derived against the entry `models.summarize` names today, on a stock `ubuntu-latest`. Section 11.0 governs what happens to all of them when that entry changes.
 
 #### The architecture, from the model card fetched 2026-09-02
 
@@ -663,6 +1132,8 @@ And 131,072 fails on wall clock before it fails on memory. Filling it once at th
 
 The two-call worst case is about 8,580 tokens: 880 system + 5,000 article cap + about 1,200 call-1 output + about 300 call-2 instructions + about 1,200 call-2 output. That is **105 percent of 8192** - the design does not fit in today's window. 16384 gives 1.9x headroom over that worst case and costs nothing once flash attention is on.
 
+Call 0's candidate table is not in that 8,580 and must be added to it before the number is final. It is bounded by construction - `numeric_facts()` takes a `limit`, 16 today - so the addition is arithmetic over that bound, not an estimate. It is derived with the output budget in 11.3, in the same commit. The headroom is 1.9x, so a bounded table does not put 16384 at risk; it does move the worst case, and a worst case that moves without being recomputed is how a window stops fitting.
+
 ### 11.2a The full settings comparison
 
 | Setting | Today | Expert proposes | Andre's verdict | Why |
@@ -684,7 +1155,7 @@ The two-call worst case is about 8,580 tokens: 880 system + 5,000 article cap + 
 
 `visuals.max_output_tokens` is **400** today. A reply that hits it becomes `none` with "the routing reply was cut off by the output budget" ([backend/idhazh/route.py](backend/idhazh/route.py#L520)) - and the owner has already observed the router cutting off in practice.
 
-Under strict JSON-schema decoding a reply that hits `max_tokens` is an **unparseable prefix**, so a cut costs the whole reply, not the tail. The two-call design puts elements, entities, events, relations, the summary and the plan through that ceiling.
+Under strict JSON-schema decoding a reply that hits `max_tokens` fails **strict validation of the whole object**, because the outer object never closes. That is not the same as the reply being lost, and an earlier version of this section said it was. The bytes come back on a normal HTTP 200, `parse_completion` puts the partial decode in `Completion.content` ([backend/idhazh/llm/server.py](backend/idhazh/llm/server.py#L195)), and `to_summary` then fails the item on `hit_the_budget` **without ever reading them** ([backend/idhazh/summarize.py](backend/idhazh/summarize.py#L385)). A grammar-constrained decode closes each sub-object in schema property order, so a `summary` that finished before the cut is closed, balanced, and independently parseable with `json.JSONDecoder().raw_decode`. E5 turns that into the degradation rule. The derivation below still binds: recovery is the seatbelt, the budget is the brake. The two-call design puts elements, entities, events, relations, the summary and the plan through that one ceiling.
 
 **The budget is not picked. It is derived** from the contract's own bounds: every array gets `maxItems`, every string gets `maxLength`, and the worst-case reply length is then arithmetic. It is re-derived whenever a bound changes, and the derivation is committed beside the number. Roughly 1,200 tokens is the order of magnitude for call 2 given 16-24 labelled elements plus the plan, but the arithmetic is what sets it, not that figure.
 
@@ -706,8 +1177,8 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 
 | P.D | Subject | Disposition |
 |---|---|---|
-| D1 | Two calls, one model | Accepted, **ordering reversed** - section 10 |
-| D2 | Full vocabulary declared, templates in waves | Accepted; wave order follows observed frequency (row 48) |
+| D1 | Two calls, one model | Accepted, **ordering reversed** - section 10. Still two model calls: call 0 is deterministic code and costs no inference (O37) |
+| D2 | Full vocabulary declared, templates in waves | Accepted; wave order follows observed frequency (row 48). **Full means full** - section 12.8 X1 |
 | D3 | Open element labels | Accepted (row 6) |
 | D4 | Per-type encoding roles | Accepted (row 15, flat map with all keys required) |
 | D5 | No invented metric weights | Accepted; weights learned (row 67) |
@@ -727,7 +1198,7 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 | P.L | Verdict | Owner | Where |
 |---|---|---|---|
 | L1 | AMEND - two calls, ordering reversed | Andre / Owner | 10.1 |
-| L2 | AMEND - declared set is config; wasted-decode rate reported | Carmack, Fowler | row 48 |
+| L2 | **AMEND, disambiguated 2026-09-03.** The vocabulary **lives in `config/`** rather than in a Python literal (Rule #6). It is still the **full** vocabulary - config locates the list, it does not shorten it. `wasted_decode_rate` reported | Carmack, Fowler | row 48, section 12.8 X1 |
 | L3 | AMEND - `pie` ships gated; stacked bar is its downgrade | Jony / Owner | row 43 |
 | L4 | ACCEPT - open vocabulary with canonicalisation | Andre | row 6 |
 | L5 | ACCEPT - equal weights, then learned | Andre | row 67 |
@@ -806,6 +1277,8 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 
 | P section | Disposition |
 |---|---|
+| *How to read this*, rule 1 - model neutrality | Accepted and extended. The pipeline stays neutral; **section 11.0** records that `InferenceConfig` is not, names the structural hole that hides it - one shared `inference` block, so a swap inherits silently - and binds every quoted setting to the model entry it was derived against (O38) |
+| *How to read this*, rule 2 - canonical vocabulary verbatim | Accepted for **identifiers**, declined for prose, and the split is written down in **section 15.4a** (O39). Raised by review: 15.4 ruled on hot files and never on hot names |
 | 1.1 Governing principle + ownership boundary | Accepted, with D15's amendment |
 | 1.2 End-to-end flow | Accepted, **with the call ordering reversed** - section 10 |
 | 1.3 What changes | Accepted; the "today" column corrected by section 2 |
@@ -843,6 +1316,64 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 | 7.3 Open questions | Section 12.4 |
 | 7.4 References | Retained |
 
+### 12.6 The section 1.2 diagram, box by box
+
+Audited 2026-09-03 against the proposal's end-to-end flow, because a coverage matrix organised by section number can miss a box that has no section of its own.
+
+**Covered: every box, every Visual Plan field, all eight Visual Validator checks, and all seven SEMANTIC MODEL responsibilities.** The three the owner named are contracted fields rather than prose - *assess visual need* is `decision`, *choose the form* is `purpose` plus `type`, *select elements* is `element_ids`, all in section 10.1's call-2 shape. The pass/fail fork is `validation_result`; the failure carries `rejection_reason` and `rejection_stage`. The diagram's own edge label, "deterministic extraction + model labelling", is O37 and calls 0 and 1.
+
+Six things were not covered. Each gets an owner here so none falls between plan-docs.
+
+| # | Gap | Why it is load-bearing | Owner |
+|---|---|---|---|
+| G1 | **The `none` decision records no cause.** Section 14.5 names five gates a visual must clear and row 36 adds a sixth, the per-visual byte cap. Only a validator failure carries a reason, so five of the six routes to `none` are one undifferentiated bar | `none` is the majority outcome by design - section 14.5 says "`none` remaining common is not a defect". A majority outcome with no cause breakdown means the largest number on the console explains nothing. Add `none_reason`, a typed enum, one member per gate | **K** |
+| G2 | **Downgrade depths 2 and 3 are unspecified.** Row 50 ships the ladder with an "escalating floor" and names no percentile; the proposal's depth 2 is p75 plus an annotation and depth 3 is refuse | A ladder with one named rung is not a ladder. The floors are computed from depth-0 published visuals only (row 50), but the percentile at each depth is a knob and needs a home under `visuals` | **H** |
+| G3 | **No visual console panel is named anywhere.** Every reference is generic - "the console panels that read them". O34's `band_reason` panel is the only one this document names | Doc K's whole worth is "the ability to tell whether the visual work worked", and section 15.2 fails its own test if the panels are left to be invented. Three must exist: rejection reason over time, keep rate by `downgrade_depth`, and `planned_type` against `rendered_type` | **K** |
+| G4 | **`downgrade_edge` is a field with no legal-edge table.** Only `pie` -> `stacked_bar` is named, in row 43 | Without a static allow-list the ladder can walk a comparison into a timeline and record it as a legal edge. The cross-family ban is what row 50's "purpose survives" invariant implies and never states | **H** |
+| G5 | **`comparative` is missing from the potential classes, and `chartable` appears only in prose.** The proposal names five: `chartable`, `singular`, `processual`, `comparative`, `narrative` | Row 56 makes every rate report per potential class. A missing class is a missing denominator, which is the exact defect row 56 exists to prevent | **G** |
+| G6 | **"NO geometry" is never stated as a rule.** The plan contract's other two prohibitions are ruled in row 4 and gate 3; the geometry ban is only implied | It is the rule that keeps the compiler swappable. A plan carrying a pixel is a plan bound to one renderer, and section 7 just made d3 that renderer | **H** |
+
+**And one structural defect in this document's own rules.** `compile_ms` and `render_ms` were heading for two stores at once: section 12.5 puts them in the P.6.1 event at `state/visuals/` (row 55), while section 14.4 T3 adds `compile_visual` and `render_visual` spans whose durations 14.4a commits to `state/span-rollup/`. Section 14.4a's disjointness test compared the rollup against item-health alone, so **the fourth-record rule it exists to enforce would never have looked at the store the collision was in.** Both are corrected in 14.4a: the visual timings live in `state/visuals/` only, and the test now runs against every committed ledger.
+
+### 12.7 The tail of the flow, audited for intent
+
+Section 12.6 asked whether each box exists. This asks whether each box still does what it was **for**. Audited 2026-09-03 from the validator's pass/fail fork to the end of the diagram.
+
+**Holds cleanly.** The machine loop still gates publication. The human loop still gates nothing - no gate in section 14.5 reads a label, and E1 bars a machine label from the publish decision. All four queue populations survive: published, rejected, config-B variants and the `none` arm.
+
+**Stronger than the proposal's intent, and worth keeping.** Three places where this document tightened rather than carried:
+
+| Tightening | Where |
+|---|---|
+| `review/` is a build artifact - never committed, never under `frontend/public/`. The proposal shipped it with the site | Row 68, section 9.3 |
+| The `none` arm carries a floor above zero, so it cannot be quietly switched off | D10 |
+| Every visual carries an annotated mark, not only a downgraded one | Row 30 |
+
+**Five defects. G7 is the serious one.**
+
+| # | Defect | Intent it breaks | Fix | Owner |
+|---|---|---|---|---|
+| G7 | **`state/visuals/` was specified two ways.** Row 55 said one row per *published* visual; section 12.5 and section 16 Q4 route the whole per-attempt event to that same store | "A rejected plan is never silently dropped." Under a per-publication ledger the diagnostic half of the machine loop - every refusal, every `none`, every typed rejection reason - is never committed. **The loop stops being auditable while still being the gate**, and a later run cannot tell a refused visual from one never attempted | Row 55 now reads **one row per attempt**, with `decision` separating published, downgraded, `none` and rejected. This is also the store G1's `none_reason` needed and did not have | **K** |
+| G8 | **A downgraded plan's re-validation is never stated.** In the diagram the ladder is an arrow *into* the compiler, not around it | A downgrade that skips the validator can publish the thing the original plan was refused for | A fourth invariant beside row 50's three: a downgraded plan re-enters the **same** validator and the **same** compiler, and a depth that fails re-validation falls to the next depth rather than publishing | **H** |
+| G9 | **The composite-score ban had no sentence.** The proposal states it twice - until the correlation between machine metrics and human keep rate is measured, no composite score may gate anything - and this document carried it only as the word "Accepted" in a coverage row while shipping the fitter (row 67) | Twelve parallel agents read section 14.5's gate list. A rule that appears nowhere in the list reads as an oversight to fix, not a rule to keep | Stated outright in section 14.5: the quality index is a diagnostic and never a gate | **K** |
+| G10 | **The rejected plan's body has no home and no size.** Row 68 says rejected plans are "recorded as JSON immediately" and names no path, no policy and no window. Section 9.3 registers the `review/` *renders* but not the plans themselves | Section 9.3 claims to name every artefact this project writes. An artefact missing from it has no retention policy, which is how a build artifact becomes a committed one by accident | The G7 ledger row carries the reason; the plan body does not fit a CSV cell. It takes the pattern T4 already set for raw spans - a short rolling window, a lookup, so it deletes rather than folds - plus a register row in 9.3 and a sampling ratio in `config/` beside `none_arm_ratio` | **K** |
+| G11 | **Two paths to `none` bypass the reason field even after G1.** Gate 1 in section 14.5 refuses before the model is ever called, and row 36 degrades on the per-visual byte cap. Neither passes through the validator that owns `rejection_reason` | The pre-model refusal is the cheapest gate and therefore the most common, so the most frequent outcome would be the least explained | `none_reason` covers all six gates in section 14.5, not only the ones the validator sees | **K** |
+
+**One field with no writer**, recorded so it is not mistaken for a contract: `gate_floor_applied` has a writer at depth 1 and none at depths 2 and 3, because G2 leaves those percentiles unspecified. It becomes real when H closes G2.
+
+### 12.8 Contradictions inside this document, resolved
+
+Four rows of this document disagreed with another row of this document. Found by review 2026-09-03 and resolved here, rather than left for a plan-doc to discover at merge time.
+
+| # | The two rows | Why they could not both stand | Resolution |
+|---|---|---|---|
+| X1 | **12.1 D2** accepts "full vocabulary declared". **12.2 L2** amended that to "declared set is config" | Read as *limited to the types that have templates*, L2 makes P.D2's neighbour-downgrade unreachable, makes `wasted_decode_rate` identically zero so it measures nothing, and **breaks row 48**. Row 48 derives the build order from what the planner chooses; a planner that cannot name an unbuilt type can never say which template to build next. L2 cites row 48 as its own resolution, so as written it refuted itself | **Full vocabulary, located in config.** Rule #6 puts the list in `config/`; it does not shorten it. An unbuilt type stays declarable, is deterministically downgraded to its nearest built neighbour, and the downgrade is logged. `wasted_decode_rate` measures how often that happens and is the cheapest signal for sequencing the waves |
+| X2 | **Row 15** rules "flat role map, all keys required". **P.D4** and P.3.2.1 define a *different* required set per type, with nine optional cells across three role names - `series`, `label`, `entity` | One flat map with every role required would make a `bar` emit `quantity_x`, `size`, `bins` and `event_label`. A flat map with roles left optional brings back the exact failure row 15 exists to prevent: "a confident chart with no bars in it, twice, on the first live run" | **Structurally present, semantically optional, per-type enforced.** One flat map. Every role name is a key and every key is in the schema's `required` list, so the decoder cannot omit one. An inapplicable role is emitted as an **empty array**. The validator's existing "roles valid for the type" check enforces the per-type set and rules whether empty is legal there. The cost is real and must be measured rather than assumed: roughly eight empty arrays per plan, at 6.01 tok/s decode |
+| X3 | **12.1 D15** accepts the amended principle in one line. **Section 1** carried a different, weaker sentence | The proposal narrows its own slogan in P.1.5.2 because the slogan is not defensible. Accepting the amendment while printing the un-amended version is how the weaker one survives into `docs/` | Section 1 now carries P.1.5.2's formulation verbatim beside the slogan. It is the same claim section 10.1a arrives at from the other direction |
+| X4 | **O2** scrubs "route" from every identifier, including a schema stem (15.4a). **C1** found that `Route` in `contracts/route.py` is a **persisted** contract with a committed `schemas/route.schema.json` | `CLAUDE.md` section 11: renaming a persisted shape is breaking and needs a changelog entry, a version stamp **and the read-side migration in the same commit**. Committed digest payloads were written under that stem. Nothing downstream of C1 picked this up, so O2 as written is a release blocker with no migration attached | **The rename is in scope and the migration is part of it.** Plan-doc H owns it: the new stem, the version stamp, the changelog entry, and a read-side migration that reads a payload written under the old stem. Row 63 already knows this file carries published enums - same file, same hazard, and the two land together |
+
+**One stale reference in the proposal**, recorded so a plan-doc does not chase it: P.D15's body calls it "the section 2 principle", but the principle is in P.1.1 and its narrowed public form is in P.1.5.2. D15's own cross-reference column says section 1, which is correct. Only the body text is stale.
+
 ---
 
 ## 13. Measurements that must be taken
@@ -859,7 +1390,7 @@ Rule #10: an unmeasured number may not justify a design. Each row blocks somethi
 | M3 | Summarizer cross-host spread | 10 full runs | **SKIP - you already have it.** The ledger spans five CPU models and `job_seconds` 1,584 to 8,124 s, a **5.1x spread on real production work**, which is better evidence than ten synthetic shards | `shard_timeout_minutes`; conservative default below |
 | M5 | Console alarm thresholds | one corpus month | **SKIP.** Ship every alarm in record-only mode with no threshold. An alarm set on a guess is worse than no alarm | Every console alarm |
 | M9 | `raw.githubusercontent.com` under burst | scripted, hits a third party | **SKIP for now.** Keep `visuals.asset_base_url` same-origin. The number is not needed until M2 says bytes must move off Pages | The degraded state for the remote carrier |
-| M4 | Call-2 `cached_tokens` | cannot precede the code | **Not a measurement campaign - a test.** Assert `cached_tokens >= call-1 input + output` inside the two-call path, same commit | Whether the two-call design is affordable |
+| M4 | Call-2 `cached_tokens` | cannot precede the code | **Not a measurement campaign - a test, and it is two assertions rather than one**, because the two halves fail for different reasons. **The floor that must hold:** `cached_tokens >= call-1 prompt tokens`. The system turn and the user turn carrying the article and the candidate table are byte-identical on both calls and come first, so they prefill once or the prompt was built in the wrong order. **The target that must be measured, not assumed:** whether call-1's *generated* tokens also cache. They sit in the slot after call 1, but call 2 re-renders them as an assistant turn through the chat template, which adds wrapper tokens the model never generated. If that re-render does not tokenise identically, the common prefix ends at the article and roughly 1,500 tokens re-prefill - a cost, not a cliff, because the article is already safe. Record both numbers | Whether the two-call design is affordable |
 | M8 | Build-time render cost per visual | cannot precede the code | Same. Time the d3 emitters when they exist, 20 repetitions, median and interquartile range | The corpus re-render path |
 | M6 | Human labelling cadence | needs a person | Gates the review plan-doc only. **Do not let it block anything earlier.** Start labelling in parallel; the rate reveals itself | Weight fitting, pairwise, the timed arm |
 
@@ -1067,11 +1598,11 @@ That keeps the rule the doc is protecting: the ledgers stay the record, a span s
 
 | | Ruling |
 |---|---|
-| Committed | Count and duration for **five spans only**: `robots`, `tag`, `render_prompt`, `parse_reply`, `item`. Plus the new visual stages when they land |
-| **Not** committed | `fetch`, `extract`, `summarize`, `score` durations; any token count; any digest; any id; any per-item cell. Item-health holds every one |
+| Committed | Count and duration for **five spans only**: `robots`, `tag`, `render_prompt`, `parse_reply`, `item` |
+| **Not** committed | `fetch`, `extract`, `summarize`, `score` durations; any token count; any digest; any id; any per-item cell - item-health holds every one. **And not the visual stages**: `compile_ms` and `render_ms` belong to `state/visuals/` and to no second store (section 12.6) |
 | Grain | One row per `(date, run_id, shard, span_name)` - the same shard-by-run grain `state/runtime-counters.csv` uses |
 | File | `state/span-rollup/<YYYY-MM>.csv`, contract `SpanRollupRow`, schema stem `span-rollup-row` |
-| The test that makes it binding | **Contract tier**: assert the rollup's column set and item-health's column set are disjoint outside the key. That turns the ruling into a machine check instead of a promise |
+| The test that makes it binding | **Contract tier**: assert the rollup's column set is disjoint, outside the key, from the column set of **every** committed ledger - `state/item-health/`, `state/scores/`, `state/runtime-counters.csv` and `state/visuals/`. Item-health alone is not enough: section 12.6 found a collision in `state/visuals/`, which an item-health-only test cannot see |
 
 **Flipping `tracing_enabled` before the fold exists buys nothing.** The file sink writes into `backend/var/`, which dies with the checkout. Spans in CI with no fold are runner seconds spent writing a file nobody opens. The toggle flips **after** T4 and T5 land, not before.
 
@@ -1129,7 +1660,11 @@ O21 says a visual is earned, never granted. The gate is five machine-checkable c
 4. **Novelty.** `information_delta` above its floor - at least one element the summary prose does not already state.
 5. **The sufficiency bar.** Legibility floor, density floor, both themes resolve, a caption when present, one annotated mark, no sideways scroll, keyboard route to every fact.
 
-Fail any one and the answer is `none`, and `none` remaining common is not a defect. Susan's warning, recorded verbatim in substance: **the proposal measures 33 things about a visual and not one of them is whether a person would choose to look at it.** Every binding gate is integrity or cost, and a plain grey bar chart passes all of them. The sufficiency bar must be a compiler oracle, not a review item - a check a person can skip is the check skipped on the day it would have bitten.
+Fail any one and the answer is `none`, and the gate that failed is recorded as `none_reason`, one enum member per gate (section 12.6 G1). `none` remaining common is not a defect.
+
+**And one thing that is deliberately not a gate.** The quality index is a diagnostic and it never gates anything. It stays a diagnostic until the correlation between the machine components and human keep rate is measured - until `information_delta` is shown to predict `visual_keep_rate`, a composite of unvalidated components is a number that looks like a judgement. Row 67 ships the fitter, and the fitter produces weights for a diagnostic. Section 12.7 G9 records that this ban had no sentence in this document before 2026-09-03.
+
+Susan's warning, recorded verbatim in substance: **the proposal measures 33 things about a visual and not one of them is whether a person would choose to look at it.** Every binding gate is integrity or cost, and a plain grey bar chart passes all of them. The sufficiency bar must be a compiler oracle, not a review item - a check a person can skip is the check skipped on the day it would have bitten.
 
 ### 14.6 Escalations, resolved
 
@@ -1139,6 +1674,7 @@ Fail any one and the answer is `none`, and `none` remaining common is not a defe
 | E2 | `quotecard` vs the republishing non-goal | **Approved (O13).** Restricted to quotes the semantic pass identifies, capped at `summarize.max_verbatim_words`. Not applied to every article |
 | E3 | The 18x uncertainty in bytes per day | **Measure before deleting (M2).** No early deletion. `image_months` 13 deletes nothing until 2027-09-17, so it buys time and is not a cap defence. If the pessimistic reading holds, the site hits the cap and **the deploy fails** - the digest stops publishing entirely. Recommendation: take M2 immediately, and land the config-driven asset base URL early so the release valve exists before it is needed |
 | E4 | Retention does not protect the Pages cap | **Agreed.** The defences that act on the right timescale are: the coverage rate itself, the per-visual byte cap (row 36), and the off-bundle base URL (section 6). Age-based retention is an archive policy, not a cap defence |
+| E5 | **What does an item get when call 2 fails?** No row said. Section 11.4 ruled on `context_exceeded` and on nothing else | **RESOLVED - graceful degradation, and the call structure does not change.** O3's two calls stand. Ruling (Andre, 2026-09-03): `summary` decodes before `visual`; on a reply that hit the output budget, code recovers the closed `summary` object from the returned bytes with `json.JSONDecoder().raw_decode`, publishes the item with that summary and `decision = none`, and records the visual's loss as a `none_reason` - never a `FailureCode`. **The bytes are already in hand.** The cut returns a normal 200, `parse_completion` puts the partial decode in `Completion.content` ([backend/idhazh/llm/server.py](backend/idhazh/llm/server.py#L195)), and `to_summary` discards it unread at [backend/idhazh/summarize.py](backend/idhazh/summarize.py#L385). We lose the summary by choice today, not by constraint. Cost: **zero extra seconds**, no second request, no re-prefill, no field reorder, and no conflict with rows 12, 14 or 17 or with sections 11.1 and 11.3. **What it does not cover, stated plainly:** any failure where the server delivered no body at all - a timeout mid-decode, an HTTP reset, a server crash - because `"stream": False` ([backend/idhazh/llm/server.py](backend/idhazh/llm/server.py#L183)) leaves the completion in the server's memory until the decode ends. Those cost the summary today too, so the merge makes them no worse, and the budget cut is the one failure the merge actually manufactures. Splitting call 2 into two requests would cover them and is the fallback **if** timeouts prove real; nothing measures a timeout rate today, so measure before taking it. Two obligations ship with this: a contract test asserting `summary` precedes `visual` in the generated schema, because the recovery boundary is the property order and llama.cpp's order-preserving grammar is not something we pin; and row 14's alarm stays on the raw `finish_reason` and never on "did the item publish", because an alarm you can satisfy by degrading gracefully has stopped being an alarm |
 
 ---
 
@@ -1156,7 +1692,7 @@ Twelve plan-docs. The organising principle is **functional isolation over depend
 | **D** | **Fewer, better articles** | Feed reliability enters the score, semantic dedup cuts a duplicate before it costs a model call, the run drops to 80 items | `backend/idhazh/rank.py`, `discover.py`, `config/idhazh.json` -> `collect` and `run` |
 | **E** | **Retention that actually runs** | `docs/concepts/adaptive-pruning.md`, the compliance register, the cap in config, deletion switched on with a visible backlog | `backend/idhazh/retention.py`, `docs/concepts/adaptive-pruning.md`, `config/idhazh.json` -> `retention` |
 | **F** | **Better summaries** | The prompt loop, key points decoded first, per-band key-point caps, the new-fact rate, the regex check on the checker | `backend/idhazh/summarize.py`, `backend/idhazh/prompts/summarize.txt`, `backend/utilities/prompt_loop.py`, `backend/idhazh/evals/metrics.py` |
-| **G** | **The element table** | Span-anchored elements of all six kinds, the re-slice invariant, extraction metrics, the potential classifier | `backend/idhazh/extract.py`, `contracts/element.py`, `backend/idhazh/elements.py` |
+| **G** | **The element table** | The code-first candidate pass (call 0), span-anchored elements of all six kinds, the re-slice invariant, extraction metrics, the potential classifier | `backend/idhazh/extract.py`, `contracts/element.py`, `backend/idhazh/elements.py` |
 | **H** | **The visual planner** | `visual_planner.py`, the plan contract, the validator, the two-call flow, `n_ctx` 16384 with flash attention, the 4B retired completely, every trace of "route" gone | `backend/idhazh/visual_planner.py`, `contracts/visual.py`, `backend/idhazh/cli.py`, `backend/idhazh/llm/server.py` |
 | **I** | **Visuals a reader can read** | Inline SVG, d3, both themes resolving, full-width reflow, the visual moved below the summary, the sufficiency bar as a build gate | `frontend/src/lib/charts/**`, `frontend/src/lib/components/ItemVisual.svelte`, `frontend/src/lib/server/visual-render.ts` |
 | **J** | **The vocabulary** | Each visual type, one at a time, each independently shippable | `frontend/src/lib/charts/types/<type>.ts`, one file per type |
@@ -1210,6 +1746,25 @@ G ------> H ------> I ------> J
 | `.github/workflows/digest.yml` | C, D, H | **C owns it.** D's change is a config value with no workflow edit; H's job removal serialises after C |
 | `docs/concepts/telemetry.md` | C only | C owns the doctrine edit outright |
 
+### 15.4a The hot names
+
+Section 15.4 rules on hot files and says nothing about hot names. That is the larger risk of the two, because section 15 hands twelve parallel agents a domain with no name table - so twelve agents mint twelve names for one thing, and the merge is where that is discovered.
+
+**The register is not the defect.** A decision record that writes `Visual Plan` in every sentence reads like a specification, and this is not one; section 0b asks for the plain register outright. Only the identifiers need binding.
+
+**The rule: the glossary binds identifiers; prose stays free.**
+
+| Surface | Bound? | Rule |
+|---|---|---|
+| Module, class, function, enum member | **Yes** | The glossary term verbatim, in the casing the language uses: `VisualPlan`, `VisualValidator`, `VisualCompiler`, `TrustedElement`, `element_id` |
+| Contract field, schema stem, telemetry value, config key, CLI verb, prompt filename | **Yes** | Same, plus O2 - the word "route" appears in none of them |
+| A model's size, vendor or revision, anywhere in an identifier | **Never** | Section 11.0 |
+| The prose of a plan-doc, a commit message, a code comment | **No** | Plain register, section 0b. "the validator" in a sentence is correct English and correct here |
+
+Two names this document uses that the glossary does not, recorded so they are not litigated twice. **`visual_planner.py`** is O2 and outranks the glossary, which names the step `Visual Planning` and names no file. **`density_floor`** is row 27, where the owner rejected `structural_efficiency` outright. Every other identifier takes the glossary term.
+
+Each plan-doc in section 15 cites this table before its first contract row. A doc that needs a domain noun the glossary has no word for names it in its own front matter and says why.
+
 ### 15.5 Suggested first wave
 
 Four docs, fully parallel, zero shared files, and every one delivers something on its own:
@@ -1238,6 +1793,12 @@ Every row here was asked on 2026-09-03 and is answered against the code, not aga
 | Q5 | How is a chart earning its place measured? | **Section 14.5** - five gates, all machine-checkable: reachability before the model is asked, potential class, validation, `information_delta` above its floor, and the sufficiency bar. Susan's warning stands: the bar must be a compiler oracle, not a review item |
 | Q6 | Where are the two pairwise-testing places? | **Two consumers, one instrument.** (a) Proposal section 5.2.3 - weight learning fits a linear ranking model on pairwise preferences, because absolute ratings are unstable across reviewers. (b) Proposal section 6.3.6 - `REVIEW_MODE = absolute \\| pairwise \\| comprehension`, the reviewer-facing mode that produces those pairs, with D9 and L16 deciding what the second candidate is. Both ship (row 67); Andre and Carmack proposed deferring them and were overruled by O16 |
 | Q7 | Is it full scope, no v1? | **Yes.** Section 5 lists twelve deferrals and reverses every one. Section 12 maps all 15 decisions, 35 litigation rows, 20 risks, 10 open questions and every proposal section to a disposition |
+| Q8 | Section 1 says code reads first; section 10.1 had the model emit surface strings. Which is it, and would the model hallucinate numbers? | **A real disagreement, and 10.1 held the wrong half.** Settled by O37 and section 10.1a: code extracts every quantity and date with offsets - `numeric_facts()` already does this and ships today - and the model labels them by id. Exact-search adjudication on its own stops an invented number but stops neither a mis-pointed one nor a mis-labelled one; 10.1a names both and shows why neither raises |
+| Q9 | Is the document tied to a specific model, and can model-neutral language be kept? | **Yes to both - section 11.0.** Names stay neutral: one config entry holds the weights and no identifier carries a size, vendor or revision. `InferenceConfig` is tuned against whatever `models.summarize` names, from that model's card and this runner's measurements, so every setting in 11.2 and 11.2a is quoted with that entry. The hole - one shared `inference` block, so a swap inherits silently - is recorded and assigned to plan-doc H |
+| Q10 | A review says the canonical vocabulary is not used verbatim. Is that a defect? | **Partly, and the half that is gets fixed.** Identifiers are bound to the glossary by section 15.4a; prose keeps the plain register section 0b asks for. The review's real find is the one worth having: 15.4 ruled on three hot files and never on hot names, with twelve parallel agents about to mint them |
+| Q11 | Who finds a number, and who finds an entity? Would the model hallucinate a figure? | **Code finds; the model points and names** - ruled in section 10.1a, drawn in section 10.1b. Close authorship, never close discovery: a quantity is discovered by regex and the model may propose a missed one by naming its sentence for code to re-parse from the article's bytes; an entity name is a Tier 2 grouping key that is never drawn, anchored through per-sentence mentions; a quote or a claim is sentence indices, never text. The model cannot type a figure at all, because no field of the schema accepts one. Two defects in `numeric_facts()` surfaced with the ruling - corrections C14 and C15: the `(value, unit)` dedup collapses a figure repeated across two periods, which is the series a trend chart exists to show, and there is no date extractor at all |
+| Q12 | Is every box in the proposal's section 1.2 diagram covered, and are its pass and fail states emitted to the console? | **Two audits, both in section 12.** Section 12.6 checks **presence**: every box, every plan field, all eight validator checks and all seven model responsibilities are covered, and *assess visual need*, *choose the form* and *select elements* are the contracted fields `decision`, `purpose` plus `type`, and `element_ids`. Six gaps found and assigned, G1 to G6. Section 12.7 walks the **tail** from the validator fork to the end and checks intent rather than presence, finding five more, G7 to G11. The serious one is G7: `state/visuals/` was specified as a per-publication ledger, which would have left every refusal uncommitted and stopped the machine loop being auditable while it was still the gate |
+| Q13 | Does this document contradict itself anywhere? | **In four places, all resolved - section 12.8.** The full-vocabulary rule was cancelled by its own amendment and took row 48 with it; "flat role map, all keys required" could not be reconciled with P.D4's per-type role sets; section 1 printed the slogan the proposal had already narrowed; and O2 renames a **persisted** contract with no migration attached, which `CLAUDE.md` section 11 makes a release blocker. A fifth finding was a hole rather than a contradiction, and the most serious of the five: **no row said what an item gets when call 2 fails.** Resolved as E5 without touching the call structure - the summary is recovered from the bytes the cut already returns, and the item publishes with `decision = none` |
 
 ### 16.1 How "6 sources said this" is counted today
 
