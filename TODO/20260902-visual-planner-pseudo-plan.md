@@ -25,7 +25,11 @@ The visual stops being "a chart" and becomes **a visual that complements the art
 
 > The model decides what the visual **means**. Code decides what the visual **contains** and how it is **rendered**.
 
-That split is not clean by stage. It is decided kind by kind: section 10.1a rules it, and section 10.1b draws it.
+That slogan is the readable version. The **defensible** version is the one the proposal narrows it to in P.1.5.2, and it is the one that binds:
+
+> Deterministic code controls every displayed value and every displayed string. Model judgement is confined to selection and labelling, and is span-anchored throughout.
+
+Section 10.1a reaches the same rule from the other direction - code finds and cuts every character a reader will see. The split is not clean by stage; it is decided kind by kind. Section 10.1a rules it, section 10.1b draws it.
 
 ---
 
@@ -192,12 +196,12 @@ Plain ASCII, not box-drawing characters: `CLAUDE.md` section 5 is ASCII-only for
    |  ONE ROW to state/visuals/, one row per ATTEMPT.                     |
    |                                                                      |
    |    decision      published | downgraded | none | rejected            |
-   |    none_reason   which of the six gates refused it                   |
+   |    none_reason   which gate refused it, or that call 2 was cut short |
    |    rejection_reason, rejection_stage, downgrade_depth,               |
    |    downgrade_reason, downgrade_edge, gate_floor_applied,             |
    |    planned_type, rendered_type, compile_ms, render_ms                |
    |                                                                      |
-   |  There is no silent path to `none`.            (row 55, 12.7 G7, G11)|
+   |  There is no silent path to `none`.       (row 55, 12.7 G7, G11, E5) |
    +===================================+==================================+
                                        |
    +======================================================================+
@@ -367,9 +371,9 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 | 12 | Field order is decode order | Andre | Measured on this codebase: with `kind` first, `reason` became a rationalisation of a choice already made. Labels must be committed before the type is chosen | P.3.1.1 |
 | 13 | Output budget rises from 400 | Andre | Derived from the schema's own bounds, re-derived whenever a bound changes. Never picked. See section 11.3 | P.3.1.1 |
 | 14 | Bound every array and string in the contract | Andre | Makes the worst-case reply length arithmetic. Alarm on `finish_reason == "length"` | P.3.2 |
-| 15 | Flat role map, all keys required | Andre | Optional arrays produced "a confident chart with no bars in it, twice, on the first live run". Not an 18-branch discriminated union | P.3.2 |
+| 15 | Flat role map, all keys required | Andre | Optional arrays produced "a confident chart with no bars in it, twice, on the first live run". Not an 18-branch discriminated union. **Disambiguated 2026-09-03**, because P.D4 defines a different required set per type and one flat map of all-required roles would make a `bar` emit `quantity_x`, `size` and `bins`: every role name is a key, every key sits in the schema's `required` list so the decoder cannot omit one, and an inapplicable role is emitted as an **empty array**. The validator's existing "roles valid for the type" check enforces the per-type set and decides whether empty is legal there. Section 12.8 X2 | P.3.2 |
 | 16 | Retire the 4B completely | Carmack, Owner O17 | Config entry, cache role, workflow job, env vars, prompt file, tests. Frees 2.33 GiB; repo cache falls from about 82 to 57 percent of the 10 GB ceiling | P.D1 |
-| 17 | Retries perturb the rejection reason only | Andre | `seed: 0` and `temperature: 0.0` are a determinism contract. Temperature jitter makes a re-run not a re-run | P.R9 |
+| 17 | **A retry that perturbs nothing is refused, not budgeted** | Andre | P.R9's remedy is "perturb the rejection reason or the temperature", and on this design neither is available. Temperature jitter breaks the `seed: 0`, `temperature: 0.0` determinism contract - a re-run stops being a re-run. And there is no rejection reason to feed back, because P.L7 chose the downgrade ladder **over** a repair retry, so no validator failure ever re-calls the model. The only retry left is a **schema** retry, which fires before the validator has run and so has no reason to carry. Under greedy decoding a schema retry against identical input is bit-identical, making it a guaranteed-identical failure that costs a full decode. Ruling: a retry must perturb the **input** - drop the candidate table's tail, tighten the grammar, or raise `max_output_tokens` when `finish_reason == "length"` - and where no input perturbation applies, **do not retry at all**. `schema_retry_count` going bimodal is the symptom P.R9 named and marked addressed; a remedy that cannot fire does not address it | P.R9, P.L7, P.5.3.2 |
 | 18 | `confidence` moves after `type`, or is deleted | Andre | Second in the field list means it conditions every field after it. Record, never gate | P.L23 |
 | 19 | Carry the drop-the-minority lesson forward | Fowler | `same_unit_bars` records a live failure: a 4B picked three correct megawatt bars then appended a headcount. The behaviour becomes a committed fixture, not a comment | P.4.1 |
 | 20 | Graceful degradation on context overflow | Andre, Owner | `context_exceeded` must degrade to a chunked read, not to nothing. See section 11.4 | P.1a |
@@ -973,6 +977,24 @@ Two conditions make the reuse real:
 
 The cost, stated: the summariser's input changes, so `summary_faithfulness` is not comparable across the cutover. The owner accepts that explicitly - the current summaries are unsatisfactory and comparability with them is not worth protecting. The discontinuity is marked in the metric series (P.6.4.2 step 5).
 
+### 10.3a What the planner's source actually is
+
+Two things are true at once and they are easy to run together. This section exists so nobody has to guess which.
+
+**The planner's source is the article and the element table. It is not the summary.** Call 2 carries the full article in the same user turn call 1 read, plus the anchored element table, and `element_ids` may cite only an anchored element. Nothing the summary says can reach a visual unless it is already an element. **The summary can neither introduce material to the plan nor hide material from it.**
+
+**And the summary is nevertheless in the planner's context**, because decoding is autoregressive and `summary` decodes before `visual` inside call 2's object. E5 requires that order - it is what makes the summary recoverable when the output budget cuts the reply.
+
+So the summary **conditions** the plan without **sourcing** it, and that is a different thing from what section 10 refused:
+
+| | Refused (P.D1's original ordering) | Ships |
+|---|---|---|
+| What the planner reads | the summary, and nothing else | the article, the element table, **and** the summary |
+| Can the planner see a fact the summary dropped? | No | Yes. The article is right there |
+| Can a sentence in the summary put a number on a chart? | Yes, and that is the defect that produced this work | No. Only an anchored `element_id` can |
+
+**The cost, named rather than implied.** With prose decoded first, a plan can drift toward illustrating the sentences rather than the elements. That is a row-12-shaped risk and it is real. Two things bound it: `element_ids` makes the drift unable to invent anything, and `information_delta` measures it directly - it counts plan elements the summary does not already state (section 12.4 Q3), so a plan that only illustrates the prose scores zero there by construction. **If `information_delta` collapses after the cutover, this ordering is the first suspect.**
+
 ### 10.4 Summary quality is a named work item
 
 The owner's assessment: summaries are extractive at times, do not focus on key ideas, and pad. `finetune.student` is `route` and `finetune.teacher` is `summarize` today, which is a distillation setup for the model being retired. **That configuration is dead once O17 lands and must be re-pointed**, and fine-tuning the summariser becomes a real candidate. Recorded here so it is not lost; it is a separate plan-doc.
@@ -1133,7 +1155,7 @@ Call 0's candidate table is not in that 8,580 and must be added to it before the
 
 `visuals.max_output_tokens` is **400** today. A reply that hits it becomes `none` with "the routing reply was cut off by the output budget" ([backend/idhazh/route.py](backend/idhazh/route.py#L520)) - and the owner has already observed the router cutting off in practice.
 
-Under strict JSON-schema decoding a reply that hits `max_tokens` is an **unparseable prefix**, so a cut costs the whole reply, not the tail. The two-call design puts elements, entities, events, relations, the summary and the plan through that ceiling.
+Under strict JSON-schema decoding a reply that hits `max_tokens` fails **strict validation of the whole object**, because the outer object never closes. That is not the same as the reply being lost, and an earlier version of this section said it was. The bytes come back on a normal HTTP 200, `parse_completion` puts the partial decode in `Completion.content` ([backend/idhazh/llm/server.py](backend/idhazh/llm/server.py#L195)), and `to_summary` then fails the item on `hit_the_budget` **without ever reading them** ([backend/idhazh/summarize.py](backend/idhazh/summarize.py#L385)). A grammar-constrained decode closes each sub-object in schema property order, so a `summary` that finished before the cut is closed, balanced, and independently parseable with `json.JSONDecoder().raw_decode`. E5 turns that into the degradation rule. The derivation below still binds: recovery is the seatbelt, the budget is the brake. The two-call design puts elements, entities, events, relations, the summary and the plan through that one ceiling.
 
 **The budget is not picked. It is derived** from the contract's own bounds: every array gets `maxItems`, every string gets `maxLength`, and the worst-case reply length is then arithmetic. It is re-derived whenever a bound changes, and the derivation is committed beside the number. Roughly 1,200 tokens is the order of magnitude for call 2 given 16-24 labelled elements plus the plan, but the arithmetic is what sets it, not that figure.
 
@@ -1156,7 +1178,7 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 | P.D | Subject | Disposition |
 |---|---|---|
 | D1 | Two calls, one model | Accepted, **ordering reversed** - section 10. Still two model calls: call 0 is deterministic code and costs no inference (O37) |
-| D2 | Full vocabulary declared, templates in waves | Accepted; wave order follows observed frequency (row 48) |
+| D2 | Full vocabulary declared, templates in waves | Accepted; wave order follows observed frequency (row 48). **Full means full** - section 12.8 X1 |
 | D3 | Open element labels | Accepted (row 6) |
 | D4 | Per-type encoding roles | Accepted (row 15, flat map with all keys required) |
 | D5 | No invented metric weights | Accepted; weights learned (row 67) |
@@ -1176,7 +1198,7 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 | P.L | Verdict | Owner | Where |
 |---|---|---|---|
 | L1 | AMEND - two calls, ordering reversed | Andre / Owner | 10.1 |
-| L2 | AMEND - declared set is config; wasted-decode rate reported | Carmack, Fowler | row 48 |
+| L2 | **AMEND, disambiguated 2026-09-03.** The vocabulary **lives in `config/`** rather than in a Python literal (Rule #6). It is still the **full** vocabulary - config locates the list, it does not shorten it. `wasted_decode_rate` reported | Carmack, Fowler | row 48, section 12.8 X1 |
 | L3 | AMEND - `pie` ships gated; stacked bar is its downgrade | Jony / Owner | row 43 |
 | L4 | ACCEPT - open vocabulary with canonicalisation | Andre | row 6 |
 | L5 | ACCEPT - equal weights, then learned | Andre | row 67 |
@@ -1339,6 +1361,19 @@ Section 12.6 asked whether each box exists. This asks whether each box still doe
 
 **One field with no writer**, recorded so it is not mistaken for a contract: `gate_floor_applied` has a writer at depth 1 and none at depths 2 and 3, because G2 leaves those percentiles unspecified. It becomes real when H closes G2.
 
+### 12.8 Contradictions inside this document, resolved
+
+Four rows of this document disagreed with another row of this document. Found by review 2026-09-03 and resolved here, rather than left for a plan-doc to discover at merge time.
+
+| # | The two rows | Why they could not both stand | Resolution |
+|---|---|---|---|
+| X1 | **12.1 D2** accepts "full vocabulary declared". **12.2 L2** amended that to "declared set is config" | Read as *limited to the types that have templates*, L2 makes P.D2's neighbour-downgrade unreachable, makes `wasted_decode_rate` identically zero so it measures nothing, and **breaks row 48**. Row 48 derives the build order from what the planner chooses; a planner that cannot name an unbuilt type can never say which template to build next. L2 cites row 48 as its own resolution, so as written it refuted itself | **Full vocabulary, located in config.** Rule #6 puts the list in `config/`; it does not shorten it. An unbuilt type stays declarable, is deterministically downgraded to its nearest built neighbour, and the downgrade is logged. `wasted_decode_rate` measures how often that happens and is the cheapest signal for sequencing the waves |
+| X2 | **Row 15** rules "flat role map, all keys required". **P.D4** and P.3.2.1 define a *different* required set per type, with nine optional cells across three role names - `series`, `label`, `entity` | One flat map with every role required would make a `bar` emit `quantity_x`, `size`, `bins` and `event_label`. A flat map with roles left optional brings back the exact failure row 15 exists to prevent: "a confident chart with no bars in it, twice, on the first live run" | **Structurally present, semantically optional, per-type enforced.** One flat map. Every role name is a key and every key is in the schema's `required` list, so the decoder cannot omit one. An inapplicable role is emitted as an **empty array**. The validator's existing "roles valid for the type" check enforces the per-type set and rules whether empty is legal there. The cost is real and must be measured rather than assumed: roughly eight empty arrays per plan, at 6.01 tok/s decode |
+| X3 | **12.1 D15** accepts the amended principle in one line. **Section 1** carried a different, weaker sentence | The proposal narrows its own slogan in P.1.5.2 because the slogan is not defensible. Accepting the amendment while printing the un-amended version is how the weaker one survives into `docs/` | Section 1 now carries P.1.5.2's formulation verbatim beside the slogan. It is the same claim section 10.1a arrives at from the other direction |
+| X4 | **O2** scrubs "route" from every identifier, including a schema stem (15.4a). **C1** found that `Route` in `contracts/route.py` is a **persisted** contract with a committed `schemas/route.schema.json` | `CLAUDE.md` section 11: renaming a persisted shape is breaking and needs a changelog entry, a version stamp **and the read-side migration in the same commit**. Committed digest payloads were written under that stem. Nothing downstream of C1 picked this up, so O2 as written is a release blocker with no migration attached | **The rename is in scope and the migration is part of it.** Plan-doc H owns it: the new stem, the version stamp, the changelog entry, and a read-side migration that reads a payload written under the old stem. Row 63 already knows this file carries published enums - same file, same hazard, and the two land together |
+
+**One stale reference in the proposal**, recorded so a plan-doc does not chase it: P.D15's body calls it "the section 2 principle", but the principle is in P.1.1 and its narrowed public form is in P.1.5.2. D15's own cross-reference column says section 1, which is correct. Only the body text is stale.
+
 ---
 
 ## 13. Measurements that must be taken
@@ -1355,7 +1390,7 @@ Rule #10: an unmeasured number may not justify a design. Each row blocks somethi
 | M3 | Summarizer cross-host spread | 10 full runs | **SKIP - you already have it.** The ledger spans five CPU models and `job_seconds` 1,584 to 8,124 s, a **5.1x spread on real production work**, which is better evidence than ten synthetic shards | `shard_timeout_minutes`; conservative default below |
 | M5 | Console alarm thresholds | one corpus month | **SKIP.** Ship every alarm in record-only mode with no threshold. An alarm set on a guess is worse than no alarm | Every console alarm |
 | M9 | `raw.githubusercontent.com` under burst | scripted, hits a third party | **SKIP for now.** Keep `visuals.asset_base_url` same-origin. The number is not needed until M2 says bytes must move off Pages | The degraded state for the remote carrier |
-| M4 | Call-2 `cached_tokens` | cannot precede the code | **Not a measurement campaign - a test.** Assert `cached_tokens >= call-1 input + output` inside the two-call path, same commit | Whether the two-call design is affordable |
+| M4 | Call-2 `cached_tokens` | cannot precede the code | **Not a measurement campaign - a test, and it is two assertions rather than one**, because the two halves fail for different reasons. **The floor that must hold:** `cached_tokens >= call-1 prompt tokens`. The system turn and the user turn carrying the article and the candidate table are byte-identical on both calls and come first, so they prefill once or the prompt was built in the wrong order. **The target that must be measured, not assumed:** whether call-1's *generated* tokens also cache. They sit in the slot after call 1, but call 2 re-renders them as an assistant turn through the chat template, which adds wrapper tokens the model never generated. If that re-render does not tokenise identically, the common prefix ends at the article and roughly 1,500 tokens re-prefill - a cost, not a cliff, because the article is already safe. Record both numbers | Whether the two-call design is affordable |
 | M8 | Build-time render cost per visual | cannot precede the code | Same. Time the d3 emitters when they exist, 20 repetitions, median and interquartile range | The corpus re-render path |
 | M6 | Human labelling cadence | needs a person | Gates the review plan-doc only. **Do not let it block anything earlier.** Start labelling in parallel; the rate reveals itself | Weight fitting, pairwise, the timed arm |
 
@@ -1639,6 +1674,7 @@ Susan's warning, recorded verbatim in substance: **the proposal measures 33 thin
 | E2 | `quotecard` vs the republishing non-goal | **Approved (O13).** Restricted to quotes the semantic pass identifies, capped at `summarize.max_verbatim_words`. Not applied to every article |
 | E3 | The 18x uncertainty in bytes per day | **Measure before deleting (M2).** No early deletion. `image_months` 13 deletes nothing until 2027-09-17, so it buys time and is not a cap defence. If the pessimistic reading holds, the site hits the cap and **the deploy fails** - the digest stops publishing entirely. Recommendation: take M2 immediately, and land the config-driven asset base URL early so the release valve exists before it is needed |
 | E4 | Retention does not protect the Pages cap | **Agreed.** The defences that act on the right timescale are: the coverage rate itself, the per-visual byte cap (row 36), and the off-bundle base URL (section 6). Age-based retention is an archive policy, not a cap defence |
+| E5 | **What does an item get when call 2 fails?** No row said. Section 11.4 ruled on `context_exceeded` and on nothing else | **RESOLVED - graceful degradation, and the call structure does not change.** O3's two calls stand. Ruling (Andre, 2026-09-03): `summary` decodes before `visual`; on a reply that hit the output budget, code recovers the closed `summary` object from the returned bytes with `json.JSONDecoder().raw_decode`, publishes the item with that summary and `decision = none`, and records the visual's loss as a `none_reason` - never a `FailureCode`. **The bytes are already in hand.** The cut returns a normal 200, `parse_completion` puts the partial decode in `Completion.content` ([backend/idhazh/llm/server.py](backend/idhazh/llm/server.py#L195)), and `to_summary` discards it unread at [backend/idhazh/summarize.py](backend/idhazh/summarize.py#L385). We lose the summary by choice today, not by constraint. Cost: **zero extra seconds**, no second request, no re-prefill, no field reorder, and no conflict with rows 12, 14 or 17 or with sections 11.1 and 11.3. **What it does not cover, stated plainly:** any failure where the server delivered no body at all - a timeout mid-decode, an HTTP reset, a server crash - because `"stream": False` ([backend/idhazh/llm/server.py](backend/idhazh/llm/server.py#L183)) leaves the completion in the server's memory until the decode ends. Those cost the summary today too, so the merge makes them no worse, and the budget cut is the one failure the merge actually manufactures. Splitting call 2 into two requests would cover them and is the fallback **if** timeouts prove real; nothing measures a timeout rate today, so measure before taking it. Two obligations ship with this: a contract test asserting `summary` precedes `visual` in the generated schema, because the recovery boundary is the property order and llama.cpp's order-preserving grammar is not something we pin; and row 14's alarm stays on the raw `finish_reason` and never on "did the item publish", because an alarm you can satisfy by degrading gracefully has stopped being an alarm |
 
 ---
 
@@ -1762,6 +1798,7 @@ Every row here was asked on 2026-09-03 and is answered against the code, not aga
 | Q10 | A review says the canonical vocabulary is not used verbatim. Is that a defect? | **Partly, and the half that is gets fixed.** Identifiers are bound to the glossary by section 15.4a; prose keeps the plain register section 0b asks for. The review's real find is the one worth having: 15.4 ruled on three hot files and never on hot names, with twelve parallel agents about to mint them |
 | Q11 | Who finds a number, and who finds an entity? Would the model hallucinate a figure? | **Code finds; the model points and names** - ruled in section 10.1a, drawn in section 10.1b. Close authorship, never close discovery: a quantity is discovered by regex and the model may propose a missed one by naming its sentence for code to re-parse from the article's bytes; an entity name is a Tier 2 grouping key that is never drawn, anchored through per-sentence mentions; a quote or a claim is sentence indices, never text. The model cannot type a figure at all, because no field of the schema accepts one. Two defects in `numeric_facts()` surfaced with the ruling - corrections C14 and C15: the `(value, unit)` dedup collapses a figure repeated across two periods, which is the series a trend chart exists to show, and there is no date extractor at all |
 | Q12 | Is every box in the proposal's section 1.2 diagram covered, and are its pass and fail states emitted to the console? | **Two audits, both in section 12.** Section 12.6 checks **presence**: every box, every plan field, all eight validator checks and all seven model responsibilities are covered, and *assess visual need*, *choose the form* and *select elements* are the contracted fields `decision`, `purpose` plus `type`, and `element_ids`. Six gaps found and assigned, G1 to G6. Section 12.7 walks the **tail** from the validator fork to the end and checks intent rather than presence, finding five more, G7 to G11. The serious one is G7: `state/visuals/` was specified as a per-publication ledger, which would have left every refusal uncommitted and stopped the machine loop being auditable while it was still the gate |
+| Q13 | Does this document contradict itself anywhere? | **In four places, all resolved - section 12.8.** The full-vocabulary rule was cancelled by its own amendment and took row 48 with it; "flat role map, all keys required" could not be reconciled with P.D4's per-type role sets; section 1 printed the slogan the proposal had already narrowed; and O2 renames a **persisted** contract with no migration attached, which `CLAUDE.md` section 11 makes a release blocker. A fifth finding was a hole rather than a contradiction, and the most serious of the five: **no row said what an item gets when call 2 fails.** Resolved as E5 without touching the call structure - the summary is recovered from the bytes the cut already returns, and the item publishes with `decision = none` |
 
 ### 16.1 How "6 sources said this" is counted today
 
