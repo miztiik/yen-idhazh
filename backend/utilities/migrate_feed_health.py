@@ -55,6 +55,12 @@ NARROW_COLUMNS: Final[tuple[str, ...]] = (
 # something to branch on; restamping every row would erase the only marker of
 # which rows predate the widening and would claim today's writer produced them.
 
+#: The stamp the widening carries. A row stamped below this predates the five
+#: appended columns, so its five cells are empty because this migration wrote
+#: them empty. A row stamped at or above it was written by the wide contract,
+#: where all five are nullable and either state is legal.
+WIDENED_AT: Final[str] = "2026-09-02T20:00"
+
 
 @dataclass(frozen=True, slots=True)
 class Migration:
