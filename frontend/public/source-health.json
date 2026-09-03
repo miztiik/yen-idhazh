@@ -1,10 +1,10 @@
 {
   "complete_dates": 10,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-03T16:51:59Z",
+  "generated_at": "2026-09-03T20:25:10Z",
   "last_date": "2026-09-02",
   "min_complete_days": 30,
-  "run_id": "2026-09-03-33767761598",
+  "run_id": "2026-09-03-33787238215",
   "sources": [
     {
       "availability": "answering",
@@ -1459,9 +1459,9 @@
       "vertical": "energy"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 4,
-      "permission": "unrecorded",
+      "permission": "allowed",
       "publications": 4,
       "retired": false,
       "retired_on": null,
@@ -1555,7 +1555,7 @@
       "vertical": "india"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 47,
       "permission": "allowed",
       "publications": 45,
