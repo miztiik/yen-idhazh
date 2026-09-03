@@ -21,7 +21,6 @@
     "max_future_hours": 6.0,
     "max_per_source": 2,
     "max_source_share_per_day": 0.08,
-    "quarantine_after_failures": 3,
     "recency_half_life_hours": 18.0,
     "recency_weight": 0.6,
     "repetition_weight": 1.5,

@@ -2426,8 +2426,9 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     # assemble's routes download: `route` is allowed to produce no artifact at
     # all, and every item then publishes with no picture. The two fold steps join
     # it for the harvest's reason: they run after the day is committed and touch
-    # only months past `observability.keep_months`, so the most a failure costs is
-    # one run's worth of bytes and the next run folds the same month again.
+    # only months past `observability.item_health_full_grain_months`, so the most
+    # a failure costs is one run's worth of bytes and the next run folds the same
+    # month again.
     tolerant = {
         (job_name, step.get("name") or step.get("uses"))
         for job_name in _mapping(workflow.get("jobs"), "jobs")

@@ -162,6 +162,11 @@ class VerticalPlan(Model):
         being invented from today's config. The model forbids unknown keys, so
         without this a plan an earlier build wrote would be refused outright
         (section 11).
+
+        This one stays. The config knobs renamed alongside it were removed on
+        2026-09-03, because a config file is a file somebody can edit; a plan
+        payload is not. A run that has already been written cannot be rewritten,
+        so the reader has to keep opening it.
         """
         if isinstance(data, dict) and "live_feeds" in data and "eligible_feeds" not in data:
             migrated = dict(data)

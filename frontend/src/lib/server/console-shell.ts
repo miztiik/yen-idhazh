@@ -226,8 +226,8 @@ function feedTrouble(results: FeedResult[], quarantineAfter: number) {
  *
  * The runs come before the feeds and the order is load-bearing: a resting feed
  * and a failed run both rank BROKEN, `worstOf` sorts stably, and a rest clears
- * itself after `quarantine_after_failures` skips while a failed run does not.
- * Listing the feeds first handed every tie to the state that fixes itself.
+ * itself after `availability_strikes_before_rest` skips while a failed run does
+ * not. Listing the feeds first handed every tie to the state that fixes itself.
  */
 function pipelinesCandidates(
 	newest: { date: string; records: RunRecord[] } | null,
@@ -255,9 +255,9 @@ function pipelinesCandidates(
 		}
 	}
 	if (feeds.rested > 0) {
-		// The retry count comes from `quarantine_after_failures`, never a literal:
-		// an operator who moves the knob would otherwise be reading yesterday's
-		// rule in today's sentence.
+		// The retry count comes from `availability_strikes_before_rest`, never a
+		// literal: an operator who moves the knob would otherwise be reading
+		// yesterday's rule in today's sentence.
 		const carry =
 			feeds.rested === 1
 				? '1 feed is resting, so nothing it carries reaches the digest.'
@@ -381,7 +381,7 @@ export function consoleShell(): ConsoleShell {
 	const newest = manifests[0] ?? null;
 	const floorPct = runConfig().success_floor_pct;
 	const budgetBytes = retentionConfig().site_budget_mb * 1024 * 1024;
-	const quarantineAfter = collectConfig().quarantine_after_failures;
+	const quarantineAfter = collectConfig().availability_strikes_before_rest;
 	const feeds = feedTrouble(feedResults(), quarantineAfter);
 
 	const scored = evalRows().rows;
