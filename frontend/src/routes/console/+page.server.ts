@@ -27,13 +27,16 @@ import {
 	loadManifests,
 	publishedCharts,
 	publishedItems,
+	sourceHealthView,
 	telemetryMonths,
 	telemetryRows,
 	TELEMETRY_ROOT,
 	type DayVisuals,
 	type FeedResult,
 	type RunRecord,
-	type RunSummary
+	type RunSummary,
+	type SourceHealthRow,
+	type SourceHealthView
 } from '$lib/server/payload';
 
 export const prerender = true;
@@ -80,6 +83,201 @@ export interface FeedTrouble {
 }
 
 export type { FeedDay, FeedDayOutcome, Reliability };
+
+/** One state, how many sources are in it, and what it costs while it holds.
+ *
+ * `id` is the address a test and a stylesheet use; `label` is the words. The
+ * two are deliberately different strings: a label may change where an address
+ * may not (`docs/concepts/ui-shell.md`).
+ */
+export interface SourceFact {
+	id: string;
+	label: string;
+	count: number;
+	/** What the reader loses while this state holds, or null where the state
+	 * costs nothing. Every automatic state that withholds a source says so -
+	 * that is the whole reason the four facts are drawn separately rather than
+	 * averaged into a score. */
+	withheld: string | null;
+}
+
+/** One source the pipeline is not reading normally, and why. */
+export interface SourceNote {
+	sourceId: string;
+	title: string;
+	vertical: string;
+	permission: string;
+	availability: string;
+	retired: boolean;
+	retiredOn: string | null;
+	opportunities: number;
+	publications: number;
+	sourceFailures: number;
+	withheld: string;
+}
+
+/** The four facts about every address a run may ask, as the page draws them. */
+export interface SourceHealth {
+	sources: number;
+	permission: SourceFact[];
+	availability: SourceFact[];
+	retired: number;
+	/** Sources held back right now by any of the four - the number an operator
+	 * acts on, and the one the clean census does not contain. */
+	withheld: number;
+	notes: SourceNote[];
+	hidden: number;
+	record: {
+		completeDates: number;
+		minCompleteDays: number;
+		readable: boolean;
+		firstDate: string | null;
+		lastDate: string | null;
+		opportunities: number;
+		publications: number;
+		sourceFailures: number;
+	};
+	generatedAt: string;
+	runId: string;
+}
+
+/** What a permission state means, and what it withholds while it holds.
+ *
+ * `unrecorded` withholds nothing: the run asked the address anyway, because an
+ * empty cell is a check nobody has run rather than a refusal. Reading it as a
+ * refusal would take every desk under its feed floor on the day the column
+ * landed (`docs/architecture/sources/health.md`).
+ */
+const PERMISSION_FACTS: { id: string; label: string; withheld: string | null }[] = [
+	{ id: 'allowed', label: 'the site allows us', withheld: null },
+	{
+		id: 'denied',
+		label: 'the site refuses us',
+		withheld: 'nothing from it reaches the digest until a later run reads its rules again'
+	},
+	{
+		id: 'unreachable',
+		label: 'we could not read its rules',
+		withheld: 'the address is not asked at all until a later run establishes permission'
+	},
+	{ id: 'unrecorded', label: 'no run has recorded an answer', withheld: null }
+];
+
+/** What an availability state means, and what it withholds.
+ *
+ * The rest's own sentence is completed on the page, where the configured retry
+ * count is in hand - a literal here would print yesterday's rule after somebody
+ * moved the knob.
+ */
+const AVAILABILITY_FACTS: { id: string; label: string; withheld: string | null }[] = [
+	{ id: 'answering', label: 'answering with articles', withheld: null },
+	{
+		id: 'failing',
+		label: 'its last read failed',
+		withheld: 'the digest is short of what it carries until it answers again'
+	},
+	{
+		id: 'resting',
+		label: 'resting after repeated failures',
+		withheld: 'nothing it carries reaches the digest until the run asks it again'
+	},
+	{
+		id: 'never_asked',
+		label: 'never read',
+		withheld: 'nothing from it has ever reached the digest'
+	}
+];
+
+/** Loudest first, so a capped list drops the states that fix themselves. */
+const NOTE_ORDER: Record<string, number> = {
+	retired: 5,
+	denied: 4,
+	unreachable: 3,
+	never_asked: 2,
+	resting: 1,
+	failing: 0
+};
+
+function tally(
+	facts: { id: string; label: string; withheld: string | null }[],
+	states: string[]
+): SourceFact[] {
+	return facts.map((fact) => ({
+		...fact,
+		count: states.filter((state) => state === fact.id).length
+	}));
+}
+
+/** The four facts, from the view the pipeline published and from nothing else.
+ *
+ * Permission, availability and retirement are the backend's decisions rendered
+ * as they were written. Re-deriving any of them here would be a second reducer
+ * over the same evidence, and two reducers are two answers.
+ */
+function sourceHealth(view: SourceHealthView | null, rows: number): SourceHealth | null {
+	if (view === null) return null;
+	const sources = view.sources;
+	const permission = tally(
+		PERMISSION_FACTS,
+		sources.map((row) => row.permission)
+	);
+	const availability = tally(
+		AVAILABILITY_FACTS,
+		sources.map((row) => row.availability)
+	);
+	const reasonFor = (row: SourceHealthRow): string | null => {
+		if (row.retired) return 'retired';
+		if (row.permission === 'denied' || row.permission === 'unreachable') return row.permission;
+		if (row.availability !== 'answering') return row.availability;
+		return null;
+	};
+	const held = sources
+		.map((row) => ({ row, reason: reasonFor(row) }))
+		.filter((entry): entry is { row: SourceHealthRow; reason: string } => entry.reason !== null)
+		.sort(
+			(a, b) =>
+				(NOTE_ORDER[b.reason] ?? 0) - (NOTE_ORDER[a.reason] ?? 0) ||
+				a.row.source_id.localeCompare(b.row.source_id)
+		);
+	const withheldFor = (reason: string): string =>
+		reason === 'retired'
+			? 'no run asks this address again until its configured address changes'
+			: ([...PERMISSION_FACTS, ...AVAILABILITY_FACTS].find((fact) => fact.id === reason)
+					?.withheld ?? 'nothing it carries reaches the digest');
+	return {
+		sources: sources.length,
+		permission,
+		availability,
+		retired: sources.filter((row) => row.retired).length,
+		withheld: held.length,
+		notes: held.slice(0, rows).map(({ row, reason }) => ({
+			sourceId: row.source_id,
+			title: row.title,
+			vertical: row.vertical,
+			permission: row.permission,
+			availability: row.availability,
+			retired: row.retired,
+			retiredOn: row.retired_on,
+			opportunities: row.opportunities,
+			publications: row.publications,
+			sourceFailures: row.source_failures,
+			withheld: withheldFor(reason)
+		})),
+		hidden: Math.max(0, held.length - rows),
+		record: {
+			completeDates: view.complete_dates,
+			minCompleteDays: view.min_complete_days,
+			readable: view.yield_readable,
+			firstDate: view.first_date,
+			lastDate: view.last_date,
+			opportunities: sources.reduce((total, row) => total + row.opportunities, 0),
+			publications: sources.reduce((total, row) => total + row.publications, 0),
+			sourceFailures: sources.reduce((total, row) => total + row.source_failures, 0)
+		},
+		generatedAt: view.generated_at,
+		runId: view.run_id
+	};
+}
 
 /** What one day's chart arm cost and what it produced.
  *
@@ -459,6 +657,11 @@ export async function load() {
 		// How many feeds have never failed, out of how many were asked, over how
 		// many runs. A count with no denominator is not a reliability record.
 		feedRecord,
+		// Permission, availability, retirement and the publishing record, read from
+		// the projection the pipeline published rather than re-derived here. Null
+		// when no run has written one or it cannot be read, which the page draws as
+		// a named absence rather than as a section that is simply missing.
+		sourceHealth: sourceHealth(sourceHealthView(), console.source_rows),
 		// One date axis for every feed's strip, so two rows can be read against each
 		// other. A per-feed axis would put each strip on its own days, and "broken
 		// since Tuesday" and "flaky all month" would draw the same picture.

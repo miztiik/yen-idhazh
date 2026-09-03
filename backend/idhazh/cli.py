@@ -45,6 +45,7 @@ from idhazh import (
     extract,
     fetch,
     ledger,
+    publish_source_health,
     publish_telemetry,
     rank,
     retention,
@@ -2893,6 +2894,20 @@ def stage_assemble(
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
     publish_telemetry.publish(state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry")
+    # Written after the ledgers this run appended, and from those files rather
+    # than from anything in memory here: the view is a projection of the
+    # committed record, so a run that failed to append has to publish the record
+    # as it stands rather than as it hoped.
+    publish_source_health.publish(
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        collect=settings.app.collect,
+        date=plan.date,
+        run_id=run_id,
+        generated_at=generated_at,
+        state_root=STATE_ROOT,
+        path=PUBLIC_ROOT.parent / publish_source_health.PUBLIC_FILENAME,
+    )
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
         "new_fingerprints=%s search_index=%s/%s",
