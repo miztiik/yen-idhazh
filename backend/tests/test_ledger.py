@@ -20,7 +20,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
 from utilities import migrate_score_ledger as migrate
-from utilities.migrate_feed_health import NARROW_COLUMNS, widen
+from utilities.migrate_feed_health import NARROW_COLUMNS, WIDENED_AT, widen
 from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
 
@@ -397,6 +397,23 @@ def narrowed(text: str) -> str:
     return out.getvalue()
 
 
+def migrated_prefix(text: str) -> str:
+    """The committed bytes for exactly the rows this migration produced.
+
+    The stamp is the marker `migrate_feed_health.py` deliberately preserved, and
+    rows are appended in run order, so the pre-widening rows are the head of the
+    file and this is a byte-exact slice rather than a re-serialisation. That is
+    what keeps the comparison below a claim about the committed bytes.
+    """
+    lines = text.splitlines(keepends=True)
+    kept = lines[:1]
+    for line in lines[1:]:
+        if line.split(",", 1)[0] >= WIDENED_AT:
+            break
+        kept.append(line)
+    return "".join(kept)
+
+
 def test_the_committed_feed_health_shards_have_the_shape_the_contract_writes() -> None:
     """The read-side migration for the widened row is the files themselves.
 
@@ -405,7 +422,13 @@ def test_the_committed_feed_health_shards_have_the_shape_the_contract_writes() -
     scheduled run at its first stage (CLAUDE.md section 11). Every row is also
     read back, because a header that matches over cells that do not parse is a
     ledger nothing can use.
+
+    Only a row stamped below `WIDENED_AT` is held to five empty cells. The
+    changelog entry that appended them made every one nullable, so a row written
+    since may fill them or leave them; asserting every row was empty only held
+    until the next scheduled run, and that is exactly how long it held.
     """
+    known = {entry.version for entry in FeedHealthRow.__changelog__}
     shards = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))
     assert shards, "no committed feed-health shard - the read is broken"
 
@@ -416,9 +439,11 @@ def test_the_committed_feed_health_shards_have_the_shape_the_contract_writes() -
         with path.open("r", encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):
                 parsed = FeedHealthRow.from_csv_row(row)
-                assert parsed.endpoint_key is None, "a legacy row must not claim an identity"
-                assert parsed.robots_outcome is None, "a legacy row never checked permission"
-                assert parsed.target_attempted is None, "absent is not False"
+                assert parsed.version in known, f"{path.name} carries {parsed.version}"
+                if parsed.version < WIDENED_AT:
+                    assert parsed.endpoint_key is None, "a migrated row claims an identity"
+                    assert parsed.robots_outcome is None, "a migrated row checked permission"
+                    assert parsed.target_attempted is None, "absent is not False"
                 read += 1
     assert read > 0
 
@@ -426,25 +451,39 @@ def test_the_committed_feed_health_shards_have_the_shape_the_contract_writes() -
 def test_the_widening_restores_the_committed_bytes_and_the_guard_forces_it(
     tmp_path: Path,
 ) -> None:
-    """The Oracle, both halves, over a real shard rather than a hand-written one.
+    """The Oracle, both halves, over real shards rather than hand-written ones.
 
-    The narrow file is the committed shard with its five appended columns taken
-    off again, so it is the exact shape every run wrote until 2026-09-02.
-    Appending to it is refused, which is what put the migration in the same
-    commit as the contract; and running the migration over it reproduces the
-    committed bytes, which is what proves those bytes are the migration's output
-    and not a hand edit.
+    The narrow file is the committed pre-widening rows with their five appended
+    columns taken off again, so it is the exact shape every run wrote until
+    2026-09-02. Appending to it is refused, which is what put the migration in
+    the same commit as the contract; and running the migration over it
+    reproduces the committed bytes, which is what proves those bytes are the
+    migration's output and not a hand edit.
+
+    Only the pre-widening rows can carry that proof, because a row written since
+    fills cells this migration writes empty. They are a fixed set that never
+    grows, so when retention finally takes the last one the claim becomes
+    unprovable and irrelevant together, and this skips rather than reporting a
+    defect that is not there.
     """
-    committed = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))[-1]
-    wide = committed.read_text(encoding="utf-8")
-    stale = ledger.health_path(tmp_path / "state", DATE)
-    stale.parent.mkdir(parents=True, exist_ok=True)
-    stale.write_text(narrowed(wide), encoding="utf-8", newline="\n")
+    shards = sorted((REPO_ROOT / "state" / ledger.HEALTH_DIRNAME).glob("*.csv"))
+    proved = 0
+    for path in shards:
+        migrated = migrated_prefix(path.read_text(encoding="utf-8"))
+        if migrated.count("\n") < 2:
+            continue
+        stale = ledger.health_path(tmp_path / str(proved), DATE)
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_text(narrowed(migrated), encoding="utf-8", newline="\n")
 
-    with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
-        ledger.append_health(tmp_path / "state", DATE, [health_row()])
+        with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
+            ledger.append_health(tmp_path / str(proved), DATE, [health_row()])
 
-    assert widen(stale.read_text(encoding="utf-8")).text == wide
+        assert widen(stale.read_text(encoding="utf-8")).text == migrated, path.name
+        proved += 1
+
+    if not proved:
+        pytest.skip("no committed row predates the widening, so there is nothing to prove")
 
 
 def test_widening_an_already_wide_feed_health_shard_is_refused() -> None:
