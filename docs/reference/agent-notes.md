@@ -190,6 +190,15 @@ guards make the redo safe: refuse to write unless an unmodified read-write
 round trip is byte-identical, and refuse if the rows are not all one width -
 the second one is what catches the doubled file.
 
+**A MERGE does the same thing and never conflicts, which is worse.** Union merge
+has no conflict state, so `git merge origin/main` over a rewritten shard exits 0,
+prints `Auto-merging`, and leaves one file carrying two headers and two row
+widths. Any recipe that waits for a conflict marker before re-running the
+migration misses it entirely. Seen twice on 2026-09-02 in one plan. Make the
+repair unconditional after every merge and every rebase: take the upstream file
+whole with `git checkout origin/main -- <path>`, re-run the migration on it, and
+read the result back through its contract.
+
 **`origin/main` moves under you.** The scheduled pipeline pushes `plan:` and
 `digest:` commits to `main` several times an hour, and the editor auto-fetches.
 A branch created "from `origin/main`" and a merge done "against `origin/main`"
@@ -503,6 +512,13 @@ tests, utilities and modules the change had nothing to do with. Run
 format pass has already happened, `git restore --` the specific unrelated paths
 rather than the tree.
 
+**Ruff `B018` rejects a bare attribute used as a "does this parse" guard.** A
+line reading `parts.port` on its own - written to make `urlsplit` raise on a
+malformed port before anything else touches the address - is a useless
+expression as far as the rule is concerned, and the rule is right that nothing
+reads it. Assign it away instead: `_ = parts.port` keeps the parse, keeps the
+intent visible, and passes.
+
 **`npm run bundle-gate` no longer weighs a route against a recorded number.**
 Until 2026-08-30 it held every route's first-load JavaScript within 64 bytes of
 a hand-maintained record, and about a hundred lines of this page were about
@@ -732,9 +748,18 @@ resolves its paths off `config.REPO_ROOT`, which is derived from the installed
 package rather than from the working directory. So a seven-shard fan-out test
 settles the developer's committed ledgers seven times, silently, and the damage
 shows up as a dirty tree long after the suite is green. Substitute the command
-with a script that takes the tree as an argument - `backend/utilities/settle_ledger.py`
-and `backend/utilities/rebuild_day.py` exist for exactly this - and check
+with a script that takes the tree as an argument - `backend/tests/settle_ledger.py`
+and `backend/tests/rebuild_day.py` exist for exactly this - and check
 `git status --porcelain` after any suite run that exercised the commit step.
+
+**Adding a settlement command to the commit step arms four of those tests at
+once.** Observed 2026-09-02: putting `python -m idhazh dedupe-ledgers` into the
+workflow's `DROP_REPEATED_ROWS_COMMAND` made four `test_workflows.py` tests run
+it for real, against this checkout's committed ledgers, reporting nothing. The
+harness now refuses the unsubstituted command by name - `_settled_in_the_clone`
+asserts the command names `settle_ledger.py` or is empty - so the failure is
+readable rather than silent. Route any new command the commit step runs through
+that helper in the same commit that adds it.
 
 ## GitHub CLI
 
@@ -789,6 +814,22 @@ Do not hand-merge `schemas/app-config.schema.json`. It is generated, so editing
 it is the anti-pattern the contract drift gate exists to catch, and the export
 is one command.
 
+**A third cause of an empty check list, and the one that looks most like a
+broken trigger: a pull
+request in `CONFLICTING` state runs no checks at all.** `gh pr checks` answers
+`no checks reported on the branch` and `statusCheckRollup` comes back `[]`,
+indefinitely, on a branch whose workflows are correct and whose push landed.
+GitHub will not build a merge it cannot compute. Ask the right question -
+`gh pr view <n> --json mergeable` - before touching a workflow file. Observed
+2026-09-02; the checks started within seconds of merging `origin/main` into the
+branch.
+
+**`gh pr checks <n>` exit codes: 8 while anything is pending, 0 when every check
+is green, 1 when one failed.** It also prints `no checks reported` for about a
+minute after a push, before the runner registers the new head. Do not read that
+minute as a broken trigger - re-ask, and only treat a persistently empty answer
+as one of the three causes above.
+
 **Deprecation warnings are check-run annotations, not log lines.** Grepping the
 log finds nothing. Read them, and always capture a baseline count from a
 pre-fix run so the fix can be shown to have done something:
@@ -821,11 +862,49 @@ gives the run plan, and each `items-<n>` and `runtime-log-<n>` appears as its
 shard finishes. So to answer "how many items is this run doing?" while it runs,
 read `plan.json` rather than the `plan` job's log.
 
+**A completed run fails the other way round, so keep both commands.** Observed
+2026-09-02: `gh run view <runId> --log` on a finished run exited 0 and wrote a
+zero-byte file, which reads exactly like a job that logged nothing, and
+`gh api repos/<owner>/<repo>/actions/jobs/<jobId>/logs` returned the whole log
+immediately. Neither endpoint is the reliable one. When the first answer is
+empty on a run that has finished, ask the other before concluding anything about
+the job.
+
+**Filtering that log by a marker string drops the output you asked for.** The
+lines worth reading - a size, a duration, a pip summary - carry no marker,
+because the marker is what your own `echo` printed around them, so a filter
+returns your two echoes and none of the work between them. Find the marker line
+numbers first, then slice between them:
+
+```powershell
+$log = Get-Content -LiteralPath $path
+$at = (Select-String -Path $path -Pattern 'MYTAG' -SimpleMatch).LineNumber
+$log[($at[0])..($at[1] - 2)]
+```
+
 **`gh run download` can exit 0 on a partial artifact.** One download extracted
 25 of 37 items and returned success; a second attempt gave all 124 files. Count
 what you got against what you expected before you compute anything from it - a
 measurement taken from a silently truncated artifact is wrong in a direction
 nobody checks.
+
+**A throwaway workflow is how you measure something on the runner, and it costs
+about 44 seconds.** When a number has to come from `ubuntu-latest` rather than a
+developer box - an install time, an installed byte count - create a ref through
+the API, PUT a one-job workflow onto it as base64 content, read the job log, then
+DELETE the ref. Nothing else in this repository is disturbed, because every
+workflow trigger here is main-only or dispatch-only, so a branch that exists for
+forty seconds triggers none of them. Record the run id in the measurement, and
+say the branch was deleted.
+
+**The workflow YAML must be converted to LF before you base64 it.** The editor's
+file tool writes CRLF, and a carriage return inside a `run: |` block reaches bash
+as part of the command - so the job fails on a line that looks correct in every
+rendering of it. Convert before encoding:
+
+```powershell
+[System.IO.File]::WriteAllText($path, ($text -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
+```
 
 **`gh pr merge --squash --delete-branch` prints
 `fatal: 'main' is already used by worktree` and exits non-zero when any worktree
@@ -1153,6 +1232,14 @@ Copy-Item "$env:TEMP\<tag>\gate-DONE.txt" "$env:TEMP\<tag>\gate-r2.txt" -Force
 
 Then read `gate-r2.txt`. A fresh path cannot be served from a stale cache, and
 it costs one line per gate round.
+
+**The fresh filename stops working when the source file is still being appended
+to.** Observed 2026-09-02 polling a browser suite: copying the log tail to a new
+name on every poll still returned test 907 twice in a row, while the run had
+reached 967. The copy is only as fresh as the read it was made from, so a file
+the child is still writing defeats both. Track a long run by a side effect the
+child finishes with - the sentinel, a result file, `git status` - and never by
+how far its log appears to have got.
 
 **`git grep -n 'pattern' -A 20 -- <path>` fails with `fatal: unable to resolve
 revision: -A`.** `git grep` reads anything after the pattern as a revision until
@@ -1715,9 +1802,12 @@ the variable protects the shell you remember to set it in and nothing else.
   `git ls-files -- <path>` for tracked - or match with `.StartsWith('??')`,
   which has no wildcard grammar at all.
 - **A relative path inside a `[System.IO.File]` call does not follow
-  `Push-Location`.** .NET resolves against the process working directory, which
-  `Push-Location` does not change. Pass an absolute path, or use
-  `Resolve-Path`.
+  `Push-Location` or `Set-Location`, and it reads and writes the wrong tree in
+  silence.** .NET resolves against the process working directory, which neither
+  PowerShell cmdlet changes, so in a worktree terminal every `ReadAllText`,
+  `ReadAllBytes`, `WriteAllText` and `WriteAllBytes` on a relative path answers
+  about - or overwrites - the shared checkout. Third sighting on this project,
+  2026-09-02. Pass an absolute path, or use `Resolve-Path`.
 - **A multi-paragraph commit message goes through a file.** Write
   `.tmp_commit_msg.txt` (gitignored), then `git commit -F`. Prefer
   `[System.IO.File]::WriteAllText($path, $text, [System.Text.UTF8Encoding]::new($false))`
@@ -1807,6 +1897,13 @@ the variable protects the shell you remember to set it in and nothing else.
   appeared, and the missing gate read as a slow one for two polls. `Test-Path`
   the log file before reading it: false means the script never started, and the
   answer is to send the launch again rather than to keep polling.
+- **`Start-Process pwsh -Wait` can report exit 1 while the child succeeded and is
+  still running.** The wrapper's exit code says nothing about the script it
+  launched - confirmed six times in one row on 2026-09-02, every time on a child
+  that went on to finish cleanly. Re-launching on that exit code starts a second
+  copy of the work against the same output files, which is the real damage. The
+  sentinel the script writes last is the only truth; read it, and ignore the
+  wrapper's code entirely.
 - **Write every long gate to a uniquely named file and read the file back.**
   `... *> "$env:TEMP\yi_<row>_pytest.txt"`, then read that file. The terminal
   pane shows whoever spoke last, which may not be you.

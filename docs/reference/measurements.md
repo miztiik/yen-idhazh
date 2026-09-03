@@ -51,9 +51,10 @@ the size those fourteen months of shards already are; the raw ledger reached it
 in fourteen months. **That is 7.7 years of headroom for every one the store used
 to spend, and the fourteen-month part stops growing at all.**
 
-**Re-measuring Decision 6 of the plan.** `TODO/20260902-source-health-lifecycle-plan.md`
-records `state/scores/` at 5,001 rows in 3,982,563 bytes across two shards on
-2026-09-02. Re-derived on this checkout on 2026-09-03 it is **5,335 rows in
+**Re-measuring the figure this work started from.** The source-health lifecycle
+plan recorded `state/scores/` at 5,001 rows in 3,982,563 bytes across two shards
+on 2026-09-02; that plan-doc has since been distilled and deleted, and git
+history holds it. Re-derived on this checkout on 2026-09-03 it is **5,335 rows in
 4,266,655 bytes across two shards** - 334 rows and 284,092 bytes more, one
 published day's growth. The shard count is the one figure that held. Both
 readings are exact counts over committed files, so neither carries a spread and
@@ -3635,6 +3636,15 @@ dependency that turned out bigger than it looked: the Python source alone is
 In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes** and
 **0.15 percent of shellcheck-py's 34,782,285**, both of which are already
 dependencies nobody has argued about.
+
+**The installed figure is the baseline, and the wheel figure is not.** Owner
+ruling, 2026-09-02, on reading the two numbers above: `protego` is inside the
+budget, and every future size comparison for this dependency is made against
+**53,292 installed bytes and 0.521 s to install**. A wheel is a zip, so the
+unpacked source, the bytecode pip generates and the packaging metadata are three
+different things - a comparison anchored on the 10,296-byte wheel understates
+what the runner actually holds by 5.18 times, and would let a package grow five
+fold before anything read as a change.
 
 **Beneficiary:** one reading of `robots.txt` on every interpreter the project
 supports. That is the control Rule #11 rests on, and it may not have an answer

@@ -1,6 +1,6 @@
 # Determinism and the Pipeline Fingerprint
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-09-03
 
 How the pipeline proves a re-run changed nothing, and how it records the times that claim turns out to be false. This page owns the stamp, the ledger that expands it, the skip rule built on it, and the violation policy.
 
@@ -80,6 +80,18 @@ and nothing reads `state/fingerprints.csv` back to call `classify`. That is
 deliberate: a safe skip needs a separate typed per-item work identity carrying
 both the article-input digest and the pipeline fingerprint, and article identity
 does not belong inside the configuration fingerprint.
+
+Fetch policy is outside the stamp, and unlike the two above that is an omission
+rather than a decision. `FETCHER_VERSION` in `backend/idhazh/fetch.py` is bumped
+when fetch behaviour changes, and nothing digests it - `PipelineInputs` carries
+the extractor and the sanitizer versions and not this one. Changing which pages a
+run is allowed to read therefore leaves `pipeline_fingerprint` still, so two runs
+under different fetch policies group as one. The constant was bumped to
+`idhazh-fetch-2` on 2026-09-02 when `protego` replaced `urllib.robotparser`
+([../sources/trust-boundary.md](../sources/trust-boundary.md)), which is the
+change that showed the gap. Adding it is one field and one changelog entry; it is
+unwritten because nothing has yet needed to tell two fetch policies apart in the
+ledger.
 
 ### A placeholder digest used to stamp clean, and now it raises
 
