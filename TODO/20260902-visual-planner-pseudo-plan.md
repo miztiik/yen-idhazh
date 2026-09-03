@@ -1,6 +1,6 @@
 # Visual Planner - Pseudo-Plan and Decision Record
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 **Status**: PSEUDO-PLAN. Not execution-ready. Not a plan-doc under `docs/how-to/author-a-plan.md`.
 **Level**: 5 (core design, four persisted contracts, the model pick, the trust boundary)
 **Companion**: [`20260902-yen-idhazh-visual-planning-architecture.md`](20260902-yen-idhazh-visual-planning-architecture.md) - "the proposal" throughout. Section references like `P.3.4.3` mean that document's section 3.4.3; `P.L28` means its litigation row L28; `P.D1` a decision; `P.R7` a risk.
@@ -430,6 +430,8 @@ Decision O9 keeps the module name `retention.py`. What follows is the **design c
 | **Lookup prune** | `state/seen/` | Deletes without folding. A lookup outside its read window answers no question, so folding it would invent a total nobody reads | `collect.seen_window_days` |
 
 **The rule that decides which policy applies: a ledger folds, an asset deletes, a lookup deletes.**
+
+**Correction, 2026-09-03: `observability.keep_months` and `observability.hard_delete_after_months` no longer exist, so every `keep_months` cell in this section and in 9.3 names a knob nothing reads.** The source-health lifecycle work replaced one shared age with one named age per store - `item_health_full_grain_months`, `item_health_aggregate_keep_months`, `feed_health_keep_months`, `scores_full_grain_months`, `score_archive_keep_months` and `public_telemetry_keep_months`, all listed in [`../docs/concepts/config.md`](../docs/concepts/config.md). A config that still spells either old name now fails validation and is told its replacement, so this is not a rename that quietly resolves. Which named window each of the six ledgers below should take - `state/visuals/` most of all, since nothing owns it yet - is this plan author's call, and it has to be made before the row that writes that store lands.
 
 ### 9.3 The compliance register
 

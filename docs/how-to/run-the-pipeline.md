@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-09-03
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -63,11 +63,12 @@ same variable. There is no hosted inference anywhere in this project
 | `backend/var/run/<date>/plan.json` | The day's work list | no - gitignored |
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
-| `state/scores.csv` | One row per scored item, appended forever | **yes** |
+| `state/scores/<YYYY-MM>.csv` | One row per scored item | **yes** |
 | `state/fingerprints.csv` | One row per pipeline stamp | **yes** |
 | `state/seen/<YYYY-MM>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
 | `state/feed-health/<YYYY-MM>.csv` | What every feed did on every run | **yes** |
+| `state/feed-retirements.csv` | Every endpoint the run stopped asking, and the evidence | **yes** |
 | `state/item-health/<YYYY-MM>.csv` | What every planned item did on every run | **yes** |
 
 **The ledgers under `state/` are the pipeline's whole memory.** Plan reads them
@@ -83,6 +84,49 @@ served to a reader
 **No article body is ever committed.** The extracted text lives under
 `backend/var/`, which is gitignored, and is what the model reads. What ships is
 the link, the title and our own summary.
+
+## Turning state cleanup on
+
+`idhazh prune-state` runs after the day is committed, in the assemble job of
+`.github/workflows/digest.yml`. **It ships with `--dry-run` set, so it prints the
+files a live run would remove and removes none of them.** That is on purpose:
+`.github/workflows/prune.yml` force-pushes `main` on a schedule
+([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file this step deletes
+wrongly stops being recoverable once that prune passes over the range. `git
+revert` is not a recovery path here.
+
+Turning live deletion on is a separate one-line commit, and this is the order:
+
+1. Wait for a scheduled run whose log would name at least one file. **The first
+   such day is 2027-10-01**, when `2026-08` falls below the fourteen-month
+   windows. Before then the list is empty every day and the switch proves
+   nothing.
+2. Read that run's log: `gh run view <runId> --repo <owner/repo> --job <jobId>
+   --log`, and grep it for `prune-state would remove`.
+3. Check the list against what you expect. On 2027-10-01 that is four files -
+   `state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv`,
+   `state/feed-health/2026-08.csv` and `state/scores/2026-08.csv`. A fifth name,
+   or a month that is not the oldest, means a boundary is wrong and the switch
+   waits.
+4. Confirm `state/score-archive/2026-08.json` exists and reconciles. The step
+   writes and reads back every archive before it unlinks anything, so an archive
+   that is missing is a step that already refused.
+5. Only then drop `--dry-run` from the `prune-state` step, in a commit that
+   changes nothing else.
+
+Two consequences to know before step 5. The published copy goes with its private
+source, so `/console/`'s per-item detail stops reaching back past the window. And
+two console readers walk the whole score ledger rather than the window, so their
+date lists shorten with no number moving
+([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
+
+What each store keeps, and why, is on the doc that owns it:
+[../architecture/sources/health.md](../architecture/sources/health.md) for feed
+health, [../architecture/sources/item-health.md](../architecture/sources/item-health.md)
+for the item census, [../concepts/evaluation.md](../concepts/evaluation.md) for
+the score archive, and
+[../architecture/publishing/layout.md](../architecture/publishing/layout.md) for
+the whole committed tree.
 
 ## Reading a run that went wrong
 
@@ -119,14 +163,21 @@ keep: the same two-per-desk rule that is a rounding error on a 400-item day is a
 quarter of a four-item one, and the share is what says so.
 
 **A vertical below its feed floor plans nothing.** The floor is `min_feeds` on
-the vertical in `config/taxonomy.json`. That is the floor working, not a bug: a
-thin list produces a thin day, and a reader cannot tell a quiet day from a
-broken one. Fix it by adding sources, not by lowering the floor.
+the vertical in `config/taxonomy.json`, and it counts only the endpoints the run
+may lawfully ask - a curated tombstone, a retired endpoint, a robots denial and
+unknown permission are all excluded, while a resting or failing endpoint still
+counts. That is the floor working, not a bug: a thin list produces a thin day,
+and a reader cannot tell a quiet day from a broken one. Fix it by adding sources,
+not by lowering the floor.
 
 **A feed that is resting is not read at all.** Five failed attempts in a row put
 a feed to sleep, and the log says `feed resting id=...` rather than an error.
 The rest ends on its own after five skips. Nothing here ever edits
-`config/sources.json` - retiring a source is a person's decision
+`config/sources.json`, which stays curated by a person - but retirement is no
+longer a person's job: five HTTP 410 results across five distinct runs write one
+row to `state/feed-retirements.csv` and the run stops asking that address, for
+good. Changing that feed's configured URL makes a new endpoint, with no inherited
+strikes and no inherited retirement
 ([../architecture/sources/health.md](../architecture/sources/health.md)).
 
 ## In CI
