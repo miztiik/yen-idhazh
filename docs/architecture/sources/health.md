@@ -472,11 +472,13 @@ runs the sentence prints the same counts and says the record is too shallow to
 read as reliability - the same knob, and the same question, as the stage rates
 one section above.
 
-Measured 2026-09-01 over the committed ledger: 5,291 rows, 182 feeds asked, 34
-runs, **156 of 182 have never failed**, and 26 have. The 26 are why the list
-also gained `console.feed_rows`, a cap of ten with the remainder stated in one
-sentence: a ranking is read from the top and its tail is a number, never
-another page of rows.
+Measured 2026-09-01 over the committed ledger, under the rule as it then stood:
+5,291 rows, 182 feeds asked, 34 runs, **156 of 182 have never failed**, and 26
+have. That reading is superseded by the one above, which drops the five feeds
+the pipeline has never actually read; the 26 are why the list also gained
+`console.feed_rows`, a cap of ten with the remainder stated in one sentence: a
+ranking is read from the top and its tail is a number, never another page of
+rows.
 
 ### Rejected alternatives
 
@@ -484,7 +486,7 @@ another page of rows.
 | --- | --- |
 | A ranked "ten most reliable feeds" | Every key it could rank on ties. A feed is read once a run, so a feed that never failed has answered on every run it was asked, and the record is about 34 runs deep. `collect.max_per_source` is 2, so what a feed may carry is capped as well. A top ten of a hundred-and-fifty-way tie is charting a constant. |
 | Rank by items yielded | It counts entries in a feed, so it ranks the firehose rather than the reliable. |
-| A share instead of a count | The number an operator acts on is how many feeds are named below, not a percentage. `156 of 182` carries both. |
+| A share instead of a count | The number an operator acts on is how many feeds are named below, not a percentage. `152 of 179` carries both. |
 
 ## Design rationale
 
