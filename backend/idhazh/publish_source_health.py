@@ -198,7 +198,7 @@ def build(
     by_feed: dict[str, list[FeedHealthRow]] = defaultdict(list)
     for row in settled_rows:
         by_feed[row.feed_id].append(row)
-    resting_ids = resting(settled_rows, after_failures=collect.quarantine_after_failures)
+    resting_ids = resting(settled_rows, after_failures=collect.availability_strikes_before_rest)
     records = endpoint_records(settled_rows)
 
     keep = collect.source_yield_min_complete_days

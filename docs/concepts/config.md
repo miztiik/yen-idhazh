@@ -174,31 +174,38 @@ faithfulness score, is
 
 ## Source-lifecycle surface
 
-Six `collect` knobs landed on 2026-09-02 with **no reader**, and that is
-deliberate. They name four different questions that
-`collect.quarantine_after_failures` had been answering on its own, so the changes
-that move the behaviour onto them are reviewable as behaviour rather than as a
-knob and a rule at once.
+Six `collect` knobs landed on 2026-09-02 with **no reader**, and that was
+deliberate. They name four different questions that one knob had been answering
+on its own, so the changes that moved the behaviour onto them were reviewable as
+behaviour rather than as a knob and a rule at once.
 
-**Three of the six now have one.** `feed_http_410_runs_before_retirement`
-decides when an address is retired, and the two recheck cadences are answered by
-the run itself - nothing about a refusal is persisted, so the next run asks the
-host again. The other three are still named and unread.
+**Five of the six now have one.** `availability_strikes_before_rest` decides
+every rest, `feed_http_410_runs_before_retirement` decides when an address is
+retired, the two recheck cadences are answered by the run itself - nothing about
+a refusal is persisted, so the next run asks the host again - and
+`source_yield_min_complete_days` is the published record's span.
+`availability_rest_runs` is the one still unread.
 
 | Knob | Default | What it decides |
 | --- | --- | --- |
-| `availability_strikes_before_rest` | 5 | Results counting against a feed before a run stops asking it. The successor to `quarantine_after_failures`, named for what it counts. Unread. |
-| `availability_rest_runs` | 5 | Runs a rested feed is skipped before it is asked again. Unread. |
+| `availability_strikes_before_rest` | 5 | Results counting against a feed before a run stops asking it, and how many runs that rest then lasts. |
+| `availability_rest_runs` | 5 | Nothing yet. It names the length of a rest, which today comes from the knob above. |
 | `feed_http_410_runs_before_retirement` | 5 | Distinct runs that must each read `410 Gone` from one address before that address is retired. |
 | `robots_denied_recheck_runs` | 1 | Runs to wait before asking `robots.txt` again after a refusal. |
 | `robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read at all. |
 | `source_yield_min_complete_days` | 30 | Complete days of item-health evidence a per-source yield judgement needs before it may be made - and, since 2026-09-03, how far back the published source-health record reads. |
 
-`quarantine_after_failures` keeps deciding every rest until a later change moves
-it, and both it and `availability_strikes_before_rest` carry 5, so the emitted
-config says the same thing twice on purpose for now. Removing the old name is a
-removal with a read-side migration behind it (`CLAUDE.md` section 11), which is
-why it is a change of its own rather than a line in this one.
+**`quarantine_after_failures` was removed on 2026-09-03**, and a config still
+spelling it is refused with a message naming `availability_strikes_before_rest`.
+Both names carried 5 in the committed file and 3 in the tuned fixture, so moving
+the reader could not move a decision - that is what made it a rename rather than
+a change of behaviour.
+
+**`availability_rest_runs` stays unread on purpose.** `discover.resting` takes
+one number and spends it twice: how many strikes start a rest, and how many
+skipped runs end it. Splitting it into two is a change to the rest rule, not a
+rename, so it did not travel with the rename. Setting this knob today changes
+nothing.
 
 **The two recheck cadences are one number in two knobs, and they still earn
 both.** A refusal is a publisher's stated policy; an unreadable `robots.txt` is
@@ -456,12 +463,11 @@ described once, in
 
 ## Every store names its own cleanup age
 
-Until 2026-09-02 one knob, `observability.keep_months`, decided when a month
-stopped being kept at full grain - and it decided it for `state/item-health/`
-and nothing else. `state/feed-health/`, `state/scores/` and
-`frontend/public/telemetry/` had no cleanup age at all, so three stores grew
-with nothing to stop them while the fourth was tuned by a number that said
-nothing about them.
+Until 2026-09-02 one knob decided when a month stopped being kept at full grain
+- and it decided it for `state/item-health/` and nothing else.
+`state/feed-health/`, `state/scores/` and `frontend/public/telemetry/` had no
+cleanup age at all, so three stores grew with nothing to stop them while the
+fourth was tuned by a number that said nothing about them.
 
 Six names replace it, one per store, each a knob and not a constant (Rule #6):
 
@@ -495,8 +501,8 @@ day of another, and those days fall in **14 calendar months**. Anchor it on
 `2024-12` on that day and the console would draw a gap that reads as a day the
 pipeline did nothing.
 
-The retired check compared `keep_months * 30` against `max_window_days` - `390 >
-366` - which is arithmetic about days, not about the files a read selects. A
+The retired check compared the old age times 30 against `max_window_days` - `390
+> 366` - which is arithmetic about days, not about the files a read selects. A
 month is not thirty days. The check now compares against the shards, and
 `backend/tests/test_contracts.py` sweeps every end date in one 400-year
 Gregorian cycle to prove it. Measured 2026-09-02 over all **146,097** anchor
@@ -507,18 +513,24 @@ them, and it is exactly tight on **3,636** of them, 2.5 percent. Those same
 
 ### A config still carrying the old names
 
-`keep_months` and `hard_delete_after_months` are read and dropped, and the file
-resolves to the six defaults above (`CLAUDE.md` section 11). The old value is not
-carried forward, because it was chosen against the check that could not answer
-the question - carrying the number forward carries the defect forward. A file
-carrying an old name **beside** its successor is refused outright: two names for
-one age is how an operator's edit stops taking effect.
+`keep_months` and `hard_delete_after_months` were read and dropped for a day, so
+that the rows spending the new ages could land one at a time. Since 2026-09-03 a
+file spelling either is **refused**, and the message names the knob that governs
+the same store: `item_health_full_grain_months` and
+`item_health_aggregate_keep_months`.
 
-Both names stay readable in code, as properties on `ObservabilityConfig`
-resolving to `item_health_full_grain_months` and
-`item_health_aggregate_keep_months`. The fold and its log line still ask for
-`keep_months` and get the corrected value, so naming the ages and moving the
-readers are two changes rather than one.
+**Refused rather than ignored.** Every config model forbids unknown keys, so
+both names already failed - with "extra inputs are not permitted", which does not
+tell an operator where their number went. Ignoring the key would be worse: an
+edit that takes no effect is a value somebody believes.
+
+**Refused rather than honoured, too.** The old value was chosen against a check
+that could not answer the question - it compared the age times 30 against the
+console window instead of the shards that window selects - so carrying the
+number forward would carry the defect forward.
+
+`collect.quarantine_after_failures` was removed on the same day and behaves the
+same way: refused, naming `availability_strikes_before_rest`.
 
 **Validation reads `config/appearance.json`.** That file owns the console window
 the published site really uses, and `AppConfig.console` is the layer under it, so
@@ -869,7 +881,7 @@ Excluding the runner's ceilings is the less obvious half. They look exactly like
 - [principles.md](principles.md) - config-driven with sane defaults.
 - [pipeline-loop.md](pipeline-loop.md) - the stages these knobs tune.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the run cadence and the scoring knobs under `collect`.
-- [../architecture/sources/health.md](../architecture/sources/health.md) - what `quarantine_after_failures` decides.
+- [../architecture/sources/health.md](../architecture/sources/health.md) - what `availability_strikes_before_rest` decides.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - what `console.*` tunes.
 - [evaluation.md](evaluation.md) - the bands and thresholds.
 - [telemetry.md](telemetry.md) - the logging knobs.

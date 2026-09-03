@@ -364,7 +364,7 @@ def stage_plan(
     candidates: list[discover.Candidate] = []
     health: list[FeedHealthRow] = []
     history = ledger.load_health(state, today=date, within_days=ledger.HEALTH_WINDOW_DAYS)
-    asleep = discover.resting(history, after_failures=collect.quarantine_after_failures)
+    asleep = discover.resting(history, after_failures=collect.availability_strikes_before_rest)
     # Retirement outranks rest, so it is decided first and from its own evidence:
     # five distinct runs reading `410 Gone` from one address. The ledger is read
     # before the row is filed and the two are joined, so the run that decides is
@@ -2616,7 +2616,7 @@ def stage_prune_state(
         LOG.info(
             "telemetry fold: nothing older than %s months, so every month is still at "
             "full grain",
-            observability.keep_months,
+            observability.item_health_full_grain_months,
         )
     else:
         LOG.info(

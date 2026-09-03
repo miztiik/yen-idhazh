@@ -618,11 +618,13 @@ def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> N
 
     result = prune_telemetry(state, config, TODAY)
 
-    kept = oldest_month_kept(TODAY, config.keep_months)
-    assert config.keep_months == 14, "a 366-day console read can open fourteen month shards"
+    kept = oldest_month_kept(TODAY, config.item_health_full_grain_months)
+    assert config.item_health_full_grain_months == 14, (
+        "a 366-day console read can open fourteen month shards"
+    )
     assert kept == "2025-07", "fourteen months ending in August 2026 starts in July 2025"
     assert list(result.folded) == sorted(stem for stem in before if stem < kept)
-    assert len(result.folded) == HISTORY_MONTHS - config.keep_months
+    assert len(result.folded) == HISTORY_MONTHS - config.item_health_full_grain_months
     for stem, bytes_before in before.items():
         shard = ledger.item_health_path(state, f"{stem}-01")
         if stem < kept:
@@ -635,7 +637,7 @@ def test_the_fold_loses_no_total(tmp_path: Path) -> None:
     """The grain changes; the answer does not. A fold that loses a total is a failed fold."""
     state = a_state_tree(tmp_path)
     config = ObservabilityConfig()
-    kept = oldest_month_kept(TODAY, config.keep_months)
+    kept = oldest_month_kept(TODAY, config.item_health_full_grain_months)
     doomed = {
         path.stem: path.read_text(encoding="utf-8")
         for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
@@ -730,11 +732,11 @@ def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
     """`console.max_window_days` is 366, so a shard has to answer for a year.
 
     Running the fold twenty times over must never remove an aggregate while
-    `hard_delete_after_months` is null, which is what ships.
+    `item_health_aggregate_keep_months` is null, which is what ships.
     """
     state = a_state_tree(tmp_path)
     config = ObservabilityConfig()
-    assert config.hard_delete_after_months is None
+    assert config.item_health_aggregate_keep_months is None
 
     first = prune_telemetry(state, config, TODAY)
     written = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
@@ -824,7 +826,7 @@ def test_the_browser_copy_goes_with_the_month_it_copies(tmp_path: Path) -> None:
     """
     state, public = a_published_tree(tmp_path)
     config = ObservabilityConfig()
-    kept = oldest_month_kept(TODAY, config.keep_months)
+    kept = oldest_month_kept(TODAY, config.item_health_full_grain_months)
     assert len(month_shards(public)) == HISTORY_MONTHS
 
     result = prune_telemetry(state, config, TODAY, public_root=public)
@@ -916,7 +918,7 @@ def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
     config = ObservabilityConfig()
     doomed = [
         path for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
-        if path.stem < oldest_month_kept(TODAY, config.keep_months)
+        if path.stem < oldest_month_kept(TODAY, config.item_health_full_grain_months)
     ]
     assert doomed, "the fixture has to reach past the window or this proves nothing"
     monkeypatch.setattr(ledger, "load_telemetry_aggregate", lambda _path: [])

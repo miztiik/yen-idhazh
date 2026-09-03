@@ -514,7 +514,7 @@ export async function load() {
 	const floorPct = runConfig().success_floor_pct;
 	const itemCeiling = runConfig().safety_ceiling_per_run;
 	const siteBudgetMb = retentionConfig().site_budget_mb;
-	const quarantineAfter = collectConfig().quarantine_after_failures;
+	const quarantineAfter = collectConfig().availability_strikes_before_rest;
 	const console = consoleConfig();
 	const summarize = summarizeConfig();
 

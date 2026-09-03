@@ -39,9 +39,9 @@ const CANARY = join(repo, 'backend', 'var', 'canary');
 /** The threshold, from the file the pipeline reads it from. Not a copy. */
 const QUARANTINE_AFTER = (
 	JSON.parse(readFileSync(join(repo, 'config', 'idhazh.json'), 'utf8')) as {
-		collect: { quarantine_after_failures: number };
+		collect: { availability_strikes_before_rest: number };
 	}
-).collect.quarantine_after_failures;
+).collect.availability_strikes_before_rest;
 
 /** How many failing feeds the section draws before its tail sentence. Read
  * from the file the page reads it from, so a cap that starts biting this
