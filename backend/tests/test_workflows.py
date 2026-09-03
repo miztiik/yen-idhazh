@@ -2165,6 +2165,27 @@ def test_the_fold_stages_the_browser_copy_it_deletes() -> None:
         assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
 
 
+def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> None:
+    """`state/telemetry-aggregate/` and `state/score-archive/` are written, never seeded.
+
+    Neither exists in a fresh checkout: one appears the first time a month is
+    folded and the other the first time a month is archived. Naming either in
+    the commit step would abort `git add` under `set -euo pipefail` on every run
+    before that day, and take the sibling ledgers staged in the same call with
+    it. Row 1 solved the same problem for `state/feed-retirements.csv` by
+    committing a header-only file; there is no header-only form of a directory,
+    so the answer here is to stage `state`, which is always there.
+    """
+    staged = COMMIT_STAGED_PATHS["fold"]
+
+    assert "state" in staged
+    for late in ("telemetry-aggregate", "score-archive"):
+        assert f"state/{late}" not in staged, f"state/{late} is not in a fresh checkout"
+        assert not (REPO_ROOT / "state" / late).exists(), (
+            f"state/{late} is now committed, so this test is asserting the wrong thing"
+        )
+
+
 def test_the_corpus_is_committed_but_never_rebuilt() -> None:
     """The window records what a run saw. It is not derived from origin's tip.
 

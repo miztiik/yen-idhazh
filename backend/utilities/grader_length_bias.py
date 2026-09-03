@@ -53,6 +53,7 @@ from pathlib import Path
 from idhazh.config import load
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.evidence import EvidenceItem
+from idhazh.evals import archive
 from idhazh.evals.evidence import EVIDENCE_ROOT_RELPATH, index, key_of
 from idhazh.evals.hhem import Scorer, chunks, score_over_chunks
 from idhazh.evals.writer import records as score_records
@@ -145,7 +146,11 @@ def _cut_by_row(state_dir: Path) -> dict[str, bool | None]:
     it here would split the table on a column that measures something else.
 
     An empty `source_word_count` is a row that does not know its own pre-cap
-    length, and that is `None` rather than `False`.
+    length, and that is `None` rather than `False`. So is a pair whose month has
+    aged out of `observability.scores_full_grain_months`: the summary that
+    replaced it counts cuts per cohort and cannot answer for one item. Both land
+    in the report's `cut unknown` group, and `load_pairs` names the archived
+    months so the two causes are told apart there rather than guessed at.
     """
     return {key_of(record): _cut_of(record) for record in score_records(state_dir)}
 
@@ -162,6 +167,12 @@ def load_pairs(evidence_dir: Path, state_dir: Path) -> list[Pair]:
 
     Refuses an empty package rather than returning an empty list. Every caller
     of this function goes on to divide by the count.
+
+    A pair the ledger cannot answer for lands in the report's `cut unknown`
+    group, and there are two ways to get there: a row that never recorded its
+    pre-cap length, and a month that has aged out of
+    `observability.scores_full_grain_months`. The second is named here, because
+    from inside the table the two are the same empty cell.
     """
     files = index(evidence_dir)
     if not files:
@@ -174,6 +185,14 @@ def load_pairs(evidence_dir: Path, state_dir: Path) -> list[Pair]:
     for key, path in sorted(files.items()):
         item = EvidenceItem.from_json(path.read_text(encoding="utf-8"))
         pairs.append(Pair(key=key, premise=item.premise, summary=item.summary, cut=cut.get(key)))
+    unjoined = sum(1 for pair in pairs if pair.cut is None)
+    summarised = archive.archived_months(state_dir)
+    if unjoined and summarised:
+        print(
+            f"{unjoined} of {len(pairs)} pairs have no cut on them. {', '.join(summarised)} "
+            f"have aged out of the full-grain window, so a pair from one of those months "
+            f"cannot be joined to a row at all. {archive.RAW_WINDOW_NOTE}"
+        )
     return pairs
 
 

@@ -382,7 +382,7 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
 | `item_health_aggregate_keep_months` | `null` | Nothing by default. Null means a folded month is never removed. |
 | `feed_health_keep_months` | `14` | Nothing. It is where `state/feed-health/` stops keeping a month, and past it the month is deleted rather than summarised. |
-| `scores_full_grain_months` | `14` | Nothing. It is where `state/scores/` stops being kept item by item. |
+| `scores_full_grain_months` | `14` | Where `state/scores/` stops being kept item by item. Past it a month becomes `state/score-archive/<YYYY-MM>.json` and the shard is deleted. |
 | `score_archive_keep_months` | `null` | Nothing by default. Null means a summarised score month is never removed. |
 | `public_telemetry_keep_months` | `14` | Nothing. It is where `frontend/public/telemetry/` stops keeping a shard, and it must equal `item_health_full_grain_months`. |
 | `cost_currency` | `"USD"` | Nothing. It is the ISO 4217 code the console prints a counterfactual cost in. |
@@ -547,14 +547,29 @@ The 219 KB a year the old description quoted was an estimate at five stages and
 estimate. The description keeps the estimate's conclusion, which the measurement
 only strengthens.
 
-**Three of the six now decide something, and the same step spends them.** From
+**Five of the six now decide something, and the same step spends them.** From
 2026-09-03 `idhazh prune-state` folds `state/item-health/` past
 `item_health_full_grain_months`, unlinks the browser's copy of that month past
-`public_telemetry_keep_months`, and deletes `state/feed-health/` past
-`feed_health_keep_months`. `scores_full_grain_months` and its archive age still
-have no reader; `state/scores/` grows with nothing to stop it, which the table in
-[../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree)
-says out loud.
+`public_telemetry_keep_months`, deletes `state/feed-health/` past
+`feed_health_keep_months`, and archives `state/scores/` past
+`scores_full_grain_months` before deleting the shard. `score_archive_keep_months`
+is the sixth and is null, so nothing has ever deleted an archive.
+
+**A score month is summarised before it is deleted, and it is the only store here
+with a summary in front of the deletion.** The archive is
+`state/score-archive/<YYYY-MM>.json`: the shard's SHA-256 and row count, one
+digest per distinct measurement, and one cohort per (date, run, row version,
+model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands,
+the boolean signal counts, the cut counts, the premise-digest counts and
+`{n, sum, sum_squares, min, max}` per numeric column. Two things make that
+necessary rather than tidy: the ledger is the evidence behind every published
+quality claim, and `evals.writer` refuses a repeat measurement by reading the
+rows - so a shard deleted with no index would make every measurement in it
+scoreable again as if it were new. **Measured 2026-09-03 over both committed
+shards: 4,266,655 bytes of shard become 557,290 bytes of archive, 13.1 percent,
+and three reads gave byte-identical results so the spread is zero.** What that
+buys, in years, is in
+[../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree).
 
 **Feed health is deleted and never summarised.** Its rows are per-feed-per-run
 evidence, the quarantine reads 31 days, and the console reaches at most 366 - so
@@ -569,11 +584,12 @@ and removes none of them. `.github/workflows/prune.yml` squashes and force-pushe
 `main` on a schedule, so a state file deleted here stops being recoverable from
 history once that prune passes over it (`CLAUDE.md` section 8) - which makes
 "read the list first" the only safe order. Turning the deletion on is a one-line
-commit of its own. Measured on this checkout on 2026-09-02: a live run today
+commit of its own. Measured on this checkout on 2026-09-03: a live run today
 removes nothing, the first file any store loses is `state/seen/2026-08.csv` on
-**2026-11-30**, and the first files this fold takes are
-`state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv` and
-`state/feed-health/2026-08.csv`, together, on **2027-10-01**. Reading committed
+**2026-11-30**, and the first files the fourteen-month rules take are
+`state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv`,
+`state/feed-health/2026-08.csv` and `state/scores/2026-08.csv`, together, on
+**2027-10-01**. Reading committed
 files against a fixed calendar is deterministic, so the spread is zero.
 
 ## Reader surface

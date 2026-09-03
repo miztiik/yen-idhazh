@@ -1,0 +1,267 @@
+{
+  "$defs": {
+    "ConfidenceBand": {
+      "description": "The band, not the number, is what drives behaviour and what a reader sees.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "ConfidenceBand",
+      "type": "string"
+    },
+    "Moment": {
+      "additionalProperties": false,
+      "description": "One numeric column of one cohort, as the five numbers that rebuild it.\n\nDeliberately not a mean and a standard deviation. Those are answers rather\nthan evidence: two cohorts' means cannot be added, and a pooled spread\ncannot be recovered from two pooled spreads. `sum` and `sum_squares` can be\nadded across any set of cohorts and give back both.",
+      "properties": {
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The largest value.",
+          "title": "Max"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The smallest value. Absent when n is zero - absent is not zero.",
+          "title": "Min"
+        },
+        "n": {
+          "description": "Rows of this cohort that carried a value for this column. Never the cohort's row count: a nullable column is empty on every row written before it existed, and counting those as zero would say the row measured the value and got nothing.",
+          "minimum": 0,
+          "title": "N",
+          "type": "integer"
+        },
+        "sum": {
+          "description": "Every value added together. A total survives; a mean does not.",
+          "title": "Sum",
+          "type": "number"
+        },
+        "sum_squares": {
+          "description": "Every value squared, added together. With n and sum this gives the variance and so the spread, which Rule #10 asks for beside any number read off this archive.",
+          "minimum": 0.0,
+          "title": "Sum Squares",
+          "type": "number"
+        }
+      },
+      "required": [
+        "n",
+        "sum",
+        "sum_squares"
+      ],
+      "title": "Moment",
+      "type": "object"
+    },
+    "ScoreCohort": {
+      "additionalProperties": false,
+      "description": "One (date, run, row version, model, pipeline, scorer) group of scored items.\n\nSix fields of key, because every one of them changes what a number over the\ngroup means. A day and a run separate two executions that published the same\ndate. The row version says which columns the rows carried at all. The model\nand the pipeline fingerprint say what produced the words, and the scorer\nversion says which instrument read them - and the scorer version is the one\nthat makes a rate from two cohorts unmixable rather than merely awkward.",
+      "properties": {
+        "bands": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "How many rows the run banded high, medium and low. All three keys are present, zero included, so a reader never has to decide whether a missing band means none or means unrecorded.",
+          "propertyNames": {
+            "$ref": "#/$defs/ConfidenceBand"
+          },
+          "title": "Bands",
+          "type": "object"
+        },
+        "cut": {
+          "description": "Of those, the rows where the model read less than the whole article. Read as the arithmetic and never as truncation_flagged, which means two different things either side of 2026-08-29T09:00.",
+          "minimum": 0,
+          "title": "Cut",
+          "type": "integer"
+        },
+        "cut_known": {
+          "description": "Rows that recorded the article's length before the truncation cap, so the cut is answerable at all. It is not the row count: a row stamped before 2026-08-27T21:00 can carry no pre-cap length.",
+          "minimum": 0,
+          "title": "Cut Known",
+          "type": "integer"
+        },
+        "date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Date",
+          "type": "string"
+        },
+        "hhem_deciles": {
+          "description": "How the group's faithfulness scores fall across ten buckets, lowest first. The distribution a percentile question can still be asked of approximately once the rows are gone, and the reason an exact percentile cannot be.",
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Hhem Deciles",
+          "type": "array"
+        },
+        "measurements": {
+          "description": "One moment per numeric column of the eval row. Keyed by the column name, so a column added later is a new key rather than a shifted position.",
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {
+              "$ref": "#/$defs/Moment"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "title": "Measurements",
+          "type": "object"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "pipeline_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Pipeline Fingerprint",
+          "type": "string"
+        },
+        "premise_distinct": {
+          "description": "Distinct premise digests among those. Below premise_recorded means two items were scored against the same text, which is the shape a broken extractor takes.",
+          "minimum": 0,
+          "title": "Premise Distinct",
+          "type": "integer"
+        },
+        "premise_recorded": {
+          "description": "Rows carrying the digest of the text the scorer read. Zero on a month scored before 2026-08-27, when no run recorded a premise.",
+          "minimum": 0,
+          "title": "Premise Recorded",
+          "type": "integer"
+        },
+        "row_version": {
+          "description": "The eval-row schema stamp these rows carried. Part of the key because a column is null on every row stamped before it existed, so a cohort that mixed two stamps would report a coverage hole as a measurement.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+          "title": "Row Version",
+          "type": "string"
+        },
+        "rows": {
+          "description": "Rows the shard held for this group, counted as written.",
+          "minimum": 1,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "run_id": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "scorer_version": {
+          "minLength": 1,
+          "title": "Scorer Version",
+          "type": "string"
+        },
+        "signals": {
+          "description": "How many rows set each boolean column. Counted rather than folded into a rate, so a count over several cohorts is a sum instead of an average of averages.",
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {
+              "type": "integer"
+            }
+          },
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "title": "Signals",
+          "type": "object"
+        }
+      },
+      "required": [
+        "date",
+        "run_id",
+        "row_version",
+        "model_id",
+        "pipeline_fingerprint",
+        "scorer_version",
+        "rows",
+        "hhem_deciles",
+        "bands",
+        "signals",
+        "cut_known",
+        "cut",
+        "premise_recorded",
+        "premise_distinct",
+        "measurements"
+      ],
+      "title": "ScoreCohort",
+      "type": "object"
+    }
+  },
+  "$id": "score-archive.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one archived month, its source hash and row count, its sorted observation digests, and one cohort per (date, run, row version, model, pipeline, scorer).",
+      "version": "2026-09-03",
+      "why": "state/scores/ is the largest store under state/ - 5,335 rows in 4,266,655 bytes on 2026-09-03 - and nothing bounded it. Deleting an old month outright would erase the evidence behind every published quality claim about it, and would let every measurement in it be scored again as if it were new, because evals.writer refuses a repeat by reading the rows themselves. This shape is what a month is turned into before its shard is unlinked: the cohorts keep the totals, rates, distributions, ranges and spread, and the digest index keeps the dedupe exact."
+    }
+  ],
+  "description": "One month of `state/scores/`, after the full-grain rows are gone.",
+  "properties": {
+    "cohorts": {
+      "description": "Every group the month held, in key order. Their row counts sum to source_rows.",
+      "items": {
+        "$ref": "#/$defs/ScoreCohort"
+      },
+      "title": "Cohorts",
+      "type": "array"
+    },
+    "month": {
+      "description": "The shard this replaces, spelled the way it was filed.",
+      "pattern": "^\\d{4}-\\d{2}$",
+      "title": "Month",
+      "type": "string"
+    },
+    "observation_digests": {
+      "description": "One digest per distinct measurement the month held - the SHA-256 of the eval writer's observation key - sorted and distinct. This is what keeps the dedupe exact after the rows are gone: without it, the day a shard is deleted every observation in it becomes scoreable again as if it were new, and a count over the ledger stops being a count of items.",
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Observation Digests",
+      "type": "array"
+    },
+    "source_rows": {
+      "description": "Data rows the shard held, header excluded. Reconciled against the shard before it is unlinked, so a summary of a truncated read can never be the reason a file is deleted.",
+      "minimum": 0,
+      "title": "Source Rows",
+      "type": "integer"
+    },
+    "source_sha256": {
+      "description": "The shard's bytes, digested whole. The one field that says WHICH file this summarises rather than describing what was in it.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Sha256",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-03",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "month",
+    "source_rows",
+    "source_sha256",
+    "observation_digests",
+    "cohorts"
+  ],
+  "title": "ScoreArchive",
+  "type": "object",
+  "version": "2026-09-03"
+}

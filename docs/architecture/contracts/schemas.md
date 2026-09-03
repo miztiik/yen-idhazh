@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -56,6 +56,7 @@ The shapes, and where each one lives once written:
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
+| `ScoreArchive` | `score-archive` | `state/score-archive/<YYYY-MM>.json`, one whole document per archived score month |
 | `RuntimeCountersRow` | `runtime-counters-row` | one appended row of `state/runtime-counters.csv` |
 | `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
@@ -67,6 +68,8 @@ The shapes, and where each one lives once written:
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
 `TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored, and `merge=union` could not tell the copy from the original. What decides when a month is folded is `observability.item_health_full_grain_months`, and what it costs is in [../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
+
+`ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of `state/scores/` past `observability.scores_full_grain_months` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the shard's SHA-256 and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of the shard before the shard is unlinked; `.github/workflows/prune.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a shard deleted on the strength of an unchecked summary does not come back. What it weighs is in [../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
 
 ### A new row ledger ships with its header, not with its first run
 
@@ -134,7 +137,8 @@ carry a time window?**
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published.csv` | one file | have we already published this? | no - published is forever |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
-| `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, but [nothing deletes a month yet](../publishing/layout.md#what-bounds-the-committed-state-tree) |
+| `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/layout.md#what-bounds-the-committed-state-tree) |
+| `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
 
