@@ -16,7 +16,7 @@
  */
 
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '$lib/charts/glance';
-import { chronological, failing, resting, skipped } from '$lib/feed-health';
+import { chronological, failing, reliability, resting, skipped } from '$lib/feed-health';
 import { modelWork, type ModelDay } from '$lib/server/model-work';
 import {
 	evalRows,
@@ -191,10 +191,15 @@ function worstOf(candidates: Candidate[]): Candidate | null {
 	return ranked[0] ?? null;
 }
 
-/** How many feeds are resting, and how many are failing without resting yet.
+/** How many feeds are resting, how many are failing without resting yet, and
+ * how many the pipeline has never actually read.
  *
  * `results` is already one row per feed per run: `feedResults` settles the
  * ledger once, so nothing here can count a re-run twice.
+ *
+ * The third number is the one that was missing. A feed whose every row is a
+ * robots answer has never been read at all, so it is neither working nor
+ * broken - and until 2026-09-03 it was counted as a feed that had never failed.
  */
 function feedTrouble(results: FeedResult[], quarantineAfter: number) {
 	const byFeed = new Map<string, FeedResult[]>();
@@ -214,7 +219,7 @@ function feedTrouble(results: FeedResult[], quarantineAfter: number) {
 		}
 		if (ordered.filter((row) => !skipped(row)).some(failing)) failed += 1;
 	}
-	return { rested, failed };
+	return { rested, failed, unread: reliability(results).ineligible.length };
 }
 
 /** What is wrong on Pipelines, loudest kind first.
@@ -226,7 +231,7 @@ function feedTrouble(results: FeedResult[], quarantineAfter: number) {
  */
 function pipelinesCandidates(
 	newest: { date: string; records: RunRecord[] } | null,
-	feeds: { rested: number; failed: number },
+	feeds: { rested: number; failed: number; unread: number },
 	quarantineAfter: number
 ): Candidate[] {
 	const found: Candidate[] = [];
@@ -268,6 +273,19 @@ function pipelinesCandidates(
 			text: `${plural(feeds.failed, 'feed', 'feeds')} failing`,
 			sentence: `${plural(feeds.failed, 'feed', 'feeds')} failed on the last ask, so the digest is short of what ${feeds.failed === 1 ? 'it carries' : 'they carry'} until ${feeds.failed === 1 ? 'it answers' : 'they answer'} again.`,
 			severity: WORTH_A_LOOK
+		});
+	}
+	if (feeds.unread > 0) {
+		// The lowest rank on purpose. Nobody can act on a publisher's own rules,
+		// so this must never outrank a run that failed - but a desk short of a
+		// source is worth knowing, and the page said the opposite until
+		// 2026-09-03: a source that has never given us an article was counted
+		// among the ones that had never failed.
+		const n = feeds.unread;
+		found.push({
+			text: `${plural(n, 'feed', 'feeds')} never read`,
+			sentence: `${plural(n, 'feed', 'feeds')} ${n === 1 ? 'has' : 'have'} never been read - a rest or the site's own rules held ${n === 1 ? 'it' : 'them'} back on every run - so the digest has never carried anything from ${n === 1 ? 'it' : 'them'}.`,
+			severity: WORTH_KNOWING
 		});
 	}
 	return found;

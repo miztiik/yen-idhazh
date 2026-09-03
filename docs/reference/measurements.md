@@ -1713,6 +1713,94 @@ the first pipeline run, not before it.
 
 ### The prerendered page, on the wire
 
+#### The `/console/` ceiling, re-derived 2026-09-03
+
+Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0. Date: 2026-09-03.
+Method: `frontend/scripts/bundle-gate.mjs`, which is `gzip -9` over each
+prerendered `index.html` in `frontend/build`. One tree, twelve published days,
+built three times, with no sibling agent on the box.
+
+| Route | Build 1 | Build 2 | Build 3 | Spread | Committed ceiling |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 163,472 | 163,460 | 163,467 | 12 | **277,195** |
+| `/console/machine/` | 31,597 | 31,588 | 31,587 | 10 | 39,743, unchanged |
+| `/console/model/` | 29,421 | 29,411 | 29,414 | 10 | 37,979, unchanged |
+
+**What a published day costs the page**, by removing one. 2026-08-27 was
+dropped from `state/scores`, `state/item-health`, `state/feed-health`,
+`frontend/public/telemetry` and `frontend/public/digest`, and the site rebuilt
+through `STATE_ROOT`, `TELEMETRY_ROOT` and `DIGEST_ROOT`. Never the newest or
+the oldest day: both anchor a window, and moving an anchor measures the anchor.
+
+| Reading | Bytes |
+| --- | ---: |
+| `/console/` with 2026-08-27 | 163,494 |
+| `/console/` without it | 155,856 |
+| One published day | **7,638** |
+| Ledger rows that day carried | 814 |
+| Per ledger row | **9.38** |
+
+Both arms of that pair were built before the section's final wording landed, so
+they are 20 to 30 bytes heavier than the table above. The difference between
+them is what the arm measures and it is unaffected.
+
+**2026-08-27 is a light day and the ceiling is sized on a heavy one.** Over the
+twelve committed days the ledger rows a day carries run 10 to 1,731, median
+1,240. At 9.38 bytes a row the heaviest day on record costs **16,237 bytes**, so
+seven of those are 113,659. The ceiling is the heaviest build plus that plus the
+64-byte noise floor: 163,472 + 113,659 + 64 = **277,195**.
+
+**It over-states the long run, which is the safe direction.** The telemetry seed
+is windowed at `console.default_window_days`, so once the ledger is longer than
+the window a new day pushes the oldest out of the document and the marginal cost
+falls toward zero. A ceiling sized on the un-windowed rate expires sooner rather
+than later, which is what a ratchet is for.
+
+**What this row cost.** Control arm: the row's five frontend source files
+checked out at `origin/main` on the same tree, built and gated, then restored.
+
+| Route | Control | Branch | Change |
+| --- | ---: | ---: | ---: |
+| `/console/` | 161,056 | 163,472 | **+2,416** (1.50 percent) |
+| `/console/machine/` | 31,583 | 31,587-31,597 | +4 to +14 |
+| `/console/model/` | 29,411 | 29,411-29,421 | 0 to +10 |
+| `/404` | 1,599 | 1,597-1,601 | -2 to +2 |
+| `/archive/` | 5,027 | 5,023-5,026 | -4 to -1 |
+| `/evals/` | 3,108 | 3,106-3,107 | -2 to -1 |
+
+**The two sibling console routes move a little, and that is the change too.**
+The standing band is one component on all three, and it gained a sentence
+counting the feeds nobody has read. The three routes this row cannot reach -
+`/404`, `/archive/` and `/evals/` - moved inside their own build-to-build
+spread, which is what says the 2,416 is the change rather than the toolchain.
+
+**What the published view costs.** `frontend/public/source-health.json` is
+44,736 bytes over 144 addresses, **310.6 bytes an address**. It is rewritten
+whole every run rather than appended, so it grows with the source list and not
+with the days - a source added costs about 311 bytes, for ever, and a day costs
+nothing. It is never served: nothing fetches it, so it is not staged into
+`frontend/static/` and it is outside both the 1 GB Pages cap and the per-day
+site rate.
+
+**What the section occupies, and that it really leaves.** Three builds off one
+copied payload root, differing only in that file: present, deleted, and
+truncated to 54 bytes of invalid JSON. Page height is the honest signal here,
+because a subtree can still report an intrinsic box while the document height
+cannot lie.
+
+| Arm | `/console/` at 1440 px | at 390 px | Console errors | Responses 400+ |
+| --- | ---: | ---: | ---: | ---: |
+| View present | 11,013 | 17,531 | 0 | 0 |
+| View deleted | 10,031 | 15,519 | 0 | 0 |
+| View truncated to invalid JSON | 10,031 | 15,519 | 0 | 0 |
+
+Both degraded arms drew the named absence, kept every other panel, and left the
+document 982 px shorter at 1440 and 2,012 px shorter at 390. The truncated arm
+also logged one line at build time naming the file and the parse error, which is
+the difference between a guard that fired and a file that was quietly ignored.
+
+#### The 2026-08-26 record, superseded
+
 Hardware: Intel Core i7-1265U, Windows, node 24.12.0. Date: 2026-08-26. Method:
 `gzip -9` over each prerendered `index.html` in `frontend/build`, heaviest page
 per route class. One tree, six published days, built three times.

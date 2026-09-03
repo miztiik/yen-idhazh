@@ -35,6 +35,7 @@ from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import Taxonomy
@@ -69,6 +70,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     ScoreArchive,
     SearchIndex,
     SeenRow,
+    SourceHealthView,
     Sources,
     Summary,
     Taxonomy,
