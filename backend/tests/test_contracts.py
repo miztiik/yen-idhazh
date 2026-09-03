@@ -32,8 +32,10 @@ from idhazh import ledger, source_health
 from idhazh.cli import main, stage_validate_days
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
+    SUPERSEDED_COLLECT_NAMES,
     SUPERSEDED_RETENTION_NAMES,
     AppConfig,
+    CollectConfig,
     ConsoleConfig,
     EvaluationConfig,
     ObservabilityConfig,
@@ -576,31 +578,44 @@ def test_the_published_copy_lasts_exactly_as_long_as_the_ledger_it_copies() -> N
     )
 
 
-def test_a_config_still_carrying_the_old_retention_names_reads() -> None:
-    """Section 11's read-side migration, on the two names this row retired.
+def test_a_config_still_carrying_a_removed_knob_is_refused_by_name() -> None:
+    """Decision 2: a removed knob fails loudly and names what to use instead.
 
-    The old value is read and dropped rather than carried forward: it was set
-    against a check that compared `months * 30` against the console window
-    instead of the shards that window selects, so carrying it forward would
-    carry the defect forward. The old names stay readable as properties, so the
-    fold and its log line still ask for `keep_months` and get the corrected
-    value.
+    Every model here forbids unknown keys, so all three names already failed -
+    with "extra inputs are not permitted", which does not tell an operator where
+    their number went. Ignoring the key would be worse still: an edit that takes
+    no effect is a value somebody believes.
+
+    The old value is not carried forward either. `keep_months` was set against a
+    check that compared `months * 30` against the console window instead of the
+    shards that window selects, so honouring it would honour the defect.
     """
-    migrated = ObservabilityConfig.model_validate(
-        {"keep_months": 13, "hard_delete_after_months": 36, "sample_rate": 0.5}
-    )
+    for block, removed, successor in (
+        ("observability", "keep_months", "item_health_full_grain_months"),
+        ("observability", "hard_delete_after_months", "item_health_aggregate_keep_months"),
+        ("collect", "quarantine_after_failures", "availability_strikes_before_rest"),
+    ):
+        model = ObservabilityConfig if block == "observability" else CollectConfig
+        with pytest.raises(ValidationError, match=successor) as raised:
+            model.model_validate({removed: 13})
+        assert f"{block}.{removed}" in str(raised.value)
 
-    assert migrated.item_health_full_grain_months == 14
-    assert migrated.item_health_aggregate_keep_months is None
-    assert migrated.sample_rate == 0.5, "an unrelated knob in the same file is untouched"
-    assert migrated.keep_months == migrated.item_health_full_grain_months
-    assert migrated.hard_delete_after_months == migrated.item_health_aggregate_keep_months
-    assert migrated == ObservabilityConfig(sample_rate=0.5)
 
-    with pytest.raises(ValidationError, match="superseded name beside its successor"):
-        ObservabilityConfig.model_validate(
-            {"keep_months": 13, "item_health_full_grain_months": 20}
-        )
+def test_the_removed_names_are_the_three_this_row_retired() -> None:
+    """The map is what the refusal message reads, so it is the map that is asserted."""
+    assert dict(SUPERSEDED_COLLECT_NAMES) == {
+        "quarantine_after_failures": "availability_strikes_before_rest"
+    }
+    assert dict(SUPERSEDED_RETENTION_NAMES) == {
+        "keep_months": "item_health_full_grain_months",
+        "hard_delete_after_months": "item_health_aggregate_keep_months",
+    }
+
+
+def test_an_unrelated_knob_in_a_block_with_no_removed_name_is_untouched() -> None:
+    """The refusal fires on the removed name and on nothing else."""
+    assert ObservabilityConfig.model_validate({"sample_rate": 0.5}).sample_rate == 0.5
+    assert CollectConfig.model_validate({"max_per_source": 3}).max_per_source == 3
 
 
 def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
@@ -610,11 +625,69 @@ def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
     assert fresh.score_archive_keep_months is None
 
 
-def test_the_committed_config_no_longer_emits_the_superseded_retention_names() -> None:
-    emitted = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["observability"]
-    assert not set(emitted) & set(SUPERSEDED_RETENTION_NAMES)
-    assert emitted["item_health_full_grain_months"] == 14
-    assert emitted["public_telemetry_keep_months"] == 14
+def test_the_committed_config_no_longer_emits_a_removed_name() -> None:
+    """The Oracle: the committed file loads, and no lifecycle value is defaulted.
+
+    Defaulted is the failure to catch. A knob deleted from the file and never
+    re-spelled under its new name would still load - on the contract's default -
+    and nothing would say the operator's number had gone.
+    """
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    assert not set(raw["observability"]) & set(SUPERSEDED_RETENTION_NAMES)
+    assert not set(raw["collect"]) & set(SUPERSEDED_COLLECT_NAMES)
+    assert raw["observability"]["item_health_full_grain_months"] == 14
+    assert raw["observability"]["public_telemetry_keep_months"] == 14
+
+    for successor in (*SUPERSEDED_COLLECT_NAMES.values(), "availability_rest_runs"):
+        assert successor in raw["collect"], f"collect.{successor} is defaulted, not set"
+    loaded = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    assert loaded.collect.availability_strikes_before_rest == 5
+
+
+def test_the_rest_rule_reads_the_knob_the_committed_config_spells() -> None:
+    """The rename cost the pipeline nothing, and this is where that is checked.
+
+    `discover.resting` took `collect.quarantine_after_failures` until
+    2026-09-03. The committed file carried 5 under both names and the tuned
+    fixture carried 3 under both, so moving the reader could not move a
+    decision - and that is the difference between a rename and a change of
+    behaviour.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).collect
+    tuned = AppConfig.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "app-config" / "tuned.json")
+    ).collect
+    assert committed.availability_strikes_before_rest == 5
+    assert tuned.availability_strikes_before_rest == 3
+
+    source = read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py")
+    assert "after_failures=collect.availability_strikes_before_rest" in source
+
+
+def test_the_console_falls_back_to_the_strike_count_the_pipeline_reads() -> None:
+    """The console keeps its own copy of this knob, and nothing held the two together.
+
+    `frontend/src/lib/server/config.ts` names the field it reads out of
+    `config/idhazh.json` and the value it uses when there is no file. A rename
+    on either side is silent: the console would fall back to its default and
+    draw a rule the run does not follow, and no build would fail. This is the
+    gate that was missing when the knob was renamed.
+    """
+    source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    declared = re.search(r"const COLLECT_DEFAULTS: CollectConfig = \{(.*?)\};", source, re.DOTALL)
+    assert declared is not None, "config.ts no longer declares COLLECT_DEFAULTS"
+    fallback = dict(re.findall(r"(\w+):\s*(\d+)", declared.group(1)))
+
+    fresh = CollectConfig()
+    assert fallback == {"availability_strikes_before_rest": str(fresh.availability_strikes_before_rest)}
+    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["collect"]
+    for name, value in fallback.items():
+        assert str(committed[name]) == value, (
+            f"config.ts falls back to collect.{name} = {value} and the committed file says "
+            f"{committed[name]}"
+        )
+    for removed in SUPERSEDED_COLLECT_NAMES:
+        assert removed not in source, f"config.ts still reads collect.{removed}"
 
 
 def test_no_configured_age_deletes_a_shard_a_366_day_read_still_selects() -> None:
@@ -794,6 +867,25 @@ def test_a_plan_that_spells_live_feeds_still_reads() -> None:
     assert parsed.eligible_feeds == 3
 
 
+def test_the_real_payload_an_earlier_build_committed_still_opens() -> None:
+    """The same migration, against bytes a build actually wrote and committed.
+
+    `tests/fixtures/superseded/run-plan-live-feeds.json` is the run-plan fixture
+    exactly as it stood in the tree before the 2026-09-02 rename, recovered from
+    git and kept unedited. A migration checked only against a payload this test
+    file builds proves the builder, not the migration - and this is the whole
+    reason the migration outlived the config knobs renamed beside it.
+    """
+    raw = read_text(FIXTURES_DIR / "superseded" / "run-plan-live-feeds.json")
+    assert '"live_feeds"' in raw and '"eligible_feeds"' not in raw
+
+    plan = RunPlan.from_json(raw)
+    assert [(desk.id, desk.eligible_feeds) for desk in plan.verticals] == [("ai", 3), ("energy", 4)]
+    assert all(desk.feed_floor is None for desk in plan.verticals), (
+        "no floor is invented for a payload that never carried one"
+    )
+
+
 def test_a_plan_that_never_carried_a_floor_is_given_none() -> None:
     """Absent reads as unknown, never as a floor of zero.
 
@@ -832,6 +924,10 @@ def test_every_committed_run_manifest_still_reads_today() -> None:
     """
     manifests = sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/run.json"))
     assert manifests, "no day is committed, so this proves nothing"
+    oldest = manifests[0]
+    assert oldest.parts[-4:-1] == ("2026", "08", "21"), (
+        f"the oldest committed run payload moved to {'/'.join(oldest.parts[-4:-1])}"
+    )
     absent = 0
     for path in manifests:
         raw = json.loads(read_text(path))
@@ -1150,8 +1246,9 @@ def test_recorded_item_health_codes_never_count_against_a_source() -> None:
 def test_a_refused_reply_is_the_models_fault_and_never_the_feeds(code: FailureCode) -> None:
     """A wire service publishing short briefs must not be quarantined for our model.
 
-    `collect.quarantine_after_failures` is 5, so leaving either code out of the
-    source-neutral set would take a working feed off the list on the fifth copy.
+    `collect.availability_strikes_before_rest` is 5, so leaving either code out
+    of the source-neutral set would take a working feed off the list on the fifth
+    copy.
     """
     assert FAILURE_CODE_STAGES[code] == frozenset({ItemStage.SUMMARIZE})
     assert code in SOURCE_NEUTRAL_FAILURE_CODES

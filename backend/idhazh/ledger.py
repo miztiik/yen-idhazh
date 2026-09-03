@@ -36,12 +36,12 @@ no time window - so it is one file. It is also the slowest-growing: eight shards
 times five runs a day is 40 rows, and a year is 14,600.
 
 `state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health
-month once `observability.keep_months` has passed: one row per (date, stage),
-folded by `retention.fold_month`. It shards by month because the shard it
-replaces did, so the two file by the same stem and a reader looking for a month
-looks in one of two places rather than in a directory and a lookup table. It is
-the one file here that is rewritten rather than appended, because every row in
-it is derived from the shard it summarises.
+month once `observability.item_health_full_grain_months` has passed: one row per
+(date, stage), folded by `retention.fold_month`. It shards by month because the
+shard it replaces did, so the two file by the same stem and a reader looking for
+a month looks in one of two places rather than in a directory and a lookup
+table. It is the one file here that is rewritten rather than appended, because
+every row in it is derived from the shard it summarises.
 
 `state/feed-retirements.csv` answers "is this address gone for good?" One row
 per retired feed endpoint, read whole because a retirement has no time bound -

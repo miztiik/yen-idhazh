@@ -115,7 +115,7 @@ export interface ObservabilityConfig {
 
 /** What the console needs to say how close a feed is to being rested. */
 export interface CollectConfig {
-	quarantine_after_failures: number;
+	availability_strikes_before_rest: number;
 }
 
 export interface SummaryBand {
@@ -274,7 +274,7 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	runtime_counters_scrape: true,
 	sample_rate: 1
 };
-const COLLECT_DEFAULTS: CollectConfig = { quarantine_after_failures: 5 };
+const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	bands: [
 		{ min_source_words: 0, target_words_min: 30, target_words_max: 45 },

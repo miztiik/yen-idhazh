@@ -254,7 +254,7 @@ def test_a_feed_past_the_strike_count_is_resting_rather_than_failing() -> None:
     """The rest is the decision an operator can act on; failing is the symptom."""
     rows = [
         health("wire", date=DATE, n=n, outcome=FetchOutcome.TRANSIENT, status=503)
-        for n in range(1, COLLECT.quarantine_after_failures + 1)
+        for n in range(1, COLLECT.availability_strikes_before_rest + 1)
     ]
     assert only(fold(feeds=[feed("wire")], health_rows=rows)).availability is (
         SourceAvailability.RESTING
