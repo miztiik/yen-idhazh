@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-03
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -551,6 +551,20 @@ different fix, so two tags leading to one code change would be one tag.
 `not_the_article`, `unjudgeable`, and `none` for a supported summary. Three of
 them mirror a counterweight the pipeline already computes, which buys that
 counterweight's own precision and recall out of the same sixty labels.
+
+**Those three counterweights are copied onto the label row from 2026-09-03, and
+that is a change of policy rather than of shape.** The read side used to re-join
+`unsupported_numbers`, `hedge_dropped` and `extraction_suspect` from
+`state/scores/` on `output_digest`, and that ledger now keeps
+`observability.scores_full_grain_months` months of item-level rows before a month
+becomes a summary. A label outlives its source row, so a re-join is a promise the
+ledger stops being able to keep - and what would be lost is exactly the precision
+and recall the sixty labels are drawn to buy. `LabelRow` carries the three as
+nullable columns filled by the queue; null means a row written before this stamp,
+which is re-joined from the ledger while its month is still there, and never
+means "the counterweight was read and did not fire". Nothing else moved: there is
+still nowhere on this row to put a machine verdict, and `model_id` is still
+absent by name. Authority: Andre.
 
 Short-source rows stay in the pool. They are extraction failures rather than
 summary defects, and dropping them would bias the sample toward well-extracted
@@ -1240,6 +1254,68 @@ run. That is ledger de-duplication, not proof that production skipped inference.
 The current pipeline fingerprint also lacks article-input identity, so it cannot
 establish that a publisher left the source bytes unchanged
 ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
+
+### A month past fourteen becomes a summary, and the dedupe survives it
+
+`state/scores/` is the largest store under `state/` - measured 2026-09-03, 5,335
+rows in 4,266,655 bytes over two monthly shards - and nothing bounded it. Sharding
+by month bounds one file, not the tree.
+
+Deleting an old shard outright would answer the bytes and break two things. Every
+published quality claim about that month would lose the rows behind it, and Rule
+#10 then forbids citing the number at all. And the dedupe above works by reading
+the rows, so the day a shard is deleted every measurement in it becomes new
+again - which turns a count over the ledger from a count of items into a count of
+times the pipeline looked, and that is the one thing this ledger promises it is
+not.
+
+So a month past `observability.scores_full_grain_months` is turned into
+`state/score-archive/<YYYY-MM>.json` first, and the shard is unlinked only after
+that file has been written temp-then-rename, read back through its contract, and
+reconciled field by field against a second reading of the shard. The archive
+carries:
+
+- the shard's SHA-256 and its row count, which is what says WHICH file it
+  summarises rather than what was in it;
+- one digest per distinct measurement it held, sorted -
+  `evals.writer.recorded_observations` unions these with the live rows, which is
+  how the promise above keeps holding for a month whose rows are gone;
+- one cohort per (date, run, row version, model, pipeline fingerprint, scorer
+  version), each carrying its row count, ten faithfulness deciles, three bands,
+  the boolean signal counts, the known and actual cut counts, the premise-digest
+  counts, and `{n, sum, sum_squares, min, max}` for every numeric column.
+
+Five numbers a column and not a mean and a standard deviation, because a stored
+mean cannot be re-added into a total and a stored spread cannot be pooled across
+cohorts. These can do both. `n` counts the rows that carried a value rather than
+the rows in the cohort, so a column added mid-month reads as never measured on
+the rows before it rather than as zero.
+
+**What is deliberately lost:** item-level lookup, a late draw into the label
+queue, re-banding those rows under new thresholds, an exact percentile,
+correlating two columns against each other, and any slice the cohort key does not
+name. **What survives:** totals, rates, distributions, ranges, spread, signal
+counts, cut counts and exact dedupe. Every utility that needs an item-level row -
+`label_queue.py`, `reband_scores.py`, `data_wrangler.py refill` and
+`grader_length_bias.py` - names the fourteen-month limit and says which months it
+can no longer reach, rather than reporting a smaller number as though the ledger
+had always been that size. Authority: Andre, under Rule #10.
+
+**Measured 2026-09-03** on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM,
+Windows 11 (build 26200), CPython 3.14.2, over both committed shards with three
+reads each: 4,266,655 bytes of shard become 557,290 bytes of archive, **13.1
+percent**. Three reads gave byte-identical archives, so the spread is zero -
+reading a committed file is deterministic. Two thirds of the archive is the digest
+index, which is the price of keeping the dedupe exact. What the ratio buys in
+years is in
+[../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree).
+
+**It ships in dry run.** `.github/workflows/prune.yml` force-pushes `main` on a
+schedule, so a shard deleted here stops being recoverable once that prune passes
+over it (`CLAUDE.md` section 8). The step prints what a live run would remove and
+removes nothing; turning it on is a one-line commit somebody takes after reading
+that list. The first shard it would take is `state/scores/2026-08.csv` on
+2027-10-01.
 
 ## Choosing the model is also a measurement
 

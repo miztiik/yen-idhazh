@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger, publish_telemetry
 from idhazh.cli import main, stage_prune_state, stage_site_weight
@@ -38,10 +39,13 @@ from idhazh.contracts.app_config import (
     ObservabilityConfig,
     RetentionConfig,
 )
+from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
+from idhazh.evals import archive as score_archive
+from idhazh.evals import writer as score_writer
 from idhazh.retention import (
     BYTES_PER_MB,
     PAGES_HARD_CAP_MB,
@@ -63,6 +67,7 @@ from idhazh.retention import (
     over_cap,
     prune,
     prune_feed_health,
+    prune_scores,
     prune_seen,
     prune_telemetry,
     visuals_older_than,
@@ -1424,3 +1429,365 @@ def test_a_shard_newer_than_the_date_it_was_handed_is_never_deleted(
     assert not stale.exists()
     # And the planner reading at its own date still finds the rows it wants.
     assert ledger.load_seen(state, today="2026-08-31", within_days=window)
+
+
+# --- The score ledger --------------------------------------------------------
+
+
+def score_row(*, day: str, run: int, number: int) -> EvalRow:
+    """One eval row, built off the committed fixture so every column is real-shaped.
+
+    `hhem` walks the deciles and `band` follows it, so a fixture month exercises
+    more than one bucket and more than one band - a summary that collapsed
+    either would still pass a single-value fixture.
+    """
+    base = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
+    faithfulness = round(0.05 + (number % 10) / 10, 4)
+    seed = f"{day}-{run}-{number}"
+    band = (
+        ConfidenceBand.HIGH
+        if faithfulness >= 0.80
+        else ConfidenceBand.MEDIUM
+        if faithfulness >= 0.50
+        else ConfidenceBand.LOW
+    )
+    return EvalRow.model_validate(
+        {
+            **base,
+            "date": day,
+            "run_id": f"{day}-{run}",
+            "item_id": f"ai-{number:04d}",
+            "url_key": hashlib.sha256(seed.encode("ascii")).hexdigest(),
+            "output_digest": hashlib.sha256(f"out-{seed}".encode("ascii")).hexdigest(),
+            "hhem": faithfulness,
+            "hhem_full": faithfulness,
+            "hhem_delta": 0.0,
+            "band": band.value,
+            "unsupported_numbers": number % 3,
+            "hedge_dropped": number % 4 == 0,
+            "extraction_suspect": number % 5 == 0,
+            "source_word_count": 1320,
+            "source_seen_word_count": 1320 - (number % 2) * 40,
+            "score_ms": 1000 + number,
+            "scored_at": f"{day}T06:18:02Z",
+        }
+    )
+
+
+def score_history(state_dir: Path, months: list[str]) -> None:
+    """A real score shard per month, written through the real appender."""
+    for index, month in enumerate(months):
+        for day_of_month in (4, 17):
+            day = f"{month}-{day_of_month:02d}"
+            score_writer.append(
+                state_dir,
+                [score_row(day=day, run=1, number=index * 100 + offset) for offset in range(6)],
+            )
+
+
+def a_score_tree(tmp_path: Path) -> Path:
+    state = tmp_path / "state"
+    score_history(state, months_back(TODAY, HISTORY_MONTHS))
+    return state
+
+
+def test_a_score_month_past_the_window_is_summarised_and_then_deleted(tmp_path: Path) -> None:
+    """The whole point: the shard goes, and everything it could still answer stays."""
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig()
+    boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
+    doomed = [
+        path.stem for path in score_writer.ledger_shards(state) if path.stem < boundary
+    ]
+    assert doomed, "the fixture has to reach past the window or this proves nothing"
+
+    result = prune_scores(state, config, TODAY)
+
+    assert result.archived == tuple(doomed)
+    assert result.dry_run is False
+    assert [path.stem for path in score_writer.ledger_shards(state)] == [
+        month for month in months_back(TODAY, HISTORY_MONTHS) if month >= boundary
+    ]
+    assert score_archive.archived_months(state) == doomed
+    # Every archived month reads back through its contract and still adds up.
+    for month in doomed:
+        stored = score_archive.read(score_archive.archive_path(state, month))
+        assert stored.month == month
+        assert sum(cohort.rows for cohort in stored.cohorts) == stored.source_rows
+        assert len(stored.observation_digests) == stored.source_rows
+    assert result.rows_archived == sum(
+        score_archive.read(score_archive.archive_path(state, month)).source_rows
+        for month in doomed
+    )
+
+
+def test_a_score_month_inside_the_window_is_untouched(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    score_history(state, months_back(TODAY, 3))
+    held = {path.name: path.read_bytes() for path in score_writer.ledger_shards(state)}
+
+    result = prune_scores(state, ObservabilityConfig(), TODAY)
+
+    assert result.changed is False
+    assert result.archived == ()
+    assert {path.name: path.read_bytes() for path in score_writer.ledger_shards(state)} == held
+    assert score_archive.archived_months(state) == []
+
+
+def test_a_score_dry_run_writes_nothing_and_still_counts_both_sides(tmp_path: Path) -> None:
+    """The dry run's own deliverable is the byte ratio, so it has to compute it.
+
+    A dry run that reported only a file list would leave the person deciding
+    whether to switch the deletion on with no idea what the archive costs
+    (Rule #10). It summarises, measures both sides, and writes nothing.
+    """
+    state = a_score_tree(tmp_path)
+    held = {path.name: path.read_bytes() for path in score_writer.ledger_shards(state)}
+
+    result = prune_scores(state, ObservabilityConfig(), TODAY, dry_run=True)
+
+    assert result.dry_run is True
+    assert result.archived
+    assert result.source_bytes > 0
+    assert result.archive_bytes > 0
+    assert {path.name: path.read_bytes() for path in score_writer.ledger_shards(state)} == held
+    assert score_archive.archived_months(state) == []
+    assert not (state / score_archive.ARCHIVE_DIRNAME).exists()
+
+
+def test_a_month_with_real_volume_summarises_to_a_fraction_of_its_shard(tmp_path: Path) -> None:
+    """The measurement the policy rests on, pinned as a direction rather than a figure.
+
+    Two costs make up an archive: one digest per distinct measurement, which is
+    64 hex characters against a whole CSV row of thirty-odd columns, and a fixed
+    block of moments per cohort. The first is what saves the bytes and the
+    second is what a thin month pays anyway - so a twelve-row month really does
+    summarise LARGER than it held, and a month with a run's worth of rows in it
+    does not. Fourteen-month-old months are the full ones, which is why this
+    direction is the one that matters. The measured figure and its date are in
+    `docs/reference/measurements.md`.
+    """
+    state = tmp_path / "state"
+    day = "2025-01-09"
+    score_writer.append(state, [score_row(day=day, run=1, number=n) for n in range(200)])
+    shard = score_writer.ledger_shards(state)[0]
+    source_bytes = shard.stat().st_size
+
+    built = score_archive.summarise(shard, observation_key=score_writer.OBSERVATION_KEY)
+    archive_bytes = len(built.to_json().encode("utf-8"))
+
+    assert built.source_rows == 200
+    assert len(built.cohorts) == 1
+    assert archive_bytes * 2 < source_bytes, (
+        f"{archive_bytes} bytes of archive against {source_bytes} of shard is not a saving"
+    )
+
+
+def test_a_second_score_run_over_a_settled_tree_moves_no_byte(tmp_path: Path) -> None:
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig()
+    prune_scores(state, config, TODAY)
+    settled = {
+        path.relative_to(state).as_posix(): path.read_bytes()
+        for path in sorted(state.rglob("*"))
+        if path.is_file()
+    }
+
+    again = prune_scores(state, config, TODAY)
+
+    assert again.changed is False
+    assert {
+        path.relative_to(state).as_posix(): path.read_bytes()
+        for path in sorted(state.rglob("*"))
+        if path.is_file()
+    } == settled
+
+
+def test_a_score_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    score_history(state, months_back(TODAY, HISTORY_MONTHS))
+    stray = state / score_writer.LEDGER_DIRNAME / "notes.csv"
+    stray.write_text("nothing the contract knows\n", encoding="utf-8")
+
+    prune_scores(state, ObservabilityConfig(), TODAY)
+
+    assert stray.exists(), "a directory this deletes from names what it recognises"
+
+
+def test_an_archive_that_does_not_reconcile_leaves_its_shard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing is deleted on the strength of a summary nobody checked.
+
+    The read-back is not enough on its own: a file that parses can still
+    describe a different month. So the reconcile recomputes from the shard and
+    compares, and a disagreement raises with the shard still on disk.
+    """
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig()
+    doomed = [
+        path for path in score_writer.ledger_shards(state)
+        if path.stem < oldest_month_kept(TODAY, config.scores_full_grain_months)
+    ]
+    assert doomed
+    honest = score_archive.read
+
+    def one_row_short(path: Path) -> object:
+        stored = honest(path)
+        return stored.model_copy(update={"source_rows": stored.source_rows + 1})
+
+    monkeypatch.setattr(score_archive, "read", one_row_short)
+
+    with pytest.raises(ValueError, match="does not reconcile"):
+        prune_scores(state, config, TODAY)
+
+    assert doomed[0].exists(), "the shard was unlinked against a summary that disagreed"
+
+
+def test_the_archive_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
+    tmp_path: Path,
+) -> None:
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig()
+    assert config.score_archive_keep_months is None
+
+    result = prune_scores(state, config, TODAY)
+
+    assert result.hard_deleted == ()
+    assert score_archive.archived_months(state)
+
+
+def test_a_hard_delete_takes_the_archive_only_after_the_month_has_been_archived(
+    tmp_path: Path,
+) -> None:
+    """A finite archive age must sit above the full-grain window, and does.
+
+    Fifteen against fourteen, so the month that is deleted outright is one that
+    was summarised on an earlier pass rather than one that never was.
+    """
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig(scores_full_grain_months=14, score_archive_keep_months=15)
+    prune_scores(state, ObservabilityConfig(), TODAY)
+    before = score_archive.archived_months(state)
+    assert len(before) > 1
+
+    result = prune_scores(state, config, TODAY)
+
+    assert result.hard_deleted == tuple(
+        month for month in before if month < oldest_month_kept(TODAY, 15)
+    )
+    assert result.hard_deleted, "the fixture has to reach past both ages"
+    assert score_archive.archived_months(state) == [
+        month for month in before if month not in result.hard_deleted
+    ]
+
+
+def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repeat(
+    tmp_path: Path,
+) -> None:
+    """The row's Oracle, both halves.
+
+    First: the archive's source hash and row count match the shard, its
+    observation digests are one-for-one with the shard's own observation keys,
+    and its moments recompute exactly - checked against the raw CSV rather than
+    by calling the summariser again, so the oracle cannot pass by agreeing with
+    the code it is checking.
+
+    Second, and the one that matters most: after the shard is gone, every
+    measurement it held is still refused as a repeat. Without that, the day a
+    month is deleted every row in it becomes scoreable again as if it were new.
+    """
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig()
+    boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
+    shard = next(
+        path for path in score_writer.ledger_shards(state) if path.stem < boundary
+    )
+    raw = list(csv.DictReader(io.StringIO(shard.read_text(encoding="utf-8"))))
+    fingerprint = hashlib.sha256(shard.read_bytes()).hexdigest()
+    keys = {
+        tuple(row[name] for name in score_writer.OBSERVATION_KEY) for row in raw
+    }
+    hhem_by_cohort: dict[tuple[str, ...], list[float]] = {}
+    for row in raw:
+        cohort = tuple(row[name] for name in score_archive.COHORT_KEY)
+        hhem_by_cohort.setdefault(cohort, []).append(float(row["hhem"]))
+    doomed = list(raw)
+
+    prune_scores(state, config, TODAY)
+
+    stored = score_archive.read(score_archive.archive_path(state, shard.stem))
+    assert stored.source_sha256 == fingerprint
+    assert stored.source_rows == len(raw)
+    assert set(stored.observation_digests) == {score_archive.digest_of(key) for key in keys}
+    assert len(stored.observation_digests) == len(keys)
+    for group in stored.cohorts:
+        values = hhem_by_cohort[group.key]
+        moment = group.measurements["hhem"]
+        assert moment.n == len(values)
+        assert moment.sum == pytest.approx(sum(values))
+        assert moment.sum_squares == pytest.approx(sum(value * value for value in values))
+        assert moment.min == pytest.approx(min(values))
+        assert moment.max == pytest.approx(max(values))
+
+    # The second half. Every row of the deleted month, offered again.
+    assert not shard.exists()
+    replayed = [EvalRow.model_validate({key: value for key, value in row.items() if value != ""})
+                for row in doomed]
+    assert score_writer.append(state, replayed) == 0, (
+        "a deleted month made its measurements new again"
+    )
+    assert not shard.exists(), "the replay recreated the shard the archive replaced"
+
+
+def test_the_stage_names_the_score_shard_a_live_run_would_remove(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The dry run names the score shard too, in the POSIX form section 2 asks for."""
+    state = tmp_path / "state"
+    config = ObservabilityConfig()
+    months = months_back(TODAY, config.scores_full_grain_months + 1)
+    score_history(state, months)
+    expired = months[0]
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=config,
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
+                dry_run=True,
+            )
+            == 0
+        )
+
+    named = sorted(
+        line.split("would remove ", 1)[1]
+        for line in caplog.text.splitlines()
+        if "prune-state would remove " in line and not line.endswith("files:")
+    )
+    assert named == [f"state/scores/{expired}.csv"]
+    assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
+    assert score_writer.ledger_path(state, f"{expired}-01").exists()
+
+
+def test_the_stage_says_so_when_every_score_month_is_at_full_grain(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Silence and "nothing aged out" read the same, and only one of them is true."""
+    state = tmp_path / "state"
+    score_history(state, months_back(TODAY, 2))
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
+            )
+            == 0
+        )
+
+    assert "score archive: every month is inside the 14-month window" in caplog.text
