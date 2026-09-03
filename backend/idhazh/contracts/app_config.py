@@ -164,17 +164,53 @@ class RunConfig(Model):
     )
 
 
+#: The `collect` names this block used to carry, and the knob that answers the
+#: same question now. A config still spelling one is refused by name.
+SUPERSEDED_COLLECT_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {"quarantine_after_failures": "availability_strikes_before_rest"}
+)
+
+#: The `observability` names this block used to carry, and the knob that governs
+#: the same store now.
+SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "keep_months": "item_health_full_grain_months",
+        "hard_delete_after_months": "item_health_aggregate_keep_months",
+    }
+)
+
+
+def refuse_a_removed_knob(block: str, data: Any, names: Mapping[str, str]) -> Any:
+    """Fail a config that still spells a removed knob, and name its replacement.
+
+    Every model here forbids unknown keys, so a removed name already fails - with
+    "extra inputs are not permitted", which does not tell an operator where their
+    number went. Ignoring it silently would be worse: that is how somebody comes
+    to believe a value nothing reads.
+    """
+    if not isinstance(data, dict):
+        return data
+    carried = sorted(name for name in names if name in data)
+    if carried:
+        spelled = "; ".join(f"{block}.{name} is now {block}.{names[name]}" for name in carried)
+        raise ValueError(
+            f"{block} carries a knob that was removed ({spelled}). Rename it - a knob "
+            "nothing reads is a number somebody believes"
+        )
+    return data
+
+
 class CollectConfig(Model):
-    quarantine_after_failures: int = Field(default=5, ge=1)
     availability_strikes_before_rest: int = Field(
         default=5,
         ge=1,
         description=(
             "Consecutive results that count against a feed before a run stops asking "
-            "it. The successor to quarantine_after_failures, named for what it counts: "
-            "the old name reads as a policy about quarantine and is now one of two "
-            "different questions. Nothing reads this yet - the strike rule moves onto "
-            "it in a later change, and both names carry the same 5 until then."
+            "it, and how many runs that rest then lasts. One number for both counters "
+            "because there is one question here - how much evidence is enough - and "
+            "discover.resting takes it once. It replaced quarantine_after_failures on "
+            "2026-09-03, carrying the same 5: the old name read as a policy about "
+            "quarantine and this one is named for what it counts."
         ),
     )
     availability_rest_runs: int = Field(
@@ -184,7 +220,9 @@ class CollectConfig(Model):
             "How many runs a rested feed is skipped before it is asked again. The rest "
             "ends on its own, so a source that came back is live on that very run and a "
             "source that is still dead costs one request per cycle rather than one per "
-            "run."
+            "run. Still unread: the rest lasts availability_strikes_before_rest runs, "
+            "because splitting one number into two is a change to the rest rule rather "
+            "than a rename, and the rename is what landed."
         ),
     )
     feed_http_410_runs_before_retirement: int = Field(
@@ -329,6 +367,11 @@ class CollectConfig(Model):
             "entries are a source list and live in config/ (Rule #6)."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_a_removed_knob(cls, data: Any) -> Any:
+        return refuse_a_removed_knob("collect", data, SUPERSEDED_COLLECT_NAMES)
 
 
 class ExtractConfig(Model):
@@ -842,17 +885,6 @@ class LoggingConfig(Model):
     level: LogLevel = LogLevel.INFO
 
 
-#: The retention names this block used to carry, and the knob that governs the
-#: same store now. A config still spelling the old name loads; see
-#: `ObservabilityConfig._read_the_superseded_retention_names`.
-SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
-    {
-        "keep_months": "item_health_full_grain_months",
-        "hard_delete_after_months": "item_health_aggregate_keep_months",
-    }
-)
-
-
 class ObservabilityConfig(Model):
     """What the pipeline records about itself, and what an operator may switch off.
 
@@ -872,7 +904,7 @@ class ObservabilityConfig(Model):
     row, so a month file stays readable across a day somebody turned something
     off.
 
-    **Every store names its own cleanup age.** One `keep_months` covered
+    **Every store names its own cleanup age.** One age covered
     `state/item-health/` while `state/feed-health/`, `state/scores/` and
     `frontend/public/telemetry/` had none, so three of the four grew with nothing
     to stop them and the fourth was tuned by a number that said nothing about
@@ -1063,58 +1095,22 @@ class ObservabilityConfig(Model):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_the_superseded_retention_names(cls, data: Any) -> Any:
-        """Read a config written before each store named its own cleanup age.
+    def _refuse_a_removed_knob(cls, data: Any) -> Any:
+        """Fail a config that still names `keep_months` or `hard_delete_after_months`.
 
-        `keep_months` and `hard_delete_after_months` governed `state/item-health/`
-        and nothing else, while three other stores had no age at all. A file that
-        still carries them loads, and resolves to the values documented in
-        `docs/concepts/config.md` - the successor knobs' own defaults.
+        Those two governed `state/item-health/` and nothing else, while three
+        other stores had no age at all. They were read and dropped for a day so
+        the rows that spend the new ages could land one at a time; now that every
+        reader has moved, a file still spelling one is refused by name.
 
-        The old value is read and dropped rather than carried forward, because it
-        was set against a check that could not answer the question: the check
+        Refused rather than ignored, and refused rather than carried forward. The
+        old value was set against a check that could not answer the question - it
         compared `months * 30` against the console window instead of the shards
-        that window selects, so `13` passed while a 366-day read reaches fourteen
-        of them. Carrying the number forward carries the defect forward.
-
-        A file carrying an old name AND its successor is refused. That is a
-        half-migrated file, and picking one of two answers silently is how an
-        operator's edit stops taking effect.
+        that window selects - so honouring it would honour the defect, and
+        dropping it silently would leave an operator believing a number nothing
+        reads.
         """
-        if not isinstance(data, dict):
-            return data
-        carried = [name for name in SUPERSEDED_RETENTION_NAMES if name in data]
-        if not carried:
-            return data
-        both = sorted(name for name in carried if SUPERSEDED_RETENTION_NAMES[name] in data)
-        if both:
-            spelled = ", ".join(f"{name} and {SUPERSEDED_RETENTION_NAMES[name]}" for name in both)
-            raise ValueError(
-                f"observability carries a superseded name beside its successor ({spelled}). "
-                "Delete the superseded one - two names for one age is how an edit stops "
-                "taking effect"
-            )
-        return {
-            name: value
-            for name, value in data.items()
-            if name not in SUPERSEDED_RETENTION_NAMES
-        }
-
-    @property
-    def keep_months(self) -> int:
-        """The superseded name for the item-health full-grain window.
-
-        Kept readable so the fold and its log line do not have to move in the
-        commit that names the ages. It resolves to
-        `item_health_full_grain_months`, which is the only store the old name
-        ever governed.
-        """
-        return self.item_health_full_grain_months
-
-    @property
-    def hard_delete_after_months(self) -> int | None:
-        """The superseded name for `item_health_aggregate_keep_months`."""
-        return self.item_health_aggregate_keep_months
+        return refuse_a_removed_knob("observability", data, SUPERSEDED_RETENTION_NAMES)
 
     def full_grain_months(self) -> Mapping[str, int]:
         """Every window that has to outlive what a console read can still select."""
@@ -2145,6 +2141,31 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-03T18:00",
+            change=(
+                "collect.quarantine_after_failures removed, and the two "
+                "observability names that were still readable in code - keep_months "
+                "and hard_delete_after_months - removed with it. The rest rule now "
+                "reads collect.availability_strikes_before_rest, and the telemetry "
+                "fold reads observability.item_health_full_grain_months and "
+                "observability.item_health_aggregate_keep_months. A config still "
+                "spelling any of the three is refused, and the message names the knob "
+                "to use instead."
+            ),
+            why=(
+                "The three names were compatibility shims, kept readable only until "
+                "every reader had moved. They have all moved, so keeping the shims "
+                "means the emitted config says the same thing twice and an operator "
+                "cannot tell which copy decides. No behaviour changes here and none "
+                "could: the committed config carries 5 under both collect names and "
+                "the tuned fixture carries 3 under both, so every reader reads the "
+                "number it read yesterday. Refusing beats ignoring, because a knob an "
+                "operator edits and nothing reads is a value they believe (Rule #6). "
+                "The payload read migration for VerticalPlan.live_feeds stays, because "
+                "a committed payload cannot be rewritten (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-02T22:00",
             change=(

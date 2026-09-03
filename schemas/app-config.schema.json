@@ -84,14 +84,14 @@
       "properties": {
         "availability_rest_runs": {
           "default": 5,
-          "description": "How many runs a rested feed is skipped before it is asked again. The rest ends on its own, so a source that came back is live on that very run and a source that is still dead costs one request per cycle rather than one per run.",
+          "description": "How many runs a rested feed is skipped before it is asked again. The rest ends on its own, so a source that came back is live on that very run and a source that is still dead costs one request per cycle rather than one per run. Still unread: the rest lasts availability_strikes_before_rest runs, because splitting one number into two is a change to the rest rule rather than a rename, and the rename is what landed.",
           "minimum": 1,
           "title": "Availability Rest Runs",
           "type": "integer"
         },
         "availability_strikes_before_rest": {
           "default": 5,
-          "description": "Consecutive results that count against a feed before a run stops asking it. The successor to quarantine_after_failures, named for what it counts: the old name reads as a policy about quarantine and is now one of two different questions. Nothing reads this yet - the strike rule moves onto it in a later change, and both names carry the same 5 until then.",
+          "description": "Consecutive results that count against a feed before a run stops asking it, and how many runs that rest then lasts. One number for both counters because there is one question here - how much evidence is enough - and discover.resting takes it once. It replaced quarantine_after_failures on 2026-09-03, carrying the same 5: the old name read as a policy about quarantine and this one is named for what it counts.",
           "minimum": 1,
           "title": "Availability Strikes Before Rest",
           "type": "integer"
@@ -145,12 +145,6 @@
           "maximum": 1.0,
           "title": "Max Source Share Per Day",
           "type": "number"
-        },
-        "quarantine_after_failures": {
-          "default": 5,
-          "minimum": 1,
-          "title": "Quarantine After Failures",
-          "type": "integer"
         },
         "recency_half_life_hours": {
           "default": 18.0,
@@ -1108,7 +1102,7 @@
     },
     "ObservabilityConfig": {
       "additionalProperties": false,
-      "description": "What the pipeline records about itself, and what an operator may switch off.\n\nFour switches rather than one master switch. Collection, scoring, publishing\nand tracing fail in different ways and a reader has to behave differently\nfor each of them, so one switch would leave nobody able to say which\ninstrument went dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.\n\n**Every store names its own cleanup age.** One `keep_months` covered\n`state/item-health/` while `state/feed-health/`, `state/scores/` and\n`frontend/public/telemetry/` had none, so three of the four grew with nothing\nto stop them and the fourth was tuned by a number that said nothing about\nthem. The four full-grain windows are checked against the shards a console\nread can still select, and a summary that replaces a full-grain window must\noutlive it.",
+      "description": "What the pipeline records about itself, and what an operator may switch off.\n\nFour switches rather than one master switch. Collection, scoring, publishing\nand tracing fail in different ways and a reader has to behave differently\nfor each of them, so one switch would leave nobody able to say which\ninstrument went dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.\n\n**Every store names its own cleanup age.** One age covered\n`state/item-health/` while `state/feed-health/`, `state/scores/` and\n`frontend/public/telemetry/` had none, so three of the four grew with nothing\nto stop them and the fourth was tuned by a number that said nothing about\nthem. The four full-grain windows are checked against the shards a console\nread can still select, and a summary that replaces a full-grain window must\noutlive it.",
       "properties": {
         "cost_currency": {
           "default": "USD",
@@ -1750,6 +1744,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "collect.quarantine_after_failures removed, and the two observability names that were still readable in code - keep_months and hard_delete_after_months - removed with it. The rest rule now reads collect.availability_strikes_before_rest, and the telemetry fold reads observability.item_health_full_grain_months and observability.item_health_aggregate_keep_months. A config still spelling any of the three is refused, and the message names the knob to use instead.",
+      "version": "2026-09-03T18:00",
+      "why": "The three names were compatibility shims, kept readable only until every reader had moved. They have all moved, so keeping the shims means the emitted config says the same thing twice and an operator cannot tell which copy decides. No behaviour changes here and none could: the committed config carries 5 under both collect names and the tuned fixture carries 3 under both, so every reader reads the number it read yesterday. Refusing beats ignoring, because a knob an operator edits and nothing reads is a value they believe (Rule #6). The payload read migration for VerticalPlan.live_feeds stays, because a committed payload cannot be rewritten (section 11)."
+    },
+    {
       "change": "observability.keep_months and observability.hard_delete_after_months removed, and six named ages added: item_health_full_grain_months 14, item_health_aggregate_keep_months null, feed_health_keep_months 14, scores_full_grain_months 14, score_archive_keep_months null and public_telemetry_keep_months 14. A config still carrying either old name loads and resolves to those defaults; carrying an old name beside its successor is refused. Every full-grain window is checked against the month shards console.max_window_days can select.",
       "version": "2026-09-02T22:00",
       "why": "One name covered state/item-health/ while state/feed-health/, state/scores/ and frontend/public/telemetry/ had no cleanup age at all, so three stores grew with nothing to stop them. Its value was also one shard short: the old check compared months * 30 against the console window instead of the shards that window selects, and a 366-day read walks 367 inclusive days, which can fall in fourteen calendar months. The old value is read and dropped rather than carried forward, because it was chosen against a check that could not answer the question."
@@ -2171,7 +2170,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-02T22:00",
+      "default": "2026-09-03T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2185,5 +2184,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-02T22:00"
+  "version": "2026-09-03T18:00"
 }

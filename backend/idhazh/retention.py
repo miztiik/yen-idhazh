@@ -53,9 +53,8 @@ the first of a month starts on the last day of another. The aggregate is kept
 forever by default, because a downsampled year costs kilobytes and deleting it
 would make a year-over-year comparison unanswerable -
 `observability.item_health_aggregate_keep_months` is the escape hatch and is
-null. Both names are read through the properties `keep_months` and
-`hard_delete_after_months`, which is why nothing else in this module moved when
-the ages were named.
+null. Those two names are what this module reads; the single age they replaced
+was removed on 2026-09-03, once every reader had moved onto them.
 
 **The private record and its browser copy go together, in that order.**
 `frontend/public/telemetry/<YYYY-MM>.csv` is the projection a reader's browser
@@ -489,11 +488,12 @@ def prune_telemetry(
     default because a caller that names its own state tree and forgets this one
     must get nothing rather than the committed one.
 
-    `hard_delete_after_months` is applied last and defaults to null, which means
-    an aggregate is kept forever. Set, it must sit above `keep_months`, which the
-    config contract enforces - so a month is never deleted before it is folded.
+    `item_health_aggregate_keep_months` is applied last and defaults to null,
+    which means an aggregate is kept forever. Set, it must sit above
+    `item_health_full_grain_months`, which the config contract enforces - so a
+    month is never deleted before it is folded.
     """
-    keep_from = oldest_month_kept(today, config.keep_months)
+    keep_from = oldest_month_kept(today, config.item_health_full_grain_months)
     public_deleted = _expired_public_copies(
         public_root, oldest_month_kept(today, config.public_telemetry_keep_months)
     )
@@ -535,8 +535,8 @@ def prune_telemetry(
             publish_telemetry.shard_path(public_root, stem).unlink(missing_ok=True)
 
     hard_deleted: list[str] = []
-    if config.hard_delete_after_months is not None:
-        delete_from = oldest_month_kept(today, config.hard_delete_after_months)
+    if config.item_health_aggregate_keep_months is not None:
+        delete_from = oldest_month_kept(today, config.item_health_aggregate_keep_months)
         for aggregate in month_shards(state_dir / ledger.TELEMETRY_AGGREGATE_DIRNAME):
             if aggregate.stem >= delete_from:
                 continue

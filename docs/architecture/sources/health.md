@@ -18,7 +18,7 @@ FEED READ (one feed-health row)
 +-- skipped -> keep strike streak -> count one rested run
 `-- blocked / permanent / transient / ok with zero items -> add one strike
 
-CONFIGURED LIMIT = collect.quarantine_after_failures (currently 5)
+CONFIGURED LIMIT = collect.availability_strikes_before_rest (currently 5)
 
 LIMIT CONSECUTIVE STRIKES -> REST FEED
 REST FEED -> write LIMIT skipped rows -> RETRY
@@ -236,21 +236,27 @@ number that decided it, and the manifest is the only committed record of a plan.
 
 | Knob | Default | The question |
 | --- | --- | --- |
-| `collect.availability_strikes_before_rest` | 5 | How much evidence before a run stops asking? |
-| `collect.availability_rest_runs` | 5 | How long is a rest? |
+| `collect.availability_strikes_before_rest` | 5 | How much evidence before a run stops asking - and how long is the rest? |
+| `collect.availability_rest_runs` | 5 | How long is a rest? Named, and still unread. |
 | `collect.feed_http_410_runs_before_retirement` | 5 | How many distinct runs must read `410` before an address is retired? |
 | `collect.robots_denied_recheck_runs` | 1 | How long before asking `robots.txt` again after a refusal? |
 | `collect.robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read. |
 | `collect.source_yield_min_complete_days` | 30 | How many complete days of item-health evidence before a yield judgement may be made at all - and how far back the published record reads? |
 
-**Four of the six now decide something.**
+**Five of the six now decide something.**
+`availability_strikes_before_rest` is the rest rule below,
 `feed_http_410_runs_before_retirement` is the retirement rule above, the two
 recheck cadences are answered by the run itself (nothing about a refusal is
 persisted, so the next run asks the host again, which is those knobs at their
 configured value of one run), and `source_yield_min_complete_days` became the
 publishing record's span and its readability bar on 2026-09-03.
-`collect.quarantine_after_failures` still decides every rest, and both it and
-`availability_strikes_before_rest` carry 5.
+
+**`availability_rest_runs` is the one still unread, and that is a decision.**
+One number starts a rest and the same number ends it, because there is one
+question here - how much evidence is enough. Splitting it in two is a change to
+the rest rule rather than a rename, so it did not travel with the rename that
+removed `quarantine_after_failures` on 2026-09-03. Both names carried 5, so
+moving the reader moved no decision.
 
 The two recheck cadences are separate because they are different facts: a refusal
 is a publisher's stated policy and an unreadable `robots.txt` is our own failed
@@ -295,7 +301,7 @@ Three of those rows carry the whole design.
 
 ## Quarantine is a rest, not a retirement
 
-A feed that has failed its last `quarantine_after_failures` (5) attempts is not asked on the next run. That is a rest.
+A feed that has failed its last `availability_strikes_before_rest` (5) attempts is not asked on the next run. That is a rest.
 
 **The rest ends on its own.** Once a feed has been skipped five times it is asked again regardless of its record. A source that came back is live on that very run; a source that is still dead costs one request per cycle instead of one per run.
 
@@ -532,5 +538,5 @@ The self-lifting rest is there because the alternative was tested by imagination
 - [item-health.md](item-health.md) - the item-grain ledger that records planned item outcomes.
 - [trust-boundary.md](trust-boundary.md) - what happens to the bytes a healthy feed returns.
 - [../publishing/frontend.md](../publishing/frontend.md) - the console that renders this record.
-- [../../concepts/config.md](../../concepts/config.md) - where `quarantine_after_failures` and the six knobs beside it live.
+- [../../concepts/config.md](../../concepts/config.md) - where `availability_strikes_before_rest` and the five knobs beside it live.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - degrade rather than fail, which is why a dead feed never fails a run.
