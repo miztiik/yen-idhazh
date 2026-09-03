@@ -354,6 +354,7 @@ COMMIT_STAGED_PATHS: Final = {
         "frontend/public/digest",
         "frontend/public/telemetry",
         "frontend/public/assist/index",
+        "frontend/public/source-health.json",
         "state",
         "corpus",
     ],
@@ -445,6 +446,7 @@ COMMIT_REFRESH_PATHS: Final = {
         f"{SUBSTITUTED_DAY_DIR}/run.json",
         "frontend/public/telemetry",
         "frontend/public/assist/index",
+        "frontend/public/source-health.json",
         "state/published.csv",
         "state/scores",
         "state/item-health",
@@ -1008,9 +1010,10 @@ def _seed_ledger(staged: str) -> str:
 
     A staged path is either a directory of month shards or one named file, and
     the work job stages one of each - so a harness that always appended a
-    filename would have built a directory called `scores.csv`.
+    filename would have built a directory called `scores.csv`. The assemble job
+    stages a named `.json` for the same reason, and it needs the same answer.
     """
-    return staged if staged.endswith(".csv") else f"{staged}/ledger.csv"
+    return staged if staged.endswith((".csv", ".json")) else f"{staged}/ledger.csv"
 
 
 #: Where a built origin lives, keyed by what it holds. A template is built once

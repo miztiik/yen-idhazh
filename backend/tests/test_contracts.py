@@ -1051,7 +1051,7 @@ def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path:
     assert tuple(rows[0]) == FeedHealthRow.csv_columns()
     unfilled = [name for name in FeedHealthRow.csv_columns() if not any(row[name] for row in rows)]
     assert unfilled == [], "a canary column nothing fills is a console state no test can reach"
-    assert {row["robots_outcome"] for row in rows} == {"allowed", "denied", ""}
+    assert {row["robots_outcome"] for row in rows} == {"allowed", "denied", "unreachable", ""}
 
 
 def test_the_frontend_names_every_live_lens_and_no_retired_one() -> None:
