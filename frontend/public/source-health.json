@@ -1,10 +1,10 @@
 {
   "complete_dates": 10,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-03T10:03:19Z",
+  "generated_at": "2026-09-03T13:48:39Z",
   "last_date": "2026-09-02",
   "min_complete_days": 30,
-  "run_id": "2026-09-03-33726980508",
+  "run_id": "2026-09-03-33749072419",
   "sources": [
     {
       "availability": "answering",
@@ -1363,7 +1363,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "opportunities": 28,
       "permission": "allowed",
       "publications": 27,
@@ -1723,9 +1723,9 @@
       "vertical": "energy"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 53,
-      "permission": "unrecorded",
+      "permission": "allowed",
       "publications": 53,
       "retired": false,
       "retired_on": null,
