@@ -101,6 +101,9 @@ Numbered for citation. Each names the proposal section it settles.
 | O28 | A **prompt-iteration loop** ships: write, critique, revise, three rounds, two judges, and a deterministic gate that decides. `CLAUDE.md` section 0a is amended to permit it offline - see section 16.2 | not in proposal |
 | O29 | `publish_telemetry.PUBLIC_COLUMNS` is widened by eight already-committed columns and every month republished, which **backfills the console for every past run** - see section 14.4b | P.6.2 |
 | O30 | The span rollup lands in `state/span-rollup/`, **not** `state/telemetry-aggregate/`, which is taken by the item-health fold - see section 14.4a | P.6.1 |
+| O31 | **Raw spans are committed** to `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl` on a short rolling window, so the console can drill into a recent run. A lookup, so it deletes rather than folds | P.6.1 |
+| O32 | `run.shard_timeout_minutes` rises 150 -> **200**. Free: Actions minutes are unmetered on a public repo, a timeout is a ceiling not an allocation, and the retired visual job returns its slot - see section 13.2 | P.5.3 |
+| O33 | The prompt loop's primary targets are `unsupported_number`, `lead_missing` and `hedge_dropped` - deterministic and computable today. HHEM is the backstop, not the steering wheel. A regex cross-check of `unsupported_number` against the source over the committed test set ships with it, to verify **the checker** | not in proposal |
 
 ---
 
@@ -852,11 +855,27 @@ Then land `n_ctx` 16384 **and** `flash_attention` on together, on one manual dis
 
 **Nothing else blocks the first plan-doc.**
 
-### 13.2 The conservative default that replaces M3
+### 13.2 The shard budget, and why the timeout rises
 
-Worst measured shard is **8,124 s = 135.4 minutes at 40 items, which is 90.3 percent of the 150-minute timeout.** The median is 78.5 minutes, 52 percent.
+Measured over 80 shard rows at 40 items: median **78.5 min**, p90 **101.7 min**, worst **135.4 min** - 90.3 percent of the 150-minute timeout.
 
-**Keep `shard_timeout_minutes` at 150.** Do not lower it to reclaim the halved item count. Size from the worst case, not the median - the margin between 78.5 and 135.4 minutes is exactly what the second call spends, and the worst case is the one that loses all 20 of a worker's items.
+At 20 items the base work roughly halves. Call 2 at the full output budget costs about 260 s an item, so 20 items is about 87 minutes.
+
+| | Base at 20 items | Buffer for call 2 | Call 2 needs | Verdict at 150 | Verdict at 200 |
+|---|---|---|---|---|---|
+| Median | ~39 min | 111 min | 87 min | fits, 24 min spare | fits, 74 min spare |
+| p90 | ~51 min | 99 min | 87 min | fits, 12 min spare | fits, 62 min spare |
+| **Worst** | **~68 min** | **82 min** | **87 min** | **overruns by 5 min** | **fits, 45 min spare** |
+
+**Raise `run.shard_timeout_minutes` from 150 to 200.** Three reasons it is free:
+
+1. **Actions minutes are free and unmetered on a public repository** (Rule #2 states it outright), so a longer ceiling costs no money.
+2. **A timeout is a ceiling, not an allocation.** A job that finishes in 60 minutes consumes 60 minutes whether the cap is 150 or 200.
+3. **The retired visual job returns its 40-to-50-minute serial slot**, so the run does not get longer end to end even though the shard may.
+
+200 minutes is 56 percent of the 6-hour platform ceiling, which is the one number that is not ours to move.
+
+**Do not lower the timeout to "reclaim" the halved item count.** Size from the worst case. The margin between 78.5 and 135.4 minutes is exactly what the second call spends.
 
 ### 13.3 Six memory fields to add, all from data already collected
 
@@ -968,20 +987,49 @@ So quote identification is entirely new work, and it is the `quote` element kind
 
 ### 14.4 Tracing and Langfuse - what ships
 
-**Today: the code supports it, and it is off.** `backend/idhazh/telemetry.py` has a `langfuse_sink()` that activates only when `LANGFUSE_HOST` and its key pair are all set. `observability.tracing_enabled` is `false`. CI installs neither the extra nor a key. The default sink writes one JSON line per span to `backend/var/traces/`, which is gitignored.
+**Today, verified against the code on 2026-09-03:**
 
-The doctrine is settled in [docs/concepts/telemetry.md](docs/concepts/telemetry.md) (2026-08-31): **a local file by default, a host opt-in.** The owner's recollection is correct.
+| Question | Answer |
+|---|---|
+| Instrumented? | **Yes.** Ten span call sites exist: `ROBOTS`, `ITEM`, `FETCH`, `EXTRACT`, `TAG`, `SUMMARIZE`, `RENDER_PROMPT`, `PARSE_REPLY`, `SCORE`, `ROUTE`, plus a `MODEL_CALL` generation |
+| Collecting? | **No, not in CI.** `tracing_enabled` is false, so the sink is `NullSink` and every span is discarded. On a developer box with it on: yes, to `backend/var/traces/` |
+| Only the env vars stopping it? | **No - two independent reasons.** Tracing is off at all, and no host is configured |
+| Exported to `state/`? | **No** |
+| Was that in the previous observability plan? | **No, and it was excluded on purpose.** `TODO/20260830-observability-plan.md` made "a published telemetry column being added" an **ESCALATE trigger**: *"nothing here needs one and a proposal to add one is a separate decision"* |
+| Can it work? | **Yes** |
+
+**Why it was excluded then, and why the reason is gone.** That plan narrowed deliberately because four sibling agents held the console files open and a second plan was mid-flight; it also wrote `shard` to `state/item-health/` while explicitly keeping it out of `PUBLIC_COLUMNS` for the same reason. Those plans have all closed - #298, #312, #357, #368, #379, #385. **The separate decision it deferred is this one.**
+
+The cost was already priced in that plan and is trivial: a per-item published trace row is about **140 bytes raw, 0.0214 MiB a day, 0.6 percent of the site's runway**. Carmack also rejected sampling the collection, measuring it at **1 part in 128,000 of a shard - 0.0008 percent**. There is nothing to save by not collecting.
+
+#### Langfuse collects nothing we do not already hold
+
+`_LangfuseSink.emit()` sends `metadata=record` where `record = span.as_record()` - **our own span, unchanged.** It derives exactly two more fields, both from attributes we own: `model` from `AttrKey.MODEL_ID`, and `usage_details` from `INPUT_TOKENS` and `OUTPUT_TOKENS`. `input` and `output` are passed **explicitly as `None`**, because they are the SDK's free-text fields and this repository is public.
+
+**So Langfuse is a rendering of data we already have, not a collector.** Writing our own spans to `state/` yields one hundred percent of what a Langfuse dashboard would show. Langfuse stays as a developer drill-down and is a source of nothing.
+
+#### What spans buy that no ledger column can
+
+| Observation | Why it matters |
+|---|---|
+| **Unaccounted shard wall clock** - `job_seconds` minus the summed stage times | Named by Andre in the closed plan as *the one thing a span tree would surface that the ledger does not*. If the model is idle for most of a shard, more shards is the wrong lever, and **nobody currently knows that** |
+| `robots.txt` read time inside fetch | Whether the first item from a host pays for a slow robots read the next twenty do not |
+| Taxonomy tag time inside extract | Whether a taxonomy that grew a hundred patterns is what slowed extraction |
+| Prompt-build and verbatim-check time | The two pure-Python costs inside summarize, invisible in `summarize_ms` |
 
 #### What changes
 
 | # | Change | Note |
 |---|---|---|
-| T1 | `observability.tracing_enabled` -> **true** | The span tree becomes the default, not a developer toggle |
-| T2 | The **file sink stays the only sink that runs in CI** | No `LANGFUSE_HOST`, no key, no third party. Rule #1 is untouched. The Langfuse host stays available to a developer who names it |
-| T3 | Spans for the new stages: `extract_elements`, `plan_visual`, `compile_visual`, `render_visual`, and a `model_call` generation per call with its token counts | `telemetry.AttrKey` is a closed vocabulary; each new name is added in the commit that emits it |
-| T4 | **A per-shard span rollup is appended to `state/span-rollup/<YYYY-MM>.csv`** and published to the console | **Not** `state/telemetry-aggregate/` - that directory is taken by the folded item-health ledger, with its own contract and schema. See 14.4a |
-| T5 | Every existing eval metric that is not yet on the console gets a panel: `ConfidenceBand`, `BandReason`, `verbatim_run`, faithfulness, lead coverage, plus the new visual metrics | O11 |
-| T6 | **Widen `publish_telemetry.PUBLIC_COLUMNS` by eight columns** | The largest win in the whole telemetry effort, and it needs no spans at all. See 14.4b |
+| T1 | `observability.tracing_enabled` -> **true**, **after** T4 exists | Flipping it first writes a file nobody reads |
+| T2 | The **file sink stays the only sink CI runs** | No host, no key, no third party. Rule #1 untouched. Langfuse stays available to a developer who names a host |
+| T3 | Spans for the new stages: `extract_elements`, `plan_visual`, `compile_visual`, `render_visual`, plus a `model_call` generation per call | Each `SpanName` and `AttrKey` member is added in the commit that emits it |
+| T4 | **Raw spans committed to `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl`, on a short rolling window** | A lookup, not a measurement, so by section 9.2's own rule it **deletes rather than folds**. Bounded by construction. Lets the console drill into a recent run |
+| T5 | **A per-shard rollup appended to `state/span-rollup/<YYYY-MM>.csv`**, kept and folded at `keep_months` | The trend line. **Not** `state/telemetry-aggregate/`, which is taken by the item-health fold |
+| T6 | Every existing eval metric that is not yet on the console gets a panel | O11 |
+| T7 | **Widen `publish_telemetry.PUBLIC_COLUMNS` by eight columns** and republish every month | See 14.4b |
+
+Raw traces are **evidence with a short life**; the rollup is **the record**. That split is what satisfies the fourth-record objection while giving an operator something to click into.
 
 #### The one collision, and how it resolves
 
@@ -1007,7 +1055,29 @@ That keeps the rule the doc is protecting: the ledgers stay the record, a span s
 | File | `state/span-rollup/<YYYY-MM>.csv`, contract `SpanRollupRow`, schema stem `span-rollup-row` |
 | The test that makes it binding | **Contract tier**: assert the rollup's column set and item-health's column set are disjoint outside the key. That turns the ruling into a machine check instead of a promise |
 
-**Flipping `tracing_enabled` before the fold exists buys nothing.** The file sink writes into `backend/var/`, which dies with the checkout. Spans in CI with no fold are runner seconds spent writing a file nobody opens. The toggle flips **after** the fold lands, not before.
+**Flipping `tracing_enabled` before the fold exists buys nothing.** The file sink writes into `backend/var/`, which dies with the checkout. Spans in CI with no fold are runner seconds spent writing a file nobody opens. The toggle flips **after** T4 and T5 land, not before.
+
+**"Republish" touches no article data.** `frontend/public/telemetry/<YYYY-MM>.csv` is a projection of the **operational ledger** - one row per planned item per run carrying stage, outcome, failure code and timings. It is rewritten whole on every publish already. Widening it adds columns to that metrics file. No article text, no summary, no payload is regenerated.
+
+### 14.4c The five eval labels, and where they are not shown
+
+These are reader-facing today, one sentence per reason, from [frontend/src/lib/bands.ts](frontend/src/lib/bands.ts#L24):
+
+| `BandReason` | Reader sees | Trigger |
+|---|---|---|
+| `unsupported_number` | "Our summary gives a figure the article does not." | A number in the summary absent from the source. **Forces `low`** |
+| `faithfulness` | "Parts of our summary do not line up with the article." | HHEM below the band threshold |
+| `lead_missing` | "Our summary leaves out names or figures from the opening." | `lead_coverage` below `evaluation.lead_coverage_min` (0.3) |
+| `hedge_dropped` | "The article is more careful about this than our summary is." | The source hedged; our summary states it flat |
+| `not_scored` | "We could not check this summary against the article." | The scorer did not run |
+
+Plus three band labels: `high` "Matches the source" (drawn on no item), `medium` "Mostly matches the source", `low` "May not match the source". **The icon difference is the band, not the reason** - the cross is `low`, the exclamation is `medium`.
+
+**`band_reason` appears nowhere in any console route.** The console shows the band distribution and a doubt count; it has never shown which of the five is driving them, or how that mix moves over time. That is the most actionable eval gap on the project and it is what a prompt loop needs to steer by.
+
+**Consequence for section 16.2: the loop's primary targets are not HHEM.** They are `unsupported_number`, `lead_missing` and `hedge_dropped` - three deterministic, model-free checks that need no scorer, no labels and no judge, and that are computable on committed data today. HHEM is the slow backstop, not the steering wheel.
+
+One instrument to add with them: **a regex cross-check of `unsupported_number` against the source over the committed test set.** That tests the checker rather than the summary, and nothing has ever verified the checker.
 
 ### 14.4b Telemetry for yesterday's code - the answer is better than expected
 
