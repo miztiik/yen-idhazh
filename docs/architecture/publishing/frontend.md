@@ -1412,6 +1412,20 @@ Three surfaces do not simply follow the span, and each says so on the page:
 | `Site size` | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
 | `Minutes per visual` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
+**Known defect: two of those readers walk the whole score ledger and will lose
+history when a shard is deleted.** `pipelineChanges`, which draws the model-change
+markers on `/console/` and `/console/machine/`, and `scoredDays` with
+`modelByDate` on `/console/model/`, all read every committed score row rather
+than the window. That is deliberate - a change marker has to sit on the day it
+happened, whatever span is being read - but `idhazh prune-state` archives and
+deletes a score shard past `observability.scores_full_grain_months`, and the
+archive carries cohort totals rather than dated rows. So from the first live
+deletion those three lose the dates in the deleted month. **No number a reader
+sees moves; a date list silently shortens.** Reported 2026-09-02 and left as it
+is, because deletion is still in dry run. Before that switch is thrown, either
+teach the readers to union the archive's cohort dates or say on the page how far
+back the marker list reaches.
+
 `Sources cut short most often` used to hard-code seven days. It follows the
 control now, and the section prints its own denominator, which at seven days
 runs as low as six articles. Its rows are aggregated once per preset at build
