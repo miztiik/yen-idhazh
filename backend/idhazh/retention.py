@@ -86,6 +86,18 @@ its honest retention is deletion. A fold would be inventing a total nobody
 reads. The keep-set is taken from the reader's own helper, and only months
 *older* than it are deleted, so the retained set is a superset of the read set
 whatever date the prune is handed.
+
+**The score archive is the sixth thing, and it is the only one that has to prove
+itself twice.** `state/scores/` is the largest store here - 5,335 rows in
+4,266,655 bytes on 2026-09-03 - and it is neither a lookup nor a set of timings:
+it is the evidence behind every published quality claim, and it is what stops an
+old measurement being scored again as if it were new. So a month past
+`observability.scores_full_grain_months` is summarised into
+`state/score-archive/<YYYY-MM>.json` (`idhazh.evals.archive`), the file is read
+back through its contract, and the summary is reconciled field by field against
+a second reading of the shard before the shard is unlinked. The telemetry fold
+above checks that what it wrote reads back; this checks that as well, and then
+checks that what reads back still describes the file it is about to delete.
 """
 
 from __future__ import annotations
@@ -100,6 +112,8 @@ from idhazh import ledger, publish_telemetry
 from idhazh.contracts.app_config import ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
+from idhazh.evals import archive as score_archive
+from idhazh.evals import writer as score_writer
 
 BYTES_PER_MB: Final = 1024 * 1024
 #: The platform's own hard ceiling. Not a knob: it is a property of the host,
@@ -675,5 +689,112 @@ def prune_seen(
         deleted=tuple(deleted),
         bytes_freed=freed,
         kept=tuple(kept),
+        dry_run=dry_run,
+    )
+
+
+# --- The score ledger --------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ScorePruneResult:
+    """What one archiving pass did, in the words a log line and a measurement need."""
+
+    archived: tuple[str, ...]
+    rows_archived: int
+    #: Distinct measurements the archives now index. This is the number that
+    #: keeps the dedupe exact after the rows are gone, so it is reported rather
+    #: than left to be inferred from the row count - they differ whenever a
+    #: shard held a repeat the settlement had not yet dropped.
+    observations_indexed: int
+    #: What the archived shards weighed, and what their summaries weigh. Both
+    #: are counted in a dry run too, because the ratio between them is the
+    #: measurement this policy is justified by (Rule #10) and a person has to be
+    #: able to read it before any deletion is switched on.
+    source_bytes: int
+    archive_bytes: int
+    hard_deleted: tuple[str, ...]
+    dry_run: bool
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.archived or self.hard_deleted)
+
+
+def prune_scores(
+    state_dir: Path,
+    config: ObservabilityConfig,
+    today: date,
+    *,
+    dry_run: bool = False,
+) -> ScorePruneResult:
+    """Archive every out-of-window score month, prove the archive, then delete the shard.
+
+    Four steps per month and the order is the whole safety argument: summarise,
+    write temp-then-rename, read the written file back through its contract, and
+    reconcile it field by field against a second reading of the shard. Only then
+    is the shard unlinked. An archive that will not reconcile leaves its shard in
+    place and stops the run, because the alternative is deleting a committed file
+    on the strength of a summary nobody checked - and `prune.yml` force-pushes
+    `main`, so that file does not come back.
+
+    A dry run does the first step and none of the others. It still counts the
+    bytes both ways, so the log says what the archive would weigh against what
+    the shard weighs, which is the figure Rule #10 asks for beside this policy.
+
+    `score_archive_keep_months` is applied last and defaults to null, which means
+    an archive is kept for ever. Set, it must sit above
+    `scores_full_grain_months`, which the config contract enforces - so a month
+    is never deleted before it is archived.
+
+    Re-running changes nothing. A month already archived has no shard left to
+    find, and a month whose archive was written by a run that then failed to
+    unlink is summarised again to the same bytes.
+    """
+    keep_from = oldest_month_kept(today, config.scores_full_grain_months)
+    archived: list[str] = []
+    rows_archived = 0
+    observations = 0
+    source_bytes = 0
+    archive_bytes = 0
+
+    for shard in score_writer.ledger_shards(state_dir):
+        if shard.stem >= keep_from:
+            continue
+        built = score_archive.summarise(shard, observation_key=score_writer.OBSERVATION_KEY)
+        archived.append(shard.stem)
+        rows_archived += built.source_rows
+        observations += len(built.observation_digests)
+        source_bytes += shard.stat().st_size
+        archive_bytes += len(built.to_json().encode("utf-8"))
+        if dry_run:
+            continue
+        target = score_archive.archive_path(state_dir, shard.stem)
+        score_archive.write(target, built)
+        # Read back through the contract, then check the file that came back
+        # still describes the shard. The first catches a bad write; only the
+        # second catches a summary of the wrong month.
+        score_archive.reconcile(
+            score_archive.read(target), shard, observation_key=score_writer.OBSERVATION_KEY
+        )
+        shard.unlink()
+
+    hard_deleted: list[str] = []
+    if config.score_archive_keep_months is not None:
+        delete_from = oldest_month_kept(today, config.score_archive_keep_months)
+        for summary in score_archive.archive_files(state_dir):
+            if summary.stem >= delete_from:
+                continue
+            hard_deleted.append(summary.stem)
+            if not dry_run:
+                summary.unlink()
+
+    return ScorePruneResult(
+        archived=tuple(archived),
+        rows_archived=rows_archived,
+        observations_indexed=observations,
+        source_bytes=source_bytes,
+        archive_bytes=archive_bytes,
+        hard_deleted=tuple(hard_deleted),
         dry_run=dry_run,
     )

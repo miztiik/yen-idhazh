@@ -10,6 +10,12 @@ already measured - same address, same inputs, same words, same scorer - has
 nothing new to say, so it writes nothing. That is the promise in
 `docs/concepts/evaluation.md`, and it is what keeps a count over the ledger a
 count of items rather than a count of times the pipeline looked at them.
+
+A month past `observability.scores_full_grain_months` stops being rows and
+becomes `state/score-archive/<YYYY-MM>.json` (`idhazh.evals.archive`). That is
+why `recorded_observations` reads two places: the promise above has to hold for
+a month whose rows are gone, and the archive's sorted digest index is the only
+thing that can still answer it.
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ from typing import Final
 
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.validation_row import ValidationRow
+from idhazh.evals import archive
 from idhazh.ledger import STATE_DIRNAME, require_matching_header
 from idhazh.ledger import read_header as _read_header
 
@@ -53,8 +60,8 @@ def ledger_path(state_dir: Path, date: str) -> Path:
 def ledger_shards(state_dir: Path) -> list[Path]:
     """Every committed month of the ledger, oldest first.
 
-    Anything that is not a `<YYYY-MM>.csv` is left alone: a directory this walks
-    is one a future retention rule may delete from, so it names what it
+    Anything that is not a `<YYYY-MM>.csv` is left alone: `retention.prune_scores`
+    archives and then deletes out of this directory, so it names what it
     recognises rather than acting on what it does not.
     """
     directory = state_dir / LEDGER_DIRNAME
@@ -94,8 +101,19 @@ def observation(payload: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(str(payload[name]) for name in OBSERVATION_KEY)
 
 
-def recorded_observations(state_dir: Path) -> set[tuple[str, ...]]:
-    """Every measurement the committed ledger already holds, across every shard.
+def observation_digest(payload: Mapping[str, object]) -> str:
+    """The same identity as one hash, which is the form that survives a deletion.
+
+    A month past `observability.scores_full_grain_months` is summarised and its
+    shard is unlinked, and the summary keeps this digest rather than the four
+    values it came from - `state/score-archive/` is a fixed-width index instead
+    of a second copy of the addresses.
+    """
+    return archive.digest_of(observation(payload))
+
+
+def recorded_observations(state_dir: Path) -> set[str]:
+    """Every measurement the ledger already holds, live rows and archived months alike.
 
     Deliberately not scoped to the shard being written. An observation is the
     same measurement whichever month it is re-taken in, and a dedupe that only
@@ -103,10 +121,19 @@ def recorded_observations(state_dir: Path) -> set[tuple[str, ...]]:
     which would turn a count over the ledger into a count of times the pipeline
     looked, and that is the one thing this ledger promises it is not.
 
-    A missing directory is a ledger with no history, which is what a fresh clone
-    has.
+    **The archived half is what makes deleting a shard safe.** A month older
+    than the full-grain window has no rows left to read, so a dedupe over the
+    rows alone would call every measurement in it new the day it was deleted.
+    `state/score-archive/<YYYY-MM>.json` carries those digests for exactly this
+    union, and it is why the archive stores them sorted (`docs/concepts/
+    evaluation.md`).
+
+    A missing directory on either side is a ledger with no history, which is
+    what a fresh clone has.
     """
-    return {observation(record) for record in records(state_dir)}
+    return {observation_digest(record) for record in records(state_dir)} | (
+        archive.archived_observations(state_dir)
+    )
 
 
 def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
@@ -140,7 +167,7 @@ def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
     fresh: dict[str, list[dict[str, object]]] = {}
     for row in pending:
         payload = row.model_dump(mode="json")
-        key = observation(payload)
+        key = observation_digest(payload)
         if key in already:
             continue
         already.add(key)

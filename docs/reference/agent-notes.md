@@ -1138,6 +1138,29 @@ inserted text was exactly right and the page had quietly changed what those two
 paragraphs were about. Re-read the whole region after any heading insert, not
 only the lines you added.
 
+**The stale read above happens on ANY file the tool has read before, not only a
+sentinel.** Observed 2026-09-03: a runner script was rewritten to emit
+`RUFF=.. MYPY=.. EXPORT=..`, and after it ran the file tool still returned the
+`RUFF=.. RUFFFMT=.. MYPY=.. EXPORT=..` line the previous version had written -
+a format that no longer existed anywhere on disk. It reads as "the old script
+ran", which sends you looking for a launcher bug that is not there. The cheap
+fix that always works is to copy the output to a filename the tool has never
+seen and read that:
+
+```powershell
+Copy-Item "$env:TEMP\<tag>\gate-DONE.txt" "$env:TEMP\<tag>\gate-r2.txt" -Force
+```
+
+Then read `gate-r2.txt`. A fresh path cannot be served from a stale cache, and
+it costs one line per gate round.
+
+**`git grep -n 'pattern' -A 20 -- <path>` fails with `fatal: unable to resolve
+revision: -A`.** `git grep` reads anything after the pattern as a revision until
+it meets `--`, so a context flag placed the way `ripgrep` takes it becomes a
+commit-ish. Put every flag before the pattern - `git grep -n -A 20 'pattern' --
+<path>` - or, simpler, grep for the line number and read the file by absolute
+path.
+
 ## Hugging Face
 
 **The `ETag` on a weights download is not the SHA-256, and it looks exactly

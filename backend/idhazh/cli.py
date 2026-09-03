@@ -102,6 +102,7 @@ from idhazh.contracts.validation_row import (
     ValidationVerdict,
 )
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
+from idhazh.evals import archive as score_archive
 from idhazh.evals import evidence, golden, metrics, qualify, sampling, score, validation, writer
 from idhazh.evals.hhem import (
     HHEM_REVISION,
@@ -2572,10 +2573,10 @@ def stage_prune_state(
     dry_run: bool = False,
 ) -> int:
     """Retire what the ledgers no longer answer for: an item-health month and the
-    browser's copy of it, a feed-health month, and every seen shard outside the
-    window the planner reads.
+    browser's copy of it, a feed-health month, every seen shard outside the
+    window the planner reads, and every score month past its full-grain window.
 
-    Four stores, one step, because they share the one property that makes this
+    Five stores, one step, because they share the one property that makes this
     safe: all of it runs after the day is committed, and none of it can cost a
     reader anything it has not already been given.
 
@@ -2605,6 +2606,7 @@ def stage_prune_state(
     removed: list[str] = []
     removed += _prune_seen_shards(state, collect, today, dry_run=dry_run)
     removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
+    removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
 
     result = retention.prune_telemetry(
         state, observability, today, public_root=public, dry_run=dry_run
@@ -2705,6 +2707,40 @@ def _prune_seen_shards(
         ", ".join(seen.kept) or "no shard",
     )
     return [ledger.seen_relpath(f"{stem}-01") for stem in seen.deleted]
+
+
+def _prune_score_shards(
+    state: Path, observability: ObservabilityConfig, today: date_type, *, dry_run: bool
+) -> list[str]:
+    """Archive the score months past their full-grain window, then delete their shards.
+
+    The one store here whose deletion is preceded by a summary that is written,
+    read back and reconciled against the file it replaces. The log says what the
+    archive weighs against what the shard weighed, because that ratio is the
+    measurement this policy rests on and a dry run is where a person reads it.
+    """
+    scores = retention.prune_scores(state, observability, today, dry_run=dry_run)
+    if not scores.changed:
+        LOG.info(
+            "score archive: every month is inside the %s-month window, so none was "
+            "summarised",
+            observability.scores_full_grain_months,
+        )
+        return []
+    LOG.info(
+        "score archive%s: summarised %s - %s rows and %s distinct measurements, "
+        "%s bytes of shard into %s bytes of archive - and hard-deleted %s",
+        " (dry run)" if scores.dry_run else "",
+        ", ".join(scores.archived) or "no month",
+        scores.rows_archived,
+        scores.observations_indexed,
+        scores.source_bytes,
+        scores.archive_bytes,
+        ", ".join(scores.hard_deleted) or "no month",
+    )
+    removed = [writer.ledger_relpath(f"{stem}-01") for stem in scores.archived]
+    removed += [score_archive.archive_relpath(stem) for stem in scores.hard_deleted]
+    return removed
 
 
 def stage_assemble(

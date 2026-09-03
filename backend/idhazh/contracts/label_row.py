@@ -24,12 +24,19 @@ Level 5 consultation.
 
 **`seconds_spent` is the cheapest fatigue detector there is**, and together with
 `labelled_at` it is what a contract test reads to refuse a machine-paced dump.
+
+**A label outlives the score row it was drawn from.** `state/scores/` keeps
+fourteen months of item-level rows and then becomes a summary, so from
+2026-09-03 the three counterweights whose defects this vocabulary mirrors are
+copied onto the row itself. Without them a label written today would stop being
+readable as evidence about those counterweights the moment its month was
+archived - which is the one thing the label ledger exists to produce.
 """
 
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -92,6 +99,31 @@ class LabelRow(Contract):
 
     __schema_stem__: ClassVar[str] = "label-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-03",
+            change=(
+                "Added unsupported_numbers, hedge_dropped and extraction_suspect, "
+                "nullable, at the end of the row, and from_csv_row as the read side."
+            ),
+            why=(
+                "The read side re-joined these three from state/scores.csv on "
+                "output_digest, and that ledger now keeps only "
+                "observability.scores_full_grain_months months of item-level rows. A "
+                "label whose month has been archived would keep its verdict and lose "
+                "the three counterweights its own tag vocabulary mirrors - "
+                "wrong_number against unsupported_numbers, overstated against "
+                "hedge_dropped, not_the_article against extraction_suspect - which is "
+                "the precision and recall the sixty labels are drawn to buy. Copied "
+                "onto the row so the label is self-contained before its source can "
+                "expire. Null and not a value on a row written before this stamp: "
+                "null says re-join from the ledger while the month is still there, and "
+                "False would say the counterweight was read and did not fire. No row "
+                "is migrated because none exists - state/labels.csv has never been "
+                "written. Appended at the end for the reason the eval ledger appends: "
+                "a column inserted mid-row shifts every later cell one place under a "
+                "reader that maps by position."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27",
             change="source_word_count is now source_seen_word_count.",
@@ -184,6 +216,39 @@ class LabelRow(Contract):
         description="Capped and sanitized. If notes pile onto one tag, the vocabulary is wrong.",
     )
 
+    # --- the counterweights the tags mirror, carried so the label survives its
+    # source row. Appended at the end rather than filed beside the scorer's
+    # number they belong with by meaning, for the reason the eval ledger appends:
+    # a column inserted mid-row shifts every later cell one place right under a
+    # reader that maps by position.
+    unsupported_numbers: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Numbers the summary asserted that appear nowhere in the article, as the "
+            "scorer counted them at draw time. What the wrong_number tag is measured "
+            "against. Null on a row written before 2026-09-03, which means re-join it "
+            "from state/scores/ while that month is still at full grain - it does not "
+            "mean zero."
+        ),
+    )
+    hedge_dropped: bool | None = Field(
+        default=None,
+        description=(
+            "The article hedged and the summary asserted, as the scorer read it at "
+            "draw time. What the overstated tag is measured against. Null means "
+            "unrecorded, never False."
+        ),
+    )
+    extraction_suspect: bool | None = Field(
+        default=None,
+        description=(
+            "The text the scorer read looked like page furniture. What the "
+            "not_the_article tag is measured against. Null means unrecorded, never "
+            "False."
+        ),
+    )
+
     @model_validator(mode="after")
     def _tag_agrees_with_the_verdict(self) -> Self:
         if self.verdict is LabelVerdict.SUPPORTED and self.tag is not LabelTag.NONE:
@@ -201,3 +266,20 @@ class LabelRow(Contract):
         """Every cell a string. An absent optional is an empty cell, not the word None."""
         payload = self.model_dump(mode="json")
         return {name: "" if payload[name] is None else str(payload[name]) for name in payload}
+
+    @classmethod
+    def from_csv_row(cls, row: dict[str, str]) -> Self:
+        """The inverse, and the read migration for a row written before 2026-09-03.
+
+        An empty cell is an absent value rather than the empty string, so a row
+        that predates a column reads back as unrecorded - which for the three
+        counterweights is the difference between "nobody wrote it down" and "the
+        scorer read it and it did not fire". A column missing from the file
+        entirely reads the same way, which is what lets a header written before
+        those columns existed still parse.
+        """
+        payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
+        for name, field in cls.model_fields.items():
+            if field.default is None and payload[name] == "":
+                payload[name] = None
+        return cls.model_validate(payload)

@@ -40,6 +40,7 @@ from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
+from idhazh.evals import archive as score_archive
 from idhazh.evals import metrics, sampling, writer
 from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
 from idhazh.evals.score import band, to_eval_row, verdict
@@ -617,6 +618,28 @@ def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> No
     """The guard reads the batch as well as the file, or a fresh ledger dodges it."""
     ledger = tmp_path / "state"
     assert writer.append(ledger, [row(), row(item_id="ai-09")]) == 1
+
+
+def test_a_measurement_whose_month_was_archived_is_still_not_new(tmp_path: Path) -> None:
+    """The dedupe spans the archives too, or deleting a shard reopens the door.
+
+    Sharding was the first way this could break and the fix was to read every
+    shard. Archiving is the second: a month past
+    `observability.scores_full_grain_months` has no rows left to read at all, so
+    a dedupe over the rows alone would call every measurement in it new on the
+    day it was deleted - and a count over the ledger would stop being a count of
+    items, which is the one thing this ledger promises it is not.
+    """
+    state = tmp_path / "state"
+    assert writer.append(state, [row()]) == 1
+    shard = writer.ledger_shards(state)[0]
+    summary = score_archive.summarise(shard, observation_key=writer.OBSERVATION_KEY)
+    score_archive.write(score_archive.archive_path(state, shard.stem), summary)
+    shard.unlink()
+
+    assert not writer.ledger_shards(state)
+    assert writer.append(state, [row(date="2026-09-14", run_id="2026-09-14-1")]) == 0
+    assert not writer.ledger_shards(state), "the archived measurement was written again"
 
 
 def test_a_changed_output_is_a_new_measurement(tmp_path: Path) -> None:

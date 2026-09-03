@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -15,6 +15,58 @@ Two rules govern this page:
   an order-of-magnitude check, not a runner figure. The runner has a different
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
+
+## What a score month weighs once it is summarised, 2026-09-03
+
+**Hardware and method.** Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM,
+Windows 11 build 26200, CPython 3.14.2. `idhazh.evals.archive.summarise` over
+each committed shard of `state/scores/`, three reads each, comparing the shard's
+size on disk against the length of the archive's own serialization. Reading a
+committed file is deterministic and the three reads gave byte-identical
+archives, so **the spread is zero** - it is stated rather than omitted, because a
+missing spread reads as an unmeasured one.
+
+| Shard | Rows | Cohorts | Source bytes | Archive bytes | Archive share | Digest share of the archive |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-08` | 4,110 | 35 | 3,215,734 | 430,009 | 13.4 percent | 68.8 percent |
+| `2026-09` | 1,225 | 10 | 1,050,921 | 127,281 | 12.1 percent | 69.3 percent |
+| both | 5,335 | 45 | 4,266,655 | 557,290 | **13.1 percent** | 68.9 percent |
+
+**What 13.1 percent means: 87 percent of the bytes go.** A row falls from 782 to
+858 bytes of CSV to 104 bytes of archive. Two thirds of what remains is the
+observation digest index - one SHA-256 per distinct measurement - and that is
+bought deliberately: `evals.writer.recorded_observations` refuses a repeat by
+reading it, so without the index every measurement in a deleted month would be
+scoreable again as if it were new.
+
+**In years, which is the unit the policy is actually about.** The ledger grew
+4,266,655 bytes over the 12 published days from 2026-08-22 to 2026-09-02:
+**355,555 bytes a published day, 130 MB a year, and nothing bounded it.** The
+day rate is the mean of a wide spread - 444.6 rows a day on average, 10 on the
+thinnest day and 731 on the fullest - so read it as a mean and not as a
+constant. With `observability.scores_full_grain_months` at 14 the item-level part
+stops growing at about 151 MB, and only the archive keeps going, at 46,441 bytes
+a published day and **17.0 MB a year**. The archive needs **8.9 years** to reach
+the size those fourteen months of shards already are; the raw ledger reached it
+in fourteen months. **That is 7.7 years of headroom for every one the store used
+to spend, and the fourteen-month part stops growing at all.**
+
+**Re-measuring Decision 6 of the plan.** `TODO/20260902-source-health-lifecycle-plan.md`
+records `state/scores/` at 5,001 rows in 3,982,563 bytes across two shards on
+2026-09-02. Re-derived on this checkout on 2026-09-03 it is **5,335 rows in
+4,266,655 bytes across two shards** - 334 rows and 284,092 bytes more, one
+published day's growth. The shard count is the one figure that held. Both
+readings are exact counts over committed files, so neither carries a spread and
+the difference is the ledger moving rather than either measurement being wrong.
+
+**A thin month summarises larger than it held.** The digest index scales with
+rows; the block of moments is a fixed cost per cohort. A twelve-row month pays
+the second and barely earns the first, and the archive comes out about 18 percent
+larger than the shard. Fourteen-month-old months are the full ones, which is why
+the direction measured above is the one the policy rests on.
+`backend/tests/test_retention.py` pins the direction at a run's worth of rows
+rather than pinning a figure, because a figure taken there goes stale the next
+time a column is added.
 
 ## How old the digest was publishing, 2026-08-30
 
