@@ -1095,7 +1095,7 @@ def seed_failures(state: Path, feed_id: str, runs: int) -> None:
 
 def failures_to_rest() -> int:
     """The committed threshold, so this test moves when the config does."""
-    return config.load().app.collect.quarantine_after_failures
+    return config.load().app.collect.availability_strikes_before_rest
 
 
 def test_a_feed_that_has_failed_enough_is_not_even_asked() -> None:

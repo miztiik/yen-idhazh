@@ -934,7 +934,8 @@ spent sixty of its hundred words on a caveat, and `idhazh site-weight` and
 **The worst-thing fact says what the state costs, and the strip keeps the short
 form.** `15 feeds resting` on a label becomes `15 feeds are resting, so nothing
 they carry reaches the digest. Each is asked again after 5 runs.` in the band.
-The retry count comes from `quarantine_after_failures` and never from a literal.
+The retry count comes from `availability_strikes_before_rest` and never from a
+literal.
 The two said the same words until 2026-08-31, 337px apart on a phone. Nothing in
 the sentence invents a task: quarantine is self-terminating, so what it asks is
 that the operator knows the digest is short of sources until the retry
@@ -1319,9 +1320,9 @@ one run from being dropped and a feed with more failures spread over a month is
 not.
 
 **Each feed carries a target bar and a strip of days.** The bar's track is
-`collect.quarantine_after_failures`, its fill is the run of failures, and its
-marker sits on the threshold - the same `TargetBar` the truncation cap and the
-minutes-per-visual rule draw with. The strip is one square a day over the page's
+`collect.availability_strikes_before_rest`, its fill is the run of failures, and
+its marker sits on the threshold - the same `TargetBar` the truncation cap and
+the minutes-per-visual rule draw with. The strip is one square a day over the page's
 window, oldest to newest, on a single date axis every row shares, so "broken
 since Tuesday" and "flaky all month" cannot draw the same picture. It shrinks to
 fit its row rather than scrolling, because twenty scroll regions in one column
