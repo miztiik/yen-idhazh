@@ -1,10 +1,10 @@
 {
   "complete_dates": 10,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-03T20:25:10Z",
+  "generated_at": "2026-09-03T23:29:23Z",
   "last_date": "2026-09-02",
   "min_complete_days": 30,
-  "run_id": "2026-09-03-33787238215",
+  "run_id": "2026-09-03-33806210146",
   "sources": [
     {
       "availability": "answering",
@@ -1195,7 +1195,7 @@
       "vertical": "world"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 33,
       "permission": "allowed",
       "publications": 30,
