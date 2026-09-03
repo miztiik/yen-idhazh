@@ -22,6 +22,7 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg           optional visual
 frontend/public/assist/index/<YYYY-MM>.json             one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin              that month's vectors, raw int8
 state/scores/<YYYY-MM>.csv                              the ledger - one row per measurement, never published twice
+state/score-archive/<YYYY-MM>.json                      a score month past its full-grain window, as totals plus a dedupe index
 ```
 
 ```
@@ -475,7 +476,7 @@ The three levers this page already names - encode efficiently, honour the visual
 | File | Bytes | Share of `state/` | Bounded by |
 | --- | --- | --- | --- |
 | `state/seen/<YYYY-MM>.csv` | 2,904,221 | 37.2 percent | `collect.seen_window_days` |
-| `state/scores/<YYYY-MM>.csv` | 2,700,019 | 34.6 percent | `observability.scores_full_grain_months` - **named 2026-09-02, and nothing deletes a month yet** |
+| `state/scores/<YYYY-MM>.csv` | 2,700,019 | 34.6 percent | `observability.scores_full_grain_months` - **archived and deleted from 2026-09-03, and the deletion is in dry run** |
 | `state/item-health/<YYYY-MM>.csv` | 1,409,945 | 18.0 percent | `observability.item_health_full_grain_months` - folded, and the fold is in dry run |
 | `state/published.csv` | 384,448 | 4.9 percent | nothing, and deliberately - published is forever |
 | everything else | 416,995 | 5.3 percent | small enough not to ask |
@@ -488,7 +489,23 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 
 **The step ships in dry run, and that is what makes it safe to have written at all.** `idhazh prune-state` logs every file a live run would remove and removes none of them. The reason is `.github/workflows/prune.yml`: it squashes and force-pushes `main` on a schedule, so a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8) - `git revert` is not a recovery path for a file older than `finetune.prune_keep_days`. Turning the deletion on is a one-line commit somebody takes after a scheduled run has printed the list.
 
-**Measured on this checkout on 2026-09-02, that list is empty and stays empty for a year.** Every committed shard is inside its own window, so a live run today would remove nothing at all. The first file any store loses is `state/seen/2026-08.csv` on **2026-11-30**, through the 90-day sight window; the first file this fold takes is on **2027-10-01**, when `2026-08` falls below fourteen months and three files go together - `state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv` and `state/feed-health/2026-08.csv`. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
+**Measured on this checkout on 2026-09-03, that list is empty and stays empty for a year.** Every committed shard is inside its own window, so a live run today would remove nothing at all. The first file any store loses is `state/seen/2026-08.csv` on **2026-11-30**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four files go together - `state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv`, `state/feed-health/2026-08.csv` and `state/scores/2026-08.csv`. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
+
+**A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and `evals.writer` refuses a repeat measurement by reading the rows themselves - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past `observability.scores_full_grain_months` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the shard's SHA-256 and row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of the shard; only then is the shard unlinked.
+
+**Measured 2026-09-03** on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM, Windows 11 (build 26200), CPython 3.14.2, over both committed shards, three reads each:
+
+| Shard | Rows | Cohorts | Source bytes | Archive bytes | Archive as a share |
+| --- | --- | --- | --- | --- | --- |
+| `2026-08` | 4,110 | 35 | 3,215,734 | 430,009 | 13.4 percent |
+| `2026-09` | 1,225 | 10 | 1,050,921 | 127,281 | 12.1 percent |
+| both | 5,335 | 45 | 4,266,655 | 557,290 | **13.1 percent** |
+
+Three reads of each shard gave byte-identical archives, so the spread is zero - reading a committed file is deterministic. **What the 13.1 percent means: 87 percent of the bytes go, and a row shrinks from 782 to 858 bytes of CSV to 104 bytes of archive.** Two thirds of what is left is the digest index - 68.8 and 69.3 percent of the two archives - which is the price of keeping the dedupe exact and is what Decision 2 of the plan bought deliberately.
+
+**In years.** The ledger grew 4,266,655 bytes over the 12 published days from 2026-08-22 to 2026-09-02, which is 355,555 bytes a published day and 130 MB a year, with nothing bounding it (444.6 rows a day on average, 10 on the thinnest day and 731 on the fullest, so read the rate as the mean of a wide spread rather than as a constant). With this rule the item-level part stops growing at fourteen months - about 151 MB - and only the archive keeps going, at 46,441 bytes a published day and **17.0 MB a year**. The archive needs 8.9 years to reach the size those fourteen months of shards already are; the raw ledger reached it in fourteen months. That is **7.7 years of headroom for every one the store used to spend**, and the fourteen-month part stops growing at all.
+
+**A thin month summarises LARGER than it held, and that is not a defect.** The digest index scales with rows and the block of moments is a fixed cost per cohort, so a twelve-row month pays the second and barely earns the first. Fourteen-month-old months are the full ones, which is why the direction that matters is the one measured above. `backend/tests/test_retention.py` pins it at a run's worth of rows rather than at a figure, because a figure taken here would go stale the next time a column is added.
 
 
 **Measured on this checkout, 2026-08-30.** Folding the committed `state/item-health/2026-08.csv` - 4,167 rows over six published days, 1,270,452 bytes - gives 24 aggregate rows and 1,531 bytes: **829.8 times smaller**, 63.8 bytes an aggregate row, 255.2 bytes a published day, 93,136 bytes a year against the shard's 77,285,830. Four rows a day and not five, because `plan` wrote no row that month.
@@ -504,6 +521,19 @@ Three things make it the one ledger the fold reaches, and each of them is why th
 **What this does not do, stated plainly: it does not bound the `/console/` document.** That page was linear in items at a measured 50.45 gzipped bytes an item and crossed its 301,580-byte ceiling on published day 16, because the compression scatter inlined every row `state/scores.csv` had ever held. Both halves of that are closed - the plot moved to a windowed seed over the telemetry projection on 2026-08-29, and the scatter itself became a per-day count of three bins on 2026-08-30 - so the page no longer grows a mark an item. The fold was never an answer to it either way: the two problems share a file and share nothing else.
 
 The aggregate is kept forever by default. `observability.item_health_aggregate_keep_months` is null, and the contract refuses a value at or below `item_health_full_grain_months` - so a month is never deleted before it has been folded. `observability.score_archive_keep_months` stands in the same relation to `scores_full_grain_months`, and is null for the same reason.
+
+**What is deliberately lost when a score month is archived**, and what survives, because a policy that only lists what it keeps is not a policy:
+
+| Lost | Survives |
+| --- | --- |
+| Looking one item up by its address or its id | Every total and rate the cohorts carry |
+| Drawing that month into the human label queue | The distribution, as ten faithfulness deciles and three bands |
+| Re-banding those rows under new thresholds | Ranges and spread, from `{n, sum, sum_squares, min, max}` per column |
+| An exact percentile | Boolean signal counts, cut counts and premise-digest counts |
+| Correlating two columns against each other | Exact dedupe, through the sorted observation digests |
+| Any slice the cohort key does not name | The shard's own SHA-256 and row count |
+
+Authority: Andre, under Rule #10 - a claim about an archived month has to be one the archive can still support.
 
 ### `state/scores/` shards by month, and that bounds nothing on its own (2026-08-31)
 

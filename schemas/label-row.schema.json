@@ -39,6 +39,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added unsupported_numbers, hedge_dropped and extraction_suspect, nullable, at the end of the row, and from_csv_row as the read side.",
+      "version": "2026-09-03",
+      "why": "The read side re-joined these three from state/scores.csv on output_digest, and that ledger now keeps only observability.scores_full_grain_months months of item-level rows. A label whose month has been archived would keep its verdict and lose the three counterweights its own tag vocabulary mirrors - wrong_number against unsupported_numbers, overstated against hedge_dropped, not_the_article against extraction_suspect - which is the precision and recall the sixty labels are drawn to buy. Copied onto the row so the label is self-contained before its source can expire. Null and not a value on a row written before this stamp: null says re-join from the ledger while the month is still there, and False would say the counterweight was read and did not fire. No row is migrated because none exists - state/labels.csv has never been written. Appended at the end for the reason the eval ledger appends: a column inserted mid-row shifts every later cell one place under a reader that maps by position."
+    },
+    {
       "change": "source_word_count is now source_seen_word_count.",
       "version": "2026-08-27",
       "why": "The queue filled it from the eval ledger's source_word_count, which now means the whole article and is null when that length was never recorded. A labeller cannot check a number against text nobody kept. The premise they read is the truncated text, so the count beside it is the count of that text, and it is never missing. No row is migrated because no label has ever been written - state/labels.csv does not exist."
@@ -64,6 +69,32 @@
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "title": "Draw Id",
       "type": "string"
+    },
+    "extraction_suspect": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The text the scorer read looked like page furniture. What the not_the_article tag is measured against. Null means unrecorded, never False.",
+      "title": "Extraction Suspect"
+    },
+    "hedge_dropped": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The article hedged and the summary asserted, as the scorer read it at draw time. What the overstated tag is measured against. Null means unrecorded, never False.",
+      "title": "Hedge Dropped"
     },
     "hhem_at_label": {
       "maximum": 1.0,
@@ -151,6 +182,20 @@
     "tag": {
       "$ref": "#/$defs/LabelTag"
     },
+    "unsupported_numbers": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Numbers the summary asserted that appear nowhere in the article, as the scorer counted them at draw time. What the wrong_number tag is measured against. Null on a row written before 2026-09-03, which means re-join it from state/scores/ while that month is still at full grain - it does not mean zero.",
+      "title": "Unsupported Numbers"
+    },
     "url_key": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Url Key",
@@ -160,7 +205,7 @@
       "$ref": "#/$defs/LabelVerdict"
     },
     "version": {
-      "default": "2026-08-27",
+      "default": "2026-09-03",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -188,5 +233,5 @@
   ],
   "title": "LabelRow",
   "type": "object",
-  "version": "2026-08-27"
+  "version": "2026-09-03"
 }

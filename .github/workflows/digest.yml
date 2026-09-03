@@ -1157,6 +1157,12 @@ jobs:
       # costs nothing that was already happening, and leaving it on costs nothing
       # either.
       #
+      # It also covers the score archive, which joined this step on 2026-09-03
+      # and is the one store here whose deletion is preceded by a summary that is
+      # written, read back and reconciled against the shard it replaces. The
+      # earliest it removes anything is `state/scores/2026-08.csv` on 2027-10-01,
+      # and its dry run prints what the archive would weigh against the shard.
+      #
       # `continue-on-error` on both, for the reason the harvest carries it: what
       # this job owes a reader is the published day, and thirteen-month-old
       # telemetry must never be what stops one. A month it does not fold today it
@@ -1164,9 +1170,10 @@ jobs:
       #
       # It stages `state` whole rather than the directories it touches.
       # `git add` runs under `set -euo pipefail` and would abort on a path a
-      # fresh checkout does not carry, and `state/telemetry-aggregate/` does not
-      # exist until the first fold writes it. `state` always does, and the day's
-      # own commit above has already taken everything else in it.
+      # fresh checkout does not carry, and neither `state/telemetry-aggregate/`
+      # nor `state/score-archive/` exists until the first fold or the first
+      # archive writes it. `state` always does, and the day's own commit above
+      # has already taken everything else in it.
       #
       # `frontend/public/telemetry` is named beside it because the fold deletes
       # the browser's copy of a month in the same step it folds the ledger, and

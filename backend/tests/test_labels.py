@@ -12,6 +12,8 @@ No mocks and no network (Rule #7): the draw runs over the committed ledger.
 from __future__ import annotations
 
 import ast
+import contextlib
+import io
 import sys
 from itertools import pairwise
 from pathlib import Path
@@ -21,7 +23,7 @@ from conftest import CONFIG_DIR, REPO_ROOT, STATE_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh import config
-from idhazh.contracts.label_row import LabelRow
+from idhazh.contracts.label_row import LabelRow, LabelTag
 from idhazh.evals import labels, writer
 from utilities import label_queue
 
@@ -389,6 +391,54 @@ class TestTheRow:
         with pytest.raises(ValidationError):
             a_label(seconds_spent=0)
 
+    def test_the_row_carries_the_counterweights_its_tags_are_measured_against(self) -> None:
+        """A label outlives the score row it was drawn from, so it copies these three.
+
+        `state/scores/` keeps `observability.scores_full_grain_months` months of
+        item-level rows. Re-joining on `output_digest` stops working the day
+        that month is archived, and the three counterweights the tag vocabulary
+        mirrors are exactly what would be lost - which is the precision and
+        recall the sixty labels are drawn to buy.
+        """
+        mirrored = {
+            "wrong_number": "unsupported_numbers",
+            "overstated": "hedge_dropped",
+            "not_the_article": "extraction_suspect",
+        }
+        fields = set(LabelRow.model_fields)
+
+        assert set(mirrored.values()) <= fields
+        for tag in mirrored:
+            assert tag in {member.value for member in LabelTag}
+        row = a_label(unsupported_numbers=2, hedge_dropped=True, extraction_suspect=False)
+        assert row.unsupported_numbers == 2
+        assert row.hedge_dropped is True
+        assert row.extraction_suspect is False
+
+    def test_a_row_written_before_the_counterweights_reads_as_unrecorded(self) -> None:
+        """Null means re-join from the ledger, and False would mean it did not fire.
+
+        The read migration for 2026-09-03. `state/labels.csv` has never been
+        written, so no row is migrated - but a header written before those
+        columns still has to parse, because the alternative is a ledger the
+        build cannot open (`CLAUDE.md` section 11).
+        """
+        old = a_label(version="2026-08-27")
+        assert old.unsupported_numbers is None
+        assert old.hedge_dropped is None
+        assert old.extraction_suspect is None
+
+        cells = old.csv_row()
+        for name in ("unsupported_numbers", "hedge_dropped", "extraction_suspect"):
+            assert cells[name] == "", "an absent optional is an empty cell, not the word None"
+            del cells[name]
+        assert LabelRow.from_csv_row(cells) == old
+
+    def test_a_row_written_after_them_round_trips_through_the_file(self) -> None:
+        row = a_label(unsupported_numbers=0, hedge_dropped=False, extraction_suspect=True)
+
+        assert LabelRow.from_csv_row(row.csv_row()) == row
+
 
 class TestTheLedger:
     def test_the_same_person_cannot_label_one_row_twice(self, tmp_path: Path) -> None:
@@ -437,3 +487,69 @@ class TestTheLoopStaysOpen:
         source = read_text(REPO_ROOT / "backend" / "utilities" / "label_queue.py")
         for forbidden in ('"--from-file"', '"--model"', "sys.stdin", "readlines("):
             assert forbidden not in source, f"label_queue.py offers {forbidden}"
+
+    def test_the_queue_fills_the_counterweights_rather_than_leaving_them_to_a_re_join(
+        self,
+    ) -> None:
+        """The only writer of this ledger has to copy them, or the column is dead.
+
+        A nullable column nothing fills is a column that reads as unrecorded on
+        every row ever written, which is worse than no column - it looks like a
+        measurement somebody could take. Read off the syntax tree, so a
+        refactor that drops a key fails here rather than in 2027.
+        """
+        tree = ast.parse(read_text(REPO_ROOT / "backend" / "utilities" / "label_queue.py"))
+        filled: set[str] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            target = node.func
+            if not isinstance(target, ast.Attribute) or target.attr != "model_validate":
+                continue
+            if not isinstance(target.value, ast.Name) or target.value.id != "LabelRow":
+                continue
+            for argument in node.args:
+                if isinstance(argument, ast.Dict):
+                    filled |= {
+                        key.value
+                        for key in argument.keys
+                        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                    }
+
+        assert {"unsupported_numbers", "hedge_dropped", "extraction_suspect"} <= filled
+        assert filled == set(LabelRow.model_fields) - {"version"}, (
+            "the queue fills every column but the schema stamp, which defaults"
+        )
+
+    def test_the_queue_says_which_months_a_draw_can_no_longer_reach(self) -> None:
+        """A row count gives no hint that a month was ever there.
+
+        `state/scores/` becomes a summary past
+        `observability.scores_full_grain_months`, and a summary holds no row to
+        label. The report names those months rather than leaving the operator to
+        infer them from a shortfall.
+        """
+        printed: list[str] = []
+        records = ledger()
+        settings = config.load(CONFIG_DIR)
+        scorer = live_scorer(records)
+        queue = labels.draw(
+            records,
+            draw_id="d1",
+            scorer_version=scorer,
+            pipeline_fingerprint=None,
+            per_decile=settings.app.evaluation.label_draw_per_decile,
+        )
+
+        with contextlib.redirect_stdout(io.StringIO()) as captured:
+            label_queue.report(
+                queue,
+                records,
+                settings,
+                scorer=scorer,
+                pipeline=None,
+                archived=["2025-11", "2025-12"],
+            )
+        printed = captured.getvalue().splitlines()
+
+        assert any("aged out" in line and "2025-11, 2025-12" in line for line in printed)

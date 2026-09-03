@@ -1,0 +1,165 @@
+{
+  "cohorts": [
+    {
+      "bands": {
+        "high": 5,
+        "low": 0,
+        "medium": 0
+      },
+      "cut": 0,
+      "cut_known": 4,
+      "date": "2026-08-22",
+      "hhem_deciles": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        5
+      ],
+      "measurements": {
+        "attempt": {
+          "max": 1.0,
+          "min": 1.0,
+          "n": 5,
+          "sum": 5.0,
+          "sum_squares": 5.0
+        },
+        "compression": {
+          "max": 0.4391691394658754,
+          "min": 0.059344091618948464,
+          "n": 5,
+          "sum": 0.8206322095272344,
+          "sum_squares": 0.2337035288985579
+        },
+        "coverage": {
+          "max": 1.0,
+          "min": 0.0,
+          "n": 5,
+          "sum": 2.3666666666666667,
+          "sum_squares": 1.7344444444444445
+        },
+        "evidential_density": {
+          "max": null,
+          "min": null,
+          "n": 0,
+          "sum": 0.0,
+          "sum_squares": 0.0
+        },
+        "extractiveness": {
+          "max": 0.24324324324324326,
+          "min": 0.08928571428571429,
+          "n": 5,
+          "sum": 0.8632932773333813,
+          "sum_squares": 0.16967354613457972
+        },
+        "hhem": {
+          "max": 0.9599491953849792,
+          "min": 0.9385051727294922,
+          "n": 5,
+          "sum": 4.746197164058685,
+          "sum_squares": 4.505685768907011
+        },
+        "hhem_delta": {
+          "max": 0.0,
+          "min": 0.0,
+          "n": 5,
+          "sum": 0.0,
+          "sum_squares": 0.0
+        },
+        "hhem_full": {
+          "max": 0.9599491953849792,
+          "min": 0.9385051727294922,
+          "n": 5,
+          "sum": 4.746197164058685,
+          "sum_squares": 4.505685768907011
+        },
+        "score_ms": {
+          "max": 0.0,
+          "min": 0.0,
+          "n": 5,
+          "sum": 0.0,
+          "sum_squares": 0.0
+        },
+        "self_repetition": {
+          "max": null,
+          "min": null,
+          "n": 0,
+          "sum": 0.0,
+          "sum_squares": 0.0
+        },
+        "source_seen_word_count": {
+          "max": 1923.0,
+          "min": 332.0,
+          "n": 5,
+          "sum": 5317.0,
+          "sum_squares": 7081477.0
+        },
+        "source_word_count": {
+          "max": 1310.0,
+          "min": 332.0,
+          "n": 4,
+          "sum": 3394.0,
+          "sum_squares": 3383548.0
+        },
+        "speculative_density": {
+          "max": null,
+          "min": null,
+          "n": 0,
+          "sum": 0.0,
+          "sum_squares": 0.0
+        },
+        "summary_word_count": {
+          "max": 148.0,
+          "min": 89.0,
+          "n": 5,
+          "sum": 572.0,
+          "sum_squares": 67282.0
+        },
+        "unsupported_numbers": {
+          "max": 0.0,
+          "min": 0.0,
+          "n": 5,
+          "sum": 0.0,
+          "sum_squares": 0.0
+        },
+        "verbatim_run": {
+          "max": 0.11320754716981132,
+          "min": 0.06956521739130435,
+          "n": 5,
+          "sum": 0.44373834279458274,
+          "sum_squares": 0.04048416843332328
+        }
+      },
+      "model_id": "qwen3-8b-q4-k-m",
+      "pipeline_fingerprint": "3090231ddecd1ea99f053ebdd59456210f800c6d246fa6632f157afb58321513",
+      "premise_distinct": 0,
+      "premise_recorded": 0,
+      "row_version": "2026-08-21T03:00",
+      "rows": 5,
+      "run_id": "2026-08-22-1",
+      "scorer_version": "hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-1;bands=0.80/0.50",
+      "signals": {
+        "determinism_violation": 0,
+        "extraction_suspect": 0,
+        "hedge_dropped": 1,
+        "truncation_flagged": 0
+      }
+    }
+  ],
+  "month": "2026-08",
+  "observation_digests": [
+    "27323b41b6f53deac12ed5b6b4575b61170c4e27c7c5b2c11adf3403cb1e7efa",
+    "4d968916ae584113f4044167225ac5365f54009c48d66230169dccdd99d699fc",
+    "71391574ba4121042dfebb628f8843b9cbb7e9ad3fd8e6fcfc992f5d9d49f25f",
+    "b3dc63fe6bbbfad5bdd1871d0000b5261eccc19eb37d01f02eb028c58fc628bf",
+    "c24f64a68707b8c640a6196378b8dc053fce794722bf3ce928ff0e24a947506d"
+  ],
+  "source_rows": 5,
+  "source_sha256": "8a316d931325ba89cd5ace85ce77dee6e7f3f0e14de148cb5ef3433ef3a2fc80",
+  "version": "2026-09-03"
+}

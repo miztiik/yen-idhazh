@@ -32,6 +32,7 @@ from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import Sources
@@ -65,6 +66,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PublishedRow,
     RunPlan,
     RuntimeCountersRow,
+    ScoreArchive,
     SearchIndex,
     SeenRow,
     Sources,

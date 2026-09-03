@@ -49,7 +49,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.evals import writer
+from idhazh.evals import archive, writer
 from idhazh.ledger import STATE_DIRNAME
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -460,9 +460,25 @@ def refill(
     only way such a pair could pass on re-measurement is if the page changed
     under it, and a row that needs the article to have moved is not a row worth
     teaching.
+
+    **How far back it reaches is now a configured number.** Every candidate comes
+    from a ledger row, and `state/scores/` keeps
+    `observability.scores_full_grain_months` months of rows before a month
+    becomes a summary. A summarised month carries no address and no digest, so
+    there is nothing to re-fetch and nothing to join - those months are counted
+    and named rather than left as a gap in the ledger count above.
     """
+    summarised = archive.archived_months(state_dir)
     if not writer.ledger_shards(state_dir):
-        print(f"{(state_dir / writer.LEDGER_DIRNAME).as_posix()} holds no month shard")
+        where = (state_dir / writer.LEDGER_DIRNAME).as_posix()
+        if summarised:
+            print(
+                f"{where} holds no month shard - {', '.join(summarised)} have aged out of "
+                f"the full-grain window and a summary carries no address to re-fetch. "
+                f"{archive.RAW_WINDOW_NOTE}"
+            )
+        else:
+            print(f"{where} holds no month shard")
         return 1
     if not digest_root.is_dir():
         print(f"{digest_root.as_posix()} is not a directory")
@@ -503,6 +519,8 @@ def refill(
     queued = candidates[:wanted]
 
     print(f"{'ledger rows':<{_WIDTH}} {len(recorded)}")
+    if summarised:
+        print(f"{'months aged out':<{_WIDTH}} {', '.join(summarised)} - no row to re-fetch")
     print(f"{'rows before':<{_WIDTH}} {before}")
     for reason, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])):
         print(f"  skipped {reason:<38} {count:>5}")
