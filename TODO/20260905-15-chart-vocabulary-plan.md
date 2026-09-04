@@ -53,6 +53,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 2 | This does not cross the non-goal about types arriving without rules. **That governs what may render; this governs what may be named.** An unbuilt type never reaches a reader | 12.8 X1 |
 | 3 | Template order follows **observed frequency**, not a fixed wave order. Guessing the order is an unmeasured number justifying a design | Row 48 |
 | 4 | `planned_type` and `rendered_type` are both recorded, always | Row 48, P.D2 |
+| 5 | **Features default on in code, behind one `disabled_features` list. No config key per feature.** Four vocabulary plans follow this one, and a knob per family is how a config file grows a switch nobody remembers the state of | O15 |
 
 ### Rejected alternatives
 
