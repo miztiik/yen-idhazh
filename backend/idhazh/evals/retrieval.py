@@ -86,6 +86,22 @@ class Corpus:
             return 0.0
         return len(self.searchable) / len(self.items)
 
+    def through(self, date: str | None) -> Corpus:
+        """The same corpus as it stood on `date`. `None` is the whole archive.
+
+        A gate scored against the live archive measures two things at once: the
+        ranking, and how many stories have been published since the labels were
+        written. Only the first is something a merge candidate can change. The
+        second is unbounded and monotone - every new item that outranks a gold
+        item evicts it from a fixed slot count - so no constant bar survives it.
+        Pin the gate here; report the live number beside it.
+
+        Dates are `YYYY-MM-DD`, so the comparison is the ordering.
+        """
+        if date is None:
+            return self
+        return Corpus(items=tuple(item for item in self.items if item.date <= date))
+
 
 @dataclass(frozen=True, slots=True)
 class LabelledQuery:

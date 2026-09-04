@@ -3,10 +3,10 @@
     "duplicate_similarity_min": 0.94
   },
   "assist": {
+    "eval_corpus_through": "2026-08-26",
     "max_tokens": 320,
     "min_readable_letter_share": 0.6,
     "recall_min": 0.9,
-    "recall_tolerance": 0.1,
     "result_limit": 8,
     "search_min_days": 14,
     "search_months": 3,
