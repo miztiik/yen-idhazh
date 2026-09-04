@@ -1,0 +1,236 @@
+import { expect, test, type Page } from '@playwright/test';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { dayShell, publishedDates } from '../src/lib/server/payload';
+import type { SeededVisual } from '../src/lib/payload/types';
+
+/**
+ * A published drawing has to read the page it is printed on.
+ *
+ * Until 2026-09-05 every chart shipped inside an `img`. That is a separate
+ * document: it reads none of the page's custom properties, so the renderer's
+ * baked colours were the only colours it could ever have - black axis type and
+ * pale grid lines, which on the dark theme is black type and eighteen bright
+ * lines on a near-black card. The stories a prerendered document carries now
+ * hold the drawing itself, and the page repaints it from its own tokens.
+ *
+ * **The oracle is an equality against a token, never against a hex.** Each test
+ * below plants a probe element, sets its `background-color` to the same custom
+ * property the stylesheet routes the mark to, and reads what the document
+ * computed. The two themes give that property two different values, so a
+ * drawing that kept a baked colour fails one arm whichever colour it kept - and
+ * a test written against a literal would have to be edited every time the
+ * palette moves, which is how a colour test stops being one.
+ */
+
+const ROOT = resolve(process.cwd(), '..');
+const CANARY = resolve(ROOT, 'backend', 'var', 'canary', 'digest');
+
+/** The canary day, which publishes one chart and one diagram. */
+const DAY = '/2026-08-20/';
+
+const THEMES = ['light', 'dark'] as const;
+
+/** What the document computes for a token, read the way the page reads it.
+ *
+ * `background-color` rather than `fill` because every element has one, so the
+ * probe needs no shape and no namespace - and both properties resolve the same
+ * custom property through the same cascade.
+ */
+function tokenColour(page: Page, token: string): Promise<string> {
+	return page.evaluate((name) => {
+		const probe = document.createElement('div');
+		probe.style.backgroundColor = `var(${name})`;
+		document.body.append(probe);
+		const painted = getComputedStyle(probe).backgroundColor;
+		probe.remove();
+		return painted;
+	}, token);
+}
+
+/** Every value the page painted a drawn part with, for one CSS property. */
+function painted(page: Page, selector: string, property: 'fill' | 'stroke'): Promise<string[]> {
+	return page.evaluate(
+		({ selector: query, property: name }) =>
+			[...document.querySelectorAll(`main figure ${query}`)].map(
+				(node) => getComputedStyle(node).getPropertyValue(name)
+			),
+		{ selector, property }
+	);
+}
+
+async function wearing(page: Page, theme: string): Promise<void> {
+	await page.evaluate((chosen) => document.documentElement.setAttribute('data-theme', chosen), theme);
+	// A locator assertion rather than a polled evaluate: the client router does
+	// its own first navigation, and an evaluate under a poll loses its context to
+	// it (docs/reference/agent-notes.md).
+	await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+}
+
+test.describe('the drawing is in the document', () => {
+	test('a seeded story carries one svg and no image', async ({ page }) => {
+		await page.goto(DAY);
+		const figures = await page.evaluate(() =>
+			[...document.querySelectorAll('main article figure')].map((figure) => ({
+				svg: figure.querySelectorAll('svg').length,
+				img: figure.querySelectorAll('img').length,
+				label: figure.getAttribute('aria-label') ?? ''
+			}))
+		);
+		expect(figures.length, 'the canary day drew no visual at all').toBeGreaterThan(0);
+		for (const figure of figures) {
+			expect(figure.svg, 'a figure holds none or more than one drawing').toBe(1);
+			expect(figure.img, 'a seeded story is still on the image carrier').toBe(0);
+		}
+	});
+
+	test('the drawing keeps the sentence that repeats its numbers', async ({ page }) => {
+		// The visual is never the only carrier of a fact, and an inlined svg has
+		// no `alt` to carry it. The label moves to the figure, which `role="img"`
+		// makes one named image rather than a tree of unnamed marks.
+		await page.goto(DAY);
+		const labels = await page
+			.locator('main article figure[role="img"]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
+		expect(labels.length).toBeGreaterThan(0);
+		for (const label of labels) expect(label.length).toBeGreaterThan(0);
+	});
+
+	test('no drawing is fetched for a story the document already carries', async ({ page }) => {
+		// One fewer request per seeded story is the other half of what inlining
+		// bought. A drawing that is still requested is one that did not inline.
+		const asked: string[] = [];
+		page.on('request', (request) => {
+			if (request.url().endsWith('.svg')) asked.push(request.url());
+		});
+		await page.goto(DAY, { waitUntil: 'networkidle' });
+		expect(asked).toEqual([]);
+	});
+});
+
+test.describe('THE ORACLE: every drawn colour comes from a token', () => {
+	test('a bar takes the page own chart colour, in both themes', async ({ page }) => {
+		await page.goto(DAY);
+		const seen: Record<string, string> = {};
+		for (const theme of THEMES) {
+			await wearing(page, theme);
+			const token = await tokenColour(page, '--chart-1');
+			const bars = await painted(page, '.mark-rect > path', 'fill');
+			expect(bars.length, `${theme}: the canary chart drew no bar`).toBeGreaterThan(0);
+			for (const bar of bars) expect(bar, `${theme}: a bar kept a baked colour`).toBe(token);
+			seen[theme] = token;
+		}
+		// The half a literal cannot pass. One hex satisfies one arm at most.
+		expect(seen.light, 'the two themes paint --chart-1 the same').not.toBe(seen.dark);
+	});
+
+	test('the axis type takes the page own text colour, in both themes', async ({ page }) => {
+		await page.goto(DAY);
+		for (const theme of THEMES) {
+			await wearing(page, theme);
+			const token = await tokenColour(page, '--color-text-secondary');
+			const labels = await painted(page, '.mark-text text', 'fill');
+			expect(labels.length, `${theme}: the canary chart drew no axis type`).toBeGreaterThan(0);
+			for (const label of labels) {
+				expect(label, `${theme}: axis type kept the renderer's black`).toBe(token);
+			}
+		}
+	});
+
+	test('the axis lines and the grid take their own tokens, in both themes', async ({ page }) => {
+		await page.goto(DAY);
+		for (const theme of THEMES) {
+			await wearing(page, theme);
+			const axis = await tokenColour(page, '--chart-axis');
+			const grid = await tokenColour(page, '--chart-grid');
+			expect(axis, `${theme}: an axis and its grid are the same colour`).not.toBe(grid);
+
+			const rules = await painted(page, '.mark-rule:not(.role-axis-grid) line', 'stroke');
+			expect(rules.length, `${theme}: the canary chart drew no axis line`).toBeGreaterThan(0);
+			for (const rule of rules) expect(rule, `${theme}: an axis line kept its baked grey`).toBe(axis);
+
+			const grids = await painted(page, '.role-axis-grid line', 'stroke');
+			expect(grids.length, `${theme}: the canary chart drew no grid line`).toBeGreaterThan(0);
+			for (const line of grids) expect(line, `${theme}: a grid line kept its baked grey`).toBe(grid);
+		}
+	});
+
+	test('a drawing that paints itself in currentColor takes the page ink', async ({ page }) => {
+		// The diagram, which is not a chart and carries no class to aim at. Inside
+		// an `img` its `currentColor` could only ever resolve to black; in the
+		// document it is whatever the card is printing in.
+		await page.goto(DAY);
+		for (const theme of THEMES) {
+			await wearing(page, theme);
+			const ink = await tokenColour(page, '--color-text');
+			const colours = await page.evaluate(() =>
+				[...document.querySelectorAll('main article figure svg')].map(
+					(node) => getComputedStyle(node).color
+				)
+			);
+			expect(colours.length).toBeGreaterThan(0);
+			for (const colour of colours) expect(colour, `${theme}: the drawing is not inheriting the page ink`).toBe(ink);
+		}
+	});
+});
+
+test.describe('what the build refuses to inline', () => {
+	/** The canary's first published drawing: the day it is on, the story it
+	 * belongs to, and the path it is served from. */
+	function drawn(): { date: string; itemId: string; path: string } {
+		for (const date of publishedDates(CANARY)) {
+			for (const item of dayShell(date, 500, { root: CANARY })?.seed ?? []) {
+				if (item.visual?.state === 'rendered' && item.visual.path) {
+					return { date, itemId: item.item_id, path: item.visual.path };
+				}
+			}
+		}
+		throw new Error('no canary day publishes a rendered visual');
+	}
+
+	/** That drawing's visual, after the file behind it was replaced.
+	 *
+	 * The whole canary tree is copied first, so the planted bytes can never
+	 * reach the tree a build reads.
+	 */
+	function planted(markup: string): SeededVisual | null {
+		const { date, itemId, path } = drawn();
+		const root = mkdtempSync(join(tmpdir(), 'item-visual-'));
+		try {
+			cpSync(CANARY, join(root, 'digest'), { recursive: true });
+			writeFileSync(join(root, path), markup, 'utf8');
+			const shell = dayShell(date, 500, { root: join(root, 'digest') })!;
+			return shell.seed.find((item) => item.item_id === itemId)?.visual ?? null;
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	}
+
+	test('the ordinary drawing does inline, so the refusals below mean something', () => {
+		const source = readFileSync(join(CANARY, '..', drawn().path), 'utf8');
+		expect(planted(source)?.markup, 'a clean drawing was refused, so every case below is vacuous').toBe(
+			source
+		);
+	});
+
+	for (const [name, markup] of [
+		['a script element', '<svg xmlns="http://www.w3.org/2000/svg"><script>fetch("//x")</script></svg>'],
+		['an inline handler', '<svg xmlns="http://www.w3.org/2000/svg"><rect onload="fetch(\'//x\')"/></svg>'],
+		['embedded html', '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><b>x</b></foreignObject></svg>'],
+		['a link out', '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:fetch(1)"><rect/></a></svg>'],
+		['a fetched image', '<svg xmlns="http://www.w3.org/2000/svg"><image href="//x/y.png"/></svg>'],
+		['something that is not a drawing at all', '<!doctype html><html><body>hi</body></html>']
+	] as const) {
+		test(`${name} is left on the image carrier`, () => {
+			// Rule #11. A chart's labels are written by a model that read a
+			// stranger's page, so the moment the drawing stops being an `img` it is
+			// markup in our own origin and the check is the control, not a promise.
+			const visual = planted(markup);
+			expect(visual?.markup ?? null, `${name} reached the document`).toBeNull();
+			// And the story keeps its picture: refusing to inline falls back to the
+			// carrier it had, and never costs the reader the drawing.
+			expect(visual?.path, `${name} cost the story its drawing`).toBeTruthy();
+		});
+	}
+});
