@@ -1058,70 +1058,56 @@ record: its 2026-08-26 point is 0.75571 over 2,237 items, against the 0.756 over
 
 ### The bar, and what it is worth
 
-`assist.recall_min` is **0.61**, two standard errors below the 2026-08-31
-baseline of 0.690 +/- 0.041 (n=60): `0.690 - 2 x 0.041 = 0.607`, rounded to two
-places the way 0.69 was. It still catches what a bar is for: a ranking change
-that costs more than about eight points fires it.
+`assist.recall_min` is **0.68**, two standard errors below the pinned baseline of
+0.756 +/- 0.037 (n=60) over the 2,237 items published through 2026-08-26, of
+which 2,235 carry a vector: `0.756 - 2 x 0.037 = 0.682`, rounded to two places
+the way 0.69 and 0.61 were. It catches what a bar is for: a ranking change that
+costs more than about eight points fires it.
 
-**The number does not depend on the day it was taken.** The same rule applied to
-arm A, the last commit where the gate was green, gives `0.69163 - 2 x 0.04092 =
-0.60979`, which rounds to 0.61 as well. So the bar was not lowered to clear a
-failing gate - it was re-derived, and the derivation lands in the same place
-whether you take it from the failing tree or the passing one.
+**The bar no longer has an expiry date, and that is the whole point.** Three
+earlier versions of this number - 0.85, then 0.69, then 0.61 - each expired
+within days, and each time the diagnosis was that the bar had been set wrong.
+The bar was never the problem. **The gate was scoring the ranking and the
+publishing rate at the same time**, and only one of those is something a merge
+candidate can change.
 
-**The bar has an expiry date, and it is about six published days.** 0.61 sits
-0.080 under today's reading, and the archive spends that at 0.0134 a day: **six
-days at the rate the last five ran, five at the archive's mean.** In items
-rather than days it is 1,660 published items. That is not a bar - it is a stay
-of execution, and it is written into the field description in
-`backend/idhazh/contracts/app_config.py` so the next person to see this gate
-fail is told why before they start measuring.
+The mechanism, stated once so it is not rediscovered a fourth time. The result
+list holds ten slots. The gold set is frozen at the labelling date. The
+competitor set was the whole live archive, growing about 654 items a day. Every
+new item that outranks a gold item **evicts** it, so the numerator erodes while
+the denominator, `min(gold_with_vector, slots)`, does not move at all. Measured
+at **-0.00004793 recall per published item**, which is 0.031 a day: **one
+publishing day moved the instrument 39 percent of the eight-point effect the
+gate exists to catch, and three days exceeded it with no code change.** No
+constant bar survives that, which is why the gate failed twice in five days -
+the second time on a commit that changed one markdown file.
+
+**`assist.eval_corpus_through` is the fix.** The gate scores against the corpus
+as it stood on the labelling day, so both inputs are fixed and `recall_min`
+measures ranking alone. The live whole-archive number is printed beside the
+gated one on every run, because that is what a reader actually gets: 0.602 +/-
+0.046 over 6,326 items on 2026-09-04. Completing the labels now *raises* the
+gated number instead of chasing an eroding one.
+
+Ruled independently by Fowler and Carmack on 2026-09-04, who reached the same
+answer from different altitudes. Both also ruled out the alternatives, and the
+reasons are worth keeping: **completing the labels is a larger stopgap wearing a
+fix's clothes** - it resets the level and the slide restarts the next morning at
+the same rate. **A judged-only metric is fatal** - `LabelledQuery.relevant`
+carries no negative judgements, so condensing to judged items makes recall 1.0
+whenever any gold appears, and the gate would pass forever. **A trend gate
+against the previous run stays confounded**, because last run's corpus differs
+from this one's.
+
+`assist.recall_tolerance`, added and removed the same day, is the record of the
+wrong shape being tried first: a band around a drifting number is a looser bar,
+not a stable one, and the arithmetic priced it at 1.8 days.
 
 **A bar with no expiry date is the same defect as a magnitude with no date.**
 The previous version of this page said the bar "has about 0.077 of room before
 that matters". That room was spent in five days and nobody was watching the
 rate, so the gate failed on `main` and blocked every open pull request. The rate
-is now measured and printed beside the room.
-
-### The bar carries a tolerance band, because a sampled number has no fixed value
-
-`assist.recall_tolerance` is **0.10**, so the gate compares against
-`recall_min x (1 - recall_tolerance)` - **0.549**, not 0.61.
-
-The expiry above arrived on schedule. The bar was set on 2026-08-31 with about
-six published days of room, and on 2026-09-04 the gate failed at **0.604 +/-
-0.046** against 0.610, on a commit that changed one markdown file and nothing
-else. The measurement was inside its own error bar and the gate fired anyway.
-That is what a fixed threshold does to a sample of 60, and it happened for the
-second time in five days.
-
-**The band is a stopgap worth about two days, and it is scheduled for deletion.**
-The drift underneath is not a ranking regression, and it is not the unjudged
-share either - that is a symptom, and `unlabelled` never enters the score. The
-cause is that **the gold set is frozen while the competitor set is not.** The
-result list holds ten slots; the archive grows about 654 items a day; a new item
-that outscores a gold item evicts it, so the numerator erodes while the
-denominator, `min(gold_with_vector, slots)`, does not move at all. Measured at
-**-0.00004793 recall per published item**, the 0.055 of room this band opens is
-1,148 items - **1.8 days**, not the four an earlier version of this page claimed.
-
-**The structural fix is to pin the eval corpus to the labelling window**, so both
-inputs are fixed and `recall_min` measures ranking alone. Completing the labels
-is not the fix: it resets the level and the slide restarts the next morning at
-the same rate. Fowler and Carmack ruled independently and landed on the same
-answer, 2026-09-04. The whole-archive number stays printed as a diagnostic; only
-the gated one is pinned.
-
-**This overrules a rejected alternative on this page, and says so rather than
-working around it.** "Lower `recall_min` until the failing gate goes green" is
-listed below as refused, and a tolerance band has the same effect today. Two
-things separate them, and only the second is decisive. The band is a policy
-about sampling noise rather than a number chosen to clear a reading: tuned to
-green it would sit at 0.605, and it sits at 0.549. And the refusal was written
-when the bar's movement was suspected to be a ranking change; it is now measured
-as gold eviction under corpus growth, so the thing the refusal was protecting is
-not the thing that is moving. Owner decision, 2026-09-04, on the principle that a
-test comparing a sampled number against a fixed one is wrong on its face.
+is now measured, and the pin means it no longer applies to the gated number.
 
 **Archive search does clear a defensible bar, and the bar is lower than it
 looked.** 0.767 over 60 questions with a fully embedded corpus is an honest
@@ -1249,7 +1235,7 @@ from what a reader gets for the same week. Authority: Andre, Rule #10.
 | Use an item's own key points as a free query | The summarizer wrote them. A query generated by the model whose output is being retrieved shares its failure modes, which is the LLM-as-judge ban in `CLAUDE.md` section 0a. | Andre |
 | Freeze a corpus snapshot into the fixture so the number never moves | It would duplicate 300 KB of already-committed vectors and would stop the eval from noticing the archive. Published days are immutable, so a labelled answer cannot vanish - and a separate test says so loudly if one does. | Fowler |
 | Lower the labels or raise the floor until recall passes 0.5 | The brief for this work said not to, and it was right: an instrument that reports bad news is doing its job. | owner |
-| Lower `recall_min` until the failing gate goes green | It is the same move as the row above, with a different knob. The bar has to come from a measurement of what the system does now, and that measurement had to separate a coverage change from a ranking change before any number could be written down. **Partly overruled 2026-09-04** by `assist.recall_tolerance`, and the section above says on what grounds - the movement is now measured as a labelling artefact rather than a ranking change. Lowering `recall_min` itself is still refused. | Andre |
+| Lower `recall_min` until the failing gate goes green | It is the same move as the row above, with a different knob. The bar has to come from a measurement of what the system does now, and that measurement had to separate a coverage change from a ranking change before any number could be written down. **Still refused, and 2026-09-04 sharpened why**: the bar was never the thing that was wrong. The gate was scoring the ranking and the publishing rate at once, so every re-derivation expired on schedule. Pinning the corpus raised the bar from 0.61 to 0.68 rather than lowering it. | Andre |
 | Drop the 13 newly answerable queries, or the queries that score worst | The queries did not change; the corpus did. Removing `crude-oil-price` because it scores 0.000 would delete the single clearest piece of evidence that the labels are incomplete. | Andre |
 | Count an unlabelled item in a slot as correct because it looks relevant | That is the metric grading itself. Relevance has to be judged against a written intent by a rule applied to every candidate, in a pool deeper than the slots, or the number means nothing. | Andre |
 | Raise the floor to 0.42 so every probe returns nothing | 0.42 silences the smartwatch match and does not silence "competitive bridge bidding" matching an offshore wind auction, which needs 0.44 and 0.073 of recall. The floor would be set by whichever probe happened to be written down rather than by the noise it exists to cut. | Andre |
