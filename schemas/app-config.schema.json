@@ -20,6 +20,20 @@
       "additionalProperties": false,
       "description": "On-device archive search: what the encoder reads, and what the list shows.\n\nEvery value here was a literal with no override path (Rule #6). The first two\ndescribe how much of an item the encoder is allowed to read; the rest describe\nwhat the reader's list keeps. All five are set from measurement rather than\nfrom taste.",
       "properties": {
+        "eval_corpus_through": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "2026-08-26",
+          "description": "The last published day the retrieval gate scores against, as YYYY-MM-DD. Set to the day the label set was pooled, so the gate's competitor set is the one the labellers saw. THIS IS THE FIX FOR A GATE THAT USED TO EXPIRE. Scored against the live archive, recall@10 measures two things at once: the ranking, and how many stories were published since the labels were written. Only the first is something a merge candidate can change. The second is unbounded and monotone - the result list holds ten slots, the archive grew about 654 items a day through 2026-09, and every new item that outranks a gold item evicts it - so the numerator erodes while the denominator, min(gold_with_vector, slots), does not move at all. Measured at -0.00004793 recall per published item, which is 0.031 a day: one publishing day moved the instrument 39 percent of the eight-point effect the gate exists to catch, and three days exceeded it with no code change. The gate failed twice in five days for that reason alone, the second time on a commit that changed one markdown file. Pinned, the drift term is zero and recall_min measures ranking. Null reads the whole archive, which is what the printed diagnostic beside the gate reports, because that number is what a reader actually gets. Ruled by Fowler and Carmack independently, 2026-09-04; the reasoning is in docs/concepts/evaluation.md.",
+          "title": "Eval Corpus Through"
+        },
         "max_tokens": {
           "default": 256,
           "description": "How far into an item's text the encoder reads before it truncates. 512 is the hard ceiling because that is the encoder's position table; the default is 256 because that is what the model was trained at, and the measurement says nothing is waiting above it. Measured 2026-08-26 over the 1886 embedded items of the six committed days: p95 217 tokens, p99 243, max 280, and 0.58 percent of items run past 256 by a mean of 13 tokens. Raising it would read 0.05 percent more text and re-date every committed vector.",
@@ -37,19 +51,11 @@
           "type": "number"
         },
         "recall_min": {
-          "default": 0.61,
-          "description": "The regression bar for recall@result_limit over the committed query set, counted over right answers that carry a vector. Coverage is excluded on purpose: an item the pipeline never embedded cannot be retrieved at any threshold, so counting it here would fail this gate for a defect in another stage. Set two standard errors below the 2026-08-31 baseline of 0.690 +/- 0.041 (n=60), measured on Windows 11, 12 logical CPUs, onnxruntime 1.29.0, over 3,596 published items of which 3,594 carry a vector: 0.690 - 2 x 0.041 = 0.607, rounded to two places as 0.61. That baseline is a LOWER BOUND: 70.8% of filled slots hold an item no labeller judged either way, and every one of them is counted as a wrong answer. THIS BAR HAS AN EXPIRY DATE. Measured over eleven published days, recall slides 0.0134 a day against the frozen label set for a reason that is not a regression, so 0.61 has 0.080 of room and about six published days of it. Re-deriving the number a third time is not the fix; completing the labels is, and it lands on its own - see docs/concepts/evaluation.md.",
+          "default": 0.68,
+          "description": "The regression bar for recall@result_limit over the committed query set, counted over right answers that carry a vector, scored against the corpus pinned by eval_corpus_through. Coverage is excluded on purpose: an item the pipeline never embedded cannot be retrieved at any threshold, so counting it here would fail this gate for a defect in another stage. Set two standard errors below the pinned baseline of 0.756 +/- 0.037 (n=60) over the 2,237 items published through 2026-08-26, of which 2,235 carry a vector: 0.756 - 2 x 0.037 = 0.682, rounded to two places as 0.68. Measured 2026-09-04 on Windows 11, 12 logical CPUs, onnxruntime 1.29.0. THIS BAR NO LONGER HAS AN EXPIRY DATE, and that is the whole point of the pin. The two earlier versions of this number, 0.85 and 0.69 and then 0.61, each expired within days because they were measured against a corpus that kept growing under them. Both inputs are now fixed, so the number moves only when the ranking moves or the labels are completed - and completing the labels raises it rather than eroding it. It is still a LOWER BOUND: 66.6 percent of filled slots hold an item no labeller judged either way, and every one of them is counted as a wrong answer. See docs/concepts/evaluation.md.",
           "maximum": 1.0,
           "minimum": 0.0,
           "title": "Recall Min",
-          "type": "number"
-        },
-        "recall_tolerance": {
-          "default": 0.1,
-          "description": "How far below recall_min the measurement may sit before the gate fails, as a fraction of recall_min. The effective bar is recall_min x (1 - recall_tolerance), so the default 0.10 turns a 0.61 bar into 0.549. It exists because a sampled measurement compared against a fixed number fails on noise: recall@10 is measured over 60 queries and carries a standard error near 0.046, so a bar set at the measurement's own edge decides on a coin toss. THIS IS A STOPGAP WORTH ABOUT TWO DAYS, AND IT IS SCHEDULED FOR DELETION. The gate holds the gold set frozen while the competitor set - the whole committed archive - grows about 654 items a day, so a new item that outscores a gold item evicts it from the ten slots and the numerator erodes while the denominator does not move. At the measured -0.00004793 recall per published item, the 0.055 of room this band opens is 1,148 items, which is 1.8 days. Pinning the eval corpus to the labelling window is the structural fix and removes this knob - see docs/concepts/evaluation.md. Owner decision, 2026-09-04: a test that compares a sampled number against a fixed one is wrong on its face, and this band buys the time to fix it properly.",
-          "maximum": 0.5,
-          "minimum": 0.0,
-          "title": "Recall Tolerance",
           "type": "number"
         },
         "result_limit": {
@@ -1752,6 +1758,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added assist.eval_corpus_through, default 2026-08-26. Removed assist.recall_tolerance, added the same day and never released. assist.recall_min re-derived against the pinned corpus, 0.61 to 0.68.",
+      "version": "2026-09-04T20:00",
+      "why": "The retrieval gate scored against the live archive, so it measured the ranking and the publishing rate at once. The result list holds ten slots and the archive grew about 654 items a day, so every new item that outranked a gold item evicted it: the numerator eroded at -0.00004793 recall per published item while the denominator did not move. One publishing day shifted the instrument 39 percent of the eight-point effect the gate exists to catch, so no constant bar could survive - it failed twice in five days, the second time on a commit that changed one markdown file. The tolerance band bought 1.8 days and was the wrong shape; a band around a drifting number is a looser bar, not a stable one. Pinned, the drift term is zero, the bar rises from 0.61 to 0.68, and it stops expiring. Ruled by Fowler and Carmack independently, 2026-09-04."
+    },
+    {
       "change": "Added assist.recall_tolerance, default 0.10. The retrieval gate now compares recall against recall_min x (1 - recall_tolerance) rather than against recall_min itself.",
       "version": "2026-09-04T18:00",
       "why": "recall@10 is measured over 60 queries with a standard error near 0.046, so a bar at the measurement's own edge decides on noise. It failed on 2026-09-04 at 0.604 against 0.610 - inside the error bar - on a commit that changed one markdown file. The drift underneath is not a search regression: the gold set is frozen while the competitor set grows about 654 items a day, so a new item outscoring a gold item evicts it from the ten slots. At -0.00004793 recall per published item this band is worth 1,148 items, or 1.8 days - it buys time to pin the eval corpus, which is the fix, and it is deleted when that lands. Owner decision, 2026-09-04."
@@ -2183,7 +2194,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-04T18:00",
+      "default": "2026-09-04T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2197,5 +2208,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-04T18:00"
+  "version": "2026-09-04T20:00"
 }

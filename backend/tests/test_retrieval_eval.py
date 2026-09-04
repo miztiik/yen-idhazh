@@ -293,6 +293,41 @@ def test_every_labelled_answer_is_still_in_the_archive(
     assert missing == []
 
 
+def test_the_pin_holds_the_competitor_set_still() -> None:
+    """`through` drops what was published later and keeps the boundary day."""
+    corpus = Corpus(
+        items=(
+            item("2026-08-25", "a", unit(1.0, 0.0)),
+            item("2026-08-26", "b", unit(1.0, 0.0)),
+            item("2026-08-27", "c", unit(1.0, 0.0)),
+        )
+    )
+    assert [row.item_id for row in corpus.through("2026-08-26").items] == ["a", "b"]
+    assert corpus.through(None) is corpus
+
+
+def test_the_pinned_gate_cannot_drift_with_the_archive(
+    corpus: Corpus, config: AppConfig
+) -> None:
+    """The gate's own defence, asserted rather than argued.
+
+    Unpinned, this measurement fell 0.0479 per thousand published items and the
+    gate failed twice in five days on commits that touched no ranking code. The
+    pin is only worth having if a later day genuinely cannot reach the scored
+    set, so that is the assertion - not the recall number, which the gate above
+    already owns.
+    """
+    pinned = config.assist.eval_corpus_through
+    assert pinned is not None, "the gate is unpinned and will expire again"
+    scored = corpus.through(pinned)
+    assert scored.items, "the pin excludes the whole archive"
+    assert max(row.date for row in scored.items) <= pinned
+    assert len(scored.items) < len(corpus.items), (
+        "the pin is at or past the newest published day, so it is not yet holding "
+        "anything still - it will start drifting again as soon as it does"
+    )
+
+
 # --------------------------------------------------------------------------
 # The measurement
 # --------------------------------------------------------------------------
@@ -311,6 +346,24 @@ def report(
     embedded: list[list[float]],
     config: AppConfig,
 ) -> RetrievalReport:
+    """The gated measurement, scored against the corpus the labellers saw."""
+    return retrieval.evaluate(
+        corpus.through(config.assist.eval_corpus_through),
+        queries,
+        embedded,
+        limit=config.assist.result_limit,
+        floor=config.assist.similarity_floor,
+    )
+
+
+@pytest.fixture(scope="session")
+def live_report(
+    corpus: Corpus,
+    queries: tuple[LabelledQuery, ...],
+    embedded: list[list[float]],
+    config: AppConfig,
+) -> RetrievalReport:
+    """The same measurement over the whole archive. Reported, never gated."""
     return retrieval.evaluate(
         corpus,
         queries,
@@ -320,7 +373,9 @@ def report(
     )
 
 
-def test_the_ranking_clears_its_bar(report: RetrievalReport, config: AppConfig) -> None:
+def test_the_ranking_clears_its_bar(
+    report: RetrievalReport, live_report: RetrievalReport, config: AppConfig
+) -> None:
     """recall@10 over the answers that carry a vector. The single gate metric.
 
     Coverage is deliberately out of it. An item the pipeline never embedded is
@@ -328,17 +383,20 @@ def test_the_ranking_clears_its_bar(report: RetrievalReport, config: AppConfig) 
     defect that belongs to the embedding stage. The reader-facing number, which
     does count it, is printed beside this one on every run.
 
-    The bar carries `assist.recall_tolerance` because a sampled number compared
-    against a fixed one decides on noise: n=60 puts a standard error near 0.046
-    on a bar of 0.61.
+    The corpus is pinned to `assist.eval_corpus_through`. Unpinned, this gate
+    scores the ranking and the publishing rate at once, and the second term is
+    unbounded - see the field description. The live number is printed below the
+    gated one because it is what a reader actually gets, and it is what a rise
+    in coverage or a re-label should be read against.
     """
-    print("\n" + report.summary())
-    bar = config.assist.recall_min * (1.0 - config.assist.recall_tolerance)
-    assert report.recall_reachable >= bar, (
+    print("\ngated  " + report.summary())
+    print("live   " + live_report.summary())
+    assert report.recall_reachable >= config.assist.recall_min, (
         f"reachable recall@{report.result_limit} is {report.recall_reachable:.3f} "
         f"+/- {report.standard_error_reachable:.3f} over {len(report.answerable)} answerable "
-        f"queries, below the {bar:.3f} bar "
-        f"({config.assist.recall_min} less {config.assist.recall_tolerance:.0%}). Weakest: "
+        f"queries, below the {config.assist.recall_min} bar, measured over the "
+        f"{report.corpus_items} items published through "
+        f"{config.assist.eval_corpus_through}. Weakest: "
         + ", ".join(
             f"{row.query_id} {row.recall_reachable:.2f}"
             for row in sorted(report.answerable, key=lambda row: row.recall_reachable)[:5]
@@ -386,8 +444,14 @@ def index_report(
     embedded: list[list[float]],
     config: AppConfig,
 ) -> RetrievalReport:
+    """Pinned to the same day as `report`, because this arm is a comparison.
+
+    The question is what moving to the index cost, so the corpus has to be held
+    still on both sides. Pin one arm and the gap reads as an index defect when
+    it is only the days between the pin and today.
+    """
     return retrieval.evaluate(
-        index_corpus,
+        index_corpus.through(config.assist.eval_corpus_through),
         queries,
         embedded,
         limit=config.assist.result_limit,
