@@ -1095,12 +1095,22 @@ else. The measurement was inside its own error bar and the gate fired anyway.
 That is what a fixed threshold does to a sample of 60, and it happened for the
 second time in five days.
 
-**The band is a delay, not a repair, and it is worth about four published days.**
-The drift underneath is not a ranking regression. The gate counts an unjudged
-slot as a wrong answer, and the unjudged share rose from 70.8 percent to 76.0
-percent as the corpus grew from 3,596 to 6,211 items across those days. More
-published items means more unjudged slots means lower recall, whatever the
-ranker does.
+**The band is a stopgap worth about two days, and it is scheduled for deletion.**
+The drift underneath is not a ranking regression, and it is not the unjudged
+share either - that is a symptom, and `unlabelled` never enters the score. The
+cause is that **the gold set is frozen while the competitor set is not.** The
+result list holds ten slots; the archive grows about 654 items a day; a new item
+that outscores a gold item evicts it, so the numerator erodes while the
+denominator, `min(gold_with_vector, slots)`, does not move at all. Measured at
+**-0.00004793 recall per published item**, the 0.055 of room this band opens is
+1,148 items - **1.8 days**, not the four an earlier version of this page claimed.
+
+**The structural fix is to pin the eval corpus to the labelling window**, so both
+inputs are fixed and `recall_min` measures ranking alone. Completing the labels
+is not the fix: it resets the level and the slide restarts the next morning at
+the same rate. Fowler and Carmack ruled independently and landed on the same
+answer, 2026-09-04. The whole-archive number stays printed as a diagnostic; only
+the gated one is pinned.
 
 **This overrules a rejected alternative on this page, and says so rather than
 working around it.** "Lower `recall_min` until the failing gate goes green" is
@@ -1109,12 +1119,9 @@ things separate them, and only the second is decisive. The band is a policy
 about sampling noise rather than a number chosen to clear a reading: tuned to
 green it would sit at 0.605, and it sits at 0.549. And the refusal was written
 when the bar's movement was suspected to be a ranking change; it is now measured
-as a labelling artefact, so the thing the refusal was protecting is not the thing
-that is moving. Owner decision, 2026-09-04, on the principle that a test
-comparing a sampled number against a fixed one is wrong on its face.
-
-What does not change: re-deriving the bar a third time is not the fix, and
-neither is widening the band a second time. Completing the labels is.
+as gold eviction under corpus growth, so the thing the refusal was protecting is
+not the thing that is moving. Owner decision, 2026-09-04, on the principle that a
+test comparing a sampled number against a fixed one is wrong on its face.
 
 **Archive search does clear a defensible bar, and the bar is lower than it
 looked.** 0.767 over 60 questions with a fully embedded corpus is an honest
