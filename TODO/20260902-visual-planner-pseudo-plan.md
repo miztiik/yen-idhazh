@@ -1209,6 +1209,16 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 
 ### 12.2 Litigation rows P.L1 - P.L35
 
+**The proposal rated its own confidence per row and this table dropped it, restored below.** It is the one column that is forward-looking: it says which verdicts are most likely to be wrong, so it is where a second look pays. The evidence that it matters is already in this audit - **L3, `pie`, is the proposal's lowest-rated row at Low-Medium, and it is exactly where the gaps clustered**: G26 found `stacked_bar` has no gate of its own and G27 found the `pie`/`bubble` telemetry flag missing, both landing on L3. L16, the other Low, was resolved well, by promoting the proposal's own suggested guard to the standing arm. Carrying this column would have flagged L3 for a second look before an audit had to find it.
+
+| Confidence | Rows |
+|---|---|
+| **Low** | L16 |
+| **Low-Medium** | **L3** |
+| **Medium** | L1, L2, L4, L7, L9, L12, L13, L20, L22, L31, L33, L34 |
+| **High** | L5, L6, L8, L10, L11, L14, L15, L17, L19, L23, L24, L25, L26, L27, L29, L30, L32, L35 |
+| **Unrated** - open or assigned when the proposal was written | L18, L21, L28 |
+
 | P.L | Verdict | Owner | Where |
 |---|---|---|---|
 | L1 | AMEND - two calls, ordering reversed | Andre / Owner | 10.1 |
@@ -1249,16 +1259,20 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 
 ### 12.3 Risks P.R1 - P.R20
 
+**Re-audited 2026-09-04, and nine of the twenty needed a correction.** This is the only coverage table written at one word per row, and it was the last to get a second pass - every other one earned a follow-up while this one did not, and short entries are the least self-checking. R9 shows the audit works in both directions: row 17 correctly found the **proposal's** own "Addressed" was wrong, because the remedy it named could not fire. The same scrutiny in the other direction finds four closures that do not hold and four that hold as a rule while the mechanism they cite does not exist.
+
+**The failure mode worth naming: a closure that cites another row inherits that row's fate, and nothing tracked that.** R17 is closed by row 35; row 35 needs the re-render path that R12's failure removed. A disposition is checkable only against the risk's own wording, never against a neighbour's promise.
+
 | P.R | Disposition |
 |---|---|
 | R1 | Rejection rate and `planned_type_entropy` alarmed as a **pair**, read per `plan_version` not per day - decoding is `temperature 0.0, seed 0`, so entropy cannot drift daily (Andre) |
-| R2 | Closed by D13; extraction metrics ship |
-| R3 | Closed by row 68 |
-| R4 | Closed by row 8 |
+| R2 | **NOT closed. Reopened 2026-09-04.** D13 was accepted as a decision and its seven instruments were not carried - 12.13 G35, including `extractable_but_unused_rate`, the one metric that separates a planner regression from an extractor one, which is the whole reason D13 exists. Same shape as G34: a decision without an artefact |
+| R3 | **Holds as a decision, not as a store.** Row 68 records and renders rejected plans; G10 then found the plan body has no path, no policy and no window. The decision stands, the storage is G10's |
+| R4 | **Holds as a rule, not as an alarm.** Row 8 logs every merge and reports `merge_rate`; G15 found `merge_rate` is never paired with `semantic_coherence`, which is the pairing P.7.1.1 asks for. Conservative merging is real; the alarm is not |
 | R5 | Closed by row 2 |
 | R6 | Managed by `ledger_version` stamping (row 7) |
 | R7 | **Reframed.** Andre's structural defence assumed summary-first. Under section 10's ordering the summariser sees the element table, so stripping numbers from prose does not raise `information_delta` - it is measured against elements, not against the summary's own scarcity. `summary_informativeness` still ships as the counterweight |
-| R8 | Closed - floors from depth-0 published visuals only |
+| R8 | **Holds as a rule, and two of its three rungs do not exist.** Floors are computed from depth-0 published visuals only, which is right; G2 found depths 2 and 3 carry no percentile, so there is nothing to compute a floor from at either |
 | R9 | Closed by row 17 |
 | R10 | Disclosed - edges are Tier 2 with a span; the decision procedure is published and edges are sampled for audit |
 | R11 | Closed - alt text generated deterministically by the compiler, inside D7. **12.8 X6 makes that binding**: section 1a's plan box and section 10.1's call-2 shape had the model emitting it, and they lose the field |
@@ -1267,24 +1281,24 @@ Every numbered item in the proposal, with its disposition here. **This is the se
 | R14 | Closed by row 65 |
 | R15 | `evaluation_cost` reported separately **and** a sample-rate cap in config enforced inside the shard budget (Carmack) |
 | R16 | Closed - `none_arm_ratio` set from a reviewer-hours budget, recorded on the queue |
-| R17 | Closed by rows 24 and 35 |
+| R17 | **NOT closed, by dependency. Reopened 2026-09-04.** Row 24 holds - d3 modules exact-pinned, recorded in `renderer_version`. Row 35 does not: "a renderer bump re-renders whole days or none" needs the plan and the elements, and 12.14 G40 found there is no store that holds either. **This is the row that shows a closure inherits the fate of what it cites** |
 | R18 | **Half closed, and the half that is closed is the other axis - see 12.14 G43.** Row 49 rules on within-day type diversity, which is Susan's and is real. R18 is cross-day repetition of one story's visual, and Editor's rule for it - a running story's visual repeats only when its numbers moved - has no instrument: the `(element set, type)` fingerprint and `visual_repetition_rate` are both absent, so nothing computes whether the numbers moved |
-| R19 | Closed by row 56 |
+| R19 | **Holds as a rule, not as a mechanism.** Row 56 requires every rate per potential class, which is correct and is the point. 12.11 G16 found the classifier that produces the class is unbuilt, and is not deterministic as described, so today there is no denominator to report against |
 | R20 | Closed by row 40 |
 
 ### 12.4 Open questions P.Q1 - P.Q10
 
 | P.Q | Answer |
 |---|---|
-| Q1 | Classifier thresholds live in `config/idhazh.json` behind a Pydantic model, stamped by that file's existing top-level `version`. No bespoke version field, no named owner (Fowler). **This refuses a second source of truth, not a telemetry column** - see 12.8 X5, which reconciles it with the P.6.1 event |
+| Q1 | Classifier thresholds live in `config/idhazh.json` behind a Pydantic model, stamped by that file's existing top-level `version`. No bespoke version field. **This refuses a second source of truth, not a telemetry column** - see 12.8 X5, which reconciles it with the P.6.1 event. **"No named owner" is superseded: O42 gives the classifier its own plan-doc, M** |
 | Q2 | Extend `visuals.min_chart_points` into a map keyed by the type enum. `table` does **not** bypass it - a one-row table is a sentence (Fowler) |
-| Q3 | `information_delta` is deterministic: plan `element_ids` whose `raw` string does not appear in the summary, over all plan `element_ids`. Relationship extraction from prose would need a model, which would make the metric share the failure modes of the thing it measures (Andre) |
+| Q3 | `information_delta` is deterministic: plan `element_ids` whose surface string does not appear in the summary, over all plan `element_ids`. Relationship extraction from prose would need a model, which would make the metric share the failure modes of the thing it measures (Andre). **Superseded in one detail and it is not cosmetic**: this answer originally named `raw`, and 12.13 G19 found `raw` is not in the element record - three names are in play for one concept. `information_delta` is gate 4 in section 14.5, so computing it on the wrong one silently changes what the gate means. **G19 names the field before Q3 is implemented** |
 | Q4 | Normalised types with the surface form preserved. `time` carries `normalised` plus `granularity`; the Tier 1 guarantee is the verbatim surface form |
 | Q5 | Sampling rate, reviewer count and agreement target are set from a reviewer-hours budget; `inter_reviewer_agreement` is published beside every keep rate or the keep rate is not quotable |
-| Q6 | The edge decision procedure is published, edges are sampled for human audit, and edge anchoring is never described as deterministic |
+| Q6 | Edges are sampled for human audit and edge anchoring is never described as deterministic - both done. **The procedure itself was promised and never written: 12.15 G46.** It is the load-bearing rule of the diagram family, and it is the twin of G16's sequencing lexicon |
 | Q7 | The canary mechanism extends to element-table fixtures. Zero runner cost; the only condition is that the fixture set stays small enough that six checkouts do not pay for it (Carmack, Fowler) |
 | Q8 | **Yes.** The eval ledger, `ConfidenceBand`, `BandReason`, `verbatim_run` and the faithfulness extra all exist. Wire in, build nothing (row 64) |
-| Q9 | One rule: **a ledger folds, an asset deletes, a lookup deletes.** Section 9.2 |
+| Q9 | One rule: **a ledger folds, an asset deletes, a lookup deletes.** Section 9.2. **Two later findings qualify it**: G10 found a rejected plan body has no policy at all, and 9.2's own 2026-09-04 correction voided every `keep_months` reference, which is the knob this answer leans on. The rule stands; the windows it points at have to be re-named per store |
 | Q10 | Alias-ledger additions are reviewed in the PR that adds them; the model never writes to it unreviewed (row 7) |
 
 ### 12.5 Proposal sections
@@ -1509,6 +1523,24 @@ Sections 12.6 to 12.13 walked the diagram, the tail, the element record, the pla
 **One finding from this pass was already recorded.** The release rule - never move `components_version` and `weight_version` in the same release, or the score time series is lost - is G34, which also notes both version fields are themselves zero hits. The rule and its subjects land together in **L**.
 
 **The pattern in G40 and G43 is worth naming, because it is the third time.** X6 was a contradiction hiding between two sections. These two are **risks marked closed against something adjacent**: R12 against a store that cannot hold the payload, R18 against a rule on the wrong axis. A "Closed" cell stops anyone looking, so it has to name what closed it and the closure has to be checkable against the risk's own wording. Every future disposition of a risk row cites the mechanism, not the neighbour.
+
+### 12.15 The audit turned on itself
+
+Sections 12.6 to 12.14 audited the proposal against this document. This pass, run 2026-09-04, audits **this document's own coverage tables**, which had never been re-read as tables. It found one unwritten algorithm, and one methodological defect that produced most of the others.
+
+| # | Gap | Why it is load-bearing | Owner |
+|---|---|---|---|
+| G46 | **The diagram edge decision procedure is promised and not written.** 12.4 Q6 answered with three clauses and delivered two: edges are sampled for human audit, and edge anchoring is never called deterministic. **The procedure itself is nowhere**, and P.7.3 calls it "the load-bearing rule of the diagram family" | **G16-shaped**: an output disposed of without its algorithm. P.3.4.2's honesty note says why it is hard - "natural language asserts sequence at many strengths: 'then' is explicit, 'subsequently' is weaker, paragraph adjacency asserts nothing" - so this is a written rule about which spans count, not a threshold. **And it has a twin already in flight.** G16 needs a sequencing lexicon for `process_signal`, with no author. Q6 needs a rule for whether a span asserts an edge. **These are one linguistic artefact seen from two ends** - the first gates whether the diagram family is attempted at all, the second gates whether each arrow is legal - so writing them apart gets them written twice and disagreeing. O42 gave the first to M; the second goes with it | **M**, with **H** for the validator predicate |
+
+**And the methodological finding, which caused more damage than any single row.** Nine of section 12.3's twenty closures needed correcting - four that do not hold, four that hold as a rule while the mechanism they name does not exist, and R11 which X6 had already caught. Three things made that table the weak one:
+
+- **It is the only coverage table written at one word per row.** "Closed by row 55" cannot be checked against anything; it names a neighbour rather than a mechanism.
+- **It was the last to get a second pass.** 12.6 and 12.7 re-walked the flow, 12.10 re-ran the compliance scorecard, 12.11 walked the element record, 12.12 walked section 3. Nothing re-read the risks until now.
+- **A closure that cites another row inherits that row's fate, and nothing tracked the dependency.** R17 cites row 35; row 35 needs the re-render store R12 was meant to provide; R12 failed. One broken closure quietly took a second with it.
+
+Two rules follow, and they bind every future pass. **A disposition names the mechanism that closes the risk, never a neighbouring row.** And **a risk marked closed is re-read whenever anything it cites changes** - which is what a "Closed" cell costs, and why one is worth writing carefully.
+
+**The confidence column is restored in 12.2 for the same reason.** It is the only forward-looking signal either document carries, it costs 35 cells, and it had already earned its keep: L3 is the lowest-rated row in the proposal and is exactly where G26 and G27 landed.
 
 ---
 
