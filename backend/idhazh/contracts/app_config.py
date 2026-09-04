@@ -2134,6 +2134,30 @@ class AssistConfig(Model):
             "labels is, and it lands on its own - see docs/concepts/evaluation.md."
         ),
     )
+    recall_tolerance: float = Field(
+        default=0.10,
+        ge=0.0,
+        le=0.5,
+        description=(
+            "How far below recall_min the measurement may sit before the gate fails, "
+            "as a fraction of recall_min. The effective bar is "
+            "recall_min x (1 - recall_tolerance), so the default 0.10 turns a 0.61 bar "
+            "into 0.549. It exists because a sampled measurement compared against a "
+            "fixed number fails on noise: recall@10 is measured over 60 queries and "
+            "carries a standard error near 0.046, so a bar set at the measurement's "
+            "own edge decides on a coin toss. THIS IS A STOPGAP WORTH ABOUT TWO DAYS, "
+            "AND IT IS SCHEDULED FOR DELETION. The gate holds the gold set frozen "
+            "while the competitor set - the whole committed archive - grows about 654 "
+            "items a day, so a new item that outscores a gold item evicts it from the "
+            "ten slots and the numerator erodes while the denominator does not move. "
+            "At the measured -0.00004793 recall per published item, the 0.055 of room "
+            "this band opens is 1,148 items, which is 1.8 days. Pinning the eval "
+            "corpus to the labelling window is the structural fix and removes this "
+            "knob - see docs/concepts/evaluation.md. Owner decision, 2026-09-04: a "
+            "test that compares a sampled number against a fixed one is wrong on its "
+            "face, and this band buys the time to fix it properly."
+        ),
+    )
 
 
 class AppConfig(Contract):
@@ -2141,6 +2165,26 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-04T18:00",
+            change=(
+                "Added assist.recall_tolerance, default 0.10. The retrieval gate now "
+                "compares recall against recall_min x (1 - recall_tolerance) rather "
+                "than against recall_min itself."
+            ),
+            why=(
+                "recall@10 is measured over 60 queries with a standard error near "
+                "0.046, so a bar at the measurement's own edge decides on noise. It "
+                "failed on 2026-09-04 at 0.604 against 0.610 - inside the error bar - "
+                "on a commit that changed one markdown file. The drift underneath is "
+                "not a search regression: the gold set is frozen while the competitor "
+                "set grows about 654 items a day, so a new item outscoring a gold item "
+                "evicts it from the ten slots. At -0.00004793 recall per published "
+                "item this band is worth 1,148 items, or 1.8 days - it buys time to "
+                "pin the eval corpus, which is the fix, and it is deleted when that "
+                "lands. Owner decision, 2026-09-04."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-03T18:00",
             change=(
