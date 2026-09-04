@@ -1,10 +1,10 @@
 {
   "complete_dates": 11,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-04T16:37:38Z",
+  "generated_at": "2026-09-04T19:26:53Z",
   "last_date": "2026-09-03",
   "min_complete_days": 30,
-  "run_id": "2026-09-04-33883405707",
+  "run_id": "2026-09-04-33901670861",
   "sources": [
     {
       "availability": "answering",
@@ -1459,7 +1459,7 @@
       "vertical": "energy"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "opportunities": 4,
       "permission": "allowed",
       "publications": 4,
