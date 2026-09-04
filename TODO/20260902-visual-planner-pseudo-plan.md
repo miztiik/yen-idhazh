@@ -248,71 +248,63 @@ Plain ASCII, not box-drawing characters: `CLAUDE.md` section 5 is ASCII-only for
 
 ### 1a-m The same drawing in Mermaid
 
-Added 2026-09-04 beside the ASCII above, not instead of it. The ASCII is deleted once a line-by-line check confirms nothing was lost, and keeping both until that check runs is what makes it possible. Mermaid source is ASCII, so `CLAUDE.md` section 5 is satisfied either way; what it buys is that a box does not have to be re-aligned by hand every time a word changes, which is how the reachability gate stayed wrong for two rounds.
+Added 2026-09-04 beside the ASCII above, not instead of it. The ASCII is deleted once a line-by-line check confirms nothing was lost, and keeping both until that check runs is what makes it possible. Mermaid source is ASCII, so `CLAUDE.md` section 5 is satisfied either way - **reading that rule as "ASCII art only" is what cost two rounds with the reachability gate drawn wrong.** What Mermaid buys is that a box no longer has to be re-aligned by hand every time a word changes.
 
-**Not to be confused with the other Mermaid in this project.** Correction C4 records that `diagram_spec()` emits Mermaid as a **published visual** for a reader. This is Mermaid as **documentation**, drawn for a person reading the plan. The two share a syntax and nothing else.
+**The boxes carry a name and the one assertion an arrow cannot carry. Every field list, check list and exception list lives in the table below, keyed by node id.**
 
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontSize":"15px","fontFamily":"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace","primaryColor":"#eef2ff","primaryBorderColor":"#4c6ef5","primaryTextColor":"#0b1020","secondaryColor":"#f1f3f5","tertiaryColor":"#ffffff","lineColor":"#5a6270","clusterBkg":"#f8f9fb","clusterBorder":"#c3c8d0"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontSize":"15px","fontFamily":"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace","background":"#ffffff","mainBkg":"#ffffff","edgeLabelBackground":"#ffffff","labelBackground":"#ffffff","textColor":"#0b1020","titleColor":"#0b1020","nodeTextColor":"#0b1020","secondaryTextColor":"#0b1020","tertiaryTextColor":"#0b1020","lineColor":"#6e7781","primaryColor":"#eef2ff","primaryBorderColor":"#4c6ef5","primaryTextColor":"#0b1020","clusterBkg":"#f8f9fb","clusterBorder":"#c3c8d0"}}}%%
 flowchart TD
 
   subgraph S1["STAGE 1 - EXTRACT   (zoomed in at section 10.1b)"]
     direction TB
     ART["<b>ARTICLE</b>"]
-    CP["<b>candidate pass</b> - CODE<br/>finds numbers<br/>mints element_id"]
-    C1["<b>call 1</b> - MODEL<br/>labels, names,<br/>points at spans"]
-    ANC["<b>anchoring</b> - CODE<br/>one rule per shape,<br/>drops what will not anchor"]
-    TE["<b>TRUSTED ELEMENTS</b><br/><br/><b>TIER 1</b>  byte-exact, never model-authored<br/><b>TIER 2</b>  model-assigned, span-anchored"]
-    AP["<b>ARTICLE POTENTIAL</b><br/>(deterministic)<br/><br/>chartable    singular<br/>processual   narrative<br/>comparative"]
+    CP["<b>candidate pass</b> - code<br/>finds numbers, mints element_id"]
+    C1["<b>call 1</b> - model<br/>labels, names, points at spans"]
+    ANC["<b>anchoring</b> - code<br/>one rule per shape<br/>drops what will not anchor"]
+    TE[("<b>TRUSTED ELEMENTS</b><br/>TIER 1 byte-exact, never model-authored<br/>TIER 2 model-assigned, span-anchored")]
+    AP["<b>ARTICLE POTENTIAL</b> - deterministic<br/>chartable, singular, processual,<br/>comparative, narrative<br/><br/>the denominator for EVERY rate in stage 4"]
     ART --> CP --> C1 --> ANC --> TE
     TE --> AP
   end
 
-  NOTE56(["the denominator for EVERY rate in stage 4.<br/>Without it, 4 percent on narrative and<br/>4 percent on chartable are the same number.  (row 56)"])
-  AP -.- NOTE56
-
   subgraph S2["STAGE 2 - DECIDE"]
     direction TB
-    RG{"<b>REACHABILITY GATE</b><br/>code, no model<br/><br/>Could ANY plan over these elements<br/>survive validation at all?<br/><br/>It suppresses the plan.<br/>It NEVER skips a call."}
-    SM["<b>SEMANTIC MODEL</b><br/>ONE model. The 4B router is retired outright.<br/>call 2, appended to call 1's message array,<br/>so the article prefills once.  (O17, 10.2)<br/><br/>understand the story<br/>summarise           =&gt; summary<br/>identify key facts  =&gt; key_points<br/>assess visual need  =&gt; decision<br/>choose the form     =&gt; purpose + type<br/>select elements     =&gt; element_ids<br/>explain the choice  =&gt; why"]
-    VP["<b>VISUAL PLAN</b><br/>decision / purpose / type<br/>encodings / element_ids<br/>labels / annotations / why<br/>title / caption<br/>confidence / plan_version<br/><br/><b>NO</b> geometry<br/><b>NO</b> literal values<br/><b>NO</b> authored text<br/><b>NO</b> alt_text - the compiler writes it"]
+    RG{"<b>REACHABILITY GATE</b> - code, no model<br/>Could ANY plan over these elements<br/>survive validation at all?<br/><br/>It suppresses the plan.<br/>It NEVER skips a call."}
+    SM["<b>SEMANTIC MODEL</b> - call 2<br/>ONE model. The 4B router is retired outright.<br/>Appended to call 1's message array, so the<br/>article prefills once.  (O17, 10.2)<br/><br/>seven jobs, listed below"]
+    VP["<b>VISUAL PLAN</b><br/>no geometry, no literal values,<br/>no authored text, no alt_text"]
     RG -->|"either way, every item"| SM
     SM -->|"constrained semantic JSON"| VP
   end
 
-  TE --> S2
-
-  N1(["<b>none: not_reachable</b><br/>plan fields suppressed inside call 2,<br/>which STILL RUNS and still writes the<br/>summary. It emits decision = none,<br/>none_reason = not_reachable."])
-  N2(["<b>none: model_declined</b>"])
-  RG -->|"no"| N1
-  VP -->|"decision = none"| N2
-
   subgraph S3["STAGE 3 - CHECK, DRAW, PUBLISH"]
     direction TB
-    VV{"<b>VISUAL VALIDATOR</b> (deterministic)<br/><br/>elements exist<br/>semantically compatible<br/>units compatible<br/>roles valid for the type<br/>enough data<br/>no duplicate in a role<br/>no invented values<br/>numerals matched"}
-    DL["<b>DOWNGRADE LADDER</b><br/>depth 1  median<br/>depth 2  p75 + note<br/>depth 3  refuse"]
-    VC["<b>VISUAL COMPILER</b><br/>one template per type,<br/>=&gt; renderable spec<br/>planned_type AND rendered_type both kept"]
-    RD["<b>RENDER - d3, one engine</b><br/>INLINE SVG in the item. No img carrier -<br/>an SVG inside img cannot read the page's<br/>tokens, and that is the whole of the<br/>dark-theme defect  (row 21)"]
-    SB{"<b>SUFFICIENCY BAR</b><br/>a COMPILER ORACLE, not a review item  (O36)<br/><br/>legibility floor, 12 px<br/>density floor<br/>both themes resolve<br/>one annotated mark<br/>keyboard route to a fact<br/>per-visual byte cap"}
+    VV{"<b>VISUAL VALIDATOR</b> - deterministic<br/>eight checks, listed below"}
+    DL["<b>DOWNGRADE LADDER</b><br/>depth 1 median, depth 2 p75 + note,<br/>depth 3 refuse"]
+    VC["<b>VISUAL COMPILER</b><br/>one template per type, into a renderable spec<br/>planned_type AND rendered_type both kept"]
+    RD["<b>RENDER</b> - d3, one engine<br/>INLINE SVG in the item, no img carrier  (row 21)"]
+    SB{"<b>SUFFICIENCY BAR</b><br/>a compiler oracle, not a review item  (O36)<br/>six checks, listed below"}
     PV["<b>PUBLISHED VISUAL</b><br/>below the summary  (O35)"]
     VV -->|"pass"| VC
     VV -->|"fail"| DL
+    DL -->|"re-enters the SAME validator  (G8)"| VV
     VC --> RD --> SB
     SB -->|"pass"| PV
   end
 
-  VP --> S3
+  TE --> RG
+  VP --> VV
 
-  N3(["<b>none: downgrade_exhausted</b>"])
-  N4(["<b>none: insufficient</b>"])
+  N1(["none: not_reachable"])
+  N2(["none: model_declined"])
+  N3(["none: downgrade_exhausted"])
+  N4(["none: insufficient"])
+  RG -->|"no"| N1
+  VP -->|"decision = none"| N2
   DL -->|"depth 3"| N3
   SB -->|"fail"| N4
 
-  G8(["a downgraded plan <b>RE-ENTERS</b> the same validator<br/>and the same compiler. It never goes around either.  (G8)"])
-  DL -.- G8
-  DL -->|"re-validate"| VV
-
-  LED[("<b>state/visuals/</b> - ONE ROW PER <b>ATTEMPT</b><br/>every path above: published, downgraded, refused, none<br/><br/>decision          published / downgraded / none / rejected<br/>none_reason       which gate refused it, or that call 2 was cut short<br/>rejection_reason, rejection_stage, downgrade_depth,<br/>downgrade_reason, downgrade_edge, gate_floor_applied,<br/>planned_type, rendered_type, compile_ms, render_ms<br/><br/><b>There is no silent path to none.</b>  (row 55, 12.7 G7, G11, E5)")]
+  LED[("<b>state/visuals/</b> - ONE ROW PER ATTEMPT<br/>published, downgraded, refused and none, all four<br/><br/><b>There is no silent path to none.</b><br/>(row 55, 12.7 G7, G11, E5)")]
 
   PV --> LED
   N1 --> LED
@@ -322,21 +314,21 @@ flowchart TD
 
   subgraph S4["STAGE 4 - THE TWO LOOPS"]
     direction LR
-    ML["<b>MACHINE LOOP</b><br/>every article, automatic, free<br/><br/><b>** GATES PUBLICATION **</b><br/><br/>plan =&gt; validation =&gt; metrics =&gt; diagnostics"]
-    HL["<b>HUMAN LOOP</b><br/>periodic, sampled, costly<br/><br/><b>** GATES NOTHING **</b><br/><br/>published + rejected + config-B + none arm,<br/>all four populations"]
-    CON["<b>CONSOLE</b><br/>rejection reason over time<br/>keep rate by downgrade depth<br/>planned_type against rendered_type<br/>the downgrade funnel<br/>the pipeline funnel, per potential class<br/>plus every existing eval metric,<br/>incl. band_reason  (O11, O34, G14)"]
-    RV["<b>review/</b><br/>a BUILD ARTIFACT.<br/>Never committed, never<br/>under frontend/public/"]
-    LW["<b>quality baseline =&gt; LEARNED WEIGHTS</b><br/><br/>A DIAGNOSTIC. Never a gate - not until<br/>information_delta is measured against<br/>visual_keep_rate.  (G9)"]
+    ML["<b>MACHINE LOOP</b><br/>every article, automatic, free<br/><b>GATES PUBLICATION</b><br/>plan, validation, metrics, diagnostics"]
+    HL["<b>HUMAN LOOP</b><br/>periodic, sampled, costly<br/><b>GATES NOTHING</b><br/>all four populations"]
+    CON["<b>CONSOLE</b><br/>five required panels, listed below<br/>plus every existing eval metric,<br/>incl. band_reason  (O11, O34, G14)"]
+    RV["<b>review/</b><br/>a BUILD ARTIFACT. Never committed,<br/>never under frontend/public/"]
+    LW["<b>quality baseline =&gt; LEARNED WEIGHTS</b><br/>A DIAGNOSTIC. Never a gate  (G9)"]
     ML --> CON
     ML -->|"sampled queue"| HL
     HL --> RV --> LW
   end
 
-  LED --> S4
+  LED --> ML
 
-  TELA(["<b>TELEMETRY</b> - stage 1<br/>elements_per_article, tier2_label_completeness,<br/>extractable_but_unused_rate, merge_rate,<br/>span_integrity_rate, potential class counts"])
-  TELB(["<b>TELEMETRY</b> - stage 2<br/>decision, purpose, planned_type, confidence,<br/>schema_retry_count, cached_tokens,<br/>input_tokens, output_tokens, prefill_ms, decode_ms"])
-  TELC(["<b>TELEMETRY</b> - stage 3<br/>validation_result, rejection_reason, rejection_stage,<br/>downgrade_depth, downgrade_edge, gate_floor_applied,<br/>rendered_type, compile_ms, render_ms, byte size"])
+  TELA(["<b>TELEMETRY</b> stage 1<br/>owner doc M, store state/visuals/"])
+  TELB(["<b>TELEMETRY</b> stage 2<br/>owner doc H, store state/visuals/"])
+  TELC(["<b>TELEMETRY</b> stage 3<br/>owner doc K, store state/visuals/"])
   S1 -.-> TELA
   S2 -.-> TELB
   S3 -.-> TELC
@@ -345,29 +337,55 @@ flowchart TD
   TELC -.-> LED
   LED -.->|"read at build time"| CON
 
+  subgraph KEY["KEY"]
+    direction LR
+    K1["code"]
+    K2["model"]
+    K3{"a gate that can refuse"}
+    K4[("persisted")]
+    K5(["none: a refusal, or telemetry"])
+  end
+
   classDef code fill:#eef2ff,stroke:#4c6ef5,stroke-width:2px,color:#0b1020;
   classDef model fill:#fff4e6,stroke:#f08c00,stroke-width:2px,color:#0b1020;
   classDef gate fill:#f3f0ff,stroke:#7048e8,stroke-width:2px,color:#0b1020;
   classDef store fill:#e6fcf5,stroke:#0ca678,stroke-width:2px,color:#0b1020;
   classDef none fill:#fff5f5,stroke:#e03131,stroke-width:1.5px,color:#0b1020;
   classDef telem fill:#fff9db,stroke:#f59f00,stroke-width:1.5px,color:#0b1020,stroke-dasharray: 6 4;
-  classDef note fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#495057,stroke-dasharray: 4 3;
   classDef plain fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#0b1020;
 
-  class ART,CP,ANC,VC,RD plain;
-  class C1,SM model;
-  class RG,VV,SB gate;
-  class TE,AP,PV store;
-  class VP code;
-  class DL code;
-  class N1,N2,N3,N4 none;
-  class LED store;
-  class ML,HL,CON,RV,LW plain;
+  class ART,ML,HL,CON,RV,LW plain;
+  class CP,ANC,VP,DL,VC,RD,K1 code;
+  class C1,SM,K2 model;
+  class RG,VV,SB,K3 gate;
+  class TE,AP,PV,LED,K4 store;
+  class N1,N2,N3,N4,K5 none;
   class TELA,TELB,TELC telem;
-  class NOTE56,G8 note;
 ```
 
-**Reading the colours.** Orange is the model and only the model - two boxes, which is O43's two calls made visible. Purple is a gate that can refuse. Green is something persisted. Red is a route to `none`, and there are four of them, which is why `none_reason` has to be an enum (G1). Dashed yellow is telemetry, and every stage has one.
+**Reading the colours, and why the hue is never the only signal.** Orange is the model and only the model - two boxes, which is O43's two calls made visible. Purple is a gate that can refuse, and a gate is also the only diamond. Green is persisted, and is also the only cylinder. Red is a route to `none`, and every one of those labels **begins with the word `none:`** - four of them, which is why `none_reason` has to be an enum (G1). Dashed yellow is telemetry, and the dash carries it because orange and yellow are one step apart.
+
+**The detail the boxes do not carry.** Every row was in the ASCII drawing above; nothing here is new.
+
+| Node | What it holds |
+|---|---|
+| `AP` | The five classes, and the reason it exists: **without it, 4 percent on narrative and 4 percent on chartable are the same number** (row 56) |
+| `RG` | The `no` branch in full: plan fields suppressed inside call 2, **which still runs and still writes the summary**. It emits `decision = none`, `none_reason = not_reachable` |
+| `SM` | Seven jobs: understand the story; summarise into `summary`; identify key facts into `key_points`; assess visual need into `decision`; choose the form into `purpose` and `type`; select elements into `element_ids`; explain the choice into `why` |
+| `VP` | Fields: `decision`, `purpose`, `type`, `encodings`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`. Four prohibitions: no geometry, no literal values, no authored text, and **no `alt_text` - the compiler writes it** (12.8 X6) |
+| `VV` | Eight checks: elements exist; semantically compatible; units compatible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched |
+| `DL` | Depth 1 median, depth 2 p75 plus a note, depth 3 refuse. **A downgraded plan re-enters the same validator and the same compiler; it never goes around either** (G8) |
+| `RD` | An SVG inside an `img` cannot read the page's tokens, and that is the whole of the dark-theme defect (row 21) |
+| `SB` | Six checks: legibility floor at 12 px; density floor; both themes resolve; one annotated mark; keyboard route to a fact; per-visual byte cap |
+| `LED` | Columns: `decision` as published, downgraded, none or rejected; `none_reason` naming which gate refused it or that call 2 was cut short; `rejection_reason`, `rejection_stage`, `downgrade_depth`, `downgrade_reason`, `downgrade_edge`, `gate_floor_applied`, `planned_type`, `rendered_type`, `compile_ms`, `render_ms` |
+| `HL` | Four populations: published, rejected, config-B and the `none` arm |
+| `CON` | Five required panels (G14): rejection reason over time; keep rate by `downgrade_depth`; `planned_type` against `rendered_type`; the downgrade funnel; the pipeline funnel per potential class |
+| `LW` | Never a gate, **not until `information_delta` is measured against `visual_keep_rate`** (G9) |
+| `TELA` `TELB` `TELC` | The field roster per stage is deliberately not drawn - see the note on drift below |
+
+**Why the telemetry nodes name a store and an owner rather than a field list.** Fowler's ruling, 2026-09-04: a field roster inside a picture is a second definition competing with the schema, and this document already carries five extraction-health fields nothing implements (G35) - correct as intent, a lie as documentation. So each telemetry node cites the thing that is **not** a snapshot - the store, and the plan-doc that owns it - and a reader is one link from the canonical list. **A diagram is a snapshot and this one says so.**
+
+**Distill instruction, written now rather than left implicit.** When these drawings move to `docs/`, the telemetry nodes keep the stage-to-store ownership and **lose any field roster**. `TODO/` is non-authoritative and dies at distill, so drift inside that window costs nothing; a roster copied into `docs/concepts/` competes with the schema and is exactly the duplication `CLAUDE.md` section 5 forbids.
 
 **The four things this drawing asserts that the proposal's does not.**
 
@@ -1083,60 +1101,79 @@ Plain ASCII, for the reason given in section 1a.
 
 Added 2026-09-04 beside the ASCII above, not instead of it. The ASCII is deleted once a line-by-line check confirms nothing was lost - that check is the second half of this change, and keeping both until it runs is what makes the check possible.
 
+**The boxes carry a name and the one assertion an arrow cannot carry. Every field list and every exception list lives in the table below, keyed by node id.** Susan ruled the earlier draft back for putting eight-line rosters inside boxes: that is a table pretending to be a diagram, and it reads as neither.
+
 ```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontSize":"15px","fontFamily":"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace","primaryColor":"#eef2ff","primaryBorderColor":"#4c6ef5","primaryTextColor":"#0b1020","secondaryColor":"#f1f3f5","tertiaryColor":"#ffffff","lineColor":"#5a6270","clusterBkg":"#f8f9fb","clusterBorder":"#c3c8d0"}}}%%
+%%{init: {"theme":"base","themeVariables":{"fontSize":"15px","fontFamily":"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace","background":"#ffffff","mainBkg":"#ffffff","edgeLabelBackground":"#ffffff","labelBackground":"#ffffff","textColor":"#0b1020","titleColor":"#0b1020","nodeTextColor":"#0b1020","secondaryTextColor":"#0b1020","tertiaryTextColor":"#0b1020","lineColor":"#6e7781","primaryColor":"#eef2ff","primaryBorderColor":"#4c6ef5","primaryTextColor":"#0b1020","clusterBkg":"#f8f9fb","clusterBorder":"#c3c8d0"}}}%%
 flowchart TD
 
-  ART["<b>ARTICLE</b><br/>sanitized text + title<br/>text_hash over the normalised bytes<br/>that every span indexes"]
+  ART["<b>ARTICLE</b><br/>sanitized text + title<br/>text_hash over the bytes every span indexes"]
 
-  subgraph CP0["CANDIDATE PASS - CODE READS FIRST (no model, no network, no tokens)"]
+  CP["<b>CANDIDATE PASS</b> - code reads first<br/>no model, no network, no tokens<br/><br/>finds every quantity the number pattern matches<br/>and misses six kinds, by design"]
+
+  C1["<b>CALL 1</b> - model reads the same article<br/><br/>CANNOT EMIT a span, a character offset, a value,<br/>a unit or a count. No field of the schema accepts<br/>one, so the grammar refuses it at decode time and<br/>nothing downstream has to check for it  (Rule #11)"]
+
+  subgraph ANCH["ANCHORING - code adjudicates, a DIFFERENT rule per shape"]
     direction TB
-    CPF["<b>FINDS</b><br/>every quantity the number pattern matches<br/><br/>element_id / kind=quantity / surface<br/>span_start / span_end / value / unit<br/>sentence_index / extractor='regex'"]
-    CPM["<b>MISSES - by design.</b> Each was a correct call for<br/>picking a few bars and the wrong call for a candidate set:<br/><br/>a figure repeated across two periods (dedup, C14)<br/>a bare four-digit year<br/>any magnitude &lt;= 2 carrying no unit<br/>a number whose following word is on the stop-list<br/>everything past the 16th figure<br/>ANY date - no date extractor exists yet (C15)"]
-    CPF -.- CPM
+    A1["<b>labels[]</b><br/>cites an element_id and nothing else<br/>=&gt; TIER 2 on an element the candidate pass minted"]
+    A2["<b>proposed[]</b><br/>the escape hatch for a figure code missed<br/>code re-parses the article's own bytes<br/>=&gt; TIER 1, extractor = model_proposed"]
+    A3["<b>entities[] / places[]</b><br/>name groups, the mention draws<br/>=&gt; TIER 1 mentions + TIER 2 name"]
+    A4["<b>quotes[] / claims[]</b><br/>indices only, no text crosses from the reply<br/>=&gt; TIER 1 span + TIER 2 attribution, hedge"]
+    A5["<b>events[] / relations[]</b><br/>an edge carries sentence_index, no exception<br/>an unanchored arrow is a causal claim<br/>the article did not make"]
   end
 
-  C1["<b>CALL 1 - MODEL READS THE SAME ARTICLE</b><br/>in: system + title + &lt;UNTRUSTED&gt;article&lt;/UNTRUSTED&gt; + candidates<br/><br/><b>CANNOT EMIT</b> a span, a character offset, a value,<br/>a unit or a count. No field of the schema accepts one,<br/>so the grammar refuses it at decode time and nothing<br/>downstream has to check for it. (Rule #11)"]
-
-  ART --> CP0
-  CP0 -->|"candidates[], indexed by element_id"| C1
-
-  subgraph ANCH["ANCHORING - CODE ADJUDICATES (a DIFFERENT rule per shape)"]
-    direction TB
-    A1["<b>labels[]</b><br/>element_id / measure / entity / dimension<br/>time / salience / attribution / hedge<br/><br/>Cites element_id and nothing else. An unknown id<br/>is dropped. No numeric field exists here at all.<br/><br/>=&gt; TIER 2 on an element the candidate pass minted"]
-    A2["<b>proposed[]</b><br/>sentence_index / surface<br/><br/>The escape hatch for a figure code missed. Search<br/>ONLY the named sentence. Exactly one hit, or dropped.<br/>Re-parse value and unit from the ARTICLE'S OWN BYTES<br/>with the same number pattern, never from the reply.<br/>Capped per article. A spelled-out number and a relative<br/>change ('doubled') stay refused - nothing to parse.<br/><br/>=&gt; TIER 1 quantity, extractor='model_proposed'"]
-    A3["<b>entities[] / places[]</b><br/>name / entity_type / geo_hint / salience<br/>mentions[]: sentence_idx, surface<br/><br/>The name field is TIER 2 - a grouping key for the alias<br/>ledger, and it is NEVER drawn on a page. Each<br/>mention.surface must occur exactly once inside its OWN<br/>named sentence, and that occurrence is the span. Zero<br/>surviving mentions drops the element. The drawn label is<br/>the longest surviving mention, never the name field.<br/><br/>=&gt; TIER 1 mentions + TIER 2 name"]
-    A4["<b>quotes[] / claims[]</b><br/>sentence_start / sentence_end<br/>speaker_mention / attribution / hedge<br/><br/>INDICES ONLY. No text crosses from the reply. Code<br/>slices the article's bytes between them. Exact search<br/>over a long string is refused: it rejects a real quote<br/>over one changed word, and it does so silently.<br/><br/>=&gt; TIER 1 span + TIER 2 attribution and hedge"]
-    A5["<b>events[] / relations[]</b><br/><br/>Every actor and object must resolve to a surviving<br/>entity element, or the row is dropped. An edge carries<br/>sentence_index with no exception (row 47): an unanchored<br/>arrow is a causal claim the article did not make."]
-  end
-
-  C1 --> ANCH
-
-  TE["<b>TRUSTED ELEMENTS</b> (source of truth)<br/><br/><b>TIER 1</b> - byte-exact, and never model-authored<br/>element_id / kind / surface / span_start / span_end<br/>span_excerpt / value / unit / sentence_index / extractor<br/><br/><b>TIER 2</b> - model-assigned, span-anchored, validated<br/>entity / time / measure / measure_canonical / dimension<br/>salience / attribution / hedge / label_source / ledger_version"]
-
-  ANCH -->|"every survivor carries a span"| TE
+  TE[("<b>TRUSTED ELEMENTS</b> - source of truth<br/><br/>TIER 1 byte-exact, never model-authored<br/>TIER 2 model-assigned, span-anchored, validated")]
 
   OUT1["to the SEMANTIC MODEL<br/>call 2 - section 10.1"]
   OUT2["to ARTICLE POTENTIAL<br/>deterministic - section 12.6 G5"]
+
+  ART --> CP
+  CP -->|"candidates[], by element_id"| C1
+  C1 --> ANCH
+  ANCH -->|"every survivor carries a span"| TE
   TE --> OUT1
   TE --> OUT2
 
-  TEL1(["<b>TELEMETRY</b> - extraction health, per article<br/>elements_per_article, tier2_label_completeness,<br/>extractable_but_unused_rate, merge_rate,<br/>span_integrity_rate  (12.13 G35 - none of these<br/>is carried yet)<br/><br/>reported to the CONSOLE"])
+  TEL1(["<b>TELEMETRY</b> - extraction health<br/>owner: doc M, store: state/visuals/<br/>fields listed in 12.13 G35, none carried yet"])
   ANCH -.-> TEL1
+
+  subgraph KEY["KEY"]
+    direction LR
+    K1["code"]
+    K2["model"]
+    K3[("persisted")]
+    K4(["telemetry"])
+  end
 
   classDef code fill:#eef2ff,stroke:#4c6ef5,stroke-width:2px,color:#0b1020;
   classDef model fill:#fff4e6,stroke:#f08c00,stroke-width:2px,color:#0b1020;
   classDef store fill:#e6fcf5,stroke:#0ca678,stroke-width:2px,color:#0b1020;
-  classDef telem fill:#fff9db,stroke:#f59f00,stroke-width:1.5px,color:#0b1020,stroke-dasharray: 6 4;
   classDef plain fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#0b1020;
+  classDef telem fill:#fff9db,stroke:#f59f00,stroke-width:1.5px,color:#0b1020,stroke-dasharray: 6 4;
 
-  class ART plain;
-  class CPF,CPM,A1,A2,A3,A4,A5 code;
-  class C1 model;
-  class TE store;
-  class OUT1,OUT2 plain;
-  class TEL1 telem;
+  class ART,OUT1,OUT2 plain;
+  class CP,A1,A2,A3,A4,A5,K1 code;
+  class C1,K2 model;
+  class TE,K3 store;
+  class TEL1,K4 telem;
 ```
+
+**The detail the boxes do not carry.** Every row here was in the ASCII drawing above; nothing is new.
+
+| Node | What it holds |
+|---|---|
+| `ART` | Sanitized text plus the title. `text_hash` is taken over the normalised bytes that every span indexes - so a span and its hash always describe the same string |
+| `CP` **finds** | It emits `element_id`, `kind=quantity`, `surface`, `span_start`, `span_end`, `value`, `unit`, `sentence_index`, `extractor="regex"` |
+| `CP` **misses** | Six, and each was a correct call for picking a few bars and the wrong call for a candidate set: a figure repeated across two periods (dedup, C14); a bare four-digit year; any magnitude 2 or below carrying no unit; a number whose following word is on the stop-list; everything past the 16th figure; **any date at all - no date extractor exists yet (C15)** |
+| `C1` **in** | system + title + `<UNTRUSTED>`article`</UNTRUSTED>` + the candidate table |
+| `A1` `labels[]` | Fields: `element_id`, `measure`, `entity`, `dimension`, `time`, `salience`, `attribution`, `hedge`. An unknown id is dropped. **No numeric field exists here at all**, so authorship is impossible by grammar rather than caught by a check |
+| `A2` `proposed[]` | Fields: `sentence_index`, `surface`. Search **only** the named sentence; exactly one hit, or dropped. Re-parse value and unit from the article's own bytes with the same number pattern, never from the reply. Capped per article. A spelled-out number and a relative change ("doubled") stay refused - there is nothing to parse |
+| `A3` `entities[]` `places[]` | Fields: `name`, `entity_type`, `geo_hint`, `salience`, `mentions[]` of `sentence_idx` and `surface`. `name` is Tier 2, a grouping key for the alias ledger, and **is never drawn on a page**. Each `mention.surface` must occur exactly once inside its own named sentence, and that occurrence is the span. Zero surviving mentions drops the element. The drawn label is the longest surviving mention, never `name` |
+| `A4` `quotes[]` `claims[]` | Fields: `sentence_start`, `sentence_end`, `speaker_mention`, `attribution`, `hedge`. Code slices the article's bytes between them. Exact search over a long string is refused: it rejects a real quote over one changed word, and it does so silently |
+| `A5` `events[]` `relations[]` | Every actor and object must resolve to a surviving entity element, or the row is dropped. Row 47 admits no exception on the span |
+| `TE` **Tier 1** | `element_id`, `kind`, `surface`, `span_start`, `span_end`, `span_excerpt`, `value`, `unit`, `sentence_index`, `extractor` |
+| `TE` **Tier 2** | `entity`, `time`, `measure`, `measure_canonical`, `dimension`, `salience`, `attribution`, `hedge`, `label_source`, `ledger_version` |
+
 
 **Three invariants the drawing encodes. A plan-doc may not relax any of them.**
 
