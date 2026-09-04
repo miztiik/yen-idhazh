@@ -2134,6 +2134,28 @@ class AssistConfig(Model):
             "labels is, and it lands on its own - see docs/concepts/evaluation.md."
         ),
     )
+    recall_tolerance: float = Field(
+        default=0.10,
+        ge=0.0,
+        le=0.5,
+        description=(
+            "How far below recall_min the measurement may sit before the gate fails, "
+            "as a fraction of recall_min. The effective bar is "
+            "recall_min x (1 - recall_tolerance), so the default 0.10 turns a 0.61 bar "
+            "into 0.549. It exists because a sampled measurement compared against a "
+            "fixed number fails on noise: recall@10 is measured over 60 queries and "
+            "carries a standard error near 0.046, so a bar set at the measurement's "
+            "own edge decides on a coin toss. The band is one-sided in effect - "
+            "recall only ever drifts down here - and it is a DELAY, not a repair. The "
+            "drift is structural: the gate counts an unjudged slot as a wrong answer, "
+            "and the unjudged share rose from 70.8 percent to 76.0 percent as the "
+            "corpus grew from 3,596 to 6,211 items between 2026-08-31 and 2026-09-04. "
+            "At the measured 0.0134 a day this band buys about four published days "
+            "over re-deriving the bar. Completing the labels is still the fix - see "
+            "docs/concepts/evaluation.md. Owner decision, 2026-09-04: a test that "
+            "compares a sampled number against a fixed one is wrong on its face."
+        ),
+    )
 
 
 class AppConfig(Contract):
@@ -2141,6 +2163,25 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-04T18:00",
+            change=(
+                "Added assist.recall_tolerance, default 0.10. The retrieval gate now "
+                "compares recall against recall_min x (1 - recall_tolerance) rather "
+                "than against recall_min itself."
+            ),
+            why=(
+                "recall@10 is measured over 60 queries with a standard error near "
+                "0.046, so a bar at the measurement's own edge decides on noise. It "
+                "failed on 2026-09-04 at 0.604 against 0.610 - inside the error bar - "
+                "on a commit that changed one markdown file. The drift underneath is "
+                "structural rather than a search regression: the gate counts an "
+                "unjudged slot as wrong, and the unjudged share rose from 70.8 to 76.0 "
+                "percent as the corpus grew from 3,596 to 6,211 items. The band is a "
+                "delay worth about four published days, not a repair; completing the "
+                "labels remains the fix. Owner decision, 2026-09-04."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-03T18:00",
             change=(

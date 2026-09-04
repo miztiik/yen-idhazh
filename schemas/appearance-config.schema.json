@@ -28,6 +28,14 @@
           "title": "Recall Min",
           "type": "number"
         },
+        "recall_tolerance": {
+          "default": 0.1,
+          "description": "How far below recall_min the measurement may sit before the gate fails, as a fraction of recall_min. The effective bar is recall_min x (1 - recall_tolerance), so the default 0.10 turns a 0.61 bar into 0.549. It exists because a sampled measurement compared against a fixed number fails on noise: recall@10 is measured over 60 queries and carries a standard error near 0.046, so a bar set at the measurement's own edge decides on a coin toss. The band is one-sided in effect - recall only ever drifts down here - and it is a DELAY, not a repair. The drift is structural: the gate counts an unjudged slot as a wrong answer, and the unjudged share rose from 70.8 percent to 76.0 percent as the corpus grew from 3,596 to 6,211 items between 2026-08-31 and 2026-09-04. At the measured 0.0134 a day this band buys about four published days over re-deriving the bar. Completing the labels is still the fix - see docs/concepts/evaluation.md. Owner decision, 2026-09-04: a test that compares a sampled number against a fixed one is wrong on its face.",
+          "maximum": 0.5,
+          "minimum": 0.0,
+          "title": "Recall Tolerance",
+          "type": "number"
+        },
         "result_limit": {
           "default": 10,
           "description": "How many results the flat list shows. The list carries no rank cue, so this is also the denominator the recall bar is measured against - the denominator is min(right answers, this), because more right answers than slots cannot all be shown.",
