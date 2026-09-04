@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-04
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -41,6 +41,25 @@ There are exactly three answers, and the third is the common one:
 "Nothing" is a real, frequent, correct answer. The failure mode being designed against is decoration: a generated picture of a chart with invented axis labels is worse than no picture, because it looks like evidence. A reader who once notices invented numbers stops trusting every summary on the page - the same contagion that makes an unmeasured summarizer dangerous.
 
 A render failure degrades the item to no visual. It never fails the item, and it never fails the run.
+
+### A number can be right and still be mislabelled
+
+The invented-number failure is closed by construction. Every value drawn comes from the article's own bytes, so a chart cannot carry a figure the article does not.
+
+**What a number means is a different question, and it is not closed.** A pattern can find `4,200 tonnes`. It cannot know whether that is exports or production. Only the model can say, so the model does - and that judgement is the one part of a visual nothing verifies. Two failures follow, and neither raises an error:
+
+- **Mis-pointing.** The model means one figure and the anchor lands on another. The span is real, so every span check passes.
+- **Mis-labelling.** The right figure, the wrong measure, unit or entity. No string search reaches a judgement.
+
+Three controls narrow it, and none of them closes it:
+
+- A surface is searched inside **one named sentence** and must match there exactly once, so an ambiguous anchor is a rejection rather than a coin toss.
+- A label is attached to an **element identifier**, never to a free string, so it can at least be checked against that element's own unit and magnitude.
+- The model never types a value. No field of the reply schema accepts a number, so authorship is refused by the grammar rather than caught by a check.
+
+**This is a permanent property of the design, not a defect waiting for a fix.** The alternative is to draw only what a pattern can name, which produces charts whose axis reads "number" - correct, verifiable, and worth nobody's attention. A digest that will not say what a figure means is not publishing a fact, it is publishing a decoration with better provenance. Owner decision, 2026-09-04.
+
+Note the split this implies, because it is easy to lose: **code finds and cuts every character a reader sees; the model points at where to cut and says what the cut means.** A value is never model-authored. A meaning always is.
 
 ## Honesty is a design requirement
 
