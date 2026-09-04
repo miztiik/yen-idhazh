@@ -37,218 +37,7 @@ Section 10.1a reaches the same rule from the other direction - code finds and cu
 
 The proposal's section 1.2 draws the target architecture. This is the same flow **with every ruling in this document folded in** - the reachability gate, the retired second model, the sufficiency oracle, the per-attempt ledger, the re-validating ladder, and the console panels. Where the two disagree, this drawing wins, because the proposal predates the rulings in section 3 and section 4.
 
-Plain ASCII, not box-drawing characters: `CLAUDE.md` section 5 is ASCII-only for every file in this repository and a diagram is not an exception.
-
-```
-   +======================================================================+
-   |  STAGE 1 - EXTRACT                     zoomed in at section 10.1b    |
-   +======================================================================+
-
-                            +---------------------+
-                            |       ARTICLE       |
-                            +----------+----------+
-                                       |
-              candidate pass (code)  ->  call 1 (model)  ->  anchoring (code)
-              finds numbers              labels, names,      one rule per shape,
-              mints element_id           points at spans     drops what will not
-                                                             anchor
-                                       |
-                                       v
-                        +-------------------------------+
-                        |       TRUSTED ELEMENTS        |
-                        |  TIER 1  byte-exact, never    |
-                        |          model-authored       |
-                        |  TIER 2  model-assigned,      |
-                        |          span-anchored        |
-                        +---+-----------------------+---+
-                            |                       |
-                            |                       v
-                            |        +---------------------------+
-                            |        |     ARTICLE POTENTIAL     |
-                            |        |      (deterministic)      |
-                            |        |  chartable     singular   |
-                            |        |  processual    narrative  |
-                            |        |  comparative              |
-                            |        +-------------+-------------+
-                            |                      |
-                            |          the denominator for EVERY
-                            |          rate in stage 4. Without it,
-                            |          4 percent on narrative and
-                            |          4 percent on chartable are
-                            |          the same number.      (row 56)
-                            v
-   +======================================================================+
-   |  STAGE 2 - DECIDE                                                    |
-   +======================================================================+
-
-              +---------------------------+
-              |     REACHABILITY GATE     |     no
-              |     code, no model        |----------> plan fields suppressed
-              |  Could ANY plan over      |            inside call 2, which
-              |  these elements survive   |            STILL RUNS and still
-              |  validation at all?       |            writes the summary.
-              |                           |            It emits decision =
-              |  It suppresses the plan.  |            none, none_reason =
-              |  It NEVER skips a call.   |            not_reachable.
-              +-------------+-------------+
-                            | either way, every item
-                            v
-              +---------------------------+
-              |      SEMANTIC MODEL       |
-              |  ONE model. The 4B router |
-              |  is retired outright.     |
-              |  call 2, appended to      |
-              |  call 1's message array,  |
-              |  so the article prefills  |
-              |  once.          (O17, 10.2)
-              +---------------------------+
-              | understand the story      |
-              | summarise            ->  summary
-              | identify key facts   ->  key_points
-              | assess visual need   ->  decision
-              | choose the form      ->  purpose + type
-              | select elements      ->  element_ids
-              | explain the choice   ->  why
-              +-------------+-------------+
-                            |
-                 constrained semantic JSON
-                            v
-              +---------------------------+     decision = none
-              |        VISUAL PLAN        |----------> none: model_declined
-              | decision  purpose  type   |
-              | encodings  element_ids    |
-              | labels  annotations  why  |
-              | title  caption            |
-              | confidence  plan_version  |
-              +---------------------------+
-              | NO geometry               |
-              | NO literal values         |
-              | NO authored text          |
-              | NO alt_text - the         |
-              |   compiler writes it      |
-              +-------------+-------------+
-                            |
-   +======================================================================+
-   |  STAGE 3 - CHECK, DRAW, PUBLISH                                      |
-   +======================================================================+
-                            v
-              +---------------------------+
-              |     VISUAL VALIDATOR      |
-              |      (deterministic)      |
-              | elements exist            |
-              | semantically compatible   |
-              | units compatible          |
-              | roles valid for the type  |
-              | enough data               |
-              | no duplicate in a role    |
-              | no invented values        |
-              | numerals matched          |
-              +------+-------------+------+
-                fail |             | pass
-                     v             |
-        +----------------------+   |
-        |   DOWNGRADE LADDER   |   |
-        |  depth 1  median     |   |
-        |  depth 2  p75 + note |   |
-        |  depth 3  refuse     |---+------> none: downgrade_exhausted
-        +----------+-----------+   |
-                   |               |
-     a downgraded plan RE-ENTERS   |
-     the same validator and the    |
-     same compiler. It never goes  |
-     around either.        (G8)    |
-                   |               |
-                   +------>>-------+
-                                   v
-              +---------------------------+
-              |      VISUAL COMPILER      |
-              |  one template per type,   |
-              |  -> renderable spec       |
-              |  planned_type AND         |
-              |  rendered_type both kept  |
-              +-------------+-------------+
-                            v
-              +---------------------------+
-              |   RENDER - d3, one engine |
-              |  INLINE SVG in the item.  |
-              |  No img carrier - an SVG  |
-              |  inside img cannot read   |
-              |  the page's tokens, and   |
-              |  that is the whole of the |
-              |  dark-theme defect (row 21)
-              +-------------+-------------+
-                            v
-              +---------------------------+     fail
-              |     SUFFICIENCY BAR       |----------> none: insufficient
-              |  a COMPILER ORACLE, not   |
-              |  a review item     (O36)  |
-              | legibility floor, 12 px   |
-              | density floor             |
-              | both themes resolve       |
-              | one annotated mark        |
-              | keyboard route to a fact  |
-              | per-visual byte cap       |
-              +-------------+-------------+
-                            | pass
-                            v
-              +---------------------------+
-              |     PUBLISHED VISUAL      |
-              |  below the summary (O35)  |
-              +-------------+-------------+
-                            |
-   +======================================================================+
-   |  EVERY path above - published, downgraded, refused, none - writes    |
-   |  ONE ROW to state/visuals/, one row per ATTEMPT.                     |
-   |                                                                      |
-   |    decision      published | downgraded | none | rejected            |
-   |    none_reason   which gate refused it, or that call 2 was cut short |
-   |    rejection_reason, rejection_stage, downgrade_depth,               |
-   |    downgrade_reason, downgrade_edge, gate_floor_applied,             |
-   |    planned_type, rendered_type, compile_ms, render_ms                |
-   |                                                                      |
-   |  There is no silent path to `none`.       (row 55, 12.7 G7, G11, E5) |
-   +===================================+==================================+
-                                       |
-   +======================================================================+
-   |  STAGE 4 - THE TWO LOOPS                                             |
-   +======================================================================+
-                                       |
-             +-------------------------+-------------------------+
-             |                                                   |
-             v                                                   v
-   +----------------------------+              +----------------------------+
-   |       MACHINE LOOP         |              |        HUMAN LOOP          |
-   |  every article, automatic  |              |  periodic, sampled, costly |
-   |  free                      |              |                            |
-   |  ** GATES PUBLICATION **   |              |  ** GATES NOTHING **       |
-   +----------------------------+   sampled    +----------------------------+
-   | plan -> validation ->      |   queue      | published + rejected +     |
-   | metrics -> diagnostics     |------------->| config-B + `none` arm,     |
-   +-------------+--------------+              | all four populations       |
-                 |                             +-------------+--------------+
-                 v                                           v
-   +----------------------------+              +----------------------------+
-   |          CONSOLE           |              |  review/                   |
-   |  rejection reason over time|              |  a BUILD ARTIFACT.         |
-   |  keep rate by downgrade    |              |  Never committed, never    |
-   |    depth                   |              |  under frontend/public/    |
-   |  planned_type against      |              +-------------+--------------+
-   |    rendered_type           |                            v
-   |  plus every existing eval  |              +----------------------------+
-   |  metric, incl. band_reason |              |  quality baseline ->       |
-   |                     (O11,  |              |  LEARNED WEIGHTS           |
-   |                      O34)  |              |                            |
-   +----------------------------+              |  A DIAGNOSTIC. Never a     |
-                                               |  gate - not until          |
-                                               |  information_delta is      |
-                                               |  measured against          |
-                                               |  visual_keep_rate.   (G9)  |
-                                               +----------------------------+
-```
-
-### 1a-m The same drawing in Mermaid
-
-Added 2026-09-04 beside the ASCII above, not instead of it. The ASCII is deleted once a line-by-line check confirms nothing was lost, and keeping both until that check runs is what makes it possible. Mermaid source is ASCII, so `CLAUDE.md` section 5 is satisfied either way - **reading that rule as "ASCII art only" is what cost two rounds with the reachability gate drawn wrong.** What Mermaid buys is that a box no longer has to be re-aligned by hand every time a word changes.
+Drawn in Mermaid since 2026-09-04. The ASCII it replaced was checked out word by word first - a script compared every content word in the old drawing against this section and reported eight real losses, which were restored before the ASCII went. **Mermaid source is ASCII, so `CLAUDE.md` section 5 was never in the way; reading that rule as "ASCII art only" is what cost two rounds with the reachability gate drawn wrong.** What it buys is that a box no longer has to be re-aligned by hand every time a word changes.
 
 **The boxes carry a name and the one assertion an arrow cannot carry. Every field list, check list and exception list lives in the table below, keyed by node id.**
 
@@ -412,7 +201,7 @@ The proposal states in its own provenance warning that every claim it makes abou
 | C1 | `RouteDraft` is the routing contract | `RouteDraft` and `ChartPoint` live in `route.py`, **not** in `contracts/`, so they are unversioned and free to rename. The persisted contract is `Route` in `contracts/route.py` | [backend/idhazh/route.py](backend/idhazh/route.py#L190) |
 | C2 | Elements are span-anchored | **No span exists.** `NumericFact` is `value, raw, unit, context`. The regex already computes `match.start()` and `match.end()` and discards them when it builds `context` | [backend/idhazh/route.py](backend/idhazh/route.py#L89) |
 | C3 | The renderer is a hard-coded bar | True, and worse: `chart_spec()` hard-codes `"color": "#4c6ef5"` and `"labelFont": "sans-serif"`, which is a live Rule #6 violation | [backend/idhazh/route.py](backend/idhazh/route.py#L437) |
-| C4 | The diagram path is unbuilt | It is built - `diagram_spec()` emits Mermaid and `render/diagram.py` draws it with a hand-written layout. It is switched **off** in `visuals.enabled_kinds` | [backend/idhazh/render/diagram.py](backend/idhazh/render/diagram.py) |
+| C4 | The diagram path is unbuilt | It is built - `diagram_spec()` emits Mermaid and `render/diagram.py` draws it with a hand-written layout. It is switched **off** in `visuals.enabled_kinds`. **Read this precisely, because a looser reading of it was written into this document on 2026-09-04 and was wrong twice**: the Mermaid is an internal persisted format, **no reader ever receives Mermaid** - `frontend/src/` has zero occurrences of the word - and with the arm off, no reader receives a diagram at all. Row 63 now deletes the format | [backend/idhazh/render/diagram.py](backend/idhazh/render/diagram.py) |
 | C5 | Rendering happens in the frontend | Digest visuals render in the **backend** via `vl-convert` (Rust, no browser). ECharts renders **console** charts in the frontend build. Two separate paths | [backend/idhazh/render/chart.py](backend/idhazh/render/chart.py#L35) |
 | C6 | Interactivity needs a new JS payload | The console already prerenders SVG then fetches a CSV at runtime and re-renders. The pattern exists and is tested | [frontend/src/routes/console/+page.svelte](frontend/src/routes/console/+page.svelte#L136) |
 | C7 | Theming is an open question | The console solved it: draw with sentinel colours `#ff00NN`, swap for `var(--chart-N)` in the emitted SVG. Both themes resolve through CSS with no JavaScript | [frontend/src/lib/charts/theme.ts](frontend/src/lib/charts/theme.ts#L74) |
@@ -586,7 +375,7 @@ Seven advisors ran the bootstrap ritual and ruled on their own altitude (`CLAUDE
 | 60 | `PAGES_HARD_CAP_MB` to config with `le=1024` | Carmack, Fowler, Owner O7 | Config can lower it and cannot raise it, so Rule #2's "the budget is the platform, not a preference" stays enforceable | P.6.2 |
 | 61 | `dry_run = false` lands **after** the new renderer | Fowler, Owner O8 | Flipping the delete fuse while the old Vega-Lite SVGs are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound | P.6.4 |
 | 62 | Cleanup records `candidates_found` and `skipped_by_fuse` | Carmack | `deleted` is capped at 200, so `deleted` alone can never show whether the backlog is shrinking | P.6.4 |
-| 63 | Delete `VisualKind.IMAGE` and `SpecFormat.IMAGE_PROMPT` | Fowler | No renderer, never exercised, skipped unconditionally. Check the committed corpus first - it is a published enum | not in proposal |
+| 63 | Delete `VisualKind.IMAGE`, and **the whole of `SpecFormat`** | Fowler, Carmack, Editor, Owner | Widened 2026-09-04 from `SpecFormat.IMAGE_PROMPT` to the entire enum, the `spec` field it types, and `render/diagram.py`. Three findings force it. **The portability claim is worth zero**: `diagram_spec()` writes Mermaid "so anyone can re-render this with the real toolchain", but `*.route.json` lands in gitignored `backend/var/`, the artifact expires after one day, and the committed `DigestVisual` carries no `spec` at all - the text is unreachable 24 hours after a run. **The round trip loses data**: `parse_mermaid` matches edges and discards them (`if "-->" in line: continue`), so order comes from `sorted(labels)` and `n0-->n2` draws the same as `n0-->n1`. **And the target needs structure anyway**: row 47 validates span-anchored edges, so `VisualPlan` carries nodes and edges natively and d3 draws them - serialising that to `flowchart TD` and regexing it back is a round trip that ends with less than it began. Lands inside H's rename commit, one stamp | not in proposal |
 | 64 | Wire in the existing faithfulness scorer | Fowler, Andre | The eval ledger, `ConfidenceBand` and `BandReason` already exist and `LabelRow` already imports `ConfidenceBand`. Do not build a second scorer (Rule #8) | P.L25, P.Q8 |
 | 65 | Never show `why` to a reviewer | Andre | `LabelRow` already hides the machine score from the labeller for the same reason | P.R14 |
 | 66 | Call it offline paired evaluation | Andre | "A/B testing" names a mechanism Rule #1 forbids, and the numbers would eventually be quoted as if readers produced them | P.L26, P.6.3.4 |
@@ -981,127 +770,9 @@ Each is the natural over-correction of the other, so both are recorded. Authorit
 
 Section 1a draws the whole pipeline. This is its stage 1 zoomed in: the proposal draws ARTICLE -> TRUSTED ELEMENTS as a single edge labelled "deterministic extraction + model labelling", and this is that edge opened up. It is the drawing plan-doc G carries into `docs/architecture/extraction/` when the plan is decomposed.
 
-Plain ASCII, for the reason given in section 1a.
-
-```
-                     +---------------------------------+
-                     |             ARTICLE             |
-                     |  sanitized text + title         |
-                     |  text_hash over the normalised  |
-                     |  bytes that every span indexes  |
-                     +----------------+----------------+
-                                      |
-                                      v
-   +======================================================================+
-   |  CANDIDATE PASS - CODE READS FIRST  no model, no network, no tokens  |
-   +======================================================================+
-   |  FINDS   every quantity the number pattern matches, and emits        |
-   |          element_id  kind=quantity  surface  span_start  span_end    |
-   |          value  unit  sentence_index  extractor="regex"              |
-   |                                                                      |
-   |  MISSES  by design. Each was a correct call for picking a few bars   |
-   |          and is the wrong call for a candidate set:                  |
-   |            - a figure repeated across two periods    (dedup, C14)    |
-   |            - a bare four-digit year                                  |
-   |            - any magnitude <= 2 carrying no unit                     |
-   |            - a number whose following word is on the stop-list       |
-   |            - everything past the 16th figure                         |
-   |            - ANY date. No date extractor exists yet   (C15)          |
-   +===================================+==================================+
-                                       |
-                      candidates[], indexed by element_id
-                                       |
-                                       v
-   +======================================================================+
-   |  CALL 1 - MODEL READS THE SAME ARTICLE                               |
-   |  in: system + title + <UNTRUSTED>article</UNTRUSTED> + candidates    |
-   +======================================================================+
-   |  CANNOT EMIT a span, a character offset, a value, a unit or a count. |
-   |  No field of the schema accepts one, so the grammar refuses it at    |
-   |  decode time and nothing downstream has to check for it. (Rule #11)  |
-   +===================================+==================================+
-                                       |
-                                       v
-   +======================================================================+
-   |  ANCHORING - CODE ADJUDICATES           a DIFFERENT rule per shape   |
-   +==================+===================================================+
-   | labels[]         | Cites element_id and nothing else. An unknown id  |
-   |   element_id     | is dropped. No numeric field exists here at all.  |
-   |   measure entity |                                                   |
-   |   dimension time | -> TIER 2 on an element the candidate pass minted |
-   |   salience       |                                                   |
-   |   attribution    |                                                   |
-   |   hedge          |                                                   |
-   +------------------+---------------------------------------------------+
-   | proposed[]       | The escape hatch for a figure code missed.        |
-   |   sentence_index | Search ONLY the named sentence. Exactly one hit,  |
-   |   surface        | or dropped. Re-parse value and unit from the      |
-   |                  | ARTICLE'S OWN BYTES with the same number pattern, |
-   |                  | never from the reply. Capped per article.         |
-   |                  | A spelled-out number and a relative change        |
-   |                  | ("doubled") stay refused - nothing to parse.      |
-   |                  |                                                   |
-   |                  | -> TIER 1 quantity, extractor="model_proposed"    |
-   +------------------+---------------------------------------------------+
-   | entities[]       | `name` is TIER 2 - a grouping key for the alias   |
-   | places[]         | ledger, and it is NEVER drawn on a page.          |
-   |   name           | Each mention.surface must occur exactly once      |
-   |   entity_type    | inside its OWN named sentence, and that           |
-   |   geo_hint       | occurrence is the span. Zero surviving mentions   |
-   |   salience       | drops the element. The drawn label is the         |
-   |   mentions[]     | longest surviving mention, never `name`.          |
-   |     sentence_idx |                                                   |
-   |     surface      | -> TIER 1 mentions + TIER 2 name                  |
-   +------------------+---------------------------------------------------+
-   | quotes[]         | INDICES ONLY. No text crosses from the reply.     |
-   | claims[]         | Code slices the article's bytes between them.     |
-   |   sentence_start | Exact search over a long string is refused: it    |
-   |   sentence_end   | rejects a real quote over one changed word, and   |
-   |   speaker_mention| it does so silently.                              |
-   |   attribution    |                                                   |
-   |   hedge          | -> TIER 1 span + TIER 2 attribution and hedge     |
-   +------------------+---------------------------------------------------+
-   | events[]         | Every actor and object must resolve to a          |
-   | relations[]      | surviving entity element, or the row is dropped.  |
-   |                  | An edge carries sentence_index with no exception  |
-   |                  | (row 47): an unanchored arrow is a causal claim   |
-   |                  | the article did not make.                         |
-   +==================+===================================================+
-                                       |
-                        every survivor carries a span
-                                       |
-                                       v
-                     +---------------------------------+
-                     |        TRUSTED ELEMENTS         |
-                     |        (source of truth)        |
-                     +---------------------------------+
-                     | TIER 1 - byte-exact, and never  |
-                     |   model-authored                |
-                     |   element_id  kind  surface     |
-                     |   span_start  span_end          |
-                     |   span_excerpt  value  unit     |
-                     |   sentence_index  extractor     |
-                     +---------------------------------+
-                     | TIER 2 - model-assigned,        |
-                     |   span-anchored, validated      |
-                     |   entity  time  measure         |
-                     |   measure_canonical  dimension  |
-                     |   salience  attribution  hedge  |
-                     |   label_source  ledger_version  |
-                     +----------------+----------------+
-                                      |
-                    +-----------------+-----------------+
-                    |                                   |
-                    v                                   v
-          to the SEMANTIC MODEL,              to ARTICLE POTENTIAL
-          call 2 - section 10.1               deterministic - section 12.6 G5
-```
-
 ### 10.1b-m The same drawing in Mermaid
 
-Added 2026-09-04 beside the ASCII above, not instead of it. The ASCII is deleted once a line-by-line check confirms nothing was lost - that check is the second half of this change, and keeping both until it runs is what makes the check possible.
-
-**The boxes carry a name and the one assertion an arrow cannot carry. Every field list and every exception list lives in the table below, keyed by node id.** Susan ruled the earlier draft back for putting eight-line rosters inside boxes: that is a table pretending to be a diagram, and it reads as neither.
+Drawn in Mermaid since 2026-09-04, and the ASCII it replaced was word-checked out first. **The boxes carry a name and the one assertion an arrow cannot carry. Every field list and every exception list lives in the table below, keyed by node id.** Susan ruled the first draft back for putting eight-line rosters inside boxes: that is a table pretending to be a diagram, and it reads as neither.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"fontSize":"15px","fontFamily":"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace","background":"#ffffff","mainBkg":"#ffffff","edgeLabelBackground":"#ffffff","labelBackground":"#ffffff","textColor":"#0b1020","titleColor":"#0b1020","nodeTextColor":"#0b1020","secondaryTextColor":"#0b1020","tertiaryTextColor":"#0b1020","lineColor":"#6e7781","primaryColor":"#eef2ff","primaryBorderColor":"#4c6ef5","primaryTextColor":"#0b1020","clusterBkg":"#f8f9fb","clusterBorder":"#c3c8d0"}}}%%
@@ -1616,7 +1287,7 @@ Six rows of this document disagreed with another row of this document. X1 to X4 
 | X1 | **12.1 D2** accepts "full vocabulary declared". **12.2 L2** amended that to "declared set is config" | Read as *limited to the types that have templates*, L2 makes P.D2's neighbour-downgrade unreachable, makes `wasted_decode_rate` identically zero so it measures nothing, and **breaks row 48**. Row 48 derives the build order from what the planner chooses; a planner that cannot name an unbuilt type can never say which template to build next. L2 cites row 48 as its own resolution, so as written it refuted itself | **Full vocabulary, located in config.** Rule #6 puts the list in `config/`; it does not shorten it. An unbuilt type stays declarable, is deterministically downgraded to its nearest built neighbour, and the downgrade is logged. `wasted_decode_rate` measures how often that happens and is the cheapest signal for sequencing the waves. **And this does not cross non-goal 3**, which says a type arriving without both a validator rule set and a compiler template is not in the vocabulary: **NG-3 governs what may render; D2 governs what may be named.** An unbuilt type never reaches a reader, so the enum stays full and the render set stays gated. Written down because an agent reading NG-3 alone would restrict the enum and undo this three weeks after it landed |
 | X2 | **Row 15** rules "flat role map, all keys required". **P.D4** and P.3.2.1 define a *different* required set per type, with nine optional cells across three role names - `series`, `label`, `entity` | One flat map with every role required would make a `bar` emit `quantity_x`, `size`, `bins` and `event_label`. A flat map with roles left optional brings back the exact failure row 15 exists to prevent: "a confident chart with no bars in it, twice, on the first live run" | **Structurally present, semantically optional, per-type enforced.** One flat map. Every role name is a key and every key is in the schema's `required` list, so the decoder cannot omit one. An inapplicable role is emitted as an **empty array**. The validator's existing "roles valid for the type" check enforces the per-type set and rules whether empty is legal there. The cost is real and must be measured rather than assumed: roughly eight empty arrays per plan, at 6.01 tok/s decode |
 | X3 | **12.1 D15** accepts the amended principle in one line. **Section 1** carried a different, weaker sentence | The proposal narrows its own slogan in P.1.5.2 because the slogan is not defensible. Accepting the amendment while printing the un-amended version is how the weaker one survives into `docs/` | Section 1 now carries P.1.5.2's formulation verbatim beside the slogan. It is the same claim section 10.1a arrives at from the other direction |
-| X4 | **O2** scrubs "route" from every identifier, including a schema stem (15.4a). **C1** found that `Route` in `contracts/route.py` is a **persisted** contract with a committed `schemas/route.schema.json` | `CLAUDE.md` section 11: renaming a persisted shape is breaking and needs a changelog entry, a version stamp **and the read-side migration in the same commit**. Committed digest payloads were written under that stem. Nothing downstream of C1 picked this up, so O2 as written is a release blocker with no migration attached | **The rename is in scope and the migration is part of it.** Plan-doc H owns it: the new stem, the version stamp, the changelog entry, and a read-side migration that reads a payload written under the old stem. Row 63 already knows this file carries published enums - same file, same hazard, and the two land together |
+| X4 | **O2** scrubs "route" from every identifier, including a schema stem (15.4a). **C1** found that `Route` in `contracts/route.py` is a **persisted** contract with a committed `schemas/route.schema.json` | `CLAUDE.md` section 11: renaming a persisted shape is breaking and needs a changelog entry and a version stamp. Committed digest payloads reference the domain, so nothing downstream of C1 picked this up and O2 as written had no migration attached | **The rename is in scope and the stamp is part of it.** Plan-doc H owns the new stem, the version stamp and the changelog entry. **Corrected 2026-09-04, and the correction reduces the work**: this row originally demanded a read-side migration too. `*.route.json` is written under `backend/var/`, which is gitignored, so **no `Route` payload is committed** - what is committed is `DigestVisual`, which carries `VisualKind` and `VisualState` and no `spec` or `spec_format`. There is no older payload for a new build to read, so there is nothing to migrate. Row 63 lands in the same commit and deletes the enum outright |
 | X5 | **12.4 Q1** rules "no bespoke version field" for the potential classifier. **12.5's 6.1 row** accepts the P.6.1 event "as the canonical schema" and section 16 Q4 says it is "adopted whole" - and that event carries `potential_classifier_version` | Fowler's reasoning is right and one config version beats a proliferation of bespoke ones. But the hazard P.2.4.4 names is real, and P.6.4.1 lists this stamp under "every rate in the system re-baselines". A version that exists only in `config/` and never lands on the row cannot tell a later reader which thresholds produced that row's class - **and the class is the denominator for every rate** (row 56). A stamp nothing carries is not a stamp | **Both stand, because the column is not a bespoke version.** No new number is minted: the row carries the value of the config file's existing top-level `version`, which is what Q1 already nominates. Q1 was refusing a **second source of truth**, not a **column**. K owns the column and its name - either P.6.1's name carrying the config value, or a name that says what it is - and `config/` stays the only place the number is set |
 | X6 | **`alt_text` has two owners.** Section 1a's VISUAL PLAN box lists it beside `title` and `caption`, and section 10.1's call-2 output emits it - so **the model writes it**. 12.3 R11 says the opposite: "Closed - alt text generated deterministically by the compiler, inside D7" - so **code writes it**. Both were carried from the proposal, which holds the same split across P.3.1.1 and P.4.3.2 | This is not a wording choice, it decides four other things. **If the model emits it**, D7's numeral check is a live validator rule with a real rejection path, `alt_text` costs output tokens in section 11.3's derived budget, and **R11 is not closed**. **If the compiler generates it**, D7 is satisfied by construction because the compiler only holds element values, `alt_text` does not belong in the plan contract at all, and X2's every-key-required rule would otherwise make it a mandatory empty field. P.4.3.2 names the stake: alt text is "the last unguarded prose channel in the system" if the model writes it | **The compiler generates it, and the plan contract loses the field.** R11 is the later and stronger ruling, and it is the one this document already recorded as closed. Section 1a's box and section 10.1's call-2 shape are corrected to drop `alt_text`; the compiler assembles it from the plan and the elements, as P.4.3.2's Owns column says. Two consequences to carry: section 11.3's output budget is re-derived without it, and the sufficiency bar's alt-text check becomes a compiler oracle rather than a validator rule. **Found by cross-referencing two sections rather than by walking one**, which is why five section-walks missed it - the same shape as X3 | **H** |
 
