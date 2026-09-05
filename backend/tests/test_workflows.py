@@ -25,7 +25,7 @@ import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
 from idhazh import ledger, publish_telemetry
-from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
+from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
@@ -1121,14 +1121,14 @@ def _settled_in_the_clone(settings: dict[str, str], relative: str, key: str) -> 
 def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
     """One rendered chart, exactly as the route job's artifact leaves it.
 
-    An SVG under the day's directory and a real `Route` beside the run's items
+    An SVG under the day's directory and a real `VisualDecision` beside the run's items
     saying where it landed. `body` is what makes two renders of one item differ,
     which is the only case that can now put two adds on one path - identical
     bytes are the case git resolves on its own.
     """
     _write(repo / "frontend" / "public" / relpath, f"<svg>{body or item_id}</svg>\n")
-    route = Route(
-        version=Route.schema_version(),
+    decision = VisualDecision(
+        version=VisualDecision.schema_version(),
         item_id=item_id,
         url_key=hashlib.sha256(item_id.encode("ascii")).hexdigest(),
         kind=VisualKind.CHART,
@@ -1137,9 +1137,9 @@ def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None =
         asset_path=relpath,
         visual_state=VisualState.RENDERED,
         model_id="qwen3-4b",
-        routed_at=f"{date}T00:00:00Z",
+        decided_at=f"{date}T00:00:00Z",
     )
-    _write(repo / RUN_ARTIFACTS / date / "items" / f"{item_id}.route.json", route.to_json())
+    _write(repo / RUN_ARTIFACTS / date / "items" / f"{item_id}.route.json", decision.to_json())
 
 
 def _rebuild(repo: Path, env: dict[str, str], date: str, items: Sequence[str]) -> None:

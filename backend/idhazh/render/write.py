@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.route import Route, VisualKind, VisualState
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.chart import render_chart
 from idhazh.render.diagram import RenderError as DiagramError
@@ -89,7 +89,7 @@ def drop_raced_assets(
     case, which makes our file the one nothing will reference. Dropping it is
     what lets the rebase apply.
 
-    The route payload is left alone on purpose. It still names the right path,
+    The decision payload is left alone on purpose. It still names the right path,
     the tip's file is sitting at that path after the rebase, and rewriting it to
     point somewhere else is how an item ends up with a picture that is not
     filed under its own name.
@@ -99,9 +99,9 @@ def drop_raced_assets(
     """
     already = set(published)
     dropped: list[str] = []
-    for route_path in sorted(items_dir.glob("*.route.json")):
-        route = Route.from_json(route_path.read_text(encoding="utf-8"))
-        relpath = route.asset_path
+    for decision_path in sorted(items_dir.glob("*.route.json")):
+        decision = VisualDecision.from_json(decision_path.read_text(encoding="utf-8"))
+        relpath = decision.asset_path
         if relpath is None or relpath not in already:
             continue
         source = public_root / relpath
@@ -114,48 +114,48 @@ def drop_raced_assets(
     return dropped
 
 
-def render_route(
-    route: Route,
+def render_visual(
+    decision: VisualDecision,
     *,
     public_root: Path,
     relpath: str,
     canvas_width: int = 800,
     canvas_height: int = 500,
-) -> Route:
-    """Render, write, and return the route carrying its outcome.
+) -> VisualDecision:
+    """Render, write, and return the decision carrying its outcome.
 
-    Every failure path returns a `render_failed` route. None of them raises, so
+    Every failure path returns a `render_failed` decision. None of them raises, so
     a picture can never be the reason an item does not reach a reader.
     """
-    if route.kind is VisualKind.NONE or not route.spec:
-        return route
+    if decision.kind is VisualKind.NONE or not decision.spec:
+        return decision
 
     try:
-        if route.kind is VisualKind.CHART:
-            payload = render_chart(route.spec)
-        elif route.kind is VisualKind.DIAGRAM:
-            payload = render_diagram(route.spec, width=canvas_width, height=canvas_height)
+        if decision.kind is VisualKind.CHART:
+            payload = render_chart(decision.spec)
+        elif decision.kind is VisualKind.DIAGRAM:
+            payload = render_diagram(decision.spec, width=canvas_width, height=canvas_height)
         else:
-            return route.model_copy(
+            return decision.model_copy(
                 update={
                     "visual_state": VisualState.RENDER_FAILED,
-                    "failure_detail": f"no renderer is built for {route.kind.value}",
+                    "failure_detail": f"no renderer is built for {decision.kind.value}",
                 }
             )
         write_bytes_atomic(public_root / relpath, payload)
     except (ChartError, DiagramError) as error:
-        return route.model_copy(
+        return decision.model_copy(
             update={
                 "visual_state": VisualState.RENDER_FAILED,
                 "failure_detail": str(error)[:200],
             }
         )
     except OSError as error:
-        return route.model_copy(
+        return decision.model_copy(
             update={
                 "visual_state": VisualState.RENDER_FAILED,
                 "failure_detail": f"the asset could not be written: {type(error).__name__}",
             }
         )
 
-    return route.model_copy(update={"visual_state": VisualState.RENDERED, "asset_path": relpath})
+    return decision.model_copy(update={"visual_state": VisualState.RENDERED, "asset_path": relpath})

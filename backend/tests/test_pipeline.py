@@ -33,13 +33,13 @@ from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.fingerprint import FingerprintRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
-from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest, RunRecord
 from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
+from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.evals import archive as score_archive
 from idhazh.evals import metrics, sampling, writer
 from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
@@ -1157,7 +1157,7 @@ class SteppingClock:
         return now
 
 
-def stage_route_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> None:
+def stage_visual_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> None:
     """One article and one OK summary per planned item, sharing one body."""
     items_dir.mkdir(parents=True, exist_ok=True)
     for item in run_plan.items:
@@ -1203,7 +1203,7 @@ def test_the_route_stage_stops_at_its_budget_instead_of_being_killed(
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     items_dir = tmp_path / "run" / run_plan.date / "items"
-    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
     settings = config.load(CONFIG_DIR)
     one_minute = config.Settings(
         app=settings.app.model_copy(
@@ -1215,12 +1215,12 @@ def test_the_route_stage_stops_at_its_budget_instead_of_being_killed(
         digests=settings.digests,
     )
 
-    cli.stage_route(run_plan, settings=one_minute, clock=SteppingClock(10.0))
+    cli.stage_visual_planner(run_plan, settings=one_minute, clock=SteppingClock(10.0))
 
-    routed = sorted(path.name.split(".")[0] for path in items_dir.glob("*.route.json"))
-    assert routed == ["ai-01", "ai-02"], "the budget stopped the stage part-way, by rank"
-    decision = Route.from_json(read_text(items_dir / "ai-01.route.json"))
-    assert decision.route_ms == 10_000
+    decided = sorted(path.name.split(".")[0] for path in items_dir.glob("*.route.json"))
+    assert decided == ["ai-01", "ai-02"], "the budget stopped the stage part-way, by rank"
+    decision = VisualDecision.from_json(read_text(items_dir / "ai-01.route.json"))
+    assert decision.decision_ms == 10_000
     assert decision.asked_the_model is False
 
 
@@ -1231,21 +1231,21 @@ def test_a_stage_inside_its_budget_routes_every_item(
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     items_dir = tmp_path / "run" / run_plan.date / "items"
-    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
 
-    cli.stage_route(run_plan, settings=config.load(CONFIG_DIR), clock=SteppingClock(0.0))
+    cli.stage_visual_planner(run_plan, settings=config.load(CONFIG_DIR), clock=SteppingClock(0.0))
 
-    routed = sorted(path.name.split(".")[0] for path in items_dir.glob("*.route.json"))
-    assert routed == [item.item_id for item in run_plan.items]
+    decided = sorted(path.name.split(".")[0] for path in items_dir.glob("*.route.json"))
+    assert decided == [item.item_id for item in run_plan.items]
 
 
 def test_the_router_visits_the_best_story_first(tmp_path: Path) -> None:
     """Plan order is vertical-major, so a suffix cut would cost whole verticals."""
     run_plan = plan()
     items_dir = tmp_path / "items"
-    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
 
-    ordered = cli.routable_items(run_plan, items_dir, published=frozenset())
+    ordered = cli.plannable_items(run_plan, items_dir, published=frozenset())
 
     assert [entry.item.item_id for entry in ordered] == ["ai-01", "ai-02", "ai-03", "ai-04", "ai-05"]
     assert [entry.item.rank_score for entry in ordered] == sorted(
@@ -1259,9 +1259,9 @@ def test_an_item_the_day_already_published_is_never_routed_again(tmp_path: Path)
     """
     run_plan = plan()
     items_dir = tmp_path / "items"
-    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
 
-    ordered = cli.routable_items(run_plan, items_dir, published=frozenset({"ai-01", "ai-03"}))
+    ordered = cli.plannable_items(run_plan, items_dir, published=frozenset({"ai-01", "ai-03"}))
 
     assert [entry.item.item_id for entry in ordered] == ["ai-02", "ai-04", "ai-05"]
 
@@ -1269,13 +1269,13 @@ def test_an_item_the_day_already_published_is_never_routed_again(tmp_path: Path)
 def test_an_item_without_a_usable_summary_is_never_routable(tmp_path: Path) -> None:
     run_plan = plan()
     items_dir = tmp_path / "items"
-    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+    stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
     failed = Summary.from_json(
         read_text(CONTRACT_FIXTURES_DIR / "summary" / "failed.json")
     ).model_copy(update={"item_id": "ai-01", "url_key": run_plan.items[0].url_key})
     (items_dir / "ai-01.summary.json").write_text(failed.to_json(), encoding="utf-8")
 
-    ordered = cli.routable_items(run_plan, items_dir, published=frozenset())
+    ordered = cli.plannable_items(run_plan, items_dir, published=frozenset())
 
     assert failed.status is not SummaryStatus.OK
     assert "ai-01" not in [entry.item.item_id for entry in ordered]
@@ -1753,7 +1753,7 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     run_plan = plan()
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
-    stage_route_payloads(run_plan, items_dir, text=FULL_TEXT)
+    stage_visual_payloads(run_plan, items_dir, text=FULL_TEXT)
     interrupted = run_plan.items[1]
     (items_dir / f"{interrupted.item_id}.summary.json").unlink()
 
@@ -2406,7 +2406,7 @@ def test_the_manifest_records_what_the_router_cost() -> None:
     one alone answers no question about the budget (Rule #10).
     """
     settings = config.load(CONFIG_DIR)
-    routed = Route.from_json(read_text(CONTRACT_FIXTURES_DIR / "route" / "chart-rendered.json"))
+    decided = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
     day = assemble.build_day(
         plan=plan(),
         items=[digest_item()],
@@ -2417,7 +2417,7 @@ def test_the_manifest_records_what_the_router_cost() -> None:
         retention_window_months=-1,
     )
 
-    def manifest_for(routes: list[Route]) -> RunManifest:
+    def manifest_for(decisions: list[VisualDecision]) -> RunManifest:
         return assemble.build_manifest(
             plan=plan(),
             day=day,
@@ -2431,13 +2431,13 @@ def test_the_manifest_records_what_the_router_cost() -> None:
             config_digests=settings.digests,
             site_bytes=1024,
             site_files=2,
-            routes=routes,
+            decisions=decisions,
         )
 
     timed = manifest_for(
         [
-            routed.model_copy(update={"route_ms": 4000}),
-            routed.model_copy(update={"route_ms": 11000}),
+            decided.model_copy(update={"decision_ms": 4000}),
+            decided.model_copy(update={"decision_ms": 11000}),
         ]
     )
     assert timed.runs[-1].items_routed == 2
@@ -2449,7 +2449,7 @@ def test_the_manifest_records_what_the_router_cost() -> None:
     assert absent.runs[-1].route_ms is None
 
     # Neither is a payload written before the clock existed.
-    unclocked = manifest_for([routed.model_copy(update={"route_ms": None})])
+    unclocked = manifest_for([decided.model_copy(update={"decision_ms": None})])
     assert unclocked.runs[-1].items_routed == 1
     assert unclocked.runs[-1].route_ms is None
 
@@ -2457,9 +2457,9 @@ def test_the_manifest_records_what_the_router_cost() -> None:
     # routed set. Counting the skips keeps a chart rate from climbing on its own.
     gated = manifest_for(
         [
-            routed.model_copy(update={"route_ms": 4000}),
-            routed.model_copy(update={"route_ms": 1, "asked_the_model": False}),
-            routed.model_copy(update={"route_ms": 1, "asked_the_model": False}),
+            decided.model_copy(update={"decision_ms": 4000}),
+            decided.model_copy(update={"decision_ms": 1, "asked_the_model": False}),
+            decided.model_copy(update={"decision_ms": 1, "asked_the_model": False}),
         ]
     )
     assert gated.runs[-1].items_routed == 3

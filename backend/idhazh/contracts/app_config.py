@@ -24,7 +24,7 @@ from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, CommitSha, Contract, Model, Sha256, Slug
 from idhazh.contracts.item_health import FailureCode
-from idhazh.contracts.route import VisualKind
+from idhazh.contracts.visual_decision import VisualKind
 
 
 @lru_cache(maxsize=16)

@@ -30,10 +30,15 @@
       "type": "string"
     }
   },
-  "$id": "route.schema.json",
+  "$id": "visual-decision.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Renamed. The class was Route, the schema file was route.schema.json, and the two fields routed_at and route_ms are now decided_at and decision_ms. No field was added, removed or retyped, and no value changed.",
+      "version": "2026-09-05T15:00",
+      "why": "Route names a dispatch decision; this payload records a planning decision, so the old stem taught the wrong word to everything that read it. The old stem is written here because a schema file that changes name leaves no other trace of what it used to be called (CLAUDE.md section 11). No read-side migration: this payload is written to <item>.route.json under backend/var/, which is gitignored and travels as a one-day artifact, so the run that writes it is the run that reads it and no committed payload carries the old field names."
+    },
     {
       "change": "asset_path is now written as digest/<Y>/<M>/<D>/<item_id>.svg. It was digest/<Y>/<M>/<D>/<vertical>-<NN>.svg, where NN came from a counter seeded by reading the day's directory.",
       "version": "2026-08-27",
@@ -55,12 +60,12 @@
       "why": "The route job sits between 51 and 60 minutes against a 60-minute bound and nothing recorded what it spent, so every argument about the budget was an estimate (Rule #10). Null on a payload written before the clock existed, which is what keeps the field additive."
     },
     {
-      "change": "Initial shape: the four-way routing enum, the spec, and the render outcome.",
+      "change": "Initial shape: the four-way visual-kind enum, the spec, and the render outcome.",
       "version": "2026-08-21",
-      "why": "Contracts before logic - Route and Render are written against a fixed payload."
+      "why": "Contracts before logic - the planner and Render are written against a fixed payload."
     }
   ],
-  "description": "The Route stage's decision plus the Render stage's outcome, one per item.",
+  "description": "The visual planner's decision plus the Render stage's outcome, one per item.",
   "properties": {
     "alt_text": {
       "anyOf": [
@@ -78,7 +83,7 @@
     },
     "asked_the_model": {
       "default": true,
-      "description": "False when the router decided this item on its own facts and never posted. True on a payload written before the gate existed, because every item was asked then.",
+      "description": "False when the planner decided this item on its own facts and never posted. True on a payload written before the gate existed, because every item was asked then.",
       "title": "Asked The Model",
       "type": "boolean"
     },
@@ -96,6 +101,25 @@
       "default": null,
       "description": "Relative POSIX path under frontend/public/, once rendered. Written as digest/<Y>/<M>/<D>/<item_id>.svg since 2026-08-27; payloads before that carry digest/<Y>/<M>/<D>/<vertical>-<NN>.svg and stay valid.",
       "title": "Asset Path"
+    },
+    "decided_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Decided At",
+      "type": "string"
+    },
+    "decision_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall-clock for this item: the planner call plus the render. Null on a payload written before the clock existed.",
+      "title": "Decision Ms"
     },
     "drafted_chart": {
       "default": false,
@@ -144,25 +168,6 @@
       "default": null,
       "title": "Rationale"
     },
-    "route_ms": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Wall-clock for this item: the router call plus the render. Null on a payload written before the clock existed.",
-      "title": "Route Ms"
-    },
-    "routed_at": {
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
-      "title": "Routed At",
-      "type": "string"
-    },
     "spec": {
       "anyOf": [
         {
@@ -193,7 +198,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-27",
+      "default": "2026-09-05T15:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -208,9 +213,9 @@
     "url_key",
     "kind",
     "model_id",
-    "routed_at"
+    "decided_at"
   ],
-  "title": "Route",
+  "title": "VisualDecision",
   "type": "object",
-  "version": "2026-08-27"
+  "version": "2026-09-05T15:00"
 }

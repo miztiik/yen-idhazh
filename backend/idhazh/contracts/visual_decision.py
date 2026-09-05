@@ -49,11 +49,29 @@ _FORMAT_FOR_KIND = {
 }
 
 
-class Route(Contract):
-    """The Route stage's decision plus the Render stage's outcome, one per item."""
+class VisualDecision(Contract):
+    """The visual planner's decision plus the Render stage's outcome, one per item."""
 
-    __schema_stem__: ClassVar[str] = "route"
+    __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-05T15:00",
+            change=(
+                "Renamed. The class was Route, the schema file was route.schema.json, and "
+                "the two fields routed_at and route_ms are now decided_at and decision_ms. "
+                "No field was added, removed or retyped, and no value changed."
+            ),
+            why=(
+                "Route names a dispatch decision; this payload records a planning "
+                "decision, so the old stem taught the wrong word to everything that read "
+                "it. The old stem is written here because a schema file that changes name "
+                "leaves no other trace of what it used to be called (CLAUDE.md section "
+                "11). No read-side migration: this payload is written to <item>.route.json "
+                "under backend/var/, which is gitignored and travels as a one-day "
+                "artifact, so the run that writes it is the run that reads it and no "
+                "committed payload carries the old field names."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27",
             change=(
@@ -109,8 +127,14 @@ class Route(Contract):
         ),
         ChangelogEntry(
             version="2026-08-21",
-            change="Initial shape: the four-way routing enum, the spec, and the render outcome.",
-            why="Contracts before logic - Route and Render are written against a fixed payload.",
+            change=(
+                "Initial shape: the four-way visual-kind enum, the spec, and the render "
+                "outcome."
+            ),
+            why=(
+                "Contracts before logic - the planner and Render are written against a "
+                "fixed payload."
+            ),
         ),
     )
 
@@ -133,19 +157,19 @@ class Route(Contract):
     alt_text: UntrustedLine | None = None
     visual_state: VisualState = VisualState.ABSENT
     model_id: Slug
-    routed_at: Timestamp
-    route_ms: int | None = Field(
+    decided_at: Timestamp
+    decision_ms: int | None = Field(
         default=None,
         ge=0,
         description=(
-            "Wall-clock for this item: the router call plus the render. Null on a payload "
+            "Wall-clock for this item: the planner call plus the render. Null on a payload "
             "written before the clock existed."
         ),
     )
     asked_the_model: bool = Field(
         default=True,
         description=(
-            "False when the router decided this item on its own facts and never posted. "
+            "False when the planner decided this item on its own facts and never posted. "
             "True on a payload written before the gate existed, because every item was "
             "asked then."
         ),
@@ -171,15 +195,15 @@ class Route(Contract):
     def _outcome_matches_the_decision(self) -> Self:
         if self.kind is VisualKind.NONE:
             if self.spec is not None or self.spec_format is not None:
-                raise ValueError("a routed-to-nothing item carries no spec")
+                raise ValueError("an item decided to nothing carries no spec")
             if self.visual_state is not VisualState.ABSENT:
-                raise ValueError("a routed-to-nothing item has no visual to be in a state about")
+                raise ValueError("an item decided to nothing has no visual to be in a state about")
         else:
             if self.spec_format is not _FORMAT_FOR_KIND[self.kind]:
                 expected = _FORMAT_FOR_KIND[self.kind].value
                 raise ValueError(f"kind {self.kind.value} requires spec_format {expected}")
             if not self.spec:
-                raise ValueError("a routed visual must carry the spec it was routed to")
+                raise ValueError("a planned visual must carry the spec it was planned as")
 
         if self.visual_state is VisualState.RENDERED:
             if self.asset_path is None:

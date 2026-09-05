@@ -61,13 +61,13 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
-from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest, VerticalCount
 from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
+from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.fingerprint import text_digest
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
@@ -1092,9 +1092,9 @@ def test_no_hash_appears_in_any_published_path() -> None:
         assert not LONG_HEX.search(item.item_id)
         if item.visual is not None and item.visual.path is not None:
             assert not LONG_HEX.search(item.visual.path)
-    route = Route.from_json(read_text(CONTRACT_FIXTURES_DIR / "route" / "chart-rendered.json"))
-    assert route.asset_path is not None
-    assert not LONG_HEX.search(route.asset_path)
+    decision = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
+    assert decision.asset_path is not None
+    assert not LONG_HEX.search(decision.asset_path)
 
 
 def test_the_eval_ledger_columns_are_defined_once() -> None:
@@ -1823,15 +1823,15 @@ def test_truncation_is_flagged_and_located_together() -> None:
 
 
 def test_a_routed_to_nothing_item_carries_no_spec() -> None:
-    payload = mutate(CONTRACT_FIXTURES_DIR / "route" / "none.json", spec="anything")
+    payload = mutate(CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json", spec="anything")
     with pytest.raises(ValueError, match="no spec"):
-        Route.model_validate(payload)
+        VisualDecision.model_validate(payload)
 
 
 def test_only_a_rendered_visual_has_an_asset_path() -> None:
-    payload = mutate(CONTRACT_FIXTURES_DIR / "route" / "chart-rendered.json", visual_state="absent")
+    payload = mutate(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json", visual_state="absent")
     with pytest.raises(ValueError, match="asset_path"):
-        Route.model_validate(payload)
+        VisualDecision.model_validate(payload)
 
 
 def test_hhem_delta_is_rebuilt_not_trusted() -> None:
@@ -2175,13 +2175,13 @@ def test_a_published_chart_written_before_the_field_reads_as_a_chart_draft() -> 
     drafts than published charts, which is the one thing `charts_drafted` exists
     to measure.
     """
-    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "route" / "chart-rendered.json"))
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
     del payload["drafted_chart"]
-    assert Route.model_validate(payload).drafted_chart is True
+    assert VisualDecision.model_validate(payload).drafted_chart is True
 
-    absent = json.loads(read_text(CONTRACT_FIXTURES_DIR / "route" / "none.json"))
+    absent = json.loads(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json"))
     del absent["drafted_chart"]
-    assert Route.model_validate(absent).drafted_chart is False
+    assert VisualDecision.model_validate(absent).drafted_chart is False
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:

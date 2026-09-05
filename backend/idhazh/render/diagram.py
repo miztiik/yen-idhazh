@@ -8,9 +8,9 @@ That is a layout problem with an exact answer, so it is solved here in about a
 hundred lines and no dependency (Rule #8 names the cost; the cost is not
 worth paying for this).
 
-The subset understood here is exactly the subset `route.diagram_spec` writes: a
-`flowchart TD` of `nN["label"]` nodes joined by `-->`. Anything else raises, and
-the item publishes with no picture.
+The subset understood here is exactly the subset `visual_planner.diagram_spec`
+writes: a `flowchart TD` of `nN["label"]` nodes joined by `-->`. Anything else
+raises, and the item publishes with no picture.
 """
 
 from __future__ import annotations
