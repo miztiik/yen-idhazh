@@ -472,6 +472,21 @@ test.describe('the section on the built console', () => {
 		await expect(section.locator('[data-histogram-n]')).toHaveCount(2);
 	});
 
+	test('the reading chart counts prompts, and never calls one a summary', async ({ page }) => {
+		// The histogram was written for one route and spelled its noun into three
+		// strings: the bar titles, the description a screen reader is read, and the
+		// cumulative axis title. The model reads the ARTICLE and writes the
+		// summary, so "5 summaries read in 32 to 64 seconds" names the wrong thing.
+		// Two of the three were caught by reading the built page; the third was
+		// only visible in a screenshot.
+		await page.goto('/console/');
+		const chart = page.locator('[data-histogram="reading-the-prompt"]');
+		const label = (await chart.locator('svg').getAttribute('aria-label')) ?? '';
+		const said = `${await chart.innerText()} ${label}`.toLowerCase();
+		expect(said, 'the reading chart never says what it is counting').toContain('prompt');
+		expect(said, 'the reading chart still calls a prompt a summary').not.toContain('summar');
+	});
+
 	test('the share is printed and never drawn as a trend, and the page says why', async ({
 		page
 	}) => {

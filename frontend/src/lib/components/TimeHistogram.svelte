@@ -409,7 +409,7 @@
 				font-size="10"
 				data-axis-title="cumulative"
 			>
-				Summaries done by then, percent
+				{nouns.charAt(0).toUpperCase()}{nouns.slice(1)} done by then, percent
 			</text>
 		</svg>
 	</div>
