@@ -27,7 +27,7 @@ from pytest import MonkeyPatch
 from idhazh import assemble, cli, config, extract, ledger, rank, telemetry
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig, ObservabilityConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import SHA256_PATTERN
+from idhazh.contracts.base import SHA256_PATTERN, StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
@@ -1492,6 +1492,30 @@ def test_item_payloads_include_an_article_without_a_summary(tmp_path: Path) -> N
     ]
     assert payloads[0].article == article()
     assert payloads[0].summary is None
+
+
+def test_an_item_written_before_a_contract_moved_says_so_at_the_stage_that_reads_it(
+    tmp_path: Path,
+) -> None:
+    """The check that would have caught run 33951249328, where it actually bit.
+
+    The visuals job wrote its payloads at 08:23, a field rename merged, and the
+    rebuild opened them at 09:03 with the new contract. The stage reported that
+    the payloads were invalid. They were not - they were written eight hundred
+    seconds before the shape changed under them, and only the stamp can say so.
+    """
+    items_dir = tmp_path / "items"
+    items_dir.mkdir()
+    stale = json.loads(article().to_json())
+    stale["version"] = "2026-01-01"
+    stale["body"] = stale.pop("text")
+    (items_dir / "ai-01.article.json").write_text(json.dumps(stale), encoding="utf-8")
+
+    with pytest.raises(StalePayloadError) as raised:
+        list(cli._item_payloads(plan(), items_dir))
+
+    assert "2026-01-01" in str(raised.value)
+    assert Article.schema_version() in str(raised.value)
 
 
 def test_assemble_writes_one_item_health_row_per_planned_item(

@@ -168,10 +168,28 @@ export interface ConsoleConfig {
 
 /** What on-device archive search reads, keeps and shows.
  *
- * Four fields and not the whole `assist` block. `recall_min` and
- * `eval_corpus_through` are the retrieval gate's, read by
- * `backend/tests/test_retrieval_eval.py` off `config/idhazh.json`, and no page
- * draws either - so they are declared there and not in `config/appearance.json`.
+ * **Four fields, and the `assist` block in `config/` holds eight.** Whatever
+ * `assistConfig()` returns is inlined into the prerendered `/archive/`
+ * document, so a knob no component opens would ride to every reader who ever
+ * loads that page. The four that are not here belong to the pipeline:
+ * `recall_min` and `eval_corpus_through` are the retrieval gate's, read by
+ * `backend/tests/test_retrieval_eval.py`; `max_tokens` and
+ * `min_readable_letter_share` are the encoder's, read by
+ * `backend/idhazh/embed.py`.
+ *
+ * The browser needs its own token cap and holds one in `$lib/assist/loader.ts`,
+ * hardcoded. That is a second copy of one number and it is a real defect, but
+ * it is not this one: nothing on the page reads `assist.max_tokens`, so the
+ * copy that ships in the document today is dead weight either way.
+ *
+ * `assistConfig()` keeps exactly the fields declared here and drops the rest.
+ * A keep-list rather than a strip-list, because the two fail in opposite
+ * directions: a strip-list has to be extended every time a backend knob lands
+ * in the block, and when somebody forgets, the knob ships to every reader in
+ * silence. A keep-list forgets the other way - a new browser knob added to
+ * `config/appearance.json` and not declared here is dropped - and TypeScript
+ * refuses the component that tries to read it. One failure is caught by the
+ * compiler; the other is caught by nobody.
  */
 export interface AssistConfig {
 	similarity_floor: number;
@@ -548,7 +566,15 @@ export function consoleConfig(): ConsoleConfig {
 }
 
 export function assistConfig(): AssistConfig {
-	return mergeLayers(ASSIST_DEFAULTS, raw().assist, appearance().assist);
+	const merged = mergeLayers(ASSIST_DEFAULTS, raw().assist, appearance().assist);
+	// The declared interface IS the list - see the note on AssistConfig for why
+	// this keeps rather than strips. `ASSIST_DEFAULTS` names every field of it,
+	// so there is no second list here to forget to update.
+	const kept = {} as AssistConfig;
+	for (const key of Object.keys(ASSIST_DEFAULTS) as (keyof AssistConfig)[]) {
+		kept[key] = merged[key];
+	}
+	return kept;
 }
 
 export function frameConfig(): FrameConfig {

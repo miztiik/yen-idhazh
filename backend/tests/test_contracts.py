@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import csv
+import inspect
 import json
 import logging
 import re
@@ -46,7 +47,7 @@ from idhazh.contracts.app_config import (
 )
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import Contract
+from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestVerticalRef, DigestVisual
 from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
 from idhazh.contracts.eval_row import EvalRow
@@ -2697,3 +2698,101 @@ def test_a_served_day_written_before_the_version_existed_still_reads() -> None:
     del payload["version"]
 
     assert DigestView.model_validate(payload).version == DigestView.schema_version()
+
+
+# --- a run's own payload, read back after the contract moved -----------------
+
+
+def _staged(tmp_path: Path, payload: dict[str, Any], name: str = "x.visual.json") -> Path:
+    path = tmp_path / name
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _a_decision() -> dict[str, Any]:
+    payload: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json")
+    )
+    return payload
+
+
+def test_a_payload_written_before_a_field_was_renamed_is_named_not_called_invalid(
+    tmp_path: Path,
+) -> None:
+    """The real incident, reduced to its two facts.
+
+    Run 33951249328 wrote its visual decisions at 08:23, a field rename merged,
+    and the rebuild at 09:03 read them with the new contract. What it reported
+    was three validation errors about fields, which points an operator at the
+    payload - and the payload is fine. The stamp is what says otherwise, so the
+    stamp is what decides.
+    """
+    payload = _a_decision()
+    payload["version"] = "2026-01-01"
+    payload["routed_at"] = payload.pop("decided_at")
+
+    with pytest.raises(StalePayloadError) as raised:
+        VisualDecision.read(_staged(tmp_path, payload))
+
+    message = str(raised.value)
+    assert "2026-01-01" in message, "the stamp the payload was written under is missing"
+    assert VisualDecision.schema_version() in message, "the stamp this build reads is missing"
+    assert "re-run the stage that wrote it" in message, "the remedy is missing"
+    assert isinstance(raised.value.__cause__, ValidationError), "the parser's own error is lost"
+
+
+def test_a_payload_stamped_with_this_build_is_still_an_ordinary_validation_error(
+    tmp_path: Path,
+) -> None:
+    """The half that keeps this from being a blanket excuse.
+
+    Identical damage, current stamp. Nothing straddled a contract change here,
+    so this is a defect in the payload and it must read like one. A guard that
+    caught this too would hide every real bug behind a story about timing.
+    """
+    payload = _a_decision()
+    payload["version"] = VisualDecision.schema_version()
+    payload["routed_at"] = payload.pop("decided_at")
+
+    with pytest.raises(ValidationError):
+        VisualDecision.read(_staged(tmp_path, payload))
+
+
+def test_an_older_payload_this_build_can_still_read_just_reads(tmp_path: Path) -> None:
+    """Most older payloads are readable, and refusing them would be the worse bug.
+
+    A stamp older than the build's is the normal case after any additive change,
+    which is what the base class already promises. The stamp selects which
+    failure this would be; it never fails on its own.
+    """
+    payload = _a_decision()
+    payload["version"] = "2026-01-01"
+
+    assert VisualDecision.read(_staged(tmp_path, payload)).version == "2026-01-01"
+
+
+def test_the_payload_a_stale_error_names_leaves_the_process_posix_and_relative(
+    tmp_path: Path,
+) -> None:
+    """CLAUDE.md section 2, at the one boundary this error crosses."""
+    payload = _a_decision()
+    payload["version"] = "2026-01-01"
+    payload["routed_at"] = payload.pop("decided_at")
+
+    with pytest.raises(StalePayloadError) as raised:
+        VisualDecision.read(_staged(tmp_path, payload, "world-01.visual.json"))
+
+    named = raised.value.payload
+    assert named == "world-01.visual.json"
+    assert "\\" not in named and ":" not in named and not named.startswith("/")
+
+
+def test_every_contract_can_be_read_through_the_stamped_boundary() -> None:
+    """The boundary is on the base class, so no contract can be left out of it.
+
+    Cheap to state and worth stating: the next contract someone adds gets this
+    for free, and a subclass that quietly replaced `read` fails here.
+    """
+    boundary = inspect.getattr_static(Contract, "read")
+    for model in CONTRACTS:
+        assert inspect.getattr_static(model, "read") is boundary, model.__name__
