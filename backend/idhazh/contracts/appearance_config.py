@@ -514,6 +514,35 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-05T13:00",
+            change=(
+                "console.chart_height now defaults to 220 rather than 180 and "
+                "console.chart_width to 760 rather than 600, and both carry a "
+                "description naming their owner. This document is now the only config "
+                "file that declares either; config/idhazh.json dropped both copies. "
+                "This document drops assist.recall_min, which config/idhazh.json keeps. "
+                "The shapes are `ConsoleConfig` and `AssistConfig`, which this document "
+                "and `AppConfig` share, so both schemas moved together. A semantic "
+                "shift on two defaults and nothing else, so an appearance file written "
+                "before today still validates."
+            ),
+            why=(
+                "Three keys were declared in both config files with two different "
+                "values. This file owns everything the published surface is drawn from "
+                "(docs/concepts/config.md), and the two console sizes are drawn by the "
+                "console pages and by nothing in backend/, so it keeps them and the "
+                "defaults move to match what it declares - 220 and 760, the same "
+                "numbers chart.height_px and chart.width_px already carry. "
+                "assist.recall_min goes the other way: it is a gate on the ranking that "
+                "only backend/tests/test_retrieval_eval.py reads, the frontend's own "
+                "AssistConfig does not declare the field, and the 0.61 here was the "
+                "value the bar held before it was re-derived against the pinned corpus "
+                "on 2026-09-04. A published surface has no business declaring a bar no "
+                "published surface reads. With both moves made, the committed console "
+                "block equals the model's defaults in every key."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-05T12:00",
             change=(
                 "ui.visual_side now defaults to trailing rather than above, and carries a "

@@ -52,8 +52,6 @@
     "watchlist_max_entities": 30
   },
   "console": {
-    "chart_height": 180,
-    "chart_width": 600,
     "default_window_days": 30,
     "doubt_rows": 10,
     "failure_list_max": 25,
