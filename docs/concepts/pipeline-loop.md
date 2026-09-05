@@ -10,7 +10,7 @@ The concrete stage list, the module names and the field-level payload shapes are
 
 An **item** is one source URL and everything derived from it. It is the atom of the whole system:
 
-- It is fetched, extracted, summarized, scored and routed independently of every other item.
+- It is fetched, extracted, summarized, scored and given a visual independently of every other item.
 - It lands as one file per item under a predictable path - the day, the vertical,
   and the item's ordinal within that vertical. Identity for dedupe is a field on
   the payload, never a path segment. Worker skip is not implemented.
@@ -39,8 +39,8 @@ In order, with what each one owns:
 | **Extract** | Turning a page into readable text, and **the trust boundary**. This is where a stranger's bytes are sanitized, exactly once. See [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md). Also where an over-long body is truncated and *flagged* as truncated - never silently dropped. Short or list-shaped text is recorded as a signal and still publishes by default. Publisher-declared paywalls and unsupported forms do not publish. | One article payload per item, including the failure cases and recorded shape signals. |
 | **Summarize** | Turning article text into a summary of a pinned shape, deterministically. The output shape is enforced by the decoder, not requested in the prompt. Also writes the item's title: a headline is written to win a click, so the digest publishes its own. If the local model server is down, Summarize records `model_unreachable` on the item rather than blaming the source or the model reply. See [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md). | One summary payload per item. |
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
-| **Route** | Deciding whether an item gets a chart, a diagram, an illustration, or nothing - where "nothing" is a frequent and correct answer. It stops at its own budget rather than waiting to be killed, and it visits the best story first so what it cannot reach is the day's weakest items. When the model gives no answer, the run log separates a request the server refused because the prompt was too long from a server that never answered at all: the item is decided with no visual either way, but only one of the two means a process is down. See [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md). | A route decision per item, for the items it reached. |
-| **Render** | Producing the visual the route asked for. A render failure degrades the item to no visual; it never fails the item. | The visual asset, or nothing. |
+| **Plan a visual** | Deciding whether an item gets a chart or nothing - where "nothing" is a frequent and correct answer. It stops at its own budget rather than waiting to be killed, and it visits the best story first so what it cannot reach is the day's weakest items. When the model gives no answer, the run log separates a request the server refused because the prompt was too long from a server that never answered at all: the item is decided with no visual either way, but only one of the two means a process is down. See [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md). | A visual decision per item, for the items it reached. |
+| **Render** | Producing the visual the planner asked for. A render failure degrades the item to no visual; it never fails the item. | The visual asset, or nothing. |
 | **Assemble** | Collecting whatever finished into the published digest, including when some items did not finish. It also completes the item-health census, because it is the only stage that sees every planned item - a worker has already committed the rows for the items it settled, and Assemble adds the rest. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md). | One dated day payload plus its run manifest under `frontend/public/digest/`, and one item-health row per planned item under `state/item-health/`. |
 
 **Collect and Assemble are the only stages that see the whole day.** Everything between them sees exactly one item, which is what allows the middle of the pipeline to run as many independent workers.
@@ -74,12 +74,13 @@ Four invariants hold regardless of how the batches are sized:
   duplicate measurement after re-summarization; that is ledger de-duplication,
   not a worker skip. The intended identity contract and current gaps are in
   [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
-- **The router records what it spent, and stops when it has spent it.** Each run
+- **The visual planner records what it spent, and stops when it has spent it.** Each run
   manifest carries `items_routed` and `route_ms`, the stage total over the items
-  the router reached. `route_ms` is null when the router never ran, which is a
+  the planner reached. Those are the wire keys the manifest froze; the Python is
+  `items_decided` and `decision_ms`. `route_ms` is null when the stage never ran, which is a
   different fact from zero. The stage stops itself at `run.visual_planner_budget_minutes`,
   because a job killed at its own timeout skips its upload step and therefore
-  discards every decision it had already made - measured on 2026-08-25, 88 routed
+  discards every decision it had already made - measured on 2026-08-25, 88 decided
   items and 9 rendered charts thrown away, and the day published 145 items with
   no visuals at all. An item the stage never reached writes no payload, which is
   what `items_routed` already reports (Rule #10). It also skips what the day

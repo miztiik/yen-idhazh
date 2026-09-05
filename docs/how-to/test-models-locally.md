@@ -69,7 +69,7 @@ curl -L -o backend/models/Qwen3-4B-Q4_K_M.gguf \
 
 5.29 GiB and 2.4 GB. The summarizer took 118 s to download on `ubuntu-latest` on
 2026-08-23, `n=1`; spread is unavailable, and the rate is not stable enough to
-extrapolate from. The router took 32 s on a runner on 2026-08-22. Exact SHA-256
+extrapolate from. The visual planner's 4B took 32 s on a runner on 2026-08-22. Exact SHA-256
 of the summarizer:
 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`.
 
@@ -148,7 +148,7 @@ PY
 ```
 
 This is the one place that program is written down. Point it at
-`settings.app.models.visual_planner` for the router, or at another `config.load(...)`
+`settings.app.models.visual_planner` for the visual planner, or at another `config.load(...)`
 directory for a scratch config. On Windows, save the same program to a file and
 run it with `.venv\Scripts\python.exe <file>`; use `backend\bin\llama-server.exe`
 for the binary.
@@ -285,7 +285,7 @@ describes the configured summarizer:
 | Model | Published score | Measured here |
 | --- | --- | --- |
 | Qwen3-8B-Q4_K_M (retired incumbent, historical record) | 0.750 | **0.887** |
-| Qwen3-4B-Q4_K_M (the router, not the summarizer) | 0.740 | **0.891** |
+| Qwen3-4B-Q4_K_M (the visual planner's model, not the summarizer) | 0.740 | **0.891** |
 
 Both beat their published number by about 0.14, and the two are within 0.004 of
 each other - well inside the 0.05 margin, so no switch. The verdict was still
@@ -319,7 +319,7 @@ an estimate dressed as arithmetic (Rule #10). Omit the flag and read the raw
 rates until that count is measured.
 
 On the runner, 2026-08-23, the configured summarizer decodes at 6.01 tok/s.
-The retired incumbent decoded at 7.28 tok/s on 2026-08-22 and the router at
+The retired incumbent decoded at 7.28 tok/s on 2026-08-22 and the 4B at
 13.00 tok/s; using the 879-token prompt, their derived blends are 229 s and
 130 s per article. Those two rows are the retired incumbent's historical record.
 The throughput is measured; the per-article figures are derived from it, the

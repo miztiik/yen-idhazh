@@ -91,7 +91,7 @@ SITE_BYTES_PER_DAY = 11_000
 
 # Two items carry a real visual, so the browser suite exercises the picture path
 # rather than proving it safe by never serving one. The specs are ours, not a
-# model's - this file tests the surface, not the router.
+# model's - this file tests the surface, not the visual planner.
 CHART_SPEC = json.dumps(
     {
         "$schema": "https://vega.github.io/schema/vega-lite/v5.json",

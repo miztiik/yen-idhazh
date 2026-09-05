@@ -271,13 +271,13 @@ def build_request(
     inference: InferenceConfig,
     visuals: VisualsConfig,
 ) -> dict[str, Any]:
-    routing = inference.model_copy(update={"max_output_tokens": visuals.max_output_tokens})
+    planning = inference.model_copy(update={"max_output_tokens": visuals.max_output_tokens})
     return request_payload(
         model_id=model_id,
         system=system_prompt(),
         user=user_turn(article, summary, facts, lead_words=visuals.lead_words),
         output_schema=output_schema(),
-        inference=routing,
+        inference=planning,
         schema_name="visual_planner",
     )
 
@@ -314,7 +314,7 @@ def _nothing(
 def decided_without_the_model(
     summary: Summary, *, model_id: str, decided_at: str, facts_found: int
 ) -> VisualDecision:
-    """The `none` a fact-poor item gets when the router skipped the model.
+    """The `none` a fact-poor item gets when the planner skipped the model.
 
     The rationale says the model never ran, so a reader of the payload is never
     left to infer it from a decision that looks like every other `none`.
@@ -324,7 +324,7 @@ def decided_without_the_model(
         model_id=model_id,
         reason=(
             f"no visual kind could be built from the {facts_found} quantities in this "
-            "article, so the router was not asked"
+            "article, so the model was not asked"
         ),
         decided_at=decided_at,
         version=VisualDecision.schema_version(),
@@ -355,7 +355,7 @@ def same_unit_bars(
     sector's headcount. Three good bars were thrown away to reject one bad one.
     Keeping the largest agreeing group never invents a bar and never mixes
     units; it only ever drops. If what remains is too small to be a comparison,
-    the caller still routes to nothing.
+    the caller still decides nothing.
 
     Ties resolve to the group whose first bar came earliest, so the same input
     always produces the same chart.
@@ -474,7 +474,7 @@ def to_decision(
     visuals: VisualsConfig,
     facts: list[NumericFact] | None = None,
 ) -> VisualDecision:
-    """One completion becomes exactly one routing decision, or becomes `none`.
+    """One completion becomes exactly one visual decision, or becomes `none`.
 
     Every rejection path lands on `none` with a rationale. A visual is never
     allowed to be the reason an item does not publish.
@@ -494,7 +494,7 @@ def to_decision(
         return _nothing(
             summary,
             model_id=model_id,
-            reason="the routing reply was cut off by the output budget",
+            reason="the planner's reply was cut off by the output budget",
             decided_at=decided_at,
             version=version,
         )
@@ -504,7 +504,7 @@ def to_decision(
         return _nothing(
             summary,
             model_id=model_id,
-            reason=f"the routing reply did not hold its shape: {type(error).__name__}",
+            reason=f"the planner's reply did not hold its shape: {type(error).__name__}",
             decided_at=decided_at,
             version=version,
         )
@@ -514,7 +514,7 @@ def to_decision(
     # indistinguishable from a diagram it never wanted, and the arm's zero
     # production rate has no cause anyone can name.
     LOG.info(
-        "router draft id=%s kind=%s points=%s steps=%s",
+        "planner draft id=%s kind=%s points=%s steps=%s",
         summary.item_id,
         draft.kind,
         len(draft.points),

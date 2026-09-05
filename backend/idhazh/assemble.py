@@ -210,7 +210,7 @@ def reader_note(article: Article) -> str | None:
 
 
 def to_digest_visual(decision: VisualDecision | None) -> DigestVisual | None:
-    """A routed-to-nothing item carries no visual object at all.
+    """An item decided to nothing carries no visual object at all.
 
     The absence and the empty object would render identically today, and the
     absence is one fewer thing in every payload for the two items in three that
@@ -1197,9 +1197,9 @@ def build_manifest(
         skipped = sum(1 for summary in summaries if summary.status is SummaryStatus.SKIPPED)
         planned = max(len(plan.items), len(summaries))
         failed = planned - succeeded - skipped
-    # A router that never ran leaves no payloads, and a payload written before
-    # the clock existed carries no number. Both are "nothing was measured", which
-    # is null - not a zero that would read as "it took no time".
+    # A visual planner that never ran leaves no payloads, and a payload written
+    # before the clock existed carries no number. Both are "nothing was measured",
+    # which is null - not a zero that would read as "it took no time".
     timed = [
         decision.decision_ms for decision in (decisions or []) if decision.decision_ms is not None
     ]
