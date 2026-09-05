@@ -58,9 +58,7 @@ AN_IMPORT: Final = re.compile(r"^\s*(?:from|import)\s")
 ARCHIVE_READERS: Final = frozenset(
     {
         "backend/tests/test_contracts.py",
-        "backend/tests/test_embed.py",
         "backend/tests/test_evidence.py",
-        "backend/tests/test_fingerprint.py",
         "backend/tests/test_labels.py",
         "backend/tests/test_leading_stories.py",
         "backend/tests/test_ledger.py",

@@ -2323,21 +2323,6 @@ def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = "2026-08-30"
     return tmp_path / "digest"
 
 
-def test_every_committed_day_passes_the_gate_that_replaced_the_build(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """The CI step, run here so it is not first seen on a runner.
-
-    Until the reading routes were split on 2026-09-01 every story was serialised
-    into a document at build time, so a story the contract refused took the
-    build down. A reading document now carries a seed, so the build never opens
-    the stories past it. This is what took that over.
-    """
-    with caplog.at_level(logging.INFO):
-        assert stage_validate_days(REPO_ROOT / "frontend" / "public" / "digest") == 0
-    assert "committed days match both contracts" in caplog.text
-
-
 def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
