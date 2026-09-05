@@ -1071,8 +1071,8 @@ Three readings, and the second and third are the ones that matter:
 
 **Measured 2026-08-25** on the 145 items with an `OK` summary from run
 `32804437110`. No model, no network, no runner: the `items-*` artifacts were
-downloaded and `route.reachable_kinds` was asked the same question
-`_route_one` asks. This is the row `measurements.md` had listed as free to
+downloaded and `visual_planner.reachable_kinds` was asked the same question
+`_plan_one_visual` asks. This is the row `measurements.md` had listed as free to
 measure and still unmeasured.
 
 | `enabled_kinds` | Model asked | Model skipped |

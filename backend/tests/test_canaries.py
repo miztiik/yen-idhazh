@@ -33,14 +33,14 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import Model, derive_output_digest, derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.qualification import CanaryObservation
-from idhazh.contracts.route import VisualKind
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
+from idhazh.contracts.visual_decision import VisualKind
 from idhazh.fetch import FetchResult
 from idhazh.fingerprint import text_digest
-from idhazh.route import numeric_facts, reachable_kinds
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, sanitize, untrusted_block
+from idhazh.visual_planner import numeric_facts, reachable_kinds
 
 # `visual`, because two of the planted attacks are aimed at the visual planner.
 pytestmark = pytest.mark.visual

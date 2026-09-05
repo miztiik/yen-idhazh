@@ -61,9 +61,9 @@ from idhazh.contracts.base import (
     compact_json,
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
-from idhazh.contracts.route import VisualState
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.taxonomy import LensId, SourceKind
+from idhazh.contracts.visual_decision import VisualState
 
 
 class DigestViewVisual(Model):

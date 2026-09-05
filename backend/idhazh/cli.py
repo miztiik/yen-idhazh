@@ -49,11 +49,11 @@ from idhazh import (
     publish_telemetry,
     rank,
     retention,
-    route,
     source_health,
     summarize,
     tag,
     telemetry,
+    visual_planner,
 )
 from idhazh.contracts.app_config import (
     CollectConfig,
@@ -89,7 +89,6 @@ from idhazh.contracts.qualification import (
     ScorerIdentity,
     corpus_digest,
 )
-from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
@@ -102,6 +101,7 @@ from idhazh.contracts.validation_row import (
     ValidationRow,
     ValidationVerdict,
 )
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
 from idhazh.evals import archive as score_archive
 from idhazh.evals import evidence, golden, metrics, qualify, sampling, score, validation, writer
@@ -128,7 +128,7 @@ from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post, props
-from idhazh.render import asset_relpath, render_route
+from idhazh.render import asset_relpath, render_visual
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 LOG: Final = logging.getLogger("idhazh")
@@ -1221,7 +1221,7 @@ def already_published(date: str) -> frozenset[str]:
     return frozenset(item.item_id for item in day.items) if day else frozenset()
 
 
-def routable_items(
+def plannable_items(
     plan: RunPlan, items_dir: Path, *, published: frozenset[str]
 ) -> list[_RoutableItem]:
     """The items this run could still decide, best story first.
@@ -1235,7 +1235,7 @@ def routable_items(
     list is what lets the stage know its own denominator before it spends
     anything on the first item.
     """
-    routable: list[_RoutableItem] = []
+    plannable: list[_RoutableItem] = []
     for item in plan.items:
         if item.item_id in published:
             continue
@@ -1246,12 +1246,12 @@ def routable_items(
         summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
         if summary.status is not SummaryStatus.OK:
             continue
-        routable.append(_RoutableItem(item, article_path, summary))
-    routable.sort(key=lambda entry: (-entry.item.rank_score, entry.item.item_id))
-    return routable
+        plannable.append(_RoutableItem(item, article_path, summary))
+    plannable.sort(key=lambda entry: (-entry.item.rank_score, entry.item.item_id))
+    return plannable
 
 
-def stage_route(
+def stage_visual_planner(
     plan: RunPlan,
     *,
     settings: config.Settings,
@@ -1290,22 +1290,22 @@ def stage_route(
     skipped = 0
     drafted = 0
     kept = 0
-    unrouted = 0
+    undecided = 0
 
     published = already_published(plan.date)
-    routable = routable_items(plan, items_dir, published=published)
+    plannable = plannable_items(plan, items_dir, published=published)
     budget_ms = settings.app.run.visual_planner_budget_minutes * 60_000
     stage_started = clock()
     LOG.info(
         "routing start items=%s already_published=%s budget_minutes=%s",
-        len(routable),
+        len(plannable),
         len(published),
         settings.app.run.visual_planner_budget_minutes,
     )
 
-    for index, entry in enumerate(routable):
+    for index, entry in enumerate(plannable):
         if (clock() - stage_started) * 1000 >= budget_ms:
-            unrouted = len(routable) - index
+            undecided = len(plannable) - index
             break
         item, summary = entry.item, entry.summary
         article = Article.from_json(entry.article_path.read_text(encoding="utf-8"))
@@ -1316,13 +1316,13 @@ def stage_route(
             tracer.span(telemetry.SpanName.ROUTE) as span,
         ):
             telemetry.item_attributes(span, item, run_id=plan.run_id, shard=0)
-            decision, asked = _route_one(article, summary, settings)
+            decision, asked = _plan_one_visual(article, summary, settings)
             if not asked:
                 skipped += 1
             if decision.drafted_chart:
                 drafted += 1
             if decision.kind is not VisualKind.NONE:
-                decision = render_route(
+                decision = render_visual(
                     decision,
                     public_root=PUBLIC_ROOT.parent,
                     relpath=asset_relpath(plan.date, item.item_id),
@@ -1335,17 +1335,17 @@ def stage_route(
             span.set(telemetry.AttrKey.DRAFTED_CHART, decision.drafted_chart)
             span.set(telemetry.AttrKey.VISUAL_KIND, decision.kind.value)
             span.set(telemetry.AttrKey.VISUAL_STATE, decision.visual_state.value)
-        route_ms = int((clock() - started) * 1000)
-        spent.append(route_ms)
-        decision = decision.model_copy(update={"route_ms": route_ms})
+        decision_ms = int((clock() - started) * 1000)
+        spent.append(decision_ms)
+        decision = decision.model_copy(update={"decision_ms": decision_ms})
         assemble.write_atomic(items_dir / f"{item.item_id}.route.json", decision.to_json())
         LOG.info(
-            "item routed id=%s kind=%s state=%s asked=%s route_ms=%s",
+            "item routed id=%s kind=%s state=%s asked=%s decision_ms=%s",
             item.item_id,
             decision.kind.value,
             decision.visual_state.value,
             asked,
-            route_ms,
+            decision_ms,
         )
 
     # The job's own wall-clock is in the run log; this is what the stage inside
@@ -1358,68 +1358,68 @@ def stage_route(
     # numbers a model that stopped asking for charts reads the same as checks
     # that started refusing them.
     LOG.info(
-        "routing done items=%s asked=%s prefiltered=%s unrouted=%s "
+        "routing done items=%s asked=%s prefiltered=%s undecided=%s "
         "charts_drafted=%s charts_kept=%s "
         "total_ms=%s median_ms=%s slowest_ms=%s",
         len(spent),
         len(spent) - skipped,
         skipped,
-        unrouted,
+        undecided,
         drafted,
         kept,
         total_ms,
         sorted(spent)[len(spent) // 2] if spent else 0,
         max(spent, default=0),
     )
-    if unrouted:
-        # An unrouted item is one the run never decided, which is what
+    if undecided:
+        # An undecided item is one the run never decided, which is what
         # `items_routed` in the manifest already reports. This says it in the run
         # log too, with the rate that would have to change for it to fit.
         LOG.warning(
-            "route stage stopped at its budget minutes=%s routed=%s unrouted=%s mean_ms=%s",
+            "route stage stopped at its budget minutes=%s routed=%s undecided=%s mean_ms=%s",
             settings.app.run.visual_planner_budget_minutes,
             len(spent),
-            unrouted,
+            undecided,
             total_ms // len(spent) if spent else 0,
         )
 
 
-def _route_one(
+def _plan_one_visual(
     article: Article,
     summary: Summary,
     settings: config.Settings,
     *,
     endpoint: str = DEFAULT_ENDPOINT,
-) -> tuple[Route, bool]:
+) -> tuple[VisualDecision, bool]:
     """One routing decision, and whether the model was asked for it.
 
-    The model is skipped when no enabled visual kind could survive `to_route`'s
+    The model is skipped when no enabled visual kind could survive `to_decision`'s
     own checks - a chart's bars are indices into these facts and must share one
     unit, so an article whose numbers hold no unit group wide enough cannot
     produce one whatever the model answers. Measured at 21.0 s an item on
     `ubuntu-latest` (2026-08-24), asking anyway is that long spent proving a
     settled question.
 
-    A skipped item still writes a `Route`. Silence is what turns a skip into a
+    A skipped item still writes a `VisualDecision`. Silence is what turns a skip into a
     quiet descope of the feature. So does an item the model never answered for,
     and the two ways it can go unanswered are logged apart: a server that
     refused the prompt for length is running, and a run log that calls it
     unreachable sends whoever reads it to look for a process that never died.
     """
     visuals = settings.app.visuals
-    facts = route.numeric_facts(article.text or "", limit=visuals.max_facts)
+    facts = visual_planner.numeric_facts(article.text or "", limit=visuals.max_facts)
     model_id = settings.app.models.visual_planner.id
-    if not route.reachable_kinds(facts, visuals=visuals):
+    if not visual_planner.reachable_kinds(facts, visuals=visuals):
         return (
-            route.decided_without_the_model(
+            visual_planner.decided_without_the_model(
                 summary,
                 model_id=model_id,
-                routed_at=assemble.utc_now(),
+                decided_at=assemble.utc_now(),
                 facts_found=len(facts),
             ),
             False,
         )
-    payload = route.build_request(
+    payload = visual_planner.build_request(
         article,
         summary,
         facts,
@@ -1444,12 +1444,12 @@ def _route_one(
         completion = Completion(content="")
         LOG.warning("%s id=%s reason=%s", cause, article.item_id, type(error).__name__)
     return (
-        route.to_route(
+        visual_planner.to_decision(
             article,
             summary,
             completion,
             model_id=model_id,
-            routed_at=assemble.utc_now(),
+            decided_at=assemble.utc_now(),
             visuals=visuals,
             facts=facts,
         ),
@@ -2294,7 +2294,7 @@ class _ItemPayload(NamedTuple):
     article: Article | None
     summary: Summary | None
     eval_path: Path
-    route_path: Path
+    decision_path: Path
 
 
 def _item_payloads(
@@ -2320,7 +2320,7 @@ def _item_payloads(
                 else None
             ),
             eval_path=items_dir / f"{item.item_id}.eval.json",
-            route_path=items_dir / f"{item.item_id}.route.json",
+            decision_path=items_dir / f"{item.item_id}.route.json",
         )
 
 
@@ -2763,7 +2763,7 @@ def stage_assemble(
     digest_items = []
     summaries: list[Summary] = []
     rows = []
-    routes: list[Route] = []
+    decisions: list[VisualDecision] = []
     item_health_rows = [
         telemetry.classify_item(
             planned=payload.planned,
@@ -2808,12 +2808,12 @@ def stage_assemble(
                 config=settings.app.evaluation,
             )
         decision = (
-            Route.from_json(payload.route_path.read_text(encoding="utf-8"))
-            if payload.route_path.exists()
+            VisualDecision.from_json(payload.decision_path.read_text(encoding="utf-8"))
+            if payload.decision_path.exists()
             else None
         )
         if decision is not None:
-            routes.append(decision)
+            decisions.append(decision)
         digest_items.append(
             assemble.to_digest_item(
                 article=article,
@@ -2823,7 +2823,7 @@ def stage_assemble(
                 source_name=names.get(article.source_id, article.source_id),
                 source_kind=kinds.get(article.source_id, SourceKind.REPORTING),
                 run_n=1,
-                route=decision,
+                decision=decision,
                 planned=payload.planned,
             )
         )
@@ -2881,7 +2881,7 @@ def stage_assemble(
         site_bytes=site_bytes,
         site_files=site_files,
         item_health_rows=item_health_rows,
-        routes=routes,
+        decisions=decisions,
         evaluation_enabled=observability.evaluation_enabled,
         evaluation_sample_rate=observability.sample_rate,
         evaluation_sampled=sampling.run_is_sampled(run_id, observability.sample_rate),
@@ -3297,7 +3297,7 @@ def stage_validate_days(root: Path) -> int:
     """Every committed day against the two contracts its readers hold.
 
     **This exists because prerendering stopped proving it.** Until the reading
-    routes were split on 2026-09-01, every story a day published was serialised
+    decisions were split on 2026-09-01, every story a day published was serialised
     into a document at build time, so a story the contract refused took the
     build down before it could be merged. A reading document now carries a seed
     and a browser fetches the rest, so the build never opens the stories past
@@ -3768,7 +3768,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.stage == "route" or (args.stage == "run" and args.visuals):
-        stage_route(_load_plan(date), settings=settings)
+        stage_visual_planner(_load_plan(date), settings=settings)
 
     if args.stage in ("assemble", "run"):
         stage_assemble(
