@@ -277,6 +277,13 @@ in [../reference/measurements.md](../reference/measurements.md#what-the-gates-co
 Read it there rather than guessing from one run: on a machine several agents
 share, the same suite spans a factor of three depending on who else is working.
 
+**A test may not read the committed archive**, because its cost then grows with
+every published day rather than with the code it checks (`CLAUDE.md` section
+13). `backend/tests/test_archive_readers.py` fails naming any test that reaches
+for `frontend/public/digest/`, `frontend/public/telemetry/` or `state/`, and it
+carries the list of tests that still do. Drive a per-item rule from the canary
+day instead; ask a whole-tree question once and assert on the total.
+
 ## The backend gates
 
 Run all five from the repository root. Each must be clean.
