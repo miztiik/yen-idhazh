@@ -266,8 +266,7 @@
     "site_title": "Yen Idhazh",
     "source_mark": true,
     "tagline": "A daily digest that checks its own work.",
-    "theme_default": "dark",
-    "visual_side": "above"
+    "theme_default": "dark"
   },
   "version": "2026-08-29T18:00",
   "visuals": {
