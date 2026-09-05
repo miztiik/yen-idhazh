@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -335,6 +335,44 @@ directory. **Two of its arms are expected to fail and are annotated
 how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-the-composed-page-gets-wrong-2026-09-02)).
 An expected failure turns the suite red the day it starts passing, which is
 when the annotation comes off.
+
+**A second spec cannot run here at all, and it fails rather than skips when it
+is handed the canary.** `whole-day.spec.ts` draws the heaviest committed day
+whole - every story, every drawing, at 390 and 1440 CSS px, in both themes - and
+asks the four things a per-drawing check cannot see: whether the day ever
+finishes arriving, whether every drawing it published reached the page, whether
+any two of them turned out to be the same drawing, and whether every mark takes
+its colour from a page token rather than from the hex the renderer baked in. The
+canary is eight stories on one desk against a seed of fifteen, so it never
+fetches and never reaches that scale. A skip there would be a check that quietly
+stopped existing, so the module refuses to load unless the tree under test
+serves exactly the days this repository has committed, and `playwright.config.ts`
+keeps the file out of the default suite - `npm run test:browser` cannot reach it
+and neither can naming it on the command line, because `testIgnore` filters
+before an argument does.
+
+```powershell
+npm run build
+npm run test:whole-day
+```
+
+**3.7 minutes end to end** on an Intel Core i7-1265U, 2026-09-05, on a machine
+several agents share: 117.5 seconds for the build and 102.1 seconds for the
+spec, which is 7 tests - three that read the day off disk in under 25 ms each,
+and four browser arms at 15.7, 18.9, 24.2 and 28.4 seconds. The spread across
+those four is 12.7 seconds, which is the shared box rather than the widths.
+Which day it looks at is derived and never written down: the committed day
+staging the most drawings, which on 2026-09-05 is 2026-08-31 with 43 drawings
+across 601 stories. Take this arm before `build:canary`, which overwrites the
+same `build/` directory.
+
+**It is not in CI, and that is a measurement nobody has taken rather than a
+ruling that it does not belong there.** The `browser` job measured 528, 528, 569
+and 583 seconds over its last four green runs (read 2026-09-05) against its
+25-minute timeout, and it already builds the real site once for the model-absent
+gate. What is missing is what this spec and its build cost *on a runner*, and a
+developer-box figure may not stand in for one (Rule #10). Until somebody takes
+that number there, run this by hand before a change to the reading page merges.
 
 **A component with no call site proves itself here too.** A shared component
 lands before the sections that render it, so the build tree-shakes it away and
