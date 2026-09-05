@@ -1,7 +1,5 @@
 {
   "assist": {
-    "max_tokens": 256,
-    "min_readable_letter_share": 0.5,
     "result_limit": 10,
     "search_min_days": 7,
     "search_months": 1,

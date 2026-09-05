@@ -239,11 +239,21 @@ def test_the_moved_blocks_keep_the_same_shape_on_both_sides() -> None:
 MOVED_BLOCKS = (("ui", "digest"), ("console", "console"), ("assist", "assist"))
 
 #: Keys `config/idhazh.json` owns although they sit on a moved model, with the
-#: reason each one is not the appearance file's to declare. Both are on
-#: `AssistConfig` and neither is drawn: they are the retrieval gate's inputs,
-#: read by `backend/tests/test_retrieval_eval.py` and by nothing else. The
-#: frontend's own `AssistConfig` interface declares neither.
-PIPELINE_OWNED = {"recall_min", "eval_corpus_through"}
+#: reason each one is not the appearance file's to declare. All four are on
+#: `AssistConfig` and none is drawn, so the frontend's own `AssistConfig`
+#: interface declares none of them. `recall_min` and `eval_corpus_through` are
+#: the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py`.
+#: `max_tokens` and `min_readable_letter_share` are the encoder's, read by
+#: `backend/idhazh/embed.py`; the appearance file carried a copy of each with
+#: the same value, which was the middle merge layer doing its job until the
+#: keep-list stopped the page receiving either - and a copy nothing reads is
+#: where `recall_min` was an hour earlier, so both were deleted (2026-09-05).
+PIPELINE_OWNED = {
+    "recall_min",
+    "eval_corpus_through",
+    "max_tokens",
+    "min_readable_letter_share",
+}
 
 
 @pytest.mark.parametrize(("legacy_key", "current_key"), MOVED_BLOCKS)
