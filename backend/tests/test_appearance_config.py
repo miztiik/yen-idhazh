@@ -232,6 +232,43 @@ def test_the_moved_blocks_keep_the_same_shape_on_both_sides() -> None:
     assert type(appearance.assist) is type(app.assist)
 
 
+def test_the_digest_block_is_declared_in_one_file_and_the_other_does_not_argue() -> None:
+    """The value-level half of the test above, which only compares types.
+
+    The shapes never forked, so that test stayed green while the two files
+    disagreed about `visual_side` for a week: `config/idhazh.json` said `above`
+    and `config/appearance.json` said `trailing`. The frontend merges the
+    appearance block over the legacy one, so the loser is silent - a knob edited
+    in the file somebody happened to open does nothing, and nothing says why.
+
+    `config/appearance.json` owns everything the published surface is drawn from
+    (docs/concepts/config.md), so the rule is one-directional: whatever the
+    legacy block still carries has to agree with it.
+
+    The other two moved blocks carry the same failure mode and are NOT covered
+    here, because settling them is not this test's change to make. Measured
+    2026-09-05 on the committed files: `console.chart_height` is 180 against
+    220, `console.chart_width` is 600 against 760, and `assist.recall_min` is
+    0.68 against 0.61 - the last of those is a live retrieval bar, and the
+    appearance copy is the stale one.
+    """
+    legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))["ui"]
+    current = json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))["digest"]
+    disagreed = {
+        key: (value, current[key])
+        for key, value in legacy.items()
+        if key in current and value != current[key]
+    }
+    assert not disagreed, (
+        f"config/idhazh.json and config/appearance.json declare different values: {disagreed}"
+    )
+    absent = sorted(key for key in legacy if key not in current)
+    assert not absent, (
+        f"config/idhazh.json declares digest knobs the appearance file does not: {absent}"
+    )
+    assert "visual_side" not in legacy, "visual_side has one owner, and it is config/appearance.json"
+
+
 def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() -> None:
     """The read-side migration's other half (section 11).
 
