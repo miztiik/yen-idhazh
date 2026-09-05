@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -68,6 +68,42 @@ The home page uses the newest committed payload as the day it can prove. It neve
 uses the build clock as "today". If the site is rebuilt after a quiet or failed
 run, the page still names the payload date it actually renders, and the empty
 state offers the archive plus the latest published day when one exists.
+
+## A seeded story carries its drawing, so the drawing can read the page
+
+Until 2026-09-05 every published chart shipped inside an `img`. An SVG in an `img` is a separate document: it reads none of the page's custom properties, so the only colours it could ever have are the ones the renderer baked in. Those are black axis type, `#888` ticks, `#ddd` grid lines and a `#4c6ef5` bar - fine on white, and on the dark theme black type and eighteen near-white lines on a near-black card. **It was the loudest reader-facing defect on the site and no gate could see it**, because every check the drawing had was about whether the file was served.
+
+The fix is the carrier, and it changes no backend byte. `dayShell()` reads the file off disk for the stories the prerendered document carries and hands the markup over with the story; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) puts it in the document and repaints it from the page's own tokens. **A presentation attribute has the lowest priority in the cascade**, so a stylesheet rule wins over `fill="#000"` with no `!important` and with nothing added to the file - the drawing keeps saying what it said and only the paint moves. Four groups, four tokens:
+
+| What is drawn | Token | Why that one |
+| --- | --- | --- |
+| The bars (`.mark-rect > path`) | `--chart-1` | The categorical chart ramp, first stop. It holds no green, amber or red, so a bar cannot read as a status |
+| Axis labels and the axis title (`.mark-text text`) | `--color-text-secondary` | Type on the card, read the way the reader note above it is read. The chart ramp is for marks that carry no word |
+| Ticks and the axis line (`.mark-rule line`) | `--chart-axis` | The token every console chart already draws an axis with, so there is one answer here rather than two |
+| Grid lines (`.role-axis-grid line`) | `--chart-grid` | Quieter than the axis that bounds it, and the group whose baked `#ddd` was the loudest thing on a dark card |
+
+The drawing that is not a chart needed none of them. The diagram renderer already paints itself in `currentColor`, which inside an `img` could only ever resolve to black; inlined it inherits the page's ink, and the component sets `color: var(--color-text)` on the root so that is a decision rather than an accident. What it still bakes is a `#8a8f98` connector stroke: measured 2026-09-05, that is 5.42:1 on the dark surface and 3.25:1 on the light one, which clears the 3:1 a non-text graphic needs and does not clear 4.5:1. It carries no words, so nothing a reader must read is at that ratio - and the renderer, not the carrier, is where the number gets fixed.
+
+**What the reader gained, as contrast on the dark card.** Measured 2026-09-05 against `--color-surface`: the axis type was black on `#141922`, which is **1.19:1** where readable text needs 4.5:1, and it is now 7.86:1. The grid lines were `#ddd` at **12.97:1** - the loudest thing in the figure was the scaffolding behind the data - and they are now `--chart-grid`. The bars went from a fixed `#4c6ef5` to 5.93:1 on dark and 6.35:1 on light. The light theme was always fine, which is why this survived every review: the defect was invisible to anyone reading in the theme the drawing was drawn for.
+
+**Only the seed inlines.** A day has published 621 stories; the committed drawings average 12.7 KB, so a document holding every one would be roughly a megabyte of markup on the surface a phone loads first. The seed is small and the drawings on it are rarer than the stories: measured 2026-09-05 over the 15 committed days, a seed holds 0.87 drawings on average and 3 at most, which is 11.8 KB of markup a day. What that cost the reader, measured on the same box on the same day, `gzip -9` over the heaviest prerendered page of each route family:
+
+| Page | Before | After | Change |
+| --- | --- | --- | --- |
+| `/` | 283,844 B | 287,581 B | +3,737 B, 1.3 percent |
+| `/<date>/` | 23,670 B | 30,610 B | +6,940 B, 29.3 percent |
+| `/<date>/<topic>/` | 18,222 B | 26,145 B | +7,923 B, 43.5 percent |
+| Whole site, per published item | 16,224 B | 16,653 B | +429 B, 2.6 percent |
+
+A day page went up by about a fifth of what a single round trip costs on a slow link, and each inlined drawing removes a request - so for a story on the first screen the page is very likely quicker, not slower. **The drawing lands in the document twice**, once as markup and once inside the serialised `load` data every prerendered page carries, which is why the page grew by more than the file weighs. Rounding the renderer's 17-digit coordinates would take 4.0 percent of the raw bytes and 51 gzipped ones off a drawing, measured, so it is not worth the code.
+
+**A story past the seed is still on the `img`.** That carrier is unreadable and it is on its way out; deleting it here would take the drawing away from those stories rather than fix it, which trades a fact a reader can half-see for one that is gone. The fetch that replaces it is the next row of the same plan.
+
+**And the drawing has to survive the rest of the day arriving.** A reading route sets `arrived = whole.items` when the fetch lands, which swapped the seed out for the served copy - and the served copy carries no markup, by design. Measured 2026-09-05 on `/2026-09-04/` before the fix: the document held an inline drawing and the page held an `img` a second later, which is the defect this row exists to remove, arriving one second late. `keepDrawings()` in [day-shape.ts](../../../frontend/src/lib/day-shape.ts) re-attaches the seed's drawings by story id, and both reading routes call it at the one line where the list is replaced. It lives beside `orderByTime` rather than in the fetch module because that module imports `$app/paths`, and a spec that imports `$app` fails the whole browser suite at load - so a rule with no test would have been the alternative.
+
+**Inlining moves the trust boundary, and the check is at the move.** Inside an `img` an SVG is inert whatever it holds. In the document it is markup in our own origin, and a chart's labels are written by a model that read a stranger's page - so `dayShell()` refuses any file that does not open on an `<svg>` element or that carries a script, an inline handler, embedded HTML, a link out, or a fetched image (Rule #11). A refused drawing is logged by name and left on the `img`, which is a degrade rather than a failure: the story keeps its picture. [frontend/tests/item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) plants each of those six shapes in a copy of the canary tree and asserts the markup never reaches the story, with a control that the ordinary drawing does inline - without it every refusal case would pass on a build that inlined nothing.
+
+**The oracle is an equality against a token, never against a hex.** The same spec plants a probe element, sets its `background-color` to the property the stylesheet routes a mark to, and compares what the document computed with what the mark was painted. The two themes give that property two different values, so one baked colour fails one arm whichever colour it is - and a test written against a literal would need editing every time the palette moves, which is how a colour test stops being one.
 
 ## Components are swapped by props, and ordered by config
 

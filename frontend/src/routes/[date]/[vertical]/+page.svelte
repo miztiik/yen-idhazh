@@ -18,6 +18,7 @@
 	 */
 	import { restoreAnchor, watchDay, type DayStatus } from '$lib/assist/day';
 	import { base } from '$app/paths';
+	import { keepDrawings } from '$lib/day-shape';
 	import DigestList from '$lib/components/DigestList.svelte';
 	import PayloadState from '$lib/components/PayloadState.svelte';
 	import { longDate } from '$lib/format';
@@ -60,8 +61,13 @@
 				if (whole === null) return;
 				// The served day is every desk, so this is the filter the prerendered
 				// document used to apply at build time - same rule, same order, one
-				// copy instead of five.
-				arrived = whole.items.filter((item) => item.vertical === vertical);
+				// copy instead of five. What the served day does not carry is the
+				// head's drawings, which the document read off disk so they could take
+				// the page's colours.
+				arrived = keepDrawings(
+					data.day?.items ?? [],
+					whole.items.filter((item) => item.vertical === vertical)
+				);
 				// A browser honours a fragment once, at load. The story a deep link
 				// names may only have arrived just now.
 				void tick().then(() => restoreAnchor());
