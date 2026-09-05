@@ -316,7 +316,15 @@ test.describe('THE ORACLE: sources ranked by the articles their failures cost', 
 			code: 'http_client_error',
 			source_words: null,
 			summary_words: null,
-			source_words_before_cap: null
+			source_words_before_cap: null,
+			fetch_ms: null,
+			extract_ms: null,
+			summarize_ms: null,
+			prefill_ms: null,
+			decode_ms: null,
+			input_tokens: null,
+			output_tokens: null,
+			cached_tokens: null
 		};
 		const twice = [row, { ...row, run_id: '2026-08-01-2' }];
 		expect(failedRows(twice, window, null)).toHaveLength(2);

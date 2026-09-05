@@ -1,4 +1,4 @@
-import type { StageTiming, StageTimingDay } from '$lib/charts/series';
+import type { StageTiming, StageTimingDay, TelemetryRow } from '$lib/charts/series';
 import { datesIn, failureSeries } from '$lib/charts/series';
 import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
@@ -383,7 +383,30 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
 	return grouped;
 }
 
-function publicTelemetry(row: Record<string, string>) {
+/** One published row as the browser reads it.
+ *
+ * **The eight stage timings and token counts are deliberately not seeded.** They
+ * are in the published shard and in `TelemetryRow`, so the browser can read them
+ * the moment a surface asks; this list is inlined into the prerendered document,
+ * and no panel draws them yet.
+ *
+ * Measured 2026-09-05 on Intel Core i7-1265U / Windows 11 / node 24, one build
+ * per arm, `npm run bundle-gate` on the real digest. `/console/` weighs
+ * 198,624 gzipped bytes without them. Seeded with their real values it weighs
+ * 375,377 - 176,753 more, an 89 percent page for numbers nothing renders, and
+ * 98,182 over the 277,195 ceiling. Seeded as the nulls below it weighs 214,985,
+ * which is 16,361 more and 62,210 under. The eight untouched routes moved -2 to
+ * +5 bytes between the arms, so the 176,753 is the columns and not the build.
+ *
+ * A ceiling is re-recorded by the change that grows it, and bytes the first
+ * paint does not use are not bytes to record a ceiling around.
+ *
+ * A panel that draws them wants them for the seeded months too, and `+page.svelte`
+ * marks those months loaded so nothing re-fetches them. That is the panel's
+ * choice to make - seed the columns it draws, or drop the seeded months from
+ * `loadedMonths` and let the fetch fill them.
+ */
+function publicTelemetry(row: Record<string, string>): TelemetryRow {
 	return {
 		date: row.date ?? '',
 		run_id: row.run_id ?? '',
@@ -395,7 +418,15 @@ function publicTelemetry(row: Record<string, string>) {
 		code: row.code ?? '',
 		source_words: measured(row, 'source_words'),
 		summary_words: measured(row, 'summary_words'),
-		source_words_before_cap: measured(row, 'source_words_before_cap')
+		source_words_before_cap: measured(row, 'source_words_before_cap'),
+		fetch_ms: null,
+		extract_ms: null,
+		summarize_ms: null,
+		prefill_ms: null,
+		decode_ms: null,
+		input_tokens: null,
+		output_tokens: null,
+		cached_tokens: null
 	};
 }
 

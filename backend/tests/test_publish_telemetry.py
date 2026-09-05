@@ -9,7 +9,12 @@ from conftest import REPO_ROOT
 from pydantic import ValidationError
 
 from idhazh import cli
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.item_health import (
+    FailureCode,
+    ItemHealthRow,
+    ItemOutcome,
+    ItemStage,
+)
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.publish_telemetry import (
     DEFAULT_PUBLIC_ROOT,
@@ -96,6 +101,14 @@ def test_publish_telemetry_drops_url_keys_urls_and_detail(tmp_path: Path) -> Non
             "source_words": "180",
             "summary_words": "65",
             "source_words_before_cap": "",
+            "fetch_ms": "100",
+            "extract_ms": "20",
+            "summarize_ms": "600",
+            "prefill_ms": "",
+            "decode_ms": "",
+            "input_tokens": "",
+            "output_tokens": "",
+            "cached_tokens": "",
         }
     ]
 
@@ -153,6 +166,45 @@ def test_publish_telemetry_carries_both_word_counts(tmp_path: Path) -> None:
     assert projected[0]["source_words_before_cap"] == "2610"
     assert int(projected[0]["source_words_before_cap"]) > int(projected[0]["source_words"])
     assert projected[1]["source_words_before_cap"] == ""
+
+
+def test_publish_telemetry_carries_the_stage_timings_and_the_token_counts(tmp_path: Path) -> None:
+    """Every run since 2026-08-23 measured these eight and the projection dropped them.
+
+    They are durations and counts of our own work, so they cross on the same
+    terms the two word counts do, and the three cells a reader never gets are
+    untouched. The pair that matters is the last two assertions: a server that
+    cached nothing writes `0`, and an instrument that never ran writes nothing
+    at all. Collapse those two and a skipped stage reads as a stage that took no
+    time.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "frontend" / "public" / "telemetry"
+    _write_item_health(
+        state,
+        [
+            _row(prefill_ms=180, decode_ms=420, input_tokens=1500, output_tokens=90, cached_tokens=0),
+            _row(item_id="ai-02", fetch_ms=None, extract_ms=None, summarize_ms=None),
+        ],
+    )
+
+    written = publish(state_root=state, public_root=public)
+
+    with written[0].open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        header = tuple(reader.fieldnames or [])
+        projected = list(reader)
+    timings = ("fetch_ms", "extract_ms", "summarize_ms", "prefill_ms", "decode_ms")
+    tokens = ("input_tokens", "output_tokens", "cached_tokens")
+    assert set(timings + tokens) <= set(header)
+    assert header[-len(timings + tokens) :] == timings + tokens, "appended at the end, never inserted"
+    assert not (FORBIDDEN_COLUMNS & set(projected[0]))
+    assert [projected[0][name] for name in timings] == ["100", "20", "600", "180", "420"]
+    assert [projected[0][name] for name in tokens] == ["1500", "90", "0"]
+    assert projected[0]["cached_tokens"] == "0", "a server that cached nothing measured zero"
+    assert all(projected[1][name] == "" for name in timings + tokens), (
+        "an instrument that did not run writes an empty cell, never a zero"
+    )
 
 
 def test_the_pipeline_never_writes_the_committed_telemetry_projection(tmp_path: Path) -> None:
