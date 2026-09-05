@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
+from idhazh.contracts.visual_decision import (
+    PAYLOAD_SUFFIX,
+    SpecFormat,
+    VisualDecision,
+    VisualKind,
+    VisualState,
+)
 from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.chart import render_chart
 from idhazh.render.diagram import RenderError as DiagramError
@@ -217,7 +223,7 @@ def _rendered(tmp_path: Path, item_id: str, relpath: str) -> Path:
             "visual_state": VisualState.RENDERED,
         }
     )
-    path = tmp_path / "items" / f"{item_id}.route.json"
+    path = tmp_path / "items" / f"{item_id}{PAYLOAD_SUFFIX}"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(route.to_json(), encoding="utf-8", newline="\n")
     return path

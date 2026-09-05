@@ -196,7 +196,7 @@ The outcome is either `ok` or `failed`. A failed row has one failure code that
 belongs to its stage. A successful row usually has no code, but may carry an
 extract signal: `too_short`, `not_prose` or `boilerplate`.
 
-`route` and `render` are not terminal item-health stages. A render failure
+`visuals` and `render` are not terminal item-health stages. A render failure
 degrades an item and never fails it.
 
 ## Failure codes

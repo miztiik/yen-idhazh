@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Start llama-server for one role and prove the process survived the start.
 #
-# Two jobs do this: `work` serves the summarizer, `route` serves the router.
+# Two jobs do this: `work` serves the summarizer, `visuals` serves the visual
+# planner.
 # The bodies were 80.6 percent identical inline shell, differing only in which
 # `models.<role>` config block to read and what to call the log and the pid
 # file. Two copies of a start sequence drift, and the copy that drifts is
