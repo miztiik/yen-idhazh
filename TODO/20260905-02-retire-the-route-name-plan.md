@@ -205,6 +205,8 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- |
 | 1 | Renaming a `###` heading in `docs/` needs a repo-wide anchor check in the same commit | Recorded trap, agent-notes |
 | 2 | The pseudo-plan's section 15 (the 13 plan-docs A to M) is superseded by this numbered group and is replaced with the index, so no reader executes the retired shape | Owner, 2026-09-05 |
+| 3 | **The canonical glossary binds identifiers, never prose.** A module, class, contract field, telemetry value, config key or schema stem takes the glossary term verbatim; a plan-doc's sentences keep the plain register. This row is where that rule is written into `docs/`, because twenty more plans are about to mint names against it | O39, section 15.4a |
+| 4 | Two names outrank the glossary and are recorded rather than re-litigated: `visual_planner.py`, because O2 names the file and the glossary names no file; and `density_floor`, because the owner rejected the glossary's term outright | Section 15.4a |
 
 ### Rejected alternatives
 
