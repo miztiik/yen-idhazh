@@ -11,7 +11,7 @@ import { expect, test } from '@playwright/test';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mergeLayers } from '../src/lib/server/config';
+import { assistConfig, mergeLayers } from '../src/lib/server/config';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -114,4 +114,44 @@ test.describe('the committed appearance file', () => {
 
 		expect(parsed.chart.width_px).toBeLessThanOrEqual(parsed.frame.console_max_px);
 	});
+});
+
+/** The knobs the `assist` block carries that no page may be handed.
+ *
+ * `config/` keeps eight keys under `assist` and the browser reads four. The
+ * other four belong to the pipeline: `recall_min` and `eval_corpus_through` to
+ * the retrieval gate, `max_tokens` and `min_readable_letter_share` to the
+ * encoder. Until 2026-09-05 all eight were merged straight into the prerendered
+ * `/archive/` document - one date and three numbers about the build, shipped to
+ * every reader who ever opened the archive.
+ *
+ * The digest block has had this discipline since it was split. This is the same
+ * question asked of the block beside it, and the answer had never been checked.
+ */
+test.describe('the assist block a reader is handed', () => {
+const DECLARED = ['result_limit', 'search_min_days', 'search_months', 'similarity_floor'];
+
+function blockOnDisk(file: string): Record<string, unknown> {
+const path = join(REPO, 'config', file);
+if (!existsSync(path)) return {};
+const parsed = JSON.parse(readFileSync(path, 'utf8')) as {
+assist?: Record<string, unknown>;
+};
+return parsed.assist ?? {};
+}
+
+test('carries exactly the fields the interface declares', () => {
+expect(Object.keys(assistConfig()).sort()).toEqual(DECLARED);
+});
+
+test('carries nothing the pipeline put in the same block', () => {
+// Named rather than counted. A census fails the day somebody adds a knob
+// for a good reason; this fails only when one of these reaches a reader.
+const handed = Object.keys(assistConfig());
+const onDisk = { ...blockOnDisk('idhazh.json'), ...blockOnDisk('appearance.json') };
+const pipelineOwned = Object.keys(onDisk).filter((key) => !DECLARED.includes(key));
+
+expect(pipelineOwned.length).toBeGreaterThan(0);
+for (const key of pipelineOwned) expect(handed).not.toContain(key);
+});
 });
