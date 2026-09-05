@@ -1,4 +1,4 @@
-"""Whether an item gets a chart, a diagram, an illustration, or nothing.
+"""Whether an item gets a chart or nothing.
 
 "Nothing" is a real, frequent and correct answer. The failure mode being
 designed against is decoration: a generated picture of a chart with invented
@@ -27,15 +27,7 @@ PAYLOAD_SUFFIX: Final = ".visual.json"
 
 class VisualKind(StrEnum):
     CHART = "chart"
-    DIAGRAM = "diagram"
-    IMAGE = "image"
     NONE = "none"
-
-
-class SpecFormat(StrEnum):
-    VEGA_LITE = "vega-lite"
-    MERMAID = "mermaid"
-    IMAGE_PROMPT = "image-prompt"
 
 
 class VisualState(StrEnum):
@@ -47,18 +39,36 @@ class VisualState(StrEnum):
     RENDER_FAILED = "render_failed"
 
 
-_FORMAT_FOR_KIND = {
-    VisualKind.CHART: SpecFormat.VEGA_LITE,
-    VisualKind.DIAGRAM: SpecFormat.MERMAID,
-    VisualKind.IMAGE: SpecFormat.IMAGE_PROMPT,
-}
-
-
 class VisualDecision(Contract):
     """The visual planner's decision plus the Render stage's outcome, one per item."""
 
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-05T18:00",
+            change=(
+                "Removed spec_format and the SpecFormat enum it was typed with. VisualKind "
+                "lost diagram and image, so it holds chart and none. spec is unchanged and "
+                "still carries the Vega-Lite JSON the renderer draws."
+            ),
+            why=(
+                "spec_format was never read. It was a second name for a fact kind already "
+                "carried, and a table in this module mapped one to the other - so the only "
+                "thing it could do was disagree with kind, which is what the validator "
+                "existed to stop. image had no producer and no renderer from the day it was "
+                "written. diagram had both, and both were Mermaid: the planner wrote "
+                "flowchart TD text and our own layout read it back. That round trip is gone "
+                "(pseudo-plan row 63). It was written so anyone could re-render the picture "
+                "with the real Mermaid toolchain, and nobody can: the payload lands under "
+                "backend/var/, which is gitignored, travels as a one-day artifact, and the "
+                "published DigestVisual carries no spec at all. It also lost data - the "
+                "parser matched edges and threw them away, so two different graphs drew "
+                "identically. No read-side migration: scanned 2026-09-05 over all 15 "
+                "committed digest.json files, 6,425 items, 351 of them carrying a visual - "
+                "every one is a chart, none carries diagram or image, and no committed "
+                "visual carries a spec or a spec_format key."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-05T17:00",
             change=(
@@ -167,9 +177,12 @@ class VisualDecision(Contract):
     kind: VisualKind
     rationale: UntrustedLine | None = None
     spec: str | None = Field(
-        default=None, description="Vega-Lite JSON, Mermaid source, or the image prompt."
+        default=None,
+        description=(
+            "The Vega-Lite JSON the renderer draws, built here from the article's own "
+            "numbers. Null on an item decided to nothing."
+        ),
     )
-    spec_format: SpecFormat | None = None
     asset_path: RelPath | None = Field(
         default=None,
         description=(
@@ -218,16 +231,12 @@ class VisualDecision(Contract):
     @model_validator(mode="after")
     def _outcome_matches_the_decision(self) -> Self:
         if self.kind is VisualKind.NONE:
-            if self.spec is not None or self.spec_format is not None:
+            if self.spec is not None:
                 raise ValueError("an item decided to nothing carries no spec")
             if self.visual_state is not VisualState.ABSENT:
                 raise ValueError("an item decided to nothing has no visual to be in a state about")
-        else:
-            if self.spec_format is not _FORMAT_FOR_KIND[self.kind]:
-                expected = _FORMAT_FOR_KIND[self.kind].value
-                raise ValueError(f"kind {self.kind.value} requires spec_format {expected}")
-            if not self.spec:
-                raise ValueError("a planned visual must carry the spec it was planned as")
+        elif not self.spec:
+            raise ValueError("a planned visual must carry the spec it was planned as")
 
         if self.visual_state is VisualState.RENDERED:
             if self.asset_path is None:

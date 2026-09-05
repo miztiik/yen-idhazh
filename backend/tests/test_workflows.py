@@ -27,7 +27,6 @@ from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 from idhazh import ledger, publish_telemetry
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
-    SpecFormat,
     VisualDecision,
     VisualKind,
     VisualState,
@@ -1173,7 +1172,6 @@ def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None =
         url_key=hashlib.sha256(item_id.encode("ascii")).hexdigest(),
         kind=VisualKind.CHART,
         spec='{"mark": "bar"}',
-        spec_format=SpecFormat.VEGA_LITE,
         asset_path=relpath,
         visual_state=VisualState.RENDERED,
         model_id="qwen3-4b",

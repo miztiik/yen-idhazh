@@ -1,4 +1,4 @@
-"""Both renderers, and the rule that a picture never costs an item its place."""
+"""The chart renderer, and the rule that a picture never costs an item its place."""
 
 from __future__ import annotations
 
@@ -9,15 +9,12 @@ import pytest
 
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
-    SpecFormat,
     VisualDecision,
     VisualKind,
     VisualState,
 )
 from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.chart import render_chart
-from idhazh.render.diagram import RenderError as DiagramError
-from idhazh.render.diagram import parse_mermaid, render_diagram, wrap
 from idhazh.render.write import (
     asset_relpath,
     drop_raced_assets,
@@ -36,8 +33,6 @@ SPEC = {
     },
 }
 
-MERMAID = 'flowchart TD\n    n0["Filed"]\n    n1["Reviewed"]\n    n2["Approved"]\n    n0 --> n1\n    n1 --> n2'
-
 
 def _decision(kind: VisualKind, spec: str) -> VisualDecision:
     return VisualDecision(
@@ -46,7 +41,6 @@ def _decision(kind: VisualKind, spec: str) -> VisualDecision:
         url_key="b" * 64,
         kind=kind,
         spec=spec,
-        spec_format=(SpecFormat.VEGA_LITE if kind is VisualKind.CHART else SpecFormat.MERMAID),
         model_id="qwen3-4b",
         decided_at="2026-08-22T00:00:00Z",
     )
@@ -67,48 +61,6 @@ class TestChartRenderer:
     def test_a_spec_vega_lite_rejects_raises(self) -> None:
         with pytest.raises(ChartError):
             render_chart(json.dumps({"mark": "not-a-mark", "data": {"values": []}}))
-
-
-class TestDiagramRenderer:
-    def test_it_reads_back_the_source_route_wrote(self) -> None:
-        caption, labels = parse_mermaid(MERMAID)
-        assert labels == ["Filed", "Reviewed", "Approved"]
-        assert caption == ""
-
-    def test_a_comment_line_is_the_caption(self) -> None:
-        caption, _ = parse_mermaid("%% How it moved\n" + MERMAID)
-        assert caption == "How it moved"
-
-    def test_a_mermaid_feature_we_do_not_draw_raises(self) -> None:
-        with pytest.raises(DiagramError):
-            parse_mermaid("flowchart TD\n    subgraph one\n    end")
-
-    def test_a_one_step_diagram_raises(self) -> None:
-        with pytest.raises(DiagramError):
-            parse_mermaid('flowchart TD\n    n0["Only"]')
-
-    def test_it_draws_one_box_per_step(self) -> None:
-        svg = render_diagram(MERMAID).decode("utf-8")
-        assert svg.count("<rect") == 3
-        assert svg.count("<line") == 2
-
-    def test_the_canvas_is_exactly_what_was_asked_for(self) -> None:
-        svg = render_diagram(MERMAID, width=800, height=500).decode("utf-8")
-        assert 'viewBox="0 0 800 500"' in svg
-
-    def test_a_label_with_markup_is_escaped_not_injected(self) -> None:
-        spec = 'flowchart TD\n    n0["<script>x</script>"]\n    n1["Two"]\n    n0 --> n1'
-        svg = render_diagram(spec).decode("utf-8")
-        assert "<script>" not in svg
-        assert "&lt;script&gt;" in svg
-
-    def test_it_renders_byte_identically_twice(self) -> None:
-        assert render_diagram(MERMAID) == render_diagram(MERMAID)
-
-    def test_a_long_label_wraps_rather_than_overflowing(self) -> None:
-        lines = wrap("one two three four five six seven eight nine ten", 120)
-        assert len(lines) > 1
-        assert all(len(line) <= 20 for line in lines)
 
 
 class TestAssetPaths:
@@ -169,14 +121,6 @@ class TestRenderRoute:
         assert result.visual_state is VisualState.RENDERED
         assert result.asset_path == "digest/2026/08/22/ai-01.svg"
         assert (tmp_path / "digest/2026/08/22/ai-01.svg").exists()
-
-    def test_a_rendered_diagram_records_where_it_landed(self, tmp_path: Path) -> None:
-        result = render_visual(
-            _decision(VisualKind.DIAGRAM, MERMAID),
-            public_root=tmp_path,
-            relpath="digest/2026/08/22/ai-01.svg",
-        )
-        assert result.visual_state is VisualState.RENDERED
 
     def test_a_render_failure_degrades_and_never_raises(self, tmp_path: Path) -> None:
         result = render_visual(

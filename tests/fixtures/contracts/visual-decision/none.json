@@ -11,7 +11,6 @@
   "model_id": "qwen3-4b-q4-k-m",
   "rationale": "no visual kind could be built from the 0 quantities in this article, so the router was not asked",
   "spec": null,
-  "spec_format": null,
   "url_key": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04",
   "version": "2026-08-21",
   "visual_state": "absent"

@@ -11,7 +11,6 @@
   "model_id": "qwen3-4b-q4-k-m",
   "rationale": "The article states two comparable cost figures.",
   "spec": "{\"data\":{\"values\":[{\"release\":\"previous\",\"usd_per_million_tokens\":0.62},{\"release\":\"new\",\"usd_per_million_tokens\":0.41}]},\"mark\":\"bar\"}",
-  "spec_format": "vega-lite",
   "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
   "version": "2026-08-21",
   "visual_state": "rendered"
