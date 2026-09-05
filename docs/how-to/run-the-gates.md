@@ -359,15 +359,16 @@ npm run build
 npm run test:whole-day
 ```
 
-**3.7 minutes end to end** on an Intel Core i7-1265U, 2026-09-05, on a machine
-several agents share: 117.5 seconds for the build and 102.1 seconds for the
-spec, which is 7 tests - three that read the day off disk in under 25 ms each,
-and four browser arms at 15.7, 18.9, 24.2 and 28.4 seconds. The spread across
-those four is 12.7 seconds, which is the shared box rather than the widths.
-Which day it looks at is derived and never written down: the committed day
-staging the most drawings, which on 2026-09-05 is 2026-08-31 with 43 drawings
-across 601 stories. Take this arm before `build:canary`, which overwrites the
-same `build/` directory.
+**Between 2.8 and 3.7 minutes end to end** on an Intel Core i7-1265U,
+2026-09-05, over two full runs on a machine several agents share: the build took
+72.2 and 117.5 seconds, and the spec 97.3 and 102.1. The spec is 7 tests - three
+that read the day off disk in under 25 ms each, and four browser arms that
+spanned 13.7 to 28.4 seconds across the two runs. That spread is the shared box
+rather than the widths, which is also why the build figure nearly doubles
+between two runs of one tree. Which day it looks at is derived and never written
+down: the committed day staging the most drawings, which on 2026-09-05 is
+2026-08-31 with 43 drawings across 601 stories. Take this arm before
+`build:canary`, which overwrites the same `build/` directory.
 
 **It is not in CI, and that is a measurement nobody has taken rather than a
 ruling that it does not belong there.** The `browser` job measured 528, 528, 569
