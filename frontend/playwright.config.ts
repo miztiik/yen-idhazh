@@ -98,9 +98,23 @@ const PORT = previewPort(dirname(fileURLToPath(import.meta.url)), process.env);
  */
 const SKIP_CONSOLE = (process.env.SKIP_CONSOLE_SUITE ?? '').trim() === 'true';
 
+/**
+ * The one spec this config may never run, whatever is asked for on the command
+ * line.
+ *
+ * The browser gate serves the canary day out of `frontend/build`, and
+ * `whole-day.spec.ts` is a question about a real published day at day scale -
+ * six hundred stories and forty-three drawings against the canary's eight and
+ * two. Handed the canary it refuses to load rather than reporting a pass, so
+ * leaving it in this file set would turn the gate red. `testIgnore` filters
+ * before a command-line argument does, so naming the file cannot reach it
+ * either; `playwright.whole-day.config.ts` is the only way in.
+ */
+const WHOLE_DAY = /whole-day\.spec\.ts$/;
+
 export default defineConfig({
 	testDir: 'tests',
-	testIgnore: SKIP_CONSOLE ? /console.*\.spec\.ts$/ : undefined,
+	testIgnore: SKIP_CONSOLE ? [WHOLE_DAY, /console.*\.spec\.ts$/] : WHOLE_DAY,
 	fullyParallel: false,
 	forbidOnly: Boolean(process.env.CI),
 	retries: 0,
