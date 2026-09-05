@@ -324,18 +324,19 @@ test.describe('the panel, in a browser', () => {
 			await expect(page.locator('[data-model-reasons="none"]')).toHaveCount(1);
 			return;
 		}
-		// One row per reason the window actually saw. A reason that never fired
-		// draws no band, so a row for it would be a swatch in a colour the plot
-		// never uses.
+		// One row per reason the window actually saw, in the declared order. A
+		// reason that never fired draws no band, so a row for it would be a swatch
+		// in a colour the plot never uses.
 		const strip = page.locator('[data-readout="doubt-reasons"]');
 		await expect(strip, 'the doubt-reason chart lost its readout strip').toHaveCount(1);
-		await expect(strip.locator('[data-readout-row]')).toHaveCount(seen.size);
-		for (const reason of REASONS.filter((entry) => seen.has(entry.id))) {
-			await expect(
-				strip.locator(`[data-readout-row="${reason.label}"]`),
-				`${reason.id} is drawn and the strip does not name it`
-			).toHaveCount(1);
-		}
+		// Read the labels rather than building one locator per label: two of the
+		// five carry a double quote, which an attribute selector cannot hold.
+		const labels = await strip
+			.locator('[data-readout-row]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-readout-row') ?? ''));
+		expect(labels, 'the strip does not name exactly the reasons the window saw').toEqual(
+			REASONS.filter((reason) => seen.has(reason.id)).map((reason) => reason.label)
+		);
 	});
 
 	test('a reason the window never saw is named in words, not left invisible', async ({ page }) => {
