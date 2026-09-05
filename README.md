@@ -42,7 +42,7 @@ flowchart TD
         B["<b>Extract</b><br/>pull readable text<br/>sanitise at the trust boundary"]
         C["<b>Summarize</b><br/>Qwen3-8B on CPU<br/>output shape pinned by a schema"]
         D["<b>Score</b><br/>faithfulness vs the source<br/>plus model-free counterweights"]
-        E["<b>Route</b><br/>chart, diagram, or nothing<br/>the model picks numbers by index"]
+        E["<b>Plan a visual</b><br/>a chart, or nothing<br/>the model picks numbers by index"]
         F["<b>Assemble</b><br/>write the day's payload<br/>commit it to the repository"]
         A --> B --> C --> D --> E --> F
     end
@@ -137,10 +137,10 @@ and the faithfulness extra, or the scores come out empty:
 ```bash
 python -m pip install -e ".[faithfulness]"
 python -m idhazh run              # plan, work, assemble - today, UTC
-python -m idhazh run --visuals    # ... and route the charts as well
+python -m idhazh run --visuals    # ... and plan and draw the charts as well
 ```
 
-Each stage also runs on its own (`plan`, `work`, `route`, `assemble`), which is
+Each stage also runs on its own (`plan`, `work`, `visuals`, `assemble`), which is
 how CI shards the slow one across machines. Model weights and llama.cpp binaries
 are downloaded, never committed.
 

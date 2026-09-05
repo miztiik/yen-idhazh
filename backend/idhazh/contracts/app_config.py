@@ -1416,7 +1416,7 @@ class VisualsConfig(Model):
     max_output_tokens: int = Field(
         default=400,
         ge=1,
-        description="Routing emits a small object. It does not need the summarizer's budget.",
+        description="The planner emits a small object. It does not need the summarizer's budget.",
     )
     max_facts: int = Field(
         default=16,

@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -187,7 +187,7 @@ strikes and no inherited retirement
 worker jobs each restores the weights once and works a shard. A scheduled run
 derives its own worker count from the day it just planned - at most four, and
 fewer on a small day. Manual runs accept one to eight and default to four; the
-plan rejects any other dispatched value before it creates the matrix. Route uses
+plan rejects any other dispatched value before it creates the matrix. The `visuals` job uses
 their output, and assemble runs **even when a worker failed** - a run that publishes nothing
 on a bad day is a run whose bad days are invisible. Each run appends to the
 day's payload rather than replacing it, so the day grows through the day. The

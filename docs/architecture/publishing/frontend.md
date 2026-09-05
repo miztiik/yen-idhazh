@@ -109,7 +109,7 @@ A day page went up by about a fifth of what a single round trip costs on a slow 
 
 **And the drawing has to survive the rest of the day arriving.** A reading route sets `arrived = whole.items` when the fetch lands, which swapped the seed out for the served copy - and the served copy carries no markup, by design. Measured 2026-09-05 on `/2026-09-04/` before the fix: the document held an inline drawing and the page held an `img` a second later, which is the defect this row exists to remove, arriving one second late. `keepDrawings()` in [day-shape.ts](../../../frontend/src/lib/day-shape.ts) re-attaches the seed's drawings by story id, and both reading routes call it at the one line where the list is replaced. It lives beside `orderByTime` rather than in the fetch module because that module imports `$app/paths`, and a spec that imports `$app` fails the whole browser suite at load - so a rule with no test would have been the alternative.
 
-**Inlining moves the trust boundary, and the check is at the move - on both sides of it.** Inside an `img` an SVG is inert whatever it holds. In the document it is markup in our own origin, and a chart's labels are written by a model that read a stranger's page (Rule #11). So a drawing is refused if it does not open on an `<svg>` element or if it carries a script, an inline handler, embedded HTML, a link out, or a fetched image - and its path is matched against the shape `route.py` writes before that path is joined onto a directory or onto `base`, because it is about to become an address. [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) holds both checks and imports nothing, which is what lets the build and the browser run the same code: `node:fs` in that graph would put the build's file reader in a browser bundle, and a `$lib` alias would put a Vite alias in a plain `node` process. **The browser's copy is the one that matters**, because that is the path a stranger's bytes travel with nobody watching; two copies of one refusal is how the two drift. A refused drawing is logged by name and not drawn, which is a degrade rather than a failure: the story is shorter. [frontend/tests/item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) plants each of those six shapes in a copy of the canary tree, asserts the markup never reaches the story and that the same markup would be refused on the fetch path too, with a control that the ordinary drawing does inline - without it every refusal case would pass on a build that inlined nothing.
+**Inlining moves the trust boundary, and the check is at the move - on both sides of it.** Inside an `img` an SVG is inert whatever it holds. In the document it is markup in our own origin, and a chart's labels are written by a model that read a stranger's page (Rule #11). So a drawing is refused if it does not open on an `<svg>` element or if it carries a script, an inline handler, embedded HTML, a link out, or a fetched image - and its path is matched against the shape `visual_planner.py` writes before that path is joined onto a directory or onto `base`, because it is about to become an address. [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) holds both checks and imports nothing, which is what lets the build and the browser run the same code: `node:fs` in that graph would put the build's file reader in a browser bundle, and a `$lib` alias would put a Vite alias in a plain `node` process. **The browser's copy is the one that matters**, because that is the path a stranger's bytes travel with nobody watching; two copies of one refusal is how the two drift. A refused drawing is logged by name and not drawn, which is a degrade rather than a failure: the story is shorter. [frontend/tests/item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) plants each of those six shapes in a copy of the canary tree, asserts the markup never reaches the story and that the same markup would be refused on the fetch path too, with a control that the ordinary drawing does inline - without it every refusal case would pass on a build that inlined nothing.
 
 **No browser check can reach the fetch, and that is a property of the fixture.** The canary day is eight stories against a seed of fifteen, so every story on it is seeded and nothing on that build asks for a drawing. What the canary suite does hold is the page-wide count: zero `<img>` under `main`, which fails the moment a story is left on the old carrier. The fetch itself is checked against the real build, on a committed day longer than the seed.
 
@@ -2024,7 +2024,7 @@ neutral ink; console chart-craft plan Row #3, 2026-08-31.
 ## The chart arm is a flow, and every drop leaves it as a named branch
 
 `Visuals drawn for articles` opens with one diagram of where items go between the
-visuals planner reaching one and a visual reaching a page. It is drawn left to
+visual planner reaching one and a visual reaching a page. It is drawn left to
 right, the direction the page reads and the order the pipeline runs its stages
 in, and it totals the whole open window rather than one day - a single day's four
 numbers are already legible in the table under it, and "where do items go" is a
@@ -2424,7 +2424,7 @@ heading has to say what is under it.** `Compression` was a subsystem word that
 names neither axis of the chart it sat over, and that chart now also carries the
 cap line - it is `Article length against summary length`, which is the string
 the chart's own accessible name already used. `Charts` on a page of six charts
-reads as "the charts" rather than as the router's output, so it is `Charts drawn
+reads as "the charts" rather than as the planner's output, so it is `Charts drawn
 for articles`. `Runs` sat four headings below `Run health` and neither name said
 which was which; it became `Runs and site size`, which is what its columns were.
 No doc anchor and no test selector read any of the three. `Runs and site size`
@@ -2439,8 +2439,8 @@ flow diagram's empty note. Where the word modified a quantity it is gone,
 because a section headed for the arm does not need to name the arm again:
 `Router minutes per chart` is `Minutes per visual`, the column `Router minutes`
 is `Minutes spent`, and `No router time is on record` is `has no minutes on
-record`. Where it names the actor it is `the visuals planner` - `Reached is
-every item the visuals planner looked at`. `chart` as the name of a drawn thing
+record`. Where it names the actor it is `the visual planner` - `Reached is
+every item the visual planner looked at`. `chart` as the name of a drawn thing
 became `visual` in the same pass, including the flow branch `Answered without a
 visual`, because more visual kinds are coming and a name about to stop being
 true is worth changing once.
@@ -2454,11 +2454,17 @@ count agree today and the rename is early rather than wrong. The day a non-chart
 visual publishes for real, either the count widens or the heading narrows;
 `frontend/tests/console.spec.ts` holds the count to charts and says so.
 
-**No identifier moved.** `RouteId`, `data-` attributes, `chart_arm_rule_days`,
+**No identifier moved on that day, and every one of them has moved since.**
+`RouteId`, `data-` attributes, `chart_arm_rule_days`,
 `chart_arm_minutes_target`, `chart_arm_coverage_pct`, `route_ms`,
-`items_routed`, `charts_drafted` and `routerMinutes` are untouched, because
-renaming those reaches `backend/`, `config/` and the committed ledgers and is
-its own change with its own gates. The section also still says `the chart-only
+`items_routed`, `charts_drafted` and `routerMinutes` were left alone on
+2026-08-31, because renaming those reaches `backend/`, `config/` and the
+committed ledgers and is its own change with its own gates. That change ran on
+2026-09-05 as a plan of six rows. `routerMinutes` is `plannerMinutes`, and the
+two manifest keys `route_ms` and `items_routed` are the one thing that did not
+move: they are published in fifteen days of `run.json`, so the Python behind
+them is `decision_ms` and `items_decided` and the wire keeps the old spelling
+([../contracts/schemas.md](../contracts/schemas.md)). The section also still says `the chart-only
 gate`, which is the gate's real name in [visuals.md](visuals.md) and is the
 sentence that explains why every visual here is a chart. Authority: owner,
 2026-08-31, over Fowler's split of copy from identifiers.

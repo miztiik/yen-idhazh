@@ -21,10 +21,10 @@ This is a reading surface before it is anything else. Measure, leading, hierarch
 The DOM state is the single source of truth for the view. Nothing is styled imperatively: **state is reflected by toggling a class or a `data-` attribute, and CSS reacts declaratively.**
 
 - **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`.
-- **Data-attribute styling** carries variants: an item keys its treatment off `data-route` (chart / diagram / illustration / none) and `data-band` (the confidence band from [evaluation.md](evaluation.md)).
+- **Data-attribute styling** carries variants: an item keys its treatment off `data-visual` (the visual's state - `rendered`, `render_failed` or `absent`) and `data-band` (the confidence band from [evaluation.md](evaluation.md)).
 - **No inline styles** except genuinely dynamic values. Everything else is a token or a class.
 
-Because the payload already carries the route kind, the band and the truncation flag, rendering is **one component parameterised by data** rather than a layout per item type. A per-item special case is a smell.
+Because the payload already carries the visual's kind and state, the band and the truncation flag, rendering is **one component parameterised by data** rather than a layout per item type. A per-item special case is a smell.
 
 ## Design tokens
 
@@ -270,7 +270,7 @@ the dark theme cannot override.
 
 ## Colour is one signal, never the only one
 
-A confidence band carries a **word** as well as a tint. A route kind carries a shape or a position as well as a colour. This is a clarity rule for all readers, and it is also what keeps the page legible in a screenshot, in dark mode, and on a bad screen.
+A confidence band carries a **word** as well as a tint. A visual kind carries a shape or a position as well as a colour. This is a clarity rule for all readers, and it is also what keeps the page legible in a screenshot, in dark mode, and on a bad screen.
 
 Accessibility *audit tooling* is a project non-goal ([../../CLAUDE.md](../../CLAUDE.md) section 0a); labelled controls, semantic landmarks and visible focus are simply good building and are in scope.
 
@@ -1367,7 +1367,7 @@ The measurements that settled it, taken in the integrated browser on 2026-08-28:
 
 **Sufficiency became a gate because the review roster was six vetoes and no demand.** Jony removes, Fowler deletes, Carmack refuses on budget, Reader and Editor report. Nothing asked whether the result was good enough to be worth a stranger's attention, and a system of pure vetoes converges on the minimum that passes every veto. The rejected alternative was giving Jony the demand mandate as well; one head holding both "remove before adding" and "this is not enough" resolves to the veto every time, which is the observed outcome. Susan was added at a distinct altitude instead, and a veto now has to name what the reader loses. Authority: owner and Fowler, 2026-08-29.
 
-Driving the look from fields the payload already carries - route kind, band, truncation - rather than from per-item styling decisions is what keeps the surface one component instead of many, and it means a new route kind or band arrives with a slot already waiting for it. The rejected alternative, bespoke treatment per item type, produces a page that must be edited every time the pipeline learns something new. Authority: Jony.
+Driving the look from fields the payload already carries - visual kind, band, truncation - rather than from per-item styling decisions is what keeps the surface one component instead of many, and it means a new visual kind or band arrives with a slot already waiting for it. The rejected alternative, bespoke treatment per item type, produces a page that must be edited every time the pipeline learns something new. Authority: Jony.
 
 Keeping the motion set to three named animations is a deliberate under-build. A reading surface that animates is a reading surface that interrupts. Authority: Jony, with Reader ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md)) as the check.
 
