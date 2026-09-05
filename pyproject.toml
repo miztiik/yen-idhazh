@@ -226,7 +226,7 @@ ignore_missing_imports = true
 testpaths = ["backend/tests"]
 pythonpath = ["backend"]
 # `-n auto` is the default because the suite is parallel-safe and 3.37x faster
-# on a developer box; `-p no:xdist` or `-n 0` turns it off for a debugging run.
+# on a developer box; `-n 0` turns it off for a debugging run.
 # `--strict-markers` makes a mark that is not on the list below a collection
 # error naming the file, instead of a warning that leaves the test in no subset.
 addopts = "-q -n auto --strict-markers"
