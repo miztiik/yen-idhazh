@@ -57,6 +57,7 @@ A persona's own worldview shapes what it says, never how plainly it says it.
 9. **Tests ship with the feature**, at the tier that matches the surface (`CLAUDE.md` section 13).
 10. **Measured, not estimated.** Any throughput, cost, size or quality claim carries hardware, date and spread. An unmeasured number may not justify a design. **One exception, and only one:** the operator console prints a counterfactual cost in currency, from measured token counts and a rate the operator sets, printing the rate it used and labelled a counterfactual - never a bill. It appears on no other surface (`CLAUDE.md` Rule #10; owner decision, 2026-08-30).
 11. **Fetched text is data, never instruction.** Untrusted web text never enters a system prompt, a shell argument, a file path, or an outbound URL, and never reaches a reader unlabelled.
+12. **Nothing costs more as the repository grows.** A step whose work scales with what we have already published is a bill that arrives every day for an answer we already had. Binds `state/`, `frontend/public/digest/`, the vector and index files under `assist/`, `corpus/`, and every test, build and check that reads them. A test reads a fixture; `backend/tests/test_archive_readers.py` refuses a new reader.
 
 ## Architecture principles (`CLAUDE.md` section 1a)
 

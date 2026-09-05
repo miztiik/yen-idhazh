@@ -125,25 +125,21 @@ jobs:
   robots:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy:
-      # Both legs report. Knowing only that "one of them disagreed" is the
-      # answer this job exists to improve on.
-      fail-fast: false
-      matrix:
-        python-version: ['3.12', '3.14']
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python-version }}
+          # The newest supported interpreter, and the only thing this job adds:
+          # `gates` already runs the whole suite, this file included, on 3.12.
+          python-version: '3.14'
           cache: pip
           cache-dependency-path: pyproject.toml
 
       - name: Install
         run: pip install -e ".[dev]"
 
-      - name: The robots fixture matrix, on both ends of the supported range
+      - name: The robots fixtures, on the newest supported interpreter
         run: pytest backend/tests/test_extract.py
 
   site:
