@@ -706,14 +706,15 @@
         },
         "visual_side": {
           "$ref": "#/$defs/VisualSide",
-          "default": "above"
+          "default": "trailing",
+          "description": "Where a story's figure sits relative to its text. Nothing reads it yet, and the default is what `DigestItem.svelte` renders: the figure comes after the summary at every width. It stays reserved until the render spec is handed the width the figure will occupy, because a chart drawn at 825 x 437 is illegible in a 20rem column (docs/concepts/design-system.md). `config/appearance.json` owns the value, as `digest.visual_side`."
         }
       },
       "title": "UiConfig",
       "type": "object"
     },
     "VisualSide": {
-      "description": "Where a visual sits beside its text, at `sm` and above. Below that, always above.",
+      "description": "Where a figure sits relative to the text it belongs to.\n\n`above` puts it before the text, `leading` beside the text on the side\nreading starts from, `trailing` after the text. A card is one column at\nevery width the site ships, so `leading` cannot yet differ from `trailing`\n- a figure has no column of its own until the render spec is handed the\nwidth it will occupy (docs/concepts/design-system.md).",
       "enum": [
         "above",
         "leading",
@@ -727,6 +728,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ui.visual_side now defaults to trailing rather than above, and carries a description. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. This document is now the only config file that declares the value; config/idhazh.json dropped its copy. A semantic shift on the default and nothing else, so an appearance file written before today still validates.",
+      "version": "2026-09-05T12:00",
+      "why": "Two files declared one knob with two values, and this one already held the right answer: trailing is what `DigestItem.svelte` renders, and it was the only key of the 16 the legacy ui block still carries whose value disagreed with the digest block here. This file owns everything the published surface is drawn from (docs/concepts/config.md), so it keeps the knob and the default moves to match what it declares. With the default moved, the committed digest block equals the model's defaults in every key."
+    },
     {
       "change": "ui.offline_version, ui.offline_retired_through and ui.offline_days_kept added, defaulting to 1, 0 and 14. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with defaults, so an appearance file written before today still validates.",
       "version": "2026-09-02T18:00",
@@ -863,7 +869,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-02T18:00",
+      "default": "2026-09-05T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -871,5 +877,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-02T18:00"
+  "version": "2026-09-05T12:00"
 }

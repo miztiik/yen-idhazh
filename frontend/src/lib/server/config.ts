@@ -26,6 +26,9 @@ import { REPO_ROOT } from './payload';
 export interface UiConfig {
 	sections: string[];
 	theme_default: 'light' | 'dark';
+	/** Where a story's figure sits relative to its text. Nothing reads it yet;
+	 * `trailing` is what `DigestItem.svelte` renders. Declared once, in
+	 * `config/appearance.json` as `digest.visual_side`. */
 	visual_side: 'above' | 'leading' | 'trailing';
 	source_mark: boolean;
 	show_filter: boolean;
@@ -241,7 +244,7 @@ export interface MotionConfig {
 const DEFAULTS: UiConfig = {
 	sections: ['notice', 'leads', 'topics', 'items'],
 	theme_default: 'dark',
-	visual_side: 'above',
+	visual_side: 'trailing',
 	source_mark: true,
 	show_filter: true,
 	filter_min_chars: 2,
