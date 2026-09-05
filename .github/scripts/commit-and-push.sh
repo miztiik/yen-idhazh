@@ -137,12 +137,12 @@ hand_back() {
 # is one story rendered twice - never two stories under one name. Two runs of a
 # day overlap, neither checkout sees what the other has not pushed, and git
 # cannot rebase two adds of one path: run 32869125768 finished eight workers and
-# a router and then threw the whole day away here.
+# a visual planner and then threw the whole day away here.
 #
 # The tip's copy is published and a reader may already hold that address, and
 # the rebuild keeps the tip's item over this run's in any case - so this run's
 # file is the one nothing will reference. Deleting it is what lets the rebase
-# apply, and the route payload still names a file that is really in the tree.
+# apply, and the visual payload still names a file that is really in the tree.
 spare_the_published_assets() {
   local tip="$1"
   shift

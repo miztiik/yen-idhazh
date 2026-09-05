@@ -12,7 +12,12 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
+from idhazh.contracts.visual_decision import (
+    PAYLOAD_SUFFIX,
+    VisualDecision,
+    VisualKind,
+    VisualState,
+)
 from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.chart import render_chart
 from idhazh.render.diagram import RenderError as DiagramError
@@ -99,7 +104,7 @@ def drop_raced_assets(
     """
     already = set(published)
     dropped: list[str] = []
-    for decision_path in sorted(items_dir.glob("*.route.json")):
+    for decision_path in sorted(items_dir.glob(f"*{PAYLOAD_SUFFIX}")):
         decision = VisualDecision.from_json(decision_path.read_text(encoding="utf-8"))
         relpath = decision.asset_path
         if relpath is None or relpath not in already:
