@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -14,7 +14,7 @@ shards on demand as the operator pans the viewport.
 
 The published columns are exactly:
 
-`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap`
+`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens`
 
 These source-ledger columns never cross to the browser:
 
@@ -38,15 +38,15 @@ than reaching the published tree.
 Two consequences worth stating plainly:
 
 - **`version` is a field of the shape and never a cell.** The header check below
-  is a prefix, so a twelfth name at position zero would shift every position the
+  is a prefix, so one more name at position zero would shift every position the
   console reads. `schemas/public-telemetry.schema.json` is where the stamp lives.
 - **A published shard has to load, not merely parse.** `publish_telemetry
   --migrate` reads every committed shard back through the contract and rewrites
   it, and a test runs the same round trip on a copy of the committed files. Run
-  2026-09-02 on this checkout: `2026-08.csv` 5,227 rows and `2026-09.csv` 1,094
-  rows, 461,564 and 107,360 bytes, unchanged to the byte either side. Unchanged
-  is the result the migration wanted - it says the committed bytes already are
-  the contract's own output.
+  2026-09-05 on this checkout, after the eight timing and token columns landed:
+  `2026-08.csv` 5,227 rows and `2026-09.csv` 2,982 rows, 614,613 and 400,160
+  bytes, unchanged to the byte either side. Unchanged is the result the migration
+  wanted - it says the committed bytes already are the contract's own output.
 
 `source_words_before_cap` joined the projection on 2026-08-28. It is a word
 count of our own extraction, the same class of cell as `source_words`, which
@@ -57,6 +57,52 @@ empty on every row written before that date, and empty is unknown rather than
 uncut. The column list, and why the count travels instead of the text, is
 [../sources/item-health.md](../sources/item-health.md).
 
+### The eight stage timings and token counts, since 2026-09-05
+
+`fetch_ms`, `extract_ms`, `summarize_ms`, `prefill_ms`, `decode_ms`,
+`input_tokens`, `output_tokens` and `cached_tokens` joined the projection on
+2026-09-05. Every run since 2026-08-23 has measured them and written them to
+`state/item-health/`, and the projection dropped all eight on the way out - so
+the console could show that a stage failed and never how long the stage took.
+
+They cross on the same terms the two word counts do: they are durations and
+counts of **our own work**, never the fetched page. Nothing about them names a
+URL, quotes a body, or identifies anything beyond the item id already carried.
+
+**Empty stays empty.** An instrument that did not run writes no cell, never a
+zero. A skipped stage and a stage that took no measurable time are different
+facts, and collapsing them turns every fetch failure into a fetch that was
+infinitely fast. `cached_tokens` is where this bites hardest, because zero is a
+real answer there - a server that cached nothing measured zero, and a server
+that reported no cache figure at all measured nothing.
+
+**What they cost over the wire, measured 2026-09-05 on this checkout:** the two
+committed shards went from 461,564 and 292,116 bytes to 614,613 and 400,160,
+and gzipped from 74,791 and 51,312 to 143,098 and 100,918. That is 117,913 more
+gzipped bytes across both months, roughly double. It is not a first-load cost:
+the console fetches a month shard on demand as the viewport reaches it, and the
+prerendered seed carries only the rows the default window needs. The 1 GB Pages
+cap (Rule #2) is three orders of magnitude away.
+
+**The prerendered seed does not carry them, and that is a measurement rather
+than a preference.** `publicTelemetry` in
+`frontend/src/routes/console/+page.server.ts` inlines the default window's rows
+into the console document so the page is complete before any script runs. Seeded
+with their real values, the eight cost 176,753 more gzipped bytes on `/console/`
+- 198,624 to 375,377, an 89 percent page, and 98,182 over the recorded ceiling.
+Seeded as nulls the page is 214,985, which is 16,361 more and 62,210 under.
+Measured 2026-09-05 on Intel Core i7-1265U / Windows 11 / node 24, one build per
+arm; the eight untouched routes moved -2 to +5 bytes between them, so the figure
+is the columns and not the build.
+
+So the seed carries nulls. Nothing draws these numbers yet, and a ceiling is
+re-recorded by the change that grows it - bytes the first paint does not use are
+not bytes to record a ceiling around. **A panel that draws them has a choice to
+make**, because `+page.svelte` marks the seeded months loaded and nothing
+re-fetches them: seed the columns that panel draws, or drop the seeded months
+from `loadedMonths` and let the month fetch fill them. The second is the cheaper
+page and the slower first paint, and which is right depends on the panel.
+
 ### A new column is appended at the end, and the reader checks a prefix
 
 **The browser's header check is a prefix match, not an equality.**
@@ -65,7 +111,7 @@ uncut. The column list, and why the count travels instead of the text, is
 read - so it asserts that the first `n` published columns are the `n` names it
 knows, and says nothing about anything after them.
 
-Both lists carry the same 11 names since 2026-08-29, so the check covers the
+Both lists carry the same 19 names since 2026-09-05, so the check covers the
 whole header today. It is written for the day it does not, and that day is
 normal rather than exceptional: **append at the end is a rule rather than
 tidiness**.
@@ -76,6 +122,25 @@ tidiness**.
   throws `telemetry projection header did not match the contract` - loudly,
   which is correct.
 - **Removing** one does the same, one position earlier.
+
+**The prefix protects one direction, and widening the reader is the other one.**
+An old bundle reading a new shard is safe, which is what the check is for. A new
+bundle reading an **old** shard is not: it knows more names than the file has, so
+the check throws. That is a stale cached shard against a fresh bundle, and it
+degrades rather than breaking - `loadVisibleMonths` in
+`frontend/src/routes/console/+page.svelte` wraps the fetch and the parse in one
+`try`, logs `telemetry <month> could not be read; showing a gap`, and the charts
+draw the gap they already know how to draw.
+
+**On today's data that direction cannot be reached at all**, and the reason is
+worth knowing before someone tries to test it. The prerendered seed covers
+`console.default_window_days`, which at 30 days reaches back across both
+published months, so `monthsToFetch` returns nothing at every preset and the
+console makes no runtime shard request. Measured 2026-09-05 by serving an
+11-column shard from a route interceptor at the 7, 14, 30 and 90-day presets: the
+interceptor fired **zero** times, which proves the path is unreachable and proves
+nothing about the degrade. It becomes reachable when a third month is published
+and the operator widens past the seeded span.
 
 **Nothing in the frontend can see the writer, so a contract test holds the two
 lists together.**

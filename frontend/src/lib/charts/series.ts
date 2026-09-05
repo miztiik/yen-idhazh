@@ -17,7 +17,15 @@ export const TELEMETRY_COLUMNS = [
 	'code',
 	'source_words',
 	'summary_words',
-	'source_words_before_cap'
+	'source_words_before_cap',
+	'fetch_ms',
+	'extract_ms',
+	'summarize_ms',
+	'prefill_ms',
+	'decode_ms',
+	'input_tokens',
+	'output_tokens',
+	'cached_tokens'
 ] as const;
 
 export type TelemetryColumn = (typeof TELEMETRY_COLUMNS)[number];
@@ -37,6 +45,21 @@ export interface TelemetryRow {
 	/** Words the body held before the cap. Null on every run before 2026-08-28,
 	 * and on any run the cap never fired for. */
 	source_words_before_cap: number | null;
+	/** Milliseconds the fetch took. Null where the stage never ran. */
+	fetch_ms: number | null;
+	/** Milliseconds the extract took. Null where the stage never ran. */
+	extract_ms: number | null;
+	/** Milliseconds the summarizer held the item. Null where it never ran. */
+	summarize_ms: number | null;
+	/** The part of `summarize_ms` spent reading the prompt. */
+	prefill_ms: number | null;
+	/** The part of `summarize_ms` spent writing the summary. */
+	decode_ms: number | null;
+	input_tokens: number | null;
+	output_tokens: number | null;
+	/** Tokens the server answered from its prompt cache. Zero means nothing was
+	 * cached; null means the server reported no figure at all. */
+	cached_tokens: number | null;
 }
 
 /** One mark on the compression plot, derived in the browser from a telemetry
@@ -504,7 +527,15 @@ export function parseTelemetryCsv(text: string): TelemetryRow[] {
 		code: cells[7] ?? '',
 		source_words: numberCell(cells[8] ?? ''),
 		summary_words: numberCell(cells[9] ?? ''),
-		source_words_before_cap: numberCell(cells[10] ?? '')
+		source_words_before_cap: numberCell(cells[10] ?? ''),
+		fetch_ms: numberCell(cells[11] ?? ''),
+		extract_ms: numberCell(cells[12] ?? ''),
+		summarize_ms: numberCell(cells[13] ?? ''),
+		prefill_ms: numberCell(cells[14] ?? ''),
+		decode_ms: numberCell(cells[15] ?? ''),
+		input_tokens: numberCell(cells[16] ?? ''),
+		output_tokens: numberCell(cells[17] ?? ''),
+		cached_tokens: numberCell(cells[18] ?? '')
 	}));
 }
 

@@ -85,7 +85,7 @@ The training corpus ships the same way and for the same reason: `corpus/corpus.j
 
 Every other row ledger writes `version` as its first cell, because
 `csv_columns()` is `tuple(cls.model_fields)` and `version` is the first field the
-base contract declares. `PublicTelemetryRow` overrides that and writes eleven
+base contract declares. `PublicTelemetryRow` overrides that and writes nineteen
 cells, none of them `version`.
 
 The reason is on the far side of the boundary. `parseTelemetryCsv` in
