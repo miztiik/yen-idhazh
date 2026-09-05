@@ -121,7 +121,7 @@
     "reference_rows": 500,
     "reference_test_rows": 100,
     "sequence_length": 8192,
-    "student": "route",
+    "student": "visual_planner",
     "teacher": "summarize",
     "train_rows": 1000
   },
@@ -151,15 +151,6 @@
       "thinking": false,
       "top_p": 1.0
     },
-    "route": {
-      "file": "Qwen3-4B-Q4_K_M.gguf",
-      "hf_base_repo": "Qwen/Qwen3-4B",
-      "id": "qwen3-4b-q4-k-m",
-      "quantisation": "Q4_K_M",
-      "repo": "Qwen/Qwen3-4B-GGUF",
-      "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
-      "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5"
-    },
     "summarize": {
       "file": "Qwen3.5-9B-Q4_K_M.gguf",
       "hf_base_repo": "Qwen/Qwen3.5-9B",
@@ -168,6 +159,15 @@
       "repo": "unsloth/Qwen3.5-9B-GGUF",
       "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
       "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+    },
+    "visual_planner": {
+      "file": "Qwen3-4B-Q4_K_M.gguf",
+      "hf_base_repo": "Qwen/Qwen3-4B",
+      "id": "qwen3-4b-q4-k-m",
+      "quantisation": "Q4_K_M",
+      "repo": "Qwen/Qwen3-4B-GGUF",
+      "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
+      "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5"
     }
   },
   "observability": {
@@ -204,11 +204,11 @@
   },
   "run": {
     "max_parallel": 4,
-    "route_budget_minutes": 40,
     "safety_ceiling_per_run": 160,
     "shard_size": 5,
     "shard_timeout_minutes": 150,
-    "success_floor_pct": 70
+    "success_floor_pct": 70,
+    "visual_planner_budget_minutes": 40
   },
   "summarize": {
     "bands": [

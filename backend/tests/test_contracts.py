@@ -801,6 +801,48 @@ def test_a_config_written_before_observability_existed_still_reads() -> None:
     assert AppConfig.model_validate(payload).observability == ObservabilityConfig()
 
 
+def test_a_config_spelling_the_old_route_names_reads_as_the_new_ones() -> None:
+    """Section 11's release blocker again, on three keys renamed on one day.
+
+    `models.route`, `run.route_budget_minutes` and a `finetune` role naming
+    `route` all moved on 2026-09-05. The proof is not that the file has a
+    migration in it - it is that the two spellings land on the same object, so a
+    config an operator wrote yesterday runs today's build and computes the same
+    thing.
+    """
+    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    yesterday = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    yesterday["models"]["route"] = yesterday["models"].pop("visual_planner")
+    yesterday["run"]["route_budget_minutes"] = yesterday["run"].pop(
+        "visual_planner_budget_minutes"
+    )
+    yesterday["finetune"]["student"] = "route"
+    assert "route" not in committed["models"], "the committed file spells the new key"
+    assert "route_budget_minutes" not in committed["run"]
+    assert committed["finetune"]["student"] != "route"
+
+    assert AppConfig.model_validate(yesterday) == AppConfig.model_validate(committed)
+
+
+def test_a_config_spelling_a_renamed_knob_twice_over_is_refused() -> None:
+    """Two spellings of one knob is two sources of truth, and one loses in silence.
+
+    The same file repeating itself is fine - it says one thing twice. The
+    refusal is for the file that says two different things, where taking either
+    one leaves an operator believing a number nothing reads.
+    """
+    agreeing = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    agreeing["run"]["route_budget_minutes"] = agreeing["run"]["visual_planner_budget_minutes"]
+    assert AppConfig.model_validate(agreeing).run.visual_planner_budget_minutes == 40
+
+    disagreeing = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    disagreeing["run"]["route_budget_minutes"] = (
+        disagreeing["run"]["visual_planner_budget_minutes"] + 5
+    )
+    with pytest.raises(ValidationError, match=re.escape("run.route_budget_minutes is now")):
+        AppConfig.model_validate(disagreeing)
+
+
 def test_the_committed_config_carries_the_capped_routes() -> None:
     """`frontend/scripts/bundle-gate.mjs` reads the file, never the model, and
     the model default is empty - so the committed config is the only place the

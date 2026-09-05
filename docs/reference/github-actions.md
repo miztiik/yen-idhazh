@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-05
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -167,7 +167,7 @@ Each worker checks its weights before it starts the server. `sha256sum` compares
 the file on disk against `models.summarize.sha256` in `config/idhazh.json`, on a
 cache hit as well as a miss, because a restored cache entry is the one case where
 nobody watched the bytes arrive. The router does the same against
-`models.route.sha256`; so do the two measurement jobs that load the summarizer.
+`models.visual_planner.sha256`; so do the two measurement jobs that load the summarizer.
 The rule is written once, under
 [Every download fails loudly, and every weight is checked](#every-download-fails-loudly-and-every-weight-is-checked).
 The health check then asserts that
@@ -509,7 +509,7 @@ watched the bytes arrive - so it is the case that most needs the check.
 | Workflow and job | Weights | Digest read from |
 | --- | --- | --- |
 | `digest.yml` / `work` | the summarizer | `models.summarize.sha256` |
-| `digest.yml` / `route` | the router | `models.route.sha256` |
+| `digest.yml` / `route` | the router | `models.visual_planner.sha256` |
 | `measure.yml` / `runtime` | the summarizer | `models.summarize.sha256` |
 | `measure.yml` / `batched` | the summarizer | `models.summarize.sha256` |
 | `validate.yml` / `qualify` | the candidate | the `plan` job's `candidate_sha256` |
@@ -527,7 +527,7 @@ downloads weights fails the test until it carries the same pair of steps.
 
 ## One place writes a production model ref, and it is config
 
-`config/idhazh.json` holds `models.summarize` and `models.route`. None of the
+`config/idhazh.json` holds `models.summarize` and `models.visual_planner`. None of the
 three workflows that load weights - `digest.yml`, `measure.yml`, `validate.yml` -
 holds a model repository, a weights filename or a publisher name of its own.
 Grepping all three for a `.gguf` name, a Hugging Face repository or a branch in a
