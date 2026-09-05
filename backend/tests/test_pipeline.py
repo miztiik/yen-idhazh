@@ -2440,18 +2440,25 @@ def test_the_manifest_records_what_the_router_cost() -> None:
             decided.model_copy(update={"decision_ms": 11000}),
         ]
     )
-    assert timed.runs[-1].items_routed == 2
-    assert timed.runs[-1].route_ms == 15000
+    assert timed.runs[-1].items_decided == 2
+    assert timed.runs[-1].decision_ms == 15000
+
+    # The Python names moved on 2026-09-05 and the published keys did not, so the
+    # serialised record is checked here rather than only the attributes above.
+    written = json.loads(timed.to_json())["runs"][-1]
+    assert written["items_routed"] == 2
+    assert written["route_ms"] == 15000
+    assert "items_decided" not in written and "decision_ms" not in written
 
     # A router that never started is not a router that took no time.
     absent = manifest_for([])
-    assert absent.runs[-1].items_routed == 0
-    assert absent.runs[-1].route_ms is None
+    assert absent.runs[-1].items_decided == 0
+    assert absent.runs[-1].decision_ms is None
 
     # Neither is a payload written before the clock existed.
     unclocked = manifest_for([decided.model_copy(update={"decision_ms": None})])
-    assert unclocked.runs[-1].items_routed == 1
-    assert unclocked.runs[-1].route_ms is None
+    assert unclocked.runs[-1].items_decided == 1
+    assert unclocked.runs[-1].decision_ms is None
 
     # The gate changes every denominator: the same charts sit over a smaller
     # routed set. Counting the skips keeps a chart rate from climbing on its own.
@@ -2462,7 +2469,7 @@ def test_the_manifest_records_what_the_router_cost() -> None:
             decided.model_copy(update={"decision_ms": 1, "asked_the_model": False}),
         ]
     )
-    assert gated.runs[-1].items_routed == 3
+    assert gated.runs[-1].items_decided == 3
     assert gated.runs[-1].items_prefiltered == 2
 
     # A payload written before the gate existed was always asked.
