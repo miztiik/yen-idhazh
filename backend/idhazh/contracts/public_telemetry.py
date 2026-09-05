@@ -13,7 +13,7 @@ import rather than in the published tree.
 
 **`version` is a field and never a cell.** The published header is a browser
 contract read as a prefix - `parseTelemetryCsv` in
-`frontend/src/lib/charts/series.ts` compares position by position - so a twelfth
+`frontend/src/lib/charts/series.ts` compares position by position - so one more
 name at position zero would shift every position the console reads and blank its
 charts on every cached bundle. The shape's own stamp lives in
 `schemas/public-telemetry.schema.json`, which is where a reader of an old shard
@@ -54,6 +54,26 @@ class PublicTelemetryRow(Contract):
     __schema_stem__: ClassVar[str] = "public-telemetry"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-05T20:00",
+            change=(
+                "Added nullable fetch_ms, extract_ms, summarize_ms, prefill_ms, "
+                "decode_ms, input_tokens, output_tokens and cached_tokens at the end "
+                "of the row."
+            ),
+            why=(
+                "Every run since 2026-08-23 has measured these eight and written them "
+                "to state/item-health/, and the projection dropped all eight on the "
+                "way out - so the console could show that a stage failed and never "
+                "how long the stage took. They are counts and durations of our own "
+                "work, not the fetched page, so they cross on the same terms "
+                "source_words always has. Appended at the end and nullable, because "
+                "the browser reads this header by position: a name inserted anywhere "
+                "else shifts every column the console already draws. Empty stays "
+                "empty - an instrument that did not run writes no cell, never a zero, "
+                "or a stage that was skipped reads as a stage that took no time."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-02",
             change=(
                 "Initial shape: the eleven published columns, typed, with "
@@ -93,6 +113,56 @@ class PublicTelemetryRow(Contract):
             "A count of our own extraction, never the text, so it crosses on the same "
             "terms source_words always has. Empty on every row written before "
             "2026-08-28, and empty means unknown rather than uncut."
+        ),
+    )
+    fetch_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Milliseconds spent fetching the page. Empty where fetch did not run.",
+    )
+    extract_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Milliseconds spent extracting the body. Empty where extract did not run.",
+    )
+    summarize_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Milliseconds the summarizer held the item, prompt and summary together. "
+            "Empty where summarize did not run."
+        ),
+    )
+    prefill_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Milliseconds of that spent reading the prompt. Reading and writing run at "
+            "different rates, so summarize_ms alone cannot separate them."
+        ),
+    )
+    decode_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Milliseconds of that spent writing the summary.",
+    )
+    input_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description="Tokens read. A rate needs its token count beside its milliseconds.",
+    )
+    output_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description="Tokens written.",
+    )
+    cached_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Tokens the server answered from its prompt cache rather than reading again. "
+            "Zero is a real answer here and means nothing was cached; empty means the "
+            "server reported no cache figure at all."
         ),
     )
 
