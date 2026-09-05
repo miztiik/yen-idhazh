@@ -117,7 +117,7 @@ Every component takes a validated slice of the day payload as props and returns 
 
 Page order is `config.ui.sections`, a registry id list. **Reordering the page is a config edit, not a code change.** That is the honest version of "modular".
 
-What is deliberately *not* built is a slot system for moving components left and right. On the surface that matters - a phone - there is no left and no right; there is one column. A layout engine for one column is unbounded QA against a reader who does not exist, and a per-reader layout would break the promise that a shared link shows the recipient what the sender saw. Two named flips are granted where left and right are real: `ui.visual_side` and `ui.source_mark`.
+What is deliberately *not* built is a slot system for moving components left and right. On the surface that matters - a phone - there is no left and no right; there is one column. A layout engine for one column is unbounded QA against a reader who does not exist, and a per-reader layout would break the promise that a shared link shows the recipient what the sender saw. Two named flips are granted where left and right are real: `digest.visual_side` and `digest.source_mark`, both in `config/appearance.json`, which owns everything the published surface is drawn from ([../../concepts/config.md](../../concepts/config.md)). `visual_side` sat in `config/idhazh.json` as well, with a different value, until 2026-09-05; the pipeline file dropped its copy rather than the two files continuing to name one knob twice.
 
 ## Theming
 

@@ -514,6 +514,27 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-05T12:00",
+            change=(
+                "ui.visual_side now defaults to trailing rather than above, and carries a "
+                "description. The shape is `UiConfig`, which this document and `AppConfig` "
+                "share, so both schemas moved together. This document is now the only "
+                "config file that declares the value; config/idhazh.json dropped its copy. "
+                "A semantic shift on the default and nothing else, so an appearance file "
+                "written before today still validates."
+            ),
+            why=(
+                "Two files declared one knob with two values, and this one already held "
+                "the right answer: trailing is what `DigestItem.svelte` renders, and it "
+                "was the only key of the 16 the legacy ui block still carries whose value "
+                "disagreed with the digest block here. This file owns everything the "
+                "published surface is drawn from (docs/concepts/config.md), so it keeps "
+                "the knob and the default moves to match what it declares. With the "
+                "default moved, the committed digest block equals the model's defaults in "
+                "every key."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-02T18:00",
             change=(
                 "ui.offline_version, ui.offline_retired_through and ui.offline_days_kept "

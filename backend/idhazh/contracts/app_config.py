@@ -1437,7 +1437,14 @@ class ThemeChoice(StrEnum):
 
 
 class VisualSide(StrEnum):
-    """Where a visual sits beside its text, at `sm` and above. Below that, always above."""
+    """Where a figure sits relative to the text it belongs to.
+
+    `above` puts it before the text, `leading` beside the text on the side
+    reading starts from, `trailing` after the text. A card is one column at
+    every width the site ships, so `leading` cannot yet differ from `trailing`
+    - a figure has no column of its own until the render spec is handed the
+    width it will occupy (docs/concepts/design-system.md).
+    """
 
     ABOVE = "above"
     LEADING = "leading"
@@ -1639,7 +1646,17 @@ class UiConfig(Model):
             "before any script runs and what a page with no script keeps."
         ),
     )
-    visual_side: VisualSide = VisualSide.ABOVE
+    visual_side: VisualSide = Field(
+        default=VisualSide.TRAILING,
+        description=(
+            "Where a story's figure sits relative to its text. Nothing reads it yet, and "
+            "the default is what `DigestItem.svelte` renders: the figure comes after the "
+            "summary at every width. It stays reserved until the render spec is handed "
+            "the width the figure will occupy, because a chart drawn at 825 x 437 is "
+            "illegible in a 20rem column (docs/concepts/design-system.md). "
+            "`config/appearance.json` owns the value, as `digest.visual_side`."
+        ),
+    )
     source_mark: bool = Field(
         default=True, description="The monogram beside a source name. A scanning aid, not the id."
     )
@@ -2169,6 +2186,31 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-05T12:00",
+            change=(
+                "ui.visual_side now defaults to trailing rather than above, and carries a "
+                "description. The shape is `UiConfig`, which this document and "
+                "`AppearanceConfig` share, so both schemas moved together. The value is "
+                "dropped from the committed config/idhazh.json; config/appearance.json "
+                "keeps it as digest.visual_side. A semantic shift on the default and "
+                "nothing else - every value that was legal yesterday is legal today, so a "
+                "file written before today still validates and owes no read-side "
+                "migration."
+            ),
+            why=(
+                "Two files declared one knob with two values: config/idhazh.json said "
+                "above and config/appearance.json said trailing. That is the whole "
+                "divergence between the two - the legacy ui block is a 16-key subset of "
+                "the appearance digest block's 26, and visual_side was the only one of "
+                "the 16 whose value disagreed. The published surface is drawn from "
+                "config/appearance.json (docs/concepts/config.md), so the appearance file "
+                "wins and the pipeline file drops its copy. The default follows the "
+                "committed value because above is the one thing the page does not do: "
+                "`DigestItem.svelte` renders the figure after the summary, so a fresh "
+                "clone with no config would have resolved to a position no page renders."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-04T20:00",
             change=(

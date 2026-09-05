@@ -41,6 +41,7 @@ from idhazh.contracts.app_config import (
     ObservabilityConfig,
     PageWeightConfig,
     UiConfig,
+    VisualSide,
     months_a_window_can_touch,
 )
 from idhazh.contracts.appearance_config import ChartConfig
@@ -371,6 +372,38 @@ def test_the_days_the_archive_lists_are_a_knob_the_frontend_agrees_with() -> Non
     mirrored = re.search(r"const ARCHIVE_RECENT_DAYS = (\d+);", reader)
     assert mirrored is not None, "the frontend dropped its archive_recent_days fallback"
     assert int(mirrored.group(1)) == UiConfig().archive_recent_days
+
+
+def test_the_side_a_figure_sits_on_is_a_knob_the_frontend_agrees_with() -> None:
+    """The knob nothing reads yet, pinned to the position the page renders.
+
+    `visual_side` sat in both config files with two different values for a
+    week, and nothing caught it because no component branches on it - the
+    fallback merge just took one and dropped the other. It is reserved rather
+    than dead: a figure gets a column of its own when the render spec is handed
+    the width it will occupy (docs/concepts/design-system.md), and until then a
+    default that names a position the page does not draw is a wrong answer
+    waiting for a reader.
+
+    So the three copies are checked against each other in one place: the
+    contract's default, the frontend's fallback for a clone with no `config/`,
+    and what `DigestItem.svelte` puts after what.
+    """
+    assert UiConfig().visual_side is VisualSide.TRAILING
+
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    block = re.search(r"const DEFAULTS: UiConfig = \{(.*?)\};", reader, re.DOTALL)
+    assert block is not None, "config.ts no longer declares a DEFAULTS block"
+    mirrored = re.search(r"visual_side:\s*'(\w+)',", block.group(1))
+    assert mirrored is not None, "the frontend dropped its visual_side default"
+    assert mirrored.group(1) == UiConfig().visual_side.value
+
+    card = read_text(
+        REPO_ROOT / "frontend" / "src" / "lib" / "components" / "DigestItem.svelte"
+    )
+    assert card.index("<ItemVisual") > card.index("data-item-summary"), (
+        "the card draws its figure before the summary, so `trailing` is the wrong default"
+    )
 
 
 def test_the_wait_worth_a_sentence_is_a_knob_the_frontend_agrees_with() -> None:
