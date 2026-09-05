@@ -302,8 +302,11 @@ npm run build:canary
 npm run test:browser
 ```
 
-954 tests in 73 files (2026-09-02): 943 passed and 11 skipped, in 19.2 minutes
-on an i7-1265U. Every skip reads a fact the fixture owns rather than a locator
+995 tests in 74 files (2026-09-05): 984 passed and 11 skipped, in 13.4 minutes
+on an i7-1265U. The same suite measured 954 tests and 19.2 minutes on
+2026-09-02, so read the minutes as the machine rather than the suite - the test
+count is what grew. Every skip reads a fact the fixture owns rather than a
+locator
 count - the canary day is eight stories on one desk, so it cannot fill a leading
 block and it never fetches. The
 failure surface has a file of its own, `console-failure.spec.ts`, split by what

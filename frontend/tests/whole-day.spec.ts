@@ -367,10 +367,13 @@ test.describe('what the day has to be for any of this to mean anything', () => {
 		).toBeGreaterThan(SEED);
 		expect(DRAWN.length, `${DAY} draws ${DRAWN.length} visuals`).toBeGreaterThan(1);
 		expect(LAST, 'the day has no last story to address').not.toBe('');
+		// The load-time guard restated where a reader of the test list can see it.
+		// The canary tree served 20 days of fixtures when this was written, so a
+		// count on its own says nothing - it is the day SET that has to match.
 		expect(
-			SERVED_DATES.length,
-			'the built tree serves one day, which is the shape of a canary rather than a site'
-		).toBeGreaterThan(1);
+			SERVED_DATES,
+			'the tree under test does not serve the days this repository committed'
+		).toEqual(publishedDates(COMMITTED));
 	});
 
 	test('every drawing the day publishes is its own drawing', () => {
