@@ -19,6 +19,7 @@
 	 */
 	import { restoreAnchor, watchDay, type DayStatus } from '$lib/assist/day';
 	import { base } from '$app/paths';
+	import { keepDrawings } from '$lib/day-shape';
 	import DigestList from '$lib/components/DigestList.svelte';
 	import PayloadState from '$lib/components/PayloadState.svelte';
 	import { longDate } from '$lib/format';
@@ -58,7 +59,9 @@
 				if (whole === null) return;
 				// The served day is this day, whole and unfiltered, so there is no
 				// rule to re-apply here - the topic pages are the ones that filter.
-				arrived = whole.items;
+				// What the served day does not carry is the seed's drawings, which
+				// the document read off disk so they could take the page's colours.
+				arrived = keepDrawings(data.day?.items ?? [], whole.items);
 				// A browser honours a fragment once, at load. The story a deep link
 				// names may only have arrived just now.
 				void tick().then(() => restoreAnchor());

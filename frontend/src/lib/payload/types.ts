@@ -29,6 +29,24 @@ export interface DigestVisual {
 	alt: string | null;
 }
 
+/** A visual as the build hands it to a component: the committed fields, plus
+ * the drawing itself for the stories a prerendered document carries.
+ *
+ * `markup` is not in `schemas/digest-day.schema.json` and is not meant to be.
+ * `dayShell()` reads the file off disk for the seed alone and attaches it here,
+ * so the field exists between that loader and `ItemVisual` and nowhere else. It
+ * is separate from `DigestVisual` because that type mirrors the committed
+ * payload, and it is out of the served projection because a fetched day would
+ * then carry every seed item's drawing a second time - `project.ts` keeps three
+ * named fields of a visual and drops this one without being told to.
+ *
+ * The drawing has to be IN the document to be themed at all. An SVG inside an
+ * `img` is a separate document: it reads none of the page's custom properties,
+ * so a chart drawn in black axis type stayed black on a near-black card. */
+export interface SeededVisual extends DigestVisual {
+	markup?: string | null;
+}
+
 export interface DigestItem {
 	item_id: string;
 	vertical: string;

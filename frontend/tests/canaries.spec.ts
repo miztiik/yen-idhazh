@@ -135,11 +135,23 @@ test.describe('the eight canaries, on the published surface', () => {
 		// `figure img` is excluded because a rendered visual is a legitimate image
 		// the pipeline produced. Everything else is markup that came from a
 		// stranger's page, and none of it may become an element.
+		//
+		// The second query is the same rule at the carrier that replaced that
+		// image. A seeded drawing is inlined, so it is markup in our own origin
+		// rather than a separate inert document, and the parts of SVG that can
+		// run or fetch have to be absent from the rendered page as well as
+		// refused by the build (Rule #11).
 		await page.goto('/2026-08-20/');
 		const smuggled = await page.evaluate(() =>
 			[
 				...document.querySelectorAll(
 					'main iframe, main object, main embed, main img:not(figure img)'
+				),
+				...document.querySelectorAll(
+					'main svg script, main svg foreignObject, main svg image, main svg use, main svg a'
+				),
+				...[...document.querySelectorAll('main svg *')].filter((node) =>
+					[...node.attributes].some((attribute) => attribute.name.startsWith('on'))
 				)
 			].map((node) => node.outerHTML)
 		);
@@ -173,9 +185,12 @@ test.describe('the eight canaries, on the published surface', () => {
 });
 
 test.describe('the visual path', () => {
-	// A payload that promises a picture at a 404 is worse than routing the item
-	// to no visual: the reader gets a broken frame where evidence should be.
-	// Until this ran, no rendered visual had ever been fetched by a browser.
+	// A payload that promises a picture the reader never gets is worse than
+	// routing the item to no visual: the reader gets an empty frame where
+	// evidence should be. The seeded stories carry their drawing in the document
+	// from 2026-09-05, so the promise is now kept at build time - a file the
+	// build could not read leaves the story on the image carrier, and that
+	// carrier is what would 404.
 	test('a promised visual is actually served', async ({ page }) => {
 		const misses: string[] = [];
 		page.on('response', (response) => {
@@ -185,32 +200,43 @@ test.describe('the visual path', () => {
 		});
 		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
 
-		const figures = page.locator('main figure img');
+		const figures = page.locator('main figure svg');
 		await expect(figures).toHaveCount(2);
+		await expect(page.locator('main figure img')).toHaveCount(0);
 		expect(misses).toEqual([]);
 	});
 
 	test('every visual carries alt text that repeats its numbers', async ({ page }) => {
-		// The visual is never the only carrier of a fact.
+		// The visual is never the only carrier of a fact. An inlined drawing has
+		// no `alt`, so the sentence is on the figure and `role="img"` is what makes
+		// that one named image rather than a tree of unnamed marks.
 		//
 		// The set rather than the positions: the stream runs newest first by the
 		// time on the story, so which of the two figures the page draws first is
 		// the day's business and not this file's.
 		await page.goto('/2026-08-20/');
 		const alts = await page
-			.locator('main figure img')
-			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('alt') ?? ''));
+			.locator('main figure[role="img"]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
 		expect(alts).toHaveLength(2);
 		expect(alts.filter((alt) => alt.includes('15,400'))).toHaveLength(1);
 		expect(alts.filter((alt) => alt.includes('Filed'))).toHaveLength(1);
 	});
 
-	test('the rendered SVG decoded as an image, not as a broken frame', async ({ page }) => {
+	test('the rendered SVG drew a box, not an empty frame', async ({ page }) => {
+		// `naturalWidth` was the question while the drawing was an image. Inlined,
+		// the same question is whether the markup laid out at all: a drawing that
+		// arrived truncated, or whose `viewBox` the page could not resolve, is a
+		// zero-height box under the summary.
 		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
-		const widths = await page.locator('main figure img').evaluateAll((nodes) =>
-			nodes.map((node) => (node as HTMLImageElement).naturalWidth)
+		const boxes = await page.locator('main figure svg').evaluateAll((nodes) =>
+			nodes.map((node) => {
+				const box = node.getBoundingClientRect();
+				return { width: box.width, height: box.height };
+			})
 		);
-		expect(widths.every((width) => width > 0)).toBe(true);
+		expect(boxes).toHaveLength(2);
+		expect(boxes.every((box) => box.width > 0 && box.height > 0)).toBe(true);
 	});
 });
 
