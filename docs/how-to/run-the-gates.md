@@ -104,6 +104,17 @@ The selector job and the backend test job declare the same Node version,
 because the workflow tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
 
+**A pull request runs the operator console's specs only when the change is the
+console's own, or the harness that chooses.** They are 584 of the browser
+suite's 997 tests, measured 2026-09-05, and the console is a page one operator
+opens rather than anything a reader is served. What that costs, stated rather
+than implied: a shared component or a token edit that breaks the console is
+found on the merge push to `main` instead of on the pull request. `main` runs
+every group, which is what the deferral leans on - there is no separate nightly
+job, because a second copy of the browser job would be a second thing to keep
+correct. `ciAnswer` in `test-scope.ts` is the one place that decides, and the
+truth table is in `frontend/scripts/tests/test-scope.test.mjs`.
+
 For a local contract change, the launcher compares schema files before and
 after export. Correct uncommitted generated files can pass; an exporter that
 changes them requires review and a new run. CI still compares its clean

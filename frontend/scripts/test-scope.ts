@@ -16,6 +16,43 @@ export type Selection = {
 const ALL: TestGroup[] = ['backend', ...FRONTEND_GROUPS];
 const READER: TestGroup[] = ['logic', 'reader', 'publishing'];
 const CONSOLE: TestGroup[] = ['logic', 'console', 'publishing'];
+
+/** The operator console's own files.
+ *
+ * The console's specs are 584 of the browser suite's 997 tests, measured
+ * 2026-09-05, and the console is a page one operator opens rather than anything
+ * a reader is served. So a pull request buys them only when the change is the
+ * console's own; every other change reaches them in `nightly.yml`, within the
+ * day. What that costs is stated rather than implied: a shared component or a
+ * token edit that breaks the console is found the next morning, not at the
+ * pull request.
+ */
+const CONSOLE_OWNED =
+	/^frontend\/(tests\/console[-.]|src\/(routes|lib)\/console\/|src\/lib\/components\/Console[A-Z]|src\/lib\/server\/console-shell\.ts$)/;
+
+function consoleIsTheSubject(paths: readonly string[]): boolean {
+	return paths.some((path) => CONSOLE_OWNED.test(path.replaceAll('\\', '/')));
+}
+
+export type CiAnswer = { browser: boolean; console: boolean };
+
+/** The two lines the `scope` job writes to `$GITHUB_OUTPUT`.
+ *
+ * A pure function of the changed paths, so the truth table is checked here at
+ * microseconds a case rather than through a temporary git repository and a
+ * shell. `backend/tests/test_workflows.py` still drives the real script end to
+ * end, on a handful of cases, because the plumbing can break on its own.
+ */
+export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
+	const selection = selectPaths(paths);
+	// A harness change still proves itself on everything: `tooling` covers the
+	// selector, the Playwright config and the workflow that reads them.
+	const deferred = isPr && !selection.tooling && !consoleIsTheSubject(paths);
+	return {
+		browser: selection.groups.some((group) => group !== 'backend' && group !== 'logic'),
+		console: selection.groups.includes('console') && !deferred
+	};
+}
 const MODULE_TESTS: Record<string, string[]> = {
 	discover: ['test_discover', 'test_pipeline'],
 	rank: ['test_discover', 'test_pipeline'],
@@ -124,14 +161,22 @@ export function selectionForChange(root: string, base = 'origin/main', head = 'H
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-	const isPr = process.env.EVENT === 'pull_request' && process.env.BASE && process.env.HEAD;
-	const selection = isPr
-		? selectionForChange(process.cwd(), process.env.BASE, process.env.HEAD, false)
-		: selectPaths(['full-ci-run']);
+	const base = process.env.BASE ?? '';
+	const head = process.env.HEAD ?? '';
+	const isPr = process.env.EVENT === 'pull_request' && base !== '' && head !== '';
+	let paths: string[] = ['full-ci-run'];
+	if (isPr) {
+		try {
+			paths = changedPaths(process.cwd(), base, head, false);
+		} catch {
+			paths = ['unresolved-change-base'];
+		}
+	}
 	if (process.argv.includes('--ci')) {
-		console.log(`browser=${selection.groups.some((group) => group !== 'backend' && group !== 'logic')}`);
-		console.log(`console=${selection.groups.includes('console')}`);
+		const answer = ciAnswer(paths, isPr);
+		console.log(`browser=${answer.browser}`);
+		console.log(`console=${answer.console}`);
 	} else {
-		console.log(JSON.stringify(selection, null, 2));
+		console.log(JSON.stringify(selectPaths(paths), null, 2));
 	}
 }

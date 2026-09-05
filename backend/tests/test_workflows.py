@@ -1476,37 +1476,19 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
     assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
 
-#: A change, and what it has to pay for: the browser half at all, and the
-#: operator console's own 233 specs inside it. The backend rows are the trap the
-#: allow-list exists to avoid - a module the canary day is built through, and a
-#: fixture the attack text is read from, can move a published page without
-#: touching `frontend/`. The two reading-route rows are the saving: they publish
-#: a page and draw nothing the console draws.
+#: What the shipped script has to answer through a real git history.
+#:
+#: The truth table itself is in `frontend/scripts/tests/test-scope.test.mjs`,
+#: where a case is a function call. Here a case is a temporary repository, two
+#: commits and a shell, and twenty-four of them cost 168 s of this module's
+#: 585 s on an i7-1265U, 2026-09-05 - for an answer the pure function already
+#: gives. These three are the plumbing rather than the policy: one change that
+#: buys everything, one that buys the browser half without the console, and one
+#: that buys nothing.
 BROWSER_SCOPE_CASES: Final = (
     ("frontend/src/routes/console/+page.svelte", True, True),
-    ("frontend/src/lib/charts/engine.ts", True, True),
-    ("frontend/src/lib/components/KpiCard.svelte", True, True),
-    ("frontend/src/lib/server/payload.ts", True, True),
-    ("frontend/tests/console-feeds.spec.ts", True, True),
-    ("config/idhazh.json", True, True),
-    ("backend/idhazh/contracts/item_health.py", True, True),
-    ("backend/utilities/build_canary_day.py", True, True),
     ("frontend/src/routes/[date]/+page.svelte", True, False),
-    ("frontend/src/lib/assist/loader.ts", True, False),
-    ("frontend/src/app.html", True, True),
-    ("frontend/src/styles/tokens.css", True, True),
-    ("frontend/src/routes/+layout.svelte", True, True),
-    ("frontend/package.json", True, True),
-    ("frontend/package-lock.json", True, True),
-    ("frontend/tests/frame.spec.ts", False, False),
-    ("backend/idhazh/render/write.py", True, True),
-    ("unknown-area/module.ts", True, True),
-    ("backend/idhazh/sanitize.py", True, False),
-    ("tests/fixtures/canaries/fake-system-delimiter.json", True, True),
     ("docs/reference/measurements.md", False, False),
-    ("backend/tests/test_discover.py", False, False),
-    ("backend/idhazh/discover.py", False, False),
-    ("TODO/some-plan.md", False, False),
 )
 
 
@@ -1575,23 +1557,15 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     shipped script skipped a change that breaks a published page. So the test
     builds a real two-commit history, runs the script the workflow runs, and
     reads the lines it writes to `$GITHUB_OUTPUT`.
+
+    What is under test here is the plumbing - the shell, the git range and the
+    output format. Which paths select which groups is decided by a pure function
+    and checked case by case in `frontend/scripts/tests/test-scope.test.mjs`.
     """
     assert _browser_scope(tmp_path, [changed]) == {
         "browser": str(browser).lower(),
         "console": str(console).lower(),
     }
-
-
-@requires_bash
-def test_the_console_half_is_never_bought_without_the_browser_half(tmp_path: Path) -> None:
-    """A containment the two patterns must satisfy for any input.
-
-    `SKIP_CONSOLE_SUITE` is only read inside the `browser` job, so a change that
-    needed the console specs and not the job would silently run neither. Every
-    case in the table is checked rather than the design being asserted in prose.
-    """
-    for changed, browser, console in BROWSER_SCOPE_CASES:
-        assert not (console and not browser), f"{changed} asks for the console with no job"
 
 
 @requires_bash

@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { FRONTEND_GROUPS, groupedSpecs, groupForSpec } from '../test-groups.ts';
-import { changedPaths, selectPaths, selectionForChange } from '../test-scope.ts';
+import { changedPaths, ciAnswer, selectPaths, selectionForChange } from '../test-scope.ts';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -79,6 +79,78 @@ test('contract and config changes include both languages and drift checks', () =
 		assert.deepEqual(selection.groups, ['backend', ...FRONTEND_GROUPS]);
 		assert.equal(selection.contracts, true);
 	}
+});
+
+//: A change, and what the `scope` job has to buy for it on a pull request: the
+//: browser half at all, and the operator console's own specs inside it. The
+//: backend rows are the trap the allow-list exists to avoid - a module the
+//: canary day is built through, and a fixture the attack text is read from, can
+//: move a published page without touching `frontend/`.
+const PULL_REQUEST_SCOPE = [
+	// The console's own files, the only thing that buys its specs before merge.
+	['frontend/src/routes/console/+page.svelte', true, true],
+	['frontend/src/lib/console/window.ts', true, true],
+	['frontend/src/lib/components/ConsoleNav.svelte', true, true],
+	['frontend/src/lib/server/console-shell.ts', true, true],
+	['frontend/tests/console-feeds.spec.ts', true, true],
+	// The harness itself, which has to prove itself on every group it selects.
+	['frontend/package.json', true, true],
+	['frontend/package-lock.json', true, true],
+	['frontend/scripts/test-groups.ts', true, true],
+	['.github/workflows/ci.yml', true, true],
+	// Reaches a published page, but not the console before merge.
+	['frontend/src/lib/charts/engine.ts', true, false],
+	['frontend/src/lib/components/KpiCard.svelte', true, false],
+	['frontend/src/lib/server/payload.ts', true, false],
+	['frontend/src/app.html', true, false],
+	['frontend/src/styles/tokens.css', true, false],
+	['frontend/src/routes/+layout.svelte', true, false],
+	['frontend/src/routes/[date]/+page.svelte', true, false],
+	['frontend/src/lib/assist/loader.ts', true, false],
+	['config/idhazh.json', true, false],
+	['backend/idhazh/contracts/item_health.py', true, false],
+	['backend/utilities/build_canary_day.py', true, false],
+	['backend/idhazh/render/write.py', true, false],
+	['backend/idhazh/sanitize.py', true, false],
+	['tests/fixtures/canaries/fake-system-delimiter.json', true, false],
+	['unknown-area/module.ts', true, false],
+	// Cannot reach a page at all.
+	['frontend/tests/frame.spec.ts', false, false],
+	['docs/reference/measurements.md', false, false],
+	['backend/tests/test_discover.py', false, false],
+	['backend/idhazh/discover.py', false, false],
+	['TODO/some-plan.md', false, false]
+];
+
+test('a pull request buys the console specs only for the console or the harness', () => {
+	for (const [path, browser, console_] of PULL_REQUEST_SCOPE) {
+		assert.deepEqual(ciAnswer([path], true), { browser, console: console_ }, path);
+	}
+});
+
+test('the console half is never bought without the browser half', () => {
+	for (const [path, browser, console_] of PULL_REQUEST_SCOPE) {
+		assert.ok(!console_ || browser, `${path} asks for the console with no job`);
+	}
+});
+
+test('a merge to main runs every group, which is what the deferral leans on', () => {
+	// Not a path list: outside a pull request the caller passes this sentinel and
+	// the selector answers with full coverage, so nothing deferred can reach a
+	// reader without the console specs having run over it first.
+	assert.deepEqual(ciAnswer(['full-ci-run'], false), { browser: true, console: true });
+	assert.deepEqual(ciAnswer(['unresolved-change-base'], true), { browser: true, console: true });
+});
+
+test('one reaching path in a mixed change still buys the browser suite', () => {
+	assert.deepEqual(
+		ciAnswer(['docs/reference/measurements.md', 'frontend/src/routes/+page.svelte'], true),
+		{ browser: true, console: false }
+	);
+	assert.deepEqual(
+		ciAnswer(['docs/a.md', 'frontend/src/routes/console/+page.svelte'], true),
+		{ browser: true, console: true }
+	);
 });
 
 test('changed paths include commits, staged, unstaged, untracked and both rename sides', () => {

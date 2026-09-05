@@ -279,8 +279,11 @@ jobs:
       # Eight canaries on the published surface, plus the hand-labelled
       # retrieval bar. A single injection getting through fails the build.
       #
-      # The shared selector can exclude the console on a PR. Main always runs
-      # all browser groups; the site job runs the no-server logic group.
+      # A pull request buys the console's own specs only for a console change or
+      # a harness change - they are 584 of the suite's 997 tests and the console
+      # is an operator's page. Main runs every group, which is where a shared
+      # edit that broke the console is caught. The site job runs the no-server
+      # logic group.
       - name: Browser suite - canaries and retrieval
         working-directory: frontend
         env:
