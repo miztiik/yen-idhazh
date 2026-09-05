@@ -1281,7 +1281,6 @@ def stage_visual_planner(
     `clock` is injected so the bound can be tested without spending it.
     """
     items_dir = _run_dir(plan.date) / "items"
-    visuals = settings.app.visuals
     tracer = telemetry.Tracer(
         sink=trace_sink(settings, date=plan.date, run_id=plan.run_id, shard=0),
         now=assemble.utc_now,
@@ -1326,8 +1325,6 @@ def stage_visual_planner(
                     decision,
                     public_root=PUBLIC_ROOT.parent,
                     relpath=asset_relpath(plan.date, item.item_id),
-                    canvas_width=visuals.canvas_width,
-                    canvas_height=visuals.canvas_height,
                 )
             if decision.kind is VisualKind.CHART:
                 kept += 1
