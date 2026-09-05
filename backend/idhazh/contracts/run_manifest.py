@@ -159,7 +159,7 @@ class RunRecord(Model):
         default=0,
         ge=0,
         description=(
-            "Items whose routing reply asked for a chart, whatever the decision became. "
+            "Items whose planner reply asked for a chart, whatever the decision became. "
             "Subtract the day's published charts and the remainder is what the "
             "post-model checks rejected - the only number that separates a model that "
             "does not want charts from checks that refuse the ones it wants. Zero on a "

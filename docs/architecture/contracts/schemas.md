@@ -215,6 +215,23 @@ Two conditions, and both have to hold. **The rename must buy a word and nothing 
 
 What it costs: the Python name and the committed key now disagree, so a grep for the key finds the wire and not the code. That is the price of not migrating 15 published days, and the alias sits on the field where a reader of the model meets it.
 
+## One word per thing, in every identifier - and plain sentences everywhere else
+
+The section above rules on *when* a name may move. This one rules on *which word* it moves to.
+
+**The project's word for a thing is used verbatim in every identifier for that thing.** That binds a module filename, a class, a function, an enum member, a contract field, a schema stem, a telemetry value, a config key, a CLI verb and a prompt filename. Casing follows the language - `VisualPlan` in Python, `visual_planner` in a config key, `plannerMinutes` in TypeScript - and the word does not change between them.
+
+**Prose is not bound, and trying to bind it makes the writing worse.** A sentence in a doc, a plan-doc, a commit message or a code comment uses the plain register (`CLAUDE.md` section 0b). "the validator", "the planner", "what the stage spent" are correct English and correct here. A decision record that writes `Visual Plan` in every sentence reads like a specification, and this project does not write specifications.
+
+Two more clauses, and each one has already cost a day:
+
+- **A model's size, vendor or revision never appears in an identifier.** `models.visual_planner` names the role; which weights fill it is a value in `config/`, and a knob called `models.qwen4b` would have to be renamed the day the weights change.
+- **A word that is wrong is renamed early, not when it is convenient.** `route` named a dispatch decision and the stage makes a planning decision. It reached a module, a contract, a schema stem, two config keys, a workflow job, an enum member, two TypeScript fields and about two hundred sentences before anybody paid it off. Every plan written against the wrong word writes more of it, so the bill grows with the calendar and never with the difficulty.
+
+Two names in this repository do not take the word a glossary would give them, recorded here so they are not argued twice. **`visual_planner.py`** is the module filename, decided ahead of any glossary because a glossary names steps and not files. **`density_floor`** was chosen over the more formal term outright, by the owner.
+
+**A definition that turns out to be false does not stop the term binding.** `Ledger` is defined as "never edited in place" and the corpus window rewrites at its edge. The word is still the identifier; the narrowed definition on the page that owns it governs what it means. Narrow the definition there rather than minting a second word.
+
 ## One serialization, so a round-trip is byte-identical
 
 Every persisted payload is written by one function: **sorted keys, two-space indent, ASCII-escaped, one trailing newline, LF.** Three things fall out of that, and all three are load-bearing:
@@ -244,7 +261,7 @@ The shapes carry rules a JSON Schema cannot express, and each one is a defect cl
 
 - An `ok` article carries title and text; a failed one records why. One field cannot mean both.
 - `truncated` and `truncated_at_tokens` are set together.
-- A visual routed to `none` carries no spec, and only a rendered visual carries an asset path.
+- A visual decided to `none` carries no spec, and only a rendered visual carries an asset path.
 - A retired vertical, lens, feed or entity carries its retirement date - the tombstone that keeps old payloads valid.
 - The lens and event vocabularies must be labelled exactly once each, so adding an enum member without a display name fails at load.
 - A run manifest's runs are numbered from one without gaps, and its counts reconcile.

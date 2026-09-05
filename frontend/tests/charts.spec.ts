@@ -171,10 +171,10 @@ test.describe('the option the engine is given', () => {
 	});
 
 	test('nothing reached says so, rather than drawing four zeros', () => {
-		// Zero reached means nothing committed says what the visuals planner did.
+		// Zero reached means nothing committed says what the visual planner did.
 		const { empty, reason } = chartFlow([{ reached: 0, asked: 0, drafted: 0, published: 0 }]);
 		expect(empty).toBe(true);
-		expect(reason).toContain('Nothing committed says what the visuals planner did');
+		expect(reason).toContain('Nothing committed says what the visual planner did');
 	});
 
 	test('a stage that counts more than the one before it is refused, in words', () => {

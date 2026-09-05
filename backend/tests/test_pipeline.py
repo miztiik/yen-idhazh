@@ -1142,7 +1142,7 @@ def test_the_stamp_records_the_run_and_never_a_placeholder(
 class SteppingClock:
     """A monotonic clock that advances a fixed number of seconds on every read.
 
-    The route stage is bounded by wall-clock, and a bound that can only be
+    The visual planner is bounded by wall-clock, and a bound that can only be
     proved by waiting for it is a bound nobody tests. This spends the budget in
     zero real seconds and makes which items survive it deterministic.
     """
@@ -1184,7 +1184,7 @@ def stage_visual_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> N
 
 
 # No quantity in here survives `numeric_facts`, so no enabled kind is reachable
-# and the router decides every item without a model. That is what keeps this an
+# and the planner decides every item without a model. That is what keeps this an
 # offline test of the bound rather than a test of the model (Rule #7).
 FACT_FREE_TEXT = (
     "The laboratory said the work continues and gave no figures. A spokesperson "
@@ -1193,7 +1193,7 @@ FACT_FREE_TEXT = (
 )
 
 
-def test_the_route_stage_stops_at_its_budget_instead_of_being_killed(
+def test_the_visual_planner_stops_at_its_budget_instead_of_being_killed(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """The defect this replaces: the job was cancelled at 60 minutes, a cancelled
@@ -1224,7 +1224,7 @@ def test_the_route_stage_stops_at_its_budget_instead_of_being_killed(
     assert decision.asked_the_model is False
 
 
-def test_a_stage_inside_its_budget_routes_every_item(
+def test_a_stage_inside_its_budget_decides_every_item(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     run_plan = plan()
@@ -1239,7 +1239,7 @@ def test_a_stage_inside_its_budget_routes_every_item(
     assert decided == [item.item_id for item in run_plan.items]
 
 
-def test_the_router_visits_the_best_story_first(tmp_path: Path) -> None:
+def test_the_planner_visits_the_best_story_first(tmp_path: Path) -> None:
     """Plan order is vertical-major, so a suffix cut would cost whole verticals."""
     run_plan = plan()
     items_dir = tmp_path / "items"
@@ -1253,7 +1253,7 @@ def test_the_router_visits_the_best_story_first(tmp_path: Path) -> None:
     )
 
 
-def test_an_item_the_day_already_published_is_never_routed_again(tmp_path: Path) -> None:
+def test_an_item_the_day_already_published_is_never_decided_again(tmp_path: Path) -> None:
     """`build_day` keeps the published copy and discards the new one, so deciding
     it again is 20 to 40 measured seconds spent on an answer nobody can read.
     """
@@ -1266,7 +1266,7 @@ def test_an_item_the_day_already_published_is_never_routed_again(tmp_path: Path)
     assert [entry.item.item_id for entry in ordered] == ["ai-02", "ai-04", "ai-05"]
 
 
-def test_an_item_without_a_usable_summary_is_never_routable(tmp_path: Path) -> None:
+def test_an_item_without_a_usable_summary_is_never_plannable(tmp_path: Path) -> None:
     run_plan = plan()
     items_dir = tmp_path / "items"
     stage_visual_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
@@ -2399,8 +2399,8 @@ def test_the_manifest_cannot_record_one_run_twice() -> None:
         )
 
 
-def test_the_manifest_records_what_the_router_cost() -> None:
-    """The route job runs against a 60-minute bound and nothing recorded its cost.
+def test_the_manifest_records_what_the_planner_cost() -> None:
+    """The visuals job runs against a 60-minute bound and nothing recorded its cost.
 
     The stage total and the item count are committed together, because either
     one alone answers no question about the budget (Rule #10).
@@ -2450,7 +2450,7 @@ def test_the_manifest_records_what_the_router_cost() -> None:
     assert written["route_ms"] == 15000
     assert "items_decided" not in written and "decision_ms" not in written
 
-    # A router that never started is not a router that took no time.
+    # A planner that never started is not a planner that took no time.
     absent = manifest_for([])
     assert absent.runs[-1].items_decided == 0
     assert absent.runs[-1].decision_ms is None
@@ -2461,7 +2461,7 @@ def test_the_manifest_records_what_the_router_cost() -> None:
     assert unclocked.runs[-1].decision_ms is None
 
     # The gate changes every denominator: the same charts sit over a smaller
-    # routed set. Counting the skips keeps a chart rate from climbing on its own.
+    # decided set. Counting the skips keeps a chart rate from climbing on its own.
     gated = manifest_for(
         [
             decided.model_copy(update={"decision_ms": 4000}),
