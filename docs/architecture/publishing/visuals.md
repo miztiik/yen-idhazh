@@ -57,7 +57,7 @@ chart an article can carry is the size of the largest unit group in its own numb
 threshold the answer is `none` whatever the model replies.
 
 `reachable_kinds()` computes that before the request is built. When no enabled kind survives it,
-the router writes a `Route` with `kind: none`, `asked_the_model: false`, and a rationale that says
+the router writes a `VisualDecision` with `kind: none`, `asked_the_model: false`, and a rationale that says
 the model never ran. The run manifest counts those separately as `items_prefiltered`.
 
 Three properties of how it is written, and each one is load-bearing:
@@ -102,7 +102,7 @@ Three things changed, and each one addresses a different link in that chain:
 
 | Change | What it stops |
 | --- | --- |
-| `stage_route` stops at `run.visual_planner_budget_minutes` (40) | The job is never cancelled, so it always reaches its upload step. |
+| `stage_visual_planner` stops at `run.visual_planner_budget_minutes` (40) | The job is never cancelled, so it always reaches its upload step. |
 | The `routes` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
 | `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
 | The router skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
@@ -358,7 +358,7 @@ from climbing on arithmetic alone.
 
 **The gate is proved by exhaustion, not by sampling.** `test_the_gate_never_rejects_a_chart_the_model_path_would_publish`
 enumerates every distinct index subset a draft could name over a fact list the gate calls
-unreachable, and asserts `to_route` lands on `none` for all of them. One survivor would mean the
+unreachable, and asserts `to_decision` lands on `none` for all of them. One survivor would mean the
 gate drops a chart a reader would have seen. That test is what makes "provable" a true word here,
 and it only became true once one quantity was limited to one bar.
 
@@ -457,7 +457,7 @@ file before it can be enabled.
 | Renumber a raced chart instead of dropping it | Right while a path could mean two different stories, wrong now that it names one item. Moving this run's copy would file that item's picture under a name that is not its own, and leave two files where the day references one. |
 | Cap the number of items the router may consider | A count has to be set for the worst host, so a fast host would route 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
-| Give a budget-stopped item a `Route` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
+| Give a budget-stopped item a `VisualDecision` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
 | A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Rule #11 in spirit, with no prompt involved. |
 | A second, smaller model to triage items first | Two calls where the point was zero. |
 | Diffusion for charts | Produces a beautiful picture of a chart with hallucinated axis labels. |

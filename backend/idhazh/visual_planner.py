@@ -24,12 +24,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from idhazh.contracts.app_config import InferenceConfig, VisualsConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import sanitize, untrusted_block
 
-PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "route.txt"
+PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "visual_planner.txt"
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -187,7 +187,7 @@ class ChartPoint(BaseModel):
     fact_index: int = Field(ge=0)
 
 
-class RouteDraft(BaseModel):
+class VisualDraft(BaseModel):
     """What the decoder is constrained to emit.
 
     Closed to unknown keys and carrying no free numeric field anywhere, so the
@@ -222,7 +222,7 @@ class RouteDraft(BaseModel):
 
 
 def output_schema() -> dict[str, Any]:
-    return RouteDraft.model_json_schema()
+    return VisualDraft.model_json_schema()
 
 
 def system_prompt() -> str:
@@ -278,16 +278,16 @@ def build_request(
         user=user_turn(article, summary, facts, lead_words=visuals.lead_words),
         output_schema=output_schema(),
         inference=routing,
-        schema_name="route",
+        schema_name="visual_planner",
     )
 
 
-def parse_draft(raw: str) -> RouteDraft:
+def parse_draft(raw: str) -> VisualDraft:
     content = _THINK.sub("", raw).strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
-    return RouteDraft.model_validate_json(content)
+    return VisualDraft.model_validate_json(content)
 
 
 def _nothing(
@@ -295,25 +295,25 @@ def _nothing(
     *,
     model_id: str,
     reason: str,
-    routed_at: str,
+    decided_at: str,
     version: str,
     drafted_chart: bool = False,
-) -> Route:
-    return Route(
+) -> VisualDecision:
+    return VisualDecision(
         version=version,
         item_id=summary.item_id,
         url_key=summary.url_key,
         kind=VisualKind.NONE,
         rationale=sanitize(reason)[:200] or None,
         model_id=model_id,
-        routed_at=routed_at,
+        decided_at=decided_at,
         drafted_chart=drafted_chart,
     )
 
 
 def decided_without_the_model(
-    summary: Summary, *, model_id: str, routed_at: str, facts_found: int
-) -> Route:
+    summary: Summary, *, model_id: str, decided_at: str, facts_found: int
+) -> VisualDecision:
     """The `none` a fact-poor item gets when the router skipped the model.
 
     The rationale says the model never ran, so a reader of the payload is never
@@ -326,8 +326,8 @@ def decided_without_the_model(
             f"no visual kind could be built from the {facts_found} quantities in this "
             "article, so the router was not asked"
         ),
-        routed_at=routed_at,
-        version=Route.schema_version(),
+        decided_at=decided_at,
+        version=VisualDecision.schema_version(),
     ).model_copy(update={"asked_the_model": False})
 
 
@@ -368,7 +368,7 @@ def same_unit_bars(
 
 
 def chart_is_reachable(facts: list[NumericFact], *, visuals: VisualsConfig) -> bool:
-    """Could ANY choice of indices over these facts survive `to_route`?
+    """Could ANY choice of indices over these facts survive `to_decision`?
 
     A published bar is always `facts[i]` for some `i`, every bar in a chart
     shares one unit, and the bars must be distinct quantities. So the ceiling on
@@ -479,7 +479,7 @@ def diagram_spec(steps: list[str], *, caption: str) -> str:
     return "\n".join(lines)
 
 
-def alt_text(draft: RouteDraft, facts: list[NumericFact]) -> str:
+def alt_text(draft: VisualDraft, facts: list[NumericFact]) -> str:
     """What a screen reader gets. The visual is never the only carrier of a fact."""
     if draft.kind == "chart":
         parts = [
@@ -492,22 +492,22 @@ def alt_text(draft: RouteDraft, facts: list[NumericFact]) -> str:
     return f"Flow diagram. {labels}."[:300]
 
 
-def to_route(
+def to_decision(
     article: Article,
     summary: Summary,
     completion: Completion,
     *,
     model_id: str,
-    routed_at: str,
+    decided_at: str,
     visuals: VisualsConfig,
     facts: list[NumericFact] | None = None,
-) -> Route:
+) -> VisualDecision:
     """One completion becomes exactly one routing decision, or becomes `none`.
 
     Every rejection path lands on `none` with a rationale. A visual is never
     allowed to be the reason an item does not publish.
     """
-    version = Route.schema_version()
+    version = VisualDecision.schema_version()
     available = facts if facts is not None else numeric_facts(article.text or "")
 
     if summary.status is not SummaryStatus.OK:
@@ -515,7 +515,7 @@ def to_route(
             summary,
             model_id=model_id,
             reason="the item has no summary, so there is nothing to illustrate",
-            routed_at=routed_at,
+            decided_at=decided_at,
             version=version,
         )
     if completion.hit_the_budget:
@@ -523,7 +523,7 @@ def to_route(
             summary,
             model_id=model_id,
             reason="the routing reply was cut off by the output budget",
-            routed_at=routed_at,
+            decided_at=decided_at,
             version=version,
         )
     try:
@@ -533,7 +533,7 @@ def to_route(
             summary,
             model_id=model_id,
             reason=f"the routing reply did not hold its shape: {type(error).__name__}",
-            routed_at=routed_at,
+            decided_at=decided_at,
             version=version,
         )
 
@@ -554,7 +554,7 @@ def to_route(
             summary,
             model_id=model_id,
             reason=draft.reason,
-            routed_at=routed_at,
+            decided_at=decided_at,
             version=version,
         )
 
@@ -568,7 +568,7 @@ def to_route(
             summary,
             model_id=model_id,
             reason=f"{kind.value} has no renderer switched on",
-            routed_at=routed_at,
+            decided_at=decided_at,
             version=version,
             drafted_chart=drafted_chart,
         )
@@ -579,7 +579,7 @@ def to_route(
                 summary,
                 model_id=model_id,
                 reason="the chart pointed at a quantity the article does not contain",
-                routed_at=routed_at,
+                decided_at=decided_at,
                 version=version,
                 drafted_chart=drafted_chart,
             )
@@ -594,7 +594,7 @@ def to_route(
                 summary,
                 model_id=model_id,
                 reason="the chart used one quantity for more than one bar",
-                routed_at=routed_at,
+                decided_at=decided_at,
                 version=version,
                 drafted_chart=drafted_chart,
             )
@@ -608,7 +608,7 @@ def to_route(
                     f"{len(bars)} of {len(draft.points)} bars measure the same thing, "
                     "which is outside the publishable range"
                 ),
-                routed_at=routed_at,
+                decided_at=decided_at,
                 version=version,
                 drafted_chart=drafted_chart,
             )
@@ -630,13 +630,13 @@ def to_route(
                 summary,
                 model_id=model_id,
                 reason=f"{len(draft.steps)} steps is outside the publishable range",
-                routed_at=routed_at,
+                decided_at=decided_at,
                 version=version,
             )
         spec = diagram_spec(draft.steps, caption=draft.caption)
         spec_format = SpecFormat.MERMAID
 
-    return Route(
+    return VisualDecision(
         version=version,
         item_id=summary.item_id,
         url_key=summary.url_key,
@@ -647,6 +647,6 @@ def to_route(
         alt_text=sanitize(alt_text(draft, available))[:300] or None,
         visual_state=VisualState.ABSENT,
         model_id=model_id,
-        routed_at=routed_at,
+        decided_at=decided_at,
         drafted_chart=drafted_chart,
     )

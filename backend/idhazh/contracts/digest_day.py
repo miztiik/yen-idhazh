@@ -59,10 +59,10 @@ from idhazh.contracts.base import (
     Url,
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
-from idhazh.contracts.route import VisualKind, VisualState
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import EventType, LensId, SourceKind
+from idhazh.contracts.visual_decision import VisualKind, VisualState
 
 
 class DigestVisual(Model):

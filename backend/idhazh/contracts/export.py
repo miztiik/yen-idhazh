@@ -28,7 +28,6 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.qualification import QualificationReport, QualificationShard
-from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
@@ -41,6 +40,7 @@ from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.validation_row import ValidationRow
+from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import Watchlist
 
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
@@ -62,7 +62,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PublicTelemetryRow,
     QualificationReport,
     QualificationShard,
-    Route,
+    VisualDecision,
     RunManifest,
     PublishedRow,
     RunPlan,

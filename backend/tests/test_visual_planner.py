@@ -23,13 +23,13 @@ from pydantic import ValidationError
 from idhazh import assemble, cli, config
 from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
 from idhazh.llm.server import Completion
-from idhazh.route import (
+from idhazh.visual_planner import (
     ChartPoint,
-    RouteDraft,
+    VisualDraft,
     chart_is_reachable,
     chart_spec,
     common_unit,
@@ -42,7 +42,7 @@ from idhazh.route import (
     reachable_kinds,
     same_unit_bars,
     system_prompt,
-    to_route,
+    to_decision,
     user_turn,
 )
 
@@ -148,11 +148,11 @@ class TestPrompting:
         assert (summary_ok.summary or "") not in system_prompt()
 
     def test_the_output_schema_is_generated_from_the_model(self) -> None:
-        assert output_schema() == RouteDraft.model_json_schema()
+        assert output_schema() == VisualDraft.model_json_schema()
 
     def test_the_schema_forbids_an_unknown_key(self) -> None:
         with pytest.raises(ValidationError):
-            RouteDraft.model_validate({"kind": "none", "reason": "no", "tool_call": {"name": "rm"}})
+            VisualDraft.model_validate({"kind": "none", "reason": "no", "tool_call": {"name": "rm"}})
 
     def test_every_field_is_required_so_the_decoder_must_emit_it(self) -> None:
         """A field with a default is absent from `required`, and the grammar skips it.
@@ -261,7 +261,7 @@ class TestSpecBuilding:
 
 class TestToRoute:
     def _visuals(self) -> VisualsConfig:
-        """Both arms on, because this class tests `to_route`, not the shipped config.
+        """Both arms on, because this class tests `to_decision`, not the shipped config.
 
         The diagram arm ships off. Its rejection paths, its Mermaid source and
         its injection canaries still have to hold, because turning it back on is
@@ -275,12 +275,12 @@ class TestToRoute:
         failed = summary_ok.model_copy(
             update={"status": SummaryStatus.FAILED, "summary": None, "key_points": []}
         )
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             failed,
             _draft_completion({"kind": "chart", "reason": "x"}),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
         )
         assert decision.kind is VisualKind.NONE
@@ -288,12 +288,12 @@ class TestToRoute:
     def test_a_truncated_reply_routes_to_nothing(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             Completion(content='{"kind":"chart"', finish_reason="length"),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
         )
         assert decision.kind is VisualKind.NONE
@@ -302,12 +302,12 @@ class TestToRoute:
     def test_a_malformed_reply_routes_to_nothing(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             Completion(content="not json at all"),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
         )
         assert decision.kind is VisualKind.NONE
@@ -317,7 +317,7 @@ class TestToRoute:
     ) -> None:
         """The one way a fabricated number could get in, closed explicitly."""
         facts = numeric_facts(ARTICLE_TEXT)
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -332,7 +332,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
             facts=facts,
         )
@@ -340,7 +340,7 @@ class TestToRoute:
         assert "does not contain" in (decision.rationale or "")
 
     def test_one_bar_is_not_a_comparison(self, article_ok: Article, summary_ok: Summary) -> None:
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -351,7 +351,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
             facts=numeric_facts(ARTICLE_TEXT),
         )
@@ -367,7 +367,7 @@ class TestToRoute:
         megawatt hour; 2024 4,200 megawatt hour; 2023 4,200 megawatt hour". Every
         number is true and the comparison is invented.
         """
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -382,7 +382,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
             facts=numeric_facts(ARTICLE_TEXT),
         )
@@ -390,7 +390,7 @@ class TestToRoute:
         assert "more than one bar" in (decision.rationale or "")
 
     def test_a_disabled_kind_is_unreachable(self, article_ok: Article, summary_ok: Summary) -> None:
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -401,7 +401,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=VisualsConfig(enabled_kinds=[VisualKind.CHART]),
         )
         assert decision.kind is VisualKind.NONE
@@ -410,7 +410,7 @@ class TestToRoute:
     def test_a_good_chart_carries_a_vega_lite_spec(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -426,7 +426,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
             facts=numeric_facts(ARTICLE_TEXT),
         )
@@ -441,7 +441,7 @@ class TestToRoute:
         """The live 4B captioned a chart with a bar this stage then removed."""
         facts = numeric_facts(ARTICLE_TEXT)
         people = next(i for i, fact in enumerate(facts) if fact.unit == "people")
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -458,7 +458,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
             facts=facts,
         )
@@ -469,7 +469,7 @@ class TestToRoute:
     def test_a_good_diagram_carries_mermaid_source(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -480,7 +480,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
         )
         assert decision.kind is VisualKind.DIAGRAM
@@ -494,7 +494,7 @@ class TestToRoute:
         facts = numeric_facts(ARTICLE_TEXT)
         percent = next(i for i, fact in enumerate(facts) if fact.unit == "%")
         people = next(i for i, fact in enumerate(facts) if fact.unit == "people")
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -509,7 +509,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
             facts=facts,
         )
@@ -530,7 +530,7 @@ class TestToRoute:
         assert Decimal(999999) not in {fact.value for fact in facts} or all(
             fact.unit != "IMPORTANT" for fact in facts
         )
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -545,7 +545,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
             facts=numeric_facts(ARTICLE_TEXT),
         )
@@ -565,12 +565,12 @@ class TestToRoute:
         }
         facts = numeric_facts(ARTICLE_TEXT)
         first, second = (
-            to_route(
+            to_decision(
                 article_ok,
                 summary_ok,
                 _draft_completion(payload),
                 model_id="qwen3-4b",
-                routed_at="2026-08-22T00:00:00Z",
+                decided_at="2026-08-22T00:00:00Z",
                 visuals=self._visuals(),
                 facts=facts,
             )
@@ -581,7 +581,7 @@ class TestToRoute:
     def test_an_injected_instruction_in_a_label_becomes_inert_text(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
-        decision = to_route(
+        decision = to_decision(
             article_ok,
             summary_ok,
             _draft_completion(
@@ -596,7 +596,7 @@ class TestToRoute:
                 }
             ),
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
             visuals=self._visuals(),
         )
         assert decision.spec is not None
@@ -649,7 +649,7 @@ class TestReachability:
 
     def test_an_unreachable_item_says_the_model_never_ran(self, summary_ok: Summary) -> None:
         decision = decided_without_the_model(
-            summary_ok, model_id="qwen3-4b", routed_at="2026-08-22T00:00:00Z", facts_found=0
+            summary_ok, model_id="qwen3-4b", decided_at="2026-08-22T00:00:00Z", facts_found=0
         )
         assert decision.kind is VisualKind.NONE
         assert decision.asked_the_model is False
@@ -662,7 +662,7 @@ class TestReachability:
 
         For a fact list the gate calls unreachable, enumerate EVERY distinct
         index subset a draft could name, up to `max_chart_points`, and assert
-        `to_route` lands on `none` for all of them. A single survivor would mean
+        `to_decision` lands on `none` for all of them. A single survivor would mean
         the gate drops a chart a reader would have seen.
         """
         visuals = VisualsConfig(enabled_kinds=[VisualKind.CHART])
@@ -672,7 +672,7 @@ class TestReachability:
         checked = 0
         for width in range(1, visuals.max_chart_points + 1):
             for indices in itertools.combinations(range(len(facts)), width):
-                decision = to_route(
+                decision = to_decision(
                     article_ok,
                     summary_ok,
                     _draft_completion(
@@ -685,7 +685,7 @@ class TestReachability:
                         }
                     ),
                     model_id="qwen3-4b",
-                    routed_at="2026-08-22T00:00:00Z",
+                    decided_at="2026-08-22T00:00:00Z",
                     visuals=visuals,
                     facts=facts,
                 )
@@ -704,20 +704,20 @@ class TestChartDrafts:
     asserted here is the identity between the two, not either number alone.
     """
 
-    def _fixture_day(self, article: Article, summary: Summary) -> list[Route]:
+    def _fixture_day(self, article: Article, summary: Summary) -> list[VisualDecision]:
         """Six items: one chart published, three refused after the model, two never drafted."""
         facts = numeric_facts(ARTICLE_TEXT)
         percent = next(i for i, fact in enumerate(facts) if fact.unit == "%")
         people = next(i for i, fact in enumerate(facts) if fact.unit == "people")
         visuals = VisualsConfig(enabled_kinds=[VisualKind.CHART])
 
-        def routed(draft: Mapping[str, object]) -> Route:
-            return to_route(
+        def routed(draft: Mapping[str, object]) -> VisualDecision:
+            return to_decision(
                 article,
                 summary,
                 _draft_completion(draft),
                 model_id="qwen3-4b",
-                routed_at="2026-08-22T00:00:00Z",
+                decided_at="2026-08-22T00:00:00Z",
                 visuals=visuals,
                 facts=facts,
             )
@@ -732,16 +732,16 @@ class TestChartDrafts:
             routed({"kind": "chart", "reason": "mixed units", "points": bars(percent, people)}),
             routed({"kind": "none", "reason": "nothing here compares"}),
             decided_without_the_model(
-                summary, model_id="qwen3-4b", routed_at="2026-08-22T00:00:00Z", facts_found=0
+                summary, model_id="qwen3-4b", decided_at="2026-08-22T00:00:00Z", facts_found=0
             ),
         ]
 
     def test_a_refused_chart_still_records_that_the_model_asked_for_one(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
-        drafted = [route for route in self._fixture_day(article_ok, summary_ok) if route.drafted_chart]
+        drafted = [decision for decision in self._fixture_day(article_ok, summary_ok) if decision.drafted_chart]
         assert len(drafted) == 4
-        assert sum(1 for route in drafted if route.kind is VisualKind.NONE) == 3
+        assert sum(1 for decision in drafted if decision.kind is VisualKind.NONE) == 3
 
     def test_an_item_the_model_never_saw_drafted_nothing(
         self, article_ok: Article, summary_ok: Summary
@@ -754,14 +754,14 @@ class TestChartDrafts:
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
         """The row's oracle, over the objects."""
-        routes = self._fixture_day(article_ok, summary_ok)
-        drafted = sum(1 for route in routes if route.drafted_chart)
-        published = sum(1 for route in routes if route.kind is VisualKind.CHART)
+        decisions = self._fixture_day(article_ok, summary_ok)
+        drafted = sum(1 for decision in decisions if decision.drafted_chart)
+        published = sum(1 for decision in decisions if decision.kind is VisualKind.CHART)
 
         refused = [
-            route.rationale or ""
-            for route in routes
-            if route.drafted_chart and route.kind is VisualKind.NONE
+            decision.rationale or ""
+            for decision in decisions
+            if decision.drafted_chart and decision.kind is VisualKind.NONE
         ]
         assert "does not contain" in refused[0]
         assert "more than one bar" in refused[1]
@@ -798,7 +798,7 @@ class TestChartDrafts:
             config_digests=settings.digests,
             site_bytes=1024,
             site_files=2,
-            routes=self._fixture_day(article_ok, summary_ok),
+            decisions=self._fixture_day(article_ok, summary_ok),
         )
         record = manifest.runs[-1]
         assert (record.charts_drafted, record.items_routed, record.items_prefiltered) == (4, 6, 1)
@@ -853,15 +853,15 @@ def refused_endpoint() -> str:
     return f"http://127.0.0.1:{port}/v1/chat/completions"
 
 
-def routed_against(endpoint: str, article: Article, summary: Summary) -> tuple[Route, bool]:
+def routed_against(endpoint: str, article: Article, summary: Summary) -> tuple[VisualDecision, bool]:
     """One routing decision made against `endpoint`, over facts that reach the model.
 
-    The article text is replaced because `_route_one` never posts when no
-    enabled kind could survive `to_route`. A fixture whose numbers hold no unit
+    The article text is replaced because `_plan_one_visual` never posts when no
+    enabled kind could survive `to_decision`. A fixture whose numbers hold no unit
     group three bars wide would exercise the skip and report it as a pass, so
     every test below also asserts the model was asked.
     """
-    return cli._route_one(
+    return cli._plan_one_visual(
         article.model_copy(update={"text": ARTICLE_TEXT}),
         summary,
         config.load(CONFIG_DIR),

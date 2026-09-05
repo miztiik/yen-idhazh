@@ -46,7 +46,7 @@ The shapes, and where each one lives once written:
 | `RunPlan` | `run-plan` | the day's work list under the run directory |
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
-| `Route` | `route` | one file per item under the run directory |
+| `VisualDecision` | `visual-decision` | one file per item under the run directory |
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
 | `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
