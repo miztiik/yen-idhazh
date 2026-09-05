@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -204,6 +204,16 @@ Inherited from the base model, per `CLAUDE.md` section 11:
 Additive change: append the entry, stamp today, done - older payloads still validate. Breaking change: append, stamp today, **and write the read-side migration in the same commit.** A payload written by yesterday's run that today's build cannot read is a release blocker.
 
 A document that arrives without a `version` is stamped with the current one on read, so the generated schema marks the field optional-with-a-default rather than required. Everything this project writes emits it explicitly; the tolerance exists for a hand-edited config file, not as a licence to omit it.
+
+### A published key can be frozen while its Python name moves
+
+A field name in Pydantic is the JSON key by default, so a rename that looks like tidying is a breaking change to a published payload. Where the payload is published and the rename buys only a better word, the honest split is to move the Python name and pin the key with `Field(alias=...)`, plus `serialize_by_alias` and `validate_by_name` on that model. The model then reads and writes the key it always wrote, the generated schema still names the key, and no committed payload is migrated.
+
+`RunRecord` is the one model doing this, since 2026-09-05. `items_decided` writes `items_routed` and `decision_ms` writes `route_ms`, because `run.json` is published and `frontend/src/lib/payload` reads both keys by name at build time. `ModelRole.VISUAL_PLANNER` is the same trade with no alias needed: an enum member is a Python name and its `"route"` value is the wire.
+
+Two conditions, and both have to hold. **The rename must buy a word and nothing else** - an alias that also changes a type or a meaning is a breaking change wearing a rename's clothes. And **the alias must be pinned on the model that owns the key**, not by flipping `by_alias` in the shared serializer: no other contract declares an alias, so a global flag would be a no-op today and a silent key move the first time somebody adds one for an unrelated reason.
+
+What it costs: the Python name and the committed key now disagree, so a grep for the key finds the wire and not the code. That is the price of not migrating 15 published days, and the alias sits on the field where a reader of the model meets it.
 
 ## One serialization, so a round-trip is byte-identical
 
