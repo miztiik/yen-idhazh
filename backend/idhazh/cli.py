@@ -129,6 +129,7 @@ from idhazh.fingerprint import (
 )
 from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post, props
 from idhazh.render import asset_relpath, render_visual
+from idhazh.render.write import assets_in_day
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 LOG: Final = logging.getLogger("idhazh")
@@ -3253,7 +3254,46 @@ def stage_site_weight(
 # --- validate-days ------------------------------------------------------------
 
 
-def _day_faults(path: Path) -> list[str]:
+def _picture_faults(public_root: Path, day: DigestDay) -> list[str]:
+    """Where a day's payload and its picture directory disagree.
+
+    The defect this exists for shipped on 2026-08-24. A per-process counter that
+    restarted at 1 let a later run of the day overwrite an earlier run's
+    `india-01.svg` while the payload still named both items, so 32 declared
+    visuals sat over 18 files and 14 files were each claimed by two stories. 28
+    readers saw a picture and 14 of those were drawn from another article's
+    numbers, under alt text describing figures that were not in the image.
+    Nothing failed: every file existed, every item validated, the page rendered.
+
+    Three disagreements, three different faults. Two stories on one path means
+    one of them shows the other's chart. A path with no file is a broken image.
+    A file no story names is weight against the 1 GB Pages cap (Rule #2) that
+    renders nowhere, and it is what a repaired collision leaves behind.
+
+    It is checked here rather than by a test per committed day because the day
+    that can still be wrong is the one being written. A day already published is
+    frozen, and re-checking every one of them costs more every day the pipeline
+    runs (Rule #12).
+    """
+    declared = [
+        item.visual.path
+        for item in day.items
+        if item.visual is not None and item.visual.path is not None
+    ]
+    faults: list[str] = []
+    shared = sorted(name for name, claims in Counter(declared).items() if claims > 1)
+    if shared:
+        faults.append(f"names one picture on two stories: {shared}")
+    absent = sorted(name for name in declared if not (public_root / name).is_file())
+    if absent:
+        faults.append(f"names a picture file that is not there: {absent}")
+    orphans = sorted(assets_in_day(public_root, day.date) - set(declared))
+    if orphans:
+        faults.append(f"carries picture files no story names: {orphans}")
+    return faults
+
+
+def _day_faults(path: Path, public_root: Path) -> list[str]:
     """What is wrong with one committed day, in sentences, or an empty list.
 
     Both shapes are asked for, because a day has two readers and they read
@@ -3276,7 +3316,7 @@ def _day_faults(path: Path) -> list[str]:
 
     faults: list[str] = []
     try:
-        DigestDay.model_validate(parsed)
+        faults.extend(_picture_faults(public_root, DigestDay.model_validate(parsed)))
     except ValidationError as error:
         faults.append(f"fails digest-day.schema.json: {error.error_count()} problems\n{error}")
     try:
@@ -3317,7 +3357,7 @@ def stage_validate_days(root: Path) -> int:
 
     broken = 0
     for path in days:
-        faults = _day_faults(path)
+        faults = _day_faults(path, root.parent)
         broken += bool(faults)
         for fault in faults:
             LOG.error("%s %s", _day_of(path), fault)
