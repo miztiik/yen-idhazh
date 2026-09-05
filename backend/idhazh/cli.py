@@ -101,7 +101,7 @@ from idhazh.contracts.validation_row import (
     ValidationRow,
     ValidationVerdict,
 )
-from idhazh.contracts.visual_decision import VisualDecision, VisualKind
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
 from idhazh.evals import archive as score_archive
 from idhazh.evals import evidence, golden, metrics, qualify, sampling, score, validation, writer
@@ -1338,7 +1338,7 @@ def stage_visual_planner(
         decision_ms = int((clock() - started) * 1000)
         spent.append(decision_ms)
         decision = decision.model_copy(update={"decision_ms": decision_ms})
-        assemble.write_atomic(items_dir / f"{item.item_id}.route.json", decision.to_json())
+        assemble.write_atomic(items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}", decision.to_json())
         LOG.info(
             "item routed id=%s kind=%s state=%s asked=%s decision_ms=%s",
             item.item_id,
@@ -2320,7 +2320,7 @@ def _item_payloads(
                 else None
             ),
             eval_path=items_dir / f"{item.item_id}.eval.json",
-            decision_path=items_dir / f"{item.item_id}.route.json",
+            decision_path=items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}",
         )
 
 
@@ -3418,7 +3418,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "work",
             "record",
             "counters",
-            "route",
+            "visuals",
             "assemble",
             "harvest",
             "dedupe-ledgers",
@@ -3460,7 +3460,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--visuals",
         action="store_true",
-        help="Include the route stage in a full run. It needs the router model served.",
+        help="Include the visuals stage in a full run. It needs the visual planner served.",
     )
     parser.add_argument(
         "--leaderboard",
@@ -3767,7 +3767,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
-    if args.stage == "route" or (args.stage == "run" and args.visuals):
+    if args.stage == "visuals" or (args.stage == "run" and args.visuals):
         stage_visual_planner(_load_plan(date), settings=settings)
 
     if args.stage in ("assemble", "run"):

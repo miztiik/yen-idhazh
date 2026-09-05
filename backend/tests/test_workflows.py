@@ -25,7 +25,13 @@ import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
 from idhazh import ledger, publish_telemetry
-from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
+from idhazh.contracts.visual_decision import (
+    PAYLOAD_SUFFIX,
+    SpecFormat,
+    VisualDecision,
+    VisualKind,
+    VisualState,
+)
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
@@ -165,10 +171,10 @@ WEIGHTS_CHECKS: Final = {
         "Start the model",
         '["models"]["summarize"]["sha256"]',
     ),
-    ("digest.yml", "route"): (
-        "Fetch runtime and router weights",
-        "Verify the router weights",
-        "Start the router",
+    ("digest.yml", "visuals"): (
+        "Fetch runtime and visual planner weights",
+        "Verify the visual planner weights",
+        "Start the visual planner",
         '["models"]["visual_planner"]["sha256"]',
     ),
     ("measure.yml", "runtime"): (
@@ -216,9 +222,8 @@ MODEL_ENV_NAMES: Final = frozenset(
         "ROUTE_FILE",
     }
 )
-# The weights cache jobs, and the config role each one serves. The job is still
-# called `route`; the role it reads is not.
-WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "route": "visual_planner"}
+# The weights cache jobs, and the config role each one serves.
+WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "visuals": "visual_planner"}
 # Bumped from v3 when the weights half of the key moved off the workflow `env`
 # copy, so the first run after that lands refetches once instead of restoring an
 # entry nobody can attribute.
@@ -240,7 +245,7 @@ BATCHED_BENCH_SETTINGS: Final = {
 # not a measurement (Rule #10).
 RUNTIME_IDENTITY_JOBS: Final = {
     "work": ("llama-server.log", "summarize_file"),
-    "route": ("router.log", "visual_planner_file"),
+    "visuals": ("visual-planner.log", "visual_planner_file"),
 }
 RUNTIME_IDENTITY_STEP: Final = "What this runner is"
 # One loopback port per workflow, declared once. `server_argv` binds it, every
@@ -255,13 +260,13 @@ LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
 # here until it appears with an install ahead of it.
 SERVER_STARTERS: Final = {
     ("digest.yml", "work"): ("Start the model", "config"),
-    ("digest.yml", "route"): ("Start the router", "config"),
+    ("digest.yml", "visuals"): ("Start the visual planner", "config"),
     ("measure.yml", "runtime"): ("Measure runtime candidate", None),
     ("validate.yml", "qualify"): ("Start the candidate", "backend/var/candidate-config"),
 }
 RUNTIME_LOG_SUMMARY_STEPS: Final = {
     "work": ("Prompt cache log summary", "llama-server.log"),
-    "route": ("Router cache log summary", "router.log"),
+    "visuals": ("Visual planner cache log summary", "visual-planner.log"),
 }
 # Four real llama-server lines. The first two are the same field under the two
 # spellings llama.cpp has used; the third is the one the old fixed pattern list
@@ -440,7 +445,7 @@ EXPRESSION_VALUES: Final = {
     "matrix.shard": SUBSTITUTED_SHARD,
 }
 # What assemble hands back to origin's tip before it rebuilds. The day's own
-# directory is never in this list: the routes artifact unpacks this run's
+# directory is never in this list: the visuals artifact unpacks this run's
 # rendered charts into it, and no producer in the assemble job can make those
 # again, so the two payload files are named one at a time.
 COMMIT_REFRESH_PATHS: Final = {
@@ -468,9 +473,9 @@ SETTLE_STAND_IN: Final = Path(__file__).with_name("settle_ledger.py")
 # directory, so it runs inside a temporary clone unchanged.
 DROP_ENTRY_POINT: Final = REPO_ROOT / "backend" / "utilities" / "drop_raced_assets.py"
 RUN_ARTIFACTS: Final = "backend/var/run"
-# One rendered chart, as the route job leaves it: an SVG in the day's directory
-# and a route payload saying where it landed. The name is the item's own id, so
-# a path both runs hold is that one item rendered twice.
+# One rendered chart, as the visuals job leaves it: an SVG in the day's directory
+# and a decision payload saying where it landed. The name is the item's own id,
+# so a path both runs hold is that one item rendered twice.
 RACED_ITEM_ID: Final = "energy-0000000001"
 RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/{RACED_ITEM_ID}.svg"
 
@@ -582,6 +587,41 @@ def _step(
 ) -> dict[str, object]:
     matches = [step for step in _steps(workflow, job_name) if step.get(key) == value]
     assert len(matches) == 1, f"job {job_name} must have one step with {key}={value}"
+    return matches[0]
+
+
+def _strings(node: object) -> Iterator[str]:
+    """Every string anywhere in a YAML subtree, so an expression cannot hide in a nest."""
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in cast(dict[str, object], node).values():
+            yield from _strings(value)
+    elif isinstance(node, list):
+        for item in cast(list[object], node):
+            yield from _strings(item)
+
+
+def _needs(workflow: dict[str, object], job_name: str) -> list[str]:
+    """What a job waits on, whether it was written as one name or a list."""
+    declared = _job(workflow, job_name).get("needs")
+    if declared is None:
+        return []
+    if isinstance(declared, str):
+        return [declared]
+    return _string_list(declared, f"job {job_name} needs")
+
+
+def _artifact_upload(
+    workflow: dict[str, object], job_name: str, artifact: str
+) -> dict[str, object]:
+    matches = [
+        step
+        for step in _steps(workflow, job_name)
+        if str(step.get("uses", "")).startswith("actions/upload-artifact")
+        and _mapping(step.get("with"), f"{job_name} upload").get("name") == artifact
+    ]
+    assert len(matches) == 1, f"job {job_name} must upload one artifact named {artifact}"
     return matches[0]
 
 
@@ -1119,7 +1159,7 @@ def _settled_in_the_clone(settings: dict[str, str], relative: str, key: str) -> 
 
 
 def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
-    """One rendered chart, exactly as the route job's artifact leaves it.
+    """One rendered chart, exactly as the visuals job's artifact leaves it.
 
     An SVG under the day's directory and a real `VisualDecision` beside the run's items
     saying where it landed. `body` is what makes two renders of one item differ,
@@ -1139,7 +1179,7 @@ def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None =
         model_id="qwen3-4b",
         decided_at=f"{date}T00:00:00Z",
     )
-    _write(repo / RUN_ARTIFACTS / date / "items" / f"{item_id}.route.json", decision.to_json())
+    _write(repo / RUN_ARTIFACTS / date / "items" / f"{item_id}{PAYLOAD_SUFFIX}", decision.to_json())
 
 
 def _rebuild(repo: Path, env: dict[str, str], date: str, items: Sequence[str]) -> None:
@@ -1944,6 +1984,110 @@ def test_content_refresh_caps_total_jobs_by_behavior() -> None:
         assert _evaluate_shard_matrix(script, invalid_shards, 4) is None
 
 
+def test_every_output_a_job_reads_is_one_its_producer_declares() -> None:
+    """A renamed job leaves `needs.<old>.outputs.<x>` resolving to the empty string.
+
+    GitHub does not fail on that. The expression evaluates to nothing, the step
+    runs with an empty argument, and the run is green - so a job rename is the
+    one edit whose damage shows up only in the output. This walks every
+    `needs.<job>.outputs.<name>` in every workflow and asks two things of it:
+    that the job is one this job waits on, and that the job declares that output.
+    """
+    for filename, workflow in sorted(_load_workflows().items()):
+        jobs = _mapping(workflow.get("jobs"), "jobs")
+        declared = {
+            job_name: set(_mapping(_job(workflow, job_name).get("outputs") or {}, "outputs"))
+            for job_name in jobs
+        }
+        for job_name in jobs:
+            waits_on = set(_needs(workflow, job_name))
+            read = {
+                (match.group(1), match.group(2))
+                for text in _strings(_job(workflow, job_name))
+                for match in re.finditer(r"needs\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)", text)
+            }
+            for producer, output in sorted(read):
+                where = f"{filename} job {job_name}"
+                assert producer in jobs, f"{where} reads an output of the absent job {producer}"
+                assert producer in waits_on, f"{where} reads {producer} without needing it"
+                assert output in declared[producer], (
+                    f"{where} reads needs.{producer}.outputs.{output}, "
+                    f"which {producer} does not declare"
+                )
+
+
+def test_every_artifact_a_job_downloads_is_uploaded_by_a_job_it_waits_on() -> None:
+    """An artifact name is a string agreed between two jobs and checked by nobody.
+
+    `download-artifact` on a name nothing uploaded fails the step, and both of
+    the daily run's cross-job downloads carry `continue-on-error` - so a
+    mismatched name degrades the day to no visuals rather than failing it. Same
+    silence as the glob below, one layer up.
+
+    A `pattern:` download takes any number of matching artifacts, so it is
+    checked as a prefix rather than as a name.
+    """
+    for filename, workflow in sorted(_load_workflows().items()):
+        uploads = {
+            str(_mapping(step.get("with"), "upload").get("name")): job_name
+            for job_name in _mapping(workflow.get("jobs"), "jobs")
+            for step in _steps(workflow, job_name)
+            if str(step.get("uses", "")).startswith("actions/upload-artifact")
+        }
+        for job_name in _mapping(workflow.get("jobs"), "jobs"):
+            reachable = set(_needs(workflow, job_name))
+            for step in _steps(workflow, job_name):
+                if not str(step.get("uses", "")).startswith("actions/download-artifact"):
+                    continue
+                asked = _mapping(step.get("with"), f"{job_name} download")
+                where = f"{filename} job {job_name}"
+                if isinstance(pattern := asked.get("pattern"), str):
+                    prefix = pattern.removesuffix("*")
+                    # A job's own later upload can match the prefix and cannot
+                    # exist yet, so it is not a producer of this download:
+                    # `validate.yml` reads `qualification-*` and then writes
+                    # `qualification-report`.
+                    producers = {
+                        uploads[name] for name in uploads if name.startswith(prefix)
+                    } - {job_name}
+                    assert producers, f"{where} downloads pattern {pattern}, which nothing uploads"
+                    assert producers <= reachable, (
+                        f"{where} downloads pattern {pattern} from {sorted(producers - reachable)}, "
+                        "which it does not wait on"
+                    )
+                    continue
+                name = str(asked.get("name"))
+                assert name in uploads, f"{where} downloads {name}, which no job uploads"
+                assert uploads[name] in reachable, (
+                    f"{where} downloads {name} from {uploads[name]}, which it does not wait on"
+                )
+
+
+def test_the_visuals_artifact_collects_the_file_the_stage_writes() -> None:
+    """The upload glob and the Python writer are one pair, and only this holds them.
+
+    `idhazh.cli` files one decision per item under `backend/var/run/<date>/items/`,
+    and the `visuals` job hands them to `assemble` by globbing that suffix. The
+    upload carries `if-no-files-found: ignore` on purpose - the stage is allowed
+    to decide nothing - so a glob that no longer matches the writer uploads an
+    empty artifact, `assemble` receives no decisions, every item publishes with
+    no picture, and the run is green throughout. Nothing else in the repository
+    connects the two: the glob is YAML and the suffix is a Python name.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    upload = _mapping(_artifact_upload(workflow, "visuals", "visuals").get("with"), "upload")
+    paths = _string_list(str(upload.get("path")).splitlines(), "visuals upload path")
+    globs = [path.strip() for path in paths if path.strip()]
+
+    assert f"{RUN_ARTIFACTS}/{SUBSTITUTED_DATE}/items/*{PAYLOAD_SUFFIX}" in [
+        _substitute(glob) for glob in globs
+    ], f"the visuals upload must glob *{PAYLOAD_SUFFIX}, which is what the stage writes"
+    assert upload.get("if-no-files-found") == "ignore", (
+        "a stage that decided nothing must not fail the job - which is why the "
+        "glob above has to be checked here"
+    )
+
+
 def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
     """A rebase that refuses to start throws away a day the run already computed.
 
@@ -2065,7 +2209,7 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     published_argv = shlex.split(_substitute(publish).replace("\\\n", " "))
     assert published_argv == settings["REGENERATE_COMMAND"].split()
     assert settings["REFRESH_PATHS"].split() == COMMIT_REFRESH_PATHS["assemble"]
-    # Never the day's directory itself. The routes artifact unpacks this run's
+    # Never the day's directory itself. The visuals artifact unpacks this run's
     # rendered charts into it and no producer here can make them again, so the
     # two payload files are named one at a time.
     assert SUBSTITUTED_DAY_DIR not in settings["REFRESH_PATHS"].split()
@@ -2453,7 +2597,7 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         )
     # Closed-world, because a publish step that swallowed its own failure would
     # publish nothing and report success. The one that was already here is
-    # assemble's routes download: `route` is allowed to produce no artifact at
+    # assemble's visuals download: `visuals` is allowed to produce no artifact at
     # all, and every item then publishes with no picture. The two fold steps join
     # it for the harvest's reason: they run after the day is committed and touch
     # only months past `observability.item_health_full_grain_months`, so the most
@@ -2828,7 +2972,7 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     _race_the_day(
         tmp_path, env, date, ["item-c"], "Merge pull request #123 from someone/branch"
     )
-    # This run: the routes artifact unpacked a chart into the day's directory,
+    # This run: the visuals artifact unpacked a chart into the day's directory,
     # and assemble published two items on the base the checkout carried.
     _write(runner / SUBSTITUTED_DAY_DIR / "assets" / "chart-1.svg", "<svg />\n")
     _rebuild(runner, env, date, ["item-d", "item-e"])
@@ -2882,10 +3026,11 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
 def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -> None:
     """The Oracle above, with the one thing it never had: both sides create the path.
 
-    Run `32869125768` finished eight workers and a router and then lost the
-    whole day here. A chart was filed by its vertical and its ordinal within the
-    day, and the ordinal was seeded by reading the day's directory - so two runs
-    of one day, neither able to see what the other pushed, wrote `energy-01.svg`
+    Run `32869125768` finished eight workers and a visual planner and then lost
+    the whole day here. A chart was filed by its vertical and its ordinal within
+    the day, and the ordinal was seeded by reading the day's directory - so two
+    runs of one day, neither able to see what the other pushed, wrote
+    `energy-01.svg`
     for DIFFERENT items with different bytes. Git cannot rebase two adds of one
     path, `assemble` exited 1, and the `items-*` artifacts expired with every
     summary in them.
@@ -3107,7 +3252,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     """`needs` resolves before a job's first step. `steps` does not.
 
     That difference is the whole reason the refs travel as job outputs: it is
-    what lets the weights cache key in `work` and `route` name the file it holds
+    what lets the weights cache key in `work` and `visuals` name the file it holds
     rather than be told by a copy that can disagree with config.
     """
     workflow = _load_workflows()["digest.yml"]
@@ -3173,7 +3318,7 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
             f"-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
         ), job_name
 
-    assert keys["work"] != keys["route"], "one entry cannot hold two sets of weights"
+    assert keys["work"] != keys["visuals"], "one entry cannot hold two sets of weights"
 def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
     """Production, the validation arm and the harness run one binary.
 
@@ -3272,7 +3417,7 @@ START_SERVER_SCRIPT: Final = SCRIPTS_DIR / "start-llama-server.sh"
 def _starter_shell(step: Mapping[str, object]) -> str:
     """Everything a starter step executes, following one level of delegation.
 
-    `work` and `route` ran 31 lines of near-identical inline shell, 80.6 percent
+    `work` and `visuals` ran 31 lines of near-identical inline shell, 80.6 percent
     the same, differing in the config attribute and two filenames. They call one
     script now. Reading the step alone would report that neither reaches
     `server_argv` any more, which is the opposite of what happened.

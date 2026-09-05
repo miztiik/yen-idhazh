@@ -19,7 +19,7 @@ flowchart LR
         direction TB
         P["plan<br/><i>rank and dedupe</i>"]
         W["work x4 shards<br/><i>fetch, extract, summarize, score</i>"]
-        R["route<br/><i>chart, diagram or none</i>"]
+        R["visuals<br/><i>chart, diagram or none</i>"]
         AS["assemble<br/><i>build the day payload</i>"]
         P --> W --> R --> AS
     end
@@ -57,7 +57,7 @@ and the pipeline replayable.
 | --- | --- | --- | --- |
 | `plan` | feed list | `run-plan.json` | Which URLs get worked today, and their order. Loads no model. |
 | `work` | one shard of the plan | `*.article.json`, `*.summary.json`, `*.eval.json` | Fetching, sanitising, summarizing, scoring. |
-| `route` | article + summary | `*.route.json` + an SVG | Whether an item gets a picture, and drawing it. |
+| `visuals` | article + summary | `*.visual.json` + an SVG | Whether an item gets a picture, and drawing it. |
 | `assemble` | everything above | `digest.json`, `run.json`, ledger rows | The published day. |
 
 Every stage is invocable on its own with a file in and a file out. A stage that
@@ -126,7 +126,7 @@ the design:
 | Blended seconds per article, retired incumbent (historical record) | 229 s | derived from the above |
 | Article length, p50 / p90 | 978 / 2769 words | 20 live articles, 2026-08-22 |
 | On-device search download | 43 MB | encoder + tokenizer + WASM |
-| `route` per item, 4B | 21.0 s | `ubuntu-latest`, 2026-08-24, n=148 |
+| `visuals` per item, 4B | 21.0 s | `ubuntu-latest`, 2026-08-24, n=148 |
 | One 512px CPU image, Z-Image-Turbo | ~79 min | `ubuntu-latest`, 2026-08-23 |
 
 There is no blended seconds-per-article figure for the configured summarizer.
@@ -150,7 +150,7 @@ here rather than left as an unexplained gap in the roadmap.
 
 **Generated images.** `Tongyi-MAI/Z-Image-Turbo` at bfloat16 needs 527 s per
 denoising step and 9.2 GB resident on a 4 vCPU runner, so one 512x512 image costs
-about 79 minutes - longer than the entire `route` job's budget. The second
+about 79 minutes - longer than the entire `visuals` job's budget. The second
 candidate, `alpha-vllm/Anima-2.9B`, does not exist on the Hub. No step count or
 resolution reaches a usable number from 527 s per step. Narrative items publish
 with no visual, which is already the common answer

@@ -13,9 +13,9 @@ no picture, because the product is trust and an invented axis label costs it per
 Routing is a separate CLI stage from `work`, not a step inside it:
 
 ```
-idhazh work  --date <D>    # the 8B summarizes
-idhazh route --date <D>    # the 4B routes and renders
-idhazh assemble --date <D> # the day payload picks up whatever routed
+idhazh work    --date <D>  # the 8B summarizes
+idhazh visuals --date <D>  # the 4B plans a visual and renders it
+idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
 One llama-server serves one set of weights, and classification is the easy task, so the router
@@ -91,7 +91,7 @@ host and 40.3 s on a slow one**, over six runs and 703 items on 2026-08-24/25. A
 therefore needs anywhere from 50 to 97 minutes against a 50-minute job.
 
 What happened when it went over is the part that made the defect invisible. A job cancelled at its
-timeout **skips any step without an explicit condition**, and the `routes` artifact upload was one
+timeout **skips any step without an explicit condition**, and the `visuals` artifact upload was one
 of those. So the run threw away every decision the hour had bought - on 2026-08-25 that was 88
 routed items and 9 rendered charts - and `assemble` published 145 items with zero visuals and no
 error anywhere on the page. The day cannot recover: `build_day` keeps an already-published item,
@@ -103,7 +103,7 @@ Three things changed, and each one addresses a different link in that chain:
 | Change | What it stops |
 | --- | --- |
 | `stage_visual_planner` stops at `run.visual_planner_budget_minutes` (40) | The job is never cancelled, so it always reaches its upload step. |
-| The `routes` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
+| The `visuals` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
 | `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
 | The router skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
 
@@ -240,7 +240,7 @@ described a chart that no longer exists.
 **Why there is no image renderer.** Measured on `ubuntu-latest` (4 vCPU, 16 GB),
 2026-08-23, run `32654562728`: `Tongyi-MAI/Z-Image-Turbo` at bfloat16 loads in
 159.2 s at 9.2 GB resident, then spends **527 s per denoising step** at 512x512.
-Nine steps is about **79 minutes for one image** - longer than the whole `route`
+Nine steps is about **79 minutes for one image** - longer than the whole `visuals`
 job's 60-minute bound, and about 196 hours for a 149-item day against a 6-hour
 job limit. The job was cancelled at step 7 of 9 and never reached 768px or a byte
 count. The plan's second candidate, `alpha-vllm/Anima-2.9B`, answers 401
@@ -445,15 +445,15 @@ file before it can be enabled.
 | A funnel of bars for the four chart counts on the console | The stages fall by an order of magnitude - 88 reached, 47 asked, 17 drafted, 9 published on 2026-08-25 - so the bar the decision rests on is the one a reader can barely see. A table gives every stage the same weight. |
 | A model filter or a model legend on the console Charts table | A filter over two values hides half the data and saves nobody any work. When a second model has run enough days to compare, the ledger it is read from has to be truthful first. |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
-| Raise `route`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
-| Shard the `route` job across a matrix | **Unblocked on 2026-08-27 and still not built.** It was blocked on the asset name: a per-vertical counter seeded from the day's directory meant four shards would each read the same highest ordinal and two would write `energy-01.svg`, silently, long before any commit. Naming the asset from the item id removes that, so sharding is now an ordinary throughput change rather than a contract one - and it is the strongest lever left, because the stage spends its whole 40-minute budget on ten of the eleven runs on record. Nobody has measured what a sharded router costs in cache restores and model loads against what it saves, and that measurement is the work. |
+| Raise `visuals`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
+| Shard the `visuals` job across a matrix | **Unblocked on 2026-08-27 and still not built.** It was blocked on the asset name: a per-vertical counter seeded from the day's directory meant four shards would each read the same highest ordinal and two would write `energy-01.svg`, silently, long before any commit. Naming the asset from the item id removes that, so sharding is now an ordinary throughput change rather than a contract one - and it is the strongest lever left, because the stage spends its whole 40-minute budget on ten of the eleven runs on record. Nobody has measured what a sharded router costs in cache restores and model loads against what it saves, and that measurement is the work. |
 | Keep the per-vertical counter and seed it better | Every seeding rule reads something a process can observe, and the defect is that two processes observe different things. A per-process counter lost 2026-08-24; a directory-seeded counter lost run `32869125768`. There is no third thing to read. |
 | Name the asset from a hash of the address, `<vertical>-<url_key prefix>.svg` | It fixes the same defect as the item id and breaks a rule the item id does not: [`layout.md`](layout.md) says no hash appears in any path, filename or URL, and `backend/tests/test_contracts.py::test_no_hash_appears_in_any_published_path` holds it. The item id is already a published address - it is the anchor a reader lands on - so it costs the reader nothing that has not already been accepted. |
 | Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
 | Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
 | Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `retention.image_months` is `-1`, which switches the prune off entirely, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
 | Keep the first claimant's chart and null only the second | The order two items sit in a payload is not evidence of which one the chart was drawn for. This repairs 14 items by guessing on the other 14, and a guess that publishes is the failure being fixed. |
-| Re-render the 2026-08-24 day from its committed routes | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `routes` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's routes expired on 2026-08-25, before anyone read the handover. |
+| Re-render the 2026-08-24 day from its committed routes | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `visuals` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's decisions expired on 2026-08-25, before anyone read the handover. |
 | Renumber a raced chart instead of dropping it | Right while a path could mean two different stories, wrong now that it names one item. Moving this run's copy would file that item's picture under a name that is not its own, and leave two files where the day references one. |
 | Cap the number of items the router may consider | A count has to be set for the worst host, so a fast host would route 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |

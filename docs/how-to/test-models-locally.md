@@ -14,7 +14,7 @@ There are four models in this project and they are tested differently:
 | Model | Role | How you test it |
 | --- | --- | --- |
 | Qwen3.5-9B-Q4_K_M | writes the summaries | serve it, run `work`, read the eval rows |
-| Qwen3-4B-Q4_K_M | decides chart / diagram / nothing | serve it, run `route`, look at the SVG |
+| Qwen3-4B-Q4_K_M | decides chart / diagram / nothing | serve it, run `visuals`, look at the SVG |
 | HHEM-2.1-Open | scores summaries against their source | it loads inside `work`; check `hhem` in the ledger |
 | all-MiniLM-L6-v2 | on-device search, in the browser | committed under `frontend/static/`; `npm run test:browser` |
 
@@ -186,7 +186,7 @@ curl -sf http://127.0.0.1:8080/health
 ```bash
 python -m idhazh plan     --date 2026-08-22
 python -m idhazh work     --date 2026-08-22 --shard 0 --shards 1
-python -m idhazh route    --date 2026-08-22   # restart the server on the 4B first
+python -m idhazh visuals  --date 2026-08-22   # restart the server on the 4B first
 python -m idhazh assemble --date 2026-08-22
 ```
 

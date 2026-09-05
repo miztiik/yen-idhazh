@@ -69,7 +69,7 @@ def _read_visuals(root: Path, date: str) -> dict[str, str]:
     if not items.is_dir():
         return {}
     found: dict[str, str] = {}
-    for path in sorted(items.glob("*.route.json")):
+    for path in sorted(items.glob("*.visual.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
         asset = payload.get("asset_path")
         if asset:

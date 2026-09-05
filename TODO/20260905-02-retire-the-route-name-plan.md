@@ -32,7 +32,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | The config keys move, and the old ones still open | - | A | DONE #411 | yi-r01 | #411 | Fowler, Carmack - agent files read directly |
 | 2 | The module and the contract take their real names | 1 | B | DONE #412 | yi-r02 | #412 | Fowler - agent file read directly |
 | 3 | The stage keeps its wire value and loses its wrong name | 2 | C | DONE #413 | yi-r03 | #413 | Fowler - agent file read directly |
-| 4 | The workflow job says what it does | 3 | D | PENDING | - | - | - |
+| 4 | The workflow job says what it does | 3 | D | DONE #415 | yi-r04 | #415 | Carmack, Fowler - agent files read directly |
 | 5 | The dead spec format and the Mermaid round trip go | 2 | D | PENDING | - | - | - |
 | 6 | The word leaves the prose | 4, 5 | E | PENDING | - | - | - |
 

@@ -348,9 +348,9 @@ jobs:
       # may name up to eight. A fixed number here is a second answer to how wide
       # the fan-out is, and the two can disagree - at four it would have queued
       # half of an eight-shard dispatch and handed back the wall-clock the
-      # fan-out buys. Eight workers plus the router is nine, well inside Rule
-      # #2's 20 concurrent jobs, and `route` waits on `work` rather than racing
-      # it.
+      # fan-out buys. Eight workers plus the visuals job is nine, well inside
+      # Rule #2's 20 concurrent jobs, and `visuals` waits on `work` rather than
+      # racing it.
       max-parallel: ${{ fromJSON(needs.plan.outputs.shards) }}
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -436,8 +436,8 @@ jobs:
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
         # One pinned build, checked against its digest before anything runs from
-        # it. Authenticated, because every shard and the router ask at once and
-        # anonymous api.github.com allows 60 requests an hour - a ceiling of
+        # it. Authenticated, because every shard and the visuals job ask at once
+        # and anonymous api.github.com allows 60 requests an hour - a ceiling of
         # eight shards makes that nine askers on a cold cache, not five.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -763,9 +763,9 @@ jobs:
           retention-days: 2
           if-no-files-found: ignore
 
-      # Seven days, not one. Route and assemble read this within the hour, so
-      # one day was enough for the run itself - but it is also the only copy of
-      # the article text a finished run leaves behind, and
+      # Seven days, not one. The visuals job and assemble read this within the
+      # hour, so one day was enough for the run itself - but it is also the only
+      # copy of the article text a finished run leaves behind, and
       # `data_wrangler.py backfill` replays it into the training corpus.
       #
       # At one day the scheduled harvest is the only way rows ever arrive, and it
@@ -807,16 +807,18 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # Visual routing runs on the small model, in its own job, because one
+  # Visual planning runs on the small model, in its own job, because one
   # llama-server serves one set of weights. It is deliberately unable to stop a
-  # publication: `continue-on-error` plus assemble's `always()` means a router
-  # that never starts costs every item its picture and costs the day nothing.
+  # publication: `continue-on-error` plus assemble's `always()` means a visual
+  # planner that never starts costs every item its picture and costs the day
+  # nothing.
   #
   # This bound is the backstop, not the budget. The stage stops itself at
   # `run.visual_planner_budget_minutes` in config/idhazh.json, which is set below this
   # number with room for the fixed cost and one worst-case item. Raising this
-  # number is not the fix for a slow router (Rule #2); lowering that one is.
-  route:
+  # number is not the fix for a slow visual planner (Rule #2); lowering that one
+  # is.
+  visuals:
     needs: [plan, work]
     if: always()
     continue-on-error: true
@@ -839,8 +841,8 @@ jobs:
       # Same key shape as the work job, and the same reason: the fetch below runs
       # only on a miss, so the key is what dates the binary, the weights and the
       # upload of those weights.
-      - name: Cache the router weights and runtime
-        id: router
+      - name: Cache the visual planner weights and runtime
+        id: weights
         uses: actions/cache@v6
         with:
           path: |
@@ -848,8 +850,8 @@ jobs:
             backend/bin
           key: llm-${{ needs.plan.outputs.visual_planner_file }}-${{ needs.plan.outputs.visual_planner_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
 
-      - name: Fetch runtime and router weights
-        if: steps.router.outputs.cache-hit != 'true'
+      - name: Fetch runtime and visual planner weights
+        if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -875,9 +877,9 @@ jobs:
 
       # No `if:`, for the same reason the work job's check carries none: a
       # restored cache entry is the one case where nobody watched the bytes
-      # arrive. The router cannot stop a publication, so a wrong file here costs
+      # arrive. This job cannot stop a publication, so a wrong file here costs
       # every item its picture in silence unless something says so (Rule #10).
-      - name: Verify the router weights
+      - name: Verify the visual planner weights
         run: |
           set -euo pipefail
           EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["visual_planner"]["sha256"] or "")')
@@ -887,11 +889,11 @@ jobs:
           fi
           echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.visual_planner_file }}" | sha256sum --check
 
-      - name: Start the router
+      - name: Start the visual planner
         env:
           LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.visual_planner_file }}
         run: |
-          .github/scripts/start-llama-server.sh visual_planner router
+          .github/scripts/start-llama-server.sh visual_planner visual-planner
 
       - uses: actions/download-artifact@v8
         with:
@@ -904,7 +906,7 @@ jobs:
           merge-multiple: true
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
 
-      - name: Check router health
+      - name: Check visual planner health
         run: |
           set -euo pipefail
           for _ in $(seq 1 120); do
@@ -912,12 +914,12 @@ jobs:
             sleep 5
           done
           curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
-            echo "the router never became healthy" >&2
-            tail -50 router.log >&2
+            echo "the visual planner never became healthy" >&2
+            tail -50 visual-planner.log >&2
             exit 1
           }
 
-      # The router's prefill rate varies 3x between runs (20.2 to 62.9 tok/s,
+      # This job's prefill rate varies 3x between runs (20.2 to 62.9 tok/s,
       # six runs 2026-08-24/25) while the prompt size and the decode rate stay
       # put, which is what decides whether a day fits its budget. The runner's
       # CPU is the remaining suspect and nothing recorded it, so record it -
@@ -928,28 +930,28 @@ jobs:
           echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
           grep -m1 'model name' /proc/cpuinfo || true
           nproc || true
-          grep -m1 'system_info' router.log || true
+          grep -m1 'system_info' visual-planner.log || true
           LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
           sha256sum backend/bin/llama-server || true
           sha256sum "backend/models/${{ needs.plan.outputs.visual_planner_file }}" || true
 
-      - name: Route and render
-        run: python -m idhazh route --date "${{ needs.plan.outputs.date }}"
+      - name: Plan the visuals and render them
+        run: python -m idhazh visuals --date "${{ needs.plan.outputs.date }}"
 
-      - name: Router log on failure
+      - name: Visual planner log on failure
         if: failure()
-        run: tail -50 router.log || true
+        run: tail -50 visual-planner.log || true
 
-      - name: Router cache log summary
+      - name: Visual planner cache log summary
         if: always()
         run: |
-          if [ ! -f router.log ]; then
-            echo "router.log not found"
+          if [ ! -f visual-planner.log ]; then
+            echo "visual-planner.log not found"
             exit 0
           fi
-          grep -E '^(srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' router.log || true
+          grep -E '^(srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' visual-planner.log || true
           for field in f_sim_best f_keep; do
-            grep -oE "${field} = [0-9.]+" router.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
+            grep -oE "${field} = [0-9.]+" visual-planner.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
               { v[NR] = $1 + 0 }
               END {
                 if (NR == 0) { printf "%s: no samples\n", field; exit }
@@ -960,32 +962,38 @@ jobs:
               }'
           done
 
-      - name: Upload router log
+      - name: Upload the visual planner log
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: router-log
-          path: router.log
+          name: visual-planner-log
+          path: visual-planner.log
           retention-days: 2
           if-no-files-found: ignore
 
       # `always()`, because a cancelled job skips a step that has no condition.
-      # Every route decision and every rendered chart lives only in this
-      # artifact, so without it a router stopped for any reason hands assemble
-      # nothing and the day publishes with no visuals at all - which is exactly
-      # what four of the six runs on 2026-08-24/25 did.
+      # Every visual decision and every rendered chart lives only in this
+      # artifact, so without it a visual planner stopped for any reason hands
+      # assemble nothing and the day publishes with no visuals at all - which is
+      # exactly what four of the six runs on 2026-08-24/25 did.
+      #
+      # The glob is the suffix `idhazh.cli` writes and `idhazh.render.write`
+      # reads, and `if-no-files-found: ignore` means a glob that matches nothing
+      # uploads an empty artifact on a green run. Move the suffix without this
+      # line and the day publishes with no pictures and no error;
+      # `test_workflows.py` holds the pair.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: routes
+          name: visuals
           path: |
-            backend/var/run/${{ needs.plan.outputs.date }}/items/*.route.json
+            backend/var/run/${{ needs.plan.outputs.date }}/items/*.visual.json
             frontend/public/digest/
           retention-days: 1
           if-no-files-found: ignore
 
   assemble:
-    needs: [plan, work, route]
+    needs: [plan, work, visuals]
     # Always runs, even when a worker failed. A run that publishes nothing on a
     # bad day is a run whose bad days are invisible.
     if: always()
@@ -1014,13 +1022,13 @@ jobs:
           merge-multiple: true
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
 
-      # The routes and their rendered assets. `continue-on-error` above means
-      # this artifact may simply not exist, which is the degraded-not-failed
-      # path: every item then publishes with no picture.
+      # The visual decisions and their rendered assets. `continue-on-error`
+      # above means this artifact may simply not exist, which is the
+      # degraded-not-failed path: every item then publishes with no picture.
       - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
-          name: routes
+          name: visuals
           path: .
 
       - name: Assemble and publish
@@ -1098,7 +1106,7 @@ jobs:
       # push loses a race, the fix is to build the day again against the tip the
       # push wants, not to ask git to text-merge two digests. `REFRESH_PATHS` is
       # what that rebuild owns, named one file at a time under the day's
-      # directory - the routes artifact unpacked this run's rendered charts into
+      # directory - the visuals artifact unpacked this run's rendered charts into
       # that same directory, and no producer here can make those again.
       #
       # `DROP_RACED_ASSETS_COMMAND` is what keeps those charts from being the
