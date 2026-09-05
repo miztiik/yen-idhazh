@@ -856,6 +856,27 @@ minute after a push, before the runner registers the new head. Do not read that
 minute as a broken trigger - re-ask, and only treat a persistently empty answer
 as one of the three causes above.
 
+**Building a `--jq` filter with PowerShell `+` splits it into three arguments,
+and `gh` answers with nothing rather than an error.** A poller written as
+`gh run list --jq '.[] | select(.headSha=="' + $head + '") | ...'` passes `gh`
+three separate operands, because PowerShell concatenates with `+` only inside
+parentheses. `gh` takes the first as the filter, ignores the rest, and prints
+an empty result - so the loop reads "no run has started yet" and waits out its
+whole deadline on a run that was already going. Measured 2026-09-05: twelve
+minutes of an apparently dead trigger on a pull request whose CI was in
+progress the entire time. Build the string first, or skip `jq` and let
+PowerShell do the filtering:
+
+```powershell
+$runs = gh run list --repo <owner/repo> --branch <branch> --limit 10 `
+  --json name,status,conclusion,headSha | ConvertFrom-Json |
+  Where-Object { $_.headSha -eq $head }
+```
+
+The same shape bites any `gh` flag whose value is assembled from a variable.
+The tell is an empty answer where a malformed filter should have raised, so
+print the run list unfiltered once before trusting a filtered poll.
+
 **Deprecation warnings are check-run annotations, not log lines.** Grepping the
 log finds nothing. Read them, and always capture a baseline count from a
 pre-fix run so the fix can be shown to have done something:
