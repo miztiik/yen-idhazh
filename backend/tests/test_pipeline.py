@@ -1217,9 +1217,9 @@ def test_the_route_stage_stops_at_its_budget_instead_of_being_killed(
 
     cli.stage_visual_planner(run_plan, settings=one_minute, clock=SteppingClock(10.0))
 
-    decided = sorted(path.name.split(".")[0] for path in items_dir.glob("*.route.json"))
+    decided = sorted(path.name.split(".")[0] for path in items_dir.glob("*.visual.json"))
     assert decided == ["ai-01", "ai-02"], "the budget stopped the stage part-way, by rank"
-    decision = VisualDecision.from_json(read_text(items_dir / "ai-01.route.json"))
+    decision = VisualDecision.from_json(read_text(items_dir / "ai-01.visual.json"))
     assert decision.decision_ms == 10_000
     assert decision.asked_the_model is False
 
@@ -1235,7 +1235,7 @@ def test_a_stage_inside_its_budget_routes_every_item(
 
     cli.stage_visual_planner(run_plan, settings=config.load(CONFIG_DIR), clock=SteppingClock(0.0))
 
-    decided = sorted(path.name.split(".")[0] for path in items_dir.glob("*.route.json"))
+    decided = sorted(path.name.split(".")[0] for path in items_dir.glob("*.visual.json"))
     assert decided == [item.item_id for item in run_plan.items]
 
 

@@ -35,6 +35,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The file this payload is written to is now <item>.visual.json. It was <item>.route.json. No field changed.",
+      "version": "2026-09-05T17:00",
+      "why": "The filename is the last place the old word survived on the write path, and it is the one nothing else records - the payload lives under backend/var/, which is gitignored, so a reader of this repository has only this entry to learn the old name from. Python now spells the suffix once, as PAYLOAD_SUFFIX above, because the writer and the glob that reads it were two literals that had to agree. The workflow's upload glob is the second spelling and cannot read a Python name, so a test holds the two as one pair: move the suffix without the glob and the artifact uploads nothing, assemble receives no visuals, and the day publishes with no pictures on a green run."
+    },
+    {
       "change": "Renamed. The class was Route, the schema file was route.schema.json, and the two fields routed_at and route_ms are now decided_at and decision_ms. No field was added, removed or retyped, and no value changed.",
       "version": "2026-09-05T15:00",
       "why": "Route names a dispatch decision; this payload records a planning decision, so the old stem taught the wrong word to everything that read it. The old stem is written here because a schema file that changes name leaves no other trace of what it used to be called (CLAUDE.md section 11). No read-side migration: this payload is written to <item>.route.json under backend/var/, which is gitignored and travels as a one-day artifact, so the run that writes it is the run that reads it and no committed payload carries the old field names."
@@ -198,7 +203,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-05T15:00",
+      "default": "2026-09-05T17:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -217,5 +222,5 @@
   ],
   "title": "VisualDecision",
   "type": "object",
-  "version": "2026-09-05T15:00"
+  "version": "2026-09-05T17:00"
 }
