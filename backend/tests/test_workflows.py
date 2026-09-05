@@ -27,6 +27,8 @@ from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 from idhazh import ledger, publish_telemetry
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 
+pytestmark = [pytest.mark.workflow, pytest.mark.slow]
+
 WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
 SCRIPTS_DIR: Final = REPO_ROOT / ".github" / "scripts"
 

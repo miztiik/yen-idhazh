@@ -227,4 +227,18 @@ testpaths = ["backend/tests"]
 pythonpath = ["backend"]
 # `-n auto` is the default because the suite is parallel-safe and 3.37x faster
 # on a developer box; `-p no:xdist` or `-n 0` turns it off for a debugging run.
-addopts = "-q -n auto"
+# `--strict-markers` makes a mark that is not on the list below a collection
+# error naming the file, instead of a warning that leaves the test in no subset.
+addopts = "-q -n auto --strict-markers"
+# Four selectors, so a change can run the tests it can break instead of all
+# 2,140. Each is a module-level `pytestmark`, so a module that is renamed or
+# moved keeps its mark. CI still runs the whole suite - a mark is a developer's
+# shortcut, never the thing that decides what a merge is checked against.
+# `backend/tests/test_marks.py` holds the four against the whole collected set,
+# so a module in no subset is named rather than silently never run.
+markers = [
+    "contract: the persisted shapes - generated schemas, config contracts, the ledgers, the committed digest tree",
+    "visual: the visual planner, its validator, the spec compiler and the two renderers",
+    "slow: a module whose average test takes over a second",
+    "workflow: the workflow YAML and the shell scripts under .github/",
+]

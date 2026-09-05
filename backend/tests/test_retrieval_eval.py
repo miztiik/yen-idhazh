@@ -33,6 +33,8 @@ from idhazh.evals.retrieval import (
     RetrievalReport,
 )
 
+pytestmark = pytest.mark.slow
+
 
 def unit(*values: float) -> tuple[float, ...]:
     length = math.sqrt(sum(value * value for value in values)) or 1.0

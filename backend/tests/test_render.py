@@ -18,6 +18,8 @@ from idhazh.render.write import (
     render_route,
 )
 
+pytestmark = pytest.mark.visual
+
 SPEC = {
     "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
     "data": {"values": [{"label": "a", "value": 3}, {"label": "b", "value": 5}]},
