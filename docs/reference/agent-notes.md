@@ -1954,6 +1954,26 @@ the variable protects the shell you remember to set it in and nothing else.
   ```
 
   Always print the abort count and refuse to call it a degraded arm at zero.
+- **Aborting a `fetch` makes Chrome log a console error of its own, so a
+  degraded arm fails the console check it is standing next to.** The page
+  handles the failure exactly as designed and the browser still writes
+  `net::ERR_FAILED` for the request it was told to drop. Section 12 asks for
+  zero new `[error]` events, so an arm that counts every console error reports a
+  failure the page did not cause - and the honest fix is to classify, not to
+  lower the bar. Match the errors your own abort produced by URL and count them
+  separately from the rest, and say in the report how many of each there were. A
+  page error and a request the test killed are different facts and only one of
+  them is about the code.
+- **A lazy fetch fires for what is near the viewport, so a check that jumps
+  straight to the bottom of the page measures nothing.** `ItemVisual.svelte`
+  asks for a drawing through an `IntersectionObserver` with a `100%` root
+  margin, so a single `window.scrollTo(0, document.body.scrollHeight)` steps
+  over every slot in between and the observer never fires for them - the arm
+  then reports zero fetches on a page whose lazy fetch is working perfectly.
+  Scroll one viewport at a time and let each step settle, which is what a reader
+  does and what the observer is written for. **Zero fetches is a null result,
+  not a pass**, the same way an abort count of zero is above; print the count and
+  refuse to read a working lazy path out of it.
 - **`document.visibilityState` is `hidden`, so `requestAnimationFrame` never
   fires.** Anything that runs in a mount-time frame callback looks dead here and
   works correctly under Playwright. Verify that class of behaviour with the

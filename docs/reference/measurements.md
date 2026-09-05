@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -4134,8 +4134,14 @@ Every figure in this section: **Windows 11, 12 logical CPUs, 31.8 GiB RAM,
 Python 3.14.2, pytest 9.1.1, pytest-xdist 3.8.0, execnet 2.1.2, node v24.12.0,
 2026-08-30.** A laptop measures the laptop, and this section measures a
 developer box - none of it is a runner figure and none of it changes one. The
-lock is skipped when `CI` is set, `addopts` is unchanged, and a runner keeps
-preview port 4173.
+lock is skipped when `CI` is set, and a runner keeps preview port 4173.
+
+**`addopts` has moved since these arms were taken, so the commands beside them
+no longer mean what they meant.** It read `-q` on 2026-08-30 and reads
+`-q -n auto --strict-markers` today. A bare `pytest` is therefore the parallel
+arm now, not the serial one; the serial arm is `pytest -n 0`. The seconds below
+are still the seconds - the same two runs on the same box - and only the way to
+ask for each of them changed.
 
 The commands are in
 [../how-to/run-the-gates.md](../how-to/run-the-gates.md#running-the-gates-when-the-machine-is-shared).
