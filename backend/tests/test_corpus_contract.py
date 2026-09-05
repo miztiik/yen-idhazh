@@ -20,6 +20,8 @@ from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.summary import Summary
 
+pytestmark = pytest.mark.contract
+
 #: Every character that has ever broken a hand-built JSON writer, in one string.
 #: A lone `\r` is in here because it is the one that survives a naive reader and
 #: lands inside the last field; `\n` and `\t` are here because a row that breaks

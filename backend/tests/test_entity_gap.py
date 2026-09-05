@@ -39,6 +39,8 @@ from utilities.entity_gap import (
     unregistered_ids,
 )
 
+pytestmark = pytest.mark.slow
+
 WATCHLIST: Final = config.load(CONFIG_DIR).watchlist
 ENTITY_IDS: Final = [entity.id for entity in WATCHLIST.entities]
 MATCHER: Final = rematched(WATCHLIST.entity_terms())

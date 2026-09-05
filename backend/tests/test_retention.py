@@ -73,6 +73,8 @@ from idhazh.retention import (
     visuals_older_than,
 )
 
+pytestmark = pytest.mark.slow
+
 #: The widest span the console's control can select, from the config that owns
 #: it. The prune may never delete a shard a read that wide names.
 CONSOLE_MAX_WINDOW_DAYS: Final = ConsoleConfig().max_window_days

@@ -24,6 +24,8 @@ from utilities.migrate_feed_health import NARROW_COLUMNS, WIDENED_AT, widen
 from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
 
+pytestmark = pytest.mark.contract
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATE_FIXTURES = FIXTURES_DIR / "state"
 DATE = "2026-08-23"

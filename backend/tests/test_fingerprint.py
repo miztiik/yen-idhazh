@@ -45,6 +45,8 @@ from idhazh.fingerprint import (
     text_digest,
 )
 
+pytestmark = pytest.mark.contract
+
 FIXTURE = CONTRACT_FIXTURES_DIR / "fingerprint-row" / "first-seen.json"
 HEX64 = re.compile(r"[0-9a-f]{64}")
 

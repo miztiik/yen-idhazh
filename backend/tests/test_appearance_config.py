@@ -43,6 +43,8 @@ from idhazh.contracts.appearance_config import (
     ThemeConfig,
 )
 
+pytestmark = pytest.mark.contract
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
 

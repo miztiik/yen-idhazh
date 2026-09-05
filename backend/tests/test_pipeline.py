@@ -48,6 +48,8 @@ from idhazh.fetch import FetchResult
 from idhazh.fingerprint import read_ledger, text_digest
 from idhazh.ledger import STATE_DIRNAME
 
+pytestmark = pytest.mark.slow
+
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
     "million tokens and 2.1 times the throughput of the model it replaces on commodity "

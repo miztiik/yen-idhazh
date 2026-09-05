@@ -27,7 +27,11 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Final
 
+import pytest
+
 from utilities import gate_lock
+
+pytestmark = pytest.mark.slow
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 GATE_LOCK: Final = REPO_ROOT / "backend" / "utilities" / "gate_lock.py"
