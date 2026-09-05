@@ -24,6 +24,8 @@ from conftest import REPO_ROOT, read_text
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.render.write import assets_in_day
 
+pytestmark = [pytest.mark.contract, pytest.mark.visual]
+
 PUBLIC_ROOT = REPO_ROOT / "frontend" / "public"
 DIGEST_ROOT = PUBLIC_ROOT / "digest"
 

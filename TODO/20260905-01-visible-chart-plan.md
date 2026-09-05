@@ -33,7 +33,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 2 | A past-seed item is themed too | 1 | B | DONE #405 | yi-v02 | #405 | worker (runSubagent unavailable - persona files read directly) |
 | 3 | A whole committed day, looked at | 2 | C | DONE #406 | yi-v03 | #406 | worker (runSubagent unavailable - persona files read directly) |
 | 4 | One knob, one value | - | C | DONE #407 | yi-v04 | #407 | worker (runSubagent unavailable - persona files read directly) |
-| 5 | A PR runs only the tests it can break | - | A | PENDING | - | - | - |
+| 5 | A PR runs only the tests it can break | - | A | DONE #408 | yi-v05 | #408 | worker (runSubagent unavailable - persona files read directly) |
 
 ---
 
