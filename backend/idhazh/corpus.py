@@ -214,10 +214,10 @@ def scored_from_items(items_dir: Path) -> list[Scored]:
         eval_path = path.with_name(f"{item_id}.eval.json")
         found.append(
             Scored(
-                article=Article.from_json(path.read_text(encoding="utf-8")),
-                summary=Summary.from_json(summary_path.read_text(encoding="utf-8")),
+                article=Article.read(path),
+                summary=Summary.read(summary_path),
                 row=(
-                    EvalRow.from_json(eval_path.read_text(encoding="utf-8"))
+                    EvalRow.read(eval_path)
                     if eval_path.is_file()
                     else None
                 ),

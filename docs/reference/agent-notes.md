@@ -2190,6 +2190,17 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
 
 ## Serving a build to measure it
 
+- **A commit made after the build turns the next browser run red before a test
+  runs.** `scripts/build-state.ts` fingerprints the tree at build time and
+  `verified-preview.ts` checks it again when Playwright starts the server, so a
+  build that is one commit old fails with `The real build has stale inputs` and
+  `Process from config.webServer was not able to start. Exit code: 1`. That
+  reads like a broken preview server, not like a stale directory. Measured
+  2026-09-05: a two-line edit to a backend test invalidated a build taken twenty
+  minutes earlier. Rebuild in the mode the spec wants and run it again - and
+  note that the guard is only checking the fingerprint, so it says nothing about
+  whether the tree is the real site or the canary. That question is answered by
+  the spec's own guard, if it has one.
 - **`python -m http.server` serves `.js` with the Windows registry MIME type**,
   which is often `text/plain`. The browser refuses the module, SvelteKit never
   hydrates, and the page still looks right and still logs zero errors. Every

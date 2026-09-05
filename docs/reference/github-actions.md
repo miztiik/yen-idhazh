@@ -352,6 +352,43 @@ so a merge lands inside a live run more often than not. Two consequences:
   have to read the old shape, which is exactly the migration `CLAUDE.md`
   section 11 already requires when the payload is committed. These are not.
 
+**The error now names the condition, which is a smaller claim than fixing it.**
+Every read of a payload one job of a run wrote and a later job reads goes
+through `Contract.read`, which compares the stamp on the payload against the one
+the running build declares before parsing rules on anything. When the two differ
+and the payload will not load, it raises `StalePayloadError` carrying both
+stamps and the remedy, instead of a list of fields that are not wrong. A payload
+stamped with the build's own version still raises the parser's own error
+untouched - that is a defect and dressing it up would hide every real bug behind
+a story about timing. The bullet above still holds: the day is still lost, the
+next scheduled run still rebuilds it, and timing the merge is still the thing
+that prevents it. What changed is that the operator can now read the failure
+without opening two commits.
+
+**The proper fix is a rule change, and it is not this one.** `CLAUDE.md`
+section 11 requires a read-side migration when a persisted shape moves, and it
+scopes that to committed files - which is why the payloads under `backend/var/`
+are outside it. They are not committed, but they ARE written by one build and
+read by another, which is the property the rule actually cares about. Extending
+section 11 to cover them would close the hole rather than report it: a rename
+would ship with a reader for the old shape, the straddling run would read its
+own payloads and publish, and no day would be lost. The cost is that every
+rename on those shapes becomes expand-migrate-contract - two commits and a
+window of hours where both shapes are read - rather than one commit. That is a
+change to the engineering contract and to a persisted-contract rule, so it is
+Level 5 (`CLAUDE.md` section 6) and belongs to the owner, not to a fix PR.
+
+Two things that look like fixes and are not. Re-running the producer instead of
+the assembler when the contract has moved does not work: `assemble` is what
+merges the day with what is already published, so skipping it is not an option
+and re-running the whole day costs the run again. And degrading the item, which
+`CLAUDE.md` section 1a would otherwise reach for, is the wrong shape here - the
+three cases that principle names are all the outside world failing, and this is
+the build and the disk disagreeing. Degrading would publish a day quietly
+missing N items because somebody merged a rename, and nothing would come back to
+correct it. Failing loudly costs one publishing slot and the next run repairs
+itself.
+
 Model validation and measurements never run on a pull request, push, or
 schedule. A person dispatches them. Drift review is a separate weekly or manual
 workflow; it does not run inside Content refresh. Vector backfill is dispatched
