@@ -15,28 +15,105 @@
 	 * survives inlining: a `viewBox` is an aspect ratio, so `height: auto`
 	 * resolves before a byte of the drawing has been read.
 	 *
-	 * **The drawing is in the document when the build could put it there.** An
-	 * SVG inside an `img` is a separate document. It reads none of the page's
-	 * custom properties, so the chart kept the colours the renderer baked in -
-	 * black axis type and grey rules, which on the dark theme is black type on a
+	 * **The drawing is always in the document, never in an `img`.** An SVG inside
+	 * an `img` is a separate document. It reads none of the page's custom
+	 * properties, so the chart kept the colours the renderer baked in - black
+	 * axis type and grey rules, which on the dark theme is black type on a
 	 * near-black card. Inlined, the same markup loses to any stylesheet rule,
 	 * because a presentation attribute has the lowest priority there is. So the
 	 * page repaints it from its own tokens and the backend writes the same bytes
 	 * it always wrote.
 	 *
-	 * The `img` below is what a story past the seed still gets. It is the
-	 * unreadable carrier and it is on its way out; until the fetch that replaces
-	 * it lands, deleting it here would take the drawing away from those stories
-	 * rather than fix it, and a fact a reader can half-see beats a fact that is
-	 * gone.
+	 * A story the prerendered document carries arrives with its drawing already in
+	 * hand. A story past that seed arrives with a path, and this component fetches
+	 * the file and puts the same markup in the same place - so one scroll shows
+	 * one treatment rather than two.
+	 *
+	 * **A drawing that does not arrive costs the story its picture and nothing
+	 * else.** No broken-image glyph, no grey box, no skeleton: the story is
+	 * shorter, which is the shape two stories in three already have.
 	 */
 	import { base } from '$app/paths';
+	import { publishedVisual, refusedDrawing } from '$lib/payload/drawing';
 	import type { SeededVisual } from '$lib/payload/types';
 
 	let { visual }: { visual: SeededVisual | null } = $props();
-	const rendered = $derived(visual?.state === 'rendered' && visual.path);
-	const drawing = $derived(visual?.markup ?? null);
+
+	/** The drawing this story arrived with, for a story the document seeded. */
+	const seeded = $derived(visual?.markup ?? null);
+	/** The file this story's drawing is in, for a story that arrived without one.
+	 *
+	 * Null once the markup is in hand, so a seeded story never asks for a file it
+	 * is already holding.
+	 */
+	const wanted = $derived(
+		!visual?.markup && visual?.state === 'rendered' && visual.path ? visual.path : null
+	);
 	const alt = $derived(visual?.alt ?? '');
+
+	/** What the fetch brought back, or null while it has not run or did not work. */
+	let arrived = $state<string | null>(null);
+	const drawing = $derived(seeded ?? arrived);
+
+	/** The drawing that file holds, or null when there is nothing safe to draw.
+	 *
+	 * The refusal is the same one the build runs, out of the same module. Inlined
+	 * markup is markup in our own origin whichever side put it there, and the
+	 * labels inside it were written by a model that read a stranger's page
+	 * (Rule #11). The path is matched before it is joined onto `base`, for the
+	 * same reason `dayUrl` matches a date: it is about to become an address.
+	 */
+	async function read(file: string): Promise<string | null> {
+		if (!publishedVisual(file)) {
+			console.warn(`[digest] ${file}: not a published visual path, so it is not drawn`);
+			return null;
+		}
+		try {
+			const response = await fetch(`${base}/${file}`);
+			if (!response.ok) {
+				console.warn(`[digest] ${file}: not available (${response.status}), so it is not drawn`);
+				return null;
+			}
+			const markup = await response.text();
+			const refused = refusedDrawing(markup);
+			if (refused !== null) {
+				console.warn(`[digest] ${file}: ${refused}, so it is not drawn`);
+				return null;
+			}
+			return markup;
+		} catch (error) {
+			console.warn(`[digest] ${file} could not be read, so it is not drawn`, error);
+			return null;
+		}
+	}
+
+	/** Ask for the drawing once the story is nearly on screen.
+	 *
+	 * The `img` this replaced carried `loading="lazy"`, so a browser asked for a
+	 * drawing only when the reader was near it. A plain fetch on mount throws that
+	 * away, and the case where it hurts is not the ordinary one: a reader
+	 * following `/<date>/#<story>` pages the stream down to that story, so the
+	 * whole prefix mounts at once. Measured 2026-09-05, the day carrying the most
+	 * drawings is 2026-08-31 with 43 across 601 stories - so a deep link into the
+	 * tail of that day would open 43 requests at once, 534 KB, against the day
+	 * payload the same page is still waiting on.
+	 *
+	 * `100%` is one screen of the scrolling root rather than a pixel count, so a
+	 * phone asks one phone-screen early and a desktop one desktop-screen, and
+	 * there is no number here to maintain.
+	 */
+	function whenNear(node: Element, file: string): { destroy: () => void } {
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((entry) => entry.isIntersecting)) return;
+				observer.disconnect();
+				void read(file).then((markup) => (arrived = markup));
+			},
+			{ rootMargin: '100% 0px' }
+		);
+		observer.observe(node);
+		return { destroy: () => observer.disconnect() };
+	}
 </script>
 
 {#if drawing}
@@ -49,16 +126,12 @@
 		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 		{@html drawing}
 	</figure>
-{:else if rendered && visual}
-	<figure class="my-4 overflow-hidden rounded-md border border-rule bg-surface">
-		<img
-			src="{base}/{visual.path}"
-			alt={visual.alt ?? ''}
-			loading="lazy"
-			decoding="async"
-			class="block h-auto w-full"
-		/>
-	</figure>
+{:else if wanted}
+	<!-- Where the drawing will go, and nothing a reader can see: no box, no
+	     border, no height. It exists so the fetch can wait until the story is
+	     nearly on screen, and a story whose drawing never arrives keeps exactly
+	     the height it has now. -->
+	<div class="slot" use:whenNear={wanted}></div>
 {/if}
 
 <style>
@@ -106,6 +179,12 @@
 	   a blob. Every chart the pipeline emits today is bars. */
 	.visual :global(.mark-rect > path) {
 		fill: var(--chart-1);
+	}
+
+	/* Stated rather than left to an empty box, so nothing a later rule does to a
+	   bare div can give this one a height a reader would see. */
+	.slot {
+		height: 0;
 	}
 </style>
 
