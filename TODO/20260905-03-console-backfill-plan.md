@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Eight committed numbers become publishable | - | A | PENDING | - | - | - |
 | 2 | What an item cost, drawn | 1 | B | PENDING | - | - | - |
-| 3 | The five doubt reasons get a shape | 1 | C | PENDING | - | - | - |
+| 3 | The five doubt reasons get a shape | 1 | C | IN-FLIGHT #425 | yi-c03 | #425 | Andre, Jony, Susan, Reader - agent files read directly, no runSubagent |
 | 4 | Faithfulness and lead coverage join them | 3 | D | PENDING | - | - | - |
 | 5 | The ceilings are re-recorded by the plan that grew them | 2, 4 | E | PENDING | - | - | - |
 
