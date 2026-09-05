@@ -11,7 +11,105 @@ Counts and file numbers below were taken on 2026-08-24 and move as the repo
 grows. Treat them as a "did the command do roughly what I expected" check, not
 as a target.
 
-## Run the fast three locally and let CI run the rest
+## Select local checks and let CI run the full suite
+
+Use the shared launcher from `frontend/`. It requires Node 22.18 or newer and
+the existing development environment. Inspect the selection before running it:
+
+```powershell
+npm run test:changed -- --list
+npm run test:changed
+```
+
+The selector includes committed changes against `origin/main`, staged edits,
+unstaged edits and untracked files. Use `--base <ref>` for a different base.
+Every selected group prints the path and reason that selected it. Shared
+contracts, config, styles, layouts and dependencies expand coverage. An unknown
+path or an unreadable base selects broader coverage, never an empty pass.
+Documentation-only changes run a whitespace check, not either application suite.
+
+| Group | What it checks | Preparation |
+| --- | --- | --- |
+| `backend` | Named module and integration tests, or the full backend for shared or unknown inputs; ruff and mypy | Existing Python development environment |
+| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium |
+| `reader` | Reading pages, layout, filters, themes and read state | Canary build |
+| `console` | The operator dashboards | Canary build |
+| `archive` | Browsing, calendar and pagination | Canary build |
+| `model-search` | On-device search and recovery | Canary build |
+| `publishing` | Payloads, projections, canaries and malformed-day handling | Canary build and Python |
+
+For the inner loop, request a group or one existing spec explicitly. Such a
+result certifies that selection, not every check the automatic selector chose:
+
+```powershell
+npm run test:changed -- --group logic
+npm run test:changed -- --group console
+npm run test:changed -- --spec archive.spec.ts
+npm run test:changed -- --mode real --spec reading-page.spec.ts --spec layout-overflow.spec.ts
+```
+
+`--group browser` selects all frontend groups; `--group all` adds the backend.
+The `all` selection also includes schema regeneration and the tooling tests.
+Choose group flags or spec flags for one invocation, not both. Several spec
+flags can select tests from different groups.
+A real-build run requires an explicitly supported reading or visual spec, so
+canary-dependent console assertions cannot accidentally run against real data.
+Keep the section 12 browser smoke for a published-site change.
+
+The launcher checks the dependencies the selection needs before waiting for a
+test slot. A logic-only run does not probe Python packages or run pytest. It
+uses the existing Python standard-library lock helper for coordination only.
+The tooling self-tests run when the test infrastructure changes, or with
+`--group all`; they are not added to every frontend run. Browser preparation
+still needs the Python producer. The launcher honors `IDHAZH_PYTHON` or
+`--python <path>`.
+It clears inherited data-root overrides and `PYTEST_ADDOPTS`. A missing or stale
+canary build is prepared automatically: canary day, canary site, then selected
+browser tests. Build and test share one lock. The logic-only path uses a
+checkout-local lock and does not queue behind another checkout's site build.
+Both paths require the lock. If it cannot be acquired, the launcher exits 75
+without starting the checks. It does not reclaim a live holder's lock based
+only on age. The lock helper's legacy unlocked fallback remains available to
+direct callers that do not pass `--require-lock`.
+
+Every normal `npm run build` captures its mode, source inputs and build
+environment after staging and before compilation. Starting a build invalidates
+its previous completion record. Completion verifies the same inputs, then
+records static output and SvelteKit preview output outside the published tree.
+A source edit during compilation cannot certify the old output. Browser
+tests refuse an unrecorded, wrong-mode or stale build. Preview never adopts an
+existing server. `PREVIEW_PORT` remains the override for a port collision.
+
+Run records under `backend/var/checks/` hold the source fingerprint, selected
+groups and specs, exit status, step durations, test counts and queue/startup
+time separately. Logic and browser reports use separate output directories.
+A matching completed run is reused.
+A caller joining the same active run waits for that attempt, not an old pass.
+Only an explicit `--fresh` reruns unchanged completed inputs. A failed or
+interrupted run is never reported as success, and collection-only or all-skipped
+reports cannot certify a change. Inspect status instead of relaunching:
+
+```powershell
+npm run test:changed -- --status
+```
+
+The group inventory includes subdirectories and fails when a new spec has no
+owner. Its tests also prove
+that shared and unknown paths select broader coverage. New dependencies between
+areas need a selector regression test, not only a new group label. The selector
+lives in `frontend/scripts/test-scope.ts`; the group inventory lives beside it
+in `test-groups.ts`. CI uses that same selector for its browser/console choice,
+keeps the full backend suite, and runs all frontend groups on `main`.
+The selector job and the backend test job declare the same Node version,
+because the workflow tests execute that TypeScript selector. The backend job
+does not install frontend packages for it; the selector uses Node's built-ins.
+
+For a local contract change, the launcher compares schema files before and
+after export. Correct uncommitted generated files can pass; an exporter that
+changes them requires review and a new run. CI still compares its clean
+checkout against the committed schemas.
+
+## Direct backend checks
 
 **CI is the authoritative arm and it is faster than your machine by between six
 and fifteen times.** The `gates` job finishes the whole backend suite in about
@@ -26,12 +124,13 @@ installing:
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
-.\.venv\Scripts\python.exe -m pytest backend/tests/test_<the module you changed>.py
+.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_<the module you changed>.py
 ```
 
-Under a minute. Then push and read CI. When the change reaches further than one
-module, the third line becomes a mark selector instead - `-m contract`,
-`-m visual`, `-m workflow` or `-m "not slow"`, priced
+Then push and read CI. A focused run uses one process to avoid starting every
+worker for a small selection. The full-suite defaults are unchanged.
+When the change reaches further than one module, the third line can use a mark
+selector: `-m contract`, `-m visual`, `-m workflow` or `-m "not slow"`, priced
 [below](#run-only-the-tests-a-change-can-break).
 
 **Run the full local suite when you cannot push, or when you are about to merge
@@ -115,9 +214,10 @@ hides the contention and the false red returns at the next fan-out.
 
 ### The backend suite can use every core the box has
 
-`-n auto` shards the suite across the machine's processors, and it is the
-default: `addopts` carries it, so a bare `pytest` already uses every core.
-`-n 0` turns it off for a debugging run.
+`-n auto` shards the suite across the machine's processors. It is already the
+default in `pyproject.toml`, locally and in CI. Use `-n 0` for a focused or
+debugging run. Disabling the plugin alone does not remove `-n auto` from the
+configured arguments.
 
 ```powershell
 python backend/utilities/gate_lock.py -- python -m pytest -n auto
@@ -342,9 +442,14 @@ echarts registration is a decision about the chart vocabulary and not about size
 The browser gate runs against the **canary day**, not the real digest, so it
 does not change meaning when the pipeline publishes.
 
+Prefer `npm run test:changed` locally. In the manual full frontend sequence
+below, `test:logic` owns the build-independent group and `test:browser` owns the
+other five groups. Together they retain the full test inventory.
+
 ```powershell
 .\.venv\Scripts\python.exe backend\utilities\build_canary_day.py
 cd frontend
+npm run test:logic
 npm run build:canary
 npm run test:browser
 ```
@@ -361,9 +466,10 @@ the fixture can reach: the canary records no failure at all, so the two facts
 that need one - a denominator walked down the pipeline, and a rate withheld
 under `console.min_attempts_for_rate` - are driven as pure functions, and every
 state the fixture does reach is driven in the browser through the controls an
-operator has. A hundred and four of them are pure-function tests over
-`frontend/src/lib/charts/`, run in Node by the same runner. There is no separate
-frontend unit-test runner, so a pure module proves itself here.
+operator has. A hundred and four of that historical inventory were pure-function
+tests over `frontend/src/lib/charts/`. Build-independent specs now use
+`playwright.logic.config.ts`, with no preview server. Mixed specs remain in
+their feature group. Both configurations use the existing Playwright runner.
 
 **One spec asks a question the canary day cannot answer, and says so.**
 `reading-page.spec.ts` reads the reading surface whole - every reader route at
@@ -376,7 +482,9 @@ skip here on a fact the served payload owns and run against the real digest:
 
 ```powershell
 npm run build
+$env:IDHAZH_TEST_BUILD = 'real'
 npx playwright test tests/reading-page.spec.ts tests/layout-overflow.spec.ts
+Remove-Item Env:IDHAZH_TEST_BUILD
 ```
 
 Take that arm before `build:canary`, which overwrites the same `build/`
@@ -508,17 +616,10 @@ The traps that remain:
   real published dates and fails for reasons that are not your change. Confirm
   `frontend/build/console/index.html` still carries a canary date before and
   after the run.
-- **A leftover `vite preview` on the preview port is adopted, not replaced.**
-  `playwright.config.ts` sets `reuseExistingServer` outside CI, so a server left
-  running by an earlier run serves stale bytes and most of the suite fails at
-  once. The tell is that everything fails together while the pure-function tests
-  still pass. Clear it, then re-run - do not start debugging the code. Kill only
-  your own checkout's port, which the command above prints; another number in
-  the band belongs to a sibling worktree that is using it:
-
-  ```powershell
-  Get-NetTCPConnection -LocalPort $port -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
-  ```
+- **An occupied preview port is rejected, not adopted.** `reuseExistingServer`
+  is false locally and in CI. Stop a server only after proving that it belongs
+  to your checkout, or choose another `PREVIEW_PORT`. Never kill every preview
+  process on a machine shared with another agent.
 
 - **The canary day has one vertical** (`ai`, 8 items). Any rule that only shows
   up with several topics cannot be tested here. Put that rule in a pure module
