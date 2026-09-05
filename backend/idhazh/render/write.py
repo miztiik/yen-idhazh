@@ -103,7 +103,7 @@ def drop_raced_assets(
     already = set(published)
     dropped: list[str] = []
     for decision_path in sorted(items_dir.glob(f"*{PAYLOAD_SUFFIX}")):
-        decision = VisualDecision.from_json(decision_path.read_text(encoding="utf-8"))
+        decision = VisualDecision.read(decision_path)
         relpath = decision.asset_path
         if relpath is None or relpath not in already:
             continue

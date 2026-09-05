@@ -525,13 +525,41 @@ down: the committed day staging the most drawings, which on 2026-09-05 is
 2026-08-31 with 43 drawings across 601 stories. Take this arm before
 `build:canary`, which overwrites the same `build/` directory.
 
-**It is not in CI, and that is a measurement nobody has taken rather than a
-ruling that it does not belong there.** The `browser` job measured 528, 528, 569
-and 583 seconds over its last four green runs (read 2026-09-05) against its
-25-minute timeout, and it already builds the real site once for the model-absent
-gate. What is missing is what this spec and its build cost *on a runner*, and a
-developer-box figure may not stand in for one (Rule #10). Until somebody takes
-that number there, run this by hand before a change to the reading page merges.
+**It runs in CI, in a job of its own, and the numbers say why it is not part of
+the `browser` job.** Measured on `ubuntu-latest`, 2026-09-05: `npm run build`
+takes 24 seconds there and `npm run test:whole-day` 85 seconds for its 7 tests,
+and the whole job - checkout, `npm ci`, the Chromium install, the build and the
+spec - is 183 seconds. The developer-box figures above are three to five times
+those, which is the usual shape and is why a local number may not stand in for a
+runner one (Rule #10).
+
+Appending the build and the spec to the `browser` job would cost 109 seconds.
+The `browser` job measured 460, 482, 494, 514, 542 and 554 seconds over its last
+six green runs on `main`, read 2026-09-05, against a 25-minute timeout - so its
+worst run uses 37 percent of what it is allowed, and 109 more seconds would take
+that to 44 percent. The timeout is not the problem. The wall clock is: those 109
+seconds land on the critical path of every pull request that buys the browser
+half, because nothing else in the run is waiting.
+
+A separate job costs nothing there. It is 183 seconds against a `browser` job
+that is 460 seconds at its fastest, it runs at the same time, and the workflow
+finishes at the moment it finished before. Actions minutes are free and
+unmetered on a public repository (Rule #2), so the 183 seconds are spent rather
+than paid, and 20 concurrent jobs are available against the six this workflow
+already starts.
+
+It is also the safer shape, and that would have decided it on its own. The
+`browser` job does build the real site once - the model-absent gate needs one -
+but it builds it with `static/assist` moved out of the way, and then overwrites
+the whole tree with the canary. Running this spec beside either of those is
+running it against exactly the tree it was written to refuse. Its own job has
+its own `frontend/build` and races nothing. `backend/tests/test_workflows.py`
+holds the job to that: the canary build may not appear in it, and the real build
+has to come before the spec.
+
+The job is bought by the same allow-list as the browser half, because it is the
+same question about the same page. Run it by hand as well when a reading-page
+change is still local - the CI answer arrives after the push.
 
 **A component with no call site proves itself here too.** A shared component
 lands before the sections that render it, so the build tree-shakes it away and
