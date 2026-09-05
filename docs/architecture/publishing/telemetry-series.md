@@ -95,13 +95,31 @@ Measured 2026-09-05 on Intel Core i7-1265U / Windows 11 / node 24, one build per
 arm; the eight untouched routes moved -2 to +5 bytes between them, so the figure
 is the columns and not the build.
 
-So the seed carries nulls. Nothing draws these numbers yet, and a ceiling is
-re-recorded by the change that grows it - bytes the first paint does not use are
-not bytes to record a ceiling around. **A panel that draws them has a choice to
-make**, because `+page.svelte` marks the seeded months loaded and nothing
-re-fetches them: seed the columns that panel draws, or drop the seeded months
-from `loadedMonths` and let the month fetch fill them. The second is the cheaper
-page and the slower first paint, and which is right depends on the panel.
+So the seed carries nulls. A ceiling is re-recorded by the change that grows it,
+and bytes the first paint does not use are not bytes to record a ceiling around.
+
+**A panel draws them since 2026-09-05, and it took neither of the two options
+this paragraph used to offer.** The choice was stated as: seed the columns that
+panel draws, or drop the seeded months from `loadedMonths` and let the month
+fetch fill them, because `+page.svelte` marks the seeded months loaded and
+nothing re-fetches them. `What one item cost the model` takes a third path. It
+reads this projection on the **server**, at build time, and reduces it to two
+doubling-binned distributions and about twenty counts **per entry in
+`console.window_presets`**; the browser picks the open one. The seeded rows are
+untouched and still carry the eight as nulls, so the page grows by the reduction
+rather than by the rows.
+
+What that costs is one thing and it is stated on the page: the section follows
+the window's **length** and not a pan, exactly as `Sources cut short most often`
+does. A pan asks about days the reduction was not taken over, and re-taking it in
+the browser needs the rows the seed deliberately does not carry. The two offered
+options were refused for measured reasons - seeding buys back the 176,753 bytes
+above, and dropping the seeded months puts a 244 KB fetch behind the first click
+of the window control and leaves the section blank until it lands
+([frontend.md](frontend.md#it-follows-the-windows-length-not-a-pan)).
+
+The two options remain open for a panel that genuinely needs a panned answer.
+Nothing on the page needs one today.
 
 ### A new column is appended at the end, and the reader checks a prefix
 

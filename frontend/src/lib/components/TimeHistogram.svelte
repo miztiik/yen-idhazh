@@ -61,6 +61,8 @@
 		name,
 		subject,
 		verb,
+		noun = 'summary',
+		nouns = 'summaries',
 		noRuleReason,
 		width,
 		height,
@@ -74,6 +76,12 @@
 		subject: string;
 		/** What happened to a summary in that time: `written`, `checked`. */
 		verb: string;
+		/** What one measured thing is, in the singular and the plural. The
+		 * Pipelines route bins how long the model spent reading a PROMPT, and a bar
+		 * reading "5 summaries read" would name the wrong thing - the model reads
+		 * the article and writes the summary. */
+		noun?: string;
+		nouns?: string;
 		/** Why no model-change rule is drawn here, in the chart's own words. */
 		noRuleReason: string;
 		width: number;
@@ -198,11 +206,11 @@
 
 	function barTitle(bin: Distribution['bins'][number]): string {
 		const span = bin.from === 0 ? 'under 1 second' : `${bin.from} to ${bin.to} seconds`;
-		return `${plural(bin.n, 'summary', 'summaries')} ${verb} in ${span}. ${bin.throughPct}% of the ${times.n} were done by ${bin.to} seconds.`;
+		return `${plural(bin.n, noun, nouns)} ${verb} in ${span}. ${bin.throughPct}% of the ${times.n} were done by ${bin.to} seconds.`;
 	}
 
 	const description = $derived(
-		`${subject} over ${plural(times.n, 'summary', 'summaries')}, on a doubling scale. ` +
+		`${subject} over ${plural(times.n, noun, nouns)}, on a doubling scale. ` +
 			`Half were ${verb} inside ${seconds(times.median)} and one in twenty took longer than ${seconds(times.p95)}. ` +
 			`The fastest took ${seconds(times.fastest)} and the slowest ${seconds(times.slowest)}. ` +
 			bars
