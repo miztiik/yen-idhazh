@@ -12,12 +12,17 @@ never fails the run.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import ChangelogEntry, Contract, ItemId, RelPath, Slug, Timestamp, UrlKey
+
+#: What one item's decision is filed as, under `backend/var/run/<date>/items/`.
+#: The writer, the reader and the workflow's upload glob all spell it, and a run
+#: where they disagree uploads an empty artifact and publishes with no pictures.
+PAYLOAD_SUFFIX: Final = ".visual.json"
 
 
 class VisualKind(StrEnum):
@@ -54,6 +59,25 @@ class VisualDecision(Contract):
 
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-05T17:00",
+            change=(
+                "The file this payload is written to is now <item>.visual.json. It was "
+                "<item>.route.json. No field changed."
+            ),
+            why=(
+                "The filename is the last place the old word survived on the write path, "
+                "and it is the one nothing else records - the payload lives under "
+                "backend/var/, which is gitignored, so a reader of this repository has "
+                "only this entry to learn the old name from. Python now spells the suffix "
+                "once, as PAYLOAD_SUFFIX above, because the writer and the glob that "
+                "reads it were two literals that had to agree. The workflow's upload glob "
+                "is the second spelling and cannot read a Python name, so a test holds "
+                "the two as one pair: move the suffix without the glob and the artifact "
+                "uploads nothing, assemble receives no visuals, and the day publishes "
+                "with no pictures on a green run."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-05T15:00",
             change=(

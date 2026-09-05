@@ -142,8 +142,9 @@ all and the 10:20 slot started at 12:50, two and a half hours late. Read
 `gh run list --workflow digest.yml` for what actually exists rather than working
 from the cron.
 
-Rule #2 allows 20 concurrent jobs. Eight workers plus the router is nine, and
-`route` waits on `work` rather than racing it, so the ceiling is nowhere near
+Rule #2 allows 20 concurrent jobs. Eight workers plus the visuals job is nine,
+and `visuals` waits on `work` rather than racing it, so the ceiling is nowhere
+near
 the platform limit. Every shard restores the same cache key, so more shards buy
 more restores and never more cache bytes.
 
@@ -166,7 +167,7 @@ value and nothing else, so changing the config number changes the bound.
 Each worker checks its weights before it starts the server. `sha256sum` compares
 the file on disk against `models.summarize.sha256` in `config/idhazh.json`, on a
 cache hit as well as a miss, because a restored cache entry is the one case where
-nobody watched the bytes arrive. The router does the same against
+nobody watched the bytes arrive. The visuals job does the same against
 `models.visual_planner.sha256`; so do the two measurement jobs that load the summarizer.
 The rule is written once, under
 [Every download fails loudly, and every weight is checked](#every-download-fails-loudly-and-every-weight-is-checked).
@@ -175,16 +176,16 @@ The health check then asserts that
 configured filename. A shard that fails either one stops before it summarizes
 anything.
 
-Route uses the worker outputs. Assemble runs even after a worker or route
-failure, then commits the digest and state.
+The visuals job uses the worker outputs. Assemble runs even after a worker or a
+visuals failure, then commits the digest and state.
 
 ```mermaid
 flowchart LR
     SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
     MANUAL["manual dispatch"] --> PLAN
     PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
-    WORK --> ROUTE["route"]
-    ROUTE --> ASSEMBLE["assemble"]
+    WORK --> VISUALS["visuals"]
+    VISUALS --> ASSEMBLE["assemble"]
     ASSEMBLE --> COMMIT["commit digest and state"]
     COMMIT --> COMPLETE["Content refresh completed"]
     COMPLETE --> PAGES["Pages publication"]
@@ -268,7 +269,7 @@ producer would ever write.
 
 `REFRESH_PATHS` names what the rebuild owns: the day's `digest.json` and
 `run.json`, `frontend/public/telemetry/`, and the four ledgers the workers and
-assemble append to. It never names the day's directory. The routes artifact
+assemble append to. It never names the day's directory. The visuals artifact
 unpacks this run's rendered charts into that same directory and no producer in
 the assemble job can make them again, so the two payload files are named one at a
 time. `frontend/public/telemetry/` is a full rewrite of `state/item-health/`,
@@ -279,7 +280,7 @@ with every row twice.
 their own answer.** A chart used to be filed as `<vertical>-<NN>.svg`, numbered
 from the day's directory, and two runs of one day overlap by hours - so both read
 the same highest number and both wrote `energy-03.svg` for different items. Run
-`32869125768` finished eight workers and a router and then died at this step on
+`32869125768` finished eight workers and a visual planner and then died at this step on
 `CONFLICT (add/add)` over four such paths, because git cannot rebase two adds of
 one path. `REFRESH_PATHS` cannot help: hand-back would delete this run's charts
 while the rebuilt `digest.json` still names them.
@@ -292,8 +293,9 @@ each rebase attempt the loop lists the asset paths the tip already publishes -
 them to that command, which deletes this run's copy of any of them. The tip's
 file never moves: it is published, a reader may already hold that address, and
 the rebuild keeps the tip's item over this run's in any case - so this run's copy
-is the one nothing would have referenced. The route payload keeps naming the same
-path, because the tip's file is sitting at it after the rebase, so the rebuilt day
+is the one nothing would have referenced. The decision payload keeps naming the
+same path, because the tip's file is sitting at it after the rebase, so the
+rebuilt day
 still names a file that is really in the tree. `DROP_RACED_ASSETS_COMMAND` without
 `REGENERATE_COMMAND` is rejected at startup, because only a job that rebuilds can
 commit the drops. Why it is a drop and not a merge side, a refresh or a rename is
@@ -509,7 +511,7 @@ watched the bytes arrive - so it is the case that most needs the check.
 | Workflow and job | Weights | Digest read from |
 | --- | --- | --- |
 | `digest.yml` / `work` | the summarizer | `models.summarize.sha256` |
-| `digest.yml` / `route` | the router | `models.visual_planner.sha256` |
+| `digest.yml` / `visuals` | the visual planner | `models.visual_planner.sha256` |
 | `measure.yml` / `runtime` | the summarizer | `models.summarize.sha256` |
 | `measure.yml` / `batched` | the summarizer | `models.summarize.sha256` |
 | `validate.yml` / `qualify` | the candidate | the `plan` job's `candidate_sha256` |
@@ -534,7 +536,7 @@ Grepping all three for a `.gguf` name, a Hugging Face repository or a branch in 
 download path returns nothing, and a workflow contract test asserts exactly that.
 
 Each one reads config in a `models` step and publishes job outputs. `digest.yml`
-does it inside `plan`, which `work` and `route` already need; `measure.yml` has
+does it inside `plan`, which `work` and `visuals` already need; `measure.yml` has
 a small `models` job of its own that every target depends on; `validate.yml`
 resolves the candidate once inside `plan`. **The `needs` context resolves before
 a job's first step while `steps` does not**, which is the whole reason the refs
@@ -789,23 +791,25 @@ Verified 2026-08-20.
   every step that carries no condition.** `if: failure()` does not run either -
   only `if: always()` does. So an artifact upload written the ordinary way is
   silently dropped exactly when a long job most needed to hand over what it
-  made. Observed 2026-08-25 on `digest.yml`'s `route` job, run `32804437110`:
-  the step list records `Route and render` as `cancelled`, `Upload router log`
-  (which has `always()`) as `success`, and the `routes` upload as **`skipped`**.
-  88 routing decisions and 9 rendered charts existed on that runner and none of
+  made. Observed 2026-08-25 on the job now called `visuals` in `digest.yml`, run
+  `32804437110`: the step list records the render step as `cancelled`, the log
+  upload (which has `always()`) as `success`, and the decisions upload as
+  **`skipped`**.
+  88 planning decisions and 9 rendered charts existed on that runner and none of
   them left it. **Any upload step that carries a job's only copy of its output
   needs `if: always()`.**
 - **A pipeline intermediate is gone within two days, so "re-render the day from
-  its routes" is not a repair option for any day older than 24 hours.** Verified
-  2026-08-27. `digest.yml` sets `retention-days: 1` on the `routes` upload, the
-  one that carries `backend/var/run/<date>/items/*.route.json` and
+  its decisions" is not a repair option for any day older than 24 hours.** Verified
+  2026-08-27. `digest.yml` sets `retention-days: 1` on the `visuals` upload, the
+  one that carries `backend/var/run/<date>/items/*.visual.json` and
   `frontend/public/digest/`; `plan` and `items-<shard>` are also 1, and
-  `router-log` and `runtime-log-<shard>` are 2. Nothing under `backend/var/` is
+  `visual-planner-log` and `runtime-log-<shard>` are 2. Nothing under `backend/var/` is
   committed either: `.gitignore` line 47 is `backend/var/`, and
   `git ls-files backend/var` returns no files. **The committed record of a run
   is the digest under `frontend/public/digest/` plus the rows under `state/`,
-  and never the intermediates.** Repairing an older day therefore means routing
-  it again and paying the `route` stage again - there is no cheaper path, and a
+  and never the intermediates.** Repairing an older day therefore means planning
+  its visuals again and paying the `visuals` stage again - there is no cheaper
+  path, and a
   plan that assumes one is proposing something that cannot be done. Job *logs*
   are the exception: they outlive every artifact here, which is why a question
   about what a past run did is asked with `gh run view --job <id> --log`.
@@ -814,8 +818,8 @@ Verified 2026-08-20.
   again from its first step; there is no way to resume at the step that failed.
   That is survivable here only because the expensive jobs are separate: a failed
   `assemble` re-runs alone - 82 s in run `33270983446` - while `plan`, the four
-  `work` shards and `route` keep their results and are not repeated. It works
-  for one day, because the `plan` and `routes` artifacts it downloads carry
+  `work` shards and `visuals` keep their results and are not repeated. It works
+  for one day, because the `plan` and `visuals` artifacts it downloads carry
   `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
   workflow file as the original event**, so it cannot pick up a fix that landed
   afterwards, and a job that failed against a `main` which has since moved will
