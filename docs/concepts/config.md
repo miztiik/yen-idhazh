@@ -96,6 +96,13 @@ spellings of one knob is two sources of truth and the loser is silent. The old
 spelling is accepted for one release and then removed the way
 `quarantine_after_failures` was - refused by name, pointing at the new key.
 
+**The acceptance only covers a reader that goes through the contract.** A
+workflow step reading the raw JSON, or resolving a `models` key by attribute
+name, sees the file and not the model - so `digest.yml`, `measure.yml` and
+`.github/scripts/start-llama-server.sh` move with the key rather than relying on
+the migration. Renaming a key without moving those readers breaks the next
+scheduled run.
+
 Extraction has three shape and access control groups:
 
 - `extract.prose_sentence_min`, `extract.prose_sentence_words_min`,
