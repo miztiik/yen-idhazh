@@ -105,6 +105,23 @@ const GROUPS = groupedSpecs(fileURLToPath(new URL('./tests/', import.meta.url)))
  */
 const WHOLE_DAY = /whole-day\.spec\.ts$/;
 
+/** How many spec files run at once.
+ *
+ * One by default. Four workers measured 233.7 s against 135.5 s at one worker on
+ * an i7-1265U with six other checkouts building, 2026-09-05 - 72 percent slower,
+ * because a laptop shared with other work has no spare core to give. A runner is
+ * 4 vCPU with nothing else on it (Rule #2), which is a different machine and a
+ * different answer, so CI sets this and a developer keeps the quiet default.
+ */
+function workerCount(asked: string | undefined): number {
+	if (asked === undefined || asked.trim() === '') return 1;
+	const count = Number(asked.trim());
+	if (!Number.isInteger(count) || count < 1) {
+		throw new Error(`PLAYWRIGHT_WORKERS must be a whole number of 1 or more, not ${JSON.stringify(asked)}`);
+	}
+	return count;
+}
+
 export default defineConfig({
 	testDir: 'tests',
 	outputDir: 'test-results/browser',
@@ -112,7 +129,7 @@ export default defineConfig({
 	fullyParallel: false,
 	forbidOnly: Boolean(process.env.CI),
 	retries: 0,
-	workers: 1,
+	workers: workerCount(process.env.PLAYWRIGHT_WORKERS),
 	reporter: process.env.CI ? 'github' : 'list',
 	timeout: 180_000,
 	expect: { timeout: 15_000 },
@@ -130,6 +147,11 @@ export default defineConfig({
 	projects: FRONTEND_GROUPS.filter((name) => name !== 'logic').map((name) => ({
 		name,
 		testMatch: GROUPS[name].map((filename) => `**/${filename}`),
+		// `offline` rewrites the kill switch the served site shares, and
+		// `reading-page` in `reader` installs the worker that obeys it. Beside each
+		// other the reader's worker retires itself and the arm times out, so the one
+		// small project runs to completion before the large one starts.
+		...(name === 'reader' ? { dependencies: ['offline'] } : {}),
 		use: { ...devices['Desktop Chrome'] }
 	})),
 	webServer: {

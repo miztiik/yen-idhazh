@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { basename } from 'node:path';
 
 export const FRONTEND_GROUPS = [
-	'logic', 'reader', 'console', 'archive', 'model-search', 'publishing'
+	'logic', 'reader', 'offline', 'console', 'archive', 'model-search', 'publishing'
 ] as const;
 
 export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
@@ -14,9 +14,12 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	reader: [
 		'dated-day', 'day-states', 'filter-bar', 'footer-facts', 'item-card', 'item-meta',
 		'item-visual', 'item-zones', 'layout', 'layout-overflow', 'leading-stories', 'lenses', 'manifest',
-		'payload-state', 'reading-page', 'readstate', 'service-worker', 'source-mark',
+		'payload-state', 'reading-page', 'readstate', 'source-mark',
 		'theme', 'time-rail', 'tokens', 'topic-day', 'topics', 'whole-day'
 	],
+	// Alone, because it rewrites the kill switch the whole served site shares and
+	// `reading-page` installs the worker that reads it. See `playwright.config.ts`.
+	offline: ['service-worker'],
 	archive: ['archive', 'archive-calendar'],
 	'model-search': ['search'],
 	publishing: [
@@ -36,7 +39,7 @@ export function groupForSpec(filename: string): FrontendGroup | undefined {
 
 export function groupedSpecs(directory: string): Record<FrontendGroup, string[]> {
 	const groups: Record<FrontendGroup, string[]> = {
-		logic: [], reader: [], console: [], archive: [], 'model-search': [], publishing: []
+		logic: [], reader: [], offline: [], console: [], archive: [], 'model-search': [], publishing: []
 	};
 	for (const filename of readdirSync(directory, { recursive: true, encoding: 'utf8' })
 		.filter((name) => name.endsWith('.spec.ts')).map((name) => name.replaceAll('\\', '/')).sort()) {
