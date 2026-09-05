@@ -17,7 +17,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from idhazh.contracts.app_config import ModelRef
 from idhazh.contracts.base import (
@@ -42,7 +42,9 @@ class RunStatus(StrEnum):
 
 class ModelRole(StrEnum):
     SUMMARIZE = "summarize"
-    ROUTE = "route"
+    #: The value stays `route` because a published manifest may carry it and this
+    #: plan migrates no committed day (CLAUDE.md section 11).
+    VISUAL_PLANNER = "route"
 
 
 class ModelUse(Model):
@@ -94,6 +96,12 @@ class ConfigDigest(Model):
 
 
 class RunRecord(Model):
+    #: Two fields carry a wire key the Python name no longer matches, so this
+    #: model reads and writes by alias. The alias is split in two rather than
+    #: written once as `alias=`, which would also rename the constructor keyword
+    #: and put the old word back in every caller.
+    model_config = ConfigDict(serialize_by_alias=True, validate_by_name=True)
+
     run_id: RunId = Field(
         description=(
             "The identity of the execution that made this record, as every ledger "
@@ -120,8 +128,12 @@ class RunRecord(Model):
     items_succeeded: int = Field(ge=0)
     items_failed: int = Field(ge=0)
     items_skipped: int = Field(default=0, ge=0)
-    items_routed: int = Field(
-        default=0, ge=0, description="Items the router reached. Zero when the route job died."
+    items_decided: int = Field(
+        default=0,
+        ge=0,
+        validation_alias="items_routed",
+        serialization_alias="items_routed",
+        description="Items the router reached. Zero when the route job died.",
     )
     items_prefiltered: int = Field(
         default=0,
@@ -132,9 +144,11 @@ class RunRecord(Model):
             "is never quoted against items_routed alone."
         ),
     )
-    route_ms: int | None = Field(
+    decision_ms: int | None = Field(
         default=None,
         ge=0,
+        validation_alias="route_ms",
+        serialization_alias="route_ms",
         description=(
             "What the router spent on this day, summed over its items. Read against "
             "items_routed and against the job's own wall-clock: a stage total far below "
@@ -242,6 +256,32 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-05T16:00",
+            change=(
+                "Three Python names moved and not one wire key did. ModelRole.ROUTE is "
+                "ModelRole.VISUAL_PLANNER and still serialises to route; RunRecord."
+                "items_routed is RunRecord.items_decided and RunRecord.route_ms is "
+                "RunRecord.decision_ms, both aliased back to the keys they had. "
+                "RunRecord now serialises and validates by alias. No field was added, "
+                "removed or retyped, no schema property name moved, and no committed "
+                "manifest needs migrating."
+            ),
+            why=(
+                "Route names a dispatch decision and this stage plans a visual, so the "
+                "names taught the wrong word to every developer who read them. The keys "
+                "could not follow, because run.json is published: 15 manifests sit under "
+                "frontend/public/digest/ and 11 of them carry items_routed and route_ms, "
+                "which frontend/src/lib/server/payload.ts reads by those exact names at "
+                "build time. Moving a key would have meant migrating every published day "
+                "to change a string no reader ever sees, against a real risk of dropping "
+                "a run from the record (Fowler, 2026-09-05). So the Python renames and "
+                "the wire is frozen, which is the whole of this entry. A payload spelling "
+                "the new Python name also validates, because validate_by_name accepts "
+                "both - nothing writes that spelling, and refusing it would be a check "
+                "with no producer to catch."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-02T23:00",
             change="Added optional eligible_feeds and feed_floor to each vertical.",

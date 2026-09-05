@@ -801,7 +801,7 @@ class TestChartDrafts:
             decisions=self._fixture_day(article_ok, summary_ok),
         )
         record = manifest.runs[-1]
-        assert (record.charts_drafted, record.items_routed, record.items_prefiltered) == (4, 6, 1)
+        assert (record.charts_drafted, record.items_decided, record.items_prefiltered) == (4, 6, 1)
 
 
 # --- A router that answered is not a router that is down ---------------------

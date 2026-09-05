@@ -1313,7 +1313,7 @@ def stage_visual_planner(
         started = clock()
         with (
             tracer.trace(_trace_id(plan.run_id, item)),
-            tracer.span(telemetry.SpanName.ROUTE) as span,
+            tracer.span(telemetry.SpanName.VISUAL_PLANNER) as span,
         ):
             telemetry.item_attributes(span, item, run_id=plan.run_id, shard=0)
             decision, asked = _plan_one_visual(article, summary, settings)

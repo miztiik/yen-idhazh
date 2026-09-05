@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-05
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -61,7 +61,7 @@ A second shape of evidence, off by default, and the only one that carries a star
 | `model_call` | `summarize` | the generation - see below |
 | `parse_reply` | `summarize` | the verbatim check, which is the longest string comparison in the pipeline |
 | `score` | `item` | - |
-| `route` | - | - |
+| `visual_planner` | - | - |
 
 **`model_call` is a generation**, the span subtype a tracing tool draws differently. It carries the model reference and the token counts. **Prefill and decode are attributes on it and not child spans**: llama-server reports both as totals in the reply, after the call returned, so nothing can be wrapped around either. A span drawn around a duration reported retrospectively is a shape nobody measured.
 
