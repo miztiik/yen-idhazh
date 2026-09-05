@@ -36,7 +36,7 @@
         },
         "recall_min": {
           "default": 0.68,
-          "description": "The regression bar for recall@result_limit over the committed query set, counted over right answers that carry a vector, scored against the corpus pinned by eval_corpus_through. Coverage is excluded on purpose: an item the pipeline never embedded cannot be retrieved at any threshold, so counting it here would fail this gate for a defect in another stage. Set two standard errors below the pinned baseline of 0.756 +/- 0.037 (n=60) over the 2,237 items published through 2026-08-26, of which 2,235 carry a vector: 0.756 - 2 x 0.037 = 0.682, rounded to two places as 0.68. Measured 2026-09-04 on Windows 11, 12 logical CPUs, onnxruntime 1.29.0. THIS BAR NO LONGER HAS AN EXPIRY DATE, and that is the whole point of the pin. The two earlier versions of this number, 0.85 and 0.69 and then 0.61, each expired within days because they were measured against a corpus that kept growing under them. Both inputs are now fixed, so the number moves only when the ranking moves or the labels are completed - and completing the labels raises it rather than eroding it. It is still a LOWER BOUND: 66.6 percent of filled slots hold an item no labeller judged either way, and every one of them is counted as a wrong answer. See docs/concepts/evaluation.md.",
+          "description": "The regression bar for recall@result_limit over the committed query set, counted over right answers that carry a vector, scored against the corpus pinned by eval_corpus_through. Coverage is excluded on purpose: an item the pipeline never embedded cannot be retrieved at any threshold, so counting it here would fail this gate for a defect in another stage. Set two standard errors below the pinned baseline of 0.756 +/- 0.037 (n=60) over the 2,237 items published through 2026-08-26, of which 2,235 carry a vector: 0.756 - 2 x 0.037 = 0.682, rounded to two places as 0.68. Measured 2026-09-04 on Windows 11, 12 logical CPUs, onnxruntime 1.29.0. THIS BAR NO LONGER HAS AN EXPIRY DATE, and that is the whole point of the pin. The two earlier versions of this number, 0.85 and 0.69 and then 0.61, each expired within days because they were measured against a corpus that kept growing under them. Both inputs are now fixed, so the number moves only when the ranking moves or the labels are completed - and completing the labels raises it rather than eroding it. It is still a LOWER BOUND: 66.6 percent of filled slots hold an item no labeller judged either way, and every one of them is counted as a wrong answer. `config/idhazh.json` owns the value. This is a pipeline gate rather than a drawn surface: the one reader is `backend/tests/test_retrieval_eval.py`, and the frontend's own `AssistConfig` does not declare the field at all. See docs/concepts/evaluation.md.",
           "maximum": 1.0,
           "minimum": 0.0,
           "title": "Recall Min",
@@ -187,14 +187,15 @@
           "type": "integer"
         },
         "chart_height": {
-          "default": 180,
+          "default": 220,
+          "description": "The drawn height of a console chart, in CSS pixels. The same number `chart.height_px` carries: both were raised from 180 when the frame widened, because a chart that grows in one dimension only flattens its own signal. `config/appearance.json` owns the value, as `console.chart_height`.",
           "minimum": 120,
           "title": "Chart Height",
           "type": "integer"
         },
         "chart_width": {
-          "default": 600,
-          "description": "The width a console chart is drawn at on the server, in CSS pixels. A prerendered chart has no element to measure, and a chart drawn in arbitrary units and then stretched by its viewBox renders its labels at whatever the stretch factor happens to be - measured 2026-08-25, one page put the same font-size at 4.5px and at 16.6px. 600 is what the reading column leaves a full-width chart on any window wide enough to reach it; a narrower one redraws at its measured width once a script runs.",
+          "default": 760,
+          "description": "The width a console chart is drawn at on the server, in CSS pixels. A prerendered chart has no element to measure, and a chart drawn in arbitrary units and then stretched by its viewBox renders its labels at whatever the stretch factor happens to be - measured 2026-08-25, one page put the same font-size at 4.5px and at 16.6px. It is a seed rather than the final width: the client re-measures its container once a script runs, and the drawn SVG was its host's width to within a pixel at 1440, 768 and 390 (measured 2026-09-01). 760 is the same number `chart.width_px` carries, so a console page has one answer to how wide a chart starts. `config/appearance.json` owns the value, as `console.chart_width`.",
           "minimum": 240,
           "title": "Chart Width",
           "type": "integer"
@@ -729,6 +730,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.chart_height now defaults to 220 rather than 180 and console.chart_width to 760 rather than 600, and both carry a description naming their owner. This document is now the only config file that declares either; config/idhazh.json dropped both copies. This document drops assist.recall_min, which config/idhazh.json keeps. The shapes are `ConsoleConfig` and `AssistConfig`, which this document and `AppConfig` share, so both schemas moved together. A semantic shift on two defaults and nothing else, so an appearance file written before today still validates.",
+      "version": "2026-09-05T13:00",
+      "why": "Three keys were declared in both config files with two different values. This file owns everything the published surface is drawn from (docs/concepts/config.md), and the two console sizes are drawn by the console pages and by nothing in backend/, so it keeps them and the defaults move to match what it declares - 220 and 760, the same numbers chart.height_px and chart.width_px already carry. assist.recall_min goes the other way: it is a gate on the ranking that only backend/tests/test_retrieval_eval.py reads, the frontend's own AssistConfig does not declare the field, and the 0.61 here was the value the bar held before it was re-derived against the pinned corpus on 2026-09-04. A published surface has no business declaring a bar no published surface reads. With both moves made, the committed console block equals the model's defaults in every key."
+    },
+    {
       "change": "ui.visual_side now defaults to trailing rather than above, and carries a description. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. This document is now the only config file that declares the value; config/idhazh.json dropped its copy. A semantic shift on the default and nothing else, so an appearance file written before today still validates.",
       "version": "2026-09-05T12:00",
       "why": "Two files declared one knob with two values, and this one already held the right answer: trailing is what `DigestItem.svelte` renders, and it was the only key of the 16 the legacy ui block still carries whose value disagreed with the digest block here. This file owns everything the published surface is drawn from (docs/concepts/config.md), so it keeps the knob and the default moves to match what it declares. With the default moved, the committed digest block equals the model's defaults in every key."
@@ -869,7 +875,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-05T12:00",
+      "default": "2026-09-05T13:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -877,5 +883,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-05T12:00"
+  "version": "2026-09-05T13:00"
 }

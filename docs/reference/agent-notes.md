@@ -548,6 +548,21 @@ Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'chrome-headless-shel
 A rising CPU total on a headless shell is work. Killing the run and starting
 again costs another eight minutes and proves nothing.
 
+**And the headless shell is the wrong process to watch during the longest
+quiet.** Measured 2026-09-05 on a 13.2-minute run: the log stopped growing for
+three and a half minutes, and across that gap the busiest
+`chrome-headless-shell` moved from 154.4 to 154.5 CPU-seconds - flat, which
+reads as hung. The runner's own `node` process moved from 395.8 to 447.9 in
+44 seconds, a full core, because the tail specs read and parse every committed
+day rather than driving a browser. Check both, and treat either one climbing as
+work:
+
+```powershell
+Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'node.exe' } |
+  Sort-Object { $_.KernelModeTime + $_.UserModeTime } -Descending |
+  Select-Object -First 1 ProcessId, @{n='CPUs';e={[math]::Round($_.KernelModeTime/1e7 + $_.UserModeTime/1e7,1)}}
+```
+
 **And `| Select-Object -Last N | Out-File` can eat that suite's whole output.**
 Written as `npm run test:browser 2>&1 | Select-Object -Last 45 | Out-File $log`,
 the log was created immediately, stayed empty for the nine minutes the suite

@@ -13,10 +13,19 @@ import type { DigestItem, SeededVisual } from '../src/lib/payload/types';
  *
  * Until 2026-09-05 every chart shipped inside an `img`. That is a separate
  * document: it reads none of the page's custom properties, so the renderer's
- * baked colours were the only colours it could ever have - black axis type and
- * pale grid lines, which on the dark theme is black type and eighteen bright
- * lines on a near-black card. The stories a prerendered document carries now
- * hold the drawing itself, and the page repaints it from its own tokens.
+ * baked colours were the only colours it could ever have - black axis type on a
+ * near-black card. The stories a prerendered document carries now hold the
+ * drawing itself, and the page repaints it from its own tokens.
+ *
+ * **The grid-line arm below is the one part of this file no reader has ever
+ * needed.** Counted 2026-09-05 over all 351 drawings the 15 committed days
+ * hold: every one carries a bar, an axis label and an axis line, and none
+ * carries a grid line, because `chart_spec()` writes `"axis": {"grid": false}`
+ * on every spec it builds. The canary fixture's spec is hand-written and leaves
+ * the grid at the renderer's default, so this file is the only place
+ * `--chart-grid` is exercised at all. It is checked anyway, as insurance for
+ * the day a renderer starts emitting a grid - baked at #ddd, that grid would be
+ * near-white across the bars on the dark theme.
  *
  * **The `img` is gone rather than kept for the stories past that seed.** Those
  * fetch the same file and inline the same markup, so one scroll shows one
