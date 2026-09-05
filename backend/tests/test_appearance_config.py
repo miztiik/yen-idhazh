@@ -234,41 +234,76 @@ def test_the_moved_blocks_keep_the_same_shape_on_both_sides() -> None:
     assert type(appearance.assist) is type(app.assist)
 
 
-def test_the_digest_block_is_declared_in_one_file_and_the_other_does_not_argue() -> None:
+#: The three blocks `AppearanceConfig` re-exposes, as (the key
+#: `config/idhazh.json` still carries, the key `config/appearance.json` carries).
+MOVED_BLOCKS = (("ui", "digest"), ("console", "console"), ("assist", "assist"))
+
+#: Keys `config/idhazh.json` owns although they sit on a moved model, with the
+#: reason each one is not the appearance file's to declare. Both are on
+#: `AssistConfig` and neither is drawn: they are the retrieval gate's inputs,
+#: read by `backend/tests/test_retrieval_eval.py` and by nothing else. The
+#: frontend's own `AssistConfig` interface declares neither.
+PIPELINE_OWNED = {"recall_min", "eval_corpus_through"}
+
+
+@pytest.mark.parametrize(("legacy_key", "current_key"), MOVED_BLOCKS)
+def test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue(
+    legacy_key: str, current_key: str
+) -> None:
     """The value-level half of the test above, which only compares types.
 
     The shapes never forked, so that test stayed green while the two files
-    disagreed about `visual_side` for a week: `config/idhazh.json` said `above`
-    and `config/appearance.json` said `trailing`. The frontend merges the
-    appearance block over the legacy one, so the loser is silent - a knob edited
-    in the file somebody happened to open does nothing, and nothing says why.
+    disagreed about four keys: `visual_side` for a week, and
+    `console.chart_height`, `console.chart_width` and `assist.recall_min` until
+    2026-09-05. The frontend merges the appearance block over the legacy one, so
+    the loser is silent - a knob edited in the file somebody happened to open
+    does nothing, and nothing says why.
 
     `config/appearance.json` owns everything the published surface is drawn from
     (docs/concepts/config.md), so the rule is one-directional: whatever the
-    legacy block still carries has to agree with it.
+    legacy block still carries has to agree with it. The exception is a key the
+    published surface does not draw at all - see `PIPELINE_OWNED`, where the
+    pipeline file is the owner and the appearance file declares nothing.
 
-    The other two moved blocks carry the same failure mode and are NOT covered
-    here, because settling them is not this test's change to make. Measured
-    2026-09-05 on the committed files: `console.chart_height` is 180 against
-    220, `console.chart_width` is 600 against 760, and `assist.recall_min` is
-    0.68 against 0.61 - the last of those is a live retrieval bar, and the
-    appearance copy is the stale one.
+    A key declared in both files with the SAME value is tolerated, because that
+    is the read-side migration's middle layer doing its job (section 11): a
+    `config/idhazh.json` written before 2026-08-29 has to keep resolving to what
+    it used to resolve to. What is refused is two files naming one knob twice
+    with two answers.
     """
-    legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))["ui"]
-    current = json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))["digest"]
+    legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))[
+        legacy_key
+    ]
+    current = json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))[current_key]
+
     disagreed = {
         key: (value, current[key])
         for key, value in legacy.items()
         if key in current and value != current[key]
     }
     assert not disagreed, (
-        f"config/idhazh.json and config/appearance.json declare different values: {disagreed}"
+        f"config/idhazh.json {legacy_key} and config/appearance.json {current_key} "
+        f"declare different values: {disagreed}"
     )
-    absent = sorted(key for key in legacy if key not in current)
+
+    absent = sorted(key for key in legacy if key not in current and key not in PIPELINE_OWNED)
     assert not absent, (
-        f"config/idhazh.json declares digest knobs the appearance file does not: {absent}"
+        f"config/idhazh.json {legacy_key} declares knobs the appearance file does not, "
+        f"and they are not on the pipeline-owned list: {absent}"
     )
-    assert "visual_side" not in legacy, "visual_side has one owner, and it is config/appearance.json"
+    intruding = sorted(key for key in current if key in PIPELINE_OWNED)
+    assert not intruding, (
+        f"config/appearance.json {current_key} declares a knob no published surface "
+        f"reads: {intruding}"
+    )
+    # The keys this rule was written for. Named rather than derived, because
+    # `disagreed` above passes the day somebody puts one back with the value it
+    # already has - and a second copy that agrees today is the next divergence.
+    settled_away = {"ui": ("visual_side",), "console": ("chart_height", "chart_width")}
+    for key in settled_away.get(legacy_key, ()):
+        assert key not in legacy, (
+            f"{key} has one owner, and it is config/appearance.json"
+        )
 
 
 def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() -> None:
@@ -277,11 +312,15 @@ def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() 
     `AppConfig` keeps `ui`, `console` and `assist`, so a `config/idhazh.json`
     written before 2026-08-29 is still a valid document and the frontend's
     fallback has something to fall back to.
+
+    Every key read here is one the committed legacy file still declares, so a
+    green run means the block loaded rather than that a default did.
     """
     legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
     resolved = AppConfig.model_validate(legacy)
     assert resolved.ui.archive_page_size >= 1
-    assert resolved.console.chart_width >= 240
+    assert resolved.console.default_window_days in resolved.console.window_presets
+    assert 0.0 < resolved.assist.recall_min <= 1.0
 
 
 def test_the_archive_may_not_list_more_than_a_month_of_days_as_rows() -> None:
