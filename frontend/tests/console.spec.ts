@@ -1276,6 +1276,14 @@ test('an unplaceable row is counted and never silently dropped', () => {
 		source_words: 1923,
 		summary_words: 205,
 		source_words_before_cap: 4200,
+		fetch_ms: null,
+		extract_ms: null,
+		summarize_ms: null,
+		prefill_ms: null,
+		decode_ms: null,
+		input_tokens: null,
+		output_tokens: null,
+		cached_tokens: null,
 		...over
 	});
 
@@ -2204,7 +2212,15 @@ test('the plot reads the cut off two lengths, so no ledger stamp can change what
 		code: '',
 		source_words: after,
 		summary_words: 205,
-		source_words_before_cap: before
+		source_words_before_cap: before,
+		fetch_ms: null,
+		extract_ms: null,
+		summarize_ms: null,
+		prefill_ms: null,
+		decode_ms: null,
+		input_tokens: null,
+		output_tokens: null,
+		cached_tokens: null
 	});
 
 	const marked = (before: number | null, after: number | null): boolean => {
