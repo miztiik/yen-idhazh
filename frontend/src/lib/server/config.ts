@@ -142,6 +142,8 @@ export interface ConsoleConfig {
 	min_window_days: number;
 	max_window_days: number;
 	min_attempts_for_rate: number;
+	/** The size a console chart is drawn at on the server, before a script
+	 * re-measures the container. Declared once, in `config/appearance.json`. */
 	chart_height: number;
 	chart_width: number;
 	failure_list_max: number;
@@ -164,7 +166,13 @@ export interface ConsoleConfig {
 	chart_arm_coverage_pct: number;
 }
 
-/** What on-device archive search reads, keeps and shows. */
+/** What on-device archive search reads, keeps and shows.
+ *
+ * Four fields and not the whole `assist` block. `recall_min` and
+ * `eval_corpus_through` are the retrieval gate's, read by
+ * `backend/tests/test_retrieval_eval.py` off `config/idhazh.json`, and no page
+ * draws either - so they are declared there and not in `config/appearance.json`.
+ */
 export interface AssistConfig {
 	similarity_floor: number;
 	result_limit: number;
@@ -296,8 +304,8 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_window_days: 7,
 	max_window_days: 366,
 	min_attempts_for_rate: 5,
-	chart_height: 180,
-	chart_width: 600,
+	chart_height: 220,
+	chart_width: 760,
 	failure_list_max: 25,
 	source_rows: 10,
 	feed_rows: 10,

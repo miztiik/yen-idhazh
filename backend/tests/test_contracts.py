@@ -44,7 +44,7 @@ from idhazh.contracts.app_config import (
     VisualSide,
     months_a_window_can_touch,
 )
-from idhazh.contracts.appearance_config import ChartConfig
+from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestVerticalRef, DigestVisual
@@ -252,21 +252,39 @@ def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
     assert committed.models.inference.metrics is True, "the committed config must count"
 
 
-def test_the_console_chart_width_is_a_knob_the_frontend_agrees_with() -> None:
-    """A prerendered chart has no element to measure, so the width is given to it.
+def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:
+    """A prerendered chart has no element to measure, so the size is given to it.
 
-    The frontend keeps its own copy of every console default so a fresh clone
-    renders without `config/`. Two copies of one number drift, so the copy is
-    checked against the model rather than trusted.
+    Three copies of one number, and the test has to hold the two that decide the
+    picture. Until 2026-09-05 it held the wrong pair: it compared the contract
+    default against `config/idhazh.json` and then against the frontend's own
+    fallback, and all three were 600 - while every console page drew at 760,
+    because `consoleConfig()` merges `config/appearance.json` last and that file
+    said 760. A green gate over three copies of a number nothing draws with is
+    worse than no gate, because it reads as coverage.
+
+    So the resolved value leads. `config/appearance.json` is the last merge
+    layer, so what it declares is what the server draws at, and a clone with no
+    `config/` has to draw the same picture - which means the contract default
+    and the frontend's fallback have to be that same number, or a first paint
+    somewhere is at a width nothing measured.
     """
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    minimal = AppConfig.model_validate({"models": committed.models.model_dump()})
-    assert committed.console.chart_width == minimal.console.chart_width
-
+    drawn = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json")).console
+    fresh = ConsoleConfig()
     reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
-    mirrored = re.search(r"chart_width:\s*(\d+)", reader)
-    assert mirrored is not None, "the frontend console defaults dropped chart_width"
-    assert int(mirrored.group(1)) == minimal.console.chart_width
+
+    for field in ("chart_width", "chart_height"):
+        shipped = getattr(drawn, field)
+        assert getattr(fresh, field) == shipped, (
+            f"config/appearance.json draws a console chart at {field}={shipped} and a "
+            f"clone with no config/ would draw it at {getattr(fresh, field)}"
+        )
+        mirrored = re.search(rf"{field}:\s*(\d+)", reader)
+        assert mirrored is not None, f"the frontend console defaults dropped {field}"
+        assert int(mirrored.group(1)) == shipped, (
+            f"the frontend's own {field} fallback is {mirrored.group(1)} and the "
+            f"console draws at {shipped}"
+        )
 
 
 def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
@@ -305,16 +323,26 @@ def test_a_preset_list_that_is_out_of_order_or_out_of_bounds_is_refused() -> Non
 
 
 def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> None:
-    """The same two-copies problem `chart_width` has, one field along.
+    """The same two-copies problem the chart size has, one field along.
 
     The frontend keeps its own console defaults so a fresh clone renders with no
     `config/`. If the two lists drift, the page draws a button for a window the
     contract would refuse.
+
+    The committed list leads for the same reason it does above: it is the last
+    merge layer, so it is the list the control really offers. Measured
+    2026-09-05, all three copies read `[7, 14, 30, 90]` - unlike the chart size,
+    this one had not drifted.
     """
+    offered = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json")).console
+    assert offered.window_presets == ConsoleConfig().window_presets, (
+        "config/appearance.json offers a window list a clone with no config/ would not"
+    )
+
     reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
     mirrored = re.search(r"window_presets:\s*\[([\d,\s]+)\]", reader)
     assert mirrored is not None, "the frontend console defaults dropped window_presets"
-    assert [int(part) for part in mirrored.group(1).split(",")] == ConsoleConfig().window_presets
+    assert [int(part) for part in mirrored.group(1).split(",")] == offered.window_presets
 
 
 def test_the_readout_cap_is_a_knob_the_frontend_agrees_with() -> None:
