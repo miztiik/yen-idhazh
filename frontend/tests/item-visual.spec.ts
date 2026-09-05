@@ -2,8 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { keepDrawings } from '../src/lib/day-shape';
+import { projectDay } from '../src/lib/payload/project';
 import { dayShell, publishedDates } from '../src/lib/server/payload';
-import type { SeededVisual } from '../src/lib/payload/types';
+import type { DigestItem, SeededVisual } from '../src/lib/payload/types';
 
 /**
  * A published drawing has to read the page it is printed on.
@@ -172,6 +174,52 @@ test.describe('THE ORACLE: every drawn colour comes from a token', () => {
 			expect(colours.length).toBeGreaterThan(0);
 			for (const colour of colours) expect(colour, `${theme}: the drawing is not inheriting the page ink`).toBe(ink);
 		}
+	});
+});
+
+test.describe('the drawing survives the rest of the day arriving', () => {
+	/** What a reading route hands `keepDrawings`: the day it seeded, and the same
+	 * day as the served copy carries it - which is to say without the drawings,
+	 * because `project.ts` keeps three named fields of a visual and this is not
+	 * one of them. */
+	function seededAndServed(): { seeded: DigestItem[]; served: DigestItem[] } {
+		for (const date of publishedDates(CANARY)) {
+			const shell = dayShell(date, 500, { root: CANARY });
+			const seeded = shell?.seed ?? [];
+			if (!seeded.some((item) => (item.visual as SeededVisual | null)?.markup)) continue;
+			const served = JSON.parse(projectDay(JSON.stringify({ items: seeded }))).items as DigestItem[];
+			return { seeded, served };
+		}
+		throw new Error('no canary day seeds a drawing');
+	}
+
+	test('a served story gets the drawing its seeded copy came with', () => {
+		// The defect this closes: `arrived = whole.items` swaps the seed out for
+		// the fetched copy, so a day page inlined its drawing and then replaced it
+		// with an image a second later.
+		const { seeded, served } = seededAndServed();
+		expect(
+			served.some((item) => (item.visual as SeededVisual | null)?.markup),
+			'the served projection is carrying markup, which is the byte cost the seed exists to avoid'
+		).toBe(false);
+
+		const kept = keepDrawings(seeded, served);
+		const drawn = seeded.filter((item) => (item.visual as SeededVisual | null)?.markup);
+		expect(drawn.length).toBeGreaterThan(0);
+		for (const item of drawn) {
+			const after = kept.find((story) => story.item_id === item.item_id);
+			expect((after?.visual as SeededVisual | null)?.markup, `${item.item_id} lost its drawing`).toBe(
+				(item.visual as SeededVisual).markup
+			);
+		}
+		expect(kept.map((item) => item.item_id), 'the swap changed the list').toEqual(
+			served.map((item) => item.item_id)
+		);
+	});
+
+	test('a story the document never seeded is handed back untouched', () => {
+		const { served } = seededAndServed();
+		expect(keepDrawings([], served)).toBe(served);
 	});
 });
 
