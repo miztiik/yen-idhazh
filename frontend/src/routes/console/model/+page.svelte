@@ -15,12 +15,26 @@
 	import { grouped } from '$lib/charts/series';
 	import { rank, type Rankable, type RankedDisplay } from '$lib/charts/rank';
 	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
+	import { stacked, type StackShape } from '$lib/charts/stacked';
 	import type { MovementPolarity } from '$lib/charts/theme';
+	import {
+		neverSeenNote,
+		reasonColumnLabels,
+		reasonColumns,
+		reasonHeadline,
+		reasonSeries,
+		reasonTotals,
+		reasonsWithin,
+		unexplainedNote,
+		REASONS
+	} from '$lib/console/doubt-reasons';
+	import Chart from '$lib/charts/Chart.svelte';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import RankedList from '$lib/components/RankedList.svelte';
 	import RunLengths from '$lib/components/RunLengths.svelte';
+	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import SwapDots from '$lib/components/SwapDots.svelte';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
@@ -375,6 +389,28 @@
 			: data.runLengths.filter((run) => run.date >= span.start && run.date <= span.end)
 	);
 
+	/** Why the checker doubted each day's summaries, over the open window.
+	 *
+	 * Anchored on `modelSpan` rather than on `span`, so this panel and the cards
+	 * above it name one set of days. The server inlined every day inside the
+	 * widest preset, so narrowing is a filter and nothing is recomputed from a
+	 * shape the browser cannot check.
+	 */
+	const reasonWindow = $derived(reasonsWithin(data.reasons, modelSpan));
+	const reasonSum = $derived(reasonTotals(reasonWindow));
+	/** The server drew stacked, so the first paint matches the prerendered
+	 * document. Picking `Lines` redraws the identical values - `stacked` changes
+	 * only the mark type, and `console-chrome.spec.ts` fails the build if the two
+	 * shapes ever carry different numbers. */
+	let reasonShape = $state<StackShape>('bars');
+	const reasonPlot = $derived(
+		stacked(reasonColumnLabels(reasonWindow), reasonSeries(reasonWindow), reasonShape)
+	);
+	const reasonStrip = $derived(reasonColumns(reasonWindow));
+	const reasonHead = $derived(reasonHeadline(reasonWindow, windowDays));
+	const reasonGap = $derived(unexplainedNote(reasonWindow, windowDays));
+	const reasonMissing = $derived(neverSeenNote(reasonWindow, windowDays));
+
 	/** Whole seconds off a millisecond clock, and `<1 s` where a real
 	 * measurement rounds away. */
 	function asSeconds(ms: number): string {
@@ -560,6 +596,107 @@
 						</table>
 					</div>
 				</details>
+			{/if}
+		</div>
+
+		<!-- What is wrong with the summaries the checker stopped on. The cards say
+		     how often it stopped; this says why, and it is the panel a prompt
+		     change is judged against. -->
+		<div
+			data-model-reasons
+			data-model-reasons-days={windowDays}
+			data-model-reasons-from={modelSpan.start}
+			data-model-reasons-to={modelSpan.end}
+		>
+			<h2 class="console-h2">Why a summary was doubted</h2>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-reasons-intro>
+				One column is one day over these {windowDays} days, and its height is that day's summaries
+				the checker wrote a reason on. A summary gets one reason, the first that applied, so no
+				summary is counted in two bands.
+				<strong class="font-semibold text-text-secondary" data-model-reasons-rule
+					>The five reasons are drawn apart and never added into one doubt count</strong
+				>: a single number says how often the checker stopped and never says which fault to go and
+				fix.
+			</p>
+
+			{#if reasonHead}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-reasons-headline>
+					{reasonHead}
+				</p>
+			{/if}
+
+			<!-- Two facts about the record itself, in the panel they govern rather
+			     than as a banner. Neither is an error and neither is styled as one. -->
+			{#if reasonGap}
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-model-reasons-unexplained>
+					{reasonGap}
+				</p>
+			{/if}
+			{#if reasonMissing}
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-model-reasons-never>
+					{reasonMissing}
+				</p>
+			{/if}
+
+			{#if reasonWindow.length === 0}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-reasons="empty">
+					No day in these {windowDays} days published a summary, so there is nothing to explain.
+				</p>
+			{:else if reasonSum.explained === 0}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-reasons="none">
+					The checker wrote no reason on any of the {grouped(reasonSum.items)} summaries in these {windowDays}
+					days.
+				</p>
+			{:else}
+				<!-- Keyed on the window and the shape together. The engine takes its
+				     option once, at hydration, so a live chart never sees a changed
+				     one - the block is torn down and rebuilt instead. -->
+				{#key `${windowDays}-${reasonShape}`}
+					<Chart
+						svg={data.reasonsSvg ?? ''}
+						option={reasonPlot.option}
+						width={data.console.chart_width}
+						height={data.console.chart_height}
+						label="Why summaries were doubted, per day, over {windowDays} days. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown."
+						columns={reasonStrip}
+						readoutName="doubt-reasons"
+						readoutMaxShare={data.chart.readout_max_share}
+						restingNote=", the newest day"
+						hint="Point at a day to read every reason at once. Left and Right step through the days, Escape returns to the newest."
+					/>
+				{/key}
+				<!-- Stacked says how much of a day the checker stopped on and what the
+				     mix was; lines say what one fault did on its own, which a stack
+				     hides when one band halves while its neighbour doubles. Same
+				     array either way, with nothing re-shaped between them. -->
+				<ShapeSwitch
+					bind:shape={reasonShape}
+					name="doubt-reasons"
+					label="How to draw the doubt reasons"
+				/>
+				<!-- The numbers, as text. It is what a chart owes anybody who cannot
+				     see it, and it is also the only honest way to check the bands: a
+				     stack read by eye cannot be tested, and the browser suite sums
+				     these five against the day's own total. -->
+				<ul class="sr-only" data-reason-days>
+					{#each reasonWindow as day (day.date)}
+						<li
+							data-reason-day={day.date}
+							data-reason-items={day.items}
+							data-reason-explained={day.explained}
+							data-reason-unexplained={day.unexplained}
+						>
+							{day.date}: {day.explained} of {day.items} summaries carry a reason.
+							{#each REASONS as reason (reason.id)}
+								<span
+									data-reason-count={reason.id}
+									data-reason-n={day.counts[reason.id] ?? 0}
+									>{reason.label}: {day.counts[reason.id] ?? 0}.</span
+								>
+							{/each}
+						</li>
+					{/each}
+				</ul>
 			{/if}
 		</div>
 
