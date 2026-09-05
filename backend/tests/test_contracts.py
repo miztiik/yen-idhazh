@@ -61,7 +61,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
-from idhazh.contracts.run_manifest import RunManifest, VerticalCount
+from idhazh.contracts.run_manifest import ModelRole, RunManifest, VerticalCount
 from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
@@ -1047,6 +1047,38 @@ def test_every_committed_run_manifest_still_reads_today() -> None:
                 assert count.eligible_feeds is None, path.name
                 assert count.feed_floor is None, path.name
     assert absent, "every committed desk already carries the field, so nothing was migrated"
+
+
+def test_the_manifest_keeps_the_keys_its_python_names_stopped_matching() -> None:
+    """Three Python names moved on 2026-09-05 and no published key was allowed to.
+
+    The counts are asserted rather than the spellings, and a zero fails: an
+    absence check over a tree with no matching file passes for the wrong reason,
+    which is exactly how a broken alias would read.
+    """
+    assert ModelRole.VISUAL_PLANNER.value == "route"
+
+    manifests = sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/run.json"))
+    carrying = 0
+    for path in manifests:
+        raw = json.loads(read_text(path))
+        parsed = RunManifest.from_json(read_text(path))
+        for record, written in zip(parsed.runs, raw["runs"], strict=True):
+            if "items_routed" not in written:
+                continue
+            carrying += 1
+            assert record.items_decided == written["items_routed"], path.name
+            assert record.decision_ms == written["route_ms"], path.name
+        assert "items_decided" not in read_text(path), path.name
+    assert carrying, (
+        f"{len(manifests)} committed manifests and not one carries items_routed, "
+        "so this test measured nothing"
+    )
+
+    # And the round trip puts the keys back, which is what a reader fetches.
+    sample = RunManifest.from_json(read_text(manifests[-1]))
+    written = json.loads(sample.to_json())["runs"][-1]
+    assert "items_routed" in written and "route_ms" in written
 
 
 def test_the_watchlist_stays_inside_its_configured_cap() -> None:

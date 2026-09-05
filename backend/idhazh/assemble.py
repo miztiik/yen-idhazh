@@ -1218,10 +1218,10 @@ def build_manifest(
         items_succeeded=succeeded,
         items_failed=failed,
         items_skipped=skipped,
-        items_routed=len(decisions or []),
+        items_decided=len(decisions or []),
         items_prefiltered=prefiltered,
         charts_drafted=sum(1 for decision in (decisions or []) if decision.drafted_chart),
-        route_ms=sum(timed) if timed else None,
+        decision_ms=sum(timed) if timed else None,
         verticals=[
             VerticalCount(
                 id=vertical.id,

@@ -459,6 +459,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Three Python names moved and not one wire key did. ModelRole.ROUTE is ModelRole.VISUAL_PLANNER and still serialises to route; RunRecord.items_routed is RunRecord.items_decided and RunRecord.route_ms is RunRecord.decision_ms, both aliased back to the keys they had. RunRecord now serialises and validates by alias. No field was added, removed or retyped, no schema property name moved, and no committed manifest needs migrating.",
+      "version": "2026-09-05T16:00",
+      "why": "Route names a dispatch decision and this stage plans a visual, so the names taught the wrong word to every developer who read them. The keys could not follow, because run.json is published: 15 manifests sit under frontend/public/digest/ and 11 of them carry items_routed and route_ms, which frontend/src/lib/server/payload.ts reads by those exact names at build time. Moving a key would have meant migrating every published day to change a string no reader ever sees, against a real risk of dropping a run from the record (Fowler, 2026-09-05). So the Python renames and the wire is frozen, which is the whole of this entry. A payload spelling the new Python name also validates, because validate_by_name accepts both - nothing writes that spelling, and refusing it would be a check with no producer to catch."
+    },
+    {
       "change": "Added optional eligible_feeds and feed_floor to each vertical.",
       "version": "2026-09-02T23:00",
       "why": "below_feed_floor said a desk was under its floor and neither number that decided it, so a reader of a past run could not check the claim or see how close a desk came. The plan now counts only the addresses a run may lawfully ask, which makes the count a different fact from the one the manifest never carried - and recording it beside the floor is what lets a later reader tell a desk that went dark from a desk that was one source away. Both null on every manifest written before today, and null reads as unknown rather than as a desk with no sources (section 11)."
@@ -540,7 +545,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-02T23:00",
+      "default": "2026-09-05T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -552,5 +557,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-02T23:00"
+  "version": "2026-09-05T16:00"
 }

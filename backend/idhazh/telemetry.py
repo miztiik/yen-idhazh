@@ -131,9 +131,9 @@ class SpanName(StrEnum):
     """Every span this pipeline opens.
 
     Five are the stages a ledger row already splits: `fetch`, `extract`,
-    `summarize`, `score` and `route`. `item` is what they hang under. The other
-    five are the reason this exists at all - `robots` nests inside `fetch`,
-    `tag` nests inside `extract`, and `render_prompt`, `model_call` and
+    `summarize`, `score` and `visual_planner`. `item` is what they hang under.
+    The other five are the reason this exists at all - `robots` nests inside
+    `fetch`, `tag` nests inside `extract`, and `render_prompt`, `model_call` and
     `parse_reply` nest inside `summarize` in that order. Each of those is a step
     no column separates and no column should: a column per sub-step is a wider
     ledger for a question asked once a quarter.
@@ -149,7 +149,7 @@ class SpanName(StrEnum):
     MODEL_CALL = "model_call"
     PARSE_REPLY = "parse_reply"
     SCORE = "score"
-    ROUTE = "route"
+    VISUAL_PLANNER = "visual_planner"
 
 
 class AttrKey(StrEnum):
