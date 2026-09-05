@@ -736,7 +736,10 @@ async function widen(page: import('@playwright/test').Page, days: number) {
 
 test.describe('Row #19 - context headroom is one chart with a limit rule', () => {
 	const limits: MachineLimits = { contextWindow: INFERENCE.n_ctx, jobTimeoutSeconds: 9000 };
-	const { runs } = machineCounters(canaryCounters(), [], limits);
+	let runs: RunCounters[] = [];
+	test.beforeAll(() => {
+		runs = machineCounters(canaryCounters(), [], limits).runs;
+	});
 
 	/** The longest sequence per run, read straight off the CSV rather than off
 	 * the module - a maximum over the run's shards, blanks skipped. */
@@ -997,8 +1000,12 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 });
 
 test.describe('Row #21 - one plot a percentile, and one across them', () => {
-	const health = canaryHealth();
-	const history = percentileHistory(health, CONSOLE.min_attempts_for_rate);
+	let health: Record<string, string>[] = [];
+	let history: ReturnType<typeof percentileHistory>;
+	test.beforeAll(() => {
+		health = canaryHealth();
+		history = percentileHistory(health, CONSOLE.min_attempts_for_rate);
+	});
 
 	test('THE ORACLE: one value per configured percentile, per readable run', () => {
 		// Recomputed here from the rows, so the module never checks itself.

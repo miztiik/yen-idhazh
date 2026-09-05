@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the orchestrator contract)
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-05
 
 The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it. The autonomy POLICY (AUTO by default, when to ESCALATE) lives in [../agents/bootstrap.md](../agents/bootstrap.md); this doc is the HOW.
 
@@ -30,11 +30,15 @@ orchestrator (main thread)                 worker subagent (one per row)        
 2. Select the next dispatchable row(s): every `Depends-on` is `DONE`; rows sharing a `Parallel-group` dispatch together, up to `Parallel N`. Waiting for checks is not a dependency.
 3. Create an isolated git worktree off `origin/main` + a named branch per row. Never share a worktree between rows or with a parallel agent (worktree contamination silently sweeps one row's edits into another's PR). Fill the Status Reckoner `Worktree`.
 4. Dispatch one worker subagent per row (`runSubagent`, default agent) with a self-contained brief (below). Set `Status = IN-FLIGHT`; fill `Subagent`.
-5. Receive the worker's report. Run the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md); on green gates, remove the row's worktree and then AUTO-merge (`gh pr merge --squash --delete-branch`). If checks or publish/deploy jobs are still running for one independent row, keep dispatching other ready rows instead of idling.
+5. Receive the worker's report. Verify its test records and the merge candidate's CI checks against the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md). Do not repeat an unchanged worker check. If a merge changes the tested inputs, select checks for those changed inputs. On green gates, remove the row's worktree and then AUTO-merge (`gh pr merge --squash --delete-branch`). If checks or publish/deploy jobs are still running for one independent row, keep dispatching other ready rows instead of idling.
 6. Flip `Status = DONE #<pr>`; unblock dependents; [distill](distill-a-plan.md) the closed row.
 7. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
 The orchestrator does NOT open the row's source files, write its code, or run its inner test loop inline - that is the worker's job. The orchestrator's own edits are limited to the Status Reckoner and the merge.
+
+Do not remove or alter a worker's checkout while its tests or build are running.
+Closing a plan does not invalidate an existing check. A documentation-only
+closure uses documentation checks and CI, not a fresh local application suite.
 
 **Remove the row's worktree BEFORE the merge, and never by detaching it instead.** Removing it first is what frees the branch, so the merge's own branch delete succeeds rather than failing on "cannot delete branch, used by worktree". Detaching frees the branch too, and that is the trap: it throws the branch away, and the branch is the only signal a later sweep can judge the leftover on - a detached checkout whose branch was squash-merged is not an ancestor of the trunk, so it reads as unmerged work and is kept for ever. Measured 2026-09-02, on the merge of the change that first wrote this step down: the tree had to be removed by hand afterwards. If the merge then needs a fixup, the branch is still on the remote and one `git worktree add` brings the checkout back.
 
@@ -47,7 +51,7 @@ Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Sc
 1. Runs bootstrap; reads the row + the docs its surface touches.
 2. Implements the row end-to-end: code + tests at the tier that matches the surface (CLAUDE.md section 13) + the docs update.
 3. Resolves ambiguity by consulting personas (below), baking the ruling into the code.
-4. Runs the row's Oracle and every acceptance gate locally; iterates until green.
+4. Runs the row's Oracle and the local checks selected by the project's gate guide. Leaves full-suite checks assigned to CI there; a list of acceptance gates is not an instruction to repeat every CI job locally. Records the tested inputs, selection, result and test counts. An active check is followed to completion, never launched again because its output is quiet.
 5. Turns every defect discovered during execution into explicit work: fix it in the row if it is in scope, or record a follow-up row / scope-change item. Do not bury defects in a footnote.
 6. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state. **The report opens with one plain sentence saying what the row settled, before any table.** A report that opens with a table hands the orchestrator the subsystem's vocabulary, and the orchestrator then forwards it to a person who asked what happened (`CLAUDE.md` section 0b).
 7. Does NOT merge, does NOT edit the Status Reckoner, does NOT start another row. Merge and closure are the orchestrator's.

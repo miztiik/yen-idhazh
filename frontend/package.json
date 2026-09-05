@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "vite dev",
     "build:icons": "node scripts/build-icons.mjs",
-    "build": "node scripts/build-icons.mjs && node scripts/build-frame-css.mjs && node scripts/build-worker-switch.mjs && node scripts/copy-visuals.mjs && vite build",
+    "build": "node scripts/build-icons.mjs && node scripts/build-frame-css.mjs && node scripts/build-worker-switch.mjs && node scripts/copy-visuals.mjs && node scripts/build-state.ts --begin && vite build && node scripts/build-state.ts --complete",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "bundle-gate": "node scripts/bundle-gate.mjs",
     "build:canary": "node scripts/build-canary.mjs",
-    "test:browser": "playwright test",
-    "test:whole-day": "playwright test --config playwright.whole-day.config.ts"
+    "test:logic": "playwright test --config playwright.logic.config.ts",
+    "check:tooling": "tsc --noEmit --strict --skipLibCheck --target es2022 --module nodenext --allowImportingTsExtensions --types node scripts/run-checks.ts scripts/verified-preview.ts",
+    "test:tooling": "npm run check:tooling && node --test scripts/tests/*.test.mjs",
+    "test:changed": "node scripts/run-checks.ts",
+  "test:browser": "playwright test",
+  "test:whole-day": "playwright test --config playwright.whole-day.config.ts"
   },
   "devDependencies": {
     "@huggingface/transformers": "^3.8.1",

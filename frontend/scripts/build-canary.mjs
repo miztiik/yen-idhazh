@@ -481,11 +481,11 @@ function writeRuntimeCountersCanary() {
 writeItemHealthCanary();
 writeRuntimeCountersCanary();
 execFileSync(
-	'python',
+	process.env.IDHAZH_PYTHON || 'python',
 	['-m', 'idhazh.publish_telemetry', '--state', STATE, '--public', join(STATE, 'telemetry')],
 	{
 		stdio: 'inherit',
-		shell: process.platform === 'win32',
+		shell: false,
 		cwd: resolve(process.cwd(), '..'),
 		env: { ...process.env, PYTHONPATH: resolve(process.cwd(), '..', 'backend') }
 	}
