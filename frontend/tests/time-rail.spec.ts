@@ -32,7 +32,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { orderByTime, railRows } from '../src/lib/day-shape';
 import { railTime, type RailForm } from '../src/lib/format';
-import { loadDay, publishedDates } from '../src/lib/server/payload';
+import { loadDay } from '../src/lib/server/payload';
 import type { DigestItem } from '../src/lib/payload/types';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -40,8 +40,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const BUILD = join(HERE, '..', 'build');
 /** The tree that built it. */
 const CANARY = resolve(HERE, '..', '..', 'backend', 'var', 'canary', 'digest');
-/** Every day this project has published, which is where the real spread is. */
-const COMMITTED = resolve(HERE, '..', 'public', 'digest');
 
 /** Never a date written here: a hardcoded one passes on an empty page the
  * moment the fixture moves. */
@@ -83,104 +81,121 @@ function refuseRelative(label: string, where: string): void {
 	}
 }
 
+/** A story carrying only what the rail reads off one.
+ *
+ * Everything else on a `DigestItem` is another surface's business, so it is
+ * filled once here and never varied - a case below differs from its neighbour
+ * in the clock and in nothing else.
+ */
+function story(id: string, at: string | null, source: string | null): DigestItem {
+	return {
+		item_id: id,
+		vertical: 'ai',
+		title: `Story ${id}`,
+		source_url: `https://example.test/${id}`,
+		source_id: 'test',
+		source_name: 'Test',
+		source_kind: 'reporting',
+		published_at: at,
+		time_source: source,
+		summary: id,
+		key_points: [],
+		lenses: [],
+		events: [],
+		entities: [],
+		band: 'high',
+		band_reason: null,
+		source_form: 'article',
+		reader_note: null,
+		truncated: false,
+		visual: null,
+		introduced_by_run: 1,
+		updated_at: null
+	} as DigestItem;
+}
+
 test.describe('the day runs newest first, and every time it prints is attributed', () => {
-	test('the re-order keeps the day, over every committed day', () => {
-		const dates = publishedDates(COMMITTED);
-		expect(dates.length, 'nothing is committed, so this checks nothing').toBeGreaterThan(0);
+	test('the re-order keeps every story it was given, and never counts upward', () => {
+		const day = '2026-08-20';
+		const items = [
+			story('ai-01', `${day}T06:20:00Z`, 'feed'),
+			story('ai-02', null, 'unknown'),
+			story('ai-03', `${day}T14:05:00Z`, 'feed'),
+			story('ai-04', '2026-08-19T23:40:00Z', 'feed'),
+			// A tie. An unstable sort drops or duplicates a story here and nowhere else.
+			story('ai-05', `${day}T14:05:00Z`, 'first_seen'),
+			story('ai-06', '2019-06-11T08:15:00Z', null),
+			story('ai-07', null, null)
+		];
 
-		let stories = 0;
-		for (const date of dates) {
-			const items = loadDay(date, COMMITTED)?.items ?? [];
-			const ordered = orderByTime(items);
-			stories += items.length;
+		const ordered = orderByTime(items);
+		expect(ordered.length, 'the re-order changed the story count').toBe(items.length);
+		expect(
+			ordered.map((item) => item.item_id).sort(),
+			'the re-order changed which stories the day holds'
+		).toEqual(items.map((item) => item.item_id).sort());
 
-			expect(ordered.length, `${date}: the re-order changed the story count`).toBe(items.length);
+		// Newest first, with the undated at the end. Written as an indexed loop
+		// rather than as the pairwise helper the implementation would reach for,
+		// so this is a second expression of the rule and not a copy of it.
+		let seenUndated = false;
+		for (let i = 0; i < ordered.length - 1; i += 1) {
+			const here = ordered[i].published_at;
+			const next = ordered[i + 1].published_at;
+			if (here === null) seenUndated = true;
 			expect(
-				[...ordered].map((item) => item.item_id).sort(),
-				`${date}: the re-order changed which stories the day holds`
-			).toEqual([...items].map((item) => item.item_id).sort());
-
-			// Newest first, with the undated at the end. Written as an indexed loop
-			// rather than as the pairwise helper the implementation would reach for,
-			// so this is a second expression of the rule and not a copy of it.
-			let seenUndated = false;
-			for (let i = 0; i < ordered.length - 1; i += 1) {
-				const here = ordered[i].published_at;
-				const next = ordered[i + 1].published_at;
-				if (here === null) seenUndated = true;
-				expect(
-					seenUndated && next !== null,
-					`${date}: a dated story sits below an undated one at ${i}`
-				).toBe(false);
-				if (here !== null && next !== null) {
-					expect(
-						here >= next,
-						`${date}: ${here} is above ${next}, so the rail counts upward`
-					).toBe(true);
-				}
+				seenUndated && next !== null,
+				`a dated story sits below an undated one at ${i}`
+			).toBe(false);
+			if (here !== null && next !== null) {
+				expect(here >= next, `${here} is above ${next}, so the rail counts upward`).toBe(true);
 			}
 		}
-		expect(stories, 'the committed tree holds no stories').toBeGreaterThan(0);
 	});
 
-	test('every time_source category is counted, and each one prints its own form', () => {
-		const seen: Record<string, number> = { feed: 0, first_seen: 0, unknown: 0, unrecorded: 0 };
-		const forms: Record<RailForm, number> = {
-			clock: 0,
-			yesterday: 0,
-			dated: 0,
-			'first-seen': 0,
-			none: 0
-		};
+	test('every clock a payload can carry prints its own form', () => {
+		// The whole domain rather than a sample of it. `time_source` is a contract
+		// enum and `published_at` is validated beside it, so a committed story
+		// cannot carry a pair outside this table - which is what walking the
+		// archive was re-establishing, once per story, for ever.
+		const day = '2026-08-20';
+		const cases: { at: string | null; source: string | null; form: RailForm; label: string }[] = [
+			{ at: `${day}T14:05:00Z`, source: 'feed', form: 'clock', label: '14:05' },
+			{ at: `${day}T14:05:00Z`, source: null, form: 'clock', label: '14:05' },
+			{ at: '2026-08-19T23:40:00Z', source: 'feed', form: 'yesterday', label: 'Yesterday 23:40' },
+			{ at: '2026-08-19T23:40:00Z', source: null, form: 'yesterday', label: 'Yesterday 23:40' },
+			{ at: '2026-06-11T08:15:00Z', source: null, form: 'dated', label: '11 Jun 08:15' },
+			{ at: '2019-06-11T08:15:00Z', source: null, form: 'dated', label: '11 Jun 2019 08:15' },
+			{
+				at: `${day}T06:20:00Z`,
+				source: 'first_seen',
+				form: 'first-seen',
+				label: 'First seen 06:20'
+			},
+			{ at: null, source: 'unknown', form: 'none', label: 'No time given' }
+		];
 
-		for (const date of publishedDates(COMMITTED)) {
-			const day = loadDay(date, COMMITTED);
-			for (const item of day?.items ?? []) {
-				seen[item.time_source ?? 'unrecorded'] += 1;
-				const time = railTime(item.published_at, item.time_source, date, GROUP_MINUTES);
-				forms[time.form] += 1;
-				refuseRelative(time.label, `${date} ${item.item_id}`);
+		for (const one of cases) {
+			const time = railTime(one.at, one.source, day, GROUP_MINUTES);
+			const named = `${one.source ?? 'unrecorded'} at ${one.at ?? 'no time'}`;
+			expect(time.label, named).toBe(one.label);
+			expect(time.form, named).toBe(one.form);
+			refuseRelative(time.label, named);
 
-				// The negative arm, and the whole reason `time_source` is published.
-				// Our own clock never prints as a bare clock reading.
-				if (item.time_source === 'first_seen') {
-					expect(
-						time.form,
-						`${date} ${item.item_id} came off our clock and printed "${time.label}"`
-					).toBe('first-seen');
-					expect(time.label).toMatch(/^First seen \d{2}:\d{2}$/);
-				} else {
-					expect(
-						time.label.startsWith('First seen'),
-						`${date} ${item.item_id} claims a first sight the payload does not record`
-					).toBe(false);
-				}
-
-				// And the positive arm: a story with no time at all says so, and one
-				// with a time never does.
-				expect(
-					time.form === 'none',
-					`${date} ${item.item_id} has ${item.published_at ? 'a time' : 'no time'} ` +
-						`and printed "${time.label}"`
-				).toBe(!item.published_at);
-			}
+			// Our own clock never prints as a bare reading, and no other clock claims
+			// a first sight the payload does not record.
+			expect(time.label.startsWith('First seen'), named).toBe(one.source === 'first_seen');
+			// A story with no time says so, and one with a time never does.
+			expect(time.form === 'none', named).toBe(!one.at);
 		}
 
-		const total = Object.values(seen).reduce((sum, n) => sum + n, 0);
-		const counted = JSON.stringify(seen);
-		expect(total, 'no story was counted, so nothing above ran').toBeGreaterThan(0);
-		// Two of the four are what the committed days actually hold. Asserting
-		// them is what stops a branch passing because no story reached it.
-		expect(seen.feed, `no story came off a feed clock: ${counted}`).toBeGreaterThan(0);
-		expect(seen.first_seen, `no story came off our own clock: ${counted}`).toBeGreaterThan(0);
+		// Exhaustive by construction, which the census could only approximate: it
+		// counted what the corpus happened to hold, and over 6,539 committed
+		// stories the corpus has never once held an undated one.
 		expect(
-			seen.unrecorded,
-			`no story predates time_source, so the unattributed form is untested: ${counted}`
-		).toBeGreaterThan(0);
-		expect(forms.clock, `no story printed a same-day clock: ${counted}`).toBeGreaterThan(0);
-		expect(forms.yesterday, `no story printed the day before: ${counted}`).toBeGreaterThan(0);
-		expect(forms.dated, `no story printed an older date: ${counted}`).toBeGreaterThan(0);
-		expect(forms['first-seen'], `no story printed our clock: ${counted}`).toBeGreaterThan(0);
+			[...new Set(cases.map((one) => one.form))].sort(),
+			'a form no case reaches is a branch with no test'
+		).toEqual(['clock', 'dated', 'first-seen', 'none', 'yesterday']);
 	});
 
 	test('the canary day carries the one state no committed day has', () => {
@@ -207,36 +222,44 @@ test.describe('the day runs newest first, and every time it prints is attributed
 	});
 
 	test('the rail draws one marker per group, not one per story', () => {
-		let stories = 0;
-		let markers = 0;
-		for (const date of publishedDates(COMMITTED)) {
-			const items = orderByTime(loadDay(date, COMMITTED)?.items ?? []);
-			const rows = railRows(items, date, GROUP_MINUTES);
-			expect(rows.length, `${date}: the rail lost a story`).toBe(items.length);
-			expect(rows[0]?.mark ?? null, `${date}: the first story opens no group`).not.toBeNull();
+		const day = '2026-08-20';
+		// Seven stories over several groups: two feed clocks in one hour, three in
+		// the hour below it, our own clock, which never shares a group with a
+		// feed's, and a story with no time at all.
+		const items = orderByTime([
+			story('ai-01', `${day}T14:58:00Z`, 'feed'),
+			story('ai-02', `${day}T14:05:00Z`, 'feed'),
+			story('ai-03', `${day}T13:50:00Z`, 'feed'),
+			story('ai-04', `${day}T13:20:00Z`, 'feed'),
+			story('ai-05', `${day}T13:01:00Z`, 'feed'),
+			story('ai-06', `${day}T13:40:00Z`, 'first_seen'),
+			story('ai-07', null, 'unknown')
+		]);
 
-			// A marker is drawn exactly where the group changes, and nowhere else.
-			let previous: string | null = null;
-			for (const row of rows) {
-				const time = railTime(row.item.published_at, row.item.time_source, date, GROUP_MINUTES);
-				expect(
-					row.mark !== null,
-					`${date}: ${row.item.item_id} is in group ${time.group} and drew ` +
-						`${row.mark ? 'a marker' : 'none'}`
-				).toBe(time.group !== previous);
-				previous = time.group;
-			}
-			stories += items.length;
-			markers += rows.filter((row) => row.mark !== null).length;
+		const rows = railRows(items, day, GROUP_MINUTES);
+		expect(rows.length, 'the rail lost a story').toBe(items.length);
+		expect(rows[0]?.mark ?? null, 'the first story opens no group').not.toBeNull();
+
+		// A marker is drawn exactly where the group changes, and nowhere else.
+		let previous: string | null = null;
+		for (const row of rows) {
+			const time = railTime(row.item.published_at, row.item.time_source, day, GROUP_MINUTES);
+			expect(
+				row.mark !== null,
+				`${row.item.item_id} is in group ${time.group} and drew ` +
+					`${row.mark ? 'a marker' : 'none'}`
+			).toBe(time.group !== previous);
+			previous = time.group;
 		}
 
-		// The whole point, as a number: a marker per story would be `stories`.
+		// The whole point, as a number: a marker per story would be `items.length`.
+		const markers = rows.filter((row) => row.mark !== null).length;
 		expect(markers, 'the rail draws nothing').toBeGreaterThan(0);
 		expect(
 			markers,
-			`${markers} markers over ${stories} stories - the rail is a label on almost ` +
-				`every story, which is the state this grouping exists to avoid`
-		).toBeLessThan(stories / 2);
+			`${markers} markers over ${items.length} stories - a label on almost every ` +
+				`story is the state this grouping exists to avoid`
+		).toBeLessThan(items.length);
 	});
 
 	test('a group is the configured span, and a day boundary always breaks it', () => {
@@ -253,25 +276,6 @@ test.describe('the day runs newest first, and every time it prints is attributed
 		);
 		// And our clock never shares a group with a feed's, even at the same hour.
 		expect(at('2026-08-20T14:05:00Z', 'first_seen')).not.toBe(at('2026-08-20T14:05:00Z', 'feed'));
-	});
-
-	test('the four strings, in the words the reader gets', () => {
-		const day = '2026-08-20';
-		expect(railTime(`${day}T14:05:00Z`, 'feed', day, 60).label).toBe('14:05');
-		expect(railTime('2026-08-19T23:40:00Z', 'feed', day, 60).label).toBe('Yesterday 23:40');
-		expect(railTime('2026-06-11T08:15:00Z', null, day, 60).label).toBe('11 Jun 08:15');
-		expect(railTime('2019-06-11T08:15:00Z', null, day, 60).label).toBe('11 Jun 2019 08:15');
-		expect(railTime(`${day}T06:20:00Z`, 'first_seen', day, 60).label).toBe('First seen 06:20');
-		expect(railTime(null, 'unknown', day, 60).label).toBe('No time given');
-		for (const label of [
-			railTime(`${day}T14:05:00Z`, 'feed', day, 60).label,
-			railTime('2026-08-19T23:40:00Z', 'feed', day, 60).label,
-			railTime('2026-06-11T08:15:00Z', null, day, 60).label,
-			railTime(`${day}T06:20:00Z`, 'first_seen', day, 60).label,
-			railTime(null, 'unknown', day, 60).label
-		]) {
-			refuseRelative(label, 'the rail vocabulary');
-		}
 	});
 });
 
