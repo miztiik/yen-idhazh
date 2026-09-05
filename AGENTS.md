@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-05
 
 Derived pointer for coding agents. Not authoritative - if this disagrees with `docs/`, docs win (CLAUDE.md section 5).
 
@@ -20,8 +20,9 @@ Before any non-trivial work:
 2. Run the ritual in [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md); honour [`docs/agents/guardrails.md`](docs/agents/guardrails.md).
 3. Route new docs by [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md).
 4. For plan execution, follow [`docs/how-to/execute-a-plan.md`](docs/how-to/execute-a-plan.md).
-5. Before claiming a change is done, read [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md). **Locally: `ruff`, `mypy`, and the tests for the module you changed. CI runs the full suite and is six to fifteen times faster than this box - push and read it rather than blocking on a local run.**
+5. Before claiming a change is done, read [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md). **Use `npm --prefix frontend run test:changed -- --list`, then run the selected local checks. CI runs the full suite. Do not repeat a worker's unchanged check or launch a second copy while its first run is active.** A documentation-only closure needs no local application suite.
 6. Write new and generated text with LF before the first test. Git normalises at `git add`, which is too late for a test that reads the working file.
+7. Start code changes in a dedicated git worktree and named branch, not the shared main checkout. Follow [`docs/how-to/ship-a-pr.md`](docs/how-to/ship-a-pr.md) for transfer, PR and cleanup.
 
 Seven persona advisors live in [`.github/agents/`](.github/agents/), each at a distinct altitude: Reader, Editor, Jony (UI/UX), Susan (Craft & Delight), Andre (AI/LLM), Fowler (Architecture & Engineering), Carmack (Engine & Runtime). Jony rules what survives on the page; Susan rules whether what survived is good enough to ship. A veto must name what the reader loses.
 

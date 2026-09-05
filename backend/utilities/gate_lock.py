@@ -439,7 +439,7 @@ def acquire(
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as error:
-        LOG.warning("the gate lock has nowhere to live (%s), so the gate runs unlocked", error)
+        LOG.warning("the gate lock has nowhere to live (%s)", error)
         return None
     started = time.monotonic()
     # Negative so the first pass through the wait reports the holder at once.
@@ -450,7 +450,7 @@ def acquire(
         except OSError as error:
             # The temp directory will not hold a lock at all. Saying so and
             # running unlocked is the promise; refusing would fail the gate.
-            LOG.warning("no gate lock could be taken (%s), so the gate runs unlocked", error)
+            LOG.warning("no gate lock could be taken (%s)", error)
             return None
         if won is not None:
             return won
@@ -552,12 +552,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--require-lock",
+        action="store_true",
+        help="Do not run without the lock or reclaim it from a live holder based on age.",
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=WAIT_TIMEOUT_SECONDS,
         help=(
-            "Seconds to wait before running the gate unlocked rather than failing "
-            f"it. Default: {WAIT_TIMEOUT_SECONDS:.0f}."
+            "Seconds to wait before running unlocked, or exiting 75 with --require-lock. "
+            f"Default: {WAIT_TIMEOUT_SECONDS:.0f}."
         ),
     )
     return parser
@@ -588,7 +593,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         lock,
         holder,
         poll=float(args.retry_every),
-        stale_after=float(args.stale_after),
+        stale_after=float("inf") if args.require_lock else float(args.stale_after),
         timeout=float(args.timeout),
     )
     if won is not None:
@@ -596,6 +601,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return run_command(command)
         finally:
             release(lock, won)
+
+    if args.require_lock:
+        LOG.error("no gate lock was acquired; the command did not run (--require-lock)")
+        return 75
 
     LOG.warning(
         "gave up waiting for the gate lock after %.0f s and ran unlocked; "

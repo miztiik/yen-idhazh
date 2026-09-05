@@ -1455,14 +1455,41 @@ BROWSER_SCOPE_CASES: Final = (
     ("backend/utilities/build_canary_day.py", True, True),
     ("frontend/src/routes/[date]/+page.svelte", True, False),
     ("frontend/src/lib/assist/loader.ts", True, False),
-    ("frontend/src/app.html", True, False),
+    ("frontend/src/app.html", True, True),
+    ("frontend/src/styles/tokens.css", True, True),
+    ("frontend/src/routes/+layout.svelte", True, True),
+    ("frontend/package.json", True, True),
+    ("frontend/package-lock.json", True, True),
+    ("frontend/tests/frame.spec.ts", False, False),
+    ("backend/idhazh/render/write.py", True, True),
+    ("unknown-area/module.ts", True, True),
     ("backend/idhazh/sanitize.py", True, False),
-    ("tests/fixtures/canaries/fake-system-delimiter.json", True, False),
+    ("tests/fixtures/canaries/fake-system-delimiter.json", True, True),
     ("docs/reference/measurements.md", False, False),
     ("backend/tests/test_discover.py", False, False),
     ("backend/idhazh/discover.py", False, False),
     ("TODO/some-plan.md", False, False),
 )
+
+
+def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
+    workflow = _load_workflows()["ci.yml"]
+    versions: dict[str, object] = {}
+    for job in ("scope", "gates"):
+        steps = _steps(workflow, job)
+        node_steps = [
+            step for step in steps
+            if str(step.get("uses", "")).startswith("actions/setup-node@")
+        ]
+        assert len(node_steps) == 1, f"{job} must declare the selector's Node runtime"
+        settings = node_steps[0].get("with")
+        assert isinstance(settings, dict)
+        versions[job] = settings.get("node-version")
+        if job == "gates":
+            test_step = next(step for step in steps if step.get("run") == "pytest")
+            assert steps.index(node_steps[0]) < steps.index(test_step)
+    assert versions["scope"] is not None
+    assert versions["gates"] == versions["scope"]
 
 
 def _browser_scope(

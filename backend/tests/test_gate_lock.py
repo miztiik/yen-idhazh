@@ -310,6 +310,68 @@ def test_the_gates_exit_code_comes_back_and_the_lock_goes(tmp_path: Path) -> Non
 
     assert done.returncode == 3
     assert not lock.exists()
+
+
+def test_required_lock_never_runs_beside_a_live_holder(tmp_path: Path) -> None:
+    lock = tmp_path / "gate.lock"
+    worker = _write(tmp_path / "worker.py", WORKER_SOURCE)
+    record = tmp_path / "intervals.txt"
+    for age in (42.0, gate_lock.STALE_AFTER_SECONDS * 10):
+        standing = _a_lock_nobody_is_holding(age)
+        lock.write_text(standing.to_json(), encoding="ascii")
+        arguments = _argv(lock, [sys.executable, str(worker), str(record), "0"], timeout=0)
+        arguments.insert(2, "--require-lock")
+        done = subprocess.run(
+            arguments,
+            cwd=tmp_path,
+            env=_developer_environment(),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert done.returncode == 75, done.stderr
+        assert "command did not run" in done.stderr
+        assert not record.exists()
+        assert lock.read_text(encoding="ascii") == standing.to_json()
+
+
+def test_required_lock_passes_through_the_command_result(tmp_path: Path) -> None:
+    lock = tmp_path / "gate.lock"
+    arguments = _argv(lock, [sys.executable, "-c", "raise SystemExit(3)"])
+    arguments.insert(2, "--require-lock")
+    done = subprocess.run(
+        arguments,
+        cwd=tmp_path,
+        env=_developer_environment(),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 3, done.stderr
+    assert not lock.exists()
+
+
+def test_required_lock_refuses_a_path_that_cannot_hold_a_lock(tmp_path: Path) -> None:
+    blocked = _write(tmp_path / "not-a-directory", "occupied\n")
+    worker = _write(tmp_path / "worker.py", WORKER_SOURCE)
+    record = tmp_path / "intervals.txt"
+    arguments = _argv(blocked / "gate.lock", [sys.executable, str(worker), str(record), "0"])
+    arguments.insert(2, "--require-lock")
+    done = subprocess.run(
+        arguments,
+        cwd=tmp_path,
+        env=_developer_environment(),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 75, done.stderr
+    assert not record.exists()
+
+
 def test_a_lock_with_nowhere_to_live_runs_the_gate_rather_than_failing_it(
     tmp_path: Path,
 ) -> None:
