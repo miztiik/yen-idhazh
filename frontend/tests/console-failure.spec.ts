@@ -48,7 +48,15 @@ function row(date: string, id: string, stage: string, outcome: string, code = ''
 		code,
 		source_words: 400,
 		summary_words: 60,
-		source_words_before_cap: null
+		source_words_before_cap: null,
+		fetch_ms: null,
+		extract_ms: null,
+		summarize_ms: null,
+		prefill_ms: null,
+		decode_ms: null,
+		input_tokens: null,
+		output_tokens: null,
+		cached_tokens: null
 	};
 }
 
