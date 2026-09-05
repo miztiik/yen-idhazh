@@ -132,21 +132,19 @@ test.describe('the eight canaries, on the published surface', () => {
 	});
 
 	test('planted markup rendered as words, not as elements', async ({ page }) => {
-		// `figure img` is excluded because a rendered visual is a legitimate image
-		// the pipeline produced. Everything else is markup that came from a
-		// stranger's page, and none of it may become an element.
+		// No exemption for a figure image, because from 2026-09-05 there is no
+		// image on this page at all: a drawing is inlined whether the build put it
+		// there or the browser fetched it. So any `img` under `main` is markup that
+		// came from a stranger's page.
 		//
 		// The second query is the same rule at the carrier that replaced that
-		// image. A seeded drawing is inlined, so it is markup in our own origin
-		// rather than a separate inert document, and the parts of SVG that can
-		// run or fetch have to be absent from the rendered page as well as
-		// refused by the build (Rule #11).
+		// image. A drawing is markup in our own origin rather than a separate inert
+		// document, so the parts of SVG that can run or fetch have to be absent
+		// from the rendered page as well as refused before it is drawn (Rule #11).
 		await page.goto('/2026-08-20/');
 		const smuggled = await page.evaluate(() =>
 			[
-				...document.querySelectorAll(
-					'main iframe, main object, main embed, main img:not(figure img)'
-				),
+				...document.querySelectorAll('main iframe, main object, main embed, main img'),
 				...document.querySelectorAll(
 					'main svg script, main svg foreignObject, main svg image, main svg use, main svg a'
 				),
@@ -187,10 +185,10 @@ test.describe('the eight canaries, on the published surface', () => {
 test.describe('the visual path', () => {
 	// A payload that promises a picture the reader never gets is worse than
 	// routing the item to no visual: the reader gets an empty frame where
-	// evidence should be. The seeded stories carry their drawing in the document
-	// from 2026-09-05, so the promise is now kept at build time - a file the
-	// build could not read leaves the story on the image carrier, and that
-	// carrier is what would 404.
+	// evidence should be. Every story carries its drawing in the document from
+	// 2026-09-05 - seeded at build time, fetched in the browser past the seed -
+	// so a file that cannot be read leaves the story shorter and there is no
+	// image left to 404.
 	test('a promised visual is actually served', async ({ page }) => {
 		const misses: string[] = [];
 		page.on('response', (response) => {
