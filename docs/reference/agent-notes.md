@@ -519,6 +519,17 @@ expression as far as the rule is concerned, and the rule is right that nothing
 reads it. Assign it away instead: `_ = parts.port` keeps the parse, keeps the
 intent visible, and passes.
 
+**Renaming a module makes `ruff` report `I001` on files you never opened.**
+Ruff's isort decides first-party from what is on disk, so an import of a module
+that no longer exists is sorted as third-party - it moves up beside `pytest` and
+`pydantic`, and every file still naming the old path reports "Import block is
+un-sorted". Measured 2026-09-05 renaming one module: 18 errors across 11 files,
+7 of them test modules the change had not touched, and `git status` listed none
+of them. It reads as lint debt that was always there. It is not; the count goes
+to zero as each importer is repointed. Fix the imports, then re-run - do not
+reach for `--fix`, which sorts the stale name into its new wrong place and hides
+the signal.
+
 **`npm run bundle-gate` no longer weighs a route against a recorded number.**
 Until 2026-08-30 it held every route's first-load JavaScript within 64 bytes of
 a hand-maintained record, and about a hundred lines of this page were about

@@ -57,15 +57,15 @@ from idhazh.contracts.feed_health import (
 )
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
-from idhazh.contracts.route import Route, SpecFormat, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LensId, SourceKind, SourceTier
+from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
-from idhazh.render import asset_relpath, render_route
+from idhazh.render import asset_relpath, render_visual
 
 CANARY_DIR = Path("tests/fixtures/canaries")
 DATE = "2026-08-20"
@@ -397,7 +397,7 @@ def lenses_for(index: int) -> list[LensId]:
     return []
 
 
-def visual_for(index: int, item_id: str, target: Path) -> Route | None:
+def visual_for(index: int, item_id: str, target: Path) -> VisualDecision | None:
     """A rendered chart on the first item, a rendered diagram on the second."""
     if index == 0:
         kind, spec, fmt = VisualKind.CHART, CHART_SPEC, SpecFormat.VEGA_LITE
@@ -408,8 +408,8 @@ def visual_for(index: int, item_id: str, target: Path) -> Route | None:
     else:
         return None
 
-    route = Route(
-        version=Route.schema_version(),
+    decision = VisualDecision(
+        version=VisualDecision.schema_version(),
         item_id=item_id,
         url_key="0" * 64,
         kind=kind,
@@ -417,10 +417,10 @@ def visual_for(index: int, item_id: str, target: Path) -> Route | None:
         spec_format=fmt,
         alt_text=alt,
         model_id="canary",
-        routed_at=f"{DATE}T06:00:00Z",
+        decided_at=f"{DATE}T06:00:00Z",
     )
-    return render_route(
-        route,
+    return render_visual(
+        decision,
         # The payload stores `digest/<Y>/<M>/<D>/...`, so the root here is the
         # parent of the digest directory - exactly as the real pipeline does it.
         public_root=target.parent,
