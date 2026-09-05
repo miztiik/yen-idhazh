@@ -20,6 +20,7 @@ import { join, resolve } from 'node:path';
 import { dayKey, toDay } from '../charts/viewport';
 import { orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
+import { publishedVisual, refusedDrawing } from '../payload/drawing';
 import { dropVectors } from '../payload/project';
 import type { DigestDay, DigestItem, SeededVisual } from '$lib/payload/types';
 
@@ -191,36 +192,18 @@ export interface DayShellSplit {
 	root?: string;
 }
 
-/** A published visual's path, as a file this build is allowed to open.
- *
- * The value comes off a committed payload rather than off the web, and it is
- * still matched rather than trusted: it is about to be joined onto a directory
- * and read, and a path that walked out of the digest tree would be read all the
- * same. The shape is the one `route.py` writes - the date the day was published
- * on, then one file named for its desk.
- */
-const VISUAL_PATH = /^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9][a-z0-9_-]*\.svg$/;
-
-/** What a drawing may not carry into the document.
- *
- * Inside an `img` an SVG is inert whatever it holds, and the moment it is
- * inlined it is markup in our own origin. The renderer is ours and its input is
- * not: a chart's labels are written by a model that read a stranger's page, so
- * this is the trust boundary moving and it gets a check rather than a promise
- * (Rule #11). Nothing here is a fix for a file that trips it - a drawing that
- * does is not drawn, and the build says which one.
- */
-const NOT_INERT = /<\s*(script|foreignObject|iframe|image|use|a|set|animate)\b|\son[a-z]+\s*=|javascript:/i;
-
 /** The drawing itself, or null when there is nothing safe to inline.
  *
- * Null is a designed state and not an error: the item keeps its `path`, so it
- * falls back to the carrier it had before. Degrade, do not fail
+ * Null is a designed state and not an error: the story keeps its `path`, so the
+ * browser asks for the same file and runs the same refusal from
+ * [../payload/drawing.ts](../payload/drawing.ts) over the answer. A file this
+ * build refuses is a file that build refuses too, so the reader gets a shorter
+ * story rather than a drawing nobody checked. Degrade, do not fail
  * (`CLAUDE.md` section 1a).
  */
 function inlineSvg(root: string, path: string): string | null {
-	if (!VISUAL_PATH.test(path)) {
-		console.warn(`[digest] ${path}: not a published visual path, left on the image carrier`);
+	if (!publishedVisual(path)) {
+		console.warn(`[digest] ${path}: not a published visual path, so it is not drawn`);
 		return null;
 	}
 	// `..` off the digest root rather than a switch of its own, the way
@@ -229,12 +212,9 @@ function inlineSvg(root: string, path: string): string | null {
 	const file = join(root, '..', path);
 	if (!existsSync(file)) return null;
 	const markup = readFileSync(file, 'utf8');
-	if (!markup.startsWith('<svg')) {
-		console.warn(`[digest] ${path}: does not open on an svg element, left on the image carrier`);
-		return null;
-	}
-	if (NOT_INERT.test(markup)) {
-		console.warn(`[digest] ${path}: carries markup a document may not run, left on the image carrier`);
+	const refused = refusedDrawing(markup);
+	if (refused !== null) {
+		console.warn(`[digest] ${path}: ${refused}, so it is not drawn`);
 		return null;
 	}
 	return markup;
