@@ -184,7 +184,7 @@ test.describe('the eight canaries, on the published surface', () => {
 
 test.describe('the visual path', () => {
 	// A payload that promises a picture the reader never gets is worse than
-	// routing the item to no visual: the reader gets an empty frame where
+	// deciding the item to no visual: the reader gets an empty frame where
 	// evidence should be. Every story carries its drawing in the document from
 	// 2026-09-05 - seeded at build time, fetched in the browser past the seed -
 	// so a file that cannot be read leaves the story shorter and there is no

@@ -314,6 +314,44 @@ where both sides rendered a chart onto the same path. Measured 2026-08-25, git
 2.55.0, bash 5.3.15. CI never runs `digest.yml`, so a change to the loop still
 needs a dispatched run to verify end to end.
 
+### The rebuild reads its own mid-flight payloads with whatever code main now holds
+
+**A contract change merged while a run is in flight breaks that run**, and the
+error names neither the cause nor the fix. The rebuild above re-runs
+`python -m idhazh assemble` against `origin/main` after a lost push race. It
+re-runs the code at the tip, and the per-item payloads on the runner's disk were
+written hours earlier by the code the run started with. If the two disagree about
+a field, the reader raises where nothing is wrong with the data.
+
+Measured on run `33951249328`, 2026-09-05. The `visuals` job wrote its per-item
+payloads at 08:23:21. `assemble` committed at 09:03:08, lost the push at
+09:03:09, rebased `a6acdb6..b68f625`, printed `rebuilding the day against
+origin/main`, and raised:
+
+```
+pydantic_core.ValidationError: 3 validation errors for VisualDecision
+decided_at   Field required
+route_ms     Extra inputs are not permitted
+routed_at    Extra inputs are not permitted
+```
+
+Two of those three fields had been renamed on `main` between 08:23 and 09:03.
+Nothing was wrong with the payloads and nothing was wrong with the new contract.
+
+**The window is most of the day.** Five scheduled runs, each 164 to 184 minutes,
+so a merge lands inside a live run more often than not. Two consequences:
+
+- **Check for an in-flight run before merging a contract change.**
+  `gh run list --workflow digest.yml --status in_progress` answers it. A change
+  that removes, renames or retypes a field on any payload under `backend/var/`
+  waits for the run to finish.
+- **The failure is loud and the day is lost, not corrupted.** `assemble` raises
+  rather than publishing a half-read day, and the next scheduled run rebuilds
+  from its own payloads under the new contract. So the cost is one digest, and
+  the answer is to time the merge rather than to build a guard - a guard would
+  have to read the old shape, which is exactly the migration `CLAUDE.md`
+  section 11 already requires when the payload is committed. These are not.
+
 Model validation and measurements never run on a pull request, push, or
 schedule. A person dispatches them. Drift review is a separate weekly or manual
 workflow; it does not run inside Content refresh. Vector backfill is dispatched
@@ -359,7 +397,7 @@ state, not a sample, so there is no spread.
 
 | Moment | Bytes | Of the 10 GB cap |
 | --- | --- | --- |
-| Before: router `llm-Qwen3-4B-Q4_K_M.gguf-b10598-v4` 2,438,761,586, a stale `qualify-03b74727...-b10598` 5,614,108,894, python and node about 0.59 GB | 8.05 GB | 81% |
+| Before: the visual planner's `llm-Qwen3-4B-Q4_K_M.gguf-b10598-v4` 2,438,761,586, a stale `qualify-03b74727...-b10598` 5,614,108,894, python and node about 0.59 GB | 8.05 GB | 81% |
 | After deleting the stale qualification copy | 3,031,429,559 | 30% |
 | After the production fill of 5,680,522,464 for the configured summarizer | **8,711,952,023** | **87%** |
 

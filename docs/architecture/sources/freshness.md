@@ -336,15 +336,15 @@ Both first-sighting and the published ledger are append-only files under `state/
 
 Authority: Carmack and Fowler. The proposal was a new knob at the planning step,
 capping how many items one run may plan for reading, separate from the crash
-guard. The value floated was about 59 items - the 40-minute route stage clock
-divided by the slowest measured per-item routing cost, `2400 / 40.3`. Four facts
+guard. The value floated was about 59 items - the 40-minute visual planner clock
+divided by the slowest measured per-item planning cost, `2400 / 40.3`. Four facts
 refused it.
 
 | Why it was refused | The evidence |
 | --- | --- |
-| The bound it adds already exists one stage later, and it is a clock rather than a count | `cli.stage_visual_planner` stops its loop at `run.visual_planner_budget_minutes` (40 minutes), inside the route job's 50-minute timeout. A count has to be set for the worst host, so the number that fits a slow host leaves a fast one idle. The router-side version of the same proposal was refused for the same reason - see [../publishing/visuals.md](../publishing/visuals.md). |
+| The bound it adds already exists one stage later, and it is a clock rather than a count | `cli.stage_visual_planner` stops its loop at `run.visual_planner_budget_minutes` (40 minutes), inside the `visuals` job's 50-minute timeout. A count has to be set for the worst host, so the number that fits a slow host leaves a fast one idle. The planner-side version of the same proposal was refused for the same reason - see [../publishing/visuals.md](../publishing/visuals.md). |
 | The loss it answered is already prevented | The `visuals` artifact upload in `.github/workflows/digest.yml` carries `if: always()`. A visuals stage that runs out of clock still hands over every decision it made. What cost four of the six runs on 2026-08-24/25 their visuals was a cancelled job skipping an upload step that had no condition on it. That step has one now. |
-| The number behind it is contaminated | The 20.7 s and 40.3 s per-item route figures were measured over 703 items that all ran with `diagram` in `visuals.enabled_kinds`, so the model was asked about every one of them: `asked=False` appears zero times in all 703. `diagram` is off now, and with it off a measured 68 of 145 items (46.9 percent) never reach the model at all. |
+| The number behind it is contaminated | The 20.7 s and 40.3 s per-item planning figures were measured over 703 items that all ran with `diagram` in `visuals.enabled_kinds`, so the model was asked about every one of them: `asked=False` appears zero times in all 703. `diagram` is off now, and with it off a measured 68 of 145 items (46.9 percent) never reach the model at all. |
 | It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `visuals`. `summarize` runs as four worker jobs by default, eight at the ceiling, and has no stage clock at all - its only bound is the `work` job's timeout, which is `run.shard_timeout_minutes` and is 150 minutes. `visuals` is one job with a 40-minute stage clock. On 2026-08-24 the committed digest carries **731 items**; a 59-item budget over five runs caps that day at 295 and deletes about 436 of them. |
 
 **The corrected cost, labelled an estimate because that is what it is (Rule
@@ -397,7 +397,7 @@ and guessing it is what this refusal is about.
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes, the read cost, and the ceiling measurement quoted above.
 - [health.md](health.md) - the record of what every feed did, and the quarantine that reads it.
 - [../contracts/determinism.md](../contracts/determinism.md) - the fingerprint that makes "this re-run changed nothing" checkable.
-- [../publishing/visuals.md](../publishing/visuals.md) - the route stage clock, and the router-side version of the budget refused above.
+- [../publishing/visuals.md](../publishing/visuals.md) - the visual planner's clock, and the planner-side version of the budget refused above.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages, and which of them see the whole day.
 - [../../concepts/config.md](../../concepts/config.md) - where these knobs live and the knob-versus-fact rule.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - workflow names and exact triggers.

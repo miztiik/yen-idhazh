@@ -991,27 +991,33 @@ re-run job, or a build that renames a series. Re-run
 `python backend/utilities/reconcile_prefill.py --run <run-id>` after a few more
 days before treating the agreement as a property rather than an observation.
 
-## The route job's budget
+## The visual planner job's budget
 
 **Measured 2026-08-24 on `ubuntu-latest` (4 vCPU, 16 GB), run `32742672105`.**
 Per-item inference owns the time. Model load, cache and orchestration do not.
+
+**The job was called `route` on every run in this section and the ones under it,
+and its step, its log lines, its artifacts and its manifest keys were named to
+match.** It is `visuals` from 2026-09-05. Every quoted string in these sections
+is left as the job logs actually spell it, so the method can still be re-run
+against them; the prose says what the stage is called now.
 
 | What | Value |
 | --- | --- |
 | Fixed cost: set-up, checkout, Python, cache restore, llama-server start, pip install, artifact download | **47 s** (17:01:24 -> 17:02:11) |
 | `Route and render` step | **3155 s** (52.6 min) |
-| Items routed | 149 |
+| Items decided | 149 |
 | Per-item wall-clock | mean **21.0 s**, min 8.1 s, max 56.0 s, n=148 gaps |
 | Kinds chosen | 15 chart (10.1%), 134 none (89.9%), **0 diagram** |
 
 The fixed cost is 1.5% of the job. That settles the first of the three questions
 this row opened: it is not model loading.
 
-The derived ceiling: `(3600 - 47) / 21.0` = **169 routable items** inside the
+The derived ceiling: `(3600 - 47) / 21.0` = **169 decidable items** inside the
 60-minute bound. `run.safety_ceiling_per_run` was 200 when this was measured, and
 moved to 160 on 2026-08-26. The two numbers had never been consistent, and the
 runs that fit did so because roughly a quarter of the plan had no `OK` summary
-and was skipped. **Improving the summarizer breaks the router.** That coupling is
+and was skipped. **Improving the summarizer breaks the visual planner.** That coupling is
 the defect, not the bound.
 
 Job wall-clock across the eight real runs since the daily size moved from 17
@@ -1032,7 +1038,7 @@ Read the five cancellations as killed, not as measured: they all report 60.3 to
 60.4 because that is where the runner stopped them. Only 8.0, 51.2 and 53.5 are
 observations.
 
-What changed on the back of this: the router now skips the model for an item no
+What changed on the back of this: the planner now skips the model for an item no
 enabled visual kind could serve, and the stage has its own request timeout. It
 had been borrowing `run.shard_timeout_minutes` - 150 minutes against a 60-minute
 job, so it could never fire. See
@@ -1041,7 +1047,7 @@ job, so it could never fire. See
 ### Re-measured across six runs, 2026-08-25
 
 The single-run figure above was not the whole picture. Six `route` jobs on
-`ubuntu-latest` between 2026-08-24 07:32 and 2026-08-25 03:14, 703 routed items.
+`ubuntu-latest` between 2026-08-24 07:32 and 2026-08-25 03:14, 703 decided items.
 Method: parse the `item routed` lines out of each job log; per-item cost is the
 recorded `route_ms` where the run wrote one and the gap between consecutive log
 timestamps where it did not. The two agree on the runs that carry both.
@@ -1133,14 +1139,14 @@ Four candidate causes die here and one survives:
   job began printing `/proc/cpuinfo` model name, `nproc` and llama-server's
   `system_info` line on 2026-08-25, after all six of these runs. The nine runs
   that do name their CPU are read in
-  [The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost),
+  [The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job),
   and they rule the CPU model out rather than confirming it.
 
 The lever this points at is the prompt, not the runtime: `visuals.lead_words`
 (150) is most of each request's prefill, and prefill is most of the stage. It has
 never been swept.
 
-### The CPU model does not sort the route job's per-item cost
+### The CPU model does not sort the per-item cost of the visuals job
 
 **Measured 2026-08-27** from the `route` job log of every `digest.yml` run this
 repository holds - 27 runs, 2026-08-22 to 2026-08-26. Method:
@@ -1183,14 +1189,14 @@ the exact value `config/idhazh.json` pins.
 
 **This cuts against the suspect the `work` job named.**
 [Eight work shards](#eight-work-shards) found two Intel Xeon shards prefilling
-3.4x faster than six AMD EPYC ones on one day. Prefill is 85 percent of a route
+3.4x faster than six AMD EPYC ones on one day. Prefill is 85 percent of a planner
 request in the slow mode, so if that vendor split reached this stage an Intel
-route job would cost about 40 percent of an AMD one - near 20 s an item, which
-is exactly the fast mode. The one Intel route job on record cost **44.4 s**, the
-middle of the AMD band. Either the split does not reach the route stage, or that
+job would cost about 40 percent of an AMD one - near 20 s an item, which
+is exactly the fast mode. The one Intel job on record cost **44.4 s**, the
+middle of the AMD band. Either the split does not reach this stage, or that
 Xeon job was not in the fast mode. Nothing here separates the two.
 
-**Only one route job has ever carried both a CPU model and a prefill rate.**
+**Only one of these jobs has ever carried both a CPU model and a prefill rate.**
 Run `32839359536`: AMD EPYC 7763, **21.09 tok/s prefill** over 62 requests,
 median prompt 898 tokens, 48.9 s an item. 21.09 tok/s is the slow mode - the six
 runs above span 20.2 to 62.9 - and at 898 tokens prefill alone is 42.6 s of the
@@ -1244,8 +1250,8 @@ appeared in nine.
 A job cancelled at its timeout skips every step without an explicit condition.
 Step 15 of run `32804437110`'s `route` job - the `routes` artifact upload - is
 recorded as `skipped`, while `Upload router log` (which carries `if: always()`)
-ran. So 88 routing decisions and 9 rendered charts existed on that runner and
-none of them left it. `assemble` downloaded no routes artifact and published 145
+ran. So 88 visual decisions and 9 rendered charts existed on that runner and
+none of them left it. `assemble` downloaded no visuals artifact and published 145
 items with zero visuals.
 
 The derived ceiling, restated for both hosts and both configurations:
@@ -1258,7 +1264,7 @@ The derived ceiling, restated for both hosts and both configurations:
 against a 50-minute stage budget. `run.safety_ceiling_per_run` was 200 when this
 was measured and moved to 160 on 2026-08-26 for the `work` job's sake. 160 is the
 first ceiling a slow host clears with `enabled_kinds: [chart]` - 166 items
-against 160 - so the plan ceiling and the router's capacity now agree where at
+against 160 - so the plan ceiling and the planner's capacity now agree where at
 200 they never did. A slow host still cannot finish a maximum day with the
 diagram arm on, which is why the stage stops itself rather than being killed.
 
@@ -4010,7 +4016,7 @@ What that margin covers, in order of how likely each is:
 scheduled runs are four hours apart and every run shares one concurrency group
 with `cancel-in-progress: false`, so a run that overruns does not get cancelled -
 the next one queues behind it. A worker that hangs to a 150-minute bound still
-lets `route` (50) and `assemble` (20) finish about 223 minutes after `plan`
+lets `visuals` (50) and `assemble` (20) finish about 223 minutes after `plan`
 starts, inside the 240-minute gap. At 330 it could not, and one stuck worker
 delayed the next two digests a reader was waiting for.
 
@@ -4032,7 +4038,7 @@ day is now measured, immediately below.
 **Measured 2026-08-27** from the GitHub jobs API and the day's committed
 `run.json`. Run `33073809079`, a scheduled `Content refresh`,
 GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB), four `work` jobs,
-`Qwen3.5-9B-Q4_K_M.gguf` summarizing and `Qwen3-4B-Q4_K_M.gguf` routing,
+`Qwen3.5-9B-Q4_K_M.gguf` summarizing and `Qwen3-4B-Q4_K_M.gguf` planning visuals,
 llama.cpp `b10598`. 160 items planned, so 40 an item per worker - the same load
 the 8B rows above were measured at. Which CPU model each job drew was not
 recorded.
@@ -4062,15 +4068,15 @@ against `run.shard_timeout_minutes` of 150, so the bound is 1.75x the only
 measurement of the model it now governs. Nothing moves on one run; the number is
 recorded so the next one has something to be compared against.
 
-**`route` finished early, which one run in eleven does: 20.4 minutes of a
+**The visuals job finished early, which one run in eleven does: 20.4 minutes of a
 40-minute budget, reaching all 114 summarized items.** 52 were decided on their
 own facts without posting, and 62 asked the model at a mean of 19.8 s each.
 
 **That 19.8 s is the fastest per-item cost on record and it is not a rate.** It
 is 1.7 times faster than the next-fastest of the eleven runs, against a median of
 48.9 s
-([The route stage's per-item cost](#the-route-stages-per-item-cost-over-every-run)).
-The router is the same 4B on the same prompt in every one of them, so nothing
+([The stage's per-item cost, over every run](../archive/measurements-2026-08.md#the-route-stages-per-item-cost-over-every-run)).
+The planner is the same 4B on the same prompt in every one of them, so nothing
 here says the stage got faster; this run drew a good hand. Reading it as the new
 normal is how the next ordinary run comes to look like a regression, and that
 mistake was made against this exact figure before the distribution was measured.
@@ -4300,8 +4306,8 @@ to justify a design decision.
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |
 | **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs on an i7-1265U ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). A laptop measures the laptop, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
-| **What makes a route host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine `route` runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)). Exactly one `route` run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. Then: **two `route` runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
-| **Which CPU a `route` job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven `route` runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). `route` runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give `route` a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |
+| **What makes a visuals host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Exactly one run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. Then: **two runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
+| **Which CPU the visuals job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). The `visuals` job runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give it a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record)). |

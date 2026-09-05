@@ -1854,7 +1854,7 @@ def test_truncation_is_flagged_and_located_together() -> None:
         Article.model_validate(payload)
 
 
-def test_a_routed_to_nothing_item_carries_no_spec() -> None:
+def test_an_item_decided_to_nothing_carries_no_spec() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "visual-decision" / "none.json", spec="anything")
     with pytest.raises(ValueError, match="no spec"):
         VisualDecision.model_validate(payload)

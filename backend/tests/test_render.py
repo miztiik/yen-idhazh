@@ -111,7 +111,7 @@ class TestAssetPaths:
         )
 
 
-class TestRenderRoute:
+class TestRenderVisual:
     def test_a_rendered_chart_records_where_it_landed(self, tmp_path: Path) -> None:
         result = render_visual(
             _decision(VisualKind.CHART, json.dumps(SPEC)),
@@ -140,7 +140,7 @@ class TestRenderRoute:
         )
         assert not (tmp_path / "digest/2026/08/22/ai-01.svg").exists()
 
-    def test_a_routed_to_nothing_item_is_returned_untouched(self, tmp_path: Path) -> None:
+    def test_an_item_decided_to_nothing_is_returned_untouched(self, tmp_path: Path) -> None:
         nothing = VisualDecision(
             version=VisualDecision.schema_version(),
             item_id="energy-01",
@@ -157,10 +157,10 @@ DAY = "digest/2026/08/22"
 
 
 def _rendered(tmp_path: Path, item_id: str, relpath: str) -> Path:
-    """One rendered chart on disk, plus the route payload that says where it is."""
+    """One rendered chart on disk, plus the decision payload that says where it is."""
     (tmp_path / "public" / relpath).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / "public" / relpath).write_bytes(f"<svg>{item_id}</svg>".encode("ascii"))
-    route = _decision(VisualKind.CHART, json.dumps(SPEC)).model_copy(
+    decision = _decision(VisualKind.CHART, json.dumps(SPEC)).model_copy(
         update={
             "item_id": item_id,
             "asset_path": relpath,
@@ -169,7 +169,7 @@ def _rendered(tmp_path: Path, item_id: str, relpath: str) -> Path:
     )
     path = tmp_path / "items" / f"{item_id}{PAYLOAD_SUFFIX}"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(route.to_json(), encoding="utf-8", newline="\n")
+    path.write_text(decision.to_json(), encoding="utf-8", newline="\n")
     return path
 
 
@@ -184,8 +184,8 @@ def _drop(tmp_path: Path, published: list[str]) -> list[str]:
 class TestDropRacedAssets:
     """Two runs of one day overlap, and neither checkout sees the other's push.
 
-    Run `32869125768` on 2026-08-25: eight workers and a router finished, then
-    the rebase hit `CONFLICT (add/add)` on four chart paths and the day was
+    Run `32869125768` on 2026-08-25: eight workers and a visual planner finished,
+    then the rebase hit `CONFLICT (add/add)` on four chart paths and the day was
     lost. Now a path names one item, so a path both sides hold is one story
     rendered twice - and the published copy is the one that stays.
     """
@@ -193,7 +193,7 @@ class TestDropRacedAssets:
     def test_a_path_the_other_run_published_gives_up_this_run_s_copy(
         self, tmp_path: Path
     ) -> None:
-        route_path = _rendered(tmp_path, "energy-0000000002", f"{DAY}/energy-0000000002.svg")
+        decision_path = _rendered(tmp_path, "energy-0000000002", f"{DAY}/energy-0000000002.svg")
 
         dropped = _drop(tmp_path, [f"{DAY}/energy-0000000002.svg"])
 
@@ -202,16 +202,16 @@ class TestDropRacedAssets:
         # The payload keeps naming the path on purpose: the tip's file is there
         # after the rebase, and pointing it anywhere else would file this item's
         # picture under a name that is not this item's.
-        kept = VisualDecision.from_json(route_path.read_text(encoding="utf-8"))
+        kept = VisualDecision.from_json(decision_path.read_text(encoding="utf-8"))
         assert kept.asset_path == f"{DAY}/energy-0000000002.svg"
 
     def test_a_path_nobody_else_holds_is_left_alone(self, tmp_path: Path) -> None:
-        route_path = _rendered(tmp_path, "ai-0000000001", f"{DAY}/ai-0000000001.svg")
+        decision_path = _rendered(tmp_path, "ai-0000000001", f"{DAY}/ai-0000000001.svg")
 
         assert _drop(tmp_path, [f"{DAY}/energy-0000000002.svg"]) == []
 
         assert (tmp_path / "public" / DAY / "ai-0000000001.svg").exists()
-        kept = VisualDecision.from_json(route_path.read_text(encoding="utf-8"))
+        kept = VisualDecision.from_json(decision_path.read_text(encoding="utf-8"))
         assert kept.asset_path == f"{DAY}/ai-0000000001.svg"
 
     def test_only_the_raced_item_loses_its_file(self, tmp_path: Path) -> None:
@@ -231,15 +231,15 @@ class TestDropRacedAssets:
         self, tmp_path: Path
     ) -> None:
         """Nothing here would commit that path, so nothing here can collide on it."""
-        route_path = _rendered(tmp_path, "ai-0000000001", f"{DAY}/ai-0000000001.svg")
+        decision_path = _rendered(tmp_path, "ai-0000000001", f"{DAY}/ai-0000000001.svg")
         (tmp_path / "public" / DAY / "ai-0000000001.svg").unlink()
 
         assert _drop(tmp_path, [f"{DAY}/ai-0000000001.svg"]) == []
 
-        kept = VisualDecision.from_json(route_path.read_text(encoding="utf-8"))
+        kept = VisualDecision.from_json(decision_path.read_text(encoding="utf-8"))
         assert kept.asset_path == f"{DAY}/ai-0000000001.svg"
 
-    def test_a_run_with_no_routes_at_all_is_a_no_op(self, tmp_path: Path) -> None:
-        """The router is allowed to never start, and the day still publishes."""
+    def test_a_run_with_no_decisions_at_all_is_a_no_op(self, tmp_path: Path) -> None:
+        """The planner is allowed to never start, and the day still publishes."""
         assert _drop(tmp_path, [f"{DAY}/energy-0000000002.svg"]) == []
 
