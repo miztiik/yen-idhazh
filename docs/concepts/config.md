@@ -54,25 +54,25 @@ The contract is `backend/idhazh/contracts/appearance_config.py`, and it imports 
 
 **One definition, two exposure points, so one new knob is a six-file commit.** `UiConfig`, `ConsoleConfig` and `AssistConfig` are each reachable through `AppConfig` and through `AppearanceConfig`, and both of those generate a schema. Adding one field to any of the three therefore moves two models, both `schemas/app-config.schema.json` and `schemas/appearance-config.schema.json`, a `version` stamp and a `changelog` entry on each of those two, and the committed fixtures for both files under `tests/fixtures/contracts/`. Change the model and stop there and the contract drift gate fails on a file the commit never mentioned, which reads as an unrelated breakage. Plan the second half before writing the first.
 
-### The legacy block has to agree, and three keys still do not
+### Every key has one owner, and the owner is whoever draws it
 
-The merge runs one way: `config/appearance.json` is the last layer, so it wins. A knob the legacy `ui`, `console` or `assist` block still carries therefore has to agree with the appearance file. Let the two differ and the loser is silent - a knob edited in the file somebody happened to open does nothing, and nothing says why. `digest.visual_side` was settled that way on 2026-09-05: the pipeline file dropped its copy, and `backend/tests/test_appearance_config.py` now fails if the `ui` and `digest` blocks name one key twice.
+The merge runs one way: `config/appearance.json` is the last layer, so it wins. A knob the legacy `ui`, `console` or `assist` block still carries therefore has to agree with the appearance file. Let the two differ and the loser is silent - a knob edited in the file somebody happened to open does nothing, and nothing says why.
 
-Three keys outside that block still disagree. Read off the committed files on 2026-09-05:
+Four keys were settled that way, and the rule is the same each time: **the file that owns a key is the file whose readers read it.** `digest.visual_side` on 2026-09-05, then the last three later the same day:
 
-| Key | `config/idhazh.json` | `config/appearance.json` | What reads it, and what it gets |
+| Key | Was | Owner now | Why |
 | --- | --- | --- | --- |
-| `console.chart_height` | 180 | 220 | The console pages, at **220** |
-| `console.chart_width` | 600 | 760 | The console pages, at **760** |
-| `assist.recall_min` | 0.68 | 0.61 | The retrieval gate, at **0.68**. Nothing reads the 0.61 |
+| `console.chart_height` | 180 here, 220 there | `config/appearance.json` | Every reader is a console page. Nothing under `backend/idhazh/` reads it |
+| `console.chart_width` | 600 here, 760 there | `config/appearance.json` | Same |
+| `assist.recall_min` | 0.68 here, 0.61 there | `config/idhazh.json` | The one reader is the retrieval gate. The frontend's `AssistConfig` does not declare the field |
 
-They are two different failures and they need two different fixes.
+Two contract defaults moved with them: `console.chart_height` 180 -> 220 and `console.chart_width` 600 -> 760. Those are the numbers `chart.height_px` and `chart.width_px` already carried - the pair was raised when the frame widened - so a fresh clone with no `config/` had been drawing a console chart at a size no console page uses. Every value legal before is legal now, so no read-side migration is owed, and a `config/idhazh.json` written before today still declares the two sizes and still wins over the new defaults through the middle merge layer.
 
-**The two console sizes have a drift gate, and it is aimed at the layer nothing draws from.** `test_the_console_chart_width_is_a_knob_the_frontend_agrees_with` compares the frontend's own default constant against the contract default. Both are 600, so it passes. A console chart is drawn 760 wide, because `consoleConfig()` puts the appearance block last. The gate is green and the two copies it holds together are not the two copies that decide the picture.
+`assist` went the other way because the block holds two kinds of knob. Four of them - `similarity_floor`, `result_limit`, `search_months`, `search_min_days` - are read in the browser, and the appearance file declares those. Two - `recall_min` and `eval_corpus_through` - are the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py` and drawn by nothing, so the pipeline file declares those and the appearance file declares neither. The 0.61 that sat here had no reader at all: it was the bar's value before it was re-derived against the pinned corpus on 2026-09-04 ([evaluation.md](evaluation.md)), 0.07 below the live 0.68, which is 10.3 percent of the bar - worth nothing while nothing read it, and a wrong gate the day something did.
 
-**`assist.recall_min` is the other shape: a second copy nothing reads.** The retrieval gate loads `config/idhazh.json` and reads 0.68 there, which is the bar re-derived against the pinned corpus on 2026-09-04 ([evaluation.md](evaluation.md)). The frontend's `AssistConfig` declares `similarity_floor`, `result_limit`, `search_months` and `search_min_days`, and no `recall_min` - so the published site reads that field from neither file. The 0.61 sitting in `config/appearance.json` is the value the bar had before 2026-09-04. The two are 0.07 apart, which is 10.3 percent of the live bar: worth nothing today, and a wrong gate the day anything starts reading the appearance copy.
+**The gate is `test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue`**, in `backend/tests/test_appearance_config.py`, and it runs over all three moved blocks. It refuses two files naming one knob twice with two answers; it tolerates two files naming it twice with one answer, because that is the migration's middle layer doing its job. `backend/idhazh/config.py` already followed the same rule before any of this: it reads `console.max_window_days` out of the appearance file, and says in a comment that `AppConfig.console` is the layer underneath and can disagree.
 
-Neither is settled here. Moving either one changes a live retrieval bar or a live console width, so it is a behaviour change and it belongs to a change that owns that surface.
+**A mirror test has to hold the pair that decides the picture.** `test_the_console_chart_size_is_a_knob_the_frontend_agrees_with` used to compare the contract default against `config/idhazh.json` and then against the frontend's own fallback constant. All three were 600 and the console drew at 760, so the gate was green over three copies of a number nothing drew with - which is worse than no gate, because it reads as coverage. It now starts from what `config/appearance.json` declares, because that is the last merge layer and therefore what the server draws at, and requires the contract default and the frontend fallback to be that same number.
 
 ### Why a frame width is a knob, when a 2026-08-28 ruling said it should not be
 

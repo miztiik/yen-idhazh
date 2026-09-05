@@ -168,8 +168,15 @@
 	}
 
 	/* After the rule above, and quieter than it: a grid line sits behind the
-	   data where an axis line bounds it. Baked at #ddd, which on the dark theme
-	   drew eighteen near-white lines across the bars. */
+	   data where an axis line bounds it. It repaints nothing any published
+	   drawing has ever carried - counted 2026-09-05 over all 351 drawings the 15
+	   committed days hold, every one carries a bar, an axis label and an axis
+	   line, and none carries a grid line, because `chart_spec()` writes
+	   `"axis": {"grid": false}` on every spec. The only drawing that exercises
+	   this rule is the canary fixture, whose spec is hand-written and leaves the
+	   grid at the renderer's default. Kept as insurance: baked at #ddd, a grid
+	   would draw near-white across the bars on the dark theme the day the
+	   renderer starts emitting one. */
 	.visual :global(.role-axis-grid line) {
 		stroke: var(--chart-grid);
 	}

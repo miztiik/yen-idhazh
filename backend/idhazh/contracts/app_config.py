@@ -1494,18 +1494,31 @@ class ConsoleConfig(Model):
         ge=1,
         description="Below this count a rate is outlined because the denominator is thin.",
     )
-    chart_height: int = Field(default=180, ge=120)
+    chart_height: int = Field(
+        default=220,
+        ge=120,
+        description=(
+            "The drawn height of a console chart, in CSS pixels. The same number "
+            "`chart.height_px` carries: both were raised from 180 when the frame "
+            "widened, because a chart that grows in one dimension only flattens its "
+            "own signal. `config/appearance.json` owns the value, as "
+            "`console.chart_height`."
+        ),
+    )
     chart_width: int = Field(
-        default=600,
+        default=760,
         ge=240,
         description=(
             "The width a console chart is drawn at on the server, in CSS pixels. A "
             "prerendered chart has no element to measure, and a chart drawn in "
             "arbitrary units and then stretched by its viewBox renders its labels at "
             "whatever the stretch factor happens to be - measured 2026-08-25, one page "
-            "put the same font-size at 4.5px and at 16.6px. 600 is what the reading "
-            "column leaves a full-width chart on any window wide enough to reach it; "
-            "a narrower one redraws at its measured width once a script runs."
+            "put the same font-size at 4.5px and at 16.6px. It is a seed rather than "
+            "the final width: the client re-measures its container once a script runs, "
+            "and the drawn SVG was its host's width to within a pixel at 1440, 768 and "
+            "390 (measured 2026-09-01). 760 is the same number `chart.width_px` "
+            "carries, so a console page has one answer to how wide a chart starts. "
+            "`config/appearance.json` owns the value, as `console.chart_width`."
         ),
     )
     failure_list_max: int = Field(
@@ -2150,7 +2163,10 @@ class AssistConfig(Model):
             "only when the ranking moves or the labels are completed - and completing "
             "the labels raises it rather than eroding it. It is still a LOWER BOUND: "
             "66.6 percent of filled slots hold an item no labeller judged either way, "
-            "and every one of them is counted as a wrong answer. See "
+            "and every one of them is counted as a wrong answer. `config/idhazh.json` "
+            "owns the value. This is a pipeline gate rather than a drawn surface: the "
+            "one reader is `backend/tests/test_retrieval_eval.py`, and the frontend's "
+            "own `AssistConfig` does not declare the field at all. See "
             "docs/concepts/evaluation.md."
         ),
     )
@@ -2186,6 +2202,44 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-05T13:00",
+            change=(
+                "console.chart_height now defaults to 220 rather than 180 and "
+                "console.chart_width to 760 rather than 600, and both carry a "
+                "description naming their owner. The committed config/idhazh.json "
+                "drops both keys; config/appearance.json keeps them. "
+                "config/appearance.json drops assist.recall_min, which this document "
+                "keeps at 0.68. The shapes are `ConsoleConfig` and `AssistConfig`, "
+                "which this document and `AppearanceConfig` share, so both schemas "
+                "moved together. A semantic shift on two defaults and nothing else - "
+                "every value legal yesterday is legal today, and a config/idhazh.json "
+                "written before today still declares the two console sizes and still "
+                "wins over the new defaults through the frontend's middle merge "
+                "layer, so no read-side migration is owed."
+            ),
+            why=(
+                "Three keys were declared in both config files with two different "
+                "values. The frontend merges the appearance block last, so the "
+                "appearance file wins and the loser is silent. The two console sizes "
+                "are drawn by the console pages and by nothing in backend/, so "
+                "config/appearance.json owns them - the same rule that settled "
+                "visual_side on 2026-09-05, and the rule backend/idhazh/config.py "
+                "already follows when it reads console.max_window_days out of the "
+                "appearance file. The defaults follow what ships: 220 and 760 are the "
+                "numbers chart.height_px and chart.width_px already carry, raised from "
+                "180 and 600 when the frame widened, so a fresh clone with no config "
+                "would have drawn a console chart at a size no console page uses. "
+                "assist.recall_min runs the other way. It is a gate on the ranking "
+                "that only backend/tests/test_retrieval_eval.py reads, off this "
+                "document, at 0.68; the frontend's AssistConfig does not declare the "
+                "field, so the 0.61 in config/appearance.json had no reader at all. It "
+                "was the value the bar held before it was re-derived against the "
+                "pinned corpus on 2026-09-04, and 0.07 of drift is 10.3 percent of the "
+                "live bar - worth nothing today and a wrong gate the day anything "
+                "reads the appearance copy."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-05T12:00",
             change=(
