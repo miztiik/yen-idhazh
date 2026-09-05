@@ -292,6 +292,8 @@ Does not apply to backend-only, tooling, docs, or schema-only changes.
 
 Four tiers - **Unit / Contract / Integration / End-to-end**. Change without an appropriate-tier test in the same commit is a Definition-of-Done failure. No test touches the network; fixtures live in `tests/fixtures/`. Mock carve-outs require an explicit user request.
 
+**A test's cost belongs to the code it checks, never to the corpus the pipeline has piled up.** So a test does not read the committed archive - `frontend/public/digest/`, `frontend/public/telemetry/` or `state/`. A per-item rule is driven from a bounded fixture, and the canary day under `backend/var/canary/` is the one to reach for: it is fixed in size and it can carry a case the archive has never produced. Where a question really is about the whole tree, it is asked once and asserted on the total rather than once per story - and the producer has already validated every payload at write time, so re-checking a frozen day on every later run buys nothing. `backend/tests/test_archive_readers.py` holds the list of tests that still do this; the list may only shrink. Measured 2026-09-05 over 16 days and 6,539 stories: reading the whole tree costs 0.15 s, while the two specs that assert once per story cost 270 s and 93 s, and the corpus offers six distinct cases however far it grows.
+
 Per tier:
 
 - **Unit** - pure functions (sanitization, sharding, scoring maths, serialization round-trip).
