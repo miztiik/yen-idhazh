@@ -3,6 +3,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { keepDrawings } from '../src/lib/day-shape';
+import { publishedVisual, refusedDrawing } from '../src/lib/payload/drawing';
 import { projectDay } from '../src/lib/payload/project';
 import { dayShell, publishedDates } from '../src/lib/server/payload';
 import type { DigestItem, SeededVisual } from '../src/lib/payload/types';
@@ -16,6 +17,14 @@ import type { DigestItem, SeededVisual } from '../src/lib/payload/types';
  * pale grid lines, which on the dark theme is black type and eighteen bright
  * lines on a near-black card. The stories a prerendered document carries now
  * hold the drawing itself, and the page repaints it from its own tokens.
+ *
+ * **The `img` is gone rather than kept for the stories past that seed.** Those
+ * fetch the same file and inline the same markup, so one scroll shows one
+ * treatment; a drawing that does not arrive leaves the story shorter and draws
+ * nothing at all. The canary day is eight stories against a seed of fifteen, so
+ * nothing here can reach that fetch in a browser - what this file holds is the
+ * refusal the browser runs before the fetched markup is allowed into the
+ * document, and the page-wide assertion that no story is left on an image.
  *
  * **The oracle is an equality against a token, never against a hex.** Each test
  * below plants a probe element, sets its `background-color` to the same custom
@@ -85,6 +94,15 @@ test.describe('the drawing is in the document', () => {
 			expect(figure.svg, 'a figure holds none or more than one drawing').toBe(1);
 			expect(figure.img, 'a seeded story is still on the image carrier').toBe(0);
 		}
+	});
+
+	test('no story anywhere on the page is left on an image', async ({ page }) => {
+		// The half of row 2's oracle a canary day can answer. The carrier is gone
+		// rather than kept for the stories past the seed, so the page-wide count is
+		// zero and not "zero among the seeded ones" - two treatments on one scroll
+		// is what reads as a broken site.
+		await page.goto(DAY);
+		await expect(page.locator('main img')).toHaveCount(0);
 	});
 
 	test('the drawing keeps the sentence that repeats its numbers', async ({ page }) => {
@@ -223,7 +241,7 @@ test.describe('the drawing survives the rest of the day arriving', () => {
 	});
 });
 
-test.describe('what the build refuses to inline', () => {
+test.describe('what may not be drawn, on either side of the move', () => {
 	/** The canary's first published drawing: the day it is on, the story it
 	 * belongs to, and the path it is served from. */
 	function drawn(): { date: string; itemId: string; path: string } {
@@ -260,7 +278,23 @@ test.describe('what the build refuses to inline', () => {
 		expect(planted(source)?.markup, 'a clean drawing was refused, so every case below is vacuous').toBe(
 			source
 		);
+		expect(refusedDrawing(source), 'the browser would refuse a drawing the build accepted').toBeNull();
+		expect(publishedVisual(drawn().path), 'a published path was not recognised as one').toBe(true);
 	});
+
+	for (const [name, path] of [
+		['a walk out of the digest tree', 'digest/2026/08/20/../../../../etc/passwd'],
+		['an address somewhere else', 'https://example.invalid/x.svg'],
+		['a file that is not a drawing', 'digest/2026/08/20/ai.js'],
+		['a date that is not one', 'digest/20xx/08/20/ai.svg']
+	] as const) {
+		test(`${name} is never asked for`, () => {
+			// The path is about to be joined onto a directory and read, or onto
+			// `base` and fetched. It came off a committed payload rather than off the
+			// web and it is still matched rather than trusted (Rule #11).
+			expect(publishedVisual(path), `${path} was accepted as a published drawing`).toBe(false);
+		});
+	}
 
 	for (const [name, markup] of [
 		['a script element', '<svg xmlns="http://www.w3.org/2000/svg"><script>fetch("//x")</script></svg>'],
@@ -270,15 +304,22 @@ test.describe('what the build refuses to inline', () => {
 		['a fetched image', '<svg xmlns="http://www.w3.org/2000/svg"><image href="//x/y.png"/></svg>'],
 		['something that is not a drawing at all', '<!doctype html><html><body>hi</body></html>']
 	] as const) {
-		test(`${name} is left on the image carrier`, () => {
+		test(`${name} is not drawn`, () => {
 			// Rule #11. A chart's labels are written by a model that read a
 			// stranger's page, so the moment the drawing stops being an `img` it is
 			// markup in our own origin and the check is the control, not a promise.
 			const visual = planted(markup);
 			expect(visual?.markup ?? null, `${name} reached the document`).toBeNull();
-			// And the story keeps its picture: refusing to inline falls back to the
-			// carrier it had, and never costs the reader the drawing.
-			expect(visual?.path, `${name} cost the story its drawing`).toBeTruthy();
+			// The story keeps its `path`, because that is a committed field and this
+			// build does not rewrite the day. What it does not keep is a picture: the
+			// browser asks for the same file and runs the line below over the answer,
+			// so a story whose drawing is refused is a shorter story and never a
+			// broken-image glyph.
+			expect(visual?.path, `${name} rewrote the committed payload`).toBeTruthy();
+			expect(
+				refusedDrawing(markup),
+				`${name} would reach the document through the fetch instead`
+			).not.toBeNull();
 		});
 	}
 });
