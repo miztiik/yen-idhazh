@@ -118,7 +118,7 @@ change the picture is sharding the stage, not tuning the number.
 
 **The router visits the best story first.** The plan is vertical-major, so stopping part-way down
 it would cost whole verticals their pictures while the weakest story in the first vertical kept
-one. `routable_items` sorts by `rank_score` before the loop, which is the rule
+one. `plannable_items` sorts by `rank_score` before the loop, which is the rule
 `_within_ceiling` already follows for the safety ceiling: drop the weakest stories across every
 vertical, never a suffix.
 
