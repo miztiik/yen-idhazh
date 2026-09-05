@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -53,6 +53,26 @@ Its blocks:
 The contract is `backend/idhazh/contracts/appearance_config.py`, and it imports `UiConfig`, `ConsoleConfig` and `AssistConfig` from `app_config` rather than copying them: the file moved, the contract did not fork. `AppConfig` keeps the three moved blocks, and the frontend loader merges three layers - defaults, then the legacy block, then the new file - so a checkout that has not been migrated resolves to exactly what it resolved to before (`CLAUDE.md` section 11). The legacy block is a middle layer rather than a discarded one so a partly migrated file cannot snap a knob back to a default nobody chose.
 
 **One definition, two exposure points, so one new knob is a six-file commit.** `UiConfig`, `ConsoleConfig` and `AssistConfig` are each reachable through `AppConfig` and through `AppearanceConfig`, and both of those generate a schema. Adding one field to any of the three therefore moves two models, both `schemas/app-config.schema.json` and `schemas/appearance-config.schema.json`, a `version` stamp and a `changelog` entry on each of those two, and the committed fixtures for both files under `tests/fixtures/contracts/`. Change the model and stop there and the contract drift gate fails on a file the commit never mentioned, which reads as an unrelated breakage. Plan the second half before writing the first.
+
+### The legacy block has to agree, and three keys still do not
+
+The merge runs one way: `config/appearance.json` is the last layer, so it wins. A knob the legacy `ui`, `console` or `assist` block still carries therefore has to agree with the appearance file. Let the two differ and the loser is silent - a knob edited in the file somebody happened to open does nothing, and nothing says why. `digest.visual_side` was settled that way on 2026-09-05: the pipeline file dropped its copy, and `backend/tests/test_appearance_config.py` now fails if the `ui` and `digest` blocks name one key twice.
+
+Three keys outside that block still disagree. Read off the committed files on 2026-09-05:
+
+| Key | `config/idhazh.json` | `config/appearance.json` | What reads it, and what it gets |
+| --- | --- | --- | --- |
+| `console.chart_height` | 180 | 220 | The console pages, at **220** |
+| `console.chart_width` | 600 | 760 | The console pages, at **760** |
+| `assist.recall_min` | 0.68 | 0.61 | The retrieval gate, at **0.68**. Nothing reads the 0.61 |
+
+They are two different failures and they need two different fixes.
+
+**The two console sizes have a drift gate, and it is aimed at the layer nothing draws from.** `test_the_console_chart_width_is_a_knob_the_frontend_agrees_with` compares the frontend's own default constant against the contract default. Both are 600, so it passes. A console chart is drawn 760 wide, because `consoleConfig()` puts the appearance block last. The gate is green and the two copies it holds together are not the two copies that decide the picture.
+
+**`assist.recall_min` is the other shape: a second copy nothing reads.** The retrieval gate loads `config/idhazh.json` and reads 0.68 there, which is the bar re-derived against the pinned corpus on 2026-09-04 ([evaluation.md](evaluation.md)). The frontend's `AssistConfig` declares `similarity_floor`, `result_limit`, `search_months` and `search_min_days`, and no `recall_min` - so the published site reads that field from neither file. The 0.61 sitting in `config/appearance.json` is the value the bar had before 2026-09-04. The two are 0.07 apart, which is 10.3 percent of the live bar: worth nothing today, and a wrong gate the day anything starts reading the appearance copy.
+
+Neither is settled here. Moving either one changes a live retrieval bar or a live console width, so it is a behaviour change and it belongs to a change that owns that surface.
 
 ### Why a frame width is a knob, when a 2026-08-28 ruling said it should not be
 
