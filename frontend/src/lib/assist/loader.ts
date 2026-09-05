@@ -46,9 +46,13 @@ export const DOWNLOAD_MB = 43;
  * One artifact, two runtimes only holds if both runtimes read the same amount
  * of text. The tokenizer config says 512 and the pipeline takes its cap from
  * there, so without this line a long query is read twice as far in the tab as
- * every item it is compared against. The runner's copy is `MAX_TOKENS` in
- * `backend/idhazh/embed.py`; row #8 of the plan moves that one into `config/`
- * and this one follows it there.
+ * every item it is compared against.
+ *
+ * This is not a fallback. Nothing merges `config/` over it, so it is the only
+ * cap a tab ever uses, and the number it has to equal is `assist.max_tokens`
+ * in `config/idhazh.json` - the cap the runner truncated the items at.
+ * `backend/tests/test_embed.py` refuses a build where the two differ, so
+ * editing that knob means editing this line in the same commit.
  */
 export const MAX_TOKENS = 256;
 

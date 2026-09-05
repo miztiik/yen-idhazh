@@ -15,12 +15,12 @@ import base64
 import math
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
-from conftest import REPO_ROOT
+from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh.contracts.app_config import AssistConfig
+from idhazh.contracts.app_config import AppConfig, AssistConfig
 from idhazh.contracts.base import SLUG_PATTERN
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.embed import (
@@ -49,6 +49,13 @@ from utilities.token_budget import digest_paths, measure_day, percentile, raw_to
 # section 2.
 ENCODER_TS_RELPATH = "frontend/src/lib/assist/encoder.ts"
 LOADER_TS_RELPATH = "frontend/src/lib/assist/loader.ts"
+
+# The cap a run truncates at, which is the committed knob and not the contract
+# default: `Embedder` reads `self._assist.max_tokens`, so the file wins the
+# moment it declares the key. Every gate on the cap is written against this.
+SHIPPED_MAX_TOKENS: Final = AppConfig.from_json(
+    read_text(CONFIG_DIR / "idhazh.json")
+).assist.max_tokens
 
 CORPUS = [
     "India added 15,400 megawatts of solar capacity, its biggest year yet.",
@@ -177,13 +184,26 @@ class TestOneEncoderTwoRuntimes:
         question, and nothing about that failure is visible: no error, no 404,
         just worse results. The browser cannot import `config/idhazh.json` -
         that reader is server-only - so until it can, this gate is what stops
-        the two numbers separating. It fails the moment `assist.max_tokens`
-        moves without `loader.ts` following.
+        the two numbers separating.
+
+        The subject is `SHIPPED_MAX_TOKENS` and not the contract default, and
+        that is what separates this mirror from the ones in
+        `backend/tests/test_contracts.py`. Those pin a frontend fallback that
+        `config/` is merged over, so the default is the number a fallback has to
+        match. `loader.ts` has no merge behind it: its literal is the only cap a
+        tab ever uses. So the number it has to match is the one the runner
+        truncated the items at, which is the committed knob. Written against the
+        default, this gate stayed green while an edit to `config/idhazh.json`
+        moved the runner and left the browser behind - the exact failure the
+        paragraph above says it exists to catch.
         """
         source = (REPO_ROOT / LOADER_TS_RELPATH).read_text(encoding="utf-8")
         found = re.search(r"^export const MAX_TOKENS = (\d+);$", source, re.MULTILINE)
         assert found is not None, f"{LOADER_TS_RELPATH} no longer declares MAX_TOKENS"
-        assert int(found.group(1)) == MAX_TOKENS
+        assert int(found.group(1)) == SHIPPED_MAX_TOKENS, (
+            f"{LOADER_TS_RELPATH} reads a query to {found.group(1)} tokens and the "
+            f"runner read the items to {SHIPPED_MAX_TOKENS}; move both or neither"
+        )
 
 
 class TestEncoder:
@@ -337,7 +357,7 @@ class TestTokenBudget:
             if float(row["readable_share"]) >= floor
         ]
         assert lengths, "the committed days hold no embeddable item"
-        assert MAX_TOKENS >= percentile(lengths, 0.95)
+        assert SHIPPED_MAX_TOKENS >= percentile(lengths, 0.95)
 
 
 class TestWhatTheEncoderCannotRead:

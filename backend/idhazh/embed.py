@@ -67,8 +67,11 @@ DTYPE: Final = "int8"
 # but a statement of how far into an item the encoder reads, and the encoder's
 # own position table stops it at 512. Measured 2026-08-26 over the 1886 embedded
 # items of the six committed days: p95 is 217 tokens, so 256 reads 99.95 percent
-# of everything published. The browser twin is `MAX_TOKENS` in
-# `frontend/src/lib/assist/loader.ts`, and a test here fails if the two separate.
+# of everything published. `Embedder` takes the configured cap rather than this
+# line, so this is a default and not the number a run truncates at. The browser
+# twin is `MAX_TOKENS` in `frontend/src/lib/assist/loader.ts`, and
+# `backend/tests/test_embed.py` pins it to the configured cap - to what ships,
+# not to this line.
 MAX_TOKENS: Final = AssistConfig().max_tokens
 
 _SCALE: Final = 127.0
