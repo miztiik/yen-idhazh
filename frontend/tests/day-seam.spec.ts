@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { resolve } from 'node:path';
 import { orderByTime } from '../src/lib/day-shape';
 import { dayShell, loadDay, publishedDates, wholeDay } from '../src/lib/server/payload';
-import type { DigestDay, DigestItem } from '../src/lib/payload/types';
+import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/types';
 
 /**
  * Row #23's oracle, as a function rather than as a build, and row #25's seed
@@ -44,18 +44,40 @@ function reading(day: DigestDay): DigestDay {
 	return { ...day, items: orderByTime(day.items) };
 }
 
+/** The day with the drawings taken back out.
+ *
+ * `dayShell` reads a seeded story's SVG off disk and hands it over with the
+ * story, so from 2026-09-05 the halves put back together hold one thing the
+ * loader's day does not. That is the point of the seed and not a leak: `markup`
+ * is a build-time field, it never reaches a served day, and every other byte of
+ * every story still has to survive the round trip. Removing it is what lets the
+ * test below go on asking the question it was written to ask.
+ */
+function withoutDrawings(day: DigestDay): DigestDay {
+	return {
+		...day,
+		items: day.items.map((item) => {
+			if (!item.visual) return item;
+			const { markup: _markup, ...visual } = item.visual as SeededVisual;
+			return { ...item, visual };
+		})
+	};
+}
+
 test.describe('the reading routes load a day in two halves', () => {
 	test('the halves put back together are the day the loader read', () => {
 		const dates = publishedDates(CANARY);
 		expect(dates.length, 'the canary tree published no day').toBeGreaterThan(0);
+		let drawings = 0;
 		for (const date of dates) {
 			const whole = loadDay(date, CANARY);
 			expect(whole, `${date} did not load`).not.toBeNull();
 			for (const seed of SEEDS) {
 				const shell = dayShell(date, seed, { root: CANARY });
 				expect(shell, `${date} at a seed of ${seed} did not load`).not.toBeNull();
+				drawings += shell!.seed.filter((item) => (item.visual as SeededVisual)?.markup).length;
 				expect(
-					JSON.stringify(wholeDay(shell!)),
+					JSON.stringify(withoutDrawings(wholeDay(shell!))),
 					`${date} at a seed of ${seed} rebuilt a different day`
 				).toBe(JSON.stringify(reading(whole!)));
 				// And the set is the set, whatever the order: a sort that dropped a
@@ -69,6 +91,9 @@ test.describe('the reading routes load a day in two halves', () => {
 				).toEqual(whole!.items.map((item) => item.item_id).sort());
 			}
 		}
+		// Without this the strip above could be removing nothing, and the test
+		// would read as green while checking a shape it no longer meets.
+		expect(drawings, 'no seeded story carried a drawing, so the strip proved nothing').toBeGreaterThan(0);
 	});
 
 	test('the seed is the head of the reading order and the rest is the tail', () => {

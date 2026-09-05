@@ -11,7 +11,33 @@
  */
 
 import { railTime, type RailTime } from './format';
-import type { DigestItem, DigestLead, DigestVerticalRef } from './payload/types';
+import type { DigestItem, DigestLead, DigestVerticalRef, SeededVisual } from './payload/types';
+
+/** The arrived stories, with the seeded ones keeping the drawing they came with.
+ *
+ * The build reads a seeded story's SVG off disk and puts it in the document, so
+ * the drawing can read the page's colours. The served day carries no such thing
+ * and never will - it is fetched by every reader past the seed, and a drawing
+ * averages 12.7 KB. So swapping the arrived list in wholesale takes the seed's
+ * drawings straight back out, and the first screen falls to the carrier this
+ * exists to replace. Measured 2026-09-05 on `/2026-09-04/` before the fix: one
+ * figure, an inline drawing in the document and an `img` again a second later.
+ *
+ * Only a story the document seeded can gain anything here, so every other story
+ * is returned untouched.
+ */
+export function keepDrawings(seeded: DigestItem[], arrived: DigestItem[]): DigestItem[] {
+	const drawings = new Map<string, SeededVisual>();
+	for (const item of seeded) {
+		const visual = item.visual as SeededVisual | null;
+		if (visual?.markup) drawings.set(item.item_id, visual);
+	}
+	if (drawings.size === 0) return arrived;
+	return arrived.map((item) => {
+		const visual = drawings.get(item.item_id);
+		return visual ? { ...item, visual } : item;
+	});
+}
 
 /** One entry of the leading block, as the component draws it. */
 export interface LeadingStory {

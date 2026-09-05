@@ -21,7 +21,7 @@ import { dayKey, toDay } from '../charts/viewport';
 import { orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
 import { dropVectors } from '../payload/project';
-import type { DigestDay, DigestItem } from '$lib/payload/types';
+import type { DigestDay, DigestItem, SeededVisual } from '$lib/payload/types';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
 export const REPO_ROOT = resolve(process.cwd(), '..');
@@ -191,17 +191,83 @@ export interface DayShellSplit {
 	root?: string;
 }
 
+/** A published visual's path, as a file this build is allowed to open.
+ *
+ * The value comes off a committed payload rather than off the web, and it is
+ * still matched rather than trusted: it is about to be joined onto a directory
+ * and read, and a path that walked out of the digest tree would be read all the
+ * same. The shape is the one `route.py` writes - the date the day was published
+ * on, then one file named for its desk.
+ */
+const VISUAL_PATH = /^digest\/\d{4}\/\d{2}\/\d{2}\/[a-z0-9][a-z0-9_-]*\.svg$/;
+
+/** What a drawing may not carry into the document.
+ *
+ * Inside an `img` an SVG is inert whatever it holds, and the moment it is
+ * inlined it is markup in our own origin. The renderer is ours and its input is
+ * not: a chart's labels are written by a model that read a stranger's page, so
+ * this is the trust boundary moving and it gets a check rather than a promise
+ * (Rule #11). Nothing here is a fix for a file that trips it - a drawing that
+ * does is not drawn, and the build says which one.
+ */
+const NOT_INERT = /<\s*(script|foreignObject|iframe|image|use|a|set|animate)\b|\son[a-z]+\s*=|javascript:/i;
+
+/** The drawing itself, or null when there is nothing safe to inline.
+ *
+ * Null is a designed state and not an error: the item keeps its `path`, so it
+ * falls back to the carrier it had before. Degrade, do not fail
+ * (`CLAUDE.md` section 1a).
+ */
+function inlineSvg(root: string, path: string): string | null {
+	if (!VISUAL_PATH.test(path)) {
+		console.warn(`[digest] ${path}: not a published visual path, left on the image carrier`);
+		return null;
+	}
+	// `..` off the digest root rather than a switch of its own, the way
+	// `INDEX_ROOT` is derived: a canary build then reads the canary's own
+	// drawings and can never reach the published tree.
+	const file = join(root, '..', path);
+	if (!existsSync(file)) return null;
+	const markup = readFileSync(file, 'utf8');
+	if (!markup.startsWith('<svg')) {
+		console.warn(`[digest] ${path}: does not open on an svg element, left on the image carrier`);
+		return null;
+	}
+	if (NOT_INERT.test(markup)) {
+		console.warn(`[digest] ${path}: carries markup a document may not run, left on the image carrier`);
+		return null;
+	}
+	return markup;
+}
+
+/** One story with its drawing in hand, for the stories the document carries. */
+function withDrawing(item: DigestItem, root: string): DigestItem {
+	if (item.visual?.state !== 'rendered' || !item.visual.path) return item;
+	const markup = inlineSvg(root, item.visual.path);
+	if (markup === null) return item;
+	const visual: SeededVisual = { ...item.visual, markup };
+	return { ...item, visual };
+}
+
 /** The day, in the two halves a reading route loads.
  *
  * Null for the same reason `loadDay` is null: the date was never published, or
  * its payload cannot be read. Both are designed states, not errors.
+ *
+ * **The seed carries its drawings and the rest does not**, which is the whole
+ * reason the split is the right place to read them. A day has published 621
+ * stories and the drawings average 12.7 KB each, so a document holding every
+ * one of them would be about a megabyte of markup on the surface a phone loads
+ * first. Measured 2026-09-05 over the 15 committed days: a seed holds 0.87
+ * drawings on average and 3 at most, which is 11.8 KB of markup a day.
  */
 export function dayShell(
 	date: string,
 	seedItems: number,
 	split: DayShellSplit = {}
 ): DayShell | null {
-	const day = loadDay(date, split.root ?? DIGEST_ROOT);
+	const root = split.root ?? DIGEST_ROOT;
+	const day = loadDay(date, root);
 	if (!day) return null;
 	// The head has to be the head of the order the PAGE draws, not of the
 	// published one. The stream runs newest first, so a seed taken off the
@@ -217,7 +283,7 @@ export function dayShell(
 	const seeded = (item: DigestItem): boolean => head.has(item.item_id) || kept.has(item.item_id);
 	return {
 		facts: { ...day, items: [] },
-		seed: items.filter(seeded),
+		seed: items.filter(seeded).map((item) => withDrawing(item, root)),
 		rest: items.filter((item) => !seeded(item))
 	};
 }

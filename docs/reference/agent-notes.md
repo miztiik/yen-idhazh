@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -1697,6 +1697,18 @@ the variable protects the shell you remember to set it in and nothing else.
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **`Set-Location` does not move the .NET current directory, so a relative path
+  handed to `[IO.File]` resolves somewhere else entirely.** In a shell shared
+  with other worktrees that somewhere else is another checkout. Observed
+  2026-09-05: `[IO.File]::ReadAllText('frontend/tests/item-visual.spec.ts')`
+  after a guarded `Set-Location` into a worktree threw `Could not find file
+  ...\yen-idhazh\frontend\tests\item-visual.spec.ts` - the shared checkout's
+  path, for a file that exists in the worktree, in a loop where the sibling
+  paths all read fine. It reads as a missing file or as terminal contamination
+  and is neither. `Get-Content` and `Select-String` are unaffected because
+  PowerShell resolves their paths itself. Join the worktree root onto every path
+  you hand a .NET method, or call `[IO.Directory]::SetCurrentDirectory($w)`
+  right after the `Set-Location` guard.
 - **A mangled here-string leaves the variable holding the PREVIOUS script.** The
   line above says the heredoc does not work; what it does next is the trap. In a
   persistent shell `$s = @'...'@` failing leaves `$s` at whatever the last script
@@ -1924,10 +1936,36 @@ the variable protects the shell you remember to set it in and nothing else.
 
 ## The integrated browser
 
+- **`page.route` intercepts nothing the service worker fetches, and the abort
+  count reads zero.** The site registers a worker, so a degraded arm written as
+  `page.route('**/digest/**/digest.json', r => r.abort())` lets the request
+  through and the page loads its day normally - which reads as "the page
+  degrades gracefully" when nothing was degraded at all. Measured 2026-09-05 on
+  `/2026-09-04/`: four navigations, `aborted: 0`, the day fully rendered. The
+  browser suite does not hit this because `playwright.config.ts` sets
+  `serviceWorkers: 'block'`; a hand-driven page has to clear it first, and then
+  re-clear it on every load, because the layout registers the worker again:
+
+  ```js
+  await page.evaluate(async () => {
+    for (const reg of await navigator.serviceWorker.getRegistrations()) await reg.unregister();
+    for (const key of await caches.keys()) await caches.delete(key);
+  });
+  ```
+
+  Always print the abort count and refuse to call it a degraded arm at zero.
 - **`document.visibilityState` is `hidden`, so `requestAnimationFrame` never
   fires.** Anything that runs in a mount-time frame callback looks dead here and
   works correctly under Playwright. Verify that class of behaviour with the
   browser suite, not by hand.
+- **`page.screenshot()` times out here too, for the same reason** - it waits for
+  the page to be stable and the frames never come. Observed 2026-09-05 alongside
+  the `scrollIntoViewIfNeeded` failure below. A screenshot is still worth having
+  for a layout-sensitive change, so take it from a real headless browser instead:
+  a small `.mjs` run with `node` from `frontend/`, importing `chromium` from
+  `@playwright/test` and pointing at the same preview server. Run it from
+  `frontend/`, not from a scratch directory - node resolves `@playwright/test`
+  from the script's own folder and reports `Cannot find package` otherwise.
 - **`locator.scrollIntoViewIfNeeded()` times out on a page that keeps relaying
   out.** Use `page.evaluate` with `scrollIntoView` instead.
 - **`locator.click()` cannot succeed here at all**, for the same reason: layout
