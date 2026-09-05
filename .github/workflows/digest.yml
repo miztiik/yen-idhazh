@@ -95,9 +95,9 @@ jobs:
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
       summarize_file: ${{ steps.models.outputs.summarize_file }}
-      route_repo: ${{ steps.models.outputs.route_repo }}
-      route_revision: ${{ steps.models.outputs.route_revision }}
-      route_file: ${{ steps.models.outputs.route_file }}
+      visual_planner_repo: ${{ steps.models.outputs.visual_planner_repo }}
+      visual_planner_revision: ${{ steps.models.outputs.visual_planner_revision }}
+      visual_planner_file: ${{ steps.models.outputs.visual_planner_file }}
     steps:
       - uses: actions/checkout@v6
 
@@ -166,7 +166,7 @@ jobs:
           import json
 
           models = json.load(open("config/idhazh.json", encoding="utf-8"))["models"]
-          for role in ("summarize", "route"):
+          for role in ("summarize", "visual_planner"):
               for field in ("repo", "revision", "file"):
                   value = models[role].get(field) or ""
                   if value.split() != [value]:
@@ -813,7 +813,7 @@ jobs:
   # that never starts costs every item its picture and costs the day nothing.
   #
   # This bound is the backstop, not the budget. The stage stops itself at
-  # `run.route_budget_minutes` in config/idhazh.json, which is set below this
+  # `run.visual_planner_budget_minutes` in config/idhazh.json, which is set below this
   # number with room for the fixed cost and one worst-case item. Raising this
   # number is not the fix for a slow router (Rule #2); lowering that one is.
   route:
@@ -846,7 +846,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: llm-${{ needs.plan.outputs.route_file }}-${{ needs.plan.outputs.route_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
+          key: llm-${{ needs.plan.outputs.visual_planner_file }}-${{ needs.plan.outputs.visual_planner_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
 
       - name: Fetch runtime and router weights
         if: steps.router.outputs.cache-hit != 'true'
@@ -870,8 +870,8 @@ jobs:
           cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server
           curl -fsSL --retry 3 --retry-all-errors \
-            -o "backend/models/${{ needs.plan.outputs.route_file }}" \
-            "https://huggingface.co/${{ needs.plan.outputs.route_repo }}/resolve/${{ needs.plan.outputs.route_revision }}/${{ needs.plan.outputs.route_file }}?download=true"
+            -o "backend/models/${{ needs.plan.outputs.visual_planner_file }}" \
+            "https://huggingface.co/${{ needs.plan.outputs.visual_planner_repo }}/resolve/${{ needs.plan.outputs.visual_planner_revision }}/${{ needs.plan.outputs.visual_planner_file }}?download=true"
 
       # No `if:`, for the same reason the work job's check carries none: a
       # restored cache entry is the one case where nobody watched the bytes
@@ -880,18 +880,18 @@ jobs:
       - name: Verify the router weights
         run: |
           set -euo pipefail
-          EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["route"]["sha256"] or "")')
+          EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["visual_planner"]["sha256"] or "")')
           if [ -z "$EXPECTED" ]; then
-            echo "config records no sha256 for models.route" >&2
+            echo "config records no sha256 for models.visual_planner" >&2
             exit 1
           fi
-          echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.route_file }}" | sha256sum --check
+          echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.visual_planner_file }}" | sha256sum --check
 
       - name: Start the router
         env:
-          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.route_file }}
+          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.visual_planner_file }}
         run: |
-          .github/scripts/start-llama-server.sh route router
+          .github/scripts/start-llama-server.sh visual_planner router
 
       - uses: actions/download-artifact@v8
         with:
@@ -931,7 +931,7 @@ jobs:
           grep -m1 'system_info' router.log || true
           LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
           sha256sum backend/bin/llama-server || true
-          sha256sum "backend/models/${{ needs.plan.outputs.route_file }}" || true
+          sha256sum "backend/models/${{ needs.plan.outputs.visual_planner_file }}" || true
 
       - name: Route and render
         run: python -m idhazh route --date "${{ needs.plan.outputs.date }}"

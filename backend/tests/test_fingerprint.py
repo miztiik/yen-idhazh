@@ -373,7 +373,7 @@ def test_an_unmeasured_weights_digest_raises_rather_than_stamping_zeros(
         stamp_with(unmeasured)
 
 
-@pytest.mark.parametrize("role", ["summarize", "route"])
+@pytest.mark.parametrize("role", ["summarize", "visual_planner"])
 def test_the_committed_config_records_a_measured_digest_for_every_model(role: str) -> None:
     """An expectation the run has to meet, and the CI gate checks the bytes against it."""
     models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models

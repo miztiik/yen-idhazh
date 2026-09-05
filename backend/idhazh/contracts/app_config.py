@@ -18,9 +18,9 @@ from datetime import timedelta
 from enum import StrEnum
 from functools import lru_cache
 from types import MappingProxyType
-from typing import Any, ClassVar, Final, Literal, Self
+from typing import Annotated, Any, ClassVar, Final, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, CommitSha, Contract, Model, Sha256, Slug
 from idhazh.contracts.item_health import FailureCode
@@ -149,7 +149,7 @@ class RunConfig(Model):
             "(Rule #2)."
         ),
     )
-    route_budget_minutes: int = Field(
+    visual_planner_budget_minutes: int = Field(
         default=40,
         ge=1,
         description=(
@@ -162,6 +162,11 @@ class RunConfig(Model):
     success_floor_pct: int = Field(
         default=70, ge=0, le=100, description="Below this, the run additionally opens an issue."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_renamed_knob_still_opens(cls, data: Any) -> Any:
+        return read_a_renamed_key("run", data, RENAMED_RUN_KEYS)
 
 
 #: The `collect` names this block used to carry, and the knob that answers the
@@ -198,6 +203,45 @@ def refuse_a_removed_knob(block: str, data: Any, names: Mapping[str, str]) -> An
             "nothing reads is a number somebody believes"
         )
     return data
+
+
+#: The `run` knobs this block used to carry, and the knob holding the same
+#: number now. A config still spelling one is read as the new name.
+RENAMED_RUN_KEYS: Final[Mapping[str, str]] = MappingProxyType(
+    {"route_budget_minutes": "visual_planner_budget_minutes"}
+)
+
+#: The `models` keys this block used to carry, and the key holding the same
+#: model now. It is also the map `finetune` roles are read through, because a
+#: role names one of these keys as a value.
+RENAMED_MODELS_KEYS: Final[Mapping[str, str]] = MappingProxyType({"route": "visual_planner"})
+
+
+def read_a_renamed_key(block: str, data: Any, names: Mapping[str, str]) -> Any:
+    """Read a config still spelling a renamed key as though it spelled the new one.
+
+    `config/` is a persisted surface, so a key rename is breaking: every model
+    here forbids unknown keys, and a file written before the rename would be
+    refused outright (section 11). The migration sits on the model that owns the
+    key, so one place knows both spellings and there is no second config reader.
+
+    A file carrying both spellings with different values is refused. Taking one
+    silently is how somebody comes to believe a number nothing reads.
+    """
+    if not isinstance(data, dict):
+        return data
+    migrated = dict(data)
+    for old, new in names.items():
+        if old not in migrated:
+            continue
+        carried = migrated.pop(old)
+        if new in migrated and migrated[new] != carried:
+            raise ValueError(
+                f"{block} spells both {old} and {new}, with different values. "
+                f"{block}.{old} is now {block}.{new} - keep one"
+            )
+        migrated.setdefault(new, carried)
+    return migrated
 
 
 class CollectConfig(Model):
@@ -535,8 +579,13 @@ class InferenceConfig(Model):
 
 class ModelsConfig(Model):
     summarize: ModelRef
-    route: ModelRef
+    visual_planner: ModelRef
     inference: InferenceConfig = Field(default_factory=InferenceConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_renamed_key_still_opens(cls, data: Any) -> Any:
+        return read_a_renamed_key("models", data, RENAMED_MODELS_KEYS)
 
 
 class SummaryBand(Model):
@@ -1166,6 +1215,13 @@ class ObservabilityConfig(Model):
         return self
 
 
+#: What a `finetune` role may spell. A key in `models` is a Python attribute
+#: name, so it is snake_case - not the kebab-case a `Slug` allows, which no key
+#: could ever be. `AppConfig` checks the name against the real block; this only
+#: bounds the shape, so an editor reading `schemas/` refuses a typo offline.
+ModelRole = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(?:_[a-z0-9]+)*$")]
+
+
 class FinetuneConfig(Model):
     """The training corpus and the schedules that maintain it.
 
@@ -1180,12 +1236,12 @@ class FinetuneConfig(Model):
     under the same name would file two unrelated retention policies together.
     """
 
-    teacher: Slug = Field(
+    teacher: ModelRole = Field(
         default="summarize",
         description="A key in `models`. The model whose outputs a session fine-tunes.",
     )
-    student: Slug = Field(
-        default="route",
+    student: ModelRole = Field(
+        default="visual_planner",
         description="A key in `models`. The smaller model a distillation session trains.",
     )
     corpus_rows: int = Field(
@@ -1290,6 +1346,25 @@ class FinetuneConfig(Model):
             "which teaches the model to stop mid-summary."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_role_naming_a_renamed_key_still_opens(cls, data: Any) -> Any:
+        """A role naming a renamed `models` key reads as the new name.
+
+        `ModelsConfig` carries the same rename where it is spelled as a key.
+        This carries it where it is spelled as a value, and without it a file
+        written before the rename loads its `models` block and then fails the
+        `AppConfig` check that a role names a real one.
+        """
+        if not isinstance(data, dict):
+            return data
+        migrated = dict(data)
+        for field in ("teacher", "student"):
+            named = migrated.get(field)
+            if isinstance(named, str) and named in RENAMED_MODELS_KEYS:
+                migrated[field] = RENAMED_MODELS_KEYS[named]
+        return migrated
 
     @model_validator(mode="after")
     def _a_session_cannot_draw_more_than_the_window_holds(self) -> Self:
@@ -2202,6 +2277,33 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-05T14:00",
+            change=(
+                "models.route is renamed models.visual_planner, run.route_budget_minutes "
+                "is renamed run.visual_planner_budget_minutes, and finetune.student now "
+                "names visual_planner. finetune.teacher and finetune.student are typed "
+                "ModelRole rather than Slug. Breaking: three key spellings changed. The "
+                "read-side migration is a before-validator on ModelsConfig, RunConfig and "
+                "FinetuneConfig that reads the old spelling as the new one and refuses a "
+                "file carrying both with different values, so a config written before "
+                "today still loads. No value moved: the weights, the revision, the sha256 "
+                "and the 40 minutes are the numbers they were yesterday."
+            ),
+            why=(
+                "Route names a dispatch decision and the stage names a planning "
+                "decision, so every knob spelling it teaches the wrong word. It is paid "
+                "now rather than later because twenty more plans are about to mint names "
+                "against these keys, and each one would write the wrong name and then pay "
+                "to change it (owner decision 2026-09-05). ModelRole replaces Slug "
+                "because these two fields spell a key in models, a key in models is a "
+                "Python attribute name, and an attribute name is snake_case - so Slug's "
+                "kebab-case was a shape no key could ever have, and visual_planner would "
+                "have been refused by the pattern before the check that matters ran. "
+                "AppConfig already checks the name against the real block, so the pattern "
+                "only has to bound the shape for an editor reading schemas/ offline."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-05T13:00",
             change=(
