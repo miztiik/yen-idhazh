@@ -1,0 +1,17 @@
+{
+  "alt_text": null,
+  "asked_the_model": true,
+  "asset_path": null,
+  "decided_at": "2026-08-21T06:16:40Z",
+  "decision_ms": null,
+  "drafted_chart": true,
+  "failure_detail": "vl-convert refused the spec: unknown mark type",
+  "item_id": "energy-01",
+  "kind": "chart",
+  "model_id": "qwen3-4b-q4-k-m",
+  "rationale": "The article states quarterly capacity for three quarters.",
+  "spec": "{\"data\":{\"values\":[{\"megawatt\":4100,\"quarter\":\"Q1\"},{\"megawatt\":5200,\"quarter\":\"Q2\"},{\"megawatt\":6050,\"quarter\":\"Q3\"}]},\"mark\":\"bar\"}",
+  "url_key": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933010852380f9b5b6f78b8dd90",
+  "version": "2026-08-21",
+  "visual_state": "render_failed"
+}

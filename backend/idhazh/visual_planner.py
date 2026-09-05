@@ -1,4 +1,4 @@
-"""Decide whether an item gets a chart, a diagram, or nothing.
+"""Decide whether an item gets a chart or nothing.
 
 The control that matters is not the prompt. It is that **the model never emits a
 number**. Numbers are pulled out of the article text deterministically, and the
@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from idhazh.contracts.app_config import InferenceConfig, VisualsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import sanitize, untrusted_block
 
@@ -394,18 +394,14 @@ def chart_is_reachable(facts: list[NumericFact], *, visuals: VisualsConfig) -> b
 def reachable_kinds(facts: list[NumericFact], *, visuals: VisualsConfig) -> list[VisualKind]:
     """The enabled kinds this item could still produce, in config order.
 
-    Written as a predicate over every kind rather than as a chart special case.
-    A diagram's steps come from prose, so nothing about it is decidable in
-    advance and it is always reachable while enabled - which means turning
-    diagrams off is a visible config edit, never a silent consequence of adding
-    this gate.
+    Written as a predicate over every kind rather than as a chart special case,
+    so a kind added later declares its own reachability here rather than being
+    let through by an `if` that only knows about charts.
     """
     survivors: list[VisualKind] = []
     for kind in visuals.enabled_kinds:
         if kind is VisualKind.CHART and not chart_is_reachable(facts, visuals=visuals):
             continue
-        if kind is VisualKind.IMAGE:
-            continue  # no renderer; `enabled_kinds` should not carry it, but do not trust that
         survivors.append(kind)
     return survivors
 
@@ -458,38 +454,14 @@ def chart_spec(
     return spec
 
 
-def diagram_spec(steps: list[str], *, caption: str) -> str:
-    """Mermaid source. Persisted as the record, rendered by our own layout.
-
-    Mermaid is the interchange format so anyone can re-render this with the real
-    Mermaid toolchain. We do not run that toolchain: it needs a headless browser,
-    and a linear chain of labelled boxes does not.
-
-    Top-down rather than left-right: at six steps a horizontal chain gives each
-    box about 130 px inside our canvas, which is narrower than most of the labels.
-    """
-    lines = ["flowchart TD"]
-    if caption:
-        lines.insert(0, f"%% {sanitize(caption)[:120]}")
-    for index, step in enumerate(steps):
-        label = sanitize(step)[:60].replace('"', "'")
-        lines.append(f'    n{index}["{label}"]')
-    for index in range(len(steps) - 1):
-        lines.append(f"    n{index} --> n{index + 1}")
-    return "\n".join(lines)
-
-
 def alt_text(draft: VisualDraft, facts: list[NumericFact]) -> str:
     """What a screen reader gets. The visual is never the only carrier of a fact."""
-    if draft.kind == "chart":
-        parts = [
-            f"{sanitize(point.label)[:40]} "
-            f"{facts[point.fact_index].raw} {facts[point.fact_index].unit}".strip()
-            for point in draft.points
-        ]
-        return f"Bar chart. {'; '.join(parts)}."[:300]
-    labels = " then ".join(sanitize(step)[:60] for step in draft.steps)
-    return f"Flow diagram. {labels}."[:300]
+    parts = [
+        f"{sanitize(point.label)[:40]} "
+        f"{facts[point.fact_index].raw} {facts[point.fact_index].unit}".strip()
+        for point in draft.points
+    ]
+    return f"Bar chart. {'; '.join(parts)}."[:300]
 
 
 def to_decision(
@@ -558,11 +530,24 @@ def to_decision(
             version=version,
         )
 
+    # The prompt and the output grammar still offer "diagram", and nothing draws
+    # one since the Mermaid round trip went (pseudo-plan row 63). Refused here,
+    # one line above where `enabled_kinds` refused it before and with the same
+    # words, so the payload a diagram draft produces does not move.
+    if draft.kind != VisualKind.CHART.value:
+        return _nothing(
+            summary,
+            model_id=model_id,
+            reason=f"{draft.kind} has no renderer switched on",
+            decided_at=decided_at,
+            version=version,
+        )
+
     kind = VisualKind(draft.kind)
     # What the model asked for, kept whatever this function does with it next.
     # Every return below is a post-model check, and the difference between this
     # flag and the published kind is exactly what those checks rejected.
-    drafted_chart = kind is VisualKind.CHART
+    drafted_chart = True
     if kind not in visuals.enabled_kinds:
         return _nothing(
             summary,
@@ -573,68 +558,55 @@ def to_decision(
             drafted_chart=drafted_chart,
         )
 
-    if kind is VisualKind.CHART:
-        if any(point.fact_index >= len(available) for point in draft.points):
-            return _nothing(
-                summary,
-                model_id=model_id,
-                reason="the chart pointed at a quantity the article does not contain",
-                decided_at=decided_at,
-                version=version,
-                drafted_chart=drafted_chart,
-            )
-        # One quantity may fill one bar. Without this the model can name index 3
-        # three times, `same_unit_bars` groups all three under one unit, the
-        # width check passes, and a chart of one number repeated under three
-        # invented labels publishes - a fabricated comparison built entirely out
-        # of real facts, which is the one failure this stage claims is
-        # unreachable.
-        if len({point.fact_index for point in draft.points}) != len(draft.points):
-            return _nothing(
-                summary,
-                model_id=model_id,
-                reason="the chart used one quantity for more than one bar",
-                decided_at=decided_at,
-                version=version,
-                drafted_chart=drafted_chart,
-            )
-        unit, bars = same_unit_bars(draft.points, available)
-        kept_from = len(draft.points)
-        if not visuals.min_chart_points <= len(bars) <= visuals.max_chart_points:
-            return _nothing(
-                summary,
-                model_id=model_id,
-                reason=(
-                    f"{len(bars)} of {len(draft.points)} bars measure the same thing, "
-                    "which is outside the publishable range"
-                ),
-                decided_at=decided_at,
-                version=version,
-                drafted_chart=drafted_chart,
-            )
-        draft = draft.model_copy(update={"points": bars})
-        # A caption written about five bars is a false statement about three.
-        # The live 4B captioned a chart "Solar Capacity and Employment" and then
-        # had its employment bar dropped, which is exactly the kind of small lie
-        # that costs a reader their trust in every other number on the page.
-        caption = draft.caption if len(bars) == kept_from else ""
-        spec: str = json.dumps(
-            chart_spec(bars, available, caption=caption, unit=unit, visuals=visuals),
-            separators=(",", ":"),
-            sort_keys=True,
+    if any(point.fact_index >= len(available) for point in draft.points):
+        return _nothing(
+            summary,
+            model_id=model_id,
+            reason="the chart pointed at a quantity the article does not contain",
+            decided_at=decided_at,
+            version=version,
+            drafted_chart=drafted_chart,
         )
-        spec_format = SpecFormat.VEGA_LITE
-    else:
-        if not visuals.min_diagram_steps <= len(draft.steps) <= visuals.max_diagram_steps:
-            return _nothing(
-                summary,
-                model_id=model_id,
-                reason=f"{len(draft.steps)} steps is outside the publishable range",
-                decided_at=decided_at,
-                version=version,
-            )
-        spec = diagram_spec(draft.steps, caption=draft.caption)
-        spec_format = SpecFormat.MERMAID
+    # One quantity may fill one bar. Without this the model can name index 3
+    # three times, `same_unit_bars` groups all three under one unit, the
+    # width check passes, and a chart of one number repeated under three
+    # invented labels publishes - a fabricated comparison built entirely out
+    # of real facts, which is the one failure this stage claims is
+    # unreachable.
+    if len({point.fact_index for point in draft.points}) != len(draft.points):
+        return _nothing(
+            summary,
+            model_id=model_id,
+            reason="the chart used one quantity for more than one bar",
+            decided_at=decided_at,
+            version=version,
+            drafted_chart=drafted_chart,
+        )
+    unit, bars = same_unit_bars(draft.points, available)
+    kept_from = len(draft.points)
+    if not visuals.min_chart_points <= len(bars) <= visuals.max_chart_points:
+        return _nothing(
+            summary,
+            model_id=model_id,
+            reason=(
+                f"{len(bars)} of {len(draft.points)} bars measure the same thing, "
+                "which is outside the publishable range"
+            ),
+            decided_at=decided_at,
+            version=version,
+            drafted_chart=drafted_chart,
+        )
+    draft = draft.model_copy(update={"points": bars})
+    # A caption written about five bars is a false statement about three.
+    # The live 4B captioned a chart "Solar Capacity and Employment" and then
+    # had its employment bar dropped, which is exactly the kind of small lie
+    # that costs a reader their trust in every other number on the page.
+    caption = draft.caption if len(bars) == kept_from else ""
+    spec = json.dumps(
+        chart_spec(bars, available, caption=caption, unit=unit, visuals=visuals),
+        separators=(",", ":"),
+        sort_keys=True,
+    )
 
     return VisualDecision(
         version=version,
@@ -643,7 +615,6 @@ def to_decision(
         kind=kind,
         rationale=sanitize(draft.reason)[:200] or None,
         spec=spec,
-        spec_format=spec_format,
         alt_text=sanitize(alt_text(draft, available))[:300] or None,
         visual_state=VisualState.ABSENT,
         model_id=model_id,

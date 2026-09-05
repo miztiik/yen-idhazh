@@ -61,7 +61,7 @@ from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunR
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LensId, SourceKind, SourceTier
-from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
@@ -115,9 +115,35 @@ CHART_SPEC = json.dumps(
     sort_keys=True,
 )
 
-DIAGRAM_SPEC = (
-    'flowchart TD\n    n0["Filed"]\n    n1["Reviewed"]\n    n2["Approved"]\n'
-    "    n0 --> n1\n    n1 --> n2"
+SECOND_CHART_SPEC = json.dumps(
+    {
+        "data": {
+            "values": [
+                {"label": "Filed", "value": 320},
+                {"label": "Reviewed", "value": 210},
+                {"label": "Approved", "value": 95},
+            ]
+        },
+        "encoding": {
+            "x": {"field": "value", "type": "quantitative"},
+            "y": {"field": "label", "sort": None, "type": "nominal"},
+        },
+        "height": 410,
+        "mark": {"color": "#4c6ef5", "type": "bar"},
+        "width": 680,
+    },
+    separators=(",", ":"),
+    sort_keys=True,
+)
+
+#: A spec the Vega toolchain refuses, so the third visual item is a chart that
+#: was planned and never drawn. The day needs one: `render_failed` is a state the
+#: reading page and the console both have to handle, and it is the only way left
+#: for a committed visual not to be a published chart.
+UNDRAWABLE_CHART_SPEC = json.dumps(
+    {"data": {"values": []}, "mark": "not-a-mark"},
+    separators=(",", ":"),
+    sort_keys=True,
 )
 
 #: What the model was given on an item extract cut short, and so the length an
@@ -398,13 +424,24 @@ def lenses_for(index: int) -> list[LensId]:
 
 
 def visual_for(index: int, item_id: str, target: Path) -> VisualDecision | None:
-    """A rendered chart on the first item, a rendered diagram on the second."""
+    """A rendered chart on each of the first two items, and a failed one on the third.
+
+    Two rendered, not one, because the browser suite's oracle is that every
+    promised picture is served - a single figure cannot show that the page draws
+    each story its own. The third is planned and never drawn, which is what keeps
+    a visual that is not a published chart on the day: the console counts
+    rendered charts rather than visuals, and a fixture where the two numbers
+    agree cannot tell the two readings apart.
+    """
     if index == 0:
-        kind, spec, fmt = VisualKind.CHART, CHART_SPEC, SpecFormat.VEGA_LITE
+        spec = CHART_SPEC
         alt = "Bar chart. 2025 15,400 megawatt; 2024 11,200 megawatt; 2023 8,600 megawatt."
     elif index == 1:
-        kind, spec, fmt = VisualKind.DIAGRAM, DIAGRAM_SPEC, SpecFormat.MERMAID
-        alt = "Flow diagram. Filed then Reviewed then Approved."
+        spec = SECOND_CHART_SPEC
+        alt = "Bar chart. Filed 320 cases; Reviewed 210 cases; Approved 95 cases."
+    elif index == 2:
+        spec = UNDRAWABLE_CHART_SPEC
+        alt = "Bar chart. Coal 41 percent; Gas 22 percent; Wind 19 percent."
     else:
         return None
 
@@ -412,9 +449,8 @@ def visual_for(index: int, item_id: str, target: Path) -> VisualDecision | None:
         version=VisualDecision.schema_version(),
         item_id=item_id,
         url_key="0" * 64,
-        kind=kind,
+        kind=VisualKind.CHART,
         spec=spec,
-        spec_format=fmt,
         alt_text=alt,
         model_id="canary",
         decided_at=f"{DATE}T06:00:00Z",
@@ -553,13 +589,13 @@ def manifest(target: Path, published: int) -> RunManifest:
     3 broke. A fixture that claimed a later run succeeded on items the digest
     does not carry would make the two files disagree about the same day.
 
-    Run 1 also carries the router's own counts, so the console's Charts table
-    has one day with real arithmetic under it and nineteen quiet days with none.
-    They are consistent with the digest too: the router reached all eight
+    Run 1 also carries the visual planner's own counts, so the console's Charts
+    table has one day with real arithmetic under it and nineteen quiet days with
+    none. They are consistent with the digest too: the planner reached all eight
     published items, posted five and answered three from their own numbers, and
-    of its two chart drafts one is the chart the day publishes. The other died
-    in the checks that run after the model answers, which is the gap the table
-    exists to show.
+    of its three chart drafts two are the charts the day publishes. The third was
+    planned and the renderer refused it, which is the gap the table exists to
+    show.
     """
     day = RunManifest(
         version=RunManifest.schema_version(),
@@ -576,7 +612,7 @@ def manifest(target: Path, published: int) -> RunManifest:
                 skipped=0,
                 decided=5,
                 prefiltered=3,
-                charts_drafted=2,
+                charts_drafted=3,
                 decision_ms=264_000,
             ),
             # Amber: nothing was attempted. Every candidate was already published.
