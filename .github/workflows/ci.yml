@@ -39,6 +39,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
       - id: decide
         env:
           EVENT: ${{ github.event_name }}
@@ -51,6 +55,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
 
       - uses: actions/setup-python@v7
         with:
@@ -162,14 +170,22 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Install the backend, for the site-weight gate
-        run: pip install -e .
+      - name: Install the backend and test tooling
+        run: pip install -e ".[dev]"
 
       # The build strips types, so it passes on code the type-checker rejects.
       # Without this gate a type error only shows up in an editor.
       - name: Type-check
         working-directory: frontend
         run: npm run check
+
+      - name: Test selection and run safeguards
+        working-directory: frontend
+        run: npm run test:tooling
+
+      - name: Frontend logic without a build or browser
+        working-directory: frontend
+        run: npm run test:logic -- --forbid-only
 
       # Every route still has to render. What the build no longer proves is that
       # every STORY does: a reading document carries a seed and the browser
@@ -179,11 +195,10 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      # Three checks under one step. The on-device encoder must stay behind a
+      # Two checks under one step. The on-device encoder must stay behind a
       # dynamic import; a static import would put a multi-megabyte library on
       # every reader's first load, and nothing about that edit looks wrong in
-      # review. Each route's first-load JavaScript must match its recorded
-      # weight. Each page that renders no day must stay under its ceiling in
+      # review. Each page that renders no day must stay under its ceiling in
       # config/idhazh.json. Read which one failed - they have different answers.
       - name: Bundle gate - encoder and page ceilings
         working-directory: frontend
@@ -268,10 +283,8 @@ jobs:
       # Eight canaries on the published surface, plus the hand-labelled
       # retrieval bar. A single injection getting through fails the build.
       #
-      # `SKIP_CONSOLE_SUITE` drops the operator console's own specs - 233 of the
-      # 411 tests, none of which is about the digest - when a pull request
-      # touched nothing the console renders. It is false on a push to main, so
-      # everything runs on the merge commit.
+      # The shared selector can exclude the console on a PR. Main always runs
+      # all browser groups; the site job runs the no-server logic group.
       - name: Browser suite - canaries and retrieval
         working-directory: frontend
         env:

@@ -1,6 +1,6 @@
 # How to ship a PR
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-09-05
 
 The end-to-end runbook for taking a worker branch from "ready to commit" to "merged + cleaned up". Procedural counterpart to [CLAUDE.md](../../CLAUDE.md) section 8 (Git Hygiene) + section 9 (Definition of Done) + section 12 (published-surface verification).
 
@@ -27,12 +27,21 @@ Confirm a clean working tree (or that the dirty paths are yours). Confirm the br
 
 ### Branching
 
-Always branch from `origin/main`, not from a stale local `main`:
+Start every code change in a dedicated worktree and named branch from the
+fetched `origin/main`. Keep the shared main checkout free of implementation
+edits. Check `git worktree list` before choosing the new directory:
 
 ```powershell
 git fetch origin main
-git checkout -b <type>/<scope>-<slug> origin/main
+git worktree list
+git worktree add -b <type>/<scope>-<slug> ../<worktree-name> origin/main
+Set-Location -LiteralPath ../<worktree-name>
 ```
+
+If work already exists in the shared checkout, preserve and verify its exact
+files before transferring it. Do not overwrite another agent's changes while
+making the transfer. Commit and validate in the dedicated worktree, merge via
+the PR, then fast-forward the clean main checkout and remove only your worktree.
 
 ## The 2-commit-then-squash pattern
 

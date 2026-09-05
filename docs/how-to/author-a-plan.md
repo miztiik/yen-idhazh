@@ -1,6 +1,6 @@
 # How to author an execution-ready plan-doc
 
-**Last Updated**: 2026-07-05
+**Last Updated**: 2026-09-05
 
 The procedure for turning a rough idea or draft into a `TODO/<YYYYMMDD>-<slug>-plan.md` that an autonomous agent can run end-to-end with no further instruction. This is the canonical home for the authoring ritual; the [`prepare-plan`](../../.claude/skills/prepare-plan/SKILL.md) skill is a thin wrapper that points here, mirroring how [`bootstrap`](../../.claude/skills/bootstrap/SKILL.md) points at [../agents/bootstrap.md](../agents/bootstrap.md).
 
@@ -54,7 +54,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
   ### Row #N - <title>
   - **Scope:** one sentence, what ships.
   - **Files touched:** bullet list of exact paths.
-  - **Acceptance gates:** bullet list (tests, lint, type-check, browser-verify ...).
+  - **Acceptance gates:** name local checks separately from CI checks. Use the project's test selector and name the focused Oracle. A full-suite requirement belongs to CI unless the row states why it must also run locally. Record the selected inputs and results so the orchestrator can verify them without repeating an unchanged check.
   - **Oracle:** ONE load-bearing check (bijection / coverage / contract / parity) that proves correctness.
   - **Decisions** (enumerated table):
 

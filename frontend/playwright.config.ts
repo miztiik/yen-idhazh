@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FRONTEND_GROUPS, groupedSpecs } from './scripts/test-groups';
 
 /**
  * The browser suite runs against a real build, not a dev server.
@@ -37,11 +38,8 @@ export const DERIVED_PORT_SPAN = 10000;
 
 /** What an unset or switched-off `CI` looks like. GitHub Actions sets `CI=true`.
  *
- * The same set `backend/utilities/gate_lock.py` reads, so the lock and the
- * suite cannot disagree about whether this machine is a runner. `forbidOnly`,
- * `reporter` and `reuseExistingServer` below keep the plain truthiness test
- * they already had - every value a runner actually sets reads the same either
- * way, and this change is about the port alone.
+ * The same set `backend/utilities/gate_lock.py` reads. Preview server reuse is
+ * disabled in every environment; only the port and reporting differ in CI.
  */
 const CI_OFF = new Set(['', '0', 'false', 'no', 'off']);
 
@@ -52,12 +50,8 @@ export function runningInCi(env: Record<string, string | undefined>): boolean {
 /**
  * Which port this checkout's preview server listens on.
  *
- * Two checkouts on one port do not queue. `reuseExistingServer` lets the second
- * adopt the first one's server, so a whole suite passes against another
- * worktree's build and says nothing about it - and a `--strictPort` preview
- * that failed to bind still answers 200, from the sibling that already holds
- * the port. Deriving the port from the checkout removes the collision instead
- * of asking a person to remember one number per worktree.
+ * Reusing a server previously let a suite read another checkout's build. Reuse
+ * is now disabled, and deriving the port makes a rejected collision uncommon.
  *
  * `worktree` is a directory that differs per checkout. Sibling paths differ by
  * a single character, which is why this hashes rather than sums: a character
@@ -86,17 +80,16 @@ const PORT = previewPort(dirname(fileURLToPath(import.meta.url)), process.env);
 /**
  * The operator console's own specs, skipped when nothing it renders has moved.
  *
- * 233 of the suite's 411 tests are `console-*.spec.ts`. None of them is about
- * the digest: the console is the operator's dashboard, and a reader never opens
- * it. `.github/scripts/browser-suite-needed.sh` decides, from the paths a pull
- * request touched, and a push to `main` always runs everything - so a path
- * nobody thought of costs a red merge commit rather than a broken page.
+ * The shared selector decides from all changed paths. Shared and unknown inputs
+ * include console coverage; main always runs every group. Test counts are
+ * discovered rather than copied here.
  *
  * Skipping is opt-in through the environment and never the default: a bare
- * `npm run test:browser` on a developer box runs the whole suite, and so does
- * every scheduled and manual run.
+ * `npm run test:browser` runs all browser groups. The build-independent group
+ * runs separately through `npm run test:logic` without starting a server.
  */
 const SKIP_CONSOLE = (process.env.SKIP_CONSOLE_SUITE ?? '').trim() === 'true';
+const GROUPS = groupedSpecs(fileURLToPath(new URL('./tests/', import.meta.url)));
 
 /**
  * The one spec this config may never run, whatever is asked for on the command
@@ -114,6 +107,7 @@ const WHOLE_DAY = /whole-day\.spec\.ts$/;
 
 export default defineConfig({
 	testDir: 'tests',
+	outputDir: 'test-results/browser',
 	testIgnore: SKIP_CONSOLE ? [WHOLE_DAY, /console.*\.spec\.ts$/] : WHOLE_DAY,
 	fullyParallel: false,
 	forbidOnly: Boolean(process.env.CI),
@@ -133,14 +127,18 @@ export default defineConfig({
 		serviceWorkers: 'block',
 		trace: 'retain-on-failure'
 	},
-	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+	projects: FRONTEND_GROUPS.filter((name) => name !== 'logic').map((name) => ({
+		name,
+		testMatch: GROUPS[name].map((filename) => `**/${filename}`),
+		use: { ...devices['Desktop Chrome'] }
+	})),
 	webServer: {
 		// `--host 127.0.0.1` is load-bearing on a runner. Left to itself vite binds
 		// to `localhost`, which resolves to ::1 first on ubuntu-latest, so polling
 		// 127.0.0.1 times out and the whole suite fails before a test runs.
-		command: `npm run preview -- --port ${PORT} --strictPort --host 127.0.0.1`,
+		command: `node scripts/verified-preview.ts --port ${PORT} --strictPort --host 127.0.0.1`,
 		url: `http://127.0.0.1:${PORT}/`,
-		reuseExistingServer: !process.env.CI,
+		reuseExistingServer: false,
 		timeout: 120_000,
 		stdout: 'pipe',
 		stderr: 'pipe'

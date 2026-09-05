@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-05
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -203,7 +203,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 - [ ] Tests added/updated at the tier appropriate to the surface (section 13). No mocks per Rule #7.
 - [ ] Full suite green **on the merge candidate**. CI is the authoritative arm and is six to fifteen times faster than a developer box; a local full-suite run before every push is optional, not required.
-- [ ] Lint (`ruff`), type-check (`mypy --strict`), and the tests for the module you changed pass locally before the push.
+- [ ] Applicable local lint, type checks and selected tests pass before the push, per [docs/how-to/run-the-gates.md](docs/how-to/run-the-gates.md). Use the shared test selector. Keep full-suite checks in CI unless local full coverage is explicitly needed. Verify a worker's unchanged test record instead of repeating its check; documentation-only closure needs no local application suite.
 - [ ] Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
 - [ ] For reader-facing and operator-facing surfaces: the sufficiency checks in [`docs/concepts/design-system.md`](docs/concepts/design-system.md) pass, or a `## Design rationale` entry says why not. A surface can fail by being too little.

@@ -1,5 +1,8 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 import base from './playwright.config';
+
+const webServer = Array.isArray(base.webServer) ? base.webServer[0] : base.webServer;
+if (!webServer) throw new Error('Whole-day checks require the verified preview server.');
 
 /**
  * The one check that has to see a real published day.
@@ -31,5 +34,8 @@ export default defineConfig({
 	...base,
 	testIgnore: undefined,
 	testMatch: /whole-day\.spec\.ts$/,
+	outputDir: 'test-results/whole-day',
+	projects: [{ name: 'whole-day', use: { ...devices['Desktop Chrome'] } }],
+	webServer: { ...webServer, env: { ...webServer.env, IDHAZH_TEST_BUILD: 'real' } },
 	timeout: 600_000
 });
