@@ -63,7 +63,7 @@ from idhazh.contracts.taxonomy import (
     VerticalDef,
 )
 from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
-from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watchlist
 
 __all__ = [
@@ -118,7 +118,6 @@ __all__ = [
     "SourceForm",
     "SourceTier",
     "Sources",
-    "SpecFormat",
     "Summary",
     "SummaryStatus",
     "Taxonomy",

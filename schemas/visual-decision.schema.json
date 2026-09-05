@@ -1,19 +1,8 @@
 {
   "$defs": {
-    "SpecFormat": {
-      "enum": [
-        "vega-lite",
-        "mermaid",
-        "image-prompt"
-      ],
-      "title": "SpecFormat",
-      "type": "string"
-    },
     "VisualKind": {
       "enum": [
         "chart",
-        "diagram",
-        "image",
         "none"
       ],
       "title": "VisualKind",
@@ -34,6 +23,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Removed spec_format and the SpecFormat enum it was typed with. VisualKind lost diagram and image, so it holds chart and none. spec is unchanged and still carries the Vega-Lite JSON the renderer draws.",
+      "version": "2026-09-05T18:00",
+      "why": "spec_format was never read. It was a second name for a fact kind already carried, and a table in this module mapped one to the other - so the only thing it could do was disagree with kind, which is what the validator existed to stop. image had no producer and no renderer from the day it was written. diagram had both, and both were Mermaid: the planner wrote flowchart TD text and our own layout read it back. That round trip is gone (pseudo-plan row 63). It was written so anyone could re-render the picture with the real Mermaid toolchain, and nobody can: the payload lands under backend/var/, which is gitignored, travels as a one-day artifact, and the published DigestVisual carries no spec at all. It also lost data - the parser matched edges and threw them away, so two different graphs drew identically. No read-side migration: scanned 2026-09-05 over all 15 committed digest.json files, 6,425 items, 351 of them carrying a visual - every one is a chart, none carries diagram or image, and no committed visual carries a spec or a spec_format key."
+    },
     {
       "change": "The file this payload is written to is now <item>.visual.json. It was <item>.route.json. No field changed.",
       "version": "2026-09-05T17:00",
@@ -183,19 +177,8 @@
         }
       ],
       "default": null,
-      "description": "Vega-Lite JSON, Mermaid source, or the image prompt.",
+      "description": "The Vega-Lite JSON the renderer draws, built here from the article's own numbers. Null on an item decided to nothing.",
       "title": "Spec"
-    },
-    "spec_format": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/SpecFormat"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
     },
     "url_key": {
       "pattern": "^[0-9a-f]{64}$",
@@ -203,7 +186,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-05T17:00",
+      "default": "2026-09-05T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -222,5 +205,5 @@
   ],
   "title": "VisualDecision",
   "type": "object",
-  "version": "2026-09-05T17:00"
+  "version": "2026-09-05T18:00"
 }

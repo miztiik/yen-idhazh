@@ -354,6 +354,22 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-05T18:00",
+            change=(
+                "VisualKind, which types DigestVisual.kind, lost diagram and image. It now "
+                "holds chart and none. No field was added, removed or retyped."
+            ),
+            why=(
+                "Nothing draws either one. image never had a producer or a renderer, and "
+                "the diagram renderer went with the Mermaid round trip it read "
+                "(pseudo-plan row 63). Narrowing an enum a committed payload is typed with "
+                "is breaking, so it was counted first: scanned 2026-09-05 over all 15 "
+                "committed digest.json files, 6,425 items, 351 of them carrying a visual, "
+                "and every one is a chart. Zero carry diagram and zero carry image, so no "
+                "read-side migration is owed and no committed day stops loading."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-02T16:00",
             change="Added considered, too_old and below_feed_floor to each desk of the day.",
             why=(

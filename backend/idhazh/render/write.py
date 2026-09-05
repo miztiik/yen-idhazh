@@ -1,4 +1,4 @@
-"""Render a routed spec to a file beside the day that names it.
+"""Render a planned spec to a file beside the day that names it.
 
 The asset lives next to the payload that references it, so a day is one
 directory a reader, a retention pass or a human with a file browser can reason
@@ -20,8 +20,6 @@ from idhazh.contracts.visual_decision import (
 )
 from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.chart import render_chart
-from idhazh.render.diagram import RenderError as DiagramError
-from idhazh.render.diagram import render_diagram
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 SUFFIX: Final = ".svg"
@@ -124,31 +122,22 @@ def render_visual(
     *,
     public_root: Path,
     relpath: str,
-    canvas_width: int = 800,
-    canvas_height: int = 500,
 ) -> VisualDecision:
     """Render, write, and return the decision carrying its outcome.
 
     Every failure path returns a `render_failed` decision. None of them raises, so
     a picture can never be the reason an item does not reach a reader.
+
+    No canvas size is passed in. A Vega-Lite spec carries its own width and
+    height, set from `visuals.canvas_width` where the spec is built.
     """
     if decision.kind is VisualKind.NONE or not decision.spec:
         return decision
 
     try:
-        if decision.kind is VisualKind.CHART:
-            payload = render_chart(decision.spec)
-        elif decision.kind is VisualKind.DIAGRAM:
-            payload = render_diagram(decision.spec, width=canvas_width, height=canvas_height)
-        else:
-            return decision.model_copy(
-                update={
-                    "visual_state": VisualState.RENDER_FAILED,
-                    "failure_detail": f"no renderer is built for {decision.kind.value}",
-                }
-            )
+        payload = render_chart(decision.spec)
         write_bytes_atomic(public_root / relpath, payload)
-    except (ChartError, DiagramError) as error:
+    except ChartError as error:
         return decision.model_copy(
             update={
                 "visual_state": VisualState.RENDER_FAILED,

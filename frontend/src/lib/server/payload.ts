@@ -687,9 +687,9 @@ export interface DayVisuals {
 /** Charts a reader can actually see on each published day, and what they are of.
  *
  * Counted from the day payload rather than from the manifest, because the
- * manifest records what the router decided and this records what survived to
- * the page. A chart whose render failed, and a diagram, are both visuals and
- * neither is a published chart.
+ * manifest records what the planner decided and this records what survived to
+ * the page. A chart whose render failed is a visual and is not a published
+ * chart.
  *
  * The item count rides along rather than costing a second pass: the arm's
  * second threshold is a share of what the day published, and the day payload is

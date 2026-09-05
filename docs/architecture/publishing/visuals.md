@@ -1,8 +1,8 @@
-# Visual routing and rendering
+# Visual planning and rendering
 
 **Last Updated**: 2026-09-05
 
-How an item gets a chart, a diagram, or - most of the time - nothing at all.
+How an item gets a chart or - most of the time - nothing at all.
 
 The rule this subsystem serves is in [`../../concepts/digest.md`](../../concepts/digest.md): a
 visual must carry a fact the sentence beside it does not. A picture that decorates is worse than
@@ -62,14 +62,15 @@ the model never ran. The run manifest counts those separately as `items_prefilte
 
 Three properties of how it is written, and each one is load-bearing:
 
-- **It is a predicate over every enabled kind, not a chart special case.** A diagram's steps come
-  from prose, so nothing about a diagram is decidable in advance and it is always reachable while
-  enabled. With `diagram` in `visuals.enabled_kinds` **no item is ever skipped** - measured at 145
-  of 145 asked on 2026-08-25. That is why the arm now ships off (below): the gate cannot fire
-  underneath it, and turning it back on stays a config edit somebody makes on purpose.
+- **It is a predicate over every enabled kind, not a chart special case.** Chart is the only kind
+  left, so the predicate answers for one today - but a kind added later declares its own
+  reachability here rather than being let through by an `if` that only knows about charts. The
+  diagram arm is what made that shape necessary and then proved its own cost: a diagram's steps come
+  from prose, so nothing about one is decidable in advance, and with `diagram` in
+  `visuals.enabled_kinds` **no item was ever skipped** - measured at 145 of 145 asked on 2026-08-25.
 - **It reads the facts only - never the article's words.** A predicate that branched on fetched
   prose would let a stranger's page steer our control flow, which is Rule #11 with no prompt in
-  sight. There is no keyword rescue for the diagram arm for the same reason.
+  sight. There was no keyword rescue for the diagram arm for the same reason.
 - **The empty string is a unit group.** `numeric_facts` writes `""` when nothing after the number
   reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
   that publish today.
@@ -210,9 +211,9 @@ persisted rate is a third fact that can disagree with the two it came from, and 
 claim is that every figure on it was written down when the run happened.
 
 **Charts published is counted from the payload, not from the manifest.** The manifest records what
-the router decided; the payload records what a reader can see. A chart whose render failed, and a
-diagram, are both visuals and neither is a published chart - counting visuals instead would put the
-diagram arm's output on the chart arm's bill.
+the planner decided; the payload records what a reader can see. A chart whose render failed is a
+visual and is not a published chart, so counting visuals instead would put a failure on the chart
+arm's bill.
 
 ## Two controls that run after the model has answered
 
@@ -234,8 +235,8 @@ described a chart that no longer exists.
 | Kind | Persisted spec | Renderer |
 | --- | --- | --- |
 | `chart` | Vega-Lite JSON | `vl-convert`, the Vega toolchain compiled as a Rust extension |
-| `diagram` | Mermaid source | ours, about a hundred lines of SVG layout |
-| `image` | - | **descoped 2026-08-23 on measurement.** Unreachable: `visuals.enabled_kinds` does not name it. |
+
+Chart is the only kind. `VisualKind` held four until 2026-09-05, and the other three are gone.
 
 **Why there is no image renderer.** Measured on `ubuntu-latest` (4 vCPU, 16 GB),
 2026-08-23, run `32654562728`: `Tongyi-MAI/Z-Image-Turbo` at bfloat16 loads in
@@ -247,11 +248,27 @@ count. The plan's second candidate, `alpha-vllm/Anima-2.9B`, answers 401
 Repository Not Found: it does not exist. Reducing steps does not rescue it -
 three steps is still 26 minutes, and one step is noise. Rule #2 says the budget
 is the platform, so the feature goes rather than the budget. The `image` member
-stays in the enum because a payload must be able to say it; the config gate is
-what makes it unreachable.
+survived in the enum for two more weeks so that a payload could say it, and no
+payload ever did: scanned 2026-09-05 over all 15 committed `digest.json` files,
+6,425 items and 351 visuals, and every one is a chart. It was deleted on that
+evidence.
 
-Both write SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, beside the
-payload that references them. A render failure records why and the item publishes without a
+**And why the diagram renderer went with it.** The arm shipped off on 2026-08-25
+for the reason above - it drafted zero diagrams in 88 items and rendered zero in
+703, while making the reachability gate unfireable. What was left was a round trip
+with nothing at either end. The planner wrote `flowchart TD` text "so anyone can
+re-render this with the real Mermaid toolchain", and nobody can: the payload lands
+under gitignored `backend/var/`, travels as a one-day artifact, and the published
+`DigestVisual` carries no spec at all, so the text is unreachable 24 hours after a
+run. The reader lost nothing, because the reader never received Mermaid. It also
+lost data on the way back - the parser matched edges and threw them away, so order
+came from a sort and two different graphs drew identically. And the diagram family
+is being rebuilt on a plan that carries nodes and edges natively, so serialising
+that to `flowchart TD` and reading it back with a regex would end with less than it
+began. Deleted 2026-09-05 on the same scan: zero committed items carry a diagram.
+
+The renderer writes SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, beside the
+payload that references it. A render failure records why and the item publishes without a
 picture. No failure path raises.
 
 **The name is the item's own id, so a path is a function of the item and of nothing else.**

@@ -61,7 +61,7 @@ from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunR
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LensId, SourceKind, SourceTier
-from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
@@ -115,9 +115,25 @@ CHART_SPEC = json.dumps(
     sort_keys=True,
 )
 
-DIAGRAM_SPEC = (
-    'flowchart TD\n    n0["Filed"]\n    n1["Reviewed"]\n    n2["Approved"]\n'
-    "    n0 --> n1\n    n1 --> n2"
+SECOND_CHART_SPEC = json.dumps(
+    {
+        "data": {
+            "values": [
+                {"label": "Filed", "value": 320},
+                {"label": "Reviewed", "value": 210},
+                {"label": "Approved", "value": 95},
+            ]
+        },
+        "encoding": {
+            "x": {"field": "value", "type": "quantitative"},
+            "y": {"field": "label", "sort": None, "type": "nominal"},
+        },
+        "height": 410,
+        "mark": {"color": "#4c6ef5", "type": "bar"},
+        "width": 680,
+    },
+    separators=(",", ":"),
+    sort_keys=True,
 )
 
 #: What the model was given on an item extract cut short, and so the length an
@@ -398,13 +414,18 @@ def lenses_for(index: int) -> list[LensId]:
 
 
 def visual_for(index: int, item_id: str, target: Path) -> VisualDecision | None:
-    """A rendered chart on the first item, a rendered diagram on the second."""
+    """A rendered chart on each of the first two items.
+
+    Two, not one, because the browser suite's oracle is that every promised
+    picture is served - a single figure cannot show that the page draws each
+    story its own.
+    """
     if index == 0:
-        kind, spec, fmt = VisualKind.CHART, CHART_SPEC, SpecFormat.VEGA_LITE
+        spec = CHART_SPEC
         alt = "Bar chart. 2025 15,400 megawatt; 2024 11,200 megawatt; 2023 8,600 megawatt."
     elif index == 1:
-        kind, spec, fmt = VisualKind.DIAGRAM, DIAGRAM_SPEC, SpecFormat.MERMAID
-        alt = "Flow diagram. Filed then Reviewed then Approved."
+        spec = SECOND_CHART_SPEC
+        alt = "Bar chart. Filed 320 cases; Reviewed 210 cases; Approved 95 cases."
     else:
         return None
 
@@ -412,9 +433,8 @@ def visual_for(index: int, item_id: str, target: Path) -> VisualDecision | None:
         version=VisualDecision.schema_version(),
         item_id=item_id,
         url_key="0" * 64,
-        kind=kind,
+        kind=VisualKind.CHART,
         spec=spec,
-        spec_format=fmt,
         alt_text=alt,
         model_id="canary",
         decided_at=f"{DATE}T06:00:00Z",
