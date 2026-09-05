@@ -39,7 +39,6 @@ from idhazh.contracts.digest_day import (
 from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
-from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
     ModelRole,
@@ -64,6 +63,7 @@ from idhazh.contracts.taxonomy import (
     VerticalDef,
 )
 from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
+from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
 from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watchlist
 
 __all__ = [
@@ -109,7 +109,6 @@ __all__ = [
     "PipelineInputs",
     "PlannedItem",
     "RetentionConfig",
-    "Route",
     "RunConfig",
     "RunManifest",
     "RunPlan",
@@ -129,6 +128,7 @@ __all__ = [
     "VerticalCount",
     "VerticalDef",
     "VerticalPlan",
+    "VisualDecision",
     "VisualKind",
     "VisualState",
     "Watchlist",

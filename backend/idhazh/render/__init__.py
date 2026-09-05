@@ -11,7 +11,7 @@ from idhazh.render.diagram import render_diagram
 from idhazh.render.write import (
     asset_relpath,
     drop_raced_assets,
-    render_route,
+    render_visual,
 )
 
 __all__ = [
@@ -19,5 +19,5 @@ __all__ = [
     "drop_raced_assets",
     "render_chart",
     "render_diagram",
-    "render_route",
+    "render_visual",
 ]

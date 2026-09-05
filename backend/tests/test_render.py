@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
+from idhazh.contracts.visual_decision import SpecFormat, VisualDecision, VisualKind, VisualState
 from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.chart import render_chart
 from idhazh.render.diagram import RenderError as DiagramError
@@ -15,7 +15,7 @@ from idhazh.render.diagram import parse_mermaid, render_diagram, wrap
 from idhazh.render.write import (
     asset_relpath,
     drop_raced_assets,
-    render_route,
+    render_visual,
 )
 
 pytestmark = pytest.mark.visual
@@ -33,16 +33,16 @@ SPEC = {
 MERMAID = 'flowchart TD\n    n0["Filed"]\n    n1["Reviewed"]\n    n2["Approved"]\n    n0 --> n1\n    n1 --> n2'
 
 
-def _route(kind: VisualKind, spec: str) -> Route:
-    return Route(
-        version=Route.schema_version(),
+def _decision(kind: VisualKind, spec: str) -> VisualDecision:
+    return VisualDecision(
+        version=VisualDecision.schema_version(),
         item_id="energy-01",
         url_key="b" * 64,
         kind=kind,
         spec=spec,
         spec_format=(SpecFormat.VEGA_LITE if kind is VisualKind.CHART else SpecFormat.MERMAID),
         model_id="qwen3-4b",
-        routed_at="2026-08-22T00:00:00Z",
+        decided_at="2026-08-22T00:00:00Z",
     )
 
 
@@ -155,8 +155,8 @@ class TestAssetPaths:
 
 class TestRenderRoute:
     def test_a_rendered_chart_records_where_it_landed(self, tmp_path: Path) -> None:
-        result = render_route(
-            _route(VisualKind.CHART, json.dumps(SPEC)),
+        result = render_visual(
+            _decision(VisualKind.CHART, json.dumps(SPEC)),
             public_root=tmp_path,
             relpath="digest/2026/08/22/ai-01.svg",
         )
@@ -165,16 +165,16 @@ class TestRenderRoute:
         assert (tmp_path / "digest/2026/08/22/ai-01.svg").exists()
 
     def test_a_rendered_diagram_records_where_it_landed(self, tmp_path: Path) -> None:
-        result = render_route(
-            _route(VisualKind.DIAGRAM, MERMAID),
+        result = render_visual(
+            _decision(VisualKind.DIAGRAM, MERMAID),
             public_root=tmp_path,
             relpath="digest/2026/08/22/ai-01.svg",
         )
         assert result.visual_state is VisualState.RENDERED
 
     def test_a_render_failure_degrades_and_never_raises(self, tmp_path: Path) -> None:
-        result = render_route(
-            _route(VisualKind.CHART, "{not json"),
+        result = render_visual(
+            _decision(VisualKind.CHART, "{not json"),
             public_root=tmp_path,
             relpath="digest/2026/08/22/ai-01.svg",
         )
@@ -183,23 +183,23 @@ class TestRenderRoute:
         assert result.asset_path is None
 
     def test_a_failed_render_leaves_no_file_behind(self, tmp_path: Path) -> None:
-        render_route(
-            _route(VisualKind.CHART, "{not json"),
+        render_visual(
+            _decision(VisualKind.CHART, "{not json"),
             public_root=tmp_path,
             relpath="digest/2026/08/22/ai-01.svg",
         )
         assert not (tmp_path / "digest/2026/08/22/ai-01.svg").exists()
 
     def test_a_routed_to_nothing_item_is_returned_untouched(self, tmp_path: Path) -> None:
-        nothing = Route(
-            version=Route.schema_version(),
+        nothing = VisualDecision(
+            version=VisualDecision.schema_version(),
             item_id="energy-01",
             url_key="b" * 64,
             kind=VisualKind.NONE,
             model_id="qwen3-4b",
-            routed_at="2026-08-22T00:00:00Z",
+            decided_at="2026-08-22T00:00:00Z",
         )
-        assert render_route(nothing, public_root=tmp_path, relpath="x.svg") is nothing
+        assert render_visual(nothing, public_root=tmp_path, relpath="x.svg") is nothing
 
 
 DATE = "2026-08-22"
@@ -210,7 +210,7 @@ def _rendered(tmp_path: Path, item_id: str, relpath: str) -> Path:
     """One rendered chart on disk, plus the route payload that says where it is."""
     (tmp_path / "public" / relpath).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / "public" / relpath).write_bytes(f"<svg>{item_id}</svg>".encode("ascii"))
-    route = _route(VisualKind.CHART, json.dumps(SPEC)).model_copy(
+    route = _decision(VisualKind.CHART, json.dumps(SPEC)).model_copy(
         update={
             "item_id": item_id,
             "asset_path": relpath,
@@ -252,7 +252,7 @@ class TestDropRacedAssets:
         # The payload keeps naming the path on purpose: the tip's file is there
         # after the rebase, and pointing it anywhere else would file this item's
         # picture under a name that is not this item's.
-        kept = Route.from_json(route_path.read_text(encoding="utf-8"))
+        kept = VisualDecision.from_json(route_path.read_text(encoding="utf-8"))
         assert kept.asset_path == f"{DAY}/energy-0000000002.svg"
 
     def test_a_path_nobody_else_holds_is_left_alone(self, tmp_path: Path) -> None:
@@ -261,7 +261,7 @@ class TestDropRacedAssets:
         assert _drop(tmp_path, [f"{DAY}/energy-0000000002.svg"]) == []
 
         assert (tmp_path / "public" / DAY / "ai-0000000001.svg").exists()
-        kept = Route.from_json(route_path.read_text(encoding="utf-8"))
+        kept = VisualDecision.from_json(route_path.read_text(encoding="utf-8"))
         assert kept.asset_path == f"{DAY}/ai-0000000001.svg"
 
     def test_only_the_raced_item_loses_its_file(self, tmp_path: Path) -> None:
@@ -286,7 +286,7 @@ class TestDropRacedAssets:
 
         assert _drop(tmp_path, [f"{DAY}/ai-0000000001.svg"]) == []
 
-        kept = Route.from_json(route_path.read_text(encoding="utf-8"))
+        kept = VisualDecision.from_json(route_path.read_text(encoding="utf-8"))
         assert kept.asset_path == f"{DAY}/ai-0000000001.svg"
 
     def test_a_run_with_no_routes_at_all_is_a_no_op(self, tmp_path: Path) -> None:

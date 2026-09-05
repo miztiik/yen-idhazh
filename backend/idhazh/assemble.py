@@ -38,7 +38,6 @@ from idhazh.contracts.digest_day import (
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
-from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
     ModelUse,
@@ -52,6 +51,7 @@ from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.contracts.sources import SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, Taxonomy
+from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.contracts.watchlist import Watchlist
 from idhazh.embed import (
     DIMENSIONS,
@@ -128,7 +128,7 @@ def to_digest_item(
     source_name: str,
     source_kind: SourceKind,
     run_n: int,
-    route: Route | None = None,
+    decision: VisualDecision | None = None,
     band_reason: BandReason | None = None,
     planned: PlannedItem | None = None,
 ) -> DigestItem:
@@ -167,7 +167,7 @@ def to_digest_item(
         reader_note=reader_note(article),
         truncated=article.truncated,
         introduced_by_run=run_n,
-        visual=to_digest_visual(route),
+        visual=to_digest_visual(decision),
         carried_by=planned.carried_by if planned is not None else None,
         watchlist_hit=planned.watchlist_hit if planned is not None else None,
         on_front_page=planned.on_front_page if planned is not None else None,
@@ -209,20 +209,20 @@ def reader_note(article: Article) -> str | None:
     return " ".join(notes) or None
 
 
-def to_digest_visual(route: Route | None) -> DigestVisual | None:
+def to_digest_visual(decision: VisualDecision | None) -> DigestVisual | None:
     """A routed-to-nothing item carries no visual object at all.
 
     The absence and the empty object would render identically today, and the
     absence is one fewer thing in every payload for the two items in three that
     correctly get no picture.
     """
-    if route is None or route.kind is VisualKind.NONE:
+    if decision is None or decision.kind is VisualKind.NONE:
         return None
     return DigestVisual(
-        kind=route.kind,
-        state=route.visual_state,
-        path=route.asset_path,
-        alt=route.alt_text,
+        kind=decision.kind,
+        state=decision.visual_state,
+        path=decision.asset_path,
+        alt=decision.alt_text,
     )
 
 
@@ -1167,7 +1167,7 @@ def build_manifest(
     determinism_violations: int = 0,
     note: str | None = None,
     item_health_rows: Sequence[ItemHealthRow] | None = None,
-    routes: Sequence[Route] | None = None,
+    decisions: Sequence[VisualDecision] | None = None,
     evaluation_enabled: bool | None = None,
     evaluation_sample_rate: float | None = None,
     evaluation_sampled: bool | None = None,
@@ -1200,8 +1200,10 @@ def build_manifest(
     # A router that never ran leaves no payloads, and a payload written before
     # the clock existed carries no number. Both are "nothing was measured", which
     # is null - not a zero that would read as "it took no time".
-    timed = [route.route_ms for route in (routes or []) if route.route_ms is not None]
-    prefiltered = sum(1 for route in (routes or []) if not route.asked_the_model)
+    timed = [
+        decision.decision_ms for decision in (decisions or []) if decision.decision_ms is not None
+    ]
+    prefiltered = sum(1 for decision in (decisions or []) if not decision.asked_the_model)
     record = RunRecord(
         run_id=plan.run_id,
         n=run_n,
@@ -1216,9 +1218,9 @@ def build_manifest(
         items_succeeded=succeeded,
         items_failed=failed,
         items_skipped=skipped,
-        items_routed=len(routes or []),
+        items_routed=len(decisions or []),
         items_prefiltered=prefiltered,
-        charts_drafted=sum(1 for route in (routes or []) if route.drafted_chart),
+        charts_drafted=sum(1 for decision in (decisions or []) if decision.drafted_chart),
         route_ms=sum(timed) if timed else None,
         verticals=[
             VerticalCount(
