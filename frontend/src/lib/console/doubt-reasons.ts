@@ -198,10 +198,30 @@ function share(part: number, whole: number): number | null {
 	return whole > 0 ? Math.round((part / whole) * 100) : null;
 }
 
-/** "about one in five", or null where the share is too small to say that way. */
+const SMALL = [
+	'',
+	'one',
+	'two',
+	'three',
+	'four',
+	'five',
+	'six',
+	'seven',
+	'eight',
+	'nine',
+	'ten',
+	'eleven',
+	'twelve'
+];
+
+/** "one in every five", or null where the share is too large to read that way.
+ *
+ * Spelled rather than printed as a figure. A ratio is a phrase somebody says out
+ * loud, and a numeral inside one reads as a second measurement. */
 function oneIn(pct: number): string | null {
 	if (pct <= 0 || pct > 50) return null;
-	return `about one in every ${Math.round(100 / pct)}`;
+	const n = Math.round(100 / pct);
+	return `one in every ${SMALL[n] ?? String(n)}`;
 }
 
 /** The reason given most often, said as a sentence.
@@ -219,7 +239,7 @@ export function reasonHeadline(days: readonly ReasonDay[], windowDays: number): 
 	const count = totals.counts[top.id] ?? 0;
 	const pct = share(count, totals.items);
 	const rough = pct === null ? null : oneIn(pct);
-	const ratio = rough === null ? '' : `, ${rough} published`;
+	const ratio = rough === null ? '' : `, or about ${rough} published`;
 	return `The reason given most often is "${top.label}": ${grouped(count)} summaries in these ${windowDays} days${ratio}.`;
 }
 

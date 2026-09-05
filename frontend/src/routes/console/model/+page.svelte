@@ -610,9 +610,9 @@
 		>
 			<h2 class="console-h2">Why a summary was doubted</h2>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-reasons-intro>
-				One column is one day over these {windowDays} days, and its height is that day's summaries
-				the checker wrote a reason on. A summary gets one reason, the first that applied, so no
-				summary is counted in two bands.
+				One column is one day over these {windowDays} days, and its height is how many of that day's
+				summaries the checker wrote a reason on. A summary gets one reason, the first that applied,
+				so no summary is counted twice.
 				<strong class="font-semibold text-text-secondary" data-model-reasons-rule
 					>The five reasons are drawn apart and never added into one doubt count</strong
 				>: a single number says how often the checker stopped and never says which fault to go and
