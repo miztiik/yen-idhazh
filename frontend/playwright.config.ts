@@ -107,11 +107,14 @@ const WHOLE_DAY = /whole-day\.spec\.ts$/;
 
 /** How many spec files run at once.
  *
- * One by default. Four workers measured 233.7 s against 135.5 s at one worker on
- * an i7-1265U with six other checkouts building, 2026-09-05 - 72 percent slower,
- * because a laptop shared with other work has no spare core to give. A runner is
- * 4 vCPU with nothing else on it (Rule #2), which is a different machine and a
- * different answer, so CI sets this and a developer keeps the quiet default.
+ * One by default, four in CI, and the two machines disagree about which is
+ * right. On a runner - 4 vCPU with nothing else on it (Rule #2) - four workers
+ * took the browser step from 344 s to 207 s, 40 percent faster, measured
+ * 2026-09-05 on runs 33989034726 and 33991122503. On an i7-1265U with six other
+ * checkouts building, the same change measured 233.7 s against 135.5 s, 72
+ * percent SLOWER, because two performance cores shared with other work have no
+ * spare core to give. So CI asks for four and a developer keeps the quiet
+ * default.
  */
 function workerCount(asked: string | undefined): number {
 	if (asked === undefined || asked.trim() === '') return 1;

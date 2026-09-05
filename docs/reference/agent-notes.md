@@ -2642,6 +2642,19 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   complete, which is what makes it convincing. The fix is one more
   `npm run build`. Measured 2026-08-31. Prefer letting a queued gate finish;
   if you do kill one, rebuild before serving anything.
+- **This box gives the opposite answer to the runner on any question about
+  parallelism, and it gives it confidently.** Raising the Playwright worker
+  count from one to four measured 233.7 s against 135.5 s on an i7-1265U with
+  six other checkouts building, 2026-09-05 - 72 percent SLOWER, both arms
+  passing the same 268 tests, so it reads as a clean result rather than as
+  contention. The same change on a runner took the browser step from 344 s to
+  207 s, 40 percent faster. Two performance cores shared with seven agents is
+  not four dedicated vCPU (Rule #2), and no number of local repetitions fixes
+  that - the arms are measuring a different machine, not a noisier one. For
+  anything about worker counts, shard widths or concurrency, put the knob behind
+  an environment variable, push, and read the job timings out of
+  `gh api repos/OWNER/REPO/actions/runs/<id>/jobs`. That measurement is free and
+  it is the only one that describes what ships.
 
 ## See also
 

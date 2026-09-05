@@ -288,7 +288,8 @@ jobs:
         working-directory: frontend
         env:
           SKIP_CONSOLE_SUITE: ${{ needs.scope.outputs.console == 'false' }}
-          # A runner is 4 vCPU with nothing else on it, so a worker per core.
+          # 4 vCPU with nothing else on it, so a worker per core: 344 s at one
+          # worker, 207 s at four, runs 33989034726 and 33991122503, 2026-09-05.
           PLAYWRIGHT_WORKERS: '4'
         run: npm run test:browser
 
