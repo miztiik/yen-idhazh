@@ -11,7 +11,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "bundle-gate": "node scripts/bundle-gate.mjs",
     "build:canary": "node scripts/build-canary.mjs",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:whole-day": "playwright test --config playwright.whole-day.config.ts"
   },
   "devDependencies": {
     "@huggingface/transformers": "^3.8.1",
