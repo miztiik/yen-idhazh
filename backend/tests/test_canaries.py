@@ -209,11 +209,11 @@ def test_no_pipeline_module_can_turn_a_string_into_an_action() -> None:
                 assert node.func.id not in FORBIDDEN_CALLS, f"{module.name} calls {node.func.id}"
 
 
-def test_a_page_demanding_a_chart_never_reaches_the_router() -> None:
+def test_a_page_demanding_a_chart_never_reaches_the_planner() -> None:
     """The strongest control against injection at this hop is not asking.
 
     A page can order us to draw it a chart. If its own numbers hold no unit group
-    wide enough for one, the router decides the item on the facts and posts
+    wide enough for one, the planner decides the item on the facts and posts
     nothing - so the demand never reaches a prompt at all. Asserting the absence
     of a call is a harder guarantee than asserting the shape of a reply.
     """

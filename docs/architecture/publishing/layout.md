@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -39,7 +39,7 @@ state/score-archive/<YYYY-MM>.json                      a score month past its f
 
 **No hash appears in any path, filename or URL.** A day carries two reader-facing addresses and both are the item's own id, `<vertical>-<ten digits>`: the anchor `#<item id>` and the rendered visual `ai-4821903756.svg`. The id is derived from the article's address, so a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)), and it is not a digest of anything - the ten digits are decimal and short enough to read back. The sha256 `url_key` that identity for dedupe actually rests on stays a field on the payload and never becomes a path segment. Paths are for humans and for globs; a hash is for the contract.
 
-**The asset name was `<vertical>-<NN>` until 2026-08-27, and both shapes are live in committed data.** The ordinal came from a counter, a counter has to be seeded from something a process can observe, and two runs of one day observed different things - which cost a finished day ([visuals.md](visuals.md)). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories. **No old address broke and none had to be migrated**: `assemble` copies `route.asset_path` into the day payload verbatim, the page renders that stored string, and the build stages by file suffix - so a name is data the day carries, never a rule the reader re-derives. That is the same property that makes the two contracts at the top of this page separable, applied one level down.
+**The asset name was `<vertical>-<NN>` until 2026-08-27, and both shapes are live in committed data.** The ordinal came from a counter, a counter has to be seeded from something a process can observe, and two runs of one day observed different things - which cost a finished day ([visuals.md](visuals.md)). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories. **No old address broke and none had to be migrated**: `assemble` copies `VisualDecision.asset_path` into the day payload verbatim, the page renders that stored string, and the build stages by file suffix - so a name is data the day carries, never a rule the reader re-derives. That is the same property that makes the two contracts at the top of this page separable, applied one level down.
 
 **`latest` and `archive` are derived at build time** from the directory listing, never committed. A committed pointer is exactly the file that goes stale after a prune or a raced deploy.
 

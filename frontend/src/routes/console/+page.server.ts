@@ -285,8 +285,8 @@ function sourceHealth(view: SourceHealthView | null, rows: number): SourceHealth
  * asked is the check that runs before the model, drafted against published is
  * the pair of checks that run after it.
  *
- * `routerMinutes` and `minutesPerChart` are null rather than zero wherever the
- * number does not exist - a day whose route job never ran measured no time, and
+ * `plannerMinutes` and `minutesPerChart` are null rather than zero wherever the
+ * number does not exist - a day whose visuals job never ran measured no time, and
  * a day with no chart has no per-chart cost. Zero would read as free.
  */
 export interface ChartDay {
@@ -298,7 +298,7 @@ export interface ChartDay {
 	/** Items the day published, chart or no chart. The arm's second threshold is
 	 * a share of this, and a share needs its denominator on the page. */
 	items: number;
-	routerMinutes: number | null;
+	plannerMinutes: number | null;
 	minutesPerChart: number | null;
 }
 
@@ -312,19 +312,19 @@ function chartDays(days: RunSummary[], charts: Map<string, DayVisuals>): ChartDa
 	return days.map((day) => {
 		const sum = (of: (run: RunRecord) => number) =>
 			day.records.reduce((total, run) => total + of(run), 0);
-		const timed = day.records.map((run) => run.routeMs).filter((ms): ms is number => ms !== null);
-		const routerMinutes = timed.length === 0 ? null : timed.reduce((a, b) => a + b, 0) / 60_000;
+		const timed = day.records.map((run) => run.decisionMs).filter((ms): ms is number => ms !== null);
+		const plannerMinutes = timed.length === 0 ? null : timed.reduce((a, b) => a + b, 0) / 60_000;
 		const seen = charts.get(day.date);
 		const published = seen?.charts ?? 0;
 		return {
 			date: day.date,
-			reached: sum((run) => run.routed + run.prefiltered),
-			asked: sum((run) => run.routed),
+			reached: sum((run) => run.decided + run.prefiltered),
+			asked: sum((run) => run.decided),
 			drafted: sum((run) => run.chartsDrafted),
 			published,
 			items: seen?.items ?? 0,
-			routerMinutes,
-			minutesPerChart: routerMinutes === null || published === 0 ? null : routerMinutes / published
+			plannerMinutes,
+			minutesPerChart: plannerMinutes === null || published === 0 ? null : plannerMinutes / published
 		};
 	});
 }

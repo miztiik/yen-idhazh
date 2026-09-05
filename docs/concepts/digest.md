@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-09-04
+**Last Updated**: 2026-09-05
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -224,6 +224,6 @@ So the fixture reaches it instead. The canary day the browser suite runs against
 - [ui-shell.md](ui-shell.md) - the layout and chrome around these items.
 - [design-system.md](design-system.md) - the visual language.
 - [evaluation.md](evaluation.md) - where the confidence signal comes from.
-- [pipeline-loop.md](pipeline-loop.md) - the Route, Render and Assemble stages that produce this.
+- [pipeline-loop.md](pipeline-loop.md) - the visual planning, Render and Assemble stages that produce this.
 - [../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md) - the person this page is written for.
 - [../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md) - the persona who owns the surface.

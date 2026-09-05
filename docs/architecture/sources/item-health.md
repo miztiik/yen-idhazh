@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-05
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -361,9 +361,9 @@ being an assertion. Measured on run `2026-08-26-5`: 11.1755 tok/s from this
 ledger against 11.1796 from the server, 0.037 percent apart
 ([../../reference/measurements.md](../../reference/measurements.md)).
 
-**Route and render are not here.** An item that got a chart and an item that got
+**Visual planning and rendering are not here.** An item that got a chart and an item that got
 nothing write the same row. A render failure degrades an item and never fails
-it, so the two are indistinguishable in this ledger by design. What the router
+it, so the two are indistinguishable in this ledger by design. What the planner
 spent lives in the run manifest (`items_routed`, `items_prefiltered`,
 `route_ms`) and in the digest payload's per-item `visual`.
 
@@ -497,13 +497,13 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for five runs a day. |
 | Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is not uploaded at all when a job is cancelled, so a longer retention protects nothing in the case that loses the rows. |
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
-| Add a route or render outcome column | Route is not a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the router did. |
+| Add a visual-planning or render outcome column | Neither is a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the planner did. |
 
 ## See also
 
 - [health.md](health.md) - the feed-grain ledger.
 - [../summarize/throughput.md](../summarize/throughput.md) - what the two model rates mean, and why the spread inside a run is wide.
-- [../publishing/visuals.md](../publishing/visuals.md) - what the router spends, which this ledger deliberately does not carry.
+- [../publishing/visuals.md](../publishing/visuals.md) - what the visual planner spends, which this ledger deliberately does not carry.
 - [trust-boundary.md](trust-boundary.md) - how fetched bytes become sanitized text.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract and schema rules.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - logs as evidence, ledgers as records.

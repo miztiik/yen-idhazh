@@ -90,7 +90,7 @@ test('a stage is measured against what reached it, never against the day', () =>
 	expect(day('extract')?.rate).toBeCloseTo(2 / 6, 10);
 	expect(day('summarize')).toMatchObject({ planned: 10, reached: 4, failures: 1, rate: 0.25 });
 
-	// An item the router listed and never fetched is in the day and in no
+	// An item the planner listed and never fetched is in the day and in no
 	// stage's denominator. It cannot fail a stage it never entered.
 	const withSkipped = failureSeries([...rows, row('2026-08-20', 'x0', 'plan', 'failed')], {
 		start: '2026-08-20',

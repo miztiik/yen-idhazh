@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-05
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
@@ -110,7 +110,8 @@ In-memory `Path` objects for local I/O may stay platform-native; the rule applie
 
 ## Identifier and config discipline
 
-- Stable IDs (stage names, event names, route kinds, score bands) are schema-validated enums defined in `backend/idhazh/contracts/`. Never invent or reformat an ID in code.
+- **One word per thing, in every identifier.** The project's word for a thing is used verbatim in a module, a class, a function, an enum member, a contract field, a schema stem, a telemetry value, a config key, a CLI verb and a prompt filename; only the casing changes with the language. Prose is not bound and keeps the plain register of section 0b. The rule, its two exceptions and what a wrong word costs are in [`../architecture/contracts/schemas.md`](../architecture/contracts/schemas.md).
+- Stable IDs (stage names, event names, visual kinds, score bands) are schema-validated enums defined in `backend/idhazh/contracts/`. Never invent or reformat an ID in code.
 - Source lists, model refs, thresholds, caps and retry budgets live in `config/`, never in code (Rule #6). Every knob has a sane default so a fresh clone runs unconfigured.
 - A derived key is rebuilt from its value fields, never trusted from the incoming payload - a content-addressed filename is recomputed from the URL on read.
 - Reader-facing text is copy, never an identifier.

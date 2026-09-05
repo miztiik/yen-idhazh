@@ -86,7 +86,7 @@ function dirs(at: string): string[] {
 }
 
 /** Every day the Pipelines daily table can draw a row for: one per committed
- * run manifest, whatever the visuals planner did on it. */
+ * run manifest, whatever the visual planner did on it. */
 function chartArmDays(): string[] {
 	const root = join(CANARY, 'digest');
 	const found: string[] = [];

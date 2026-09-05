@@ -207,7 +207,7 @@ midnight.
 
 
 def _trace_id(run_id: str, item: PlannedItem) -> str:
-    """One item on one run. The work stage opens it twice and route opens it again."""
+    """One item on one run. The work stage opens it twice and the planner opens it again."""
     return f"{run_id}-{item.item_id}"
 
 
@@ -998,10 +998,10 @@ def stage_work(
 def _write_evidence(row: EvalRow, *, premise: str, summary: str) -> Path:
     """Leave the two texts this row was judged on where a person can read them.
 
-    Outside `items/` on purpose. That directory is downloaded whole by route and
-    by assemble and kept for a day; this one is read by nobody in the run, is
-    never committed, and needs to outlive the day so a labeller has time to work
-    (`docs/how-to/label-the-faithfulness-queue.md`).
+    Outside `items/` on purpose. That directory is downloaded whole by the visual
+    planner and by assemble and kept for a day; this one is read by nobody in the
+    run, is never committed, and needs to outlive the day so a labeller has time
+    to work (`docs/how-to/label-the-faithfulness-queue.md`).
     """
     item = evidence.of(row, premise=premise, summary=summary)
     path = evidence.path_for(_evidence_dir(row.date), item)
@@ -1196,10 +1196,10 @@ def _summarize_one(
     return summary
 
 
-# --- route -------------------------------------------------------------------
+# --- visual planner ----------------------------------------------------------
 
 
-class _RoutableItem(NamedTuple):
+class _PlannableItem(NamedTuple):
     item: PlannedItem
     article_path: Path
     summary: Summary
@@ -1210,7 +1210,7 @@ def already_published(date: str) -> frozenset[str]:
 
     `assemble.build_day` keeps an already-published item and discards the new
     run's copy of it, because the reading order is part of what a shared link
-    shows. So a later run's routing decision for one of those items can never
+    shows. So a later run's visual decision for one of those items can never
     reach a reader: it is computed, written, read back, and thrown away.
 
     A day runs five times. Without this the second run spends its whole budget
@@ -1223,7 +1223,7 @@ def already_published(date: str) -> frozenset[str]:
 
 def plannable_items(
     plan: RunPlan, items_dir: Path, *, published: frozenset[str]
-) -> list[_RoutableItem]:
+) -> list[_PlannableItem]:
     """The items this run could still decide, best story first.
 
     Rank order, not plan order. The plan is vertical-major, so stopping part-way
@@ -1231,11 +1231,11 @@ def plannable_items(
     the first vertical kept one. This is the rule the safety ceiling already
     follows: drop the weakest stories across every vertical, never a suffix.
 
-    The article stays on disk until the item is actually routed. Building this
+    The article stays on disk until the item is actually decided. Building this
     list is what lets the stage know its own denominator before it spends
     anything on the first item.
     """
-    plannable: list[_RoutableItem] = []
+    plannable: list[_PlannableItem] = []
     for item in plan.items:
         if item.item_id in published:
             continue
@@ -1246,7 +1246,7 @@ def plannable_items(
         summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
         if summary.status is not SummaryStatus.OK:
             continue
-        plannable.append(_RoutableItem(item, article_path, summary))
+        plannable.append(_PlannableItem(item, article_path, summary))
     plannable.sort(key=lambda entry: (-entry.item.rank_score, entry.item.item_id))
     return plannable
 
@@ -1261,7 +1261,7 @@ def stage_visual_planner(
 
     A separate stage from `work` because it runs a different, smaller model, and
     one llama-server serves one set of weights. Splitting it also means a run
-    that never starts a router still publishes - every item simply carries no
+    that never starts a planner still publishes - every item simply carries no
     picture, which is already the common and correct answer.
 
     **The stage stops itself at `run.visual_planner_budget_minutes`.** It used to run
@@ -1296,7 +1296,7 @@ def stage_visual_planner(
     budget_ms = settings.app.run.visual_planner_budget_minutes * 60_000
     stage_started = clock()
     LOG.info(
-        "routing start items=%s already_published=%s budget_minutes=%s",
+        "planning start items=%s already_published=%s budget_minutes=%s",
         len(plannable),
         len(published),
         settings.app.run.visual_planner_budget_minutes,
@@ -1337,7 +1337,7 @@ def stage_visual_planner(
         decision = decision.model_copy(update={"decision_ms": decision_ms})
         assemble.write_atomic(items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}", decision.to_json())
         LOG.info(
-            "item routed id=%s kind=%s state=%s asked=%s decision_ms=%s",
+            "item decided id=%s kind=%s state=%s asked=%s decision_ms=%s",
             item.item_id,
             decision.kind.value,
             decision.visual_state.value,
@@ -1355,7 +1355,7 @@ def stage_visual_planner(
     # numbers a model that stopped asking for charts reads the same as checks
     # that started refusing them.
     LOG.info(
-        "routing done items=%s asked=%s prefiltered=%s undecided=%s "
+        "planning done items=%s asked=%s prefiltered=%s undecided=%s "
         "charts_drafted=%s charts_kept=%s "
         "total_ms=%s median_ms=%s slowest_ms=%s",
         len(spent),
@@ -1373,7 +1373,7 @@ def stage_visual_planner(
         # `items_routed` in the manifest already reports. This says it in the run
         # log too, with the rate that would have to change for it to fit.
         LOG.warning(
-            "route stage stopped at its budget minutes=%s routed=%s undecided=%s mean_ms=%s",
+            "visual planner stopped at its budget minutes=%s decided=%s undecided=%s mean_ms=%s",
             settings.app.run.visual_planner_budget_minutes,
             len(spent),
             undecided,
@@ -1388,7 +1388,7 @@ def _plan_one_visual(
     *,
     endpoint: str = DEFAULT_ENDPOINT,
 ) -> tuple[VisualDecision, bool]:
-    """One routing decision, and whether the model was asked for it.
+    """One visual decision, and whether the model was asked for it.
 
     The model is skipped when no enabled visual kind could survive `to_decision`'s
     own checks - a chart's bars are indices into these facts and must share one
@@ -1425,7 +1425,7 @@ def _plan_one_visual(
         visuals=visuals,
     )
     completion: Completion
-    cause = "router unreachable"
+    cause = "visual planner unreachable"
     try:
         completion = post(payload, endpoint=endpoint, timeout=visuals.request_timeout_minutes * 60)
     except HTTPError as error:
@@ -1435,7 +1435,7 @@ def _plan_one_visual(
         completion = Completion(content="")
         with error:
             if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
-                cause = "router prompt did not fit the context window"
+                cause = "visual planner prompt did not fit the context window"
         LOG.warning("%s id=%s reason=%s", cause, article.item_id, type(error).__name__)
     except OSError as error:
         completion = Completion(content="")

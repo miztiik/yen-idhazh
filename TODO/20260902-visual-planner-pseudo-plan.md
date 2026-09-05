@@ -1789,111 +1789,128 @@ Susan's warning, recorded verbatim in substance: **the proposal measures 33 thin
 
 ## 15. The plan-doc split
 
-Thirteen plan-docs. The organising principle is **functional isolation over dependency order**: each doc delivers something that works and is worth having on its own, and each owns a disjoint set of files so parallel agents do not collide. Many PRs is fine; overlapping PRs is not.
+**Superseded on 2026-09-05.** The thirteen lettered plan-docs A to M below were
+never written. Twenty-two numbered plan-docs were written instead, they are the
+work, and they are indexed here so nobody executes the retired shape. Authority:
+owner, 2026-09-05.
 
-### 15.1 The thirteen
+What the letters got right survives in the numbers: each plan delivers something
+worth having on its own, and each owns a disjoint set of files so parallel agents
+do not collide. What changed is the grain. Thirteen docs each held several
+unrelated wins, so a doc could not be finished; twenty-two are small enough to
+close. Two of the letters split outright - J became four vocabulary plans, one
+per family - and three of the numbers had no letter at all, because retiring the
+old stage name, pinning the runtime and closing the group are work the letters
+never named.
 
-| # | Plan-doc | Delivers, on its own | Primary files it owns |
-|---|---|---|---|
-| **A** | **Console owes you telemetry** | Every number already committed becomes visible, for every past run. Eight per-item timing and token columns, the five band reasons plotted over time, faithfulness and lead coverage panels | `backend/idhazh/publish_telemetry.py`, `frontend/src/routes/console/**`, `frontend/src/lib/console/**` |
-| **B** | **Developer speed** | A PR runs only the tests it can break; page-weight ceilings get headroom instead of failing reactively | `pyproject.toml`, `backend/tests/conftest.py`, `config/idhazh.json` -> `page_weight` |
-| **C** | **The span tree earns its keep** | Tracing on, raw traces on a rolling window, a per-shard rollup, and the first answer to "is the model idle for most of a shard" | `backend/idhazh/telemetry.py`, `contracts/span_rollup.py`, `ledger.py`, `.github/workflows/digest.yml` |
-| **D** | **Fewer, better articles** | Feed reliability enters the score, semantic dedup cuts a duplicate before it costs a model call, the run drops to 80 items | `backend/idhazh/rank.py`, `discover.py`, `config/idhazh.json` -> `collect` and `run` |
-| **E** | **Retention that actually runs** | `docs/concepts/adaptive-pruning.md`, the compliance register, the cap in config, deletion switched on with a visible backlog | `backend/idhazh/retention.py`, `docs/concepts/adaptive-pruning.md`, `config/idhazh.json` -> `retention` |
-| **F** | **Better summaries** | The prompt loop, key points decoded first, per-band key-point caps, the new-fact rate, the regex check on the checker | `backend/idhazh/summarize.py`, `backend/idhazh/prompts/summarize.txt`, `backend/utilities/prompt_loop.py`, `backend/idhazh/evals/metrics.py` |
-| **G** | **The element table** | The code-first candidate pass, span-anchored elements of all six kinds, the re-slice invariant, extraction metrics | `backend/idhazh/extract.py`, `contracts/element.py`, `backend/idhazh/elements.py` |
-| **H** | **The visual planner** | `visual_planner.py`, the plan contract, the validator, the two-call flow, `n_ctx` 16384 with flash attention, the 4B retired completely, every trace of "route" gone | `backend/idhazh/visual_planner.py`, `contracts/visual.py`, `backend/idhazh/cli.py`, `backend/idhazh/llm/server.py` |
-| **I** | **Visuals a reader can read** | Inline SVG, d3, both themes resolving, full-width reflow, the visual moved below the summary, the sufficiency bar as a build gate | `frontend/src/lib/charts/**`, `frontend/src/lib/components/ItemVisual.svelte`, `frontend/src/lib/server/visual-render.ts` |
-| **J** | **The vocabulary** | Each visual type, one at a time, each independently shippable | `frontend/src/lib/charts/types/<type>.ts`, one file per type |
-| **K** | **The visual is measured** | The section 6.1 telemetry event, `state/visuals/`, `ItemStage.VISUAL`, the console panels that read them | `contracts/visual_telemetry.py`, `frontend/src/routes/console/visual/**` |
-| **L** | **Human judgement** | The `review/` harness, paired evaluation, weight fitting, the timed arm | `review/**`, `backend/idhazh/evals/labels.py`, `backend/utilities/review_queue.py` |
-| **M** | **The potential classifier** | A denominator for every rate in the system: which visual family an article could have supported, and where it could not, why. Split out of G by O42. Carries the two lexicons, the `date` dependency and the Deviation A question | `backend/idhazh/potential.py`, `contracts/potential.py`, plus the classifier-threshold block it introduces in `config/idhazh.json` |
+### 15.1 The twenty-two
 
-### 15.2 What each one is worth alone
+Each row is a file under [`TODO/`](.). Read the plan-doc; this table is the
+index, not the plan.
 
-This is the test that matters. A plan-doc that only pays off when a later one lands is a phase, not a plan.
+| # | Plan-doc | Delivers, on its own |
+|---|---|---|
+| 01 | [The chart stops being invisible](20260905-01-visible-chart-plan.md) | A chart a reader can actually read, in both themes |
+| 02 | ["Route" leaves the repository](20260905-02-retire-the-route-name-plan.md) | One word for the stage, in every identifier and every sentence |
+| 03 | [The console shows the numbers already in the repo](20260905-03-console-backfill-plan.md) | Every committed number becomes visible, for every past run |
+| 04 | [The site cannot fill up](20260905-04-site-cap-defence-plan.md) | A published site that stays inside the platform's 1 GB |
+| 05 | [Where the time actually goes](20260905-05-span-tree-plan.md) | The span tree, a per-shard rollup, and the first answer on model idle time |
+| 06 | [Fewer, better articles](20260905-06-fewer-better-articles-plan.md) | Feed reliability in the score, and a duplicate cut before it costs a model call |
+| 07 | [Better summaries](20260905-07-better-summaries-plan.md) | The prompt loop, per-band key-point caps, and the new-fact rate |
+| 08 | [Every fact in an article, with the characters that prove it](20260905-08-element-table-plan.md) | The element table - a queryable fact table over every article |
+| 09 | [The runtime stops guessing which model it was tuned for](20260905-09-pin-the-runtime-plan.md) | A runtime whose settings are pinned to the weights they were measured on |
+| 10 | [A plan that cannot draw a number the article did not state](20260905-10-visual-plan-contract-plan.md) | The visual plan contract and its validator |
+| 11 | [One model, two calls](20260905-11-two-call-planner-plan.md) | One set of weights instead of two, and the cache saving that comes with it |
+| 12 | [Visuals a reader can read](20260905-12-readable-visuals-plan.md) | Inline SVG, both themes resolving, full-width reflow |
+| 13 | [Deletion switched on](20260905-13-switch-on-deletion-plan.md) | Retention that actually deletes, with a visible backlog |
+| 14 | [The rest of the ship-or-not bar](20260905-14-sufficiency-bar-plan.md) | The sufficiency checks as a build gate rather than a habit |
+| 15 | [Charts, plus the two the reader asked for](20260905-15-chart-vocabulary-plan.md) | More ways to say a number, one type per PR |
+| 16 | [Parts of a whole](20260905-16-composition-vocabulary-plan.md) | The composition family |
+| 17 | [The rest of the infographics](20260905-17-infographic-vocabulary-plan.md) | The infographic family |
+| 18 | [Diagrams](20260905-18-diagram-vocabulary-plan.md) | The diagram family, gated on the potential classifier |
+| 19 | [Every attempt is recorded](20260905-19-visual-telemetry-plan.md) | The visual telemetry event and the ledger under `state/` |
+| 20 | [The operator can see whether it worked](20260905-20-visual-console-plan.md) | The console panels that read that ledger |
+| 21 | [Human judgement](20260905-21-human-judgement-plan.md) | Ground truth: the review harness, paired evaluation, weight fitting |
+| 22 | [Close it out](20260905-22-distil-and-close-plan.md) | Every finding distilled into `docs/`, and this document deleted |
 
-| # | If nothing else ever ships, you still got |
-|---|---|
-| A | An operator who can see per-item cost and which summary defect dominates. **Backfilled over every past run** |
-| B | A faster PR loop for every future change on the project |
-| C | The answer to whether more shards is the right lever |
-| D | A better digest from the same runner budget |
-| E | A site that does not fill up, and a documented cleanup contract |
-| F | Better summaries. **This alone may be the largest reader-visible win in the whole programme** |
-| G | A queryable fact table over every article, reusable by search later |
-| H | One model instead of two, a 2.33 GiB cache saving, and honest naming |
-| I | Charts that are readable in dark mode - today's most visible defect |
-| J | One more way to say something. Each type is its own PR |
-| K | The ability to tell whether the visual work worked |
-| L | Ground truth |
-| M | The one number that makes every other rate readable - what was possible. Without it, 4 percent on narrative articles and 4 percent on chartable articles are the same figure |
+### 15.2 The worth-alone test, which the numbers inherit
 
-### 15.3 Dependency edges - only the real ones
+This is the test that mattered and it still binds: a plan-doc that only pays off
+when a later one lands is a phase, not a plan. Each row above states what it
+delivers on its own, and each numbered plan-doc restates it in its own section 0.
 
-```
-B ----------------------------------------> (independent, do first, helps all)
-A ---------------------------------> K      (K reuses A's console patterns)
-C ---------------------------------> K      (K reuses C's ledger seam)
-D ---------------------------------> (independent)
-E ---------------------------------> (independent)
-F ---------------------------------> (independent)
-G ------> H ------> I ------> J
-                    I ------> K
-                              K ------> L
-G ------> M ------> J                       (M gates the diagram family, row 46)
-          M ------> K                       (M is the denominator, row 56)
-```
+### 15.3 Dependency order
 
-**Two chains leave G, and only the first is long.** `G -> H -> I -> J` is the build chain: the element table must exist before the planner can point at it, the planner must emit a plan before a renderer can draw it, and the renderer must exist before a type can be added to it. `G -> M` is the measurement branch, and it is short but not optional - M gates J's diagram family (row 46) and supplies K's per-class denominator (row 56). Everything else is independent and can run in parallel from day one.
+Each numbered plan-doc carries its own `Depends-on` column in its section 1
+Status Reckoner, and its `Chain` line at the top names the plan before and after
+it. That is where the order lives now, because an order kept in two places is an
+order that disagrees with itself.
+
+The one shape worth stating once: **the element table comes before the visual
+plan, the plan before the renderer, and the renderer before a new visual type.**
+A compiler cannot precede the table it points at.
 
 ### 15.4 The hot files, and how the collisions are avoided
 
-**A plan claiming its rows touch different files is a claim, not a fact.** Three files are touched by many docs, and each needs a rule.
+**A plan claiming its rows touch different files is a claim, not a fact.** These
+files are touched by many plans, and each needs a rule. The letters are gone; the
+rule is the same and it is now keyed to whichever plan owns the block.
 
-| Hot file | Touched by | The rule |
-|---|---|---|
-| `config/idhazh.json` | B, D, E, H, I, K, M | **Each doc owns a disjoint top-level block.** B owns `page_weight`; D owns `collect` and `run`; E owns `retention` and `observability`; H owns `models` and `visuals`; I owns `ui` and `appearance`; M owns the classifier-threshold block it introduces, and no other. A doc never edits a block it does not own |
-| `backend/idhazh/contracts/app_config.py` | same set | **Append-only, one field group per doc, never a reorder.** A rename or a reorder here is what turns a clean merge into a silent revert |
-| `backend/idhazh/cli.py` | C, G, H, M | **H owns it.** C, G and M add their call sites through helper modules that `cli.py` imports once. If one of them must edit `cli.py` directly, it serialises behind H |
-| `.github/workflows/digest.yml` | C, D, H | **C owns it.** D's change is a config value with no workflow edit; H's job removal serialises after C |
-| `docs/concepts/telemetry.md` | C only | C owns the doctrine edit outright |
+| Hot file | The rule |
+|---|---|
+| `config/idhazh.json` | **Each plan owns a disjoint top-level block**, and never edits a block it does not own. A plan that needs a new block introduces it and says so in its section 0 |
+| `backend/idhazh/contracts/app_config.py` | **Append-only, one field group per plan, never a reorder.** A rename or a reorder here is what turns a clean merge into a silent revert |
+| `backend/idhazh/cli.py` | **One plan owns it at a time.** Everything else adds its call sites through helper modules that `cli.py` imports once, or serialises behind the owner |
+| `.github/workflows/digest.yml` | **One plan owns it at a time**, and a job removal serialises after every plan that still needs the job |
+| `docs/concepts/telemetry.md` | Whichever plan changes the doctrine owns the edit outright |
 
 ### 15.4a The hot names
 
-Section 15.4 rules on hot files and says nothing about hot names. That is the larger risk of the two, because section 15 hands thirteen parallel agents a domain with no name table - so thirteen agents mint thirteen names for one thing, and the merge is where that is discovered.
+**This rule now lives in `docs/`**, at
+[`docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md),
+under "One word per thing, in every identifier". It was moved there on
+2026-09-05 by plan 02 row 6, because twenty more plans are about to mint names
+against it and a plan-doc is deleted when it closes. What is below is the
+summary; the doc is the rule.
 
-**The register is not the defect.** A decision record that writes `Visual Plan` in every sentence reads like a specification, and this is not one; section 0b asks for the plain register outright. Only the identifiers need binding.
+Hot names are the larger risk of the two, because a numbered group hands parallel
+agents a domain with no name table - so several agents mint several names for one
+thing, and the merge is where that is discovered.
 
-**The rule: the glossary binds identifiers; prose stays free.**
+**The register is not the defect.** A decision record that writes `Visual Plan`
+in every sentence reads like a specification, and this is not one; section 0b
+asks for the plain register outright. Only the identifiers need binding.
+
+**The rule: the canonical term binds identifiers; prose stays free.**
 
 | Surface | Bound? | Rule |
 |---|---|---|
-| Module, class, function, enum member | **Yes** | The glossary term verbatim, in the casing the language uses: `VisualPlan`, `VisualValidator`, `VisualCompiler`, `TrustedElement`, `element_id` |
+| Module, class, function, enum member | **Yes** | The term verbatim, in the casing the language uses: `VisualPlan`, `VisualValidator`, `VisualCompiler`, `TrustedElement`, `element_id` |
 | Contract field, schema stem, telemetry value, config key, CLI verb, prompt filename | **Yes** | Same, plus O2 - the word "route" appears in none of them |
 | A model's size, vendor or revision, anywhere in an identifier | **Never** | Section 11.0 |
 | The prose of a plan-doc, a commit message, a code comment | **No** | Plain register, section 0b. "the validator" in a sentence is correct English and correct here |
 
-Two names this document uses that the glossary does not, recorded so they are not litigated twice. **`visual_planner.py`** is O2 and outranks the glossary, which names the step `Visual Planning` and names no file. **`density_floor`** is row 27, where the owner rejected `structural_efficiency` outright. Every other identifier takes the glossary term.
+Two names this document uses that a glossary does not, recorded so they are not litigated twice. **`visual_planner.py`** is O2 and outranks the glossary, which names the step `Visual Planning` and names no file. **`density_floor`** is row 27, where the owner rejected `structural_efficiency` outright. Every other identifier takes the glossary term.
 
 **A glossary definition that is false does not bind, and there is one.** `Ledger` is defined as "never edited in place", and every fold in section 9.2 rewrites at the window edge. The **term** still binds as an identifier; the narrowed definition in 9.2's correction of 2026-09-04 governs what it means. A plan-doc that finds another such term narrows it in the same way rather than working around it.
 
-Each plan-doc in section 15 cites this table before its first contract row. A doc that needs a domain noun the glossary has no word for names it in its own front matter and says why.
+Each plan-doc in section 15.1 cites this table before its first contract row. A doc that needs a domain noun the glossary has no word for names it in its own front matter and says why.
 
-### 15.5 Suggested first wave
+### 15.5 The first wave, and how it turned out
 
-Four docs, fully parallel, zero shared files, and every one delivers something on its own:
+Four of the lettered docs were meant to go first, on the worth-alone test: the
+test-selection work, the console backfill, fewer and better articles, and better
+summaries. The numbered group opened on 01 and 02 instead - a chart a reader can
+read, and this rename - because a defect a reader can see and a word every later
+plan would have copied both get more expensive with every day they wait. The
+worth-alone test is unchanged and every numbered plan still has to pass it.
 
-| Doc | Why it goes first |
-|---|---|
-| **B** | Cheapest, and it speeds up every doc after it |
-| **A** | Zero runner cost, backfills every past run, and gives you the eval visibility the rest of the programme is steered by |
-| **D** | Independent, and it frees the runner budget the two-call design needs |
-| **F** | Independent, and summary quality is the loudest reader-visible defect that is not the dark-theme chart |
-
-**Deliberately not in the first wave:** G, because it is the root of the only real chain and deserves the attention a wave of four would dilute; E, because `dry_run = false` must land after the new renderer, not before it; and M, which cannot start until G gives it an element table to classify.
-
-**One divergence from the proposal's build order, recorded so it is visible rather than discovered.** The proposal's step 1 is the Trusted Element model, which is doc G, and G is the fifth doc started here. The **dependency** order the proposal sequences is intact - 15.3 keeps G before H before I before J, and a compiler still cannot precede the element table. What changed is the **start** order, on 15.2's worth-alone test: B, A, D and F each pay off with no visual work at all.
+**One divergence from the proposal's build order, recorded so it is visible
+rather than discovered.** The proposal's step 1 is the Trusted Element model,
+which is plan 08 here, and eight plans open before it. The **dependency** order
+the proposal sequences is intact: the element table still comes before the visual
+plan, and a compiler still cannot precede the table it points at. What changed is
+the **start** order, on the worth-alone test.
 
 ---
 

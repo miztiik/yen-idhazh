@@ -1,4 +1,4 @@
-/** Where items go between the visuals planner looking at one and a visual being
+/** Where items go between the visual planner looking at one and a visual being
  * published.
  *
  * This was a funnel until 2026-08-30. A funnel draws a monotonic sequence as a
@@ -108,7 +108,7 @@ export function chartFlow(days: readonly FlowDay[]): ChartFlow {
 		value: days.reduce((sum, day) => sum + day[stage.key], 0)
 	}));
 	const reached = total[0].value;
-	// Nothing reached means nothing committed says what the visuals planner did. A
+	// Nothing reached means nothing committed says what the visual planner did. A
 	// flow of four zeros draws nothing and reads as a chart that failed to load.
 	if (reached === 0) {
 		return {
@@ -116,7 +116,7 @@ export function chartFlow(days: readonly FlowDay[]): ChartFlow {
 			empty: true,
 			steps: [],
 			reason:
-				'Nothing committed says what the visuals planner did over this window, so there is ' +
+				'Nothing committed says what the visual planner did over this window, so there is ' +
 				'no flow to draw.'
 		};
 	}

@@ -10,7 +10,7 @@ repository - and it would put the pipeline under test rather than the git loop.
 
 So this is a real program doing real file I/O with `stage_assemble`'s shape:
 read the previous day, drop the items it already carries, replace this run's
-entry in the run list, copy each route's asset path into the day the way
+entry in the run list, copy each decision's asset path into the day the way
 `to_digest_visual` does, blind-append the two ledgers that blind-append,
 deduplicate the one that deduplicates, rewrite the telemetry projection whole,
 and rebuild the month search index from the days on disk. It decides nothing -
@@ -58,9 +58,9 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 
 
 def _read_visuals(root: Path, date: str) -> dict[str, str]:
-    """Where this run's routes say their rendered assets landed.
+    """Where this run's decisions say their rendered assets landed.
 
-    `stage_assemble` copies each route's `asset_path` into the day payload
+    `stage_assemble` copies each decision's `asset_path` into the day payload
     verbatim, so the payload and the files on disk agree only while something
     keeps them agreeing. A stand-in that skipped this could not tell a day that
     publishes a picture from a day that publishes a broken image.
@@ -101,9 +101,9 @@ def rebuild(root: Path, date: str) -> None:
 
     # An item already published keeps the picture it published with, as
     # `build_day` does: only a fresh item brings one.
-    routed = _read_visuals(root, date)
+    decided = _read_visuals(root, date)
     visuals: dict[str, str] = dict(previous["visuals"]) if previous else {}
-    visuals.update({item: routed[item] for item in fresh if item in routed})
+    visuals.update({item: decided[item] for item in fresh if item in decided})
 
     _write_json(
         day_dir / "digest.json",

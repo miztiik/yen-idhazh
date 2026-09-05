@@ -1,4 +1,4 @@
-"""The routing stage, and the one property the whole row exists to guarantee.
+"""The visual planner, and the one property the whole row exists to guarantee.
 
 The oracle for Row #8 is: every value in a rendered chart is present in the
 source article. It is asserted here as a property over generated drafts rather
@@ -249,12 +249,12 @@ class TestSpecBuilding:
         assert same_unit_bars(points, facts) == same_unit_bars(points, facts)
 
 
-class TestToRoute:
+class TestToDecision:
     def _visuals(self) -> VisualsConfig:
         """The shipped arm, which is now the only one there is."""
         return VisualsConfig(enabled_kinds=[VisualKind.CHART])
 
-    def test_a_failed_summary_routes_to_nothing(
+    def test_a_failed_summary_decides_nothing(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
         failed = summary_ok.model_copy(
@@ -270,7 +270,7 @@ class TestToRoute:
         )
         assert decision.kind is VisualKind.NONE
 
-    def test_a_truncated_reply_routes_to_nothing(
+    def test_a_truncated_reply_decides_nothing(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
         decision = to_decision(
@@ -284,7 +284,7 @@ class TestToRoute:
         assert decision.kind is VisualKind.NONE
         assert "cut off" in (decision.rationale or "")
 
-    def test_a_malformed_reply_routes_to_nothing(
+    def test_a_malformed_reply_decides_nothing(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
         decision = to_decision(
@@ -297,7 +297,7 @@ class TestToRoute:
         )
         assert decision.kind is VisualKind.NONE
 
-    def test_an_index_past_the_end_routes_to_nothing(
+    def test_an_index_past_the_end_decides_nothing(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
         """The one way a fabricated number could get in, closed explicitly."""
@@ -492,7 +492,7 @@ class TestToRoute:
         assert decision.drafted_chart is False
         assert decision.rationale == "diagram has no renderer switched on"
 
-    def test_bars_measuring_different_things_route_to_nothing(
+    def test_bars_measuring_different_things_decide_nothing(
         self, article_ok: Article, summary_ok: Summary
     ) -> None:
         """Once the stray bars are dropped there is nothing left to compare."""
@@ -611,7 +611,7 @@ class TestToRoute:
 
 
 class TestReachability:
-    """The gate that lets the router skip a call whose answer is already settled.
+    """The gate that lets the planner skip a call whose answer is already settled.
 
     A chart's bars are indices into these facts, every bar shares one unit, and
     one quantity may fill only one bar. So the widest chart an article can carry
@@ -693,7 +693,7 @@ class TestReachability:
 class TestChartDrafts:
     """Why a drafted chart did not become a published one, as a committed number.
 
-    On 2026-08-25 the router drafted 17 charts and published 9. Nothing said
+    On 2026-08-25 the planner drafted 17 charts and published 9. Nothing said
     where the other 8 went, so a model that had stopped asking for charts and a
     set of checks that had started refusing them read exactly the same. The
     count only means anything beside the charts that survived, so what is
@@ -707,7 +707,7 @@ class TestChartDrafts:
         people = next(i for i, fact in enumerate(facts) if fact.unit == "people")
         visuals = VisualsConfig(enabled_kinds=[VisualKind.CHART])
 
-        def routed(draft: Mapping[str, object]) -> VisualDecision:
+        def decided(draft: Mapping[str, object]) -> VisualDecision:
             return to_decision(
                 article,
                 summary,
@@ -722,11 +722,11 @@ class TestChartDrafts:
             return [{"label": f"b{index}", "fact_index": index} for index in indices]
 
         return [
-            routed({"kind": "chart", "reason": "the months compare", "points": bars(0, 1, 2)}),
-            routed({"kind": "chart", "reason": "a made-up bar", "points": bars(0, 1, 999)}),
-            routed({"kind": "chart", "reason": "one number thrice", "points": bars(0, 0, 0)}),
-            routed({"kind": "chart", "reason": "mixed units", "points": bars(percent, people)}),
-            routed({"kind": "none", "reason": "nothing here compares"}),
+            decided({"kind": "chart", "reason": "the months compare", "points": bars(0, 1, 2)}),
+            decided({"kind": "chart", "reason": "a made-up bar", "points": bars(0, 1, 999)}),
+            decided({"kind": "chart", "reason": "one number thrice", "points": bars(0, 0, 0)}),
+            decided({"kind": "chart", "reason": "mixed units", "points": bars(percent, people)}),
+            decided({"kind": "none", "reason": "nothing here compares"}),
             decided_without_the_model(
                 summary, model_id="qwen3-4b", decided_at="2026-08-22T00:00:00Z", facts_found=0
             ),
@@ -800,13 +800,13 @@ class TestChartDrafts:
         assert (record.charts_drafted, record.items_decided, record.items_prefiltered) == (4, 6, 1)
 
 
-# --- A router that answered is not a router that is down ---------------------
+# --- A planner that answered is not a planner that is down -------------------
 
 
 class RecordedErrorEndpoint:
     """A real local server that replays one recorded llama-server error reply.
 
-    Nothing is mocked: the router makes its ordinary POST over a loopback
+    Nothing is mocked: the planner makes its ordinary POST over a loopback
     socket, and the bytes it reads back are the ones a llama-server wrote
     (Rule #7). The stdlib server owns the framing, so the test is about the
     body and not about HTTP.
@@ -849,8 +849,8 @@ def refused_endpoint() -> str:
     return f"http://127.0.0.1:{port}/v1/chat/completions"
 
 
-def routed_against(endpoint: str, article: Article, summary: Summary) -> tuple[VisualDecision, bool]:
-    """One routing decision made against `endpoint`, over facts that reach the model.
+def decided_against(endpoint: str, article: Article, summary: Summary) -> tuple[VisualDecision, bool]:
+    """One visual decision made against `endpoint`, over facts that reach the model.
 
     The article text is replaced because `_plan_one_visual` never posts when no
     enabled kind could survive `to_decision`. A fixture whose numbers hold no unit
@@ -865,41 +865,41 @@ def routed_against(endpoint: str, article: Article, summary: Summary) -> tuple[V
     )
 
 
-def test_a_router_prompt_the_server_refused_for_length_says_so(
+def test_a_planner_prompt_the_server_refused_for_length_says_so(
     article_ok: Article, summary_ok: Summary, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The oracle: a running router that refused is never reported as a dead one."""
+    """The oracle: a running planner that refused is never reported as a dead one."""
     caplog.set_level("WARNING", logger="idhazh")
     body = (LLM_ERRORS / "context-exceeded.json").read_bytes()
 
     with RecordedErrorEndpoint(400, body) as server:
-        decision, asked = routed_against(server.endpoint, article_ok, summary_ok)
+        decision, asked = decided_against(server.endpoint, article_ok, summary_ok)
 
     assert asked is True, "the fixture has to reach the model, or this proves nothing"
-    assert "router prompt did not fit the context window" in caplog.text
-    assert "router unreachable" not in caplog.text
+    assert "visual planner prompt did not fit the context window" in caplog.text
+    assert "visual planner unreachable" not in caplog.text
     assert decision.item_id == summary_ok.item_id
     assert decision.kind is VisualKind.NONE
     assert decision.rationale, "degrade, do not fail: the item is still decided"
 
 
-def test_a_refused_router_connection_is_still_an_unreachable_router(
+def test_a_refused_planner_connection_is_still_an_unreachable_planner(
     article_ok: Article, summary_ok: Summary, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The other half of it: naming one cause must not rename the other."""
     caplog.set_level("WARNING", logger="idhazh")
 
-    decision, asked = routed_against(refused_endpoint(), article_ok, summary_ok)
+    decision, asked = decided_against(refused_endpoint(), article_ok, summary_ok)
 
     assert asked is True
-    assert "router unreachable" in caplog.text
+    assert "visual planner unreachable" in caplog.text
     assert "context window" not in caplog.text
     assert decision.item_id == summary_ok.item_id
     assert decision.kind is VisualKind.NONE
     assert decision.rationale, "degrade, do not fail: the item is still decided"
 
 
-def test_a_router_error_the_transport_does_not_recognise_stays_unreachable(
+def test_a_planner_error_the_transport_does_not_recognise_stays_unreachable(
     article_ok: Article, summary_ok: Summary, caplog: pytest.LogCaptureFixture
 ) -> None:
     """An unrecognised status must not become a new silent class."""
@@ -907,9 +907,9 @@ def test_a_router_error_the_transport_does_not_recognise_stays_unreachable(
     body = (LLM_ERRORS / "server-unavailable.json").read_bytes()
 
     with RecordedErrorEndpoint(503, body) as server:
-        decision, asked = routed_against(server.endpoint, article_ok, summary_ok)
+        decision, asked = decided_against(server.endpoint, article_ok, summary_ok)
 
     assert asked is True
-    assert "router unreachable" in caplog.text
+    assert "visual planner unreachable" in caplog.text
     assert "context window" not in caplog.text
     assert decision.kind is VisualKind.NONE

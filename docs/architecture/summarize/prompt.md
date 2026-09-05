@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-05
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -235,7 +235,7 @@ Two controls, not one. The sanitizer runs before the model on text it has seen;
 this runs after the model on text it wrote. A page can still ask for a beacon,
 and the address now has to survive both.
 
-The title takes the other route. It is the one field with a working fallback -
+The title takes the other path. It is the one field with a working fallback -
 the source's own headline - so an address there drops the title and keeps the
 item, the same way a title outside the asked range does. The summary has no
 fallback, which is why the same leak there is fatal.

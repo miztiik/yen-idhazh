@@ -10,7 +10,7 @@ no picture, because the product is trust and an invented axis label costs it per
 
 ## The stage runs on its own model, in its own pass
 
-Routing is a separate CLI stage from `work`, not a step inside it:
+Visual planning is a separate CLI stage from `work`, not a step inside it:
 
 ```
 idhazh work    --date <D>  # the 8B summarizes
@@ -18,9 +18,9 @@ idhazh visuals --date <D>  # the 4B plans a visual and renders it
 idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
-One llama-server serves one set of weights, and classification is the easy task, so the router
+One llama-server serves one set of weights, and classification is the easy task, so the planner
 runs on Qwen3-4B while the summarizer keeps the 8B. Splitting the stage also means **a run that
-never starts a router still publishes.** Every item simply carries no picture, which is already
+never starts a planner still publishes.** Every item simply carries no picture, which is already
 the common and correct answer.
 
 ## The model never writes a number
@@ -57,7 +57,7 @@ chart an article can carry is the size of the largest unit group in its own numb
 threshold the answer is `none` whatever the model replies.
 
 `reachable_kinds()` computes that before the request is built. When no enabled kind survives it,
-the router writes a `VisualDecision` with `kind: none`, `asked_the_model: false`, and a rationale that says
+the planner writes a `VisualDecision` with `kind: none`, `asked_the_model: false`, and a rationale that says
 the model never ran. The run manifest counts those separately as `items_prefiltered`.
 
 Three properties of how it is written, and each one is load-bearing:
@@ -79,9 +79,11 @@ With the arm off, measured on the 145 items of run `32804437110` with no model a
 **68 items (46.9%) never reach the model**, and 77 do. The histogram of widest unit group per
 article is in [`../../reference/measurements.md`](../../reference/measurements.md).
 
-The denominator moves when this is on: the same charts sit over a smaller routed set, so a chart
+The denominator moves when this is on: the same charts sit over a smaller decided set, so a chart
 rate quoted against `items_routed` alone climbs without a single extra chart existing. Quote it
-against `items_routed + items_prefiltered`, or state which one you meant.
+against `items_routed + items_prefiltered`, or state which one you meant. Both keys are the wire
+names the run manifest froze on 2026-09-05; the Python behind them is `items_decided` and
+`items_prefiltered` ([../contracts/schemas.md](../contracts/schemas.md)).
 
 ## The stage stops itself before the job does
 
@@ -94,9 +96,9 @@ therefore needs anywhere from 50 to 97 minutes against a 50-minute job.
 What happened when it went over is the part that made the defect invisible. A job cancelled at its
 timeout **skips any step without an explicit condition**, and the `visuals` artifact upload was one
 of those. So the run threw away every decision the hour had bought - on 2026-08-25 that was 88
-routed items and 9 rendered charts - and `assemble` published 145 items with zero visuals and no
+decided items and 9 rendered charts - and `assemble` published 145 items with zero visuals and no
 error anywhere on the page. The day cannot recover: `build_day` keeps an already-published item,
-so the four later runs of that day re-route the same items at full price and their answers are
+so the four later runs of that day re-decide the same items at full price and their answers are
 discarded.
 
 Three things changed, and each one addresses a different link in that chain:
@@ -106,24 +108,24 @@ Three things changed, and each one addresses a different link in that chain:
 | `stage_visual_planner` stops at `run.visual_planner_budget_minutes` (40) | The job is never cancelled, so it always reaches its upload step. |
 | The `visuals` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
 | `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
-| The router skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
+| The planner skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
 
 **The budget stop is not a rare event, and that is now measured.** Over the eleven committed runs
-that routed anything, the stage spends its **whole** budget on ten of them and leaves items
-unrouted on nine, at a median of 48.9 seconds an asked item and a median of 18 items left
+that decided anything, the stage spends its **whole** budget on ten of them and leaves items
+undecided on nine, at a median of 48.9 seconds an asked item and a median of 18 items left
 ([`../../reference/measurements.md`](../../archive/measurements-2026-08.md#the-route-stages-per-item-cost-over-every-run)).
 So a run that hits the bound is the normal case rather than a symptom, and **a single run's figure
 must not be quoted as what the stage costs** - the fastest run on record is 1.7 times faster per
 item than the next, which is enough to make an ordinary run look like a regression. What would
 change the picture is sharding the stage, not tuning the number.
 
-**The router visits the best story first.** The plan is vertical-major, so stopping part-way down
+**The planner visits the best story first.** The plan is vertical-major, so stopping part-way down
 it would cost whole verticals their pictures while the weakest story in the first vertical kept
 one. `plannable_items` sorts by `rank_score` before the loop, which is the rule
 `_within_ceiling` already follows for the safety ceiling: drop the weakest stories across every
 vertical, never a suffix.
 
-**The router skips an item the day's committed digest already carries.** `build_day` keeps an
+**The planner skips an item the day's committed digest already carries.** `build_day` keeps an
 already-published item and discards the new run's copy, because the reading order is part of what a
 shared link shows. So a later run's decision for one of those items is computed, written, read back
 and thrown away. A day runs five times: without the skip, run 2 spends its whole budget re-deciding
@@ -134,12 +136,12 @@ only the unfinished items - applied to the one stage that did not. It reads the 
 with the assembler.
 
 The corollary is worth stating plainly: **an item published without a visual can never gain one.**
-That is a property of `build_day`, not of the router, and it is why a run cancelled at the bound
+That is a property of `build_day`, not of the planner, and it is why a run cancelled at the bound
 cost its day permanently rather than for one run. Changing it means letting a later run mutate a
-published item, which is a decision about the day payload rather than about the router.
+published item, which is a decision about the day payload rather than about the planner.
 
 **An item the stage never reached writes no payload.** That is the same fact `items_routed` already
-reports - "items the router reached" - and it is what an item looks like today when the router
+reports - "items the planner reached" - and it is what an item looks like today when the planner
 never starts. A budget stop is the stage stopping, not a decision about an item, so it does not
 borrow `asked_the_model` and does not move `items_prefiltered`, which counts one specific cause.
 The run log names the count and the mean that produced it.
@@ -152,21 +154,21 @@ its own limit. Raising either one is the move Rule #2 forbids.
 
 **The chart arm has a kill line, registered before the data was read.** Authority: Jony,
 2026-08-25. Over 14 consecutive days with the chart-only gate on, retire the arm if the median day
-publishes a chart on fewer than 5% of published items, or spends more than 6 router minutes per
+publishes a chart on fewer than 5% of published items, or spends more than 6 planner minutes per
 published chart. Either limb trips it. A day stopped at the budget still counts. Measured
 2026-08-25 on `ubuntu-latest` (4 vCPU, 16 GB): 6.2% and 4.4 minutes - inside the line on both
 limbs, which is why the arm ships. Writing the line down first is what stops the number being
 argued after it is seen.
 
 `charts_drafted` on the run manifest is what makes that reading possible. It counts the items whose
-routing reply asked for a chart, whatever the decision became, so the gap between it and the day's
+planner reply asked for a chart, whatever the decision became, so the gap between it and the day's
 published charts is exactly what the two controls below rejected. Without it a model that stops
 asking for charts and checks that start refusing them are the same number.
 
-**The summarizer swap on 2026-08-27 moved an input the window sits on.** The router runs on its own
+**The summarizer swap on 2026-08-27 moved an input the window sits on.** The planner runs on its own
 Qwen3-4B and that model did not change, but the user turn it reads carries the summary text as well
 as the article's opening and the indexed numbers - so a different summarizer writes a different
-question, and `charts_drafted` can move with no router change at all. The 6.2% and 4.4 minutes
+question, and `charts_drafted` can move with no planner change at all. The 6.2% and 4.4 minutes
 measured on 2026-08-25 were taken on the retired incumbent's summaries. Read the fourteen-day window
 from days after the swap, and treat a step at the swap date as a changed input rather than a
 verdict. The mark that would make that step visible on the console is not built
@@ -185,28 +187,28 @@ page a reader sees. Seven columns:
 | Asked the model | `items_routed`, summed over the day's runs. |
 | Charts drafted | `charts_drafted`, summed over the day's runs. |
 | Charts published | The day's `digest.json`: items whose `visual` is a `chart` in state `rendered`. |
-| Router minutes | `route_ms` summed over the runs that recorded one, in minutes. |
-| Minutes per chart | Router minutes divided by charts published. |
+| Minutes spent | `route_ms` summed over the runs that recorded one, in minutes. |
+| Minutes per visual | Minutes spent divided by charts published. |
 
 The two gaps are the point. Reached against asked is the reachability gate above, running before any
 request. Drafted against published is the two post-model controls. A single funnel of bars would
 make the last stage the shortest and hardest to read, and the last stage is where the decision sits -
 so it is a table.
 
-**A number that does not exist prints a dash, never a zero.** A day whose route job never ran
+**A number that does not exist prints a dash, never a zero.** A day whose visuals job never ran
 reached zero items, which is a measurement and prints as `0`. It spent no measured minutes, which is
 not the same as spending none - `route_ms` is null on that manifest, and `0.0` there would read as a
-router that was free. A day with no published chart has no per-chart cost, so that cell is a dash
+stage that was free. A day with no published chart has no per-chart cost, so that cell is a dash
 too rather than an infinity or a zero.
 
 **Zero reached and a day older than the counts read the same, on purpose.** `items_routed`,
 `items_prefiltered` and `charts_drafted` all default to zero on a manifest written before they
 existed, so a day from before 2026-08-24 prints zero reached beside the charts it really published.
-That is the honest reading: nothing committed says what its router did. It also means a day before
+That is the honest reading: nothing committed says what its planner did. It also means a day before
 the counts existed cannot enter the kill line's fourteen-day window, which is correct - the window
 starts when the chart-only gate went on, and the gate and the counts landed together.
 
-**No rate is stored.** `Minutes per chart` is two committed numbers divided at read time. A
+**No rate is stored.** `Minutes per visual` is two committed numbers divided at read time. A
 persisted rate is a third fact that can disagree with the two it came from, and the console's whole
 claim is that every figure on it was written down when the run happened.
 
@@ -219,9 +221,9 @@ arm's bill.
 
 **Bars must measure the same thing.** The largest group of chosen bars that share a unit is kept
 and the rest are dropped. This never invents a bar and never mixes units; it only ever removes. If
-what remains is below `visuals.min_chart_points`, the item routes to nothing.
+what remains is below `visuals.min_chart_points`, the item is decided to nothing.
 
-**One quantity may fill one bar.** A draft that names the same `fact_index` twice routes to
+**One quantity may fill one bar.** A draft that names the same `fact_index` twice is decided to
 nothing. Without this the model can name index 3 three times, `same_unit_bars` groups all three
 under one unit, the width check passes, and a chart of one number under three invented labels
 publishes - every value true and the comparison fabricated. It is also what makes the reachability
@@ -282,10 +284,10 @@ visuals over 18 files, fourteen paths claimed twice, and `india-01.svg` shared b
 story and a defence-stocks story - one of them showing a chart of the other's numbers under alt text
 describing figures that were not in the picture. **A counter seeded from the day's directory** fixed
 that and could not fix the next one: a run takes about three hours and the day is refreshed five
-times, so a second run is routing while the first is still summarizing, neither checkout can see what
+times, so a second run is planning while the first is still summarizing, neither checkout can see what
 the other has not pushed, and both read the same highest ordinal. Both wrote `energy-03.svg` for
-different items with different bytes. The router never found out; the push did, and run
-`32869125768` lost eight workers and a router at `CONFLICT (add/add)` over four asset paths, because
+different items with different bytes. The planner never found out; the push did, and run
+`32869125768` lost eight workers and a visuals job at `CONFLICT (add/add)` over four asset paths, because
 git cannot rebase two adds of one path. Every summary in the day expired with the `items-*`
 artifacts.
 
@@ -300,7 +302,7 @@ tip's copy is published and a reader may already hold that address, and `build_d
 item over this run's in any case, which makes this run's file the one nothing will reference. Before
 each rebase attempt the commit step lists the asset paths the tip already publishes and hands them to
 [`backend/utilities/drop_raced_assets.py`](../../../backend/utilities/drop_raced_assets.py), which
-deletes this run's copy of any of them. The route payload is left naming the same path, because after
+deletes this run's copy of any of them. The decision payload is left naming the same path, because after
 the rebase the tip's file is sitting at it.
 
 **Neither control repairs the day it already happened on.** Both stop a run standing on a path
@@ -362,7 +364,7 @@ not chart quantities that measure different things" were requests. A request is 
 4B reading an article that mentions years. Both are now enforced - the first in the extractor, the
 second after the model answers - and the prompt is shorter for it.
 
-**Why the router skips a call rather than running faster.** Measured 2026-08-24 on `ubuntu-latest`
+**Why the planner skips a call rather than running faster.** Measured 2026-08-24 on `ubuntu-latest`
 (run `32742672105`): 47 s of fixed cost, a 3155 s stage, 149 items at a mean of 21.0 s each, and 15
 charts out of 149. Nine calls in ten produced nothing. Removing a call whose outcome is decided is
 not an optimisation of the model; it is deleting work that could not have mattered. Everything else
@@ -385,14 +387,14 @@ stays enabled until one run separates the three explanations - no exemplar in th
 landed. `32804437110` logs the draft kind beside the final kind: **17 chart drafts, 71 `none`
 drafts, and 0 diagram drafts in 88 items.** The model is not asking for diagrams and our checks are
 not rejecting them, so the first explanation is the live one - and the second and third cannot be
-told apart without a prompt change nobody has a reason to make. Across 703 routed items on
+told apart without a prompt change nobody has a reason to make. Across 703 decided items on
 2026-08-24/25 the arm produced nothing at all. Meanwhile it was the reason the reachability gate
 above could never fire, which cost 46.9% of every day at 20.7 to 40.3 s an item.
 
 So the arm is switched off in `visuals.enabled_kinds`, and the contract default follows, because a
 fresh clone should not pay for it either (Rule #6: the sane default is the measured one). Nothing
 else changes: the `diagram` enum member, the Mermaid writer, the SVG layout and their tests all
-stay, and `TestToRoute` keeps both arms on so the rejection paths and the injection canaries still
+stay, and `TestToDecision` keeps both arms on so the rejection paths and the injection canaries still
 hold. Turning it back on is one word in `config/idhazh.json`. The prompt still describes diagrams;
 it was left alone on purpose, because editing it changes the decode grammar and would invalidate
 the 21 s and 40 s figures this whole page rests on. A draft that asks for one now folds to `none`
@@ -404,20 +406,20 @@ exemplar that, measured offline against fixture articles, drafts diagrams at a r
 post-model checks - AND a hand-read sample showing those drafts carry an order the summary does not
 already state. The first alone only proves a model will say "diagram" when asked to. The experiment
 runs against fixtures, off the daily path, because on the daily path its bill is paid by readers:
-every day it runs, the gate cannot fire and the router spends the hour before publishing nothing.
+every day it runs, the gate cannot fire and the planner spends the hour before publishing nothing.
 
 **A day with no visuals says nothing to the reader.** Authority: Jony, 2026-08-25. "No picture" is
-the normal answer for an item, so a day where the router died reads exactly like a day where
+the normal answer for an item, so a day where the planner died reads exactly like a day where
 nothing earned one, and both are honest. A line about our own missing machinery is the one thing on
 the page a reader can neither verify nor act on. `items_failed` stays, because a missing story is
-something the reader actually lost. The router's failure belongs where an operator looks: the run
+something the reader actually lost. The planner's failure belongs where an operator looks: the run
 manifest's `items_routed` and `route_ms`, and the console.
 
 **Why a raced chart is dropped rather than merged, refreshed, renumbered or picked between.**
 Authority: the owner, 2026-08-27. Every cheaper-looking answer publishes a wrong picture instead of
 failing, which is worse than losing a day because nobody finds out. Adding the day's directory to
 `REFRESH_PATHS` makes the rebuild's hand-back delete every chart this run added that the tip lacks,
-while the regenerated `digest.json` still names them - `assemble` copies the path from the route
+while the regenerated `digest.json` still names them - `assemble` copies the path from the decision
 payload and cannot render anything - so the day publishes with broken images. Resolving the add/add
 by a stated side has two outcomes and no third one; `-X theirs` gives our item the tip's picture,
 `-X ours` overwrites an address a reader may already hold. **Renumbering was the answer while a path
@@ -463,16 +465,16 @@ file before it can be enabled.
 | A model filter or a model legend on the console Charts table | A filter over two values hides half the data and saves nobody any work. When a second model has run enough days to compare, the ledger it is read from has to be truthful first. |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
 | Raise `visuals`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
-| Shard the `visuals` job across a matrix | **Unblocked on 2026-08-27 and still not built.** It was blocked on the asset name: a per-vertical counter seeded from the day's directory meant four shards would each read the same highest ordinal and two would write `energy-01.svg`, silently, long before any commit. Naming the asset from the item id removes that, so sharding is now an ordinary throughput change rather than a contract one - and it is the strongest lever left, because the stage spends its whole 40-minute budget on ten of the eleven runs on record. Nobody has measured what a sharded router costs in cache restores and model loads against what it saves, and that measurement is the work. |
+| Shard the `visuals` job across a matrix | **Unblocked on 2026-08-27 and still not built.** It was blocked on the asset name: a per-vertical counter seeded from the day's directory meant four shards would each read the same highest ordinal and two would write `energy-01.svg`, silently, long before any commit. Naming the asset from the item id removes that, so sharding is now an ordinary throughput change rather than a contract one - and it is the strongest lever left, because the stage spends its whole 40-minute budget on ten of the eleven runs on record. Nobody has measured what a sharded planner costs in cache restores and model loads against what it saves, and that measurement is the work. |
 | Keep the per-vertical counter and seed it better | Every seeding rule reads something a process can observe, and the defect is that two processes observe different things. A per-process counter lost 2026-08-24; a directory-seeded counter lost run `32869125768`. There is no third thing to read. |
 | Name the asset from a hash of the address, `<vertical>-<url_key prefix>.svg` | It fixes the same defect as the item id and breaks a rule the item id does not: [`layout.md`](layout.md) says no hash appears in any path, filename or URL, and `backend/tests/test_contracts.py::test_no_hash_appears_in_any_published_path` holds it. The item id is already a published address - it is the anchor a reader lands on - so it costs the reader nothing that has not already been accepted. |
 | Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
 | Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
 | Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `retention.image_months` is `-1`, which switches the prune off entirely, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
 | Keep the first claimant's chart and null only the second | The order two items sit in a payload is not evidence of which one the chart was drawn for. This repairs 14 items by guessing on the other 14, and a guess that publishes is the failure being fixed. |
-| Re-render the 2026-08-24 day from its committed routes | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `visuals` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's decisions expired on 2026-08-25, before anyone read the handover. |
+| Re-render the 2026-08-24 day from its committed decisions | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `visuals` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's decisions expired on 2026-08-25, before anyone read the handover. |
 | Renumber a raced chart instead of dropping it | Right while a path could mean two different stories, wrong now that it names one item. Moving this run's copy would file that item's picture under a name that is not its own, and leave two files where the day references one. |
-| Cap the number of items the router may consider | A count has to be set for the worst host, so a fast host would route 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
+| Cap the number of items the planner may consider | A count has to be set for the worst host, so a fast host would decide 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
 | Give a budget-stopped item a `VisualDecision` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
 | A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Rule #11 in spirit, with no prompt involved. |
@@ -482,7 +484,7 @@ file before it can be enabled.
 | `mermaid-cli` for diagrams | A headless Chromium to lay out a linear chain of boxes. |
 | PNG or WebP for charts and diagrams | A bar chart is a dozen paths. The vector is smaller than any raster of it, stays sharp on a phone, and costs the retention budget less. Raster stays the right answer for a photographic image. |
 | Discard the whole chart when one bar disagrees on units | Observed live: the model picked three correct year-on-year megawatt bars and appended the sector headcount. Three good bars thrown away to reject one bad one. |
-| Route on the 8B | Classification is the easy task. The big model belongs on summarization, and a second set of weights would not fit the pass anyway. |
+| Plan on the 8B | Classification is the easy task. The big model belongs on summarization, and a second set of weights would not fit the pass anyway. |
 | Keep `image` out of the enum until it is built | A payload must be able to say `image`, and the four-way vocabulary is a contract. The gate belongs in config, so switching it on is an edit rather than a schema change. |
 
 ## See also

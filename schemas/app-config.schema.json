@@ -1723,7 +1723,7 @@
         },
         "max_output_tokens": {
           "default": 400,
-          "description": "Routing emits a small object. It does not need the summarizer's budget.",
+          "description": "The planner emits a small object. It does not need the summarizer's budget.",
           "minimum": 1,
           "title": "Max Output Tokens",
           "type": "integer"

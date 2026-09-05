@@ -1600,7 +1600,7 @@ test('every chart cell equals what the day committed', async ({ page }) => {
 		.locator('[data-chart-day]')
 		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-chart-day') ?? ''));
 	// Newest first, and every day inside the open window that the manifest covers
-	// - so a day the visuals planner never reached still counts towards the arm's
+	// - so a day the visual planner never reached still counts towards the arm's
 	// fourteen-day rule. Days older than the window are the section's own answer
 	// to a preset the reader picked, not rows that went missing.
 	const committed = manifestDays().map((day) => day.date);
@@ -1635,7 +1635,7 @@ test('the measured day prints rates, and the day with no minutes prints dashes',
 	await expect(measured.locator('[data-charts-cell="minutes"]')).not.toHaveText('-');
 	await expect(measured.locator('[data-charts-cell="per-chart"]')).not.toHaveText('-');
 
-	// A quiet day ran and published nothing, so its visuals planner never
+	// A quiet day ran and published nothing, so its visual planner never
 	// started. Zero items reached is a measurement; zero minutes would be an
 	// invention, and a per-visual cost over no visuals is not a number at all.
 	const quiet = page.locator(`[data-chart-day="${manifestDays()[0].date}"]`);
@@ -1673,10 +1673,10 @@ test('a visual that never drew is a visual and is not a published chart', async 
 });
 
 test('no console route reads the word router to an operator', async ({ page }) => {
-	// `router` names a pipeline stage, and CLAUDE.md section 0b bars a subsystem
-	// word from a string a person reads. Script text is exempt because nobody
-	// reads it: the serialized payload still carries `routerMinutes`, which is a
-	// key and not a sentence.
+	// `router` named this pipeline stage until 2026-09-05, and CLAUDE.md section
+	// 0b bars a subsystem word from a string a person reads. The word is gone from
+	// the code as well now, so this is a ban list: it holds the old name out of
+	// every reader string whatever a later row calls the stage.
 	for (const route of ['/console/', '/console/model/', '/console/machine/']) {
 		await page.goto(route);
 		const leaks = await page.evaluate(() => {

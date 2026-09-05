@@ -1744,6 +1744,23 @@ the variable protects the shell you remember to set it in and nothing else.
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **`Start-Process -Wait` does not set `$LASTEXITCODE`, so a poller's verdict
+  reads as empty rather than as a failure.** Every long gate here runs through
+  `Start-Process pwsh -WindowStyle Hidden`, and a waiter script that exits 0 on
+  a sentinel and 1 on a timeout is the usual way to block on one. Printing
+  `"waiter_exit=$LASTEXITCODE"` after it prints whatever the last native command
+  in the shell left there, or nothing at all - so a timed-out wait and a
+  finished one look the same, and a sentinel that is still short reads as a gate
+  that failed to write it. Observed 2026-09-05 waiting on a 16-minute browser
+  suite. Capture the process object instead:
+
+```powershell
+$p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle Hidden -PassThru -Wait
+"waiter_exit=$($p.ExitCode)"
+```
+
+  The sentinel file is still the answer; this only tells you whether waiting for
+  it finished.
 - **`Set-Location` does not move the .NET current directory, so a relative path
   handed to `[IO.File]` resolves somewhere else entirely.** In a shell shared
   with other worktrees that somewhere else is another checkout. Observed

@@ -1,7 +1,7 @@
 /** A value against the target it should have hit.
  *
  * The question: are we inside the limit, and by how much. A bare number cannot
- * answer it - "4.1 router minutes per chart" means nothing without the 6 that
+ * answer it - "4.1 minutes per chart" means nothing without the 6 that
  * retires the arm. The target is a marker on the track, so the gap is a
  * distance the reader measures with their eye rather than a subtraction.
  *

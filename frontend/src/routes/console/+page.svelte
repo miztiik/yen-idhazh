@@ -461,7 +461,7 @@
 	/** A minute count, or a dash where there is no number to print.
 	 *
 	 * Null means nothing was measured. Printing that as `0.0` would say the
-	 * visuals planner was free, and printing a per-visual cost of infinity on a day
+	 * visual planner was free, and printing a per-visual cost of infinity on a day
 	 * with no visual would say it was ruinous. Both are answers to a question
 	 * nobody asked.
 	 */
@@ -538,7 +538,7 @@
 	<!-- Which way a chart-arm figure has moved across the window it draws.
 
 	     The polarity comes off the bar's own marks, so the delta and the target
-	     marker above it read one declaration: fewer router minutes is better and
+	     marker above it read one declaration: fewer minutes spent is better and
 	     a wider chart share is better, and neither is decided here. -->
 	{#snippet armMove(change: number | null, sense: TargetSense, figure: string)}
 		{#if change !== null}
@@ -1308,7 +1308,7 @@
 						option={flow.option}
 						width={data.console.chart_width}
 						height={FLOW_HEIGHT}
-						label="Where items go between the visuals planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
+						label="Where items go between the visual planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 						noReadout="a flow between stages, so there is no column two branches share"
 					/>
 				</div>
@@ -1351,11 +1351,11 @@
 					>Show these figures day by day, over these {windowDays} days</summary
 				>
 				<p class="mt-3 text-[0.8125rem] text-text-tertiary">
-					One row per day in the open window, newest first. Reached is every item the visuals planner
+					One row per day in the open window, newest first. Reached is every item the visual planner
 					looked at, asked the model is the part it sent a request for, visuals drafted is what the
 					model returned, and visuals published is what survived the checks after it. A dash means no
 					minutes are on record, so there is no rate to divide. Zero reached means nothing committed
-					says what the visuals planner did: it never ran, or its manifest is older than these counts.
+					says what the visual planner did: it never ran, or its manifest is older than these counts.
 				</p>
 				<div class="console-table mt-3" data-charts="table">
 					<table class="w-full text-[0.8125rem]">
@@ -1383,7 +1383,7 @@
 									>
 									<td class="py-2 text-end tabular-nums" data-charts-cell="items">{day.items}</td>
 									<td class="py-2 text-end tabular-nums" data-charts-cell="minutes"
-										>{minutes(day.routerMinutes)}</td
+										>{minutes(day.plannerMinutes)}</td
 									>
 									<td class="py-2 text-end tabular-nums" data-charts-cell="per-chart"
 										>{minutes(day.minutesPerChart)}</td
@@ -1420,7 +1420,7 @@ gap: var(--space-2);
 min-inline-size: 0;
 }
 
-/* The movement pair, never the confidence ramp: a window in which the router
+/* The movement pair, never the confidence ramp: a window in which the planner
    got 3 percent slower is not a broken run, and painting it in --band-low is
    how an operator learns to ignore --band-low. The sign is printed beside the
    colour, so the hue is never the only signal. */

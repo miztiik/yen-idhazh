@@ -575,18 +575,18 @@ export interface RunRecord {
 	skipped: number;
 	startedAt: string;
 	sourceListStale: boolean;
-	/** Items the router posted to the model. */
-	routed: number;
-	/** Items the router decided without posting, because no enabled kind could survive its checks. */
+	/** Items the visual planner posted to the model. */
+	decided: number;
+	/** Items the planner decided without posting, because no enabled kind could survive its checks. */
 	prefiltered: number;
-	/** Items whose routing reply asked for a chart, whatever the decision became. */
+	/** Items whose planner reply asked for a chart, whatever the decision became. */
 	chartsDrafted: number;
-	/** What the router spent, or null where the run wrote no time down at all.
+	/** What the planner spent, or null where the run wrote no time down at all.
 	 *
-	 * Null and zero are different facts: a route job that never ran spent no
+	 * Null and zero are different facts: a visuals job that never ran spent no
 	 * measured time, and printing that as zero minutes reads as a stage that was
 	 * free rather than one that is missing. */
-	routeMs: number | null;
+	decisionMs: number | null;
 }
 
 export interface RunSummary {
@@ -629,12 +629,12 @@ export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
 				skipped: Number(run.items_skipped ?? 0) || 0,
 				startedAt: String(run.started_at ?? ''),
 				sourceListStale: run.source_list_stale === true,
-				routed: Number(run.items_routed ?? 0) || 0,
-				prefiltered: Number(run.items_prefiltered ?? 0) || 0,
-				chartsDrafted: Number(run.charts_drafted ?? 0) || 0,
-				// The manifest writes an integer or a literal null. `Number(null)` is 0,
-				// so coercing here would turn "never measured" into "measured zero".
-				routeMs: typeof run.route_ms === 'number' ? run.route_ms : null
+							decided: Number(run.items_routed ?? 0) || 0,
+							prefiltered: Number(run.items_prefiltered ?? 0) || 0,
+							chartsDrafted: Number(run.charts_drafted ?? 0) || 0,
+							// The manifest writes an integer or a literal null. `Number(null)` is 0,
+							// so coercing here would turn "never measured" into "measured zero".
+							decisionMs: typeof run.route_ms === 'number' ? run.route_ms : null
 			}));
 			const last = runs.at(-1) ?? {};
 			const models = runs.flatMap((run) =>
