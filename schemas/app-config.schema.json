@@ -774,16 +774,16 @@
           "type": "integer"
         },
         "student": {
-          "default": "route",
+          "default": "visual_planner",
           "description": "A key in `models`. The smaller model a distillation session trains.",
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
           "title": "Student",
           "type": "string"
         },
         "teacher": {
           "default": "summarize",
           "description": "A key in `models`. The model whose outputs a session fine-tunes.",
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
           "title": "Teacher",
           "type": "string"
         },
@@ -1101,16 +1101,16 @@
         "inference": {
           "$ref": "#/$defs/InferenceConfig"
         },
-        "route": {
+        "summarize": {
           "$ref": "#/$defs/ModelRef"
         },
-        "summarize": {
+        "visual_planner": {
           "$ref": "#/$defs/ModelRef"
         }
       },
       "required": [
         "summarize",
-        "route"
+        "visual_planner"
       ],
       "title": "ModelsConfig",
       "type": "object"
@@ -1292,13 +1292,6 @@
           "title": "Max Parallel",
           "type": "integer"
         },
-        "route_budget_minutes": {
-          "default": 40,
-          "description": "What the route stage may spend before it stops asking the model and leaves the rest of the day unrouted. Sized below the job's own timeout, not equal to it: a job killed at its bound uploads no artifact, so the whole hour's decisions are lost rather than the tail it could not reach.",
-          "minimum": 1,
-          "title": "Route Budget Minutes",
-          "type": "integer"
-        },
         "safety_ceiling_per_run": {
           "default": 160,
           "description": "What sizes a run. It began as a crash guard against a mis-parsed feed and supply overtook it: items_planned has been exactly this number on every run since 2026-08-25, so it is the cap whatever it is called. Owner decision, 2026-08-29: it stays at 160, and a run gets better by spending those slots on articles that can be read rather than by raising this. It is also what sizes the worst case a work shard and the route stage have to finish, so any new number is bounded by the slower of those two - and a worker killed at run.shard_timeout_minutes uploads nothing.",
@@ -1326,6 +1319,13 @@
           "maximum": 100,
           "minimum": 0,
           "title": "Success Floor Pct",
+          "type": "integer"
+        },
+        "visual_planner_budget_minutes": {
+          "default": 40,
+          "description": "What the route stage may spend before it stops asking the model and leaves the rest of the day unrouted. Sized below the job's own timeout, not equal to it: a job killed at its bound uploads no artifact, so the whole hour's decisions are lost rather than the tail it could not reach.",
+          "minimum": 1,
+          "title": "Visual Planner Budget Minutes",
           "type": "integer"
         }
       },
@@ -1759,6 +1759,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "models.route is renamed models.visual_planner, run.route_budget_minutes is renamed run.visual_planner_budget_minutes, and finetune.student now names visual_planner. finetune.teacher and finetune.student are typed ModelRole rather than Slug. Breaking: three key spellings changed. The read-side migration is a before-validator on ModelsConfig, RunConfig and FinetuneConfig that reads the old spelling as the new one and refuses a file carrying both with different values, so a config written before today still loads. No value moved: the weights, the revision, the sha256 and the 40 minutes are the numbers they were yesterday.",
+      "version": "2026-09-05T14:00",
+      "why": "Route names a dispatch decision and the stage names a planning decision, so every knob spelling it teaches the wrong word. It is paid now rather than later because twenty more plans are about to mint names against these keys, and each one would write the wrong name and then pay to change it (owner decision 2026-09-05). ModelRole replaces Slug because these two fields spell a key in models, a key in models is a Python attribute name, and an attribute name is snake_case - so Slug's kebab-case was a shape no key could ever have, and visual_planner would have been refused by the pattern before the check that matters ran. AppConfig already checks the name against the real block, so the pattern only has to bound the shape for an editor reading schemas/ offline."
+    },
     {
       "change": "console.chart_height now defaults to 220 rather than 180 and console.chart_width to 760 rather than 600, and both carry a description naming their owner. The committed config/idhazh.json drops both keys; config/appearance.json keeps them. config/appearance.json drops assist.recall_min, which this document keeps at 0.68. The shapes are `ConsoleConfig` and `AssistConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. A semantic shift on two defaults and nothing else - every value legal yesterday is legal today, and a config/idhazh.json written before today still declares the two console sizes and still wins over the new defaults through the frontend's middle merge layer, so no read-side migration is owed.",
       "version": "2026-09-05T13:00",
@@ -2206,7 +2211,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-05T13:00",
+      "default": "2026-09-05T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2220,5 +2225,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-05T13:00"
+  "version": "2026-09-05T14:00"
 }

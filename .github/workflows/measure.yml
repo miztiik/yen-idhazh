@@ -95,7 +95,7 @@ jobs:
 
           models = json.load(open("config/idhazh.json", encoding="utf-8"))["models"]
           refs = []
-          for role in ("route", "summarize"):
+          for role in ("visual_planner", "summarize"):
               for field in ("repo", "revision", "file"):
                   value = models[role].get(field) or ""
                   if value.split() != [value]:

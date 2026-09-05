@@ -1264,7 +1264,7 @@ def stage_route(
     that never starts a router still publishes - every item simply carries no
     picture, which is already the common and correct answer.
 
-    **The stage stops itself at `run.route_budget_minutes`.** It used to run
+    **The stage stops itself at `run.visual_planner_budget_minutes`.** It used to run
     until the job's own timeout killed it, and a killed job uploads no artifact,
     so a day that overran by one item threw away every decision the whole hour
     had bought. Measured on `ubuntu-latest`: five of the eight runs since the
@@ -1294,13 +1294,13 @@ def stage_route(
 
     published = already_published(plan.date)
     routable = routable_items(plan, items_dir, published=published)
-    budget_ms = settings.app.run.route_budget_minutes * 60_000
+    budget_ms = settings.app.run.visual_planner_budget_minutes * 60_000
     stage_started = clock()
     LOG.info(
         "routing start items=%s already_published=%s budget_minutes=%s",
         len(routable),
         len(published),
-        settings.app.run.route_budget_minutes,
+        settings.app.run.visual_planner_budget_minutes,
     )
 
     for index, entry in enumerate(routable):
@@ -1377,7 +1377,7 @@ def stage_route(
         # log too, with the rate that would have to change for it to fit.
         LOG.warning(
             "route stage stopped at its budget minutes=%s routed=%s unrouted=%s mean_ms=%s",
-            settings.app.run.route_budget_minutes,
+            settings.app.run.visual_planner_budget_minutes,
             len(spent),
             unrouted,
             total_ms // len(spent) if spent else 0,
@@ -1408,7 +1408,7 @@ def _route_one(
     """
     visuals = settings.app.visuals
     facts = route.numeric_facts(article.text or "", limit=visuals.max_facts)
-    model_id = settings.app.models.route.id
+    model_id = settings.app.models.visual_planner.id
     if not route.reachable_kinds(facts, visuals=visuals):
         return (
             route.decided_without_the_model(
