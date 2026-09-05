@@ -34,9 +34,12 @@ function consoleIsTheSubject(paths: readonly string[]): boolean {
 	return paths.some((path) => CONSOLE_OWNED.test(path.replaceAll('\\', '/')));
 }
 
-export type CiAnswer = { browser: boolean; console: boolean };
+export type CiAnswer = { browser: boolean; console: boolean; validateAll: boolean };
 
-/** The two lines the `scope` job writes to `$GITHUB_OUTPUT`.
+/** Anything under here IS the archive, so a change to it has to be re-read. */
+const ARCHIVE_TOUCHED = /^frontend\/public\/(digest|telemetry|assist)\//;
+
+/** The three lines the `scope` job writes to `$GITHUB_OUTPUT`.
  *
  * A pure function of the changed paths, so the truth table is checked here at
  * microseconds a case rather than through a temporary git repository and a
@@ -50,7 +53,17 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 	const deferred = isPr && !selection.tooling && !consoleIsTheSubject(paths);
 	return {
 		browser: selection.groups.some((group) => group !== 'backend' && group !== 'logic'),
-		console: selection.groups.includes('console') && !deferred
+		console: selection.groups.includes('console') && !deferred,
+		// A published day is frozen, so the only thing that can invalidate one is a
+		// change to the shape it is read through - or an edit to the day itself.
+		// Everything else leaves an answer that was settled when the day was
+		// written, and re-deriving it costs about 0.27 s a day (`CLAUDE.md` Rule
+		// #12). Outside a pull request it always runs: that is the merge to `main`.
+		validateAll:
+			!isPr ||
+			selection.contracts ||
+			selection.tooling ||
+			paths.some((path) => ARCHIVE_TOUCHED.test(path.replaceAll('\\', '/')))
 	};
 }
 const MODULE_TESTS: Record<string, string[]> = {
@@ -176,6 +189,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 		const answer = ciAnswer(paths, isPr);
 		console.log(`browser=${answer.browser}`);
 		console.log(`console=${answer.console}`);
+		console.log(`validate_all=${answer.validateAll}`);
 	} else {
 		console.log(JSON.stringify(selectPaths(paths), null, 2));
 	}

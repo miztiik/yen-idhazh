@@ -1482,13 +1482,15 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
 #: where a case is a function call. Here a case is a temporary repository, two
 #: commits and a shell, and twenty-four of them cost 168 s of this module's
 #: 585 s on an i7-1265U, 2026-09-05 - for an answer the pure function already
-#: gives. These three are the plumbing rather than the policy: one change that
-#: buys everything, one that buys the browser half without the console, and one
-#: that buys nothing.
+#: gives. These four are the plumbing rather than the policy: one change that
+#: buys everything, one that buys the browser half without the console, one that
+#: re-reads the archive because it moved the shape a day is read through, and
+#: one that buys nothing.
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True, True),
-    ("frontend/src/routes/[date]/+page.svelte", True, False),
-    ("docs/reference/measurements.md", False, False),
+    ("frontend/src/routes/console/+page.svelte", True, True, False),
+    ("frontend/src/routes/[date]/+page.svelte", True, False, False),
+    ("config/idhazh.json", True, False, True),
+    ("docs/reference/measurements.md", False, False, False),
 )
 
 
@@ -1547,9 +1549,9 @@ def _browser_scope(
 
 
 @requires_bash
-@pytest.mark.parametrize(("changed", "browser", "console"), BROWSER_SCOPE_CASES)
+@pytest.mark.parametrize(("changed", "browser", "console", "validate_all"), BROWSER_SCOPE_CASES)
 def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
-    changed: str, browser: bool, console: bool, tmp_path: Path
+    changed: str, browser: bool, console: bool, validate_all: bool, tmp_path: Path
 ) -> None:
     """The filter is executed, not read.
 
@@ -1565,6 +1567,7 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     assert _browser_scope(tmp_path, [changed]) == {
         "browser": str(browser).lower(),
         "console": str(console).lower(),
+        "validate_all": str(validate_all).lower(),
     }
 
 
@@ -1589,6 +1592,7 @@ def test_a_push_to_main_never_consults_the_list(tmp_path: Path) -> None:
     assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == {
         "browser": "true",
         "console": "true",
+        "validate_all": "true",
     }
 
 
@@ -1638,6 +1642,59 @@ def test_every_committed_day_is_validated_where_the_build_stopped_doing_it(
     assert calls, f"{filename}/{job_name} never validates the committed days"
     assert "continue-on-error" not in steps[calls[0]], (
         "a day that fails its contract is a day no reader can read; the step still fails"
+    )
+
+
+def test_the_daily_publish_validates_the_day_it_wrote_and_not_every_other_one() -> None:
+    """A published day is frozen, so re-opening all of them buys nothing.
+
+    Measured 2026-09-05 on an i7-1265U: 16 committed days took 6.6 s to 7.1 s,
+    about 0.27 s a day on top of a fixed start. The pipeline publishes five
+    times a day, so a year of days would spend roughly eight minutes a day
+    re-deriving an answer settled when each of those days was written
+    (`CLAUDE.md` Rule #12).
+
+    `backfill.yml` is deliberately not here: it repairs days it chooses, so the
+    day it has to check is not one this file can name.
+    """
+    steps = _steps(_load_workflows()["digest.yml"], "assemble")
+    call = next(
+        shlex.split(str(step.get("run", "")))
+        for step in steps
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+    )
+    assert "--day" in call, "the daily publish still opens every committed day"
+    named = call[call.index("--day") + 1]
+    assert "needs.plan.outputs.date" in named, (
+        f"the day is {named!r}, which is not the day this run was planned for"
+    )
+
+
+def test_the_whole_tree_is_re_read_only_when_the_shape_it_is_read_through_moves() -> None:
+    """The other half: `ci.yml` pays the full price on the change that earns it.
+
+    A contract, schema, config or harness edit can invalidate a day nobody
+    touched, and a merge to `main` always counts. Anything else leaves every
+    committed day exactly as valid as it was when it was pushed.
+    """
+    workflow = _load_workflows()["ci.yml"]
+    # `needs:` is a bare string for one dependency and a list for several.
+    declared = _job(workflow, "gates").get("needs")
+    waits_for = [declared] if isinstance(declared, str) else declared
+    assert isinstance(waits_for, list) and "scope" in waits_for, (
+        "gates cannot read the selector's answer without waiting for it"
+    )
+    outputs = _job(workflow, "scope").get("outputs")
+    assert isinstance(outputs, dict) and "validate_all" in outputs, (
+        "the selector's answer is not published for another job to read"
+    )
+    step = next(
+        step
+        for step in _steps(workflow, "gates")
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+    )
+    assert "validate_all" in str(step.get("if", "")), (
+        "the full pass over the archive runs on every change, whatever moved"
     )
 
 

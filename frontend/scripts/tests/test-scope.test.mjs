@@ -124,8 +124,49 @@ const PULL_REQUEST_SCOPE = [
 
 test('a pull request buys the console specs only for the console or the harness', () => {
 	for (const [path, browser, console_] of PULL_REQUEST_SCOPE) {
-		assert.deepEqual(ciAnswer([path], true), { browser, console: console_ }, path);
+		const answer = ciAnswer([path], true);
+		assert.equal(answer.browser, browser, path);
+		assert.equal(answer.console, console_, path);
 	}
+});
+
+//: A change, and whether it can invalidate a day that is already committed. A
+//: published day is frozen, so only the shape it is read through - or an edit to
+//: the day itself - can, and everything else leaves an answer settled when the
+//: day was written.
+const REVALIDATES_THE_ARCHIVE = [
+	'backend/idhazh/contracts/item_health.py',
+	'schemas/digest-day.schema.json',
+	'config/idhazh.json',
+	'pyproject.toml',
+	'frontend/package.json',
+	'frontend/scripts/test-groups.ts',
+	'.github/workflows/ci.yml',
+	'frontend/public/digest/2026/08/26/digest.json',
+	'frontend/public/telemetry/2026-08.csv',
+	'frontend/public/assist/index/2026-08.json'
+];
+
+const LEAVES_THE_ARCHIVE_ALONE = [
+	'frontend/src/routes/console/+page.svelte',
+	'frontend/src/lib/charts/engine.ts',
+	'frontend/src/styles/tokens.css',
+	'backend/idhazh/discover.py',
+	'backend/tests/test_discover.py',
+	'docs/reference/measurements.md'
+];
+
+test('only a change that can invalidate a committed day re-reads every day', () => {
+	for (const path of REVALIDATES_THE_ARCHIVE) {
+		assert.equal(ciAnswer([path], true).validateAll, true, path);
+	}
+	for (const path of LEAVES_THE_ARCHIVE_ALONE) {
+		assert.equal(ciAnswer([path], true).validateAll, false, path);
+	}
+	// One path in a mixed change is enough, and a merge always re-reads.
+	assert.equal(ciAnswer(['docs/a.md', 'config/idhazh.json'], true).validateAll, true);
+	assert.equal(ciAnswer(['full-ci-run'], false).validateAll, true);
+	assert.equal(ciAnswer(['unresolved-change-base'], true).validateAll, true);
 });
 
 test('the console half is never bought without the browser half', () => {
@@ -138,19 +179,24 @@ test('a merge to main runs every group, which is what the deferral leans on', ()
 	// Not a path list: outside a pull request the caller passes this sentinel and
 	// the selector answers with full coverage, so nothing deferred can reach a
 	// reader without the console specs having run over it first.
-	assert.deepEqual(ciAnswer(['full-ci-run'], false), { browser: true, console: true });
-	assert.deepEqual(ciAnswer(['unresolved-change-base'], true), { browser: true, console: true });
+	const merged = ciAnswer(['full-ci-run'], false);
+	assert.equal(merged.browser, true);
+	assert.equal(merged.console, true);
+	const unresolved = ciAnswer(['unresolved-change-base'], true);
+	assert.equal(unresolved.browser, true);
+	assert.equal(unresolved.console, true);
 });
 
 test('one reaching path in a mixed change still buys the browser suite', () => {
-	assert.deepEqual(
-		ciAnswer(['docs/reference/measurements.md', 'frontend/src/routes/+page.svelte'], true),
-		{ browser: true, console: false }
+	const mixed = ciAnswer(
+		['docs/reference/measurements.md', 'frontend/src/routes/+page.svelte'],
+		true
 	);
-	assert.deepEqual(
-		ciAnswer(['docs/a.md', 'frontend/src/routes/console/+page.svelte'], true),
-		{ browser: true, console: true }
-	);
+	assert.equal(mixed.browser, true);
+	assert.equal(mixed.console, false);
+	const withConsole = ciAnswer(['docs/a.md', 'frontend/src/routes/console/+page.svelte'], true);
+	assert.equal(withConsole.browser, true);
+	assert.equal(withConsole.console, true);
 });
 
 test('changed paths include commits, staged, unstaged, untracked and both rename sides', () => {

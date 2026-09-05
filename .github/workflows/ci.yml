@@ -34,6 +34,7 @@ jobs:
     outputs:
       browser: ${{ steps.decide.outputs.browser }}
       console: ${{ steps.decide.outputs.console }}
+      validate_all: ${{ steps.decide.outputs.validate_all }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -51,6 +52,7 @@ jobs:
         run: .github/scripts/browser-suite-needed.sh >> "$GITHUB_OUTPUT"
 
   gates:
+    needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -107,7 +109,15 @@ jobs:
       # rather than hidden: a broken day can no longer be built, it can only no
       # longer be MERGED. The publishing jobs run the same command before their
       # own commit, which is what covers a day the pipeline pushes on its own.
+      #
+      # Only when the shape can have moved. A published day is frozen, so a
+      # contract, schema, config or harness change - or an edit to the tree
+      # itself - is the only thing that can invalidate one, and a merge to `main`
+      # always counts. Measured 2026-09-05: 16 days took 6.6 s, about 0.27 s a
+      # day, so a year of publishing would be around 100 s of every run
+      # (Rule #12).
       - name: Every committed day still matches its contracts
+        if: needs.scope.outputs.validate_all == 'true'
         run: python -m idhazh validate-days
 
   # The one gate `gates` cannot be: it runs on ONE interpreter, and the thing

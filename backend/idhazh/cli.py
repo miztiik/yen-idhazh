@@ -3330,8 +3330,8 @@ def _day_faults(path: Path, public_root: Path) -> list[str]:
     return faults
 
 
-def stage_validate_days(root: Path) -> int:
-    """Every committed day against the two contracts its readers hold.
+def stage_validate_days(root: Path, only: Sequence[str] = ()) -> int:
+    """Committed days against the two contracts their readers hold.
 
     **This exists because prerendering stopped proving it.** Until the reading
     decisions were split on 2026-09-01, every story a day published was serialised
@@ -3342,9 +3342,17 @@ def stage_validate_days(root: Path) -> int:
     is weaker than it was and it is written down rather than hidden: a broken
     day can no longer be built, it can only no longer be merged.
 
-    An empty tree fails. A validator that checked nothing prints the same line
-    as one that checked every day, which is the failure `site-weight` already
-    has a rule about.
+    `only` names the days to open, as `YYYY-MM-DD`. Empty means every committed
+    day, which is what a contract change needs and nothing else does: a day
+    already published is frozen, so the only thing that can invalidate it is a
+    change to the shape it is read through. Measured 2026-09-05 on an i7-1265U,
+    16 committed days took 6.6 s to 7.1 s - about 0.27 s a day on top of a fixed
+    start, so a year of publishing is around 100 s every time this runs
+    (Rule #12). A run that wrote one day names that day.
+
+    An empty tree fails, and so does a named day that is not there. A validator
+    that checked nothing prints the same line as one that checked every day,
+    which is the failure `site-weight` already has a rule about.
     """
     days = published_days(root)
     if not days:
@@ -3354,6 +3362,14 @@ def stage_validate_days(root: Path) -> int:
             root.as_posix(),
         )
         return 1
+
+    if only:
+        wanted = set(only)
+        days = [path for path in days if _day_of(path) in wanted]
+        missing = sorted(wanted - {_day_of(path) for path in days})
+        if missing:
+            LOG.error("validate-days was asked for days that are not committed: %s", missing)
+            return 1
 
     broken = 0
     for path in days:
@@ -3626,6 +3642,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--day",
+        action="append",
+        default=[],
+        metavar="YYYY-MM-DD",
+        help=(
+            "A day for `validate-days` to open, repeatable. Every committed day when "
+            "this is not given, which is what a contract change needs and nothing else "
+            "does - a published day is frozen, so only the shape it is read through can "
+            "invalidate it. A run that wrote one day names that day."
+        ),
+    )
+    parser.add_argument(
         "--digest-root",
         type=Path,
         default=PUBLIC_ROOT,
@@ -3674,7 +3702,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Above the fetcher for the same reason site-weight is: reading committed
         # files decides nothing about the open web, and starting a fetcher to do
         # it would read every host's robots.txt for nothing.
-        return stage_validate_days(args.digest_root)
+        return stage_validate_days(args.digest_root, args.day)
 
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.

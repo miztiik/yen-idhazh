@@ -127,3 +127,29 @@ def test_the_stage_stops_the_publish_rather_than_logging_and_passing(tmp_path: P
     draw(tmp_path, picture(0))
 
     assert cli.stage_validate_days(tmp_path / "digest") == 1
+
+
+def test_naming_a_day_opens_that_day_and_leaves_the_rest_shut(tmp_path: Path) -> None:
+    """What the daily publish asks for: it wrote one day, so it pays for one day.
+
+    The broken day is the one NOT named, so a run that quietly widened back to
+    the whole tree would fail here rather than pass more thoroughly.
+    """
+    a_day_naming(tmp_path, [picture(0), picture(0)])
+    draw(tmp_path, picture(0))
+    other = tmp_path / "digest" / "2026" / "08" / "22"
+    other.mkdir(parents=True)
+    (other / "digest.json").write_text(
+        json.dumps({**json.loads(read_text(FIXTURE)), "date": "2026-08-22"}), encoding="utf-8"
+    )
+
+    assert cli.stage_validate_days(tmp_path / "digest", ["2026-08-22"]) == 0
+    assert cli.stage_validate_days(tmp_path / "digest") == 1
+
+
+def test_a_day_that_is_not_committed_fails_rather_than_checking_nothing(tmp_path: Path) -> None:
+    """A typo in the workflow's date would otherwise read as a clean pass."""
+    a_day_naming(tmp_path, [picture(0)])
+    draw(tmp_path, picture(0))
+
+    assert cli.stage_validate_days(tmp_path / "digest", ["1999-01-01"]) == 1
