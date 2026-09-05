@@ -3614,7 +3614,6 @@ def test_the_whole_day_check_is_bought_by_the_same_change_the_browser_half_is() 
     half, and a job nobody buys is a check that stopped existing.
     """
     workflow = _load_workflows()["ci.yml"]
-    jobs = workflow["jobs"]
 
-    assert jobs["whole-day"]["if"] == jobs["browser"]["if"]
-    assert jobs["whole-day"]["needs"] == "scope"
+    assert _job(workflow, "whole-day")["if"] == _job(workflow, "browser")["if"]
+    assert _job(workflow, "whole-day")["needs"] == "scope"
