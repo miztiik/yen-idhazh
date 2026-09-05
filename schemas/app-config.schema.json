@@ -1661,8 +1661,6 @@
     "VisualKind": {
       "enum": [
         "chart",
-        "diagram",
-        "image",
         "none"
       ],
       "title": "VisualKind",
@@ -1680,7 +1678,7 @@
     },
     "VisualsConfig": {
       "additionalProperties": false,
-      "description": "Routing and rendering knobs. \"Nothing\" is the common answer, by design.\n\n`enabled_kinds` is the gate that keeps an unbuilt renderer unreachable. The\nfour-way enum lives in the contract because a payload must be able to say\n`image`; the router may only choose a kind whose renderer exists, so turning\none on is a config edit rather than a code change.",
+      "description": "Planning and rendering knobs. \"Nothing\" is the common answer, by design.\n\n`enabled_kinds` is the gate that keeps an unbuilt renderer unreachable. It\nis a list rather than a flag so that a kind added later is switched on by a\nconfig edit rather than by a code change.",
       "properties": {
         "canvas_width": {
           "default": 800,
@@ -1690,7 +1688,7 @@
           "type": "integer"
         },
         "enabled_kinds": {
-          "description": "Kinds the router may choose. `none` is always available and never listed. Diagram ships off: the model drafted it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made the router's own pre-filter unfireable, because a diagram's steps come from prose and nothing about it is decidable in advance. The renderer is built and tested; turning the arm back on is this one word.",
+          "description": "Kinds the planner may choose. `none` is always available and never listed. Chart is the only one left: the diagram arm shipped off - the model drafted it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made the planner's own pre-filter unfireable, because a diagram's steps come from prose and nothing about it is decidable in advance - and its renderer was deleted with the Mermaid round trip on 2026-09-05.",
           "items": {
             "$ref": "#/$defs/VisualKind"
           },
@@ -1759,6 +1757,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "VisualKind, which types visuals.enabled_kinds, lost diagram and image. A config naming either value no longer loads.",
+      "version": "2026-09-05T18:00",
+      "why": "The diagram renderer went with the Mermaid round trip it read, and image never had a renderer at all (pseudo-plan row 63), so a config could ask for a kind nothing could draw. No read-side migration is owed: the committed config/idhazh.json names chart alone, which is the only value left, so the shipped file loads unchanged."
+    },
     {
       "change": "models.route is renamed models.visual_planner, run.route_budget_minutes is renamed run.visual_planner_budget_minutes, and finetune.student now names visual_planner. finetune.teacher and finetune.student are typed ModelRole rather than Slug. Breaking: three key spellings changed. The read-side migration is a before-validator on ModelsConfig, RunConfig and FinetuneConfig that reads the old spelling as the new one and refuses a file carrying both with different values, so a config written before today still loads. No value moved: the weights, the revision, the sha256 and the 40 minutes are the numbers they were yesterday.",
       "version": "2026-09-05T14:00",
@@ -2211,7 +2214,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-05T14:00",
+      "default": "2026-09-05T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2225,5 +2228,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-05T14:00"
+  "version": "2026-09-05T18:00"
 }

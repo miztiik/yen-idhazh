@@ -1645,7 +1645,7 @@ test('the measured day prints rates, and the day with no minutes prints dashes',
 	await expect(quiet.locator('[data-charts-cell="per-chart"]')).toHaveText('-');
 });
 
-test('a diagram is a visual and is not a published chart', async ({ page }) => {
+test('a visual that never drew is a visual and is not a published chart', async ({ page }) => {
 	await page.goto('/console/');
 	await openDailyCharts(page);
 
@@ -1660,12 +1660,12 @@ test('a diagram is a visual and is not a published chart', async ({ page }) => {
 		(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
 	).length;
 
-	// The fixture publishes a chart and a diagram. The column is headed `Visuals
-	// published` since 2026-08-31 but still counts only rendered charts, because
-	// counting every visual would put the diagram in the chart arm's bill and the
-	// arm would look twice as productive as it is. Every visual on the eleven
-	// committed days is a chart, so the two numbers agree today; the day a
-	// diagram publishes for real, the count or the heading has to move.
+	// The fixture publishes two charts and plans a third the renderer refused. The
+	// column is headed `Visuals published` since 2026-08-31 but still counts only
+	// rendered charts, because counting every visual would put a picture nobody
+	// can see on the arm's bill and the arm would look more productive than it is.
+	// Every visual on the committed days is a rendered chart, so the two numbers
+	// agree there; the fixture is the only place they can be told apart.
 	expect(visuals).toBeGreaterThan(charts);
 	await expect(
 		page.locator(`[data-chart-day="${DAY}"] [data-charts-cell="published"]`)

@@ -1381,23 +1381,23 @@ class FinetuneConfig(Model):
 
 
 class VisualsConfig(Model):
-    """Routing and rendering knobs. "Nothing" is the common answer, by design.
+    """Planning and rendering knobs. "Nothing" is the common answer, by design.
 
-    `enabled_kinds` is the gate that keeps an unbuilt renderer unreachable. The
-    four-way enum lives in the contract because a payload must be able to say
-    `image`; the router may only choose a kind whose renderer exists, so turning
-    one on is a config edit rather than a code change.
+    `enabled_kinds` is the gate that keeps an unbuilt renderer unreachable. It
+    is a list rather than a flag so that a kind added later is switched on by a
+    config edit rather than by a code change.
     """
 
     enabled_kinds: list[VisualKind] = Field(
         default_factory=lambda: [VisualKind.CHART],
         description=(
-            "Kinds the router may choose. `none` is always available and never listed. "
-            "Diagram ships off: the model drafted it zero times in 88 items and rendered "
-            "it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made "
-            "the router's own pre-filter unfireable, because a diagram's steps come from "
-            "prose and nothing about it is decidable in advance. The renderer is built and "
-            "tested; turning the arm back on is this one word."
+            "Kinds the planner may choose. `none` is always available and never listed. "
+            "Chart is the only one left: the diagram arm shipped off - the model drafted "
+            "it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, "
+            "2026-08-24/25), while its presence made the planner's own pre-filter "
+            "unfireable, because a diagram's steps come from prose and nothing about it "
+            "is decidable in advance - and its renderer was deleted with the Mermaid "
+            "round trip on 2026-09-05."
         ),
     )
     min_chart_points: int = Field(
@@ -2277,6 +2277,20 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-05T18:00",
+            change=(
+                "VisualKind, which types visuals.enabled_kinds, lost diagram and image. A "
+                "config naming either value no longer loads."
+            ),
+            why=(
+                "The diagram renderer went with the Mermaid round trip it read, and image "
+                "never had a renderer at all (pseudo-plan row 63), so a config could ask "
+                "for a kind nothing could draw. No read-side migration is owed: the "
+                "committed config/idhazh.json names chart alone, which is the only value "
+                "left, so the shipped file loads unchanged."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-05T14:00",
             change=(

@@ -289,8 +289,7 @@
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
-      "chart",
-      "diagram"
+      "chart"
     ],
     "lead_words": 120,
     "max_chart_points": 8,
