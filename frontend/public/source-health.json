@@ -1,10 +1,10 @@
 {
   "complete_dates": 12,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-05T12:36:59Z",
+  "generated_at": "2026-09-05T15:21:53Z",
   "last_date": "2026-09-04",
   "min_complete_days": 30,
-  "run_id": "2026-09-05-33961270208",
+  "run_id": "2026-09-05-33968946519",
   "sources": [
     {
       "availability": "answering",
@@ -235,7 +235,7 @@
       "vertical": "world"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 0,
       "permission": "allowed",
       "publications": 0,
@@ -1723,7 +1723,7 @@
       "vertical": "energy"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "opportunities": 53,
       "permission": "allowed",
       "publications": 53,
