@@ -33,6 +33,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 2 | A past-seed item is themed too | 1 | B | PENDING | - | - | - |
 | 3 | A whole committed day, looked at | 2 | C | PENDING | - | - | - |
 | 4 | One knob, one value | - | C | PENDING | - | - | - |
+| 5 | A PR runs only the tests it can break | - | A | PENDING | - | - | - |
 
 ---
 
@@ -149,7 +150,34 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 3 | Wire it up now so the duplicate has a reader | The knob's own doc says a setting that draws an illegible chart is worse than no setting. Wiring it before plan 12 ships exactly that | Susan |
 
 ---
+## 6. Row #5 - A PR runs only the tests it can break
 
+- **Scope:** `pyproject.toml` gains a `markers` list, so a change can run the tests it can break rather than the whole suite.
+- **Files touched:**
+  - `pyproject.toml`
+  - `backend/tests/conftest.py`
+  - selected modules under `backend/tests/` (the marks themselves)
+  - `docs/how-to/run-the-gates.md`
+- **Acceptance gates:** `ruff`; `mypy --strict`; the full suite in CI; each marked subset run alone.
+- **Oracle:** The union of the marked subsets equals the full collected set, asserted by comparing collected node ids - so a test that carries no mark is **found**, rather than silently never running in any subset.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Four marks earn a name: `contract` (schema generation, drift, round trip), `visual` (planner, validator, compiler, renderer), `slow` (anything over a second), `workflow` (the YAML and shell-script tests) | O26, section 14.1 |
+| 2 | **CI keeps running everything.** The marks exist so a developer can run the ten tests their change can break, and so the local suite stops being the reason a gate gets skipped | Section 14.1 |
+| 3 | Parallel execution is **already shipped** - `addopts` is `-q -n auto`. Only the `markers` list is missing, so the throughput half of this decision is done and this row is the filtering half | C17, verified 2026-09-05 |
+| 4 | It sits in plan 01 because it is the head of the chain and it speeds every plan after it | Carmack, 2026-09-05 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A mark per subsystem | Marks nobody selects on are noise, and the four here are the four a developer actually reaches for | Fowler |
+| 2 | Let CI use the marks too | Then a mismarked test stops running anywhere, and the full suite is the only thing that catches the traps this repository keeps hitting | Carmack |
+
+---
 ## See also
 
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
