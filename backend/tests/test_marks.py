@@ -3,8 +3,7 @@
 The four marks declared in `pyproject.toml` let a developer run what a change
 can break instead of the whole suite. That is only safe when a test outside
 every subset is FOUND rather than silently never run, so this module collects
-the suite once whole, once for each declared mark and once for the complement,
-then holds those sets against each other by node id.
+the suite once and asks pytest which marks it resolved onto each test.
 
 A mark is a module-level `pytestmark`, so a module that is renamed or moved
 carries its mark with it and nothing here needs an edit. What does need an edit
@@ -13,17 +12,20 @@ is the one place the fact "no mark selects this" is written down.
 
 The marks never decide what a merge is checked against. CI runs the whole suite
 (`docs/how-to/run-the-gates.md`), so a wrong mark costs a developer a re-run
-rather than a missed regression.
+rather than a missed regression. That is also why this file buys its answer as
+cheaply as it can.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+import tempfile
 import tomllib
 from collections.abc import Iterable
 from functools import cache
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Final
 
 import pytest
@@ -75,6 +77,34 @@ UNMARKED_MODULES: Final = frozenset(
 )
 
 
+#: Collects the suite and reports what pytest resolved onto each test.
+#:
+#: `pytest_collection_modifyitems` runs after every `pytestmark`, class mark and
+#: decorator has been applied, so `iter_markers` is pytest's own answer rather
+#: than this file re-reading source and guessing. The JSON goes to a file
+#: because pytest owns stdout.
+CENSUS: Final = """
+import json, sys
+import pytest
+
+class Census:
+    def __init__(self):
+        self.rows = []
+
+    def pytest_collection_modifyitems(self, items):
+        for item in items:
+            self.rows.append([item.nodeid, sorted({m.name for m in item.iter_markers()})])
+
+census = Census()
+code = pytest.main(
+    ["-o", "addopts=", "--collect-only", "-q", "-p", "no:cacheprovider"],
+    plugins=[census],
+)
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump({"code": int(code), "rows": census.rows}, handle)
+"""
+
+
 def declared_marks() -> tuple[str, ...]:
     """The mark names `pyproject.toml` declares, in the order it declares them.
 
@@ -87,44 +117,48 @@ def declared_marks() -> tuple[str, ...]:
 
 
 @cache
-def collected(expression: str) -> frozenset[str]:
-    """The node ids `-m <expression>` selects, from a real collection.
+def census() -> dict[str, frozenset[str]]:
+    """Every node id in the suite, against the marks pytest resolved onto it.
 
-    `-o addopts=` clears the repository defaults, so the output shape does not
-    depend on how quiet `addopts` happens to be and no second layer of xdist
+    One collection, where this file used to run six - the whole suite, one per
+    declared mark, and the complement - at 32 s of subprocess each. The five
+    extra runs were asking pytest's `-m` engine to confirm set arithmetic that
+    pytest's own mark data already answers, and that engine is not ours to test.
+    Measured 2026-09-05 on Intel Core i7-1265U / Windows 11: 195 s to 34 s.
+
+    `-o addopts=` clears the repository defaults, so no second layer of xdist
     workers starts. It also drops `--strict-markers`, which is deliberate: a
     misspelled mark must reach this file as an unmarked module rather than
     stopping the subprocess, so the failure names the module either way.
     """
-    argv = [
-        sys.executable,
-        "-m",
-        "pytest",
-        "-o",
-        "addopts=",
-        "--collect-only",
-        "-q",
-        "-p",
-        "no:cacheprovider",
-    ]
-    if expression:
-        argv += ["-m", expression]
-    done = subprocess.run(
-        argv, cwd=REPO_ROOT, capture_output=True, text=True, check=False, encoding="utf-8"
-    )
-    # 5 is "nothing was collected", which is an answer here rather than a failure.
-    assert done.returncode in {0, 5}, (
-        f"collection failed for -m {expression!r}:\n{done.stdout}\n{done.stderr}"
-    )
-    return frozenset(
-        line.strip()
-        for line in done.stdout.splitlines()
-        if line.startswith("backend/tests/") and "::" in line
-    )
+    with tempfile.TemporaryDirectory() as room:
+        out = Path(room) / "census.json"
+        done = subprocess.run(
+            [sys.executable, "-c", CENSUS, str(out)],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            encoding="utf-8",
+        )
+        assert out.exists(), f"the census never ran:\n{done.stdout}\n{done.stderr}"
+        payload = json.loads(out.read_text(encoding="utf-8"))
+
+    assert payload["code"] == 0, f"collection failed:\n{done.stdout}\n{done.stderr}"
+    rows = {node_id: frozenset(marks) for node_id, marks in payload["rows"]}
+    # A census of nothing would make every assertion below vacuous, which reads
+    # exactly like a pass.
+    assert len(rows) > 1000, f"the census collected {len(rows)} tests, so it did not collect"
+    return rows
 
 
-def unmarked_expression() -> str:
-    return " and ".join(f"not {name}" for name in declared_marks())
+def selected_by(name: str) -> frozenset[str]:
+    return frozenset(node_id for node_id, marks in census().items() if name in marks)
+
+
+def selected_by_nothing() -> frozenset[str]:
+    declared = frozenset(declared_marks())
+    return frozenset(node_id for node_id, marks in census().items() if not (marks & declared))
 
 
 def by_module(node_ids: Iterable[str]) -> dict[str, list[str]]:
@@ -134,37 +168,19 @@ def by_module(node_ids: Iterable[str]) -> dict[str, list[str]]:
     return grouped
 
 
-def test_every_mark_selects_tests_and_together_with_the_rest_they_are_the_suite() -> None:
-    """The four subsets and the complement are the suite, with nothing outside them.
-
-    One test rather than four, because each collection costs a subprocess and
-    `-n auto` gives two tests two processes that cannot share the cache.
-    """
+def test_every_mark_selects_tests_and_no_module_falls_outside_them() -> None:
+    """One test, because `-n auto` gives two tests two processes and the census
+    cache cannot cross them."""
     marks = declared_marks()
-    empty = [name for name in marks if not collected(name)]
+    assert marks, "pyproject.toml declares no marks at all"
+    empty = [name for name in marks if not selected_by(name)]
     assert not empty, (
         f"pyproject.toml declares {empty} and no test carries them. "
         "A module-level `pytestmark` was removed, or the name was never applied."
     )
 
-    whole = collected("")
-    marked: set[str] = set()
-    for name in marks:
-        marked |= collected(name)
-    rest = collected(unmarked_expression())
-
-    missing = whole - (marked | rest)
-    assert not missing, f"{len(missing)} node ids are in no subset at all: {sorted(missing)[:5]}"
-    assert not (marked | rest) - whole, "a subset selected something the whole suite did not"
-    assert rest == whole - marked, (
-        "`-m 'not <every mark>'` and 'the whole suite minus the marked subsets' disagree, "
-        f"by {len(rest ^ (whole - marked))} node ids"
-    )
-
-
-def test_a_module_in_no_subset_is_one_this_file_names() -> None:
-    """An unmarked module is a decision somebody wrote down, never an oversight."""
-    rest = by_module(collected(unmarked_expression()))
+    # An unmarked module is a decision somebody wrote down, never an oversight.
+    rest = by_module(selected_by_nothing())
     appeared = sorted(set(rest) - UNMARKED_MODULES)
     vanished = sorted(UNMARKED_MODULES - set(rest))
 
