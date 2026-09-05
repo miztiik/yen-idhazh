@@ -507,10 +507,10 @@ def _record(
     succeeded: int,
     failed: int,
     skipped: int,
-    routed: int = 0,
+    decided: int = 0,
     prefiltered: int = 0,
     charts_drafted: int = 0,
-    route_ms: int | None = None,
+    decision_ms: int | None = None,
 ) -> RunRecord:
     hour = f"{n * 6:02d}"
     return RunRecord(
@@ -536,10 +536,10 @@ def _record(
         items_succeeded=succeeded,
         items_failed=failed,
         items_skipped=skipped,
-        items_routed=routed,
+        items_decided=decided,
         items_prefiltered=prefiltered,
         charts_drafted=charts_drafted,
-        route_ms=route_ms,
+        decision_ms=decision_ms,
         site_bytes=_site_bytes(date),
         site_files=4,
     )
@@ -574,10 +574,10 @@ def manifest(target: Path, published: int) -> RunManifest:
                 succeeded=published,
                 failed=0,
                 skipped=0,
-                routed=5,
+                decided=5,
                 prefiltered=3,
                 charts_drafted=2,
-                route_ms=264_000,
+                decision_ms=264_000,
             ),
             # Amber: nothing was attempted. Every candidate was already published.
             _record(DATE, 2, RunStatus.COMPLETED, planned=4, succeeded=0, failed=0, skipped=4),
