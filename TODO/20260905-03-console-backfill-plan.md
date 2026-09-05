@@ -27,9 +27,9 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Eight committed numbers become publishable | - | A | IN-FLIGHT #423 | yi-c01 | #423 | Carmack ruled the seed: the eight cost 176,753 gzipped bytes on `/console/` and no panel draws them, so the shard carries them and the prerendered seed does not |
+| 1 | Eight committed numbers become publishable | - | A | DONE #423 | yi-c01 | #423 | Carmack ruled the seed: the eight cost 176,753 gzipped bytes on `/console/` and no panel draws them, so the shard carries them and the prerendered seed does not |
 | 2 | What an item cost, drawn | 1 | B | IN-FLIGHT #427 | yi-c02 | #427 | Carmack ruled the two clocks stay apart and both axes double; the plan's illustrative `0.72 to 0.90` cache range did not survive - measured 0.518 in the middle, 0.000 to 0.820 across the spread, and 667 of 6,104 items reused nothing. Drawn from a server-side reduction per preset, so the seed keeps its nulls |
-| 3 | The five doubt reasons get a shape | 1 | C | PENDING | - | - | - |
+| 3 | The five doubt reasons get a shape | 1 | C | DONE #425 | yi-c03 | #425 | Andre, Jony, Susan, Reader - agent files read directly, no runSubagent |
 | 4 | Faithfulness and lead coverage join them | 3 | D | PENDING | - | - | - |
 | 5 | The ceilings are re-recorded by the plan that grew them | 2, 4 | E | PENDING | - | - | - |
 

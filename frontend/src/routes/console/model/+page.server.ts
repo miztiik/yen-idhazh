@@ -1,6 +1,13 @@
 import { chartConfig, consoleConfig, observabilityConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import { countersWithoutScores, recordingNotes } from '$lib/console/recording';
 import {
+	reasonColumnLabels,
+	reasonDays,
+	reasonSeries,
+	reasonsWithin,
+	type ReasonDay
+} from '$lib/console/doubt-reasons';
+import {
 	itemRates,
 	modelByDate,
 	modelSwap,
@@ -12,8 +19,10 @@ import {
 	type DayWindow
 } from '$lib/server/model-work';
 import type { RateSpread, ThroughputDay } from '$lib/charts/series';
+import { stacked } from '$lib/charts/stacked';
 import { windowOfDays } from '$lib/charts/viewport';
-import { evalRows, itemHealthRows } from '$lib/server/payload';
+import { renderToSvg } from '$lib/server/chart-render';
+import { evalRows, itemHealthRows, loadDay, publishedDates } from '$lib/server/payload';
 
 export const prerender = true;
 
@@ -32,6 +41,37 @@ export type {
 	WriteBin,
 	WriteTimes
 } from '$lib/server/model-work';
+
+export type { ReasonDay } from '$lib/console/doubt-reasons';
+
+/** Why the checker doubted each day's summaries, from the committed payloads.
+ *
+ * The reason is a field on the published item, decided by
+ * `backend/idhazh/evals/score.py` and written by `assemble.build_day`. It is not
+ * a column of `state/scores/`, which carries the inputs it was decided from, so
+ * this is the only ledger on disk that can answer the question.
+ *
+ * Every committed day is opened. That is a build-time read of the same tree
+ * `publishedItems` already walks for the Pipelines route, and nothing about it
+ * reaches a browser: what ships is one count per reason per day.
+ */
+function doubtReasonDays(): ReasonDay[] {
+	return reasonDays(
+		publishedDates()
+			.map((date) => {
+				const day = loadDay(date);
+				if (day === null) return null;
+				return {
+					date,
+					items: day.items.map((item) => ({
+						band: item.band,
+						reason: item.band_reason
+					}))
+				};
+			})
+			.filter((day) => day !== null)
+	);
+}
 
 function measured(row: Record<string, string>, name: string): number | null {
 	const raw = row[name];
@@ -107,6 +147,26 @@ export async function load() {
 	// The widest span the control can reach. Nothing older than this can be drawn
 	// whatever the operator does, so nothing older is inlined.
 	const widest = [...windows.values()].reduce((a, b) => (a.days >= b.days ? a : b));
+
+	// Why each day's summaries were doubted. Seeded to the widest span for the
+	// same reason `runLengths` is: each day is already seven small numbers, so
+	// narrowing the window is a filter and never a re-aggregation, and a day
+	// older than the widest preset could never be drawn.
+	const reasons = reasonsWithin(doubtReasonDays(), {
+		start: widest.start,
+		end: widest.end
+	});
+	// Drawn on the server at the span the page opens on, so every mark is on the
+	// page before any script runs. The browser re-draws from the same array when
+	// the operator moves the control.
+	const openReasons = reasonsWithin(reasons, windows.get(console.default_window_days) ?? widest);
+	const reasonsPlot = stacked(reasonColumnLabels(openReasons), reasonSeries(openReasons));
+	const reasonsSvg = reasonsPlot.empty
+		? null
+		: await renderToSvg(reasonsPlot.option, {
+				width: console.chart_width,
+				height: console.chart_height
+			});
 
 	const observability = observabilityConfig();
 	/** The days each instrument answered for, so the page can name a day one of
@@ -225,6 +285,11 @@ export async function load() {
 		// pipeline runs. Trimming a seed the first paint cannot use is a saving,
 		// not a cut.
 		runLengths: runLengths(rows, bands).filter((run) => run.date >= widest.start),
+		// One entry per committed day inside the widest span: the day's own item
+		// count, the summaries carrying a reason, the summaries doubted with none,
+		// and one count per reason. The browser filters this to the open window.
+		reasons,
+		reasonsSvg,
 		// Not windowed. A swap is a point in time and its two sides are however
 		// many articles ran on each model.
 		modelSwap: modelSwap(rows, itemRows, bands, console.min_attempts_for_rate),

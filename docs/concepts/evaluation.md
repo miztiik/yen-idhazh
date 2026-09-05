@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-04
+**Last Updated**: 2026-09-05
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -682,6 +682,76 @@ When both counterweights fail together - 5 of the 27 re-banded rows - the missin
 lead is named. Dropped facts are the larger loss: a flattened hedge changes how a
 sentence reads, and a missing lead means the story's who, what and how-much never
 arrived.
+
+### The reason lives on the published item, not in the score ledger
+
+The console plots these five since 2026-09-05, and the panel had to read them
+from the committed day payloads under `frontend/public/digest/`. **`band_reason`
+is not a column of `state/scores/`.** The ledger's 35 columns carry the inputs
+the reason is decided from - `hhem`, `coverage`, `unsupported_numbers`,
+`hedge_dropped` - and the band, and no reason. `verdict()` decides it,
+`assemble.build_day` writes it onto the item, and that is the only place on disk
+it exists.
+
+Re-deriving it from the ledger's inputs was the rejected alternative. It would
+put a second copy of `verdict()` in a second language, and the day the two
+disagree the console is wrong about the item a reader was shown - which is the
+one failure this instrument exists to prevent.
+
+**Each item carries at most one reason**, because `verdict()` returns exactly
+one. That is what lets the five be added: a stacked column of the five is the
+count of summaries the checker wrote a reason on, with nothing counted twice.
+
+### What the five reasons look like today
+
+Measured 2026-09-05 over all 16 committed day payloads, 6,633 published
+summaries. Exact counts over committed files, so there is no spread.
+
+| Reason | Summaries | Share of published |
+| --- | ---: | ---: |
+| none - the item reached `high` | 4,124 | 62.2% |
+| `faithfulness` | 1,312 | 19.8% |
+| `hedge_dropped` | 533 | 8.0% |
+| `lead_missing` | 453 | 6.8% |
+| `unsupported_number` | 211 | 3.2% |
+| `not_scored` | **0** | **0%** |
+
+**One summary in five is doubted because it does not line up with the article,
+and that is the largest single fault by a factor of two and a half.** The bands
+behind it are `high` 3,755, `medium` 1,817 and `low` 1,061.
+
+Two of those rows are worth reading twice.
+
+**`not_scored` has never fired.** It is drawn when no faithfulness score exists,
+and the scorer has run on every production item so far. The panel still declares
+it, and names it in a sentence under the plot rather than drawing an invisible
+line - a reader cannot otherwise tell a fault that never happened from one nobody
+looked for. The day the scorer is switched off, the line appears by itself.
+
+**`high` carries a reason on 0 of 3,755 items**, which is the rule above holding
+in the committed record rather than only in the function.
+
+### 369 summaries are doubted with no reason, and every one predates the field
+
+The five reasons total 2,509 while `medium` and `low` together total 2,878, so
+**369 doubtful summaries name nothing**. Measured per day, all 369 sit on three
+days: 2026-08-21 (4 of its 4 doubtful summaries), 2026-08-23 (52) and 2026-08-24
+(313). Every day from 2026-08-25 onward has **zero**. The two oldest days do not
+carry the `band_reason` key at all, and the next two carry it null on every item
+- the field was added to `DigestItem` after they were published.
+
+So the gap is a record we did not keep, not a reason the checker failed to give.
+The console says exactly that, in the panel, with the count: a column missing
+them is short by that much rather than clean. Reading a short column there as a
+quiet day is the same mistake as reading a zero as an absence, and this page has
+made that one before - see the 2,232 rows above that never measured the
+truncation gap.
+
+**Nothing is backfilled.** The band was written by a run that had already
+decided the reason and thrown it away, so recomputing one now would mean
+re-scoring those 369 items against today's scorer and stamping the answer onto a
+day another scorer banded. That publishes a number nobody measured on those items
+(Rule #10). Three days aging out of the widest console window costs less.
 
 ## Per-item scores cannot see drift
 

@@ -1931,6 +1931,74 @@ built on the same tree and the same machine.
 Authority: Jony, 2026-08-25; the three marks and the counts behind them, Jony
 and Fowler, 2026-08-27.
 
+### Why a summary was doubted, and the one ledger that can answer it
+
+The Summaries route draws the five reasons a summary failed to reach the top
+band, one column a day, over the window the page shares. The measure cards above
+it say how often the checker stopped; this says what was wrong.
+
+**It reads the committed day payloads, not `state/scores/`.** `band_reason` is
+decided by `verdict()` and written onto the published item by
+`assemble.build_day`. The score ledger's 35 columns carry the inputs a reason is
+decided from - `hhem`, `coverage`, `unsupported_numbers`, `hedge_dropped` - and
+the band, and no reason column at all. So the route walks `DIGEST_ROOT` the way
+`publishedItems` already does for the Pipelines route, and what ships is one
+count per reason per day rather than the payloads. Re-deriving the reason from
+the ledger's inputs was refused: it puts a second copy of `verdict()` in a second
+language, and the day the two disagree the console is wrong about the item a
+reader was shown ([../../concepts/evaluation.md](../../concepts/evaluation.md)).
+
+**The five are drawn apart and never added into one doubt count.** A single
+number says how often the checker stopped and never says which fault to go and
+fix. Each item carries at most one reason, so the five add up with nothing
+counted twice - which is what makes the stack legal and what the oracle checks.
+
+**Stacked, with a switch to lines.** The same array draws both with only `type`
+and `stack` moving, which is the condition
+[../../concepts/design-system.md](../../concepts/design-system.md) sets for that
+control. Unlike the two panels that had the switch before it, the chart is keyed
+on the shape as well as the window, so picking `Lines` reaches the live chart
+rather than only the prerendered one - the engine takes its option once, at
+hydration, so the block has to be rebuilt.
+
+**A reason with no items draws nothing, so the panel names it in a sentence.**
+`not_scored` has never fired: it needs a missing faithfulness score, and the
+scorer has run on every production item. A series that is zero everywhere is
+dropped by `stacked()`, so without the sentence a reader cannot tell a fault that
+never happened from one nobody looked for.
+
+**The column total is the day's reason count, never its doubtful count**, and
+the difference is printed. 369 doubtful summaries carry no reason, all of them on
+the three days published before the field existed. A panel that folded them into
+a band would draw a fault the checker never named; one that dropped them silently
+would make three days look clean.
+
+**It does not declare `data-windowed`.** The exact list of surfaces that do is an
+oracle in
+[../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts),
+and that oracle is stronger for being exact. The panel honours the same control
+and proves it in its own spec, by driving the control to each preset and reading
+the control's own attribute back against the panel's.
+
+**What it cost, measured 2026-09-05 on an Intel Core i7-1265U.** The panel adds
+**5,557 gzipped bytes** to `/console/model/`: the median of five builds is 38,867
+B against 33,310 B for `origin/main`'s own source built in place on the same tree
+and the same machine. Five builds of the shipping tree spanned 15 B, so the 64 B
+noise floor holds.
+
+**The ceiling moved to 47,974 B, by the method that owns it.** Heaviest of five
+builds (38,873 B), plus seven published days, plus the 64 B floor. A published
+day now costs this route **1,291 gzipped bytes**, re-measured by removing
+2026-08-31 - 601 articles, the heaviest committed day - from every ledger the
+route reads and rebuilding: 38,866 B fell to 37,575 B. It was 1,179 B when the
+ceiling was last re-derived on 2026-08-31, and the panel is what added the other
+112 B a day. The page therefore ships with 9,101 B of slack, which is seven
+published days and expires by design.
+
+That is one of the three ceilings the plan that grew them re-records, done for
+the one route this panel grew. `/console/` and `/console/machine/` are untouched
+and their own re-derivation is still owed.
+
 ### The model-change rule, and the charts it means something on
 
 A dashed rule down a chart says one sentence: *everything left of this line was
