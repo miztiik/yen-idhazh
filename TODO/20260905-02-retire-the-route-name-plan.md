@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The config keys move, and the old ones still open | - | A | PENDING | - | - | - |
+| 1 | The config keys move, and the old ones still open | - | A | DONE #411 | yi-r01 | #411 | Fowler, Carmack - agent files read directly |
 | 2 | The module and the contract take their real names | 1 | B | PENDING | - | - | - |
 | 3 | The stage keeps its wire value and loses its wrong name | 2 | C | PENDING | - | - | - |
 | 4 | The workflow job says what it does | 3 | D | PENDING | - | - | - |

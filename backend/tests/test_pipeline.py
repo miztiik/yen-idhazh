@@ -1207,7 +1207,7 @@ def test_the_route_stage_stops_at_its_budget_instead_of_being_killed(
     settings = config.load(CONFIG_DIR)
     one_minute = config.Settings(
         app=settings.app.model_copy(
-            update={"run": settings.app.run.model_copy(update={"route_budget_minutes": 1})}
+            update={"run": settings.app.run.model_copy(update={"visual_planner_budget_minutes": 1})}
         ),
         sources=settings.sources,
         taxonomy=settings.taxonomy,
