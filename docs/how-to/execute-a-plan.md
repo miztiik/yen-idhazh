@@ -34,6 +34,16 @@ orchestrator (main thread)                 worker subagent (one per row)        
 6. Flip `Status = DONE #<pr>`; unblock dependents; [distill](distill-a-plan.md) the closed row.
 7. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
+**Between selecting a row and dispatching it, check the row against the tree. Two things, and both take seconds.**
+
+A plan-doc is written before the work and read after the tree has moved under it. Both checks are searches against the current tree, not an entry into the row's implementation - the orchestrator still writes none of the row's code. Both belong to the orchestrator because the fix for either is an edit to the plan-doc, and the plan-doc is the orchestrator's to edit.
+
+1. **Every symbol the row names has to exist.** Search the tree for each identifier, path and command the row's text quotes. A row that names something renamed, moved, or never written sends a worker looking for it, and the worker then either invents a substitute or stops and asks. Both cost a dispatch, and the substitute is the more expensive one because it arrives looking like finished work. When a name is wrong, correct the row before dispatching and say what it was corrected from.
+
+2. **The row's oracle has to be able to fail against the base tree.** Run it before the worker starts. It must fail. An oracle that already passes is measuring something other than the row, and the worker will report a green that proves nothing - so the row closes, the plan records it as settled, and nothing was checked. A row that retires a name is where this bites most often: an oracle phrased as a search for that name matches every place the name still is, so it answers the same before the work and after it, for two different reasons.
+
+Neither check makes a row correct. They establish only that the row can be acted on, and that its result can be told apart from its starting position - which is the same standard `CLAUDE.md` Rule #10 sets for any other measurement.
+
 The orchestrator does NOT open the row's source files, write its code, or run its inner test loop inline - that is the worker's job. The orchestrator's own edits are limited to the Status Reckoner and the merge.
 
 Do not remove or alter a worker's checkout while its tests or build are running.

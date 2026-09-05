@@ -13,9 +13,10 @@ import hashlib
 import json
 import re
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Annotated, Any, ClassVar, Final, Self
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError, model_validator
 
 JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 
@@ -155,6 +156,52 @@ class ChangelogEntry(Model):
     why: str
 
 
+class StalePayloadError(Exception):
+    """A run's own payload, read back by a build whose contract has since moved.
+
+    This is not a validation failure, and calling it one is what made the real
+    incident unreadable. A payload that fails to parse is normally a defect in
+    the payload. This one is exactly what its author meant to write; what moved
+    underneath it is the build doing the reading. The two are told apart by the
+    date-stamp the payload carries, never by the text of the parser's complaint,
+    so a genuine defect still raises `ValidationError` untouched.
+
+    It happens because a run's per-item payloads live for hours. One job writes
+    them, later jobs read them, and a contract change can merge in between. They
+    are not committed files, so the read-side migration `CLAUDE.md` section 11
+    requires does not reach them - see
+    `docs/reference/github-actions.md`.
+
+    It carries both stamps and the remedy because the operator's next move is
+    not the one a validation error asks for. Nothing about the payload can be
+    corrected: the stage that wrote it has to run again under this build.
+    """
+
+    def __init__(self, *, contract: str, payload: str, written_under: str, read_by: str) -> None:
+        self.contract = contract
+        self.payload = payload
+        self.written_under = written_under
+        self.read_by = read_by
+        super().__init__(
+            f"{payload} was written under {contract} {written_under} and this build reads "
+            f"{contract} {read_by}. The contract moved while the run was in flight, so the "
+            f"payload cannot be repaired - re-run the stage that wrote it under this build."
+        )
+
+
+def _payload_name(path: Path) -> str:
+    """The payload's address, in the form CLAUDE.md section 2 allows out of a process.
+
+    Relative and POSIX-separated when the file is under the working directory,
+    and the bare filename when it is not - which is still the minimal
+    reconstructable form, because the run directory is derived from the date.
+    """
+    try:
+        return path.resolve().relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        return path.name
+
+
 class Contract(Model):
     """Base for a top-level persisted document.
 
@@ -225,6 +272,42 @@ class Contract(Model):
     @classmethod
     def from_json(cls, text: str) -> Self:
         return cls.model_validate_json(text)
+
+    @classmethod
+    def read(cls, path: Path) -> Self:
+        """Read one payload off disk, and name a stale one rather than mis-report it.
+
+        The stamp the payload carries is compared against the one this build
+        declares **first**, so which of two conditions this is gets decided by a
+        recorded fact rather than by the shape of a parser's complaint. A payload
+        stamped with this build's own version raises `ValidationError` exactly as
+        it always did - that is a defect and it must not be dressed up. Only a
+        payload written under an older contract that this build then cannot read
+        becomes `StalePayloadError`, which names both stamps and the remedy.
+
+        Use this wherever a payload one job wrote is read back by another. A
+        config file or a committed ledger read at the start of a run cannot
+        straddle a contract change, and `from_json` stays the right call there.
+        """
+        text = path.read_text(encoding="utf-8")
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            # Not JSON at all, so there is no stamp to reason about. Hand it to
+            # pydantic and let it raise the error it always raised.
+            return cls.from_json(text)
+        stamp = data.get("version") if isinstance(data, dict) else None
+        if not isinstance(stamp, str) or stamp == cls.schema_version():
+            return cls.model_validate(data)
+        try:
+            return cls.model_validate(data)
+        except ValidationError as error:
+            raise StalePayloadError(
+                contract=cls.__name__,
+                payload=_payload_name(path),
+                written_under=stamp,
+                read_by=cls.schema_version(),
+            ) from error
 
     def to_json(self) -> str:
         return canonical_json(self.model_dump(mode="json"))

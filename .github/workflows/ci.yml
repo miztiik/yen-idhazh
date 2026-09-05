@@ -298,3 +298,67 @@ jobs:
           path: frontend/test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # The day-scale reading check, which cannot share the `browser` job.
+  #
+  # `frontend/build` is one directory. The `browser` job builds the real site
+  # once, for the model-absent gate, but it builds it with `static/assist`
+  # moved out of the way and then overwrites the whole tree with the canary.
+  # `whole-day.spec.ts` exists to refuse a tree that is not the published site,
+  # so running it beside either of those would be running it against the thing
+  # it was written to catch. Its own job gets its own build and races nothing.
+  #
+  # Separate rather than appended for a second reason, and it is the deciding
+  # one. Measured on `ubuntu-latest`, 2026-09-05: the build takes 24 s and the
+  # spec 85 s, so appending them to `browser` costs 109 s of wall clock on
+  # every pull request that buys the browser half. This whole job is 183 s and
+  # it runs concurrently, against a `browser` job that measured 460, 482, 494,
+  # 514, 542 and 554 s over its last six green runs on main - so the run
+  # finishes at the same moment it does now. Actions minutes are free and
+  # unmetered on a public repository (Rule #2), and 20 concurrent jobs are
+  # available against the six this workflow already starts.
+  whole-day:
+    needs: scope
+    if: needs.scope.outputs.browser == 'true'
+    runs-on: ubuntu-latest
+    # Sized from the worst case, not the blended figure (Rule #10). The job
+    # measured 183 s; the spec's own per-test timeout is 600 s, and a browser
+    # that crashes rather than finishing has to be allowed to report as a crash.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # The real site, never the canary. `npm run build:canary` must not appear
+      # anywhere in this job.
+      - name: Build the published site
+        working-directory: frontend
+        run: npm run build
+
+      # Every story of the heaviest committed day, every drawing, at 390 and
+      # 1440 CSS px, in both themes. The module refuses to load unless the tree
+      # under test serves exactly the days this repository has committed.
+      - name: The whole day, end to end
+        working-directory: frontend
+        run: npm run test:whole-day
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces-whole-day
+          path: frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

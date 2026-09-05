@@ -1035,7 +1035,7 @@ def _write_stamp(items_dir: Path, *, inputs: PipelineInputs, run_id: str) -> Fin
 def _stamps(items_dir: Path) -> list[FingerprintRow]:
     """Every stamp the shards left behind, in a stable order."""
     return [
-        FingerprintRow.from_json(path.read_text(encoding="utf-8"))
+        FingerprintRow.read(path)
         for path in sorted(items_dir.glob("*.fingerprint.json"))
     ]
 
@@ -1243,7 +1243,7 @@ def plannable_items(
         summary_path = items_dir / f"{item.item_id}.summary.json"
         if not (article_path.exists() and summary_path.exists()):
             continue
-        summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
+        summary = Summary.read(summary_path)
         if summary.status is not SummaryStatus.OK:
             continue
         plannable.append(_PlannableItem(item, article_path, summary))
@@ -1307,7 +1307,7 @@ def stage_visual_planner(
             undecided = len(plannable) - index
             break
         item, summary = entry.item, entry.summary
-        article = Article.from_json(entry.article_path.read_text(encoding="utf-8"))
+        article = Article.read(entry.article_path)
 
         started = clock()
         with (
@@ -2183,7 +2183,7 @@ def stage_qualify_decide(
     and stops rather than switching anything itself.
     """
     paths = sorted(QUALIFICATION_ROOT.glob("shard-*.json"))
-    shards = [QualificationShard.from_json(path.read_text(encoding="utf-8")) for path in paths]
+    shards = [QualificationShard.read(path) for path in paths]
     if not shards:
         raise SystemExit("no qualification shard was written, so there is nothing to decide")
 
@@ -2307,12 +2307,12 @@ def _item_payloads(
         yield _ItemPayload(
             planned=item,
             article=(
-                Article.from_json(article_path.read_text(encoding="utf-8"))
+                Article.read(article_path)
                 if article_exists
                 else None
             ),
             summary=(
-                Summary.from_json(summary_path.read_text(encoding="utf-8"))
+                Summary.read(summary_path)
                 if summary_exists
                 else None
             ),
@@ -2362,7 +2362,7 @@ def stage_record(plan: RunPlan, *, shard: int = 0, shards: int = 1) -> tuple[int
             )
         )
         if payload.eval_path.exists():
-            rows.append(EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8")))
+            rows.append(EvalRow.read(payload.eval_path))
     recorded = ledger.append_item_health(STATE_ROOT, plan.date, health)
     scored = writer.append(STATE_ROOT, rows)
     LOG.info(
@@ -2785,7 +2785,7 @@ def stage_assemble(
         # ran. The counterweights are free and always available, and they never
         # claim the top band on their own.
         if payload.eval_path.exists():
-            row = EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8"))
+            row = EvalRow.read(payload.eval_path)
             rows.append(row)
             decided = score.verdict(
                 row.hhem,
@@ -2805,7 +2805,7 @@ def stage_assemble(
                 config=settings.app.evaluation,
             )
         decision = (
-            VisualDecision.from_json(payload.decision_path.read_text(encoding="utf-8"))
+            VisualDecision.read(payload.decision_path)
             if payload.decision_path.exists()
             else None
         )
@@ -3349,7 +3349,7 @@ def _plan_path(date: str) -> Path:
 
 
 def _load_plan(date: str) -> RunPlan:
-    return RunPlan.from_json(_plan_path(date).read_text(encoding="utf-8"))
+    return RunPlan.read(_plan_path(date))
 
 
 def _scorer(enabled: bool) -> object | None:
