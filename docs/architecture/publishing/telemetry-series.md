@@ -123,6 +123,25 @@ tidiness**.
   which is correct.
 - **Removing** one does the same, one position earlier.
 
+**The prefix protects one direction, and widening the reader is the other one.**
+An old bundle reading a new shard is safe, which is what the check is for. A new
+bundle reading an **old** shard is not: it knows more names than the file has, so
+the check throws. That is a stale cached shard against a fresh bundle, and it
+degrades rather than breaking - `loadVisibleMonths` in
+`frontend/src/routes/console/+page.svelte` wraps the fetch and the parse in one
+`try`, logs `telemetry <month> could not be read; showing a gap`, and the charts
+draw the gap they already know how to draw.
+
+**On today's data that direction cannot be reached at all**, and the reason is
+worth knowing before someone tries to test it. The prerendered seed covers
+`console.default_window_days`, which at 30 days reaches back across both
+published months, so `monthsToFetch` returns nothing at every preset and the
+console makes no runtime shard request. Measured 2026-09-05 by serving an
+11-column shard from a route interceptor at the 7, 14, 30 and 90-day presets: the
+interceptor fired **zero** times, which proves the path is unreachable and proves
+nothing about the degrade. It becomes reachable when a third month is published
+and the operator widens past the seeded span.
+
 **Nothing in the frontend can see the writer, so a contract test holds the two
 lists together.**
 `backend/tests/test_contracts.py::test_the_console_reads_a_prefix_of_the_published_telemetry_columns`
