@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-09-05
 
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
@@ -56,7 +56,7 @@ A number from another build is a separate measurement.
 
 Every URL names a commit rather than a branch. A branch hands back whatever was
 uploaded last, so a download from one is not the file `config/idhazh.json`
-records the SHA-256 of. Both commits below are `models.route.revision` and
+records the SHA-256 of. Both commits below are `models.visual_planner.revision` and
 `models.summarize.revision` in that file - copy them from there rather than from
 here, because there they are the values the pipeline itself fetches.
 
@@ -148,7 +148,7 @@ PY
 ```
 
 This is the one place that program is written down. Point it at
-`settings.app.models.route` for the router, or at another `config.load(...)`
+`settings.app.models.visual_planner` for the router, or at another `config.load(...)`
 directory for a scratch config. On Windows, save the same program to a file and
 run it with `.venv\Scripts\python.exe <file>`; use `backend\bin\llama-server.exe`
 for the binary.

@@ -578,7 +578,7 @@ def test_a_band_that_asks_for_more_than_the_gate_accepts_is_refused() -> None:
     with pytest.raises(ValidationError):
         AppConfig(
             version=AppConfig.schema_version(),
-            models=ModelsConfig(summarize=weights, route=weights),
+            models=ModelsConfig(summarize=weights, visual_planner=weights),
             evaluation=EvaluationConfig(summary_words_min=40, summary_words_max=120),
             summarize=SummarizeConfig(
                 bands=[

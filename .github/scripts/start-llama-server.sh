@@ -13,7 +13,7 @@
 # never names one.
 #
 # Usage: start-llama-server.sh <role> <name>
-#   role  the attribute on settings.app.models - `summarize` or `route`
+#   role  the attribute on settings.app.models - `summarize` or `visual_planner`
 #   name  the stem for <name>.log and <name>.pid
 #
 # Reads LLAMA_WEIGHTS and LLAMA_PORT from the environment.
@@ -28,9 +28,9 @@ ROLE="$1"
 NAME="$2"
 
 case "$ROLE" in
-	summarize | route) ;;
+	summarize | visual_planner) ;;
 	*)
-		echo "unknown role ${ROLE} - expected summarize or route" >&2
+		echo "unknown role ${ROLE} - expected summarize or visual_planner" >&2
 		exit 2
 		;;
 esac

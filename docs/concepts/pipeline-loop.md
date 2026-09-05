@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-05
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -77,7 +77,7 @@ Four invariants hold regardless of how the batches are sized:
 - **The router records what it spent, and stops when it has spent it.** Each run
   manifest carries `items_routed` and `route_ms`, the stage total over the items
   the router reached. `route_ms` is null when the router never ran, which is a
-  different fact from zero. The stage stops itself at `run.route_budget_minutes`,
+  different fact from zero. The stage stops itself at `run.visual_planner_budget_minutes`,
   because a job killed at its own timeout skips its upload step and therefore
   discards every decision it had already made - measured on 2026-08-25, 88 routed
   items and 9 rendered charts thrown away, and the day published 145 items with

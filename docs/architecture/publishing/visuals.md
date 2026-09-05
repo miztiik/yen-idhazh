@@ -1,6 +1,6 @@
 # Visual routing and rendering
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-09-05
 
 How an item gets a chart, a diagram, or - most of the time - nothing at all.
 
@@ -102,7 +102,7 @@ Three things changed, and each one addresses a different link in that chain:
 
 | Change | What it stops |
 | --- | --- |
-| `stage_route` stops at `run.route_budget_minutes` (40) | The job is never cancelled, so it always reaches its upload step. |
+| `stage_route` stops at `run.visual_planner_budget_minutes` (40) | The job is never cancelled, so it always reaches its upload step. |
 | The `routes` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
 | `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
 | The router skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
@@ -415,7 +415,7 @@ at all. The naming rule itself stays in `backend/idhazh/render/write.py`, which 
 lists paths and pipes them, and a small argv wrapper under `backend/utilities/` does the work.
 Bash never learns what an item id means (Rule #3).
 
-**Why the budget became a stop rather than a louder warning.** `run.route_budget_minutes` already
+**Why the budget became a stop rather than a louder warning.** `run.visual_planner_budget_minutes` already
 existed and already logged when the stage went over. It fired after the fact, into a log nobody
 reads until a reader notices a day with no pictures - and by then the run had already been
 cancelled and had already binned its artifact. A warning that only ever describes a loss is not a

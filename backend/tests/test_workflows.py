@@ -169,7 +169,7 @@ WEIGHTS_CHECKS: Final = {
         "Fetch runtime and router weights",
         "Verify the router weights",
         "Start the router",
-        '["models"]["route"]["sha256"]',
+        '["models"]["visual_planner"]["sha256"]',
     ),
     ("measure.yml", "runtime"): (
         "Fetch runtime and weights",
@@ -199,9 +199,9 @@ MODEL_REF_OUTPUTS: Final = (
     "summarize_repo",
     "summarize_revision",
     "summarize_file",
-    "route_repo",
-    "route_revision",
-    "route_file",
+    "visual_planner_repo",
+    "visual_planner_revision",
+    "visual_planner_file",
 )
 MODEL_REF_FIELDS: Final = ("repo", "revision", "file")
 # What the daily run used to call them at workflow scope. Named here so the
@@ -216,8 +216,9 @@ MODEL_ENV_NAMES: Final = frozenset(
         "ROUTE_FILE",
     }
 )
-# The weights cache jobs, and the config role each one serves.
-WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "route": "route"}
+# The weights cache jobs, and the config role each one serves. The job is still
+# called `route`; the role it reads is not.
+WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "route": "visual_planner"}
 # Bumped from v3 when the weights half of the key moved off the workflow `env`
 # copy, so the first run after that lands refetches once instead of restoring an
 # entry nobody can attribute.
@@ -239,7 +240,7 @@ BATCHED_BENCH_SETTINGS: Final = {
 # not a measurement (Rule #10).
 RUNTIME_IDENTITY_JOBS: Final = {
     "work": ("llama-server.log", "summarize_file"),
-    "route": ("router.log", "route_file"),
+    "route": ("router.log", "visual_planner_file"),
 }
 RUNTIME_IDENTITY_STEP: Final = "What this runner is"
 # One loopback port per workflow, declared once. `server_argv` binds it, every
@@ -3095,7 +3096,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
     assert _run_the_inline_program(script, REPO_ROOT) == {
         f"{role}_{field}": models[role][field]
-        for role in ("summarize", "route")
+        for role in ("summarize", "visual_planner")
         for field in MODEL_REF_FIELDS
     }
 
