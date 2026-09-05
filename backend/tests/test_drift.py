@@ -37,6 +37,9 @@ from idhazh.drift import (
     shortfall,
 )
 
+# `workflow`, because the program `.github/workflows/drift.yml` ships is asserted here.
+pytestmark = pytest.mark.workflow
+
 DRIFT_WORKFLOW: Final = REPO_ROOT / ".github" / "workflows" / "drift.yml"
 COMPARE_STEP: Final = "Compare the windows"
 #: The five cells the review reads out of the eval ledger. A row carries about

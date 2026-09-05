@@ -29,7 +29,10 @@ installing:
 .\.venv\Scripts\python.exe -m pytest backend/tests/test_<the module you changed>.py
 ```
 
-Under a minute. Then push and read CI.
+Under a minute. Then push and read CI. When the change reaches further than one
+module, the third line becomes a mark selector instead - `-m contract`,
+`-m visual`, `-m workflow` or `-m "not slow"`, priced
+[below](#run-only-the-tests-a-change-can-break).
 
 **Run the full local suite when you cannot push, or when you are about to merge
 and want the answer now.** The commands are below and none of them is going
@@ -112,9 +115,9 @@ hides the contention and the false red returns at the next fan-out.
 
 ### The backend suite can use every core the box has
 
-`-n auto` shards the suite across the machine's processors. It is opt-in:
-`addopts` is unchanged, so a bare `pytest` is still one process, and the CI gate
-everybody trusts runs exactly the way it always did.
+`-n auto` shards the suite across the machine's processors, and it is the
+default: `addopts` carries it, so a bare `pytest` already uses every core.
+`-n 0` turns it off for a debugging run.
 
 ```powershell
 python backend/utilities/gate_lock.py -- python -m pytest -n auto
@@ -124,6 +127,50 @@ Nothing needs pinning to one worker. Every test that binds a port binds an
 ephemeral one, no test changes the working directory, and no test writes into a
 tracked root - so the parallel run passes the same node ids as the serial one
 and leaves `git status --porcelain` empty.
+
+### Run only the tests a change can break
+
+Four marks are declared in `pyproject.toml`. Each is a module-level
+`pytestmark`, so a module that gets renamed or moved keeps its mark and no list
+anywhere has to be repointed.
+
+| Selector | What it holds | Tests | `-n auto` | `-n 0` |
+| --- | --- | --- | --- | --- |
+| `-m contract` | The persisted shapes: the generated schemas, the two config contracts, the append-only ledgers, the committed digest tree | 564 | 20.9 s (n=2, spread 2.5) | 17.3 s |
+| `-m visual` | The visual planner, its validator, the spec compiler, both renderers, and the planted attacks aimed at the planner | 161 | 19.9 s (n=2, spread 3.3) | 14.3 s |
+| `-m workflow` | The workflow YAML and the shell scripts under `.github/` | 134 | 80.9 s (n=1) | - |
+| `-m slow` | Every module whose average test runs over a second | 335 | 131.8 s (n=1) | - |
+| `-m "not slow"` | Everything else, which is 84 percent of the tests | 1,807 | 39.3 s (n=1) | - |
+| nothing | The whole suite, which is what CI runs | 2,142 | 155.4 s (n=2, spread 45.9) | - |
+
+**Windows 11, 12 logical CPUs, Python 3.14.2, pytest 9.1.1, 2026-09-05**, every
+arm through `gate_lock.py` so no sibling gate could land inside a timing.
+`-n 0` is the faster arm for a small subset, because twelve workers cost about
+seven seconds to start and that is most of what a 161-test run pays.
+
+**Read the ratio rather than the seconds.** The whole-suite spread is 45.9 s on
+a 155.4 s mean - 30 percent of itself, and that is the shared box rather than
+the suite. A contract change runs in about a seventh of the time the whole suite
+takes, and the worst pairing measured - the slowest subset run against the
+fastest whole-suite run - is still six times. The two selectors that save least
+say why by themselves: `-m workflow` picks the slowest file in the repository,
+and `-m slow` picks the slow modules on purpose.
+
+**CI runs everything, and always will.** A mark is a shortcut for the person
+writing the change, never the thing that decides what a merge is checked
+against - so a test marked wrong costs a re-run rather than a missed regression.
+
+Two things stop a mark going quietly wrong. `--strict-markers` is in `addopts`,
+so a name that is not one of the four is a collection error naming the file
+instead of a warning nobody reads. And `backend/tests/test_marks.py` collects
+the suite whole, once per mark and once for the complement, then fails naming
+any module that no mark selects and that its own `UNMARKED_MODULES` set does not
+name - so a new test module has to be classified before it can merge.
+
+**Thirty-three modules carry no mark on purpose.** A developer working in one of
+those areas already has something shorter to run than the whole suite: that
+module. And `-m "not slow"` still pays for the two longest tests outside the
+slow set, one in `test_extract.py` at 37 s and one in `test_embed.py` at 16 s.
 
 **What each gate costs on a developer box, and what `-n auto` buys, is measured
 in [../reference/measurements.md](../reference/measurements.md#what-the-gates-cost-on-a-developer-box).**

@@ -74,6 +74,8 @@ from idhazh.publish_telemetry import PUBLIC_COLUMNS
 from idhazh.retention import oldest_month_kept
 from utilities import build_canary_day
 
+pytestmark = pytest.mark.contract
+
 BY_STEM: dict[str, type[Contract]] = {c.__schema_stem__: c for c in CONTRACTS}
 CONFIG_FILES: dict[str, type[Contract]] = {
     "idhazh.json": AppConfig,

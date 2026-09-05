@@ -42,6 +42,9 @@ from idhazh.fingerprint import text_digest
 from idhazh.route import numeric_facts, reachable_kinds
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, sanitize, untrusted_block
 
+# `visual`, because two of the planted attacks are aimed at the visual planner.
+pytestmark = pytest.mark.visual
+
 CANARY_DIR = FIXTURES_DIR / "canaries"
 EXTRACT = config.load(CONFIG_DIR).app.extract
 

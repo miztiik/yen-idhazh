@@ -46,6 +46,8 @@ from idhazh.route import (
     user_turn,
 )
 
+pytestmark = pytest.mark.visual
+
 ARTICLE_TEXT = (
     "The plant produced 4,200 megawatt hours in March, up from 3,150 megawatt hours in "
     "February and 2,900 megawatt hours in January. Costs fell 12 percent. The operator "
