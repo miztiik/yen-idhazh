@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The seed items carry their drawing in the page | - | A | PENDING | - | - | - |
+| 1 | The seed items carry their drawing in the page | - | A | DONE | yi-v01 | #401 | worker (runSubagent unavailable - persona files read directly) |
 | 2 | A past-seed item is themed too | 1 | B | PENDING | - | - | - |
 | 3 | A whole committed day, looked at | 2 | C | PENDING | - | - | - |
 | 4 | One knob, one value | - | C | PENDING | - | - | - |
