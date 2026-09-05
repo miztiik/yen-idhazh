@@ -77,7 +77,6 @@ ARCHIVE_READERS: Final = frozenset(
         "frontend/tests/item-meta.spec.ts",
         "frontend/tests/malformed-day.spec.ts",
         "frontend/tests/reading-page.spec.ts",
-        "frontend/tests/served-day.spec.ts",
         "frontend/tests/staged-day.spec.ts",
         "frontend/tests/whole-day.spec.ts",
     }
