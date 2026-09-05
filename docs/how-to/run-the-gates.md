@@ -136,22 +136,25 @@ anywhere has to be repointed.
 
 | Selector | What it holds | Tests | `-n auto` | `-n 0` |
 | --- | --- | --- | --- | --- |
-| `-m contract` | The persisted shapes: the generated schemas, the two config contracts, the append-only ledgers, the committed digest tree | 564 | 22.1 s | 17.3 s |
-| `-m visual` | The visual planner, its validator, the spec compiler, both renderers, and the planted attacks aimed at the planner | 161 | 21.6 s | 14.3 s |
-| `-m workflow` | The workflow YAML and the shell scripts under `.github/` | 134 | 80.9 s | - |
-| `-m slow` | Every module whose average test runs over a second | 335 | 131.8 s | - |
-| `-m "not slow"` | Everything else, which is 84 percent of the tests | 1,807 | 39.3 s | - |
-| nothing | The whole suite, which is what CI runs | 2,142 | 132.4 s | - |
+| `-m contract` | The persisted shapes: the generated schemas, the two config contracts, the append-only ledgers, the committed digest tree | 564 | 20.9 s (n=2, spread 2.5) | 17.3 s |
+| `-m visual` | The visual planner, its validator, the spec compiler, both renderers, and the planted attacks aimed at the planner | 161 | 19.9 s (n=2, spread 3.3) | 14.3 s |
+| `-m workflow` | The workflow YAML and the shell scripts under `.github/` | 134 | 80.9 s (n=1) | - |
+| `-m slow` | Every module whose average test runs over a second | 335 | 131.8 s (n=1) | - |
+| `-m "not slow"` | Everything else, which is 84 percent of the tests | 1,807 | 39.3 s (n=1) | - |
+| nothing | The whole suite, which is what CI runs | 2,142 | 155.4 s (n=2, spread 45.9) | - |
 
-**Windows 11, 12 logical CPUs, Python 3.14.2, pytest 9.1.1, 2026-09-05, one run
-of each on a box several agents share**, so read these as magnitudes rather than
-as targets. `-n 0` is the faster arm for a small subset, because twelve workers
-cost about seven seconds to start and that is most of what a 161-test run pays.
+**Windows 11, 12 logical CPUs, Python 3.14.2, pytest 9.1.1, 2026-09-05**, every
+arm through `gate_lock.py` so no sibling gate could land inside a timing.
+`-n 0` is the faster arm for a small subset, because twelve workers cost about
+seven seconds to start and that is most of what a 161-test run pays.
 
-So a contract change runs in **22 seconds instead of 132**, and a renderer
-change in **14**. The two selectors that save least say why by themselves:
-`-m workflow` picks the slowest file in the repository, and `-m slow` picks the
-slow modules on purpose.
+**Read the ratio rather than the seconds.** The whole-suite spread is 45.9 s on
+a 155.4 s mean - 30 percent of itself, and that is the shared box rather than
+the suite. A contract change runs in about a seventh of the time the whole suite
+takes, and the worst pairing measured - the slowest subset run against the
+fastest whole-suite run - is still six times. The two selectors that save least
+say why by themselves: `-m workflow` picks the slowest file in the repository,
+and `-m slow` picks the slow modules on purpose.
 
 **CI runs everything, and always will.** A mark is a shortcut for the person
 writing the change, never the thing that decides what a merge is checked
