@@ -105,9 +105,17 @@ function within(
 	});
 }
 
+/** The middle value, as a whole number.
+ *
+ * Every caller is a count of tokens or a whole percent, and no console cell
+ * prints a decimal. It matters here rather than at the far end: over an even
+ * number of items the middle is the mean of two, so a real window of 6,104
+ * items printed `1,687.5 tokens` while the seven-item canary printed a whole
+ * number and no test could see it.
+ */
 function middle(values: readonly number[]): number | null {
 	if (values.length === 0) return null;
-	return quantile([...values].sort((a, b) => a - b), 0.5);
+	return Math.round(quantile([...values].sort((a, b) => a - b), 0.5));
 }
 
 /** A share as whole percent, or null where the denominator is nothing.

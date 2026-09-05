@@ -122,6 +122,23 @@ test.describe('what one item cost, as arithmetic', () => {
 		expect(cost.msPerReadToken, '1000 ms over the 100 it actually read').toBe(10);
 	});
 
+	test('a middle taken over an even number of items is still a whole number', () => {
+		// The canary holds an odd number of timed items, so no browser arm can reach
+		// this. The committed projection holds 6,104 and reached it on the first
+		// real build: the middle prompt printed 1,687.5 tokens.
+		const cost = itemCost(
+			[
+				row({ input_tokens: '1687', output_tokens: '10', cached_tokens: '843' }),
+				row({ item_id: 'a-02', input_tokens: '1688', output_tokens: '11', cached_tokens: '845' })
+			],
+			WINDOW
+		);
+		expect(cost.promptTokens).toBe(1688);
+		expect(cost.writtenTokens).toBe(11);
+		expect(cost.itemReusedPct).toBe(50);
+		expect(cost.reusedMedian).toBe(844);
+	});
+
 	test('a window with nothing in it draws nothing, rather than a chart of zeroes', () => {
 		const cost = itemCost([row({ date: '2026-07-01', prefill_ms: '4000' })], WINDOW);
 		expect(cost.rows).toBe(0);
@@ -391,14 +408,23 @@ test.describe('the section on the built console', () => {
 
 			const marks = await drawn(page);
 			const say = (what: string) => `${what} at ${preset} days`;
-			expect(Number(marks.promptTokens), say('the middle prompt')).toBe(at(prompts, 0.5));
-			expect(Number(marks.writtenTokens), say('the middle summary')).toBe(at(written, 0.5));
+			// Rounded, because no console cell prints a decimal and the middle of an
+			// even number of items is the mean of two. The rounding is the page's
+			// stated rule; the value under it is derived here.
+			expect(Number(marks.promptTokens), say('the middle prompt')).toBe(
+				Math.round(at(prompts, 0.5))
+			);
+			expect(Number(marks.writtenTokens), say('the middle summary')).toBe(
+				Math.round(at(written, 0.5))
+			);
 			expect(Number(marks.readTokens), say('prompt tokens read')).toBe(read);
 			expect(Number(marks.reusedTokens), say('prompt tokens already in memory')).toBe(reused);
 			expect(Number(marks.reusedPct), say("the window's share")).toBe(
 				Math.round((reused / (read + reused)) * 100)
 			);
-			expect(Number(marks.itemReusedPct), say("the middle item's share")).toBe(at(shares, 0.5));
+			expect(Number(marks.itemReusedPct), say("the middle item's share")).toBe(
+				Math.round(at(shares, 0.5))
+			);
 			expect(Number(marks.readWhole), say('items read whole')).toBe(whole);
 			expect(Number(marks.msPerReadToken), say('milliseconds a read token costs')).toBe(
 				Math.round(readMs / read)

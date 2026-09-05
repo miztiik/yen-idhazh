@@ -1274,15 +1274,23 @@
 		<h2 class="console-h2">What one item cost the model</h2>
 
 		<p class="mt-2 text-[0.9375rem] text-text-secondary" data-item-cost-lead data-item-cost-rows={cost.rows}>
-			{grouped(cost.timed)} of the {grouped(cost.rows)} items in these {cost.days} days were timed
-			by the model itself. The rest failed before it saw them, or were kept without ever being sent
-			to it. Panning does not move these days: they always end on the newest day the ledger holds.
+			{#if cost.rows === 0}
+				No item is on the published record for these {cost.days} days, so there is nothing here to
+				measure yet. It fills as runs publish.
+			{:else}
+				{grouped(cost.timed)} of the {grouped(cost.rows)} items in these {cost.days} days were
+				timed by the model itself. The rest failed before it saw them, or were kept without ever
+				being sent to it.
+			{/if}
+			Panning does not move these days: they always end on the newest day the ledger holds.
 		</p>
 
 		{#if cost.reading === null && cost.writing === null}
-			<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost="unmeasured">
-				Nothing recorded a model clock in these {cost.days} days. This fills as runs publish.
-			</p>
+			{#if cost.rows > 0}
+				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost="unmeasured">
+					Nothing recorded a model clock in these {cost.days} days. This fills as runs publish.
+				</p>
+			{/if}
 		{:else}
 			{#if cost.reading === null}
 				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-reading="empty">
