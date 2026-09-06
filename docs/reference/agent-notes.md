@@ -214,6 +214,30 @@ repair unconditional after every merge and every rebase: take the upstream file
 whole with `git checkout origin/main -- <path>`, re-run the migration on it, and
 read the result back through its contract.
 
+**`frontend/public/telemetry/*.csv` is the opposite case, and the conflict it
+raises is the feature.** That path is deliberately not union-merged, because a
+shard there is a full rewrite of `state/item-health/` rather than an append. So
+a branch that widens the projection collides loudly instead of quietly
+concatenating. What causes the collision is not another agent: the scheduled
+`digest.yml` run stages `frontend/public/telemetry` from a checkout pinned to
+the SHA it started on, so a run in flight while your PR is open republishes both
+shards with the **old** publisher and pushes them to `main`. Measured 2026-09-06
+on run `33979150677`: a green PR turned `CONFLICTING` about a minute after the
+run's `assemble` job finished.
+
+Do not hand-merge it, and do not keep your side. Both sides are machine output,
+and yours was generated from a census that has since moved:
+
+```powershell
+git restore --source=origin/main -- frontend/public/telemetry
+python -m idhazh.publish_telemetry
+```
+
+That rebuilds the shards with the new code from the current census, which is the
+only resolution that is true of both. Before merging anything that rewrites
+`frontend/public/`, check `gh run list --workflow digest.yml --limit 3` for a run
+in flight and wait it out - the wait is minutes and the repair is not.
+
 **`origin/main` moves under you.** The scheduled pipeline pushes `plan:` and
 `digest:` commits to `main` several times an hour, and the editor auto-fetches.
 A branch created "from `origin/main`" and a merge done "against `origin/main`"
