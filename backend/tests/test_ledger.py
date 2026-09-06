@@ -128,7 +128,9 @@ def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> N
     assert {"url_key", "published_on"} <= set(narrow_header)
 
     published = ledger.load_published(wide)
-    assert len(published) == 11, "an empty or trimmed ledger would pass the comparison while proving nothing"
+    assert len(published) == 11, (
+        "an empty or trimmed ledger would pass the comparison while proving nothing"
+    )
     assert published == ledger.load_published(narrow_state)
 
 
@@ -211,9 +213,7 @@ def test_one_story_recorded_twice_is_counted_once(tmp_path: Path) -> None:
     state = tmp_path / "state"
     ledger.append_item_health(state, DATE, [carried_row(1, source_id="wire")])
     twice = carried_row(1, source_id="wire")
-    ledger.append_item_health(
-        state, DATE, [twice.model_copy(update={"run_id": f"{DATE}-2"})]
-    )
+    ledger.append_item_health(state, DATE, [twice.model_copy(update={"run_id": f"{DATE}-2"})])
 
     assert ledger.load_source_counts(state, DATE) == {"wire": 1}
 
@@ -222,9 +222,7 @@ def test_yesterdays_share_is_not_todays(tmp_path: Path) -> None:
     """The window is the day. A feed that filled yesterday starts today empty."""
     state = tmp_path / "state"
     yesterday = "2026-08-22"
-    ledger.append_item_health(
-        state, yesterday, [carried_row(1, source_id="wire", date=yesterday)]
-    )
+    ledger.append_item_health(state, yesterday, [carried_row(1, source_id="wire", date=yesterday)])
     ledger.append_item_health(state, DATE, [carried_row(2, source_id="wire")])
 
     assert ledger.load_source_counts(state, yesterday) == {"wire": 1}
@@ -234,6 +232,30 @@ def test_yesterdays_share_is_not_todays(tmp_path: Path) -> None:
 def test_a_day_nothing_was_recorded_for_counts_nothing(tmp_path: Path) -> None:
     """A fresh clone has no history, and no history is an empty count."""
     assert ledger.load_source_counts(tmp_path / "state", DATE) == {}
+
+
+def test_the_item_health_read_stops_at_the_window(tmp_path: Path) -> None:
+    """A shard older than the window is never opened (Rule #12).
+
+    This is the ledger a run appends to five times a day, so a reader that
+    globbed the directory would cost more every run for an answer about the last
+    few weeks - and the extra rows are thrown away by the caller's own date
+    filter anyway. Without this test a bounded read and an unbounded one are
+    indistinguishable until the archive is large enough to hurt.
+
+    The old row is one a census would notice if it arrived, so this fails loudly
+    rather than by a count nobody reads.
+    """
+    state = tmp_path / "state"
+    old = "2026-05-14"
+    ledger.append_item_health(state, old, [carried_row(1, source_id="ancient", date=old)])
+    ledger.append_item_health(state, DATE, [carried_row(2, source_id="recent")])
+
+    inside = ledger.load_item_health(state, today=DATE, within_days=30)
+    assert {row.source_id for row in inside} == {"recent"}
+
+    wide = ledger.load_item_health(state, today=DATE, within_days=120)
+    assert {row.source_id for row in wide} == {"ancient", "recent"}
 
 
 def test_narrowing_the_published_ledger_keeps_every_pair_the_skip_read_uses() -> None:

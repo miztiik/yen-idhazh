@@ -46,6 +46,8 @@
       "too_short",
       "unsupported_form"
     ],
+    "source_yield_alarm_min_decisions": 30,
+    "source_yield_alarm_point": 0.5,
     "source_yield_min_complete_days": 30,
     "tier_weights": {
       "community": 0.3,
