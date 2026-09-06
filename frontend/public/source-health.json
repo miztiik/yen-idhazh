@@ -1,10 +1,10 @@
 {
   "complete_dates": 13,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-06T18:26:18Z",
+  "generated_at": "2026-09-06T21:48:13Z",
   "last_date": "2026-09-05",
   "min_complete_days": 30,
-  "run_id": "2026-09-06-34047615218",
+  "run_id": "2026-09-06-34058152794",
   "sources": [
     {
       "availability": "answering",
@@ -715,6 +715,18 @@
       "vertical": "world"
     },
     {
+      "availability": "never_asked",
+      "opportunities": 0,
+      "permission": "unrecorded",
+      "publications": 0,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 0,
+      "source_id": "google-ai-blog",
+      "title": "Google - AI",
+      "vertical": "ai"
+    },
+    {
       "availability": "answering",
       "opportunities": 4,
       "permission": "allowed",
@@ -1051,6 +1063,18 @@
       "vertical": "business-economy"
     },
     {
+      "availability": "never_asked",
+      "opportunities": 0,
+      "permission": "unrecorded",
+      "publications": 0,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 0,
+      "source_id": "marktechpost",
+      "title": "MarkTechPost",
+      "vertical": "ai"
+    },
+    {
       "availability": "answering",
       "opportunities": 11,
       "permission": "allowed",
@@ -1316,6 +1340,18 @@
     },
     {
       "availability": "answering",
+      "opportunities": 20,
+      "permission": "unrecorded",
+      "publications": 0,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 20,
+      "source_id": "openai-news",
+      "title": "OpenAI",
+      "vertical": "ai"
+    },
+    {
+      "availability": "answering",
       "opportunities": 28,
       "permission": "allowed",
       "publications": 28,
@@ -1363,7 +1399,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 48,
       "permission": "allowed",
       "publications": 46,
@@ -1385,18 +1421,6 @@
       "source_id": "rest-of-world",
       "title": "Rest of World",
       "vertical": "ai"
-    },
-    {
-      "availability": "answering",
-      "opportunities": 111,
-      "permission": "allowed",
-      "publications": 4,
-      "retired": false,
-      "retired_on": null,
-      "source_failures": 107,
-      "source_id": "scmp-news",
-      "title": "South China Morning Post",
-      "vertical": "world"
     },
     {
       "availability": "answering",
@@ -1555,7 +1579,7 @@
       "vertical": "india"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 64,
       "permission": "allowed",
       "publications": 62,
@@ -1723,7 +1747,7 @@
       "vertical": "energy"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 53,
       "permission": "allowed",
       "publications": 53,
