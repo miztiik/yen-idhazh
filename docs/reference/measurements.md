@@ -69,6 +69,17 @@ the direction measured above is the one the policy rests on.
 rather than pinning a figure, because a figure taken there goes stale the next
 time a column is added.
 
+## When the committed span rollup starts, 2026-09-06
+
+`observability.tracing_enabled` shipped false until 2026-09-06 and true from it, so
+`state/span-rollup/` carries its first row on that date and none before. This is a
+discontinuity, not a measurement: a per-shard series that begins 2026-09-06 - the
+`item` residual, or the `robots`, `tag`, `render_prompt` or `parse_reply` timing -
+is the instrument switching on, not the pipeline changing. A panel that plots one
+of these names the flip the way it would name a hardware change, and reads no trend
+across it. The switch is `config/idhazh.json` `observability.tracing_enabled`; the
+reasoning is in [`../concepts/telemetry.md`](../concepts/telemetry.md).
+
 ## How old the digest was publishing, 2026-08-30
 
 Source: the 2,900 items in the committed day payloads under
