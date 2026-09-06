@@ -25,7 +25,13 @@ import { sparkline, sparklineMarks, sparklineShape } from '../src/lib/charts/spa
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const frontend = path.resolve(here, '..');
-const built = path.join(frontend, 'test-results', 'rendered');
+// Named after this file, because a spec beside it may compile the same component.
+const built = path.join(
+	frontend,
+	'test-results',
+	'rendered',
+	path.basename(fileURLToPath(import.meta.url), '.spec.ts')
+);
 
 type Rendered = { body: string; css: string };
 

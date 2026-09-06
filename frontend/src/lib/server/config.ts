@@ -293,7 +293,7 @@ const DEFAULTS: UiConfig = {
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
 	tagline: 'A daily digest that checks its own work.',
-	read_mark_days: 7,
+	read_mark_days: 14,
 	archive_page_size: 25
 };
 
@@ -331,11 +331,11 @@ const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 };
 const CONSOLE_DEFAULTS: ConsoleConfig = {
 	default_window_days: 30,
-	window_presets: [7, 14, 30, 90],
+	window_presets: [1, 7, 14, 30, 90],
 	today_anchor: 'right',
 	pan_days: 7,
 	zoom_factor: 1.5,
-	min_window_days: 7,
+	min_window_days: 1,
 	max_window_days: 366,
 	min_attempts_for_rate: 5,
 	chart_height: 220,
@@ -417,17 +417,20 @@ interface RawConfig {
  * a number no component opens would ride to every reader on every page for
  * ever. `shell_seed_items` is read by the build alone, and so is
  * `archive_recent_days` - the archive's day list is decided in its `load` and
- * the page draws what it is handed. The six leading-block
+ * the page draws what it is handed. `archive_window_days` is the span the
+ * archive's window control will open on and has no reader yet. The six
+ * leading-block
  * knobs are read by the pipeline, which decides the block at assemble and
  * publishes the answer on the day - the page draws what it is handed and
  * re-decides nothing. The three `offline_` knobs are read by
  * `scripts/build-worker-switch.mjs`, which bakes them into the service worker
- * and into the file that retires it. `items_per_topic` is retired and read by
- * nothing at all.
+ * and into the file that retires it; `offline_bytes_kept` is the fourth and has
+ * no reader yet. `items_per_topic` is retired and read by nothing at all.
  */
 const BUILD_ONLY_KEYS = [
 	'shell_seed_items',
 	'archive_recent_days',
+	'archive_window_days',
 	'items_per_topic',
 	'leading_stories',
 	'leading_per_desk',
@@ -437,7 +440,8 @@ const BUILD_ONLY_KEYS = [
 	'lead_max_yesterday',
 	'offline_version',
 	'offline_retired_through',
-	'offline_days_kept'
+	'offline_days_kept',
+	'offline_bytes_kept'
 ] as const;
 
 /** The `digest` block: everything `UiConfig` holds, plus the knobs
@@ -544,7 +548,7 @@ export function leadingStories(): number {
  * The fallback is the same number `UiConfig.archive_recent_days` defaults to,
  * and `backend/tests/test_contracts.py` fails if the two copies drift.
  */
-const ARCHIVE_RECENT_DAYS = 7;
+const ARCHIVE_RECENT_DAYS = 14;
 
 export function archiveRecentDays(): number {
 	return (

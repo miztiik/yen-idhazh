@@ -58,7 +58,7 @@
     "feed_rows": 10,
     "max_window_days": 366,
     "min_attempts_for_rate": 5,
-    "min_window_days": 7,
+    "min_window_days": 1,
     "pan_days": 7,
     "source_rows": 10,
     "today_anchor": "right",
@@ -253,7 +253,7 @@
     "leading_min": 3,
     "leading_per_desk": 2,
     "leading_stories": 5,
-    "read_mark_days": 7,
+    "read_mark_days": 14,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [
       "notice",

@@ -51,11 +51,11 @@ export function clockUtc(timestamp: string): string {
  * ours; every other form prints the stamp the day published and claims nothing
  * about whose clock wrote it.
  */
-export type RailForm = 'clock' | 'yesterday' | 'dated' | 'first-seen' | 'none';
+export type RailForm = 'clock' | 'dated' | 'first-seen' | 'none';
 
 /** One story's time, as the rail says it. */
 export interface RailTime {
-	/** What the reader reads. Never a relative form. */
+	/** What the reader reads. Digits and separators, never a word. */
 	label: string;
 	form: RailForm;
 	/** Stories sharing this draw one marker between them, on the first of them. */
@@ -83,22 +83,24 @@ function dayOffset(stamp: string, onDate: string): number {
 	return Math.round((day - anchor) / 86_400_000);
 }
 
-/** A story's time, in the one vocabulary the day's rail uses.
+/** A story's time, in the one vocabulary the day's rail uses: digits.
  *
- * **No relative form, ever.** The page is prerendered once and read for the
+ * **No words, and no relative form.** The rail prints a clock, and a date in
+ * front of it when the stamp is not from the day being read. `Yesterday`,
+ * `First seen` and `No time given` are gone - the column already says
+ * `Times shown in UTC` once, above itself, so a reader who can read a clock can
+ * read every mark on it without being told anything twice. A relative form
+ * would be worse than a word: the page is prerendered once and read for the
  * next 24 hours with script optionally off, so `3 hours ago` baked in at 06:20
- * is wrong by 18:20 and wrong for ever on an archived day. `Yesterday` is not
- * a relative form: it is relative to the day the page IS, which is printed at
- * the top of that page and never moves.
+ * is wrong by 18:20 and wrong for ever on an archived day.
  *
- * **The clock is only ever attributed where the payload attributes it.**
- * `time_source` says which clock `published_at` came from, and the one value
- * that changes what a reader is told is `first_seen` - the feed's date was
- * absent or rejected as impossible, so the stamp is our own first sight of the
- * address. That prints `First seen 06:20` and carries a mark. A story whose
- * `time_source` is absent - every day published before 2026-08-31 - prints the
- * stamp with no attribution at all, because the run recorded no answer and
- * either claim would be one we cannot back.
+ * **The clock is still only ever attributed where the payload attributes it.**
+ * `time_source: first_seen` means the feed's date was absent or rejected as
+ * impossible and the stamp is our own first sight of the address. That keeps
+ * its own form, and `TimeRail.svelte` draws a mark beside it - a mark rather
+ * than a sentence, so the rail stays numbers.
+ *
+ * A story with no stamp at all has no number to print and gets an empty label.
  */
 export function railTime(
 	publishedAt: string | null | undefined,
@@ -106,23 +108,23 @@ export function railTime(
 	onDate: string,
 	groupMinutes: number
 ): RailTime {
-	if (!publishedAt) return { label: 'No time given', form: 'none', group: 'none' };
+	if (!publishedAt) return { label: '', form: 'none', group: 'none' };
 	const clock = publishedAt.slice(11, 16);
 	const group = slice(publishedAt, groupMinutes);
-	if (timeSource === 'first_seen') {
-		return { label: `First seen ${clock}`, form: 'first-seen', group: `first-seen:${group}` };
-	}
 	const offset = dayOffset(publishedAt, onDate);
-	if (offset === 0) return { label: clock, form: 'clock', group: `clock:${group}` };
-	if (offset === -1) {
-		return { label: `Yesterday ${clock}`, form: 'yesterday', group: `yesterday:${group}` };
-	}
 	const date = publishedAt.slice(0, 10);
 	const sameYear = date.slice(0, 4) === onDate.slice(0, 4);
+	// The day being read needs no date in front of it; every other day does, and
+	// the year only when it is not the year on the page.
+	const stamp =
+		offset === 0 ? clock : `${sameYear ? date.slice(5) : date} ${clock}`;
+	if (timeSource === 'first_seen') {
+		return { label: stamp, form: 'first-seen', group: `first-seen:${group}` };
+	}
 	return {
-		label: `${sameYear ? dayMonth(date) : shortDate(date)} ${clock}`,
-		form: 'dated',
-		group: `dated:${group}`
+		label: stamp,
+		form: offset === 0 ? 'clock' : 'dated',
+		group: `${offset === 0 ? 'clock' : 'dated'}:${group}`
 	};
 }
 

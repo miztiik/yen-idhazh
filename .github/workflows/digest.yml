@@ -1081,8 +1081,14 @@ jobs:
       # every story. Since the reading routes split on 2026-09-01 a document
       # carries a seed and a browser fetches the rest, so the build below never
       # looks at the stories past the seed and cannot fail on one.
-      - name: Every committed day still matches its contracts
-        run: python -m idhazh validate-days
+      #
+      # This run wrote one day, so it names that day. Every other committed day
+      # is frozen and was validated before it was pushed, and re-opening all of
+      # them costs about 0.27 s a day - measured 2026-09-05, 16 days in 6.6 s -
+      # five times a day, forever (Rule #12). `ci.yml` re-reads the whole tree
+      # on the change that can actually invalidate it: one that moves a contract.
+      - name: The day this run wrote still matches its contracts
+        run: python -m idhazh validate-days --day "${{ needs.plan.outputs.date }}"
 
       - name: Build the site
         working-directory: frontend
