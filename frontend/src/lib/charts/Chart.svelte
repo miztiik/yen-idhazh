@@ -76,6 +76,9 @@
 	// Bound in one of two branches, so it is state rather than a plain binding.
 	let host = $state<HTMLDivElement | null>(null);
 	let live: LiveChart | null = null;
+	/** The option the live chart is holding, so an unchanged one is not handed
+	 * over again the first time the effect runs. */
+	let handed: EChartsOption | null = null;
 	// The prerendered width is only a starting point; the observer owns it from
 	// mount onward. Reactive because the strip's column centres come off it: the
 	// engine keeps its grid insets in pixels, so the share of the element a
@@ -99,30 +102,58 @@
 
 	onMount(() => {
 		let cancelled = false;
-		let observer: ResizeObserver | null = null;
+		const node = host;
+		if (node === null) return;
+
+		// The element's own width, from mount onward and whether or not the engine
+		// ever runs. The strip's column centres come off it, so it cannot wait for
+		// a chart that may be nine screens down.
+		const observer = new ResizeObserver((entries) => {
+			const next = Math.round(entries[0].contentRect.width);
+			if (next > 0 && next !== measured) {
+				measured = next;
+				live?.resize({ width: next, height });
+			}
+		});
+		observer.observe(node);
 
 		// Deferred so the engine is never on the critical path: the page is
 		// already complete and this only adds the readout.
 		void (async () => {
-			const { hydrate } = await import('./engine');
-			const node = host;
-			if (cancelled || node === null) return;
-			live = await hydrate(node, option, { width: measured, height });
-			observer = new ResizeObserver((entries) => {
-				const next = Math.round(entries[0].contentRect.width);
-				if (next > 0 && next !== measured) {
-					measured = next;
-					live?.resize({ width: next, height });
-				}
+			// The engine is a network fetch and it can fail - an offline reader, a
+			// dropped connection. The server already drew this chart, so a failure
+			// costs the tooltip and nothing else. It is said once, in the console,
+			// rather than thrown: an unhandled rejection per chart is noise a
+			// reader cannot act on and a real fault cannot be seen through.
+			const engine = await import('./engine').catch((reason: unknown) => {
+				console.warn(`chart "${label}": the engine did not load, so it stays as drawn`, reason);
+				return null;
 			});
-			observer.observe(node);
+			// The import is a network fetch, so the component can be gone by now.
+			// `hydrate` hands back a handle in the same turn, so past this check
+			// there is no window where an instance exists and nothing holds it.
+			if (engine === null || cancelled) return;
+			handed = option;
+			live = engine.hydrate(node, option, { width: measured, height });
 		})();
 
 		return () => {
 			cancelled = true;
-			observer?.disconnect();
+			observer.disconnect();
 			live?.destroy();
+			live = null;
 		};
+	});
+
+	// A live chart keeps the option it was given until it is told otherwise. A
+	// control that redraws a chart - the failure mix's shape switch is one -
+	// changes this prop and nothing else, so without this the page and the chart
+	// disagree and the chart is the one that is wrong.
+	$effect(() => {
+		const next = option;
+		if (live === null || next === handed) return;
+		handed = next;
+		live.update(next);
 	});
 </script>
 
