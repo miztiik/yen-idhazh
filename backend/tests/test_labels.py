@@ -6,7 +6,14 @@ other is that the ledger is hard to fill with a machine - LLM-as-judge is a
 project non-goal (`CLAUDE.md` section 0a), and a non-goal that is only
 discouraged is not a control.
 
-No mocks and no network (Rule #7): the draw runs over the committed ledger.
+No mocks and no network (Rule #7). The draw runs over a ledger built here, not
+over `state/`: measured 2026-09-06 the committed ledger held 6,966 rows over 15
+days and grows by about 465 a day, and the tests below read and re-drew over all
+of them eighteen times to establish six cases. The draw reads `hhem`,
+`scorer_version` and `pipeline_fingerprint` and nothing else, so eighty built
+rows carry every combination the tests name - including a short decile and a
+second producer at one scorer, which are states the archive cannot be relied on
+to hold.
 """
 
 from __future__ import annotations
@@ -14,15 +21,19 @@ from __future__ import annotations
 import ast
 import contextlib
 import io
+import shutil
 import sys
+from collections.abc import Iterator
 from itertools import pairwise
 from pathlib import Path
+from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, STATE_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh import config
+from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.label_row import LabelRow, LabelTag
 from idhazh.evals import labels, writer
 from utilities import label_queue
@@ -30,17 +41,147 @@ from utilities import label_queue
 #: A pair no run has ever written, so a draw for it is empty on any ledger.
 NO_SUCH_PIPELINE = "0" * 64
 
+#: The producers the built ledger carries. Two scorers, so an older one has a
+#: pool to be excluded from; two pipelines at the live scorer, so a pooled draw
+#: has a mix to report.
+LIVE_SCORER: Final = "hhem-2.1-open@6a30c896;metrics-3;bands=0.80/0.50;lead=0.30"
+OLD_SCORER: Final = "hhem-2.0-open@0f1e2d3c;metrics-2;bands=0.80/0.50;lead=0.30"
+LIVE_PIPELINE: Final = "1" * 64
+OTHER_PIPELINE: Final = "2" * 64
+
+#: One more than `evaluation.label_draw_per_decile`, so a full decile proves the
+#: draw stops at the cap.
+FULL_DECILE_ROWS: Final = 7
+
+#: Fewer than it, so the top decile proves the draw reports the shortfall rather
+#: than borrowing from the decile below.
+SHORT_DECILE_ROWS: Final = 3
+
+#: Under the extraction floor, so one row proves a failed extraction stays in
+#: the pool instead of being tidied out of the sample.
+A_SHORT_SOURCE: Final = 40
+
+#: Where the built ledger lives for the length of this module. A path rather
+#: than the rows, because the operator tool reads files.
+_WORLD: Path | None = None
+
+
+def _band_of(hhem: float) -> ConfidenceBand:
+    """The bands the scorer strings above declare: 0.80 and 0.50."""
+    if hhem >= 0.80:
+        return ConfidenceBand.HIGH
+    if hhem >= 0.50:
+        return ConfidenceBand.MEDIUM
+    return ConfidenceBand.LOW
+
+
+def _an_eval_row(
+    base: EvalRow, *, seq: int, decile: int, date: str, scorer: str, pipeline: str, words: int
+) -> EvalRow:
+    """One row at a chosen decile, distinct from every other row by address."""
+    hhem = round(decile / 10 + 0.05, 2)
+    return base.model_copy(
+        update={
+            "item_id": f"ai-{seq:04d}",
+            "url_key": f"{seq:064x}",
+            "output_digest": f"{seq + 1_000_000:064x}",
+            "source_url": f"https://example.test/story/{seq:04d}",
+            "title": f"Story {seq:04d}",
+            "date": date,
+            "run_id": f"{date}-1",
+            "scored_at": f"{date}T06:00:00Z",
+            "hhem": hhem,
+            "hhem_full": hhem,
+            "hhem_delta": 0.0,
+            "band": _band_of(hhem),
+            "scorer_version": scorer,
+            "pipeline_fingerprint": pipeline,
+            "source_seen_word_count": words,
+            "source_word_count": max(words, 1320),
+        }
+    )
+
+
+def _built_rows() -> list[EvalRow]:
+    """Eighty rows, in the order the shards must hold them.
+
+    `_live_scorer` reads the last row, so the live pair is written last and the
+    two it has to be told apart from are written before it.
+    """
+    base = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
+    rows: list[EvalRow] = []
+    seq = 0
+
+    def add(*, decile: int, date: str, scorer: str, pipeline: str, words: int = 1320) -> None:
+        nonlocal seq
+        rows.append(
+            _an_eval_row(
+                base,
+                seq=seq,
+                decile=decile,
+                date=date,
+                scorer=scorer,
+                pipeline=pipeline,
+                words=words,
+            )
+        )
+        seq += 1
+
+    # A scorer that has been retired, on its own day.
+    for decile in (0, 2, 4, 6, 8, 9):
+        add(decile=decile, date="2026-08-20", scorer=OLD_SCORER, pipeline=LIVE_PIPELINE)
+
+    # A second producer at the live scorer, so a pooled draw mixes two.
+    for decile in range(8):
+        add(decile=decile, date="2026-09-01", scorer=LIVE_SCORER, pipeline=OTHER_PIPELINE)
+
+    # The live pair. Nine full deciles, one short one, and one failed extraction.
+    for decile in range(9):
+        for position in range(FULL_DECILE_ROWS):
+            add(
+                decile=decile,
+                date="2026-09-02" if position % 2 == 0 else "2026-09-03",
+                scorer=LIVE_SCORER,
+                pipeline=LIVE_PIPELINE,
+                words=A_SHORT_SOURCE if seq == 20 else 1320,
+            )
+    for _ in range(SHORT_DECILE_ROWS):
+        add(decile=9, date="2026-09-03", scorer=LIVE_SCORER, pipeline=LIVE_PIPELINE)
+    return rows
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _the_built_world(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """One ledger and one config, built once and read by every test below."""
+    global _WORLD
+    root = tmp_path_factory.mktemp("label-world")
+    shutil.copytree(CONFIG_DIR, root / "config")
+    landed = writer.append(root / "state", _built_rows())
+    assert landed == 80, f"the built ledger deduped down to {landed} rows"
+    _WORLD = root
+    yield
+    _WORLD = None
+
+
+@pytest.fixture(autouse=True)
+def _the_tool_reads_the_built_world(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The operator tool locates its ledger off one constant, so this moves it."""
+    monkeypatch.setattr(label_queue, "REPO_ROOT", world())
+
+
+def world() -> Path:
+    assert _WORLD is not None, "the built world is only there inside a test"
+    return _WORLD
+
 
 def ledger() -> list[dict[str, str]]:
-    """Every committed row, oldest month first - the population the tool reads.
+    """Every built row, oldest month first - the population the tool reads.
 
-    A month is a shard boundary and nothing else, so a helper that names one
-    file stops agreeing with `label_queue` about what the ledger holds on the
-    first of every month. The disagreement lands in the inventory the tool
-    prints for an empty pool, which is the one screen an operator reads to tell
-    a gate one run-day away from a gate that is unreachable.
+    Read back through `writer.records` off real shards rather than handed over
+    in memory, so a test sees the CSV spelling production sees and a column that
+    stops round-tripping fails here.
     """
-    return list(writer.records(STATE_DIR))
+    return list(writer.records(world() / "state"))
 
 
 def live_scorer(records: list[dict[str, str]]) -> str:

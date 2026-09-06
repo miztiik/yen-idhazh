@@ -1495,23 +1495,21 @@ naming the worker API for a test to assert on.
 
 ## Running the gates
 
-- **A new `frontend/tests/*.spec.ts` can pass every frontend gate and still fail
-  the backend job.** `backend/tests/test_archive_readers.py` scans both test
-  directories and refuses any file that is not on its list and reads the
-  committed archive - in TypeScript the trigger is the literal
-  `'public', 'digest'` or `'public', 'telemetry'` in a `join`. The list may only
-  shrink, so the answer is a fixture, never a new entry. Nothing local catches
-  it: the module carries no mark, so `-m contract`, `-m visual` and
-  `-m "not slow"` all miss it, `npm run check` and the browser suite know
-  nothing about it, and the first red is CI's `gates` job about fifteen minutes
-  after the push. Run it directly when a spec reads a tree:
-
-  ```powershell
-  .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_archive_readers.py
-  ```
-
-  `backend/var/canary/` is deliberately outside the pattern, so the canary tree
-  is the fixture a per-item rule is driven from.
+- **A guard that lists the hazards is wrong the day after it is written, and
+  this repository has the receipt.** `backend/tests/test_archive_readers.py`
+  scanned both test directories for two hand-written path patterns and held the
+  matches against a list of approved names. It shipped and was deleted the same
+  day, 2026-09-06. Three things killed it, and they generalise to any guard of
+  this shape. It **enumerated the hazard rather than the safe set**, so it
+  covered two collections out of nineteen and looked complete - `corpus/`,
+  `assist/`, `source-health.json` and three ledgers that grow for ever were
+  never in it. **Its own upkeep grew with the number of collections**, which is
+  the defect it existed to catch. And it was **a list with no escape hatch**, so
+  a judgement call could only be expressed by editing the list. If you are about
+  to write a check that enumerates paths, enumerate the bounded set instead, or
+  accept that review is the control. Rule #12 is now stated as a property - does
+  a run that changed no code make this slower - precisely so it survives a
+  collection nobody has invented yet.
 
 - **`vite build` on its own is not the build, and a page measured that way is
   both lighter and noisier.** `npm run build` runs `build-icons.mjs`,
@@ -2797,6 +2795,35 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   complete, which is what makes it convincing. The fix is one more
   `npm run build`. Measured 2026-08-31. Prefer letting a queued gate finish;
   if you do kill one, rebuild before serving anything.
+- **A green local `svelte-check` says nothing about the `site` job, because CI
+  type-checks the MERGE with `main` and your worktree is not that tree.** A test
+  helper built a `TelemetryRow` by spreading `Partial<TelemetryRow>` over a
+  literal. `main` had meanwhile grown eight nullable timing and token columns on
+  that interface, and the spread widens every field to `| undefined`, which the
+  row type refuses - so `npm run check` was clean on this box and the `site` job
+  was red on four consecutive runs, 2026-09-06, with the failure naming a field
+  that does not exist in the local file. That last part is the tell: **an error
+  naming a symbol your working tree does not contain means you are reading the
+  wrong tree, not the wrong code.** `git merge origin/main` into the branch and
+  re-run before believing a green frontend check, which is what the section
+  above already says for the suite and applies exactly as hard to the types.
+- **Never build a fixture object by spreading `Partial<T>` over a literal.**
+  Every field of a `Partial` is optional, so the spread widens the result and
+  the target type refuses it - and because the error only appears once `T` grows
+  a field, it arrives on somebody else's commit. Name the fields the helper
+  actually varies and write the rest out.
+ Raising the Playwright worker
+  count from one to four measured 233.7 s against 135.5 s on an i7-1265U with
+  six other checkouts building, 2026-09-05 - 72 percent SLOWER, both arms
+  passing the same 268 tests, so it reads as a clean result rather than as
+  contention. The same change on a runner took the browser step from 344 s to
+  207 s, 40 percent faster. Two performance cores shared with seven agents is
+  not four dedicated vCPU (Rule #2), and no number of local repetitions fixes
+  that - the arms are measuring a different machine, not a noisier one. For
+  anything about worker counts, shard widths or concurrency, put the knob behind
+  an environment variable, push, and read the job timings out of
+  `gh api repos/OWNER/REPO/actions/runs/<id>/jobs`. That measurement is free and
+  it is the only one that describes what ships.
 
 ## See also
 
