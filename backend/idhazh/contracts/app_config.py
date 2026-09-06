@@ -476,6 +476,34 @@ class CollectConfig(Model):
             "entries are a source list and live in config/ (Rule #6)."
         ),
     )
+    dedup_similarity_min: float = Field(
+        default=0.94,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How alike two of a day's planned stories have to be, by cosine over the "
+            "headline-and-lead vectors the plan builds, before they are recorded as one "
+            "story carried at two addresses. The same number and the same reason as "
+            "assemble.duplicate_similarity_min: set by hand labels at 0.94, the first "
+            "round hundredth above the highest-scoring pair a person marked as two "
+            "stories (measured 2026-09-01, i7-1265U, 3,978 items). The plan pass reuses "
+            "it rather than minting a second threshold for the same question one stage "
+            "earlier. Raising it misses duplicates; lowering it risks folding two "
+            "stories into one, so it leans high."
+        ),
+    )
+    dedup_enforce: bool = Field(
+        default=False,
+        description=(
+            "Whether the plan-stage duplicate pass CUTS the weaker telling of a "
+            "repeated story, or only records what it would cut. False is record-only: "
+            "the pass logs each would-collapse pair against what it matched and removes "
+            "nothing, so a day is measured before it is trimmed. Turning it on cuts the "
+            "lower-ranked of each pair before the safety ceiling and changes nothing "
+            "else. It ships false, because a cut nobody has read the record of is a cut "
+            "nobody can defend."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -2556,6 +2584,25 @@ class AppConfig(Contract):
                 "one because a low yield and a low volume are independent axes, and a "
                 "single number answering both fires on cnn-world at 1 of 7, which the "
                 "source docs already ruled is a working feed."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-06T21:40",
+            change=(
+                "collect.dedup_similarity_min added, defaulting to 0.94 and bounded to "
+                "[0.0, 1.0], and collect.dedup_enforce added, defaulting to false. "
+                "Together they drive a plan-stage pass that finds a day's same-story "
+                "repeats across sources by cosine over headline-and-lead vectors. "
+                "Additive: an older config validates and takes the defaults."
+            ),
+            why=(
+                "The same story at two addresses was planned twice: the exact-url "
+                "collapse only joins identical addresses, and two outlets carrying one "
+                "story carry two addresses. The pass ships record-only (dedup_enforce "
+                "false), so a day's duplicate rate is written to the run log and read "
+                "before any cut is turned on. The threshold reuses "
+                "assemble.duplicate_similarity_min rather than minting a second number "
+                "for the same question one stage earlier."
             ),
         ),
         ChangelogEntry(
