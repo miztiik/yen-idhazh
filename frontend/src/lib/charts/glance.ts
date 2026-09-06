@@ -695,7 +695,16 @@ export function publishedSkyline(
  * Null under two measurements. One measurement has nothing to move from.
  */
 export function sizeGain(manifests: readonly RunSummary[]): number | null {
-	const ordered = [...manifests].sort((a, b) => a.date.localeCompare(b.date));
-	if (ordered.length < 2) return null;
-	return ordered[ordered.length - 1].siteBytes - ordered[0].siteBytes;
+	if (manifests.length < 2) return null;
+	// The earliest-dated and latest-dated manifest, in one pass. A full sort only
+	// to read its two ends is a cost the card pays for nothing. Ties resolve as
+	// the sort did - the first manifest of the earliest date, the last of the
+	// latest - so a same-day correction still moves the gain by what it should.
+	let earliest = manifests[0];
+	let latest = manifests[0];
+	for (const run of manifests) {
+		if (run.date.localeCompare(earliest.date) < 0) earliest = run;
+		if (run.date.localeCompare(latest.date) >= 0) latest = run;
+	}
+	return latest.siteBytes - earliest.siteBytes;
 }
