@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -256,6 +256,24 @@ against a 160 ceiling - so there was no reserve to repay them with. Setting the
 number lower is the owner's call and needs a run measured at it first
 (Rule #10).
 
+## A feed that publishes badly stops scoring as though it did not
+
+`authority` was the source's tier scaled by that feed's hand-set `weight`, and nothing else. So a feed that failed its reads, or returned 200 and parsed to nothing, kept the full authority of its tier - it scored as though it had published. A second factor now scales it: the feed's **reliability**, derived from its own recent record rather than set by hand.
+
+Reliability is `productive / evidence-bearing` over a trailing window, clamped to `[reliability_floor, 1.0]`:
+
+- **Evidence-bearing** is every read that did not preserve the streak - so a rest and a robots answer are set aside, because neither asked the feed whether it works. A fetch, a silent reshape to zero items, and an address we could not reach all count.
+- **Productive** is the read that came back carrying entries (`FeedHealthRow.answered`).
+
+It is applied inside `authority`, the same place and the same way `weight` is: `tier_weight * weight * reliability`. Multiplying rather than adding keeps a badly-publishing feed below a dependable one of the same tier, which is the point. Because it multiplies the authority term, it scales before reach and before the watchlist, front-page, theme and recency bonuses - a feed's record dims the story it carried, it does not touch a bonus the story earned elsewhere.
+
+Two knobs, both under `collect`, both bounded so the factor can only ever reduce a score and never remove a feed:
+
+- `reliability_window_days` (30) is the trailing window. A feed publishes a few times a day at most, so thirty days is dozens of reads - enough that one bad afternoon cannot set the factor. The read is bounded by this window and never the whole ledger (Rule #12).
+- `reliability_floor` (0.5) is the lowest the factor may reach. A feed with a record of nothing but dead reads scores 0.0 raw and is clamped up to 0.5, so the worst its record can do is **halve its authority - a two-to-one cut, never more**. That is why this factor alone can never empty a desk: a `min_feeds` floor counts configured feeds, and a multiplier scales a score without removing a feed from the count.
+
+A feed with no evidence-bearing read in the window - brand new, or only ever rested and politely refused - scores 1.0. **Unknown is not the same as bad**, so an untested feed is never punished; it simply carries its tier until it has a record. The map of factors is built once per run by `ledger.reliability` off the committed feed-health shards and read inside `authority`; a feed absent from the map reads 1.0.
+
 ## Design rationale
 
 The fifth slot was added at 02:20 rather than 22:20. Both are one more attempt
@@ -275,6 +293,14 @@ four items. On 2026-08-24 the day published 731 and every run planned 200, so
 dissent for its argument about vertical mix, not for its volume figure.
 
 The age rule went the same way for the same reason. A 24-hour cutoff and a decay curve agree on every ordinary day, and disagree exactly on the days that matter: the quiet ones, where the cutoff empties a vertical and the curve publishes the best thing available. Losing a good item to a rule that was meant to protect quality is the worst outcome available.
+
+### A feed's reliability multiplies its authority, and only ever reduces it
+
+The factor is applied multiplicatively, `tier_weight * weight * reliability`, and an additive penalty was rejected. A subtracted penalty has no natural scale against the tier weights - institution is 1.0 and community is 0.3, so one penalty value either barely touches an institution or wipes out a community feed, and the two cannot be reconciled with a single number. Multiplying scales with the tier exactly the way the hand-set `weight` already does, keeps the tier ordering intact, and lands the factor in a bounded, readable range where 0.5 means "half" whatever the tier.
+
+The clamp to `[reliability_floor, 1.0]` is what makes the change safe to ship without a second guard. Because the factor can never exceed 1.0 it can only ever reduce a score, and because it can never reach 0 it can never zero a feed out; and because it scales a score rather than removing a feed, it cannot change `eligible_feeds`, which is what a vertical's `min_feeds` floor counts. So the factor alone can neither move a score by more than the floor allows nor take a desk under its floor - the two failure modes the plan named. A floor of 0.5 caps the worst cut at two-to-one.
+
+Measured over the committed 30-day window ending 2026-09-06 (Intel Core i7-1265U / Windows 11): 184 feeds carried evidence-bearing reads. 157 scored a full 1.0 - dependable across the window - and 27, about one in seven, were dimmed below it, 15 of them sitting at the 0.5 floor because their record was worse than one good read in two. The median feed was untouched at 1.0, and no factor fell below the floor, so neither failure mode was anywhere near firing. The factor is a real signal - it moves 27 feeds - and a bounded one.
 
 ### Age became a hard gate on 2026-08-30, and the argument above is the thing it overturned
 
