@@ -31,16 +31,27 @@ export const FRONTEND = path.resolve(here, '..', '..');
 /** A project path, the way GitHub Pages serves this site. */
 export const BASE = '/yen-idhazh';
 
+/** A day as a spec reads it back out of the page. `generated_at` is the
+ * payload's own content revision, which is what decides whether a day the
+ * session already holds is the day the host is serving. */
+export interface LoadedDay {
+	items: { item_id?: string }[];
+	generated_at?: string;
+}
+
 /** What the bundled module hands the page. */
 export interface Loader {
 	watchDay: (
 		date: string,
 		watch: {
-			onStatus: (status: string, day: { items: unknown[] } | null) => void;
+			onStatus: (status: string, day: LoadedDay | null) => void;
 			slowMs: number;
 			again?: boolean;
 		}
-	) => Promise<{ items: unknown[] } | null>;
+	) => Promise<LoadedDay | null>;
+	/** The archive's own call: no wait states, no retry control, one day. */
+	loadDay: (date: string) => Promise<LoadedDay | null>;
+	itemOf: (day: LoadedDay | null, itemId: string) => { item_id: string } | null;
 	dayUrl: (date: string, root?: string) => string | null;
 	restoreAnchor: (hash?: string) => boolean;
 }
