@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A rollup that holds only what no ledger holds | - | A | DONE #449 | span-r1 (removed) | #449 | worker |
 | 2 | Raw traces, briefly, so a recent run can be opened | 1 | B | PENDING | - | - | - |
-| 3 | Every second of a shard is accounted for | 1 | C | PENDING | - | - | - |
+| 3 | Every second of a shard is accounted for | 1 | C | DONE #450 | span-r3 (removed) | #450 | worker |
 | 4 | Tracing switches on | 2, 3 | D | PENDING | - | - | - |
 | 5 | Where the time went, drawn | 4 | E | PENDING | - | - | - |
 
