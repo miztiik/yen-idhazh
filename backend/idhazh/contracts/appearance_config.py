@@ -232,13 +232,14 @@ class FrameConfig(Model):
         description=(
             "The day stream's leading column from the small breakpoint, which carries "
             "the time rail. It is the widest label the rail prints that decides this "
-            "number, not the shortest: `Yesterday 23:40` and `First seen 06:20` both "
-            "wrap in less. In rem, so the column grows with a reader who set their "
-            "browser text larger and the label keeps the same number of lines. There "
-            "is no phone value because there is no phone column: 328 CSS px of content "
-            "box cannot hold a rail, the read mark and a readable line at once, so "
-            "below the small breakpoint the marker is a rule across the top of its "
-            "group instead."
+            "number, not the shortest: the rail prints digits only, so the widest is "
+            "a cross-year stamp, `2019-06-11 08:15` at 16 characters, and the common "
+            "ones are `14:05` and `08-19 23:40`. In rem, so the column grows with a "
+            "reader who set their browser text larger and the label keeps the same "
+            "number of lines. There is no phone value because there is no phone "
+            "column: 328 CSS px of content box cannot hold a rail, the read mark and "
+            "a readable line at once, so below the small breakpoint the marker is a "
+            "rule across the top of its group instead."
         ),
     )
 
@@ -563,6 +564,24 @@ class AppearanceConfig(Contract):
                 "spans. Neither new knob has a reader yet; rows 8 and 25 of "
                 "TODO/20260906-constant-cost-reads-plan.md are the readers, and the "
                 "knobs land in one commit so no later row edits the config contract."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-06T10:00",
+            change=(
+                "frame.zone_time_rem keeps its default of 5.5 and its bounds. Its "
+                "description now names the labels the time rail prints today, which "
+                "are digits only. No field was added, removed or retyped and no "
+                "default moved, so every appearance file that validated yesterday "
+                "validates unchanged."
+            ),
+            why=(
+                "The description sized the column against `Yesterday 23:40` and "
+                "`First seen 06:20`. The rail no longer prints either, so an operator "
+                "widening or narrowing the column was measuring against two strings "
+                "that no longer exist. The widest label is now `2019-06-11 08:15` at "
+                "16 characters, which is exactly what `First seen 06:20` was, so the "
+                "number this knob defaults to did not have to move."
             ),
         ),
         ChangelogEntry(

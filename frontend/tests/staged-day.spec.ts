@@ -97,6 +97,32 @@ function staged(): Day[] {
 	return found;
 }
 
+/** The newest committed day, found by walking the tree rather than parsing it.
+ *
+ * The control below needs one day that carries a vector block, and the newest
+ * is the one the current writer produced. Parsing all of them to find one cost
+ * a parse per published day and answered the same question sixteen times
+ * (`CLAUDE.md` Rule #12).
+ */
+function newestCommittedDay(): Day {
+	const deepest = (at: string, depth: number): string =>
+		depth === 0
+			? at
+			: deepest(
+					join(
+						at,
+						readdirSync(at, { withFileTypes: true })
+							.filter((entry) => entry.isDirectory())
+							.map((entry) => entry.name)
+							.sort()
+							.at(-1) as string
+					),
+					depth - 1
+				);
+	const path = join(deepest(COMMITTED, 3), 'digest.json');
+	return { path, payload: JSON.parse(readFileSync(path, 'utf8')) };
+}
+
 function items(day: Day): Record<string, unknown>[] {
 	return day.payload.items as Record<string, unknown>[];
 }
@@ -188,13 +214,9 @@ test('the vectors are gone from the staged copy and still in the committed one',
 		).not.toContain('embeddings');
 	}
 
-	const committed = daysUnder(COMMITTED);
-	expect(committed.length, 'no committed day, so the control below proves nothing').toBeGreaterThan(
-		0
-	);
-	const carrying = committed.filter((day) => day.payload.embeddings !== null);
+	const committed = newestCommittedDay();
 	expect(
-		carrying.length,
-		'no committed day carries a vector block - the index rebuild has no source left'
-	).toBeGreaterThan(0);
+		committed.payload.embeddings,
+		`${committed.path} carries no vector block - the index rebuild has no source left`
+	).not.toBeNull();
 });

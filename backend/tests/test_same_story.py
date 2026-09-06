@@ -1,14 +1,22 @@
 """The same-story pass: what it groups, what it refuses, and what it never loses.
 
 Row #9's oracle is a hand-labelled day. Every group the pass forms on the
-committed 2026-08-30 payload was read from the published titles and summaries on
+2026-08-30 payload was read from the published titles and summaries on
 2026-09-01 and marked same-story or not; the labels are written out below and
-the test holds the shipped threshold against them. A group that is two stories
+the test holds the shipped threshold against them.  A group that is two stories
 is a false merge, and a false merge is a story that never ran.
 
+**The day is frozen under `tests/fixtures/`, not read from the published tree.**
+A hand-labelled judgement is the most expensive artefact in this file and
+retention would have deleted the payload it was read off, taking the labels'
+meaning with it and turning three tests red on a date nobody chose. The fixture
+keeps the four fields the pass actually reads - `item_id`, `source_id`,
+`rank_score`, `introduced_by_run` - and every vector, which is 280.6 KB against
+the day's 1,041.9 KB. It never grows.
+
 Unit tier for the rules and integration tier for the oracle (CLAUDE.md section
-13). Real quantised vectors through the encoder's own wire format for the rules,
-and the real committed day for the oracle. No mocks, no network.
+13). Real quantised vectors through the encoder's own wire format throughout.
+No mocks, no network.
 """
 
 from __future__ import annotations
@@ -17,11 +25,10 @@ import json
 import math
 from array import array
 from base64 import b64decode
-from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.assemble import collapse_same_story, cosine_int8
@@ -54,12 +61,32 @@ LABELLED_GROUPS: Final = {
 #: sit above them or the pushback never ran.
 LABELLED_FALSE_PAIR: Final = ("world-8617792855", "business-economy-2218216680")
 
+#: The day the labels were read off, frozen the day the labels were taken.
+#: Written by hand once from the then-committed payload; re-taking it means
+#: re-taking the labels, which is the point of freezing it.
+LABELLED_DAY_FIXTURE: Final = FIXTURES_DIR / "same-story" / "labelled-day.json"
 
-def committed_day(date: str) -> DigestDay:
-    year, month, day = date.split("-")
-    path = REPO_ROOT / "frontend" / "public" / "digest" / year / month / day / "digest.json"
-    assert path.is_file(), f"the labelled day {date} is not committed under frontend/public/digest"
-    return DigestDay.from_json(read_text(path))
+
+def labelled_day() -> tuple[list[DigestItem], DigestEmbeddings]:
+    """The oracle day: 431 stories over 64 sources, and every vector.
+
+    Only the four fields `collapse_same_story` reads are stored, so `item()`
+    fills the rest. A title or a summary in here would be article text in the
+    repository for no reader (`CLAUDE.md` section 0a) and would not change one
+    grouping.
+    """
+    payload = json.loads(read_text(LABELLED_DAY_FIXTURE))
+    assert payload["date"] == LABELLED_DATE, "the fixture is not the day the labels were read off"
+    items = [
+        item(
+            one["item_id"],
+            source=one["source_id"],
+            score=one["rank_score"],
+            run=one["introduced_by_run"],
+        )
+        for one in payload["items"]
+    ]
+    return items, DigestEmbeddings.model_validate(payload["embeddings"])
 
 
 def committed_threshold() -> float:
@@ -269,10 +296,8 @@ def test_the_oracle_every_group_on_the_labelled_day_is_one_story() -> None:
     and ESCALATE trigger (b) has fired - read the two items before touching the
     number.
     """
-    day = committed_day(LABELLED_DATE)
-    stamped = collapse_same_story(
-        day.items, day.embeddings, similarity_min=committed_threshold()
-    )
+    items, embeddings = labelled_day()
+    stamped = collapse_same_story(items, embeddings, similarity_min=committed_threshold())
 
     assert groups_of(stamped) == LABELLED_GROUPS
 
@@ -284,11 +309,10 @@ def test_the_threshold_sits_above_the_labelled_false_pair() -> None:
     two stories, and they score 0.9317. A threshold at or below that merges
     them.
     """
-    day = committed_day(LABELLED_DATE)
-    assert day.embeddings is not None
+    _, embeddings = labelled_day()
     left_id, right_id = LABELLED_FALSE_PAIR
-    left = array("b", b64decode(day.embeddings.vectors[left_id]))
-    right = array("b", b64decode(day.embeddings.vectors[right_id]))
+    left = array("b", b64decode(embeddings.vectors[left_id]))
+    right = array("b", b64decode(embeddings.vectors[right_id]))
     score = cosine_int8(
         left,
         right,
@@ -301,44 +325,52 @@ def test_the_threshold_sits_above_the_labelled_false_pair() -> None:
 
 
 def test_the_labelled_day_keeps_every_item_it_published() -> None:
-    """Nothing is unpublished, counted on the real payload rather than argued."""
-    day = committed_day(LABELLED_DATE)
-    stamped = collapse_same_story(
-        day.items, day.embeddings, similarity_min=committed_threshold()
-    )
+    """Nothing is unpublished, counted on the oracle day rather than argued."""
+    items, embeddings = labelled_day()
+    stamped = collapse_same_story(items, embeddings, similarity_min=committed_threshold())
 
-    assert len(stamped) == len(day.items)
-    assert [one.item_id for one in stamped] == [one.item_id for one in day.items]
+    assert len(stamped) == len(items)
+    assert [one.item_id for one in stamped] == [one.item_id for one in items]
 
 
 # --- the read side ---------------------------------------------------------
 
 
-def committed_days() -> list[Path]:
-    return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))
+def a_day() -> dict[str, Any]:
+    """A three-story day, mutable, for the rules the day-level validator holds.
+
+    Three is what these need: one item folded onto a second folded onto a third
+    is the chain that must be refused.
+    """
+    payload: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")
+    )
+    return payload
 
 
 def test_a_committed_day_reads_an_absent_duplicate_field_as_unknown() -> None:
-    """The read-side migration (CLAUDE.md section 11), over the real payloads.
+    """The read-side migration (CLAUDE.md section 11).
 
     A day written before the pass existed omits both fields, and each must come
     back as `None`. `0` for `also_covered_by` would claim no other source
     carried the story, which is a fact nobody measured.
-    """
-    assert committed_days(), "no digest.json under frontend/public/digest"
-    absent = 0
-    for path in committed_days():
-        text = read_text(path)
-        written = json.loads(text)["items"]
-        day = DigestDay.from_json(text)
-        for payload, one in zip(written, day.items, strict=True):
-            for name in ("also_covered_by", "same_story_as"):
-                if name in payload:
-                    continue
-                absent += 1
-                assert getattr(one, name) is None, f"{path.name} {one.item_id}: {name} invented"
 
-    assert absent, "every committed item carries both, so nothing here reads an absent field"
+    Driven from the fixture with both keys removed. Walking the committed tree
+    cost one parse per published day, and it counted the items that still LACK
+    the fields and failed at zero - so it went red on the day the last
+    unmigrated day aged out of retention, which is a date on the calendar rather
+    than a change anybody made.
+    """
+    payload = a_day()
+    for item_payload in payload["items"]:
+        item_payload.pop("also_covered_by", None)
+        item_payload.pop("same_story_as", None)
+    assert payload["items"], "the fixture holds no story, so removing the fields proved nothing"
+
+    day = DigestDay.model_validate(payload)
+    for one in day.items:
+        assert one.also_covered_by is None, f"{one.item_id}: also_covered_by invented"
+        assert one.same_story_as is None, f"{one.item_id}: same_story_as invented"
 
 
 def test_a_day_may_not_collapse_onto_an_item_it_also_collapses() -> None:
@@ -348,7 +380,7 @@ def test_a_day_may_not_collapse_onto_an_item_it_also_collapses() -> None:
     survivor drawing a count from somewhere else, and the reader with no way
     back to either.
     """
-    payload = json.loads(committed_day(LABELLED_DATE).to_json())
+    payload = a_day()
     first, second, third = (one["item_id"] for one in payload["items"][:3])
     for one in payload["items"]:
         if one["item_id"] == first:
@@ -361,7 +393,7 @@ def test_a_day_may_not_collapse_onto_an_item_it_also_collapses() -> None:
 
 
 def test_a_day_may_not_collapse_onto_an_item_it_does_not_hold() -> None:
-    payload = json.loads(committed_day(LABELLED_DATE).to_json())
+    payload = a_day()
     payload["items"][0]["same_story_as"] = "world-9999999999"
     payload["items"][0]["also_covered_by"] = 1
 
@@ -370,7 +402,7 @@ def test_a_day_may_not_collapse_onto_an_item_it_does_not_hold() -> None:
 
 
 def test_an_item_cannot_be_the_same_story_as_itself() -> None:
-    payload = json.loads(committed_day(LABELLED_DATE).to_json())
+    payload = a_day()
     payload["items"][0]["same_story_as"] = payload["items"][0]["item_id"]
     payload["items"][0]["also_covered_by"] = 1
 
@@ -379,7 +411,7 @@ def test_an_item_cannot_be_the_same_story_as_itself() -> None:
 
 
 def test_a_collapsed_item_carries_the_count_the_sentence_needs() -> None:
-    payload = json.loads(committed_day(LABELLED_DATE).to_json())
+    payload = a_day()
     payload["items"][1]["same_story_as"] = payload["items"][0]["item_id"]
 
     with pytest.raises(ValueError, match="how many sources covered it"):

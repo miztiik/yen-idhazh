@@ -59,19 +59,18 @@ Six entries and five states, because Loaded is the one that is not a failure of 
 
 The stream orders by the time on the story, newest first, down a rail on its leading edge. What it replaced was the published order, which is desk-blocked rather than ranked - the whole of one desk, then the whole of the next - so a reader met the same desk ninety times before the next one began. **Nothing editorial is lost by re-ordering it**: what the day thinks is important is the leading block, chosen across the whole day, and it is unchanged. Measured 2026-09-02 over the 12 committed days and 4,713 stories, the re-ordered set is the published set on every day.
 
-**No relative time, anywhere, ever.** A page is rendered once and read for the next 24 hours, and its times are in the document before any script runs and stay there if none ever does - so `3 hours ago` baked in at 06:20 is wrong by 18:20 and wrong for ever on an archived day. A device may add a relative form beside a correct absolute string; it may never replace one. `Yesterday` is not a relative form - it is relative to the day the page IS, which is printed at the top of that page and never moves.
+**No relative time, and no words at all.** A page is rendered once and read for the next 24 hours, and its times are in the document before any script runs and stay there if none ever does - so `3 hours ago` baked in at 06:20 is wrong by 18:20 and wrong for ever on an archived day. A device may add a relative form beside a correct absolute string; it may never replace one. The rail prints digits: a clock, and a date in front of it when the stamp is not from the day being read.
 
-Five strings, and the fourth is the one that matters:
+Four shapes, and the third is the one that matters:
 
 | The reader sees | When |
 | --- | --- |
 | `14:05` | the story's stamp is on the day being read |
-| `Yesterday 23:40` | it is on the day before. Common rather than an edge case: feed-to-arrival reaches 25.7 hours against a 24-hour age limit |
-| `11 Jun 08:15`, or `11 Jun 2019 08:15` across a year boundary | older than that |
-| `First seen 06:20`, with a mark | the feed's own time was absent or rejected as impossible, so the clock printed is **ours** |
-| `No time given` | neither clock answered, so the story carries no time at all |
+| `08-19 23:40`, or `2019-06-11 08:15` across a year boundary | it is on any other day. The day before is common rather than an edge case: feed-to-arrival reaches 25.7 hours against a 24-hour age limit |
+| `06:20` with a mark | the feed's own time was absent or rejected as impossible, so the clock printed is **ours** |
+| nothing | neither clock answered, so the story carries no time at all and the rail has no number to print |
 
-The fourth exists because the fallback behind it is silent. `published_at` is the feed's own date where the feed gave a usable one and our first sight of the address where it did not, and both are the same kind of string - so a page printing the time cannot say whose it is without `time_source` ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). **The page never prints a time it rejected as a feed time.** That is the same class of failure as an invented axis label.
+The third exists because the fallback behind it is silent. `published_at` is the feed's own date where the feed gave a usable one and our first sight of the address where it did not, and both are the same kind of string - so a page printing the time cannot say whose it is without `time_source` ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). **The page never prints a time it rejected as a feed time.** That is the same class of failure as an invented axis label. The mark carries that, because the words no longer can.
 
 A story published before `time_source` existed prints the stamp with **no attribution at all** and no mark. The run recorded no answer, so "the feed said this" and "we said this" are both claims we cannot back, and 3,733 of the 4,713 committed stories are in that state.
 
@@ -148,10 +147,11 @@ The console is the one surface added since, and it was added for a named person 
 | A cookie for the read mark | Sent on every request, so it would put a reading history into the host's access logs. | Reader |
 | A day-level chart of the confidence bands | Its proportions were the same every day, and it shared its colours with the item mark that does vary. Colour is spent per item. | Jony, Reader |
 | Truncating a long day so the page looks like a digest | It would stop being one. The day's leading stories give the page a first screen without dropping a published item, and the stream below carries the whole day. | Jony |
-| Our own pipeline arrival time on the rail | Puts our run schedule into the news timeline. A reader wants to know when the news happened, not when we found it. The one exception is the story that has no other time, and there the label says `First seen` and carries a mark. | owner |
+| Our own pipeline arrival time on the rail | Puts our run schedule into the news timeline. A reader wants to know when the news happened, not when we found it. The one exception is the story that has no other time, and there the stamp carries a mark. | owner |
 | Keeping the published order and using time only as a label | A rail whose numbers jump up and down as the reader scrolls, which trains them to stop reading it. | Editor |
 | A relative time rewritten by script | Two clocks on one page, and a wrong one for every reader with script off. | Editor |
-| A midnight stamp read as "the feed gave a date and no clock" | 47 of the 4,713 committed stories are stamped exactly `T00:00:00Z`, which is what a date-only feed date parses to - and it is also what a story genuinely published at midnight parses to. The payload cannot tell them apart, so printing `no time given` on that guess would mislabel a real midnight story, which is the invented-label failure the rail exists to avoid. | agent, 2026-09-02 |
+| Words on the rail: `Yesterday 23:40`, `First seen 06:20`, `No time given` | A column of numbers is read by shape, and a word in it is a stop. The words were also the reason the column had to be 5.5 rem wide and the reason it could not exist on a phone. What `First seen` said is now said by the mark that was already beside it, and what `Yesterday` said is said by the date in front of the clock. `No time given` labelled a state with no number in it, so the rail now prints nothing there. Cost, stated rather than hidden: a reader who does not notice the mark reads our first-sight clock as a feed time, and that is 10 of 4,713 stories measured 2026-09-02. | owner, 2026-09-06 |
+| A midnight stamp read as "the feed gave a date and no clock" | 47 of the 4,713 committed stories are stamped exactly `T00:00:00Z`, which is what a date-only feed date parses to - and it is also what a story genuinely published at midnight parses to. The payload cannot tell them apart, so blanking the rail on that guess would hide a real midnight story's time, which is the invented-label failure the rail exists to avoid. | agent, 2026-09-02 |
 | A service worker with no kill-switch | The one failure a static site cannot recover from: a reader pinned to a broken bundle with no way to reach the fix. This page named the condition before the worker existed, and the worker shipped with the switch written first. | Fowler |
 | Precaching every published day on install | It spends a stranger's data on days they may never open, and it grows without bound as the archive grows. | Carmack |
 | Background sync, so a day is ready before the reader arrives | Work on the reader's device that they did not ask for, on a schedule we chose. It is the same instinct push notifications come from. | owner |
