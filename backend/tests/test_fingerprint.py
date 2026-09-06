@@ -15,14 +15,13 @@ fixture, so the test and the fixture cannot drift apart.
 
 from __future__ import annotations
 
-import csv
 import re
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, STATE_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig, InferenceConfig, ModelRef
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
@@ -307,14 +306,6 @@ def test_the_ledger_round_trips_through_flat_columns(tmp_path: Path) -> None:
 
 def test_an_absent_ledger_reads_as_empty(tmp_path: Path) -> None:
     assert read_ledger(tmp_path / LEDGER_RELPATH) == {}
-
-
-def test_the_committed_ledger_carries_the_declared_columns() -> None:
-    """A hand-edited header would silently reorder every future row."""
-    committed = STATE_DIR / "fingerprints.csv"
-    with committed.open("r", encoding="utf-8", newline="") as handle:
-        header = next(csv.reader(handle))
-    assert tuple(header) == FingerprintRow.csv_columns()
 
 
 def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:

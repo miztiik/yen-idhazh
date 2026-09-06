@@ -412,19 +412,24 @@ test('a strip that cannot fill its frame is centred in it', async ({ page }) => 
 	// so it read as a run that had stopped. Centred, the spare room is on both
 	// sides and belongs to neither end.
 	//
-	// The narrowest preset on purpose. At the default window thirty columns fill
-	// a page-wide frame, so left and right and centred are the same thing there
-	// and the premise below could not hold.
+	// The narrowest strip the presets offer, on purpose. At the default window
+	// thirty columns fill a page-wide frame, so left and right and centred are the
+	// same thing there and the premise below could not hold. A one-day window is
+	// excluded for the opposite reason: one square has no inside to be centred in,
+	// and every assertion here would pass on it.
 	await page.setViewportSize(UNDERFULL_VIEWPORT);
 	await page.goto('/console/');
 	await hydrated(page);
-	await setWindow(page, Math.min(...WINDOW_PRESETS));
+	await setWindow(page, Math.min(...WINDOW_PRESETS.filter((days) => days > 1)));
 
 	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
 	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
 
 	// The premise: fewer days than the strip has room for. Without it the test
 	// passes on a full strip, where every alignment is the same thing.
+	expect(columns.length, 'the strip drew one column, so alignment asserts nothing').toBeGreaterThan(
+		1
+	);
 	const drawn = columns[columns.length - 1].right - columns[0].x;
 	expect(drawn, 'the strip is full, so alignment cannot be told apart').toBeLessThan(
 		strip.width - 2

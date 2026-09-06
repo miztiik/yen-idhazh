@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, STATE_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
 from idhazh import cli
@@ -29,7 +29,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.label_row import LabelTag, LabelVerdict
 from idhazh.contracts.summary import Summary
-from idhazh.evals import evidence, writer
+from idhazh.evals import evidence
 from utilities import label_queue
 
 EVIDENCE_FIXTURE = CONTRACT_FIXTURES_DIR / "evidence-item" / "premise-recorded.json"
@@ -52,11 +52,6 @@ def a_queue_row() -> dict[str, str]:
 
 def _no_input(*_: object) -> str:
     raise AssertionError("a refused row must not be asked about")
-
-
-def ledger() -> list[dict[str, str]]:
-    """Every committed row, oldest month first. The ledger is a directory of shards."""
-    return list(writer.records(STATE_DIR))
 
 
 def written(directory: Path, item: EvidenceItem) -> Path:
@@ -140,20 +135,20 @@ class TestTheTextSurvivesTheRun:
 
 class TestARowNobodyCanJudgeIsRefused:
     def test_a_row_scored_before_the_premise_was_recorded_says_so(self, tmp_path: Path) -> None:
+        """The ledger held 2,232 such rows on 2026-08-27, and none may be labelled.
+
+        Asked of one row rather than of every committed one. The rule is a rule of
+        `look_up`, so the second row proves what the first did - and the walk
+        carried a fuse: it asserted the ledger still HELD such a row, so it goes
+        red on the day the last one ages out of retention, which is a date on the
+        calendar rather than a change anybody made.
+        """
         found = evidence.look_up(
             evidence.index(tmp_path), a_queue_row() | {"source_digest": ""}
         )
 
         assert found.item is None
         assert found.refusal == evidence.NO_DIGEST
-
-    def test_every_committed_row_with_no_premise_digest_is_refused(self, tmp_path: Path) -> None:
-        """The ledger held 2,232 such rows on 2026-08-27. None of them may be labelled."""
-        package = evidence.index(tmp_path)
-        older = [row for row in ledger() if not (row.get("source_digest") or "").strip()]
-
-        assert older, "the ledger no longer has a row that predates source_digest"
-        assert {evidence.look_up(package, row).refusal for row in older} == {evidence.NO_DIGEST}
 
     def test_a_row_the_package_does_not_hold_says_so(self, tmp_path: Path) -> None:
         found = evidence.look_up(evidence.index(tmp_path), a_queue_row())

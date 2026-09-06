@@ -82,11 +82,35 @@ def write_day(root: Path, payload: DigestDay) -> Path:
     return path
 
 
-def committed_days() -> list[DigestDay]:
+def committed_day_paths() -> list[Path]:
     paths = sorted(DIGEST_ROOT.glob("*/*/*/digest.json"))
     if not paths:
         pytest.skip("no committed day payloads in this checkout")
-    return [DigestDay.from_json(read_text(path)) for path in paths]
+    return paths
+
+
+def newest_committed_month() -> str:
+    """The month of the newest committed day, read off the path.
+
+    Not off the payload: parsing every day to learn one date cost one parse per
+    published day, and the tree gets longer every day (`CLAUDE.md` Rule #12).
+    """
+    year, month, _day = committed_day_paths()[-1].parts[-4:-1]
+    return f"{year}-{month}"
+
+
+def committed_days(month: str) -> list[DigestDay]:
+    """The committed payloads of one month.
+
+    A month is bounded and the archive is not, which is the whole difference. The
+    rules these tests hold are rules of `rebuild_search_index`, and the fixture
+    tiers below drive that function with days built to exercise each one.
+    """
+    return [
+        DigestDay.from_json(read_text(path))
+        for path in committed_day_paths()
+        if f"{path.parts[-4]}-{path.parts[-3]}" == month
+    ]
 
 
 # --- Contract tier ----------------------------------------------------------
@@ -179,54 +203,48 @@ class TestTheWriter:
     def test_the_oracle_every_committed_item_appears_once_and_decodes_the_same(
         self, tmp_path: Path
     ) -> None:
-        """The bijection, over whatever the archive holds right now."""
-        days = committed_days()
-        months = sorted({assemble.month_of(payload.date) for payload in days})
+        """The bijection, over the month the pipeline is currently writing."""
+        month = newest_committed_month()
+        days = committed_days(month)
 
+        built = assemble.rebuild_search_index(
+            digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
+        )
+        raw = (tmp_path / f"{month}.bin").read_bytes()
+        assert len(raw) == built.vector_bytes
+
+        expected = [(payload.date, item) for payload in days for item in payload.items]
+        assert [(item.date, item.item_id) for item in built.entries] == [
+            (date, item.item_id) for date, item in expected
+        ]
+
+        stored = {
+            payload.date: (payload.embeddings.vectors if payload.embeddings else {})
+            for payload in days
+        }
         seen = 0
         offsets = 0
         nulls = 0
-        for month in months:
-            built = assemble.rebuild_search_index(
-                digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
-            )
-            raw = (tmp_path / f"{month}.bin").read_bytes()
-            assert len(raw) == built.vector_bytes
-
-            expected = [
-                (payload.date, item)
-                for payload in days
-                if assemble.month_of(payload.date) == month
-                for item in payload.items
-            ]
-            assert [(item.date, item.item_id) for item in built.entries] == [
-                (date, item.item_id) for date, item in expected
-            ]
-
-            stored = {
-                payload.date: (payload.embeddings.vectors if payload.embeddings else {})
-                for payload in days
-            }
-            for record, (date, item) in zip(built.entries, expected, strict=True):
-                assert record.title == item.title
-                assert record.vertical == item.vertical
-                encoded = stored[date].get(item.item_id)
-                seen += 1
-                if encoded is None:
-                    assert record.vector is None
-                    nulls += 1
-                    continue
-                assert record.vector is not None
-                offsets += 1
-                sliced = raw[record.vector : record.vector + built.dimensions]
-                assert dequantise(sliced) == from_base64(encoded)
+        for record, (date, item) in zip(built.entries, expected, strict=True):
+            assert record.title == item.title
+            assert record.vertical == item.vertical
+            encoded = stored[date].get(item.item_id)
+            seen += 1
+            if encoded is None:
+                assert record.vector is None
+                nulls += 1
+                continue
+            assert record.vector is not None
+            offsets += 1
+            sliced = raw[record.vector : record.vector + built.dimensions]
+            assert dequantise(sliced) == from_base64(encoded)
 
         assert seen > 0, "a probe over an empty corpus proves nothing"
         assert offsets + nulls == seen
 
     def test_rebuilding_twice_produces_identical_bytes(self, tmp_path: Path) -> None:
         """The whole reason there is no incremental path."""
-        month = assemble.month_of(committed_days()[-1].date)
+        month = newest_committed_month()
         assemble.rebuild_search_index(
             digest_root=DIGEST_ROOT, index_root=tmp_path / "once", month=month
         )
@@ -239,7 +257,7 @@ class TestTheWriter:
             assert first, f"{suffix} is empty, so the comparison proved nothing"
 
     def test_the_index_file_is_lf(self, tmp_path: Path) -> None:
-        month = assemble.month_of(committed_days()[-1].date)
+        month = newest_committed_month()
         assemble.rebuild_search_index(
             digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
         )
@@ -336,11 +354,8 @@ class TestTheWriter:
 
     def test_the_header_names_the_scale_the_committed_bytes_carry(self) -> None:
         """The index projects already-quantised bytes, so it states their step."""
-        days = committed_days()
-        month = assemble.month_of(days[-1].date)
-        built, raw = assemble.build_search_index(
-            month, [payload for payload in days if assemble.month_of(payload.date) == month]
-        )
+        month = newest_committed_month()
+        built, raw = assemble.build_search_index(month, committed_days(month))
         if not raw:
             pytest.skip("no committed vectors in this checkout")
         assert built.scale == VECTOR_SCALE
@@ -398,23 +413,16 @@ class TestTheCommittedShard:
         if not index_root.exists():
             pytest.skip("no committed index in this checkout")
 
-        days = committed_days()
-        months = sorted({assemble.month_of(payload.date) for payload in days})
-        assert months, "a probe over an empty corpus proves nothing"
-
-        for month in months:
-            path = index_root / f"{month}.json"
-            assert path.exists(), f"{month} has published days and no committed shard"
-            committed = SearchIndex.from_json(path.read_text(encoding="utf-8"))
-            expected = [
-                (payload.date, item.item_id)
-                for payload in days
-                if assemble.month_of(payload.date) == month
-                for item in payload.items
-            ]
-            assert [
-                (record.date, record.item_id) for record in committed.entries
-            ] == expected
+        month = newest_committed_month()
+        days = committed_days(month)
+        path = index_root / f"{month}.json"
+        assert path.exists(), f"{month} has published days and no committed shard"
+        committed = SearchIndex.from_json(path.read_text(encoding="utf-8"))
+        expected = [
+            (payload.date, item.item_id) for payload in days for item in payload.items
+        ]
+        assert expected, "a probe over an empty month proves nothing"
+        assert [(record.date, record.item_id) for record in committed.entries] == expected
 
     def test_the_committed_vectors_rebuild_byte_for_byte(self, tmp_path: Path) -> None:
         """The day payloads are the only store the vectors have, and this proves it.
@@ -438,22 +446,21 @@ class TestTheCommittedShard:
         if not index_root.exists():
             pytest.skip("no committed index in this checkout")
 
-        days = committed_days()
-        months = sorted({assemble.month_of(payload.date) for payload in days})
-        assert months, "a probe over an empty corpus proves nothing"
+        # The month being written, not every month ever written. An older shard is
+        # frozen - nothing appends to it and no later run rebuilds it - so
+        # re-deriving it every run re-answers a settled question at a price that
+        # grows every month (`CLAUDE.md` Rule #12).
+        month = newest_committed_month()
+        path = index_root / f"{month}.bin"
+        assert path.exists(), f"{month} has published days and no committed vector file"
+        committed = path.read_bytes()
+        assemble.rebuild_search_index(
+            digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
+        )
+        rebuilt = (tmp_path / f"{month}.bin").read_bytes()
 
-        for month in months:
-            path = index_root / f"{month}.bin"
-            assert path.exists(), f"{month} has published days and no committed vector file"
-            committed = path.read_bytes()
-            assemble.rebuild_search_index(
-                digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
-            )
-            rebuilt = (tmp_path / f"{month}.bin").read_bytes()
-
-            assert rebuilt, f"{month}.bin rebuilt empty - the committed days lost their vectors"
-            assert len(rebuilt) % DIMENSIONS == 0
-            assert rebuilt == committed, (
-                f"{month}.bin rebuilds to {len(rebuilt)} bytes against "
-                f"{len(committed)} committed"
-            )
+        assert rebuilt, f"{month}.bin rebuilt empty - the committed days lost their vectors"
+        assert len(rebuilt) % DIMENSIONS == 0
+        assert rebuilt == committed, (
+            f"{month}.bin rebuilds to {len(rebuilt)} bytes against {len(committed)} committed"
+        )

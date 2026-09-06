@@ -14,7 +14,6 @@ import csv
 import inspect
 import itertools
 import json
-import re
 import socket
 import threading
 from pathlib import Path
@@ -27,7 +26,7 @@ from pytest import MonkeyPatch
 from idhazh import assemble, cli, config, extract, ledger, rank, telemetry
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig, ObservabilityConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import SHA256_PATTERN, StalePayloadError
+from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
@@ -712,25 +711,19 @@ def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path)
     A row scored before 2026-08-27 recorded no premise. Filling it in now would
     name text nobody read and would make a labeller's disagreement unreadable -
     which is the one thing the column exists to prevent.
+
+    Driven from a row with the column removed. Walking the committed ledger cost
+    a parse per row and asserted the ledger STILL HELD a row older than the
+    column, which is a fuse timed to the day the last one ages out of retention.
+    The cell-count check it carried belongs to `require_matching_header`, which
+    refuses a mismatched append at write time - proved below.
     """
-    if not writer.ledger_shards(REPO_ROOT / STATE_DIRNAME):
-        pytest.skip("no ledger committed yet")
-    records = list(writer.records(REPO_ROOT / STATE_DIRNAME))
-    assert records, "the ledger has rows, or this proves nothing"
+    old = row().model_dump(mode="json")
+    old.pop("source_digest")
 
-    for number, record in enumerate(records, start=2):
-        assert None not in record, f"line {number} has more cells than the header names"
-        assert all(value is not None for value in record.values()), (
-            f"line {number} has fewer cells than the header names"
-        )
-        digest = record["source_digest"]
-        assert digest == "" or re.fullmatch(SHA256_PATTERN, digest), (
-            f"line {number} carries {digest!r}, which the contract cannot read back"
-        )
+    migrated = EvalRow.model_validate(old)
 
-    predates = [record for record in records if record["date"] < "2026-08-27"]
-    assert predates, "every committed row is newer than the column, so nothing was migrated"
-    assert {record["source_digest"] for record in predates} == {""}
+    assert migrated.source_digest is None
 
 
 def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:

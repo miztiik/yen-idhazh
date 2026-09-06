@@ -129,6 +129,7 @@ from idhazh.fingerprint import (
 )
 from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post, props
 from idhazh.render import asset_relpath, render_visual
+from idhazh.render.write import assets_in_day
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 LOG: Final = logging.getLogger("idhazh")
@@ -3335,7 +3336,46 @@ def stage_site_weight(
 # --- validate-days ------------------------------------------------------------
 
 
-def _day_faults(path: Path) -> list[str]:
+def _picture_faults(public_root: Path, day: DigestDay) -> list[str]:
+    """Where a day's payload and its picture directory disagree.
+
+    The defect this exists for shipped on 2026-08-24. A per-process counter that
+    restarted at 1 let a later run of the day overwrite an earlier run's
+    `india-01.svg` while the payload still named both items, so 32 declared
+    visuals sat over 18 files and 14 files were each claimed by two stories. 28
+    readers saw a picture and 14 of those were drawn from another article's
+    numbers, under alt text describing figures that were not in the image.
+    Nothing failed: every file existed, every item validated, the page rendered.
+
+    Three disagreements, three different faults. Two stories on one path means
+    one of them shows the other's chart. A path with no file is a broken image.
+    A file no story names is weight against the 1 GB Pages cap (Rule #2) that
+    renders nowhere, and it is what a repaired collision leaves behind.
+
+    It is checked here rather than by a test per committed day because the day
+    that can still be wrong is the one being written. A day already published is
+    frozen, and re-checking every one of them costs more every day the pipeline
+    runs (Rule #12).
+    """
+    declared = [
+        item.visual.path
+        for item in day.items
+        if item.visual is not None and item.visual.path is not None
+    ]
+    faults: list[str] = []
+    shared = sorted(name for name, claims in Counter(declared).items() if claims > 1)
+    if shared:
+        faults.append(f"names one picture on two stories: {shared}")
+    absent = sorted(name for name in declared if not (public_root / name).is_file())
+    if absent:
+        faults.append(f"names a picture file that is not there: {absent}")
+    orphans = sorted(assets_in_day(public_root, day.date) - set(declared))
+    if orphans:
+        faults.append(f"carries picture files no story names: {orphans}")
+    return faults
+
+
+def _day_faults(path: Path, public_root: Path) -> list[str]:
     """What is wrong with one committed day, in sentences, or an empty list.
 
     Both shapes are asked for, because a day has two readers and they read
@@ -3358,7 +3398,7 @@ def _day_faults(path: Path) -> list[str]:
 
     faults: list[str] = []
     try:
-        DigestDay.model_validate(parsed)
+        faults.extend(_picture_faults(public_root, DigestDay.model_validate(parsed)))
     except ValidationError as error:
         faults.append(f"fails digest-day.schema.json: {error.error_count()} problems\n{error}")
     try:
@@ -3372,8 +3412,8 @@ def _day_faults(path: Path) -> list[str]:
     return faults
 
 
-def stage_validate_days(root: Path) -> int:
-    """Every committed day against the two contracts its readers hold.
+def stage_validate_days(root: Path, only: Sequence[str] = ()) -> int:
+    """Committed days against the two contracts their readers hold.
 
     **This exists because prerendering stopped proving it.** Until the reading
     decisions were split on 2026-09-01, every story a day published was serialised
@@ -3384,9 +3424,17 @@ def stage_validate_days(root: Path) -> int:
     is weaker than it was and it is written down rather than hidden: a broken
     day can no longer be built, it can only no longer be merged.
 
-    An empty tree fails. A validator that checked nothing prints the same line
-    as one that checked every day, which is the failure `site-weight` already
-    has a rule about.
+    `only` names the days to open, as `YYYY-MM-DD`. Empty means every committed
+    day, which is what a contract change needs and nothing else does: a day
+    already published is frozen, so the only thing that can invalidate it is a
+    change to the shape it is read through. Measured 2026-09-05 on an i7-1265U,
+    16 committed days took 6.6 s to 7.1 s - about 0.27 s a day on top of a fixed
+    start, so a year of publishing is around 100 s every time this runs
+    (Rule #12). A run that wrote one day names that day.
+
+    An empty tree fails, and so does a named day that is not there. A validator
+    that checked nothing prints the same line as one that checked every day,
+    which is the failure `site-weight` already has a rule about.
     """
     days = published_days(root)
     if not days:
@@ -3397,9 +3445,17 @@ def stage_validate_days(root: Path) -> int:
         )
         return 1
 
+    if only:
+        wanted = set(only)
+        days = [path for path in days if _day_of(path) in wanted]
+        missing = sorted(wanted - {_day_of(path) for path in days})
+        if missing:
+            LOG.error("validate-days was asked for days that are not committed: %s", missing)
+            return 1
+
     broken = 0
     for path in days:
-        faults = _day_faults(path)
+        faults = _day_faults(path, root.parent)
         broken += bool(faults)
         for fault in faults:
             LOG.error("%s %s", _day_of(path), fault)
@@ -3668,6 +3724,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--day",
+        action="append",
+        default=[],
+        metavar="YYYY-MM-DD",
+        help=(
+            "A day for `validate-days` to open, repeatable. Every committed day when "
+            "this is not given, which is what a contract change needs and nothing else "
+            "does - a published day is frozen, so only the shape it is read through can "
+            "invalidate it. A run that wrote one day names that day."
+        ),
+    )
+    parser.add_argument(
         "--digest-root",
         type=Path,
         default=PUBLIC_ROOT,
@@ -3716,7 +3784,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Above the fetcher for the same reason site-weight is: reading committed
         # files decides nothing about the open web, and starting a fetcher to do
         # it would read every host's robots.txt for nothing.
-        return stage_validate_days(args.digest_root)
+        return stage_validate_days(args.digest_root, args.day)
 
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.

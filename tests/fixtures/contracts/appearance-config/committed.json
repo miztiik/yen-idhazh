@@ -47,6 +47,7 @@
   "digest": {
     "archive_page_size": 25,
     "archive_recent_days": 7,
+    "archive_window_days": 30,
     "desk_thin_max": 12,
     "filter_min_chars": 2,
     "items_per_topic": 3,
@@ -56,6 +57,7 @@
     "leading_min": 3,
     "leading_per_desk": 2,
     "leading_stories": 5,
+    "offline_bytes_kept": 20000000,
     "offline_days_kept": 14,
     "offline_retired_through": 0,
     "offline_version": 1,

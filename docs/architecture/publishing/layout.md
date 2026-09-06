@@ -93,14 +93,16 @@ The planning step scores every story before a single model loads ([../sources/di
 
 ### The rail is what reads it, and what it can and cannot say (2026-09-02)
 
-The day's stream orders by `published_at`, newest first, and prints it on a rail. So `time_source` stopped being a field with no reader and became the thing that decides which of five strings a story gets ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Counted 2026-09-02 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over every committed day - 12 days, 4,713 stories:
+The day's stream orders by `published_at`, newest first, and prints it on a rail. So `time_source` stopped being a field with no reader and became the thing that decides how a story's stamp is drawn ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Counted 2026-09-02 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over every committed day - 12 days, 4,713 stories:
 
 | `time_source` | Stories | Share | What the rail prints |
 | --- | --- | --- | --- |
 | `feed` | 970 | 20.6 percent | the clock, unmarked |
-| `first_seen` | 10 | 0.2 percent | `First seen 06:20`, with a mark |
-| `unknown` | 0 | 0 | `No time given` |
+| `first_seen` | 10 | 0.2 percent | the clock, with a mark |
+| `unknown` | 0 | 0 | nothing - there is no number to print |
 | absent | 3,733 | 79.2 percent | the clock, unattributed and unmarked |
+
+The rail prints digits only, from 2026-09-06: a clock, and a date in front of it when the stamp is not from the day being read. The mark is what carries the `first_seen` case now that no word does.
 
 Three things follow from that table and each one moved the design.
 
@@ -459,6 +461,89 @@ What it must never touch: a day's JSON payload, a date directory, the eval ledge
 Two promises to the reader, both non-negotiable: **the window is stated before anything is deleted**, on the archive page and on the missing-day page; and a pruned day lands in the designed missing state, **never a silent redirect to today**. A reader who cannot distinguish a dead link from a live one has lost the ability to trust any link.
 
 The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts older than N months are deleted. Every story and every link stays." is the promise, and "Nothing here is deleted." is what ships today at `image_months: -1`. The footer used to say days were removed, which promised the opposite of what the code does; it now says the same thing the archive does, because two sentences disagreeing about deletion on one page is the exact failure this section exists to prevent.
+
+### Unpublishing a day, a range or a month: the design (2026-09-06)
+
+**Designed, not built. Nothing below ships yet.** The request is an operator
+command that takes a day back off the site - one date, a range of dates, or a
+whole month - and the reason it is written down before it is written is that
+`retention.prune` cannot be stretched into it. That function selects files by
+suffix, deletes rendered charts only, and is explicitly forbidden from touching
+a day's payload or its date directory. Unpublishing is the opposite operation
+and it needs its own name.
+
+**A published day is eleven things, and a command that misses one leaves a
+reader on a broken page.** The daily publish stages exactly this set, so this
+set is what an unpublish has to answer for:
+
+| Artefact | Grain | What an unpublish owes it |
+| --- | --- | --- |
+| `frontend/public/digest/<Y>/<M>/<D>/digest.json` | day | remove |
+| `frontend/public/digest/<Y>/<M>/<D>/run.json` | day | remove |
+| `frontend/public/digest/<Y>/<M>/<D>/*.svg` | day | remove |
+| `frontend/public/assist/index/<Y>-<M>.json` and `.bin` | month | **rebuild**, never edit |
+| `frontend/public/telemetry/<Y>-<M>.csv` | month | rewrite without the day's rows |
+| `frontend/public/source-health.json` | whole site | rebuild |
+| `state/published.csv` | append-only | rewrite without the day |
+| `state/scores/<Y>-<M>.csv` | month | rewrite without the day |
+| `state/item-health/<Y>-<M>.csv` | month | rewrite without the day |
+| `state/runtime-counters.csv` | append-only | rewrite without the day |
+| `corpus/corpus.jsonl` | rolling window | rewrite without the day |
+
+The month-grain rows are the trap. Three of them are shards a later run appends
+to, so a command that deletes the shard takes the neighbouring days with it, and
+a command that leaves it alone publishes telemetry for a day that no longer
+exists. The index is worse: it is derived, and `assemble.rebuild_search_index`
+already regenerates a whole month from the days present - so the index needs a
+rebuild call rather than an edit, and it is the one artefact that repairs itself
+correctly for free.
+
+**`state/seen/` and `state/fingerprints.csv` are deliberately absent from that
+table.** They record that a URL was *seen*, not that it was published. Removing
+a day's rows there would let the next run rediscover every story it just
+unpublished, which turns one operator command into a loop.
+
+**The reader-facing half is already designed and must not be re-decided.** This
+page's retention rules bind an unpublished day exactly as they bind a pruned
+one: the day lands in the designed missing state, never a silent redirect to
+today, and the archive's own header says what happened. Today that header reads
+"Nothing here is deleted.", which is true and would stop being true - so the
+sentence is part of the change, not a follow-up to it.
+
+**What it costs, stated rather than implied.** `prune.yml` force-pushes `main`
+on a schedule ([../../../CLAUDE.md](../../../CLAUDE.md) section 8), so once a
+squash passes over the range, the unpublished day's bytes are gone from history
+as well as from the tree. Before that boundary an unpublish is a normal commit
+and is revertible; after it, it is permanent. That is an argument for the
+command writing what it removed into its own commit message, and for it never
+running on a schedule.
+
+**The command carries no threshold of its own, and may not grow one.** It takes
+the dates an operator names and nothing else - no "older than", no "down to N
+megabytes", no day count written into the code. Every bound this repository
+honours is already a key in `config/` with a contract behind it
+([../../../CLAUDE.md](../../../CLAUDE.md) Rule #6): `retention.image_months`,
+`retention.max_deletes_per_run`, `retention.site_budget_mb`, and the
+`observability.*_keep_months` family that bounds the ledgers a day writes into,
+all at 14 months today. A number in the source that decides what to delete is
+the defect, whatever the number is.
+
+If a scheduled variant is ever wanted, it reuses that shape rather than minting
+a figure: months as an integer, `-1` meaning never, defaulting to never, and the
+same `dry_run` and `max_deletes_per_run` guards `retention.prune` already
+answers to. **It would also have to clear a higher bar than the manual command.**
+The manual one removes a day somebody decided was wrong; a scheduled one removes
+a day nobody looked at, and the archive's own header would have to say so before
+the first run.
+
+**Nothing forces this yet.** Measured 2026-09-05: 16 committed days, and the
+site's ceiling is a function of the prerendered dated routes named in the
+follow-up above rather than of any day's payload - so deleting days is not the
+lever that buys room, and sizing this command against `site_budget_mb` would be
+solving the wrong problem with the destructive tool. The command is worth having
+for a day published in error - a bad extraction, a source that asked to be
+removed - and that is a different need from bounding the site.
+
 
 ### The valve: the drawings can be served from somewhere else (2026-09-06)
 

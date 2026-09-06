@@ -7,15 +7,18 @@
 	 * texture rather than information. `railRows` decides where a group opens;
 	 * this draws it.
 	 *
-	 * **No relative time, anywhere.** The page is prerendered once and read for
-	 * the next 24 hours with script optionally off, so `3 hours ago` baked in at
-	 * 06:20 is wrong by 18:20 and wrong for ever on an archived day. The zone is
-	 * named once above the stream instead of suffixed onto every label.
+	 * **No relative time, and no words at all.** A marker is digits: a clock, and
+	 * a date in front of it when the stamp is not from the day being read. The
+	 * page is prerendered once and read for the next 24 hours with script
+	 * optionally off, so `3 hours ago` baked in at 06:20 is wrong by 18:20 and
+	 * wrong for ever on an archived day. The zone is named once above the stream
+	 * instead of suffixed onto every label.
 	 *
-	 * The mark beside `First seen` is the one glyph the rail draws, and it earns
-	 * its place on that case alone: the printed clock there is ours rather than
-	 * the publisher's, and a reader scanning a column of times would otherwise
-	 * read it as a feed time. An old story gets no mark - the date says it.
+	 * The mark on the `first-seen` form is the one glyph the rail draws, and it
+	 * carries what the words no longer do: the printed clock there is ours rather
+	 * than the publisher's, and a reader scanning a column of times would
+	 * otherwise read it as a feed time. An old story gets no mark - the date in
+	 * front of its clock says it.
 	 */
 	import type { RailRow } from '$lib/day-shape';
 	import Icon from '$lib/icons/Icon.svelte';

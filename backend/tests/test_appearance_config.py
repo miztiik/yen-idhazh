@@ -347,7 +347,7 @@ def test_the_archive_may_not_list_more_than_a_month_of_days_as_rows() -> None:
             UiConfig(archive_recent_days=refused)
     assert UiConfig(archive_recent_days=1).archive_recent_days == 1
     assert UiConfig(archive_recent_days=31).archive_recent_days == 31
-    assert UiConfig().archive_recent_days == 7
+    assert UiConfig().archive_recent_days == 14
 
 
 def test_the_default_theme_is_the_one_root_carries() -> None:

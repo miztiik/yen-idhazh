@@ -39,7 +39,6 @@ pytestmark = pytest.mark.slow
 #: that a NEW unmarked module fails this file instead of joining it unnoticed.
 UNMARKED_MODULES: Final = frozenset(
     {
-        "test_archive_readers",
         "test_assemble_embeddings",
         "test_backfill_vectors",
         "test_canary_day",

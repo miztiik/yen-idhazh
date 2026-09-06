@@ -11,7 +11,6 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import NamedTuple
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
@@ -485,40 +484,6 @@ def committed_shards() -> list[Path]:
     return sorted((REPO_ROOT / "state" / ledger.ITEM_HEALTH_DIRNAME).glob("*.csv"))
 
 
-class CommittedRow(NamedTuple):
-    """One committed row, and the file and line it sits on so a failure can name it."""
-
-    relpath: str
-    line: int
-    cells: dict[str, str]
-
-
-def committed_rows() -> list[CommittedRow]:
-    """Every committed row, oldest month first. The ledger is a directory of shards."""
-    found: list[CommittedRow] = []
-    for shard in committed_shards():
-        relpath = shard.relative_to(REPO_ROOT).as_posix()
-        rows = records(shard)
-        assert rows, f"{relpath} has a header and no rows"
-        found.extend(
-            CommittedRow(relpath, number, record) for number, record in enumerate(rows, start=2)
-        )
-    return found
-
-
-def written_before(version: str) -> list[CommittedRow]:
-    """The rows a column's migration is about: the ones a run wrote before it existed.
-
-    Read across the whole ledger, never one shard at a time. The migration
-    rewrote the shards that existed on the day it ran, so a shard opened after
-    that day holds no migrated row at all - and the pipeline opens one on the
-    first of every month. A shard with nothing to check is outside the
-    population rather than a counter-example, so the guard that stops these
-    checks passing on an empty list belongs on the ledger, where it still bites.
-    """
-    return [row for row in committed_rows() if row.cells["version"] < version]
-
-
 def test_a_cut_item_carries_both_counts_and_the_cut_is_the_difference() -> None:
     """The comparison is the test for a cut, so both counters ride the same row.
 
@@ -593,34 +558,6 @@ def test_a_row_written_before_the_pre_cap_column_reads_as_unmeasured() -> None:
     row = ItemHealthRow.from_csv_row(old)
 
     assert row.source_words_before_cap is None
-
-
-def test_every_migrated_item_health_row_records_its_absence() -> None:
-    """The Oracle, first half: an empty cell, never a value invented today.
-
-    A run before 2026-08-28 never looked at the body's full length, and the
-    pre-cap text is gone, so no later pass can recover it. Writing anything into
-    those cells would make `source_words_before_cap > source_words` - the whole
-    test for a cut - answer on evidence nobody gathered. The row's own `version`
-    cell says which side of the change wrote it.
-    """
-    rows = committed_rows()
-    assert rows, "no item-health row is committed, so this proves nothing"
-
-    for row in rows:
-        assert None not in row.cells, (
-            f"{row.relpath}:{row.line} has more cells than the header names"
-        )
-        assert all(value is not None for value in row.cells.values()), (
-            f"{row.relpath}:{row.line} has fewer cells than the header names"
-        )
-
-    migrated = written_before("2026-08-28")
-    assert migrated, "no committed row is older than the column, so nothing was migrated"
-    for row in migrated:
-        assert row.cells["source_words_before_cap"] == "", (
-            f"{row.relpath}:{row.line} predates the column and carries a length nobody measured"
-        )
 
 
 def test_the_committed_item_health_shard_still_takes_a_row_today(tmp_path: Path) -> None:
@@ -765,23 +702,6 @@ def test_a_row_written_before_the_shard_column_reads_as_unclaimed() -> None:
     row = ItemHealthRow.from_csv_row(old)
 
     assert row.shard is None
-
-
-def test_every_migrated_item_health_row_leaves_the_shard_empty() -> None:
-    """An empty cell, never the shard the item would have gone to.
-
-    `shard_of` is deterministic, so the machine each committed row was meant for
-    could be worked out from the plan. Writing it down would say a machine
-    produced a row when the run may have used a different number of workers that
-    day, and a per-shard rate would then be quoted over items that machine never
-    touched.
-    """
-    migrated = written_before("2026-08-30")
-    assert migrated, "no committed row is older than the column, so nothing was migrated"
-    for row in migrated:
-        assert row.cells["shard"] == "", (
-            f"{row.relpath}:{row.line} predates the column and names a worker"
-        )
 
 
 # --- The event envelope ------------------------------------------------------

@@ -22,7 +22,7 @@ Growth claims cited per row come from [the research handover](20260906-data-grow
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Config knobs and contract | - | A | PENDING | - | - | - |
+| 1 | Config knobs and contract | - | A | DONE #443 | ../yi-r01-knobs | #443 | worker |
 | 2 | One-pass build reductions | 1 | B | PENDING | - | - | - |
 | 3 | Pointer readout and dead readout work | 1 | B | PENDING | - | - | - |
 | 4 | Read marks on a calendar window | 1 | B | PENDING | - | - | - |
@@ -64,7 +64,7 @@ Coverage: rows 2-26 carry all 43 findings exactly once. Rows 1, 10 and 27 carry 
   - `frontend/src/lib/server/config.ts`
   - `backend/tests/test_contracts.py`
 - **Acceptance gates:** local - the shared test selector, plus the contract drift gate so schemas and frontend types regenerate byte-identical. CI - full suite.
-- **Oracle:** the drift gate. Regenerated schema and generated frontend types must match the committed bytes exactly, and every existing config file must still validate against the new model.
+- **Oracle:** a contract test asserting, against the real committed config, that `1 in console.window_presets`, `console.min_window_days == 1`, `console.max_window_days == 366`, `read_mark_days == 14`, `archive_recent_days == 14`, and that both new knobs exist with their documented bounds. Corrected from "the drift gate" before dispatch: that gate passes on the base tree, so it could not tell this row's result from its starting position.
 - **Decisions:**
 
   | # | Decision | Authority |
