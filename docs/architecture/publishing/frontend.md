@@ -1765,7 +1765,7 @@ the run count stays in the verdict line under the legend.
 The strip's shape is not this chart's own. `dayTicks`, `dayColumnX`,
 `readoutCapStyle` and `readoutMarks` in
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
-hold the axis-thinning, the column arithmetic, the cap and the announcement, so
+hold the axis-thinning, the column arithmetic, the cap and the hover targets, so
 the stage-timing trend directly above this one on the page and this chart cannot
 drift apart. Two charts stacked on one page that hover differently cost the
 operator a second guess.
