@@ -211,7 +211,7 @@ test.describe('what one summary cost, as a distribution', () => {
 		const config = JSON.parse(
 			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 		) as { console?: { window_presets?: number[]; default_window_days?: number } };
-		const presets = config.console?.window_presets ?? [7, 14, 30, 90];
+		const presets = config.console?.window_presets ?? [1, 7, 14, 30, 90];
 		const fallback = config.console?.default_window_days ?? 30;
 
 		await page.goto('/console/model/');
