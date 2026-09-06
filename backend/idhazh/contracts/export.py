@@ -36,6 +36,7 @@ from idhazh.contracts.search_index import SearchIndex
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import Sources
+from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
@@ -73,6 +74,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     SeenRow,
     SourceHealthView,
     Sources,
+    SpanRollupRow,
     Summary,
     Taxonomy,
     TelemetryAggregateRow,
