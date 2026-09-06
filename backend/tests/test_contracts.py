@@ -2369,20 +2369,32 @@ def test_the_published_tree_holds_days_to_migrate() -> None:
 
     The migration test below loops over the committed days. An empty tree would
     loop zero times and report the same pass as a tree that checked every day.
+
+    Two, not one: `a_day_that_validates` reads the newest FINISHED day, and a
+    tree holding only the day still being written has none.
     """
-    assert committed_days(), "no digest.json under frontend/public/digest"
+    assert len(committed_days()) >= 2, "frontend/public/digest holds fewer than two days"
 
 
 # --- the guard that replaced the one prerendering used to give free ---------
 
 
 def a_day_that_validates() -> dict[str, Any]:
-    """A committed day, taken off the real tree rather than written here.
+    """A finished committed day, taken off the real tree rather than written here.
 
     A day composed by hand drifts from the one the pipeline writes, and the
     guard under test is about the real file.
+
+    Finished, not newest. The pipeline publishes several times into the same
+    date, so the last date on disk is a fraction of itself for most of the day -
+    measured 2026-09-06 one run in, 78 stories against the 374 to 627 a finished
+    day carries. The test below needs a day longer than `ui.shell_seed_items`,
+    which is 15, and a first run has no floor. Every earlier date can gain no
+    more runs, so it is finished by construction.
     """
-    day: dict[str, Any] = json.loads(read_text(committed_days()[-1]))
+    finished = committed_days()[:-1]
+    assert finished, "the tree holds one date, and the newest date is never finished"
+    day: dict[str, Any] = json.loads(read_text(finished[-1]))
     return day
 
 
