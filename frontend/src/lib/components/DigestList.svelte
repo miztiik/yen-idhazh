@@ -13,7 +13,15 @@
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
 	import TimeRail from '$lib/components/TimeRail.svelte';
 	import { restoreAnchor } from '$lib/assist/day';
-	import { filterNeedle, leadingStories, matchItems, orderByTime, railRows } from '$lib/day-shape';
+	import {
+		filterNeedle,
+		indexDay,
+		leadingStories,
+		orderByTime,
+		railRows,
+		revealed,
+		shortlist
+	} from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
 	import type { DigestDay, DigestItem } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
@@ -96,12 +104,22 @@
 				: scoped.length
 	);
 	const needle = $derived(filterNeedle(query, ui.filter_min_chars));
-	// Over `scoped`, which is derived from the `day` prop - so when a reading
-	// route's fetch lands, the filter re-runs over the whole day. A list captured
-	// once would narrow the document's seed for ever.
-	const matched = $derived(matchItems(scoped, needle));
+	// The day's searchable text, lowercased, and every story's place in it.
+	// Derived from `scoped` rather than captured, so when a reading route's fetch
+	// lands the whole day is re-indexed and the filter runs over all of it - an
+	// index taken once at mount would narrow the document's seed for ever. It is
+	// NOT derived from the needle, which is the point: a reader types letters far
+	// more often than the day changes.
+	const index = $derived(indexDay(scoped));
+	// Every lead the day published, not the block the page drew. `revealed` cuts
+	// it back to what is on screen; this is only where they sit.
+	const pinned = $derived(new Set((day.leads ?? []).map((lead) => lead.item_id)));
+	// One walk down the day for the four answers below it. Read state is passed
+	// as null rather than an empty set when the reader is not hiding anything, so
+	// the ordinary case does no lookups.
+	const list = $derived(shortlist(index, needle, hideRead ? read : null, pinned, wanted));
 	const filtering = $derived(needle !== null);
-	const visible = $derived(hideRead ? matched.filter((item) => !read.has(item.item_id)) : matched);
+	const visible = $derived(list.visible);
 
 	// Chosen by the pipeline over the whole day and published on the payload.
 	// The block only draws on the all-topics view: a topic route and a filter
@@ -129,25 +147,21 @@
 	// zero with no fragment, so the server draws the same twelve it always drew
 	// and so does every reader who followed an ordinary link. A lead is zero too,
 	// because the line above already draws it - reaching for one would page the
-	// whole stream down to its position for a click that never needed it.
+	// whole stream down to its position for a click that never needed it. A
+	// fragment naming a story this page is not showing is zero as well, which is
+	// what `wantedRow` being -1 says.
 	const reach = $derived(
-		wanted === '' || leading.has(wanted)
-			? 0
-			: visible.findIndex((item) => item.item_id === wanted) + 1
+		wanted === '' || leading.has(wanted) || list.wantedRow < 0 ? 0 : list.wantedRow + 1
 	);
 	const shown = $derived(Math.max(shownCount || PAGE, reach));
-	const paged = $derived(
-		visible.filter((item, index) => index < shown || leading.has(item.item_id))
-	);
+	const paged = $derived(revealed(visible, list.pinnedRows, leading, shown));
 	const remaining = $derived(Math.max(visible.length - paged.length, 0));
-	// A fragment naming a story this page never draws. `scoped` rather than
-	// `visible`, so a story the reader has hidden or filtered out is not reported
-	// as absent - it is here, and the controls to bring it back are on screen.
-	// Only once the list in hand is the whole list: a story still on its way is
-	// not a story that was never here.
-	const missing = $derived(
-		settled && wanted !== '' && !scoped.some((item) => item.item_id === wanted)
-	);
+	// A fragment naming a story this page never draws. The whole day rather than
+	// what is visible, so a story the reader has hidden or filtered out is not
+	// reported as absent - it is here, and the controls to bring it back are on
+	// screen. Only once the list in hand is the whole list: a story still on its
+	// way is not a story that was never here.
+	const missing = $derived(settled && wanted !== '' && !index.at.has(wanted));
 	const verticalNames = $derived(
 		Object.fromEntries(day.verticals.map((ref) => [ref.id, ref.display_name]))
 	);
@@ -212,7 +226,7 @@
 	{:else if section === 'items'}
 		{#if day.items.length === 0}
 			<EmptyDay date={day.date} {latest} />
-		{:else if matched.length === 0}
+		{:else if list.matched === 0}
 			<p class="py-12 text-base text-text-secondary">
 				Nothing on today's page matches &ldquo;{query}&rdquo;.
 			</p>
