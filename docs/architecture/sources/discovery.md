@@ -461,6 +461,57 @@ the fetch is allowed, but `corpus/` commits article text as training samples
 point in opposite directions. Recorded here rather than resolved: the owner
 takes that call, and if it goes the other way the fix is one `retired_on`.
 
+### The 2026-09-06 requested feed check: three of fourteen entered live config
+
+Fourteen endpoints were requested and every one was probed with
+[`backend/utilities/probe_feeds.py`](../../../backend/utilities/probe_feeds.py),
+which drives the production fetcher and extractor - the configured user agent,
+the public-address check, the `robots.txt` policy, bounded retries, `feedparser`,
+the publisher-declared paywall check and prose extraction. Three articles were
+sampled behind each feed, and a feed passes when any one of them yields prose.
+Evidence about a developer machine on 2026-09-06, not qualification on the
+runner.
+
+| Candidate | Feed result | Articles, 3 sampled | Decision |
+| --- | --- | --- | --- |
+| Google AI - `https://blog.google/technology/ai/rss/` | 200; 20 of 20 entries dated | 3 of 3 read; 320 to 951 words | **Added** as `google-ai-blog`, tier 1, `announcement`. |
+| MarkTechPost - `https://www.marktechpost.com/feed/` | 200; 10 of 10 entries dated | 3 of 3 read; 726 to 936 words | **Added** as `marktechpost`, tier 2, `reporting`. |
+| OpenAI - `https://openai.com/news/rss.xml` | 200; 1,172 of 1,172 entries dated | 3 of 3 read; 1,270 to 2,994 words | **Un-retired.** See below. |
+| VentureBeat all-site - `https://venturebeat.com/feed/` | HTTP 429 on the feed itself | Not reached | Reject. Third VentureBeat address to fail; keep the `venturebeat-ai` tombstone. |
+| Pandaily - `https://pandaily.com/feed` | 200; 20 of 20 entries dated | 3 of 3 returned no extractable text | Reject. |
+| Fast Company AI - `https://www.fastcompany.com/section/artificial-intelligence/rss` | 200; 15 of 15 entries dated | 3 of 3 HTTP 403 | Reject. The links carry `?campaign_date=&partner=newsletter&position=` and answer 403; the live `fastcompany-tech` feed does not. |
+| Bloomberg Technology - `https://feeds.bloomberg.com/technology/news.rss` | 200; 3 entries | 3 of 3 HTTP 403 | Reject. |
+| SCMP Diplomacy, China Economy, Companies, Global Economy, Tech, Innovation - `/rss/318199`, `/318421`, `/10`, `/12`, `/36`, `/318222` | 200; 50 of 50 entries dated on each | 18 of 18 publisher-declared paywall | Reject, all six. |
+| SCMP Tech leaders and founders - `/rss/318223` | 200; 50 of 50 entries dated | 1 of 3 read, at 105 words and dated 2021; 2 of 3 paywalled | Reject. See below. |
+
+**The SCMP result is one publisher answering nine times, not nine results.**
+Every one of the seven addresses parsed perfectly and offered fifty dated
+entries, so a check that stopped at the feed would have added seven feeds and
+600 slots of nothing. Twenty of the twenty-one articles behind them are
+paywalled. The seventh feed technically passed on a single 105-word item from
+2021, which is a stale index page leaking through a paywall rather than a source:
+`min_source_words` is 60, so the length floor cannot catch it. The existing
+`scmp-news` feed stays as it is.
+
+**`openai-news` is un-retired, and that reverses a decision this page recorded.**
+It was retired on 2026-08-29 under "the article answers 4xx, however the feed
+reads". Measured again on 2026-09-06, three of three articles returned 1,270 to
+2,994 words through the same production path. The reason for the tombstone no
+longer holds, so the tombstone goes: the row moves back into `Sources.feeds`
+with `status: active` and `retired_on: null`. This is the mechanism working -
+a retirement is a statement about what was measured on a date, not a permanent
+judgement, and re-measuring is how it gets revisited. If the 4xx returns, the
+feed-health ledger will quarantine it without anyone editing config.
+
+**What this check cost, and why it is now a committed tool.** Fourteen feeds and
+thirty-nine article reads took 55 seconds. The 2026-08-30 check was done by hand
+and left nothing runnable behind, so this one was written as
+`probe_feeds.py` instead: it takes addresses or reads `config/sources.json`, it
+emits spans through the project's own tracer, and its verdicts are `FailureCode`
+values, so a row of the table above is a row of the reasons table further down
+this page. Re-running it on a tombstone is now one command, which is the only
+reason the OpenAI reversal was found at all.
+
 ### The 2026-08-30 requested feed check: none entered live config
 
 Eight endpoints were checked independently from a developer machine on
@@ -497,6 +548,10 @@ failed research.
 A tombstone carries a date and not a reason, so the reasons are here. Probed
 2026-08-29 with the pipeline's own user agent, against the 2026-08-24 to
 2026-08-29 ledger window.
+
+This is what was measured on that date and it is not a permanent judgement.
+`openai-news` was re-probed on 2026-09-06 and its articles now read, so it is
+live again and no longer in `Sources.retired`; its row below is history.
 
 | Reason | Feeds |
 | --- | --- |
