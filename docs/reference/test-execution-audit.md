@@ -1,6 +1,6 @@
 # Test Execution Audit
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 Historical test executions and the current selection controls, checked against
 `main` at `3b425be8`. This records an investigation, not a change to the testing
@@ -164,6 +164,39 @@ selection, build-mode verification or duplicate-run prevention. The union of
 test groups can be complete while the mapping from a changed source file to
 those groups is still wrong. Neither the row nor the testing policy was
 modified by this audit.
+
+## What the audit turned into, 2026-09-06
+
+Two of the questions above were answered, and the answer to the second was not
+the one the audit expected.
+
+**Selection.** `ciAnswer` in `frontend/scripts/test-scope.ts` is now the one
+place that decides, and it returns three answers rather than one: whether to run
+the browser groups, whether to run the operator console's specs, and whether to
+open every committed day. The console's specs are 584 of the browser suite's 997
+tests and a pull request runs them only when the change is the console's own or
+the harness that chooses; `main` runs every group, which is what the deferral
+leans on. There is no nightly job, because a second copy of the browser job is a
+second thing to keep correct.
+
+**The bigger cost was not selection.** It was that a test may re-read the whole
+committed archive, so its cost grows with every day the pipeline publishes while
+its coverage does not. That became Rule #12 and three paragraphs of
+[../../CLAUDE.md](../../CLAUDE.md) section 13, with an owner ruling attached: a
+test checks code functionality rather than data hygiene, and it is driven with a
+built parameter rather than a loop over what the archive happens to hold. A
+hygiene check has three legal fates - delete it where a fixture already covers
+the rule, move it into the producer that writes the data, or make it an operator
+surface `pytest` does not run. `backend/tests/test_archive_readers.py` holds the
+list of tests that still read the tree; it went from 22 entries to 12 and may
+only shrink.
+
+The numbers behind both are in
+[measurements.md](measurements.md#what-the-suite-paid-to-re-read-the-archive-2026-09-06).
+The one that reframed the work: the `browser` job was 462 s and the entire
+backend suite was 63 s, so deleting backend tests buys about zero wall clock.
+None of this was done for speed on the day; it was done because the cost
+compounds and the coverage does not.
 
 ## See also
 

@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
 ## The shell is deliberately thin
