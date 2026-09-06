@@ -4,6 +4,7 @@ import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 import { targetMarks, type TargetMarks } from '$lib/charts/targetbar';
 import { failureMix, runHealth, siteCost } from '$lib/charts/glance';
+import { itemCost, type ItemCost } from '$lib/console/item-cost';
 import { renderToSvg } from '$lib/server/chart-render';
 import { pipelineChanges, sourceCuts, wasCut, SOURCE_CUT_ROWS } from '$lib/server/model-work';
 import {
@@ -42,6 +43,8 @@ import {
 export const prerender = true;
 
 type TimingStats = StageTimingDay;
+
+export type { ItemCost } from '$lib/console/item-cost';
 
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
@@ -388,7 +391,7 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
  * **The eight stage timings and token counts are deliberately not seeded.** They
  * are in the published shard and in `TelemetryRow`, so the browser can read them
  * the moment a surface asks; this list is inlined into the prerendered document,
- * and no panel draws them yet.
+ * and the one section that draws them is reduced on the server instead.
  *
  * Measured 2026-09-05 on Intel Core i7-1265U / Windows 11 / node 24, one build
  * per arm, `npm run bundle-gate` on the real digest. `/console/` weighs
@@ -402,9 +405,11 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
  * paint does not use are not bytes to record a ceiling around.
  *
  * A panel that draws them wants them for the seeded months too, and `+page.svelte`
- * marks those months loaded so nothing re-fetches them. That is the panel's
- * choice to make - seed the columns it draws, or drop the seeded months from
- * `loadedMonths` and let the fetch fill them.
+ * marks those months loaded so nothing re-fetches them. `What one item cost the
+ * model` takes neither of the two ways out of that: it reduces this projection on
+ * the server, once per window preset, so the rows never have to carry the cells.
+ * The price is that it follows the window's length and not a pan, and it says so
+ * (`docs/architecture/publishing/telemetry-series.md`).
  */
 function publicTelemetry(row: Record<string, string>): TelemetryRow {
 	return {
@@ -610,6 +615,27 @@ export async function load() {
 	// control above it cannot disagree at first paint. The browser recomputes the
 	// same card from the same rows when the operator moves the control.
 	const today = new Date().toISOString().slice(0, 10);
+	// The cost section is reduced here, once per span the control offers, and it
+	// is the reason those eight columns were published at all.
+	//
+	// It reads the projection with its cells intact rather than the seeded array
+	// above, which carries the eight as nulls on purpose - seeded with their real
+	// values they cost this page 176,753 gzipped bytes for numbers a distribution
+	// throws away anyway. What crosses instead is two binnings and about twenty
+	// counts per preset, which is the same trade the Summaries route's own
+	// distributions take.
+	//
+	// The price is that the section follows the window's LENGTH and not a pan,
+	// exactly as `Sources cut short most often` below it does. A pan asks a
+	// question about days the reduction was not taken over, and re-taking it in
+	// the browser needs the rows the seed deliberately does not carry.
+	const widest = Math.max(...console.window_presets);
+	const costRows = telemetryRows(TELEMETRY_ROOT, widest).rows;
+	const costDates = [...new Set(costRows.map((row) => row.date ?? '').filter(Boolean))].sort();
+	const itemCostByWindow: ItemCost[] = console.window_presets.map((days) => {
+		const span = windowOfDays(costDates, today, days, console.today_anchor);
+		return itemCost(costRows, { ...span, days });
+	});
 	const seed = windowOfDays(
 		datesIn(publicRows),
 		today,
@@ -642,6 +668,9 @@ export async function load() {
 	return {
 		timingDays,
 		manifests,
+		// What one item cost the model, one entry per span the control offers. The
+		// browser picks the open one; nothing re-reads a ledger to change window.
+		itemCostByWindow,
 		// Articles per published day, read from the same tree `site_bytes` measures.
 		// The denominator of the console's per-article cost, and the numerator's own
 		// corpus - a count taken from anywhere else divides one tree's bytes by
