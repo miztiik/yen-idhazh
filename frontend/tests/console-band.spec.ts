@@ -143,9 +143,9 @@ test('THE ORACLE: the band prints the articles the headroom buys', async ({ page
 
 test('no rate of runs a day can move the answer', () => {
 	// One site, described twice: four days at one run a day, and the same four
-	// days at three. `run.safety_ceiling_per_run` is 160 and bounds a RUN, so a
-	// formula built on it prices the second day at 480 articles and the first at
-	// 160 - and its answer moves by three. This one may not move at all, because
+	// days at three. `run.safety_ceiling_per_run` is 80 and bounds a RUN, so a
+	// formula built on it prices the second day at 240 articles and the first at
+	// 80 - and its answer moves by three. This one may not move at all, because
 	// the site did not change.
 	const dates = ['2026-08-01', '2026-08-02', '2026-08-03', '2026-08-04'];
 	const bytes = [1_000_000, 1_300_000, 1_600_000, 1_900_000];
@@ -167,7 +167,7 @@ test('no rate of runs a day can move the answer', () => {
 	// And what a per-day answer would have done with the same two fixtures,
 	// written out so the difference is on the page rather than asserted in the
 	// abstract.
-	const CEILING = 160;
+	const CEILING = 80;
 	const daysAtCeiling = (runsADay: number) =>
 		(PAGES_CAP_BYTES - used) / (3000 * CEILING * runsADay);
 	expect(daysAtCeiling(3)).toBeCloseTo(daysAtCeiling(1) / 3, 6);
