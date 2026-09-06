@@ -148,21 +148,143 @@ export function filterNeedle(query: string, minChars: number): string | null {
 	return needle.length >= Math.max(minChars, 1) ? needle : null;
 }
 
-/** The stories a needle keeps, out of whatever list it is handed.
+/** A day's stories with the two things the page asks about them over and over.
+ *
+ * **Built once per day, read once per keystroke.** A needle arrives lowercase
+ * and a story's text does not, so a filter has to lower one side of every
+ * comparison - and the day's side is the same answer on every letter. On the
+ * 601-story day of 2026-08-31 that was a little over 3,600 strings rebuilt per
+ * keystroke for an answer that had not changed since the day loaded.
+ *
+ * Measured 2026-09-06 on a 12th Gen Intel Core i7-1265U, Windows 11, node
+ * 24.12.0, over a built 601-story day and 40 keystrokes, 10 timed repetitions
+ * after 2 discarded: a keystroke's selection work went from a median 0.254 ms
+ * to 0.112 ms - 56 percent less, and 0.14 ms of it back per letter. Whole-run
+ * medians were 10.2 ms (6.4 to 12.9) and 4.5 ms (4.3 to 6.3). Building the
+ * index costs a median 0.4 ms (0.3 to 0.5) and is paid once. These are small
+ * numbers on a fast machine; what matters is that the part that grew with the
+ * day is now paid when the day changes rather than when a reader types.
  *
  * **It takes the list rather than holding one.** A reading route seeds its
- * document with the head of the day and fetches the rest, so a filter that
- * captured the items once would narrow the seed for ever and hide everything
- * that arrived afterwards, with nothing on screen saying so.
+ * document with the head of the day and fetches the rest, so an index captured
+ * once at mount would narrow the seed for ever and hide everything that landed
+ * afterwards, with nothing on screen saying so. `DigestList` derives it from
+ * the list the page is holding, so it is rebuilt when that list changes.
  */
-export function matchItems(items: DigestItem[], needle: string | null): DigestItem[] {
-	if (needle === null) return items;
-	return items.filter(
-		(item) =>
-			item.title.toLowerCase().includes(needle) ||
-			item.summary.toLowerCase().includes(needle) ||
-			item.key_points.some((point) => point.toLowerCase().includes(needle))
-	);
+export interface DayIndex {
+	/** The stories, in the order the page draws them. */
+	items: DigestItem[];
+	/** Each story's searchable text, lowercased: its title, then its summary,
+	 * then its key points, in that order.
+	 *
+	 * **Kept as separate strings and never joined.** A join turns the end of one
+	 * field and the start of the next into a substring, so a needle would match
+	 * text no story holds - `frontend/tests/day-list.spec.ts` asserts it cannot.
+	 */
+	fields: string[][];
+	/** Where each story sits in `items`, by id. */
+	at: Map<string, number>;
+}
+
+/** The day, prepared for the two questions a filter and a link keep asking. */
+export function indexDay(items: DigestItem[]): DayIndex {
+	const fields: string[][] = [];
+	const at = new Map<string, number>();
+	for (let row = 0; row < items.length; row += 1) {
+		const item = items[row];
+		const lowered = [item.title.toLowerCase(), item.summary.toLowerCase()];
+		for (const point of item.key_points) lowered.push(point.toLowerCase());
+		fields.push(lowered);
+		// First wins, which is what a scan down the day would have found. A
+		// payload cannot hold one id twice, so this only decides what happens if
+		// one ever does - and quietly pointing at the second copy is worse than
+		// pointing at the one a reader scrolling would reach first.
+		if (!at.has(item.item_id)) at.set(item.item_id, row);
+	}
+	return { items, fields, at };
+}
+
+/** What the page shows, and where the two stories it has to point at landed. */
+export interface Shortlist {
+	/** How many stories the needle kept, before read state hid any. This is the
+	 * number beside the filter box, and it is counted rather than collected -
+	 * the list it would have built is never drawn. */
+	matched: number;
+	/** The stories the page would show, in draw order. */
+	visible: DigestItem[];
+	/** Where each of the day's published leads landed in `visible`, ascending.
+	 * A lead is chosen across the whole day, so it is routinely past the page a
+	 * reader has revealed, and the pager has to draw it anyway. */
+	pinnedRows: number[];
+	/** Where the story a reader's own address named landed in `visible`, or -1
+	 * where this page is not showing it. */
+	wantedRow: number;
+}
+
+/** One pass down the day: what the needle keeps, what read state hides, and
+ * where the leads and the addressed story ended up.
+ *
+ * The four answers used to cost four walks - a filter, a second filter, a
+ * `findIndex` and a membership scan - over a list that had just been walked to
+ * build it. They are four answers about the same row, so they are collected on
+ * the way past it.
+ *
+ * `hidden` is null rather than an empty set when the reader is not hiding what
+ * they have read, so the ordinary case does no lookups at all.
+ */
+export function shortlist(
+	day: DayIndex,
+	needle: string | null,
+	hidden: ReadonlySet<string> | null,
+	pinned: ReadonlySet<string>,
+	wanted: string
+): Shortlist {
+	const visible: DigestItem[] = [];
+	const pinnedRows: number[] = [];
+	let matched = 0;
+	let wantedRow = -1;
+	for (let row = 0; row < day.items.length; row += 1) {
+		if (needle !== null && !day.fields[row].some((field) => field.includes(needle))) continue;
+		matched += 1;
+		const item = day.items[row];
+		if (hidden !== null && hidden.has(item.item_id)) continue;
+		const seat = visible.length;
+		visible.push(item);
+		if (pinned.has(item.item_id)) pinnedRows.push(seat);
+		if (wantedRow < 0 && item.item_id === wanted) wantedRow = seat;
+	}
+	return { matched, visible, pinnedRows, wantedRow };
+}
+
+/** The stories the page draws: the prefix it has revealed, plus any lead
+ * sitting past it.
+ *
+ * The prefix is taken rather than filtered for. A filter reads every story in
+ * the day to decide the first twelve, so a reader on a long day paid for the
+ * whole stream to see one screen of it. `frontend/tests/day-list.spec.ts`
+ * counts both: over a built 480-story day the filter reads 480 rows and this
+ * reads 12 plus its outlying leads, and quadrupling the day does not move the
+ * second number.
+ *
+ * `leading` is the block the page actually drew, which is a subset of the day's
+ * published leads: a topic route and a filter both draw no block, and a lead
+ * the reader has hidden drops out of it. `pinnedRows` says where every
+ * published lead sits; `leading` says which of them the page is pointing at.
+ */
+export function revealed(
+	visible: readonly DigestItem[],
+	pinnedRows: readonly number[],
+	leading: ReadonlySet<string>,
+	shown: number
+): DigestItem[] {
+	const drawn = visible.slice(0, shown);
+	if (leading.size === 0) return drawn;
+	for (const row of pinnedRows) {
+		if (row < shown) continue;
+		const item = visible[row];
+		if (leading.has(item.item_id)) drawn.push(item);
+	}
+	return drawn;
 }
 
 /** The day's leads, resolved against the stories this page actually holds.
