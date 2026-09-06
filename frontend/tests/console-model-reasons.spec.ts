@@ -27,12 +27,11 @@ import {
  * three days look clean.
  *
  * The arithmetic is driven from days written here rather than from the committed
- * archive, which `backend/tests/test_archive_readers.py` forbids and which would
- * cost more every day the pipeline publishes. It is also the stronger arm: these
- * days carry an unknown reason and a day of pure absence, neither of which the
- * archive has ever produced. The browser half then re-derives the drawn numbers
- * from the tree the site was actually built from, so nothing here is checked
- * only against itself.
+ * archive, which Rule #12 refuses and which would cost more every day the
+ * pipeline publishes. It is also the stronger arm: these days carry an unknown
+ * reason and a day of pure absence, neither of which the archive has ever
+ * produced. The browser half then re-derives the drawn numbers from the tree the
+ * site was actually built from, so nothing here is checked only against itself.
  */
 
 /** The tree the site under test was built from. Bounded, and a fixture. */

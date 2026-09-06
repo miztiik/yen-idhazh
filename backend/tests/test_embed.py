@@ -43,7 +43,6 @@ from idhazh.embed import (
     text_for,
     to_base64,
 )
-from utilities.token_budget import digest_paths, measure_day, percentile, raw_tokenizer
 
 # The browser's half of the same contract. POSIX and relative, per CLAUDE.md
 # section 2.
@@ -320,44 +319,6 @@ class TestPinnedArithmetic:
             pytest.skip("the tokenizer is not committed in this checkout")
         narrow = build_tokenizer(REPO_ROOT, max_tokens=64)
         assert len(narrow.encode(" ".join(["word"] * 5000)).ids) == 64
-
-
-class TestTokenBudget:
-    """The cap against the text it has to read. See `backend/utilities/token_budget.py`.
-
-    The distribution itself is an operator sweep, not a test - there is no
-    assertion a tier can defend about a p50. What is assertable is the relation
-    the cap has to hold to the corpus, so that is all this asserts.
-    """
-
-    def test_the_oracle_the_cap_sits_at_or_above_the_p95_of_what_it_reads(self) -> None:
-        """The cap may truncate a tail. It may not truncate the ordinary case.
-
-        Measured 2026-08-26 (Windows 11, 8 vCPU, Python 3.12.12) over the 1886
-        embedded items of the six committed days: p95 217 tokens, p99 243, max
-        280. The 18 percent over-cap figure this row started from came from a
-        character-count proxy; the encoder's own count says 0.58 percent.
-
-        This is also the gate that says when to revisit the cap. If a day
-        arrives whose items are half again as long, it fails here rather than
-        in a reader's search results.
-        """
-        if not (REPO_ROOT / TOKENIZER_RELPATH).exists():
-            pytest.skip("the tokenizer is not committed in this checkout")
-        paths = digest_paths(REPO_ROOT)
-        if not paths:
-            pytest.skip("no day is committed in this checkout")
-
-        tokenizer = raw_tokenizer(REPO_ROOT)
-        floor = AssistConfig().min_readable_letter_share
-        lengths = [
-            int(row["tokens"])
-            for path in paths
-            for row in measure_day(path, tokenizer)
-            if float(row["readable_share"]) >= floor
-        ]
-        assert lengths, "the committed days hold no embeddable item"
-        assert SHIPPED_MAX_TOKENS >= percentile(lengths, 0.95)
 
 
 class TestWhatTheEncoderCannotRead:

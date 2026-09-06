@@ -86,8 +86,16 @@ def clean_title(raw: str | None) -> str | None:
     return cleaned or None
 
 
-def _published_at(entry: Any) -> str | None:
+def _published_at(entry: Any, channel: Any = None) -> str | None:
     """The feed's own date, spelled the one way every payload spells a timestamp.
+
+    The entry's date first, then the channel's. An entry with no date of its own
+    is common in hand-rolled feeds, and the alternative to the channel's stamp is
+    not a better date - it is `first_seen`, our own ingest clock, which says
+    nothing about when the story was published and prints as such on the rail.
+    The channel stamp is the publisher's answer to the same question at a
+    coarser grain, so it is a real degradation rather than a guess: worse than
+    the entry's own date and better than ours.
 
     The year is padded here rather than by `strftime`, which leaves a year below
     1000 short on Linux: the `0001-01-01` placeholder that content systems emit
@@ -95,6 +103,10 @@ def _published_at(entry: Any) -> str | None:
     timestamp expects four digits.
     """
     parsed = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+    if not parsed and channel is not None:
+        parsed = getattr(channel, "published_parsed", None) or getattr(
+            channel, "updated_parsed", None
+        )
     if not parsed:
         return None
     year, month, day, hour, minute, second = parsed[:6]
@@ -150,7 +162,7 @@ def candidates_from_feed(feed: FeedDef, body: str | bytes) -> list[Candidate]:
                 tier=feed.tier,
                 source_form=feed.form,
                 title=clean_title(getattr(entry, "title", None)),
-                published_at=_published_at(entry),
+                published_at=_published_at(entry, getattr(parsed, "feed", None)),
                 weight=feed.weight,
             )
         )

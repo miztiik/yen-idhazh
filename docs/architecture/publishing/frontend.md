@@ -327,7 +327,7 @@ A reader can mark an item read. The mark lives in `localStorage` and nowhere els
 - **It greyed out the wrong article.** An id that came round again on a later day matched a mark the reader had never made, so an unopened item arrived already read.
 - **It grew forever.** Nothing in a bare list says which day a mark belongs to, so nothing could ever decide which marks to drop.
 
-A date makes a mark answerable, and answerable is what lets an old one be dropped. `loadRead` prunes to the newest `ui.read_mark_days` (7) days on every page load, so the store is bounded by the window rather than by how long the reader has been coming.
+A date makes a mark answerable, and answerable is what lets an old one be dropped. `ui.read_mark_days` (14) is the window, and since 2026-09-06 it means **14 calendar days back from today** rather than the newest 14 dates the store happens to hold. That swap costs something and the knob says so: expiry by calendar needs the device clock, and the rule it replaced deliberately needed none. It is worth it because the old rule bounded the store by how often a reader came back rather than by how long ago they read - a reader who opened one day a month kept marks from seven different months, and each greyed out an article last seen most of a year ago. `loadRead` still prunes to the newest 14 dates; the calendar pruning is row 4 of [../../../TODO/20260906-constant-cost-reads-plan.md](../../../TODO/20260906-constant-cost-reads-plan.md), and until it merges the store holds a superset of the window, so no mark a reader should still see is hidden.
 
 **The old shape is discarded, not migrated.** There is no honest way to decide which day an undated mark belonged to. A wrong mark costs a reader an article; a lost mark costs them a click.
 
@@ -417,7 +417,7 @@ Four rulings behind the shape, the first three Jony's and the last one Susan's:
 - **No sort control.** Per-reader ordering is forbidden by [layout.md](layout.md) - two people at one URL see one order.
 - **No infinite scroll.** It takes the footer away from the reader and has no resting state.
 - **The header states the retention window**, which the page did not do and which [layout.md](layout.md) requires before anything is deleted.
-- **The per-day story count and the partial flag came back on 2026-09-01, on the newest seven rows only.** They left the day row in the first place because a count beside every one of 700 dates is what turns a compact row into a wall. That argument holds against 700 rows and not against seven: `ui.archive_recent_days` rows are a list somebody reads, and "how big was Tuesday, and did it finish" is what decides whether to open it. Every older day is a number inside its month and carries neither. Run health in the aggregate still belongs to the console.
+- **The per-day story count and the partial flag came back on 2026-09-01, on the newest `ui.archive_recent_days` rows only.** They left the day row in the first place because a count beside every one of 700 dates is what turns a compact row into a wall. That argument holds against 700 rows and not against fourteen: `ui.archive_recent_days` rows are a list somebody reads, and "how big was Tuesday, and did it finish" is what decides whether to open it. Every older day is a number inside its month and carries neither. Run health in the aggregate still belongs to the console.
 
 The degraded states, and each one is designed rather than discovered:
 
@@ -1420,10 +1420,11 @@ interpolated, and it never white-screens the console.
 
 The window belongs to the page, not to the viewport, and one control at the top
 of the console sets it. It is a set of radio buttons carrying
-`console.window_presets` - four spans, all four on the page at once, so the cost
+`console.window_presets` - five spans, all five on the page at once, so the cost
 of the wide one is readable without opening a menu. A slider was rejected for
 the same reason: every span is a different number of month files to fetch, and
-the spans between these four cannot be told apart once drawn.
+the spans between these five cannot be told apart once drawn. The narrowest is
+one day, added 2026-09-06 as the cheapest read the console can do.
 
 Three rules keep the control honest and all three are in the contract, so a bad
 config fails the build rather than the page:

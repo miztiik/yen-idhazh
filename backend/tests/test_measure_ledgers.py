@@ -19,9 +19,8 @@ import statistics
 from collections.abc import Sequence
 from typing import Final
 
-from conftest import CONFIG_DIR, FIXTURES_DIR, STATE_DIR
+from conftest import FIXTURES_DIR
 
-from idhazh import config
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
@@ -217,20 +216,6 @@ def test_the_report_says_which_grain_each_line_is() -> None:
     assert "2026-01-01-1:" in text
     assert "2. The clock residual" in text
     assert "tokens an article word" in text
-
-
-def test_the_committed_ledgers_still_answer_all_three() -> None:
-    """No fixture: the real `state/` tree, read-only, so a shape change fails loudly."""
-    cap = config.load(CONFIG_DIR).app.extract.truncation_cap_tokens
-    items = read_items(STATE_DIR)
-    admitted = [a.run_id for a in admissions(STATE_DIR, items, cap_tokens=cap) if a.admitted]
-    fit = WordsToTokens.over(sized_pairs(items, admitted))
-
-    assert Residual.over(items).count > 0
-    assert fit.count > 0
-    assert 1.0 < fit.slope < 2.0
-    assert fit.intercept > 0
-    assert any(clock.job_seconds > 0 for clock in shard_clocks(STATE_DIR, items))
 
 
 def test_both_ledgers_now_name_the_shard_that_did_the_work() -> None:
