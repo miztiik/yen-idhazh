@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
