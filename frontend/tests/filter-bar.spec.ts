@@ -2,7 +2,7 @@ import { expect, test, type Page, type Request } from '@playwright/test';
 import { readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { deskShortfall, filterNeedle, matchItems } from '../src/lib/day-shape';
+import { deskShortfall, filterNeedle, indexDay, shortlist } from '../src/lib/day-shape';
 import type { DigestItem, DigestVerticalRef } from '../src/lib/payload/types';
 
 /**
@@ -25,11 +25,14 @@ import type { DigestItem, DigestVerticalRef } from '../src/lib/payload/types';
  *   third of a phone screen for the whole scroll is screen the reader paid for.
  * - **The filter reads the list it is handed.** A reading route seeds its
  *   document and fetches the rest of the day, so a filter holding a list
- *   captured at mount would narrow the seed for ever. The rule is pure and is
- *   driven in Node, because the canary day publishes 8 stories against a seed
- *   of 15 and no reading route in this build ever fetches
- *   (`docs/how-to/run-the-gates.md`). The archive is where a browser can show
- *   it: its stories arrive a month at a time, always after first paint.
+ *   captured at mount would narrow the seed for ever. The day's text is now
+ *   lowercased once into an index instead of once per keystroke, which is the
+ *   same hazard one step earlier: an index built at mount is a captured list.
+ *   The rule is pure and is driven in Node, because the canary day publishes 8
+ *   stories against a seed of 15 and no reading route in this build ever
+ *   fetches (`docs/how-to/run-the-gates.md`). The archive is where a browser
+ *   can show it: its stories arrive a month at a time, always after first
+ *   paint.
  *
  * Row #11's oracle lives here too, because the sentence a thin desk prints is
  * drawn by this panel. It has two arms and only one of them can be a browser:
@@ -83,6 +86,11 @@ function item(id: string, title: string, summary = '', points: string[] = []): D
 	};
 }
 
+/** The stories a needle keeps, as `DigestList` asks for them. */
+function kept(items: DigestItem[], needle: string | null): DigestItem[] {
+	return shortlist(indexDay(items), needle, null, new Set<string>(), '').visible;
+}
+
 test.describe('the filter rule', () => {
 	test('a field narrows nothing until it holds enough to narrow by', () => {
 		expect(filterNeedle('', 2)).toBeNull();
@@ -105,13 +113,13 @@ test.describe('the filter rule', () => {
 			item('four', 'Nothing to do with it')
 		];
 
-		expect(matchItems(items, 'reactor').map((story) => story.item_id)).toEqual([
+		expect(kept(items, 'reactor').map((story) => story.item_id)).toEqual([
 			'one',
 			'two',
 			'three'
 		]);
 		// A null needle is the whole list, never an empty one.
-		expect(matchItems(items, null)).toEqual(items);
+		expect(kept(items, null)).toEqual(items);
 	});
 
 	test('the filter reads the list it is handed, never one captured earlier', () => {
@@ -119,11 +127,19 @@ test.describe('the filter rule', () => {
 		const seed = [item('one', 'A reactor in Kerala')];
 		const whole = [...seed, item('two', 'A second reactor'), item('three', 'A pumpjack')];
 
-		expect(matchItems(seed, 'reactor')).toHaveLength(1);
+		expect(kept(seed, 'reactor')).toHaveLength(1);
 		expect(
-			matchItems(whole, 'reactor'),
+			kept(whole, 'reactor'),
 			'the filter narrowed the seed rather than the day that arrived'
 		).toHaveLength(2);
+
+		// And the index the filter reads is the day's, not the seed's. This is the
+		// same hazard one step earlier: an index is lowercased text plus a position
+		// per story, so one built over the seed answers every later question about
+		// a day that is no longer the day in hand.
+		const index = indexDay(whole);
+		expect(index.fields).toHaveLength(3);
+		expect(index.at.get('three'), 'the index does not know where the day ends').toBe(2);
 	});
 });
 
