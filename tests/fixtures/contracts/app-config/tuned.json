@@ -288,6 +288,7 @@
   },
   "version": "2026-08-26T10:10",
   "visuals": {
+    "asset_base_url": "",
     "canvas_width": 800,
     "enabled_kinds": [
       "chart"
