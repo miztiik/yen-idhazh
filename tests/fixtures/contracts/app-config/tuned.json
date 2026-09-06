@@ -212,6 +212,7 @@
     "dry_run": true,
     "image_months": 12,
     "max_deletes_per_run": 50,
+    "pages_hard_cap_mb": 900,
     "site_budget_mb": 600
   },
   "run": {
