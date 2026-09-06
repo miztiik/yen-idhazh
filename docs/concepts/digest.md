@@ -163,7 +163,7 @@ surface draws it.
 
 About two minutes. Ten items a reader can skim beats forty they cannot.
 
-That is a design target for the page, not a cap on the pipeline. What a day carries is decided by supply, the score and `run.safety_ceiling_per_run` ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation.
+That is a design target for the page, not a cap on the pipeline. What a day carries is decided by supply, the score and `run.safety_ceiling_per_run` - lowered to 80 on 2026-09-05 so a day carries fewer but better-chosen stories ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation.
 
 **A long day gets its hierarchy from its leading stories.** 586 items in one queue had no usable first screen - its opening items were whichever vertical id sorted first, which is an accident rather than an edit. The day now opens on at most five stories chosen across the whole day, and the stream below them carries every story in the published order. Nothing is removed, hidden or re-ranked. Until 2026-09-01 that hierarchy came from topic sections instead, and they bought it by hiding: three stories a desk on the page and 416 of 431 behind five links.
 

@@ -429,7 +429,7 @@ model. The
 transition can temporarily hold the old summary model too and cross the 10 GB
 repository ceiling. Production derives the worker count from the plan as
 `min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at
-`run.safety_ceiling_per_run` gives a worker 40 items. Do not size a timeout from
+`run.safety_ceiling_per_run` gives a worker 20 items. Do not size a timeout from
 a fictional five-item shard.
 
 **Measure the cache; do not derive it.** On 2026-08-27 the transition was far
