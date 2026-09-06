@@ -431,9 +431,9 @@ derives the worker count as `min(ceil(items / run.shard_size), run.max_parallel)
 so `run.shard_size` decides how few workers a small day is worth, not how big a
 shard is. `run.max_parallel` is four, so an automatic run still fans out to at
 most the four this page has measured; a dispatch may ask for up to eight. At
-`run.safety_ceiling_per_run` a worker draws 40 items, not five. Run
-`32742672105` measured 34 to 41 items per worker across four. A current day can
-be larger. Size request and job bounds from a measured real worker population
+`run.safety_ceiling_per_run` a worker now draws 20 items, not five. Run
+`32742672105` measured 34 to 41 items per worker across four back when the
+ceiling was 200. Size request and job bounds from a measured real worker population
 and its worst item, never from five-item arithmetic or the 229-second blend.
 
 ### The configured summarizer: Qwen3.5-9B-Q4_K_M
@@ -707,10 +707,10 @@ sharding it: the design survives the estimate being wrong by 100 percent
 (Rule #2, Rule #10).
 
 The production projection uses the same 176 s. `digest.yml` derives workers as
-`min(ceil(items / run.shard_size), run.max_parallel)`, so at
-`run.safety_ceiling_per_run` a worst worker draws `160 / 4 = 40` items:
-40 x 176 s = 117 minutes of model time, about 130 minutes with the fixed costs,
-against the `work` job's 330. For comparison, the measured incumbent worst
+`min(ceil(items / run.shard_size), run.max_parallel)`, so at the 160-item
+`run.safety_ceiling_per_run` then in force a worst worker drew `160 / 4 = 40`
+items: 40 x 176 s = 117 minutes of model time, about 130 minutes with the fixed
+costs, against the `work` job's 330. For comparison, the measured incumbent worst
 worker was 58.8 minutes after PR #110.
 
 **What the run actually cost, measured 2026-08-26.** Run `33016222069`: the
@@ -724,7 +724,7 @@ work against different bounds: 30 replay calls at 3 repeats on frozen payloads,
 against up to 40 live items with fetch, extraction, routing and scoring around
 them, under the `work` job's 150-minute bound. The configured model has never
 run a production day, so its worst worker is still unmeasured
-([Where the 150-minute bound comes from](#where-the-150-minute-bound-comes-from)).
+([Where the work job's bound comes from](#where-the-work-jobs-bound-comes-from)).
 
 ### The faithfulness scorer, pinned 2026-08-26
 
@@ -2665,7 +2665,7 @@ grows on total scored rows, forever, at whatever the day publishes.
 
 **The runway for this page is short, and it is short in published days.** The
 ceiling is 301,580 and the page is 173,269, so the headroom is 128,311 bytes. At
-the item ceiling in force - `run.safety_ceiling_per_run` is 160 - a published day
+the item ceiling then in force - `run.safety_ceiling_per_run` was 160 - a published day
 costs `160 x 50.45 = 8,072` bytes, and the headroom is **15.9 published days**.
 At the observed nine-day mean of 339 items a day it is 7.5 days. Both are
 derived from the measured slope; neither is a separate measurement.
@@ -2675,9 +2675,9 @@ problem rather than its size.** 2.49 times 301,580 is 750,935 bytes. The fit
 reaches that at 14,500 items, which is **71 published days away at the 160-item
 ceiling** - not 30. The synthetic arm lands at 2.23x and the same arm corrected
 for its own clone bias at about 3.0x, so 2.49 sits inside the range for a window
-of 700-item days. **That regime no longer exists**: the day cap has been 160
-since 2026-08-27, and every figure taken from days that published 731 describes
-a pipeline this one is not.
+of 700-item days. **That regime no longer exists**: the day cap came down to 160
+on 2026-08-27 and to 80 on 2026-09-05, and every figure taken from days that
+published 731 describes a pipeline this one is not.
 
 **What the same measurement says instead is worse, because it carries a date.**
 21 more published days at 160 items puts the page near 342,800 bytes, **1.14x the
@@ -4347,7 +4347,7 @@ Summarizer `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through
 llama.cpp `b10598`.
 
 **The slowest worker of a full day takes 83.5 to 117.5 minutes, and 94.5 at
-today's item ceiling. The `work` job was bounded at 330.** That bound was 3.5
+the 40-item ceiling those runs ran at. The `work` job was bounded at 330.** That bound was 3.5
 times the worst thing it has ever had to allow. It was also a second answer:
 `config/idhazh.json` said `run.shard_timeout_minutes: 150` and nothing read it,
 so a person sizing a model against config read a number production ignored.
@@ -4403,8 +4403,8 @@ line - 5 items and 40 items, worst against worst - give:
   `pip install`, the cache restore (30-73 s, median 45) and the weights load.
 - **about 2.29 minutes an item after that.**
 
-That predicts `3 + 40 x 2.29 = 94.6` minutes for a worker at today's item
-ceiling. The worst one measured is 94.5. The arithmetic is a check on the
+That predicts `3 + 40 x 2.29 = 94.6` minutes for a worker at the 40-item
+ceiling those days ran. The worst one measured is 94.5. The arithmetic is a check on the
 measurement here, not a substitute for it.
 
 **The 3 minutes is a 2026-08-22 figure and the direct measurement is larger.**
@@ -4415,28 +4415,54 @@ ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). A li
 8B is a weaker instrument than one run read against its own clock, so take the
 5.6 minutes and read the 3 as history.
 
-### Where the 150-minute bound comes from
+### Where the work job's bound comes from
 
-`run.safety_ceiling_per_run` is 160 and `run.max_parallel` is 4, so a worker on
-the automatic path draws `ceil(160 / 4) = 40` items and cannot draw more. The
-bound is **half again the slowest worker measured at that ceiling, rounded up to
-the next half hour**: `94.5 x 1.5 = 141.8`, so **150 minutes**.
+`run.safety_ceiling_per_run` is 80 and `run.max_parallel` is 4, so a worker on
+the automatic path draws `ceil(80 / 4) = 20` items and cannot draw more - half
+the 40 it drew at the 160 ceiling this section was first sized against, so the
+base work per worker roughly halves.
 
-What that margin covers, in order of how likely each is:
+**The worst shard is measured, not the slowest-of-each-day this page used to
+quote.** Read from the whole of `state/runtime-counters.csv` on 2026-09-02 -
+104 rows, 80 of them carrying `job_seconds` at the old 40-item load, on the
+runner - the distribution is min 26.4, median **78.5**, p90 101.7 and worst
+**135.4 minutes**. The worst used 90.3 percent of the old 150-minute bound and
+the median 52 percent. The 94.5 quoted above is the slowest worker of each of a
+few days; reading every shard row instead finds a worst nearly half again as
+slow, and a bound is sized from the worst.
 
-| The bound is | Against |
-| --- | --- |
-| 1.59x | the slowest worker measured at today's 40-item ceiling, 94.5 min |
-| 1.28x | the slowest worker this project has ever run, 117.5 min - at 50 items, under the 200-item ceiling that was replaced on 2026-08-26 |
-| 1.15x | a day of 40 items every one of which costs the worst rate ever seen, 2.36 min, on a worker that also drew the worst fixed cost |
+**The bound rose to 200, and not because a worker got slower.** At 20 items a
+worker finishes far inside 150; the extra room is headroom for the coming
+two-call summariser change, whose second model call an item costs about 87
+minutes at 20 items. Sized from the worst case, never the median, because a
+worker killed at the bound uploads nothing:
 
-**A bound above about 165 minutes cannot be honoured anyway.** The five
-scheduled runs are four hours apart and every run shares one concurrency group
-with `cancel-in-progress: false`, so a run that overruns does not get cancelled -
-the next one queues behind it. A worker that hangs to a 150-minute bound still
-lets `visuals` (50) and `assemble` (20) finish about 223 minutes after `plan`
-starts, inside the 240-minute gap. At 330 it could not, and one stuck worker
-delayed the next two digests a reader was waiting for.
+| At 20 items | Base work | Call 2 needs | At 150 | At 200 |
+| --- | --- | --- | --- | --- |
+| Median | ~39 min | 87 min | fits, 24 min spare | fits, 74 min spare |
+| p90 | ~51 min | 87 min | fits, 12 min spare | fits, 62 min spare |
+| Worst | ~68 min | 87 min | **overruns by 5 min** | **fits, 45 min spare** |
+
+The gap between the 78.5-minute median and the 135.4-minute worst is exactly
+what the second call spends, so lowering the timeout to reclaim the halved item
+count would take that room back before the change that needs it (Rule #2). 200
+is 56 percent of the six-hour platform ceiling, which is not ours to move.
+
+**The concurrency gap is why the bound stayed low before, and it is the one
+thing the rise has to answer.** The five scheduled runs are four hours apart and
+every run shares one concurrency group with `cancel-in-progress: false`, so a run
+that overruns queues the next one behind it rather than being cancelled. A worker
+that hangs to its bound then has to leave `visuals` (50) and `assemble` (20) room
+to finish inside the 240-minute gap, and `150 + 50 + 20` clears it where
+`200 + 50 + 20` does not. Two things make 200 safe anyway. Today a healthy worker
+at 20 items finishes near 68 minutes, far under either bound, so the 200 is a
+backstop a healthy run never reaches, not a budget it spends. And the two-call
+change that needs the 200 folds the visual decision into the work shard and
+retires the separate `visuals` job, so the 50-minute serial stage that made a
+bound above about 165 minutes unhonourable goes away in the same change. Until
+then the ceiling, not the timeout, is still the lever for a worker that runs
+long. At 330 one stuck worker delayed the next two digests a reader was waiting
+for.
 
 **This does not size a Qwen3.5-9B production worker, and the two derivations on
 record for it disagree.** [The qualification budget](#the-qualification-budget-derived-2026-08-26)

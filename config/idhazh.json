@@ -210,9 +210,9 @@
   },
   "run": {
     "max_parallel": 4,
-    "safety_ceiling_per_run": 160,
+    "safety_ceiling_per_run": 80,
     "shard_size": 5,
-    "shard_timeout_minutes": 150,
+    "shard_timeout_minutes": 200,
     "success_floor_pct": 70,
     "visual_planner_budget_minutes": 40
   },

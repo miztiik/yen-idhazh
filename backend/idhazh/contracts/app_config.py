@@ -113,17 +113,19 @@ class TierWeights(Model):
 
 class RunConfig(Model):
     safety_ceiling_per_run: int = Field(
-        default=160,
+        default=80,
         ge=1,
         description=(
             "What sizes a run. It began as a crash guard against a mis-parsed feed and "
             "supply overtook it: items_planned has been exactly this number on every run "
             "since 2026-08-25, so it is the cap whatever it is called. Owner decision, "
-            "2026-08-29: it stays at 160, and a run gets better by spending those slots "
-            "on articles that can be read rather than by raising this. It is also what "
-            "sizes the worst case a work shard and the route stage have to finish, so "
-            "any new number is bounded by the slower of those two - and a worker killed "
-            "at run.shard_timeout_minutes uploads nothing."
+            "2026-09-05: it comes down to 80 from 160 - the day publishes half as many "
+            "stories, and the gain is that those 80 slots go to articles worth reading "
+            "rather than to a second copy of one already chosen or to a feed that has "
+            "been publishing badly. It is an editorial choice about the day now, not a "
+            "crash guard. It is also what sizes the worst case a work shard and the "
+            "route stage have to finish - a smaller run makes a smaller worst case - and "
+            "a worker killed at run.shard_timeout_minutes uploads nothing."
         ),
     )
     shard_size: int = Field(
@@ -142,17 +144,21 @@ class RunConfig(Model):
         ),
     )
     shard_timeout_minutes: int = Field(
-        default=150,
+        default=200,
         ge=1,
         description=(
             "The work job's own timeout, which digest.yml reads from here. A backstop, "
             "never a budget: a worker has no clock of its own, and one killed at this "
-            "bound uploads nothing, so the run loses every item that worker held. Sized "
-            "at half again the slowest worker measured at run.safety_ceiling_per_run - "
-            "94.5 minutes on 2026-08-26 - and it still clears the 117.5-minute worst of "
-            "2026-08-24, when a day handed a worker 50 items instead of 40. A slow "
-            "worker is answered by lowering the ceiling, never by raising this "
-            "(Rule #2)."
+            "bound uploads nothing, so the run loses every item that worker held. It "
+            "rose to 200 from 150 as headroom for the coming two-call summariser "
+            "change, not because any worker got slower - at run.safety_ceiling_per_run "
+            "of 80 a worker draws 20 items, half of the 40 it drew before, so the base "
+            "work roughly halves. Sized from the worst measured shard, not the median: "
+            "over 80 shard rows on 2026-09-02 the worst used 135.4 minutes of the old "
+            "150-minute bound and the median used 78.5, and the second model call an "
+            "item spends exactly that margin. 200 is 56 percent of the six-hour platform "
+            "ceiling, well inside Rule #2. A slow worker is still answered by lowering "
+            "the ceiling, never by raising this."
         ),
     )
     visual_planner_budget_minutes: int = Field(
@@ -2530,6 +2536,25 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T22:30",
+            change=(
+                "run.safety_ceiling_per_run default lowered from 160 to 80, and "
+                "run.shard_timeout_minutes default raised from 150 to 200. Both are "
+                "defaults on RunConfig; an older config that names either value keeps "
+                "it."
+            ),
+            why=(
+                "The ceiling is now an editorial cap: a day publishes half as many "
+                "stories, and the 80 slots go to articles worth reading rather than to "
+                "a duplicate or a badly-publishing feed (owner, 2026-09-05). The "
+                "timeout rise is headroom for the coming two-call summariser change, "
+                "not a response to a slower worker - at 80 items a worker draws 20 and "
+                "the base work roughly halves; the bound is sized from the worst "
+                "measured shard, 135.4 of the old 150 minutes over 80 rows on "
+                "2026-09-02, not the median 78.5."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06T21:40",
             change=(
