@@ -634,8 +634,8 @@
 	}
 
 	.segment:has(.segment-input:focus-visible) {
-		outline: 2px solid var(--color-focus);
-		outline-offset: 2px;
+		outline: 1px solid var(--color-focus);
+		outline-offset: 1px;
 	}
 
 	.segment-input {
