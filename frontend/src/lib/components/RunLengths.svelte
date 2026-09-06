@@ -55,16 +55,22 @@
 
 	const box = $derived(frame(chartWidth(measured, width), height, MARGIN));
 
-	const yAxis = $derived(
-		linearAxis(
-			runs.flatMap((run) => [
-				run.low,
-				run.high,
-				...(run.askLow === null ? [] : [run.askLow]),
-				...(run.askHigh === null ? [] : [run.askHigh])
-			]),
-			[box.bottom, box.top]
-		)
+	/** Every length the axis must hold, data only. Split from the axis so a
+	 * resize reuses this pass rather than walking the runs again for a new plot
+	 * height. */
+	const runValues = $derived(
+		runs.flatMap((run) => [
+			run.low,
+			run.high,
+			...(run.askLow === null ? [] : [run.askLow]),
+			...(run.askHigh === null ? [] : [run.askHigh])
+		])
+	);
+	const yAxis = $derived(linearAxis(runValues, [box.bottom, box.top]));
+	/** The raw extent of the lengths, bound to the data alone: a resize cannot
+	 * move it and a window change can. Published so a test can hold the split. */
+	const runExtent = $derived(
+		runValues.length === 0 ? '' : `${Math.min(...runValues)},${Math.max(...runValues)}`
 	);
 
 	/** One column per run, whatever the calendar did. Runs are not evenly spaced
@@ -210,6 +216,7 @@
 	class="plot"
 	data-run-lengths="chart"
 	data-run-lengths-runs={runs.length}
+	data-run-domain={runExtent}
 	data-readout-columns={columns.length}
 >
 	<div use:observeWidth={(next) => (measured = next)}>

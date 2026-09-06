@@ -101,17 +101,17 @@
 		return `${reading(measure, measure.before)}, then ${reading(measure, measure.after)}`;
 	}
 
+	/** The two label columns, data only. Pulled out of the gutter so a resize
+	 * measures the same strings against the new frame rather than rebuilding them
+	 * first. */
+	const labels = $derived(drawn.map((measure) => measure.label));
+	const valueLines = $derived(drawn.map(valueLine));
 	/** The room the two label lines need, or null where the frame cannot spare
 	 * it. `labelGutter` refuses a gutter past 30 percent of the frame, which is
 	 * the bound that stops a chart becoming a list with a plot in the margin. */
 	const gutter = $derived.by(() => {
-		const names = labelGutter(
-			drawn.map((measure) => measure.label),
-			NAME_PX,
-			GUTTER_GAP,
-			chartBox
-		);
-		const values = labelGutter(drawn.map(valueLine), VALUE_PX, GUTTER_GAP, chartBox);
+		const names = labelGutter(labels, NAME_PX, GUTTER_GAP, chartBox);
+		const values = labelGutter(valueLines, VALUE_PX, GUTTER_GAP, chartBox);
 		return names === null || values === null ? null : Math.max(names, values);
 	});
 	const stacked = $derived(gutter === null);
@@ -130,9 +130,18 @@
 		} satisfies Margin)
 	);
 
+	/** Every drawn measure's percent move, data only. One pass feeds both the
+	 * scale and the published extent, so a boundary change reads the moves once
+	 * rather than three times - the recomputation this row removes. */
+	const swapValues = $derived(drawn.map((measure) => pct(measure)));
 	/** Symmetric about no change, so the same distance either side of the rule
 	 * means the same size of move. */
-	const scale = $derived(swapScale(drawn.map((measure) => pct(measure))));
+	const scale = $derived(swapScale(swapValues));
+	/** The raw extent of the moves, bound to the data alone: a resize cannot move
+	 * it and a boundary change can. Published so a test can hold the split. */
+	const swapExtent = $derived(
+		swapValues.length === 0 ? '' : `${Math.min(...swapValues)},${Math.max(...swapValues)}`
+	);
 
 	function x(percent: number): number {
 		return box.left + scale.at(percent) * box.innerWidth;
@@ -230,6 +239,7 @@
 	data-model-swap-plot
 	data-swap-at={swap.at}
 	data-swap-rows={drawn.length}
+	data-swap-domain={swapExtent}
 	data-readout-none="one row per measure, each against its own baseline, so no column is shared"
 >
 	<div use:observeWidth={(next) => (measured = next)}>
