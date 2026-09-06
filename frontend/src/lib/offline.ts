@@ -37,9 +37,96 @@ export const KILL_FILE = 'service-worker-kill.json';
  * `dayUrl` in `$lib/assist/day.ts` builds, checked rather than trusted. */
 export const DAY_PAYLOAD = /\/digest\/(\d{4})\/(\d{2})\/(\d{2})\/digest\.json$/;
 
+/** The data SvelteKit serves beside a prerendered document, for a page reached
+ * without a fresh navigation. */
+export const ROUTE_DATA = /\/__data\.json$/;
+
 /** Whether a cache belongs to this project. */
 export function ours(cacheName: string): boolean {
 	return cacheName.startsWith(CACHE_PREFIX);
+}
+
+/** The header the worker stamps a kept day with, holding what its body costs
+ * the device in bytes.
+ *
+ * Measured from the body that is stored, never read off `content-length`. That
+ * header names the length of what came down the wire, and what came down the
+ * wire is compressed while what is kept is the decoded body - so a ceiling set
+ * from it would be a ceiling set from the wrong number.
+ */
+export const BYTES_HELD = 'x-idhazh-bytes';
+
+/** One day on the reader's device: what it is cached under, and what it costs. */
+export interface HeldDay {
+	/** The URL the day is cached under. */
+	key: string;
+	/** The bytes its body takes on the device. */
+	bytes: number;
+}
+
+/** The two bounds on the kept set. */
+export interface OfflineBounds {
+	/** `ui.offline_days_kept`. */
+	days: number;
+	/** `ui.offline_bytes_kept`. */
+	bytes: number;
+}
+
+/** Which held days a fresh one pushes off the device, oldest first.
+ *
+ * **Two bounds, because a day count cannot bound bytes.** Measured 2026-09-06
+ * over the 17 committed days, one day payload runs 11,547 to 1,924,051 bytes -
+ * a factor of 167 - so the same fourteen days is anything from 162 KB to 27 MB
+ * and the count alone promises the reader nothing about their storage.
+ *
+ * `held` is oldest first, which is the order `Cache.keys()` answers in, and a
+ * day that is fetched again is put again and so moves to the back. So the front
+ * of the list is the day the reader has gone longest without opening.
+ *
+ * **One day is always kept, whatever it costs.** A ceiling that evicts a day as
+ * fast as it arrives is worse than no cache at all: the reader pays the
+ * download and keeps nothing. `ui.offline_bytes_kept` has a floor above the
+ * largest day measured, so this is a guard rather than a path today.
+ */
+export function evictions(held: readonly HeldDay[], bounds: OfflineBounds): string[] {
+	const days = Math.max(1, Math.trunc(bounds.days));
+	const ceiling = Math.max(0, bounds.bytes);
+	const cost = (day: HeldDay) => Math.max(0, day.bytes);
+	let total = held.reduce((sum, day) => sum + cost(day), 0);
+	let left = held.length;
+	const going: string[] = [];
+	for (const day of held) {
+		if (left <= 1) break;
+		if (left <= days && total <= ceiling) break;
+		going.push(day.key);
+		total -= cost(day);
+		left -= 1;
+	}
+	return going;
+}
+
+/** Whether the shell cache keeps a response the network just answered.
+ *
+ * **An allow-list, and that is the point of it.** The shell cache used to take
+ * any successful same-origin GET, so every file the pipeline publishes - a
+ * drawing, a telemetry shard, a month index - landed in it the moment a page
+ * asked for one. That is a store that grows with the archive rather than with
+ * the shell, in a cache with no byte bound of its own.
+ *
+ * What is on the list is what this build emitted, plus the pages the reader
+ * opened: the documents and the data SvelteKit serves beside them. Reading data
+ * is not here - a day payload has its own cache, its own bounds and its own
+ * rule, because it has to survive the deploy that empties this one.
+ */
+export function shellKeeps(what: {
+	/** The request's path, base included. */
+	pathname: string;
+	/** Whether the browser asked for a document rather than a subresource. */
+	navigation: boolean;
+	/** Every path this build emitted, as `$service-worker` names them. */
+	emitted: ReadonlySet<string>;
+}): boolean {
+	return what.navigation || ROUTE_DATA.test(what.pathname) || what.emitted.has(what.pathname);
 }
 
 /** Start the offline reader, retire it, or leave the page exactly as it was.

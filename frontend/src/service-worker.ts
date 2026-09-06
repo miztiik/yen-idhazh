@@ -44,6 +44,16 @@
  * archive. Never the encoder's model and runtime, 43.2 MB together, which keep
  * their own store. Never the switch itself.
  *
+ * **Both caches have a rule, and neither of them is "whatever a page asked
+ * for".** The kept days are bounded twice - by `ui.offline_days_kept` and by
+ * `ui.offline_bytes_kept` - because one day payload runs from 11,547 to
+ * 1,924,051 bytes (measured 2026-09-06 over the 17 committed days), so fourteen
+ * of them is anything from 162 KB to 27 MB and a count promises the reader
+ * nothing about their storage. The shell cache keeps what this build emitted
+ * and the pages the reader opened; every other file this site publishes is
+ * served and then forgotten, so a store named for one build's shell stops
+ * taking a share of the archive.
+ *
  * **The shell is network-first and a day is served from the device first.** The
  * shell changes on every deploy, so a stale one is the bug the switch above
  * exists for. A day is different: an archived day never changes again, so
@@ -57,13 +67,21 @@
 
 import { base, build, files, version } from '$service-worker';
 import {
+	BYTES_HELD,
 	DAY_CACHE,
 	DAY_PAYLOAD,
 	KILL_FILE,
 	SHELL_CACHE_PREFIX,
-	ours
+	evictions,
+	ours,
+	shellKeeps,
+	type HeldDay
 } from '$lib/offline';
-import { OFFLINE_DAYS_KEPT, OFFLINE_VERSION } from '$lib/offline.generated';
+import {
+	OFFLINE_BYTES_KEPT,
+	OFFLINE_DAYS_KEPT,
+	OFFLINE_VERSION
+} from '$lib/offline.generated';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -71,6 +89,14 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
  * moves on every build, so a deploy never reads the last one's chunks. */
 const SHELL_CACHE = `${SHELL_CACHE_PREFIX}${version}`;
 const KILL_URL = `${base}/${KILL_FILE}`;
+
+/** Every path this build emitted, as a path rather than as a URL, so a request
+ * can be looked up in it. `$service-worker` names them once, at build time, and
+ * that list is the shell - which is what makes the shell cache's membership a
+ * question with an answer rather than "whatever a page asked for". */
+const EMITTED = new Set(
+	[...build, ...files].map((path) => new URL(path, sw.location.href).pathname)
+);
 
 /** Set once this worker has retired. Everything below it stops answering, so a
  * worker waiting for its last client to go away never serves from a cache it
@@ -188,7 +214,7 @@ sw.addEventListener('fetch', (event) => {
 	if (isEncoder(url.pathname)) return;
 
 	event.respondWith(
-		DAY_PAYLOAD.test(url.pathname) ? fromDayCache(event) : fromNetworkFirst(request)
+		DAY_PAYLOAD.test(url.pathname) ? fromDayCache(event) : fromNetworkFirst(request, url)
 	);
 });
 
@@ -210,8 +236,8 @@ async function fromDayCache(event: FetchEvent): Promise<Response> {
 	const held = await cache.match(request, { ignoreVary: true });
 	const fresh = fetch(request).then(async (answer) => {
 		if (answer.ok && answer.status === 200 && !answer.redirected) {
-			await cache.put(request, answer.clone());
-			await trim(cache);
+			await cache.put(request, await measured(answer));
+			await evict(cache);
 		}
 		return answer;
 	});
@@ -225,27 +251,85 @@ async function fromDayCache(event: FetchEvent): Promise<Response> {
 
 function noop(): void {}
 
-/** Keep the last `OFFLINE_DAYS_KEPT` days added and no more.
+/** The same body, carrying what it costs the device.
+ *
+ * The size is taken once, here, from the body that is about to be stored. The
+ * alternative is to read every kept day back on every eviction, which is up to
+ * `OFFLINE_BYTES_KEPT` of blob reads for an answer this line already had.
+ *
+ * `content-length` and `content-encoding` are dropped with it, because they
+ * describe what came down the wire and this is the decoded body.
+ */
+async function measured(answer: Response): Promise<Response> {
+	const body = await answer.clone().arrayBuffer();
+	const headers = new Headers(answer.headers);
+	headers.delete('content-encoding');
+	headers.delete('content-length');
+	headers.set(BYTES_HELD, String(body.byteLength));
+	return new Response(body, {
+		status: answer.status,
+		statusText: answer.statusText,
+		headers
+	});
+}
+
+/** What a kept day costs, off its own stamp, or off its body when a worker
+ * before this one stored it without one. */
+async function costOf(held: Response | undefined): Promise<number> {
+	if (held === undefined) return 0;
+	const stamp = held.headers.get(BYTES_HELD);
+	if (stamp !== null && Number.isFinite(Number(stamp))) return Math.max(0, Number(stamp));
+	return (await held.clone().arrayBuffer()).byteLength;
+}
+
+/** Keep the days the two bounds allow, and no more.
  *
  * `keys()` answers in insertion order, so the front of the list is the day
- * added longest ago. Without this the kept set grows with the archive, which is
- * the argument that was made against caching days at all.
+ * added longest ago. Without a bound the kept set grows with the archive, which
+ * is the argument that was made against caching days at all - and a day count
+ * alone is not that bound, because one day payload runs from 11,547 to
+ * 1,924,051 bytes (measured 2026-09-06 over the 17 committed days), so fourteen
+ * of them is anything from 162 KB to 27 MB.
+ *
+ * **Reading a stamp is not reading a body.** `match` hands back a response
+ * whose body is untouched until something asks for it, so the walk below costs
+ * one header read a kept day and never the bytes themselves.
  */
-async function trim(cache: Cache): Promise<void> {
-	const held = await cache.keys();
-	const over = held.length - OFFLINE_DAYS_KEPT;
-	if (over <= 0) return;
-	await Promise.all(held.slice(0, over).map((request) => cache.delete(request)));
+async function evict(cache: Cache): Promise<void> {
+	const keys = await cache.keys();
+	const held: HeldDay[] = [];
+	for (const request of keys) {
+		const answer = await cache.match(request, { ignoreVary: true });
+		held.push({ key: request.url, bytes: await costOf(answer) });
+	}
+	const going = new Set(
+		evictions(held, { days: OFFLINE_DAYS_KEPT, bytes: OFFLINE_BYTES_KEPT })
+	);
+	if (going.size === 0) return;
+	await Promise.all(
+		keys.filter((request) => going.has(request.url)).map((request) => cache.delete(request))
+	);
 }
 
 /** The shell: from the network, and from the device only when there is no
  * network. A stale shell is the one thing this worker may not serve while the
- * host is answering. */
-async function fromNetworkFirst(request: Request): Promise<Response> {
+ * host is answering.
+ *
+ * **What is kept here is what this build emitted plus the pages the reader
+ * opened, and nothing else.** Anything the pipeline publishes - a drawing, a
+ * telemetry shard, a month index - is served and then forgotten, so this cache
+ * holds one build's shell rather than a share of the archive.
+ */
+async function fromNetworkFirst(request: Request, url: URL): Promise<Response> {
 	const cache = await caches.open(SHELL_CACHE);
+	const keep = shellKeeps({
+		pathname: url.pathname,
+		navigation: request.mode === 'navigate',
+		emitted: EMITTED
+	});
 	try {
 		const answer = await fetch(request);
-		if (answer.ok && answer.status === 200 && !answer.redirected) {
+		if (keep && answer.ok && answer.status === 200 && !answer.redirected) {
 			await cache.put(request, answer.clone());
 		}
 		return answer;
