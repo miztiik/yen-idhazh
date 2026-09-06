@@ -1845,6 +1845,15 @@ a single statement about the console rather than three.
 313,300 is 2.79x, 27.4x and 35.3x each. The tightest is `/console/`, at 2.79x
 against 2.32x when it was last derived.
 
+**The 16,024 is not a rate for ever, and the fourteenth publish from here is
+where it stops.** `console.default_window_days` is 30 and sixteen days are
+committed, so a new day is still added to the seed rather than pushed through it.
+Once the ledger passes the window a new day drops the oldest out of the document
+and the marginal cost falls toward zero. Two more re-derivations at this rate and
+the third one should read a much smaller number - a ceiling raised at the
+un-windowed rate expires sooner rather than later, which is the safe direction
+and is what a ratchet is for.
+
 **The contract test's bound moved with them.**
 `test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
 every console ceiling under a constant that stands in for the page it cannot see:
