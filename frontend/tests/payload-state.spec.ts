@@ -10,8 +10,10 @@ import {
 	Intercepted,
 	loaderSource,
 	servedDayUrl,
-	type Loader
+	type Loader,
+	type LoadedDay
 } from './support/day-loader';
+import { assistConfig } from '../src/lib/server/config';
 
 /**
  * The client loader, the retry, the anchor, and the state a reader meets when
@@ -52,24 +54,30 @@ const DATE = '2026-08-30';
 /** What the loader must ask for, spelled out rather than rebuilt from `dayUrl`. */
 const WANTED = servedDayUrl(DATE);
 const PATTERN = `**${WANTED}`;
+/** The content revision a served day carries. Its own `generated_at`, which is
+ * what a republish moves and nothing else does. */
+const REVISION = '2026-08-30T06:00';
 
-/** A day payload holding one story the page can actually render.
+/** A day payload holding stories the page can actually render.
  *
  * Four names, because the loader keeps a story only when it carries everything
  * the page reads off it without a guard - a story short of one of them is
  * dropped and counted, which `malformed-day.spec.ts` is the arm for.
  */
-const PAYLOAD = JSON.stringify({
-	version: '2026-09-01T09:00',
-	items: [
-		{
-			item_id: 'ai-1',
+function dayBody(revision: string, ids: string[]): string {
+	return JSON.stringify({
+		version: '2026-09-01T09:00',
+		generated_at: revision,
+		items: ids.map((id) => ({
+			item_id: id,
 			title: 'A story',
 			summary: 'A summary long enough to be a summary.',
 			key_points: ['One point.']
-		}
-	]
-});
+		}))
+	});
+}
+
+const PAYLOAD = dayBody(REVISION, ['ai-1']);
 
 const LOADER = loaderSource('payload-state');
 const primed = new WeakSet<Page>();
@@ -107,6 +115,16 @@ async function watch(page: Page, slowMs: number, again = false): Promise<Watched
 		},
 		[DATE, slowMs, again] as [string, number, boolean]
 	);
+}
+
+/** One `loadDay` call - the archive's own, with no wait states and no retry
+ * control. It returns the story count, or null for a day it could not read. */
+async function load(page: Page, date: string = DATE): Promise<number | null> {
+	return page.evaluate(async (asked: string) => {
+		const loader = (window as unknown as { dayLoader: Loader }).dayLoader;
+		const day = await loader.loadDay(asked);
+		return day === null ? null : day.items.length;
+	}, date);
 }
 
 test.describe('the day a browser could not read', () => {
@@ -150,11 +168,15 @@ test.describe('the day a browser could not read', () => {
 			'nothing in the console named the day that failed'
 		).not.toEqual([]);
 
-		// Asking again with nothing changed costs no second request. One flaky
-		// connection may not become a request per render.
-		const held = await watch(page, 30_000);
-		expect(held.states).toEqual(['loading', 'unreachable']);
-		expect(blocked.count, 'a held failure went back to the network on its own').toBe(1);
+		// A failure is not an answer, so the loader does not hold one: the next ask
+		// really asks. That is what lets a day recover with no retry control at
+		// all - the archive fetches the day behind every result and has none - and
+		// it is still one request per ask rather than one per render, because
+		// nothing on a render path asks. Until 2026-09-06 the null was held for
+		// the life of the session and the day was finished.
+		const again = await watch(page, 30_000);
+		expect(again.states).toEqual(['loading', 'unreachable']);
+		expect(blocked.count, 'a failure was held, so the day could never recover').toBe(2);
 
 		// The retry, which is the only thing that asks twice.
 		await page.unroute(PATTERN);
@@ -234,6 +256,218 @@ test.describe('the day a browser could not read', () => {
 			expect(url, `${name} still became an address`).toBeNull();
 		}
 		expect(asked.count, 'a date the loader cannot read reached the network').toBe(0);
+	});
+});
+
+test.describe('what one session keeps in hand', () => {
+	test('a day that failed once is asked for again, and it recovers', async ({ page }) => {
+		// The oracle. A search answer names a day, that day's fetch fails, and the
+		// next answer naming it has no retry control to press - so if the failure
+		// is held, that day is finished for the life of the session.
+		const asked = new Intercepted();
+		let refuse = true;
+		await page.route(PATTERN, async (route) => {
+			asked.take(route.request().url());
+			if (refuse) {
+				await route.abort('connectionfailed');
+				return;
+			}
+			await route.fulfill({ contentType: 'application/json', body: dayBody(REVISION, ['ai-1']) });
+		});
+
+		await armed(page);
+		expect(await load(page), 'the first ask did not fail').toBeNull();
+
+		// The network recovers, and nothing tells the loader.
+		refuse = false;
+		const recovered = await load(page);
+		console.log(`[payload-state] recovery interceptions: ${asked.count}`);
+		expect(recovered, 'a day that failed once stayed failed for the session').toBe(1);
+		expect(asked.count, 'the second ask never reached the network').toBe(2);
+
+		// The reader's own route reaches the same rule through `watchDay`.
+		refuse = true;
+		const readerFailed = await watch(page, 30_000, true);
+		expect(readerFailed.states).toEqual(['loading', 'unreachable']);
+		refuse = false;
+		const readerRecovered = await watch(page, 30_000);
+		expect(readerRecovered.states, 'the reading page could not recover either').toEqual([
+			'loading',
+			'ready'
+		]);
+	});
+
+	test('two asks racing on one failing day still cost one request', async ({ page }) => {
+		// Single-flight sharing is what this row keeps. A failure that is not held
+		// must not become a request per caller.
+		const asked = new Intercepted();
+		await page.route(PATTERN, async (route) => {
+			asked.take(route.request().url());
+			await new Promise((done) => setTimeout(done, 200));
+			await route.abort('connectionfailed');
+		});
+
+		await armed(page);
+		const both = await page.evaluate(async (date: string) => {
+			const loader = (window as unknown as { dayLoader: Loader }).dayLoader;
+			const pair = await Promise.all([loader.loadDay(date), loader.loadDay(date)]);
+			return pair.map((day) => (day === null ? null : day.items.length));
+		}, DATE);
+
+		console.log(`[payload-state] racing interceptions: ${asked.count}`);
+		expect(both, 'a failing day handed something back').toEqual([null, null]);
+		expect(asked.count, 'two callers waiting on one day made two requests').toBe(1);
+	});
+
+	test('a retry hands back the day the page holds, unless the day changed', async ({ page }) => {
+		// The revision is the key. A retry on an unchanged day must not throw away
+		// the payload every derived view is built on, and a republished day must
+		// not be served from the one before it.
+		const changed = '2026-08-30T18:00';
+		let served = 0;
+		await page.route(PATTERN, async (route) => {
+			served += 1;
+			const body = served <= 2 ? dayBody(REVISION, ['ai-1']) : dayBody(changed, ['ai-2', 'ai-3']);
+			await route.fulfill({ contentType: 'application/json', body });
+		});
+
+		await armed(page);
+		const identity = await page.evaluate(async (date: string) => {
+			const loader = (window as unknown as { dayLoader: Loader }).dayLoader;
+			const quiet = { slowMs: 30_000, onStatus: () => {} };
+			const first = await loader.watchDay(date, quiet);
+			const same = await loader.watchDay(date, { ...quiet, again: true });
+			const fresh = await loader.watchDay(date, { ...quiet, again: true });
+			return {
+				unchangedIsTheSameDay: first === same,
+				republishedIsANewDay: first !== fresh,
+				firstIds: (first?.items ?? []).map((item) => item.item_id ?? ''),
+				freshIds: (fresh?.items ?? []).map((item) => item.item_id ?? '')
+			};
+		}, DATE);
+
+		console.log(`[payload-state] revision interceptions: ${served}`);
+		expect(served, 'a retry did not reach the network').toBe(3);
+		expect(
+			identity.unchangedIsTheSameDay,
+			'a retry on an unchanged day replaced the payload the page already held'
+		).toBe(true);
+		expect(identity.republishedIsANewDay, 'a republished day was served stale').toBe(true);
+		expect(identity.firstIds).toEqual(['ai-1']);
+		expect(identity.freshIds, 'the republished day did not reach the page').toEqual([
+			'ai-2',
+			'ai-3'
+		]);
+	});
+
+	test('one lookup index is built per day, and a second day gets its own', async ({ page }) => {
+		// Finding 87. A result list resolves an id against a day it already holds,
+		// once per result and again on every arrival. The count below is the whole
+		// oracle: reading `items` once per lookup is a walk of the day per lookup,
+		// and reading it once is an index the day owns.
+		await armed(page);
+		const probed = await page.evaluate(() => {
+			const loader = (window as unknown as { dayLoader: Loader }).dayLoader;
+			const story = (id: string) => ({
+				item_id: id,
+				title: id,
+				summary: id,
+				key_points: [] as string[]
+			});
+			/** A day that counts how many times anything reads its story list. */
+			const watched = (items: ReturnType<typeof story>[]) => {
+				const reads = { count: 0 };
+				const day = { generated_at: '2026-08-30T06:00', items };
+				const probe = new Proxy(day, {
+					get(target, key, receiver) {
+						if (key === 'items') reads.count += 1;
+						return Reflect.get(target, key, receiver);
+					}
+				}) as unknown as LoadedDay;
+				return { probe, reads };
+			};
+
+			const first = watched([story('ai-1'), story('ai-2'), story('ai-3')]);
+			const asks = 50;
+			let found = 0;
+			for (let n = 0; n < asks; n += 1) {
+				if (loader.itemOf(first.probe, 'ai-2') !== null) found += 1;
+			}
+			const firstReads = first.reads.count;
+			const missing = loader.itemOf(first.probe, 'energy-9');
+			const noDay = loader.itemOf(null, 'ai-2');
+
+			const second = watched([story('energy-9')]);
+			const secondFound = loader.itemOf(second.probe, 'energy-9');
+			const crossed = loader.itemOf(second.probe, 'ai-1');
+			const secondReads = second.reads.count;
+
+			return {
+				asks,
+				found,
+				firstReads,
+				missing,
+				noDay,
+				secondReads,
+				secondFound: secondFound === null ? null : secondFound.item_id,
+				crossed
+			};
+		});
+
+		expect(probed.found, 'a lookup stopped finding the story it was given').toBe(probed.asks);
+		expect(probed.firstReads, `the day was walked once per lookup, ${probed.asks} times`).toBe(1);
+		expect(probed.missing, 'a story the day does not hold was invented').toBeNull();
+		expect(probed.noDay, 'a missing day did not answer null').toBeNull();
+		expect(probed.secondReads, 'a second day did not get an index of its own').toBe(1);
+		expect(probed.secondFound, 'the second day lost its own story').toBe('energy-9');
+		expect(probed.crossed, "one day answered with another day's story").toBeNull();
+	});
+
+	test('the held days are bounded, and a whole archive answer survives', async ({ page }) => {
+		// The bound is stated by two facts rather than by repeating its number: a
+		// session holds at least as many days as one screen of search results can
+		// name, and it does not hold every day it has ever visited.
+		const asked = new Intercepted();
+		await page.route('**/digest/**/digest.json', async (route) => {
+			const url = route.request().url();
+			asked.take(url);
+			const parts = /(\d{4})\/(\d{2})\/(\d{2})\/digest\.json$/.exec(url);
+			const date = parts ? `${parts[1]}-${parts[2]}-${parts[3]}` : DATE;
+			await route.fulfill({
+				contentType: 'application/json',
+				body: dayBody(`${date}T06:00`, [`ai-${date}`])
+			});
+		});
+
+		const visited: string[] = [];
+		for (const month of ['01', '02']) {
+			for (let day = 1; day <= 28; day += 1) {
+				visited.push(`2026-${month}-${String(day).padStart(2, '0')}`);
+			}
+		}
+
+		await armed(page);
+		await page.evaluate(async (dates: string[]) => {
+			const loader = (window as unknown as { dayLoader: Loader }).dayLoader;
+			for (const date of dates) await loader.loadDay(date);
+		}, visited);
+		const fetched = asked.count;
+		console.log(`[payload-state] days visited: ${visited.length}, interceptions: ${fetched}`);
+		expect(fetched, 'a visited day was never fetched').toBe(visited.length);
+
+		// The day the session just read.
+		await load(page, visited[visited.length - 1]!);
+		expect(asked.count, 'the day the session just read was dropped').toBe(fetched);
+
+		// A whole search answer back. `assist.result_limit` is what one answer can
+		// name, and `fetchDays` in the archive asks for every one of them.
+		const answer = assistConfig().result_limit;
+		await load(page, visited[visited.length - answer]!);
+		expect(asked.count, `a session did not hold one answer of ${answer} days`).toBe(fetched);
+
+		// And the first day of the session, long since left behind.
+		await load(page, visited[0]!);
+		expect(asked.count, 'the session held every day it had ever visited').toBe(fetched + 1);
 	});
 });
 

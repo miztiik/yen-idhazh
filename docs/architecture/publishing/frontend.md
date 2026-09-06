@@ -362,7 +362,9 @@ The owner asked for it. What ships is the narrow defensible version, which is a 
 - No results says so plainly, naming the day rather than the corpus.
 - The query is untrusted reader input matched against untrusted payload text: compared with a lowercased substring test, and never interpolated into a selector, a class, a URL or markup.
 
-**It reads the list the page is holding, never one it captured.** A reading route prerenders the head of its day and fetches the rest, so a filter that took a copy of the items at mount would narrow a fifteen-story seed for ever, with nothing on screen saying so. `matchItems` in `frontend/src/lib/day-shape.ts` takes the list as an argument for that reason, and `frontend/tests/filter-bar.spec.ts` drives it with a seed and then with the whole day.
+**It reads the list the page is holding, never one it captured.** A reading route prerenders the head of its day and fetches the rest, so a filter that took a copy of the items at mount would narrow a fifteen-story seed for ever, with nothing on screen saying so. The day's searchable text is lowercased once into a `DayIndex` (`indexDay` in `frontend/src/lib/day-shape.ts`) rather than once per keystroke, and that index is derived from the list the page is holding for exactly the same reason - an index built at mount is a captured list wearing a different name. `frontend/tests/filter-bar.spec.ts` drives the rule with a seed and then with the whole day, and asserts the index follows.
+
+**A story's fields are lowercased separately and never joined.** One string per story would be smaller and faster, and it would also make the end of a title and the start of its summary into a substring - so a needle would match text no story holds. `frontend/tests/day-list.spec.ts` asserts it cannot.
 
 Real cross-day search belongs on the archive, later, where the question "where was that thing about the reactor?" is genuinely unanswerable by scrolling.
 
