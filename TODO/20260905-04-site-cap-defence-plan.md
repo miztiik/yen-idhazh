@@ -27,7 +27,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | How fast is it actually filling | - | A | PENDING | - | - | - |
+| 1 | How fast is it actually filling | - | A | IN-FLIGHT #431 | yi-d01 | #431 | 3,023,156 B a published day, 5,572 an item; 240.6 published days to the 800 MiB alarm, so no escalation |
 | 2 | The cap moves into config and can only be lowered | 1 | B | PENDING | - | - | - |
 | 3 | A way to put bytes somewhere else | 1 | C | PENDING | - | - | - |
 | 4 | The cleanup says what it did not clear | 2 | D | PENDING | - | - | - |
