@@ -179,6 +179,33 @@ class SourceHealthRow(Model):
             raise ValueError("source_failures cannot exceed opportunities")
         return self
 
+    @property
+    def decisions(self) -> int:
+        """Addresses whose fate this source decided: it published or it lost them.
+
+        The honest denominator for a yield, and not `opportunities`. A model
+        that would not answer, a rate limit and a robots refusal all cost an
+        opportunity and none of them is the publisher's doing, so dividing by
+        the wider number charges a source for our outage. Measured 2026-09-06
+        over the committed view: `aljazeera-economy` is 78 of 115 offered and 78
+        of 79 decided - 68 percent against 99 percent, from the same two rows.
+
+        Derived rather than stored, so this file cannot disagree with itself and
+        the payload gains no field (CLAUDE.md section 11).
+        """
+        return self.publications + self.source_failures
+
+    @property
+    def source_yield(self) -> float | None:
+        """The share of its own decisions this source turned into a story.
+
+        `None` when it decided nothing, because 0 of 0 is not zero - it is a
+        source nobody has asked yet, and a page that prints 0 percent for it is
+        making an accusation the record cannot support.
+        """
+        decided = self.decisions
+        return self.publications / decided if decided else None
+
     @model_validator(mode="after")
     def _a_retirement_names_its_day(self) -> Self:
         """A day exactly when there is a retirement, so neither can be read alone."""

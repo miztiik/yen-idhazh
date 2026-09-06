@@ -259,19 +259,26 @@ def publish(
     generated_at: str,
     state_root: Path = config.REPO_ROOT / ledger.STATE_DIRNAME,
     path: Path = DEFAULT_PUBLIC_PATH,
-) -> Path:
-    """Read the committed record, fold it, and write the view.
+) -> SourceHealthView:
+    """Read the committed record, fold it, write the view, and hand it back.
 
     The health read is the one the quarantine reads - `HEALTH_WINDOW_DAYS`
     anchored on this run's date - because this file publishes the run's decision
-    rather than a second opinion about it.
+    rather than a second opinion about it. The item read is bounded by the same
+    number of days the census keeps, so nothing is opened that `_complete_dates`
+    would throw away.
+
+    Returns the view rather than the path because `yield_alarm` reads it and the
+    caller already holds the path it passed in.
     """
     health = ledger.load_health(state_root, today=date, within_days=ledger.HEALTH_WINDOW_DAYS)
     view = build(
         feeds=active_feeds(sources, [vertical.id for vertical in taxonomy.verticals]),
         collect=collect,
         health=health,
-        items=_load_items(state_root),
+        items=ledger.load_item_health(
+            state_root, today=date, within_days=collect.source_yield_min_complete_days
+        ),
         retired_on={
             row.endpoint_key: row.retired_on for row in ledger.load_retirements(state_root)
         },
@@ -281,18 +288,59 @@ def publish(
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(view.to_json(), encoding="utf-8", newline="\n")
-    return path
+    return view
 
 
-def _load_items(state_root: Path) -> list[ItemHealthRow]:
-    """Every item-health row on record, oldest shard first."""
-    directory = state_root / ledger.ITEM_HEALTH_DIRNAME
-    if not directory.exists():
-        return []
-    found: list[ItemHealthRow] = []
-    for shard in sorted(directory.glob("*.csv")):
-        found.extend(ledger.load_item_health_shard(shard))
-    return found
+def yield_alarm(
+    view: SourceHealthView, *, alarm_point: float, min_decisions: int
+) -> str | None:
+    """Name the sources that answer cleanly and return almost nothing.
+
+    The gap this closes: every other signal asks whether we could ask, and none
+    asks whether asking was worth it. `scmp-news` held permission `allowed`,
+    availability `answering` and HTTP 200 with fifty dated entries every run for
+    a fortnight while 123 of its 127 items failed extraction as `paywalled`. The
+    ratio was already on this view and already on the console, and nobody was
+    told (`docs/architecture/sources/discovery.md`, 2026-09-06).
+
+    The denominator is the addresses the source itself decided - its
+    publications plus its own losses - never `opportunities`. A model that would
+    not answer, a rate limit and a robots refusal are ours or nobody's, and
+    charging a publisher for our outage is how a true signal earns a false
+    positive. Measured 2026-09-06 over the committed view: `aljazeera-economy`
+    is 78 of 115 offered and 78 of 79 owned, so the wide denominator calls a
+    99 percent source a 68 percent one.
+
+    Reports rather than decides. Nothing here rests a feed, scales its rank or
+    edits `config/sources.json` - feed health is recorded, not configured
+    (`docs/architecture/sources/health.md`). A low yield is a claim about slots
+    we spent, not about whether the writing was any good, and only a person can
+    tell those apart.
+    """
+    named = [
+        row
+        for row in view.sources
+        if not row.retired
+        and row.permission is SourcePermission.ALLOWED
+        and row.availability is SourceAvailability.ANSWERING
+        and row.decisions >= min_decisions
+        and row.source_yield is not None
+        and row.source_yield < alarm_point
+    ]
+    if not named:
+        return None
+    worst = sorted(named, key=lambda row: (row.source_yield or 0.0, row.source_id))
+    listed = ", ".join(
+        f"{row.source_id} {row.publications}/{row.decisions} ({(row.source_yield or 0.0):.0%})"
+        for row in worst
+    )
+    return (
+        f"{len(worst)} source(s) answer but do not read, over {view.complete_dates} "
+        f"complete day(s): {listed}. The bar is {alarm_point:.0%} of the addresses a "
+        f"source owns, over at least {min_decisions} of them. Probe one with "
+        f"'python backend/utilities/probe_feeds.py --from-config feeds --id <id> "
+        f"--articles 5', then retire it in config/sources.json or leave it."
+    )
 
 
 def main() -> None:
@@ -307,7 +355,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     settings = config.load()
-    written = publish(
+    publish(
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         collect=settings.app.collect,
@@ -318,7 +366,7 @@ def main() -> None:
         state_root=args.state,
         path=args.out,
     )
-    print(written.relative_to(config.REPO_ROOT).as_posix())
+    print(args.out.relative_to(config.REPO_ROOT).as_posix())
 
 
 if __name__ == "__main__":
