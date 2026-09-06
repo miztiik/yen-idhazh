@@ -33,6 +33,7 @@ from idhazh import ledger, source_health
 from idhazh.cli import main, stage_validate_days
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
+    PAGES_HARD_CAP_MB,
     SUPERSEDED_COLLECT_NAMES,
     SUPERSEDED_RETENTION_NAMES,
     AppConfig,
@@ -41,6 +42,7 @@ from idhazh.contracts.app_config import (
     EvaluationConfig,
     ObservabilityConfig,
     PageWeightConfig,
+    RetentionConfig,
     UiConfig,
     VisualSide,
     months_a_window_can_touch,
@@ -235,6 +237,67 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
     assert minimal.retention.image_months == -1, "retention ships disabled"
     assert minimal.retention.dry_run is True
+    assert minimal.retention.pages_hard_cap_mb == PAGES_HARD_CAP_MB, (
+        "an unconfigured clone enforces the platform's own ceiling"
+    )
+
+
+def test_the_config_refuses_a_pages_cap_above_the_platforms_own() -> None:
+    """The direction the bound exists for. A cap config can raise is not a cap.
+
+    Rule #2 says the budget is the platform and not a preference. That held while
+    the 1024 was a module constant only because nobody edited it, which is not a
+    control. It is a control now: the schema refuses the edit, and the message
+    names the number it refused, so an operator reading it learns the bound
+    rather than only that the file is wrong.
+    """
+    with pytest.raises(ValidationError) as raised:
+        RetentionConfig(pages_hard_cap_mb=PAGES_HARD_CAP_MB + 1)
+    assert "less than or equal to 1024" in str(raised.value)
+
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw["retention"]["pages_hard_cap_mb"] = 2048
+    with pytest.raises(ValidationError) as from_file:
+        AppConfig.model_validate(raw)
+    assert "pages_hard_cap_mb" in str(from_file.value)
+    assert "1024" in str(from_file.value)
+
+
+def test_the_config_takes_a_pages_cap_below_the_platforms_own() -> None:
+    """The other arm, and the reason the field is here at all.
+
+    A bound only tested in the direction it permits is not a bound - it is a
+    default nobody has pushed on. Lowering is the whole use: it buys an earlier
+    and louder failure while there is still headroom to act in. The tuned fixture
+    carries 900 so a lowered cap is exercised by every round trip, not only here.
+    """
+    assert RetentionConfig(pages_hard_cap_mb=1).pages_hard_cap_mb == 1
+
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw["retention"]["pages_hard_cap_mb"] = 512
+    assert AppConfig.model_validate(raw).retention.pages_hard_cap_mb == 512
+
+    tuned = AppConfig.from_json(read_text(CONTRACT_FIXTURES_DIR / "app-config" / "tuned.json"))
+    assert tuned.retention.pages_hard_cap_mb == 900
+
+
+def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
+    """One reports and one stops, so one number cannot do both jobs.
+
+    Collapsing them gives a warning nobody may ignore or a failure that arrives
+    with no notice. The committed file spells both, 224 MB apart, and the tuned
+    fixture moves them independently - which is the shape that proves they are
+    two instruments rather than one written twice.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).retention
+    assert committed.site_budget_mb == 800
+    assert committed.pages_hard_cap_mb == PAGES_HARD_CAP_MB
+    assert committed.site_budget_mb < committed.pages_hard_cap_mb
+
+    tuned = AppConfig.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "app-config" / "tuned.json")
+    ).retention
+    assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
 
 
 def test_the_runtime_counters_are_on_without_being_asked_for() -> None:

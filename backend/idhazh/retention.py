@@ -11,6 +11,15 @@ deliberately not the same thing:
 - **The prune** removes rendered visuals older than a configured window. It
   ships disabled, in dry-run, behind a per-run delete fuse.
 
+**The alarm and the cap are two instruments and they stay apart.**
+`retention.site_budget_mb` is the alarm: it prints and stops nothing.
+`retention.pages_hard_cap_mb` is the cap: past it the step fails, because past
+it the bytes cannot be published at all. Merging them would leave one number
+doing a job it can only do badly - a warning nobody can ignore, or a failure
+that arrives with no notice. The cap is a knob in one direction only. Its field
+is bounded by `PAGES_HARD_CAP_MB`, the platform's own ceiling, so a config edit
+can make this gate stricter and can never make it looser (Rule #2).
+
 **The alarm measures the built bundle and never the committed payload tree.**
 Those are two different trees and they grow at different rates, so one cannot
 stand in for the other. Measured 2026-08-27 on this checkout: the payload tree
@@ -108,16 +117,13 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger, publish_telemetry
-from idhazh.contracts.app_config import ObservabilityConfig, RetentionConfig
+from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 
 BYTES_PER_MB: Final = 1024 * 1024
-#: The platform's own hard ceiling. Not a knob: it is a property of the host,
-#: and making it editable would invite raising it instead of shrinking the site.
-PAGES_HARD_CAP_MB: Final = 1024
 
 _VISUAL_SUFFIXES: Final[frozenset[str]] = frozenset({".png", ".webp", ".jpg", ".jpeg", ".svg"})
 
@@ -211,11 +217,12 @@ def over_budget(size: SiteSize, config: RetentionConfig) -> bool:
 
 
 def over_cap(size: SiteSize, *, cap_mb: int = PAGES_HARD_CAP_MB) -> bool:
-    """Past the platform's own ceiling, which is where reporting stops being enough.
+    """Past the cap in force, which is where reporting stops being enough.
 
     `cap_mb` is a parameter for the same reason `prune` takes `today`: a test has
-    to be able to cross the line without building a one-gigabyte fixture. No
-    caller passes it, and the CLI offers no flag for it.
+    to be able to cross the line without building a one-gigabyte fixture. The
+    step passes `retention.pages_hard_cap_mb` down from config, and the default
+    here is the platform's own ceiling, which is the most that knob may name.
     """
     return size.megabytes > cap_mb
 
@@ -248,17 +255,17 @@ def days_to_cap(size: SiteSize, items_per_day: int, *, cap_mb: int = PAGES_HARD_
     return headroom_mb(size, cap_mb=cap_mb) * BYTES_PER_MB / daily_growth_bytes(size, items_per_day)
 
 
-def budget_alarm(
-    size: SiteSize, config: RetentionConfig, *, cap_mb: int = PAGES_HARD_CAP_MB
-) -> str | None:
+def budget_alarm(size: SiteSize, config: RetentionConfig) -> str | None:
     """The alarm's words, or None when the built site is inside budget.
 
-    Below the platform cap the alarm only reports - it fails no build and deletes
-    nothing - so the run that meets it needs a line it can act on: the size, the
-    alarm point it crossed, and the headroom left to the cap.
+    Below the cap the alarm only reports - it fails no build and deletes nothing -
+    so the run that meets it needs a line it can act on: the size, the alarm point
+    it crossed, and the headroom left to the cap. Both numbers come from the same
+    config, so an operator who lowers the cap sees the shorter headroom here too.
     """
     if not over_budget(size, config):
         return None
+    cap_mb = config.pages_hard_cap_mb
     return (
         f"published site is {size.megabytes:.0f} MB, past the "
         f"{config.site_budget_mb} MB alarm point, with "
