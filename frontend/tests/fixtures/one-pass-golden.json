@@ -1,0 +1,2295 @@
+{
+	"machineCounters": {
+		"runs": [
+			{
+				"runId": "2026-05-04-2",
+				"date": "2026-05-04",
+				"shards": 4,
+				"reported": [
+					{
+						"shard": 0,
+						"scrapedAt": "2026-05-04T00:00:00Z",
+						"readSeconds": 1402,
+						"writeSeconds": 840,
+						"readPct": 63,
+						"promptTokens": 50738,
+						"cachedTokens": 6342,
+						"cachedPct": 11,
+						"writtenTokens": 7509,
+						"readTokensPerSecond": 36.189728958630525,
+						"writeTokensPerSecond": 8.939285714285715,
+						"longestSequence": 5626,
+						"contextUsedPct": 69,
+						"jobSeconds": 2544,
+						"jobUsedPct": 28,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 94,
+						"peakRssBytes": 12804759416,
+						"modelLoadMs": 3823,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 1,
+						"scrapedAt": "2026-05-04T01:00:00Z",
+						"readSeconds": 924,
+						"writeSeconds": 995,
+						"readPct": 48,
+						"promptTokens": 53367,
+						"cachedTokens": 6671,
+						"cachedPct": 11,
+						"writtenTokens": 7777,
+						"readTokensPerSecond": 57.756493506493506,
+						"writeTokensPerSecond": 7.8160804020100505,
+						"longestSequence": 4947,
+						"contextUsedPct": 60,
+						"jobSeconds": 3227,
+						"jobUsedPct": 36,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 91,
+						"peakRssBytes": 12899775660,
+						"modelLoadMs": 3753,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 2,
+						"scrapedAt": "2026-05-04T02:00:00Z",
+						"readSeconds": 987,
+						"writeSeconds": 735,
+						"readPct": 57,
+						"promptTokens": 51612,
+						"cachedTokens": 6452,
+						"cachedPct": 11,
+						"writtenTokens": 6052,
+						"readTokensPerSecond": 52.29179331306991,
+						"writeTokensPerSecond": 8.234013605442177,
+						"longestSequence": 5271,
+						"contextUsedPct": 64,
+						"jobSeconds": 3415,
+						"jobUsedPct": 38,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 94,
+						"peakRssBytes": 12882034328,
+						"modelLoadMs": 3841,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 3,
+						"scrapedAt": "2026-05-04T03:00:00Z",
+						"readSeconds": 1084,
+						"writeSeconds": 789,
+						"readPct": 58,
+						"promptTokens": 47089,
+						"cachedTokens": 5886,
+						"cachedPct": 11,
+						"writtenTokens": 7526,
+						"readTokensPerSecond": 43.440036900369,
+						"writeTokensPerSecond": 9.538656527249683,
+						"longestSequence": 4111,
+						"contextUsedPct": 50,
+						"jobSeconds": 2626,
+						"jobUsedPct": 29,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 88,
+						"peakRssBytes": 12408101714,
+						"modelLoadMs": 4094,
+						"slotsPerDecode": 1
+					}
+				],
+				"readSeconds": {
+					"value": 4397,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeSeconds": {
+					"value": 3359,
+					"from": 4,
+					"outOf": 4
+				},
+				"readPct": {
+					"value": 57,
+					"from": 4,
+					"outOf": 4
+				},
+				"promptTokens": {
+					"value": 202806,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedTokens": {
+					"value": 25351,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedPct": {
+					"value": 11,
+					"from": 4,
+					"outOf": 4
+				},
+				"readTokensPerSecond": {
+					"value": 46.12372071867182,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeTokensPerSecond": {
+					"value": 8.593033640964572,
+					"from": 4,
+					"outOf": 4
+				},
+				"readSpread": {
+					"value": 1.5959360616520932,
+					"from": 4,
+					"outOf": 4
+				},
+				"longestSequence": {
+					"value": 5626,
+					"from": 4,
+					"outOf": 4
+				},
+				"contextUsedPct": {
+					"value": 69,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestJobSeconds": {
+					"value": 3415,
+					"from": 4,
+					"outOf": 4
+				},
+				"jobUsedPct": {
+					"value": 38,
+					"from": 4,
+					"outOf": 4
+				},
+				"cpuModels": {
+					"value": [
+						"AMD EPYC 9V45",
+						"AMD EPYC 9V74"
+					],
+					"from": 4,
+					"outOf": 4
+				},
+				"lowestCpuBusyPct": {
+					"value": 88,
+					"from": 4,
+					"outOf": 4
+				},
+				"peakRssBytes": {
+					"value": 12899775660,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestModelLoadMs": {
+					"value": 4094,
+					"from": 4,
+					"outOf": 4
+				},
+				"slotsPerDecode": {
+					"value": 1,
+					"from": 4,
+					"outOf": 4
+				},
+				"clocks": {
+					"ledger": {
+						"tokens": 41021,
+						"seconds": 613.444,
+						"parts": 12,
+						"rate": 66.86999954356062
+					},
+					"server": {
+						"tokens": 202806,
+						"seconds": 4397,
+						"parts": 4,
+						"rate": 46.12372071867182
+					},
+					"gapPct": 44.97962979055653,
+					"agrees": false
+				}
+			},
+			{
+				"runId": "2026-05-04-1",
+				"date": "2026-05-04",
+				"shards": 4,
+				"reported": [
+					{
+						"shard": 0,
+						"scrapedAt": "2026-05-04T00:00:00Z",
+						"readSeconds": 1349,
+						"writeSeconds": 784,
+						"readPct": 63,
+						"promptTokens": 49206,
+						"cachedTokens": 6151,
+						"cachedPct": 11,
+						"writtenTokens": 7133,
+						"readTokensPerSecond": 36.475908080059305,
+						"writeTokensPerSecond": 9.098214285714286,
+						"longestSequence": 5282,
+						"contextUsedPct": 64,
+						"jobSeconds": 2728,
+						"jobUsedPct": 30,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 95,
+						"peakRssBytes": 12029380949,
+						"modelLoadMs": 3948,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 1,
+						"scrapedAt": "2026-05-04T01:00:00Z",
+						"readSeconds": 1040,
+						"writeSeconds": 723,
+						"readPct": 59,
+						"promptTokens": 56302,
+						"cachedTokens": 7038,
+						"cachedPct": 11,
+						"writtenTokens": 7607,
+						"readTokensPerSecond": 54.136538461538464,
+						"writeTokensPerSecond": 10.521438450899032,
+						"longestSequence": 5378,
+						"contextUsedPct": 66,
+						"jobSeconds": 3533,
+						"jobUsedPct": 39,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 86,
+						"peakRssBytes": 12276799221,
+						"modelLoadMs": 3867,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 2,
+						"scrapedAt": "2026-05-04T02:00:00Z",
+						"readSeconds": 1055,
+						"writeSeconds": 864,
+						"readPct": 55,
+						"promptTokens": 59775,
+						"cachedTokens": 7472,
+						"cachedPct": 11,
+						"writtenTokens": 6750,
+						"readTokensPerSecond": 56.65876777251185,
+						"writeTokensPerSecond": 7.8125,
+						"longestSequence": 5061,
+						"contextUsedPct": 62,
+						"jobSeconds": 3455,
+						"jobUsedPct": 38,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 86,
+						"peakRssBytes": 12467881078,
+						"modelLoadMs": 4290,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 3,
+						"scrapedAt": "2026-05-04T03:00:00Z",
+						"readSeconds": 1043,
+						"writeSeconds": 871,
+						"readPct": 54,
+						"promptTokens": 59055,
+						"cachedTokens": 7382,
+						"cachedPct": 11,
+						"writtenTokens": 7858,
+						"readTokensPerSecond": 56.62032598274209,
+						"writeTokensPerSecond": 9.021814006888635,
+						"longestSequence": 5587,
+						"contextUsedPct": 68,
+						"jobSeconds": 2900,
+						"jobUsedPct": 32,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 93,
+						"peakRssBytes": 12597105374,
+						"modelLoadMs": 3546,
+						"slotsPerDecode": 1
+					}
+				],
+				"readSeconds": {
+					"value": 4487,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeSeconds": {
+					"value": 3242,
+					"from": 4,
+					"outOf": 4
+				},
+				"readPct": {
+					"value": 58,
+					"from": 4,
+					"outOf": 4
+				},
+				"promptTokens": {
+					"value": 224338,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedTokens": {
+					"value": 28043,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedPct": {
+					"value": 11,
+					"from": 4,
+					"outOf": 4
+				},
+				"readTokensPerSecond": {
+					"value": 49.99732560731,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeTokensPerSecond": {
+					"value": 9.052436767427514,
+					"from": 4,
+					"outOf": 4
+				},
+				"readSpread": {
+					"value": 1.5533202805576247,
+					"from": 4,
+					"outOf": 4
+				},
+				"longestSequence": {
+					"value": 5587,
+					"from": 4,
+					"outOf": 4
+				},
+				"contextUsedPct": {
+					"value": 68,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestJobSeconds": {
+					"value": 3533,
+					"from": 4,
+					"outOf": 4
+				},
+				"jobUsedPct": {
+					"value": 39,
+					"from": 4,
+					"outOf": 4
+				},
+				"cpuModels": {
+					"value": [
+						"AMD EPYC 9V45",
+						"AMD EPYC 9V74"
+					],
+					"from": 4,
+					"outOf": 4
+				},
+				"lowestCpuBusyPct": {
+					"value": 86,
+					"from": 4,
+					"outOf": 4
+				},
+				"peakRssBytes": {
+					"value": 12597105374,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestModelLoadMs": {
+					"value": 4290,
+					"from": 4,
+					"outOf": 4
+				},
+				"slotsPerDecode": {
+					"value": 1,
+					"from": 4,
+					"outOf": 4
+				},
+				"clocks": {
+					"ledger": {
+						"tokens": 43987,
+						"seconds": 785.894,
+						"parts": 12,
+						"rate": 55.970652530748424
+					},
+					"server": {
+						"tokens": 224338,
+						"seconds": 4487,
+						"parts": 4,
+						"rate": 49.99732560731
+					},
+					"gapPct": 11.947292881931816,
+					"agrees": false
+				}
+			},
+			{
+				"runId": "2026-05-03-2",
+				"date": "2026-05-03",
+				"shards": 4,
+				"reported": [
+					{
+						"shard": 0,
+						"scrapedAt": "2026-05-03T00:00:00Z",
+						"readSeconds": 1333,
+						"writeSeconds": 896,
+						"readPct": 60,
+						"promptTokens": 59628,
+						"cachedTokens": 7454,
+						"cachedPct": 11,
+						"writtenTokens": 6414,
+						"readTokensPerSecond": 44.73218304576144,
+						"writeTokensPerSecond": 7.158482142857143,
+						"longestSequence": 4387,
+						"contextUsedPct": 54,
+						"jobSeconds": 2426,
+						"jobUsedPct": 27,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 85,
+						"peakRssBytes": 12653456896,
+						"modelLoadMs": 3961,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 1,
+						"scrapedAt": "2026-05-03T01:00:00Z",
+						"readSeconds": 1260,
+						"writeSeconds": 974,
+						"readPct": 56,
+						"promptTokens": 50277,
+						"cachedTokens": 6285,
+						"cachedPct": 11,
+						"writtenTokens": 7528,
+						"readTokensPerSecond": 39.90238095238095,
+						"writeTokensPerSecond": 7.728952772073922,
+						"longestSequence": 4770,
+						"contextUsedPct": 58,
+						"jobSeconds": 3219,
+						"jobUsedPct": 36,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 93,
+						"peakRssBytes": 12699363412,
+						"modelLoadMs": 3596,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 2,
+						"scrapedAt": "2026-05-03T02:00:00Z",
+						"readSeconds": 1468,
+						"writeSeconds": 768,
+						"readPct": 66,
+						"promptTokens": 50198,
+						"cachedTokens": 6275,
+						"cachedPct": 11,
+						"writtenTokens": 6126,
+						"readTokensPerSecond": 34.194822888283376,
+						"writeTokensPerSecond": 7.9765625,
+						"longestSequence": 5787,
+						"contextUsedPct": 71,
+						"jobSeconds": 3447,
+						"jobUsedPct": 38,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 89,
+						"peakRssBytes": 12022778534,
+						"modelLoadMs": 4040,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 3,
+						"scrapedAt": "2026-05-03T03:00:00Z",
+						"readSeconds": 1464,
+						"writeSeconds": 831,
+						"readPct": 64,
+						"promptTokens": 59932,
+						"cachedTokens": 7492,
+						"cachedPct": 11,
+						"writtenTokens": 7882,
+						"readTokensPerSecond": 40.93715846994535,
+						"writeTokensPerSecond": 9.484957882069795,
+						"longestSequence": 4646,
+						"contextUsedPct": 57,
+						"jobSeconds": 2985,
+						"jobUsedPct": 33,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 92,
+						"peakRssBytes": 12383248213,
+						"modelLoadMs": 3874,
+						"slotsPerDecode": 1
+					}
+				],
+				"readSeconds": {
+					"value": 5525,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeSeconds": {
+					"value": 3469,
+					"from": 4,
+					"outOf": 4
+				},
+				"readPct": {
+					"value": 61,
+					"from": 4,
+					"outOf": 4
+				},
+				"promptTokens": {
+					"value": 220035,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedTokens": {
+					"value": 27506,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedPct": {
+					"value": 11,
+					"from": 4,
+					"outOf": 4
+				},
+				"readTokensPerSecond": {
+					"value": 39.825339366515834,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeTokensPerSecond": {
+					"value": 8.057076967425772,
+					"from": 4,
+					"outOf": 4
+				},
+				"readSpread": {
+					"value": 1.3081565941108768,
+					"from": 4,
+					"outOf": 4
+				},
+				"longestSequence": {
+					"value": 5787,
+					"from": 4,
+					"outOf": 4
+				},
+				"contextUsedPct": {
+					"value": 71,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestJobSeconds": {
+					"value": 3447,
+					"from": 4,
+					"outOf": 4
+				},
+				"jobUsedPct": {
+					"value": 38,
+					"from": 4,
+					"outOf": 4
+				},
+				"cpuModels": {
+					"value": [
+						"AMD EPYC 9V45",
+						"AMD EPYC 9V74"
+					],
+					"from": 4,
+					"outOf": 4
+				},
+				"lowestCpuBusyPct": {
+					"value": 85,
+					"from": 4,
+					"outOf": 4
+				},
+				"peakRssBytes": {
+					"value": 12699363412,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestModelLoadMs": {
+					"value": 4040,
+					"from": 4,
+					"outOf": 4
+				},
+				"slotsPerDecode": {
+					"value": 1,
+					"from": 4,
+					"outOf": 4
+				},
+				"clocks": {
+					"ledger": {
+						"tokens": 45718,
+						"seconds": 696.802,
+						"parts": 12,
+						"rate": 65.61117792428838
+					},
+					"server": {
+						"tokens": 220035,
+						"seconds": 5525,
+						"parts": 4,
+						"rate": 39.825339366515834
+					},
+					"gapPct": 64.74731657767781,
+					"agrees": false
+				}
+			},
+			{
+				"runId": "2026-05-03-1",
+				"date": "2026-05-03",
+				"shards": 4,
+				"reported": [
+					{
+						"shard": 0,
+						"scrapedAt": "2026-05-03T00:00:00Z",
+						"readSeconds": 983,
+						"writeSeconds": 989,
+						"readPct": 50,
+						"promptTokens": 56957,
+						"cachedTokens": 7120,
+						"cachedPct": 11,
+						"writtenTokens": 7452,
+						"readTokensPerSecond": 57.942014242115974,
+						"writeTokensPerSecond": 7.534883720930233,
+						"longestSequence": 4190,
+						"contextUsedPct": 51,
+						"jobSeconds": 3577,
+						"jobUsedPct": 40,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 93,
+						"peakRssBytes": 12225889770,
+						"modelLoadMs": 3824,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 1,
+						"scrapedAt": "2026-05-03T01:00:00Z",
+						"readSeconds": 1495,
+						"writeSeconds": 852,
+						"readPct": 64,
+						"promptTokens": 45619,
+						"cachedTokens": 5702,
+						"cachedPct": 11,
+						"writtenTokens": 6269,
+						"readTokensPerSecond": 30.51438127090301,
+						"writeTokensPerSecond": 7.357981220657277,
+						"longestSequence": 5306,
+						"contextUsedPct": 65,
+						"jobSeconds": 3470,
+						"jobUsedPct": 39,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 91,
+						"peakRssBytes": 12086228535,
+						"modelLoadMs": 4130,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 2,
+						"scrapedAt": "2026-05-03T02:00:00Z",
+						"readSeconds": 906,
+						"writeSeconds": 861,
+						"readPct": 51,
+						"promptTokens": 41144,
+						"cachedTokens": 5143,
+						"cachedPct": 11,
+						"writtenTokens": 7988,
+						"readTokensPerSecond": 45.41280353200883,
+						"writeTokensPerSecond": 9.277584204413472,
+						"longestSequence": 4834,
+						"contextUsedPct": 59,
+						"jobSeconds": 2424,
+						"jobUsedPct": 27,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 87,
+						"peakRssBytes": 12552996150,
+						"modelLoadMs": 3622,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 3,
+						"scrapedAt": "2026-05-03T03:00:00Z",
+						"readSeconds": 1064,
+						"writeSeconds": 740,
+						"readPct": 59,
+						"promptTokens": 44074,
+						"cachedTokens": 5509,
+						"cachedPct": 11,
+						"writtenTokens": 6666,
+						"readTokensPerSecond": 41.42293233082707,
+						"writeTokensPerSecond": 9.008108108108107,
+						"longestSequence": 5280,
+						"contextUsedPct": 64,
+						"jobSeconds": 2978,
+						"jobUsedPct": 33,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 87,
+						"peakRssBytes": 12326983646,
+						"modelLoadMs": 4052,
+						"slotsPerDecode": 1
+					}
+				],
+				"readSeconds": {
+					"value": 4448,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeSeconds": {
+					"value": 3442,
+					"from": 4,
+					"outOf": 4
+				},
+				"readPct": {
+					"value": 56,
+					"from": 4,
+					"outOf": 4
+				},
+				"promptTokens": {
+					"value": 187794,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedTokens": {
+					"value": 23474,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedPct": {
+					"value": 11,
+					"from": 4,
+					"outOf": 4
+				},
+				"readTokensPerSecond": {
+					"value": 42.21987410071942,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeTokensPerSecond": {
+					"value": 8.243753631609529,
+					"from": 4,
+					"outOf": 4
+				},
+				"readSpread": {
+					"value": 1.898842835045998,
+					"from": 4,
+					"outOf": 4
+				},
+				"longestSequence": {
+					"value": 5306,
+					"from": 4,
+					"outOf": 4
+				},
+				"contextUsedPct": {
+					"value": 65,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestJobSeconds": {
+					"value": 3577,
+					"from": 4,
+					"outOf": 4
+				},
+				"jobUsedPct": {
+					"value": 40,
+					"from": 4,
+					"outOf": 4
+				},
+				"cpuModels": {
+					"value": [
+						"AMD EPYC 9V45",
+						"AMD EPYC 9V74"
+					],
+					"from": 4,
+					"outOf": 4
+				},
+				"lowestCpuBusyPct": {
+					"value": 87,
+					"from": 4,
+					"outOf": 4
+				},
+				"peakRssBytes": {
+					"value": 12552996150,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestModelLoadMs": {
+					"value": 4130,
+					"from": 4,
+					"outOf": 4
+				},
+				"slotsPerDecode": {
+					"value": 1,
+					"from": 4,
+					"outOf": 4
+				},
+				"clocks": {
+					"ledger": {
+						"tokens": 43721,
+						"seconds": 804.659,
+						"parts": 12,
+						"rate": 54.334817605967245
+					},
+					"server": {
+						"tokens": 187794,
+						"seconds": 4448,
+						"parts": 4,
+						"rate": 42.21987410071942
+					},
+					"gapPct": 28.694883069396422,
+					"agrees": false
+				}
+			},
+			{
+				"runId": "2026-05-02-2",
+				"date": "2026-05-02",
+				"shards": 4,
+				"reported": [
+					{
+						"shard": 0,
+						"scrapedAt": "2026-05-02T00:00:00Z",
+						"readSeconds": 900,
+						"writeSeconds": 728,
+						"readPct": 55,
+						"promptTokens": 41378,
+						"cachedTokens": 5172,
+						"cachedPct": 11,
+						"writtenTokens": 6121,
+						"readTokensPerSecond": 45.97555555555556,
+						"writeTokensPerSecond": 8.407967032967033,
+						"longestSequence": 5840,
+						"contextUsedPct": 71,
+						"jobSeconds": 2917,
+						"jobUsedPct": 32,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 89,
+						"peakRssBytes": 12926258351,
+						"modelLoadMs": 3834,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 1,
+						"scrapedAt": "2026-05-02T01:00:00Z",
+						"readSeconds": 1357,
+						"writeSeconds": 745,
+						"readPct": 65,
+						"promptTokens": 58094,
+						"cachedTokens": 7262,
+						"cachedPct": 11,
+						"writtenTokens": 6800,
+						"readTokensPerSecond": 42.81061164333088,
+						"writeTokensPerSecond": 9.12751677852349,
+						"longestSequence": 4971,
+						"contextUsedPct": 61,
+						"jobSeconds": 2849,
+						"jobUsedPct": 32,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 86,
+						"peakRssBytes": 12325210063,
+						"modelLoadMs": 3913,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 2,
+						"scrapedAt": "2026-05-02T02:00:00Z",
+						"readSeconds": 1147,
+						"writeSeconds": 879,
+						"readPct": 57,
+						"promptTokens": 50030,
+						"cachedTokens": 6254,
+						"cachedPct": 11,
+						"writtenTokens": 7264,
+						"readTokensPerSecond": 43.61813426329555,
+						"writeTokensPerSecond": 8.263936291240045,
+						"longestSequence": 4993,
+						"contextUsedPct": 61,
+						"jobSeconds": 2993,
+						"jobUsedPct": 33,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 91,
+						"peakRssBytes": 12673018713,
+						"modelLoadMs": 4067,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 3,
+						"scrapedAt": "2026-05-02T03:00:00Z",
+						"readSeconds": 1351,
+						"writeSeconds": 725,
+						"readPct": 65,
+						"promptTokens": 55354,
+						"cachedTokens": 6919,
+						"cachedPct": 11,
+						"writtenTokens": 6505,
+						"readTokensPerSecond": 40.97261287934863,
+						"writeTokensPerSecond": 8.972413793103449,
+						"longestSequence": 5247,
+						"contextUsedPct": 64,
+						"jobSeconds": 3063,
+						"jobUsedPct": 34,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 88,
+						"peakRssBytes": 12693171828,
+						"modelLoadMs": 3559,
+						"slotsPerDecode": 1
+					}
+				],
+				"readSeconds": {
+					"value": 4755,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeSeconds": {
+					"value": 3077,
+					"from": 4,
+					"outOf": 4
+				},
+				"readPct": {
+					"value": 61,
+					"from": 4,
+					"outOf": 4
+				},
+				"promptTokens": {
+					"value": 204856,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedTokens": {
+					"value": 25607,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedPct": {
+					"value": 11,
+					"from": 4,
+					"outOf": 4
+				},
+				"readTokensPerSecond": {
+					"value": 43.08222923238696,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeTokensPerSecond": {
+					"value": 8.67403314917127,
+					"from": 4,
+					"outOf": 4
+				},
+				"readSpread": {
+					"value": 1.1221045553267255,
+					"from": 4,
+					"outOf": 4
+				},
+				"longestSequence": {
+					"value": 5840,
+					"from": 4,
+					"outOf": 4
+				},
+				"contextUsedPct": {
+					"value": 71,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestJobSeconds": {
+					"value": 3063,
+					"from": 4,
+					"outOf": 4
+				},
+				"jobUsedPct": {
+					"value": 34,
+					"from": 4,
+					"outOf": 4
+				},
+				"cpuModels": {
+					"value": [
+						"AMD EPYC 9V45",
+						"AMD EPYC 9V74"
+					],
+					"from": 4,
+					"outOf": 4
+				},
+				"lowestCpuBusyPct": {
+					"value": 86,
+					"from": 4,
+					"outOf": 4
+				},
+				"peakRssBytes": {
+					"value": 12926258351,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestModelLoadMs": {
+					"value": 4067,
+					"from": 4,
+					"outOf": 4
+				},
+				"slotsPerDecode": {
+					"value": 1,
+					"from": 4,
+					"outOf": 4
+				},
+				"clocks": {
+					"ledger": {
+						"tokens": 36811,
+						"seconds": 705.126,
+						"parts": 12,
+						"rate": 52.204854167907584
+					},
+					"server": {
+						"tokens": 204856,
+						"seconds": 4755,
+						"parts": 4,
+						"rate": 43.08222923238696
+					},
+					"gapPct": 21.174913875307816,
+					"agrees": false
+				}
+			},
+			{
+				"runId": "2026-05-02-1",
+				"date": "2026-05-02",
+				"shards": 4,
+				"reported": [
+					{
+						"shard": 0,
+						"scrapedAt": "2026-05-02T00:00:00Z",
+						"readSeconds": 1121,
+						"writeSeconds": 803,
+						"readPct": 58,
+						"promptTokens": 45143,
+						"cachedTokens": 5643,
+						"cachedPct": 11,
+						"writtenTokens": 7594,
+						"readTokensPerSecond": 40.270294380017845,
+						"writeTokensPerSecond": 9.45703611457036,
+						"longestSequence": 5951,
+						"contextUsedPct": 73,
+						"jobSeconds": 3061,
+						"jobUsedPct": 34,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 92,
+						"peakRssBytes": 12844114566,
+						"modelLoadMs": 3527,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 1,
+						"scrapedAt": "2026-05-02T01:00:00Z",
+						"readSeconds": 1129,
+						"writeSeconds": 816,
+						"readPct": 58,
+						"promptTokens": 52928,
+						"cachedTokens": 6616,
+						"cachedPct": 11,
+						"writtenTokens": 6327,
+						"readTokensPerSecond": 46.88042515500443,
+						"writeTokensPerSecond": 7.7536764705882355,
+						"longestSequence": 4971,
+						"contextUsedPct": 61,
+						"jobSeconds": 3551,
+						"jobUsedPct": 39,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 91,
+						"peakRssBytes": 12911850523,
+						"modelLoadMs": 3683,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 2,
+						"scrapedAt": "2026-05-02T02:00:00Z",
+						"readSeconds": 1173,
+						"writeSeconds": 905,
+						"readPct": 56,
+						"promptTokens": 52142,
+						"cachedTokens": 6518,
+						"cachedPct": 11,
+						"writtenTokens": 6218,
+						"readTokensPerSecond": 44.451832907075875,
+						"writeTokensPerSecond": 6.870718232044199,
+						"longestSequence": 4472,
+						"contextUsedPct": 55,
+						"jobSeconds": 3027,
+						"jobUsedPct": 34,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 92,
+						"peakRssBytes": 12478593218,
+						"modelLoadMs": 3989,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 3,
+						"scrapedAt": "2026-05-02T03:00:00Z",
+						"readSeconds": 1277,
+						"writeSeconds": 729,
+						"readPct": 64,
+						"promptTokens": 58062,
+						"cachedTokens": 7258,
+						"cachedPct": 11,
+						"writtenTokens": 7105,
+						"readTokensPerSecond": 45.46750195771339,
+						"writeTokensPerSecond": 9.746227709190672,
+						"longestSequence": 5426,
+						"contextUsedPct": 66,
+						"jobSeconds": 3282,
+						"jobUsedPct": 36,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 87,
+						"peakRssBytes": 12433501524,
+						"modelLoadMs": 3788,
+						"slotsPerDecode": 1
+					}
+				],
+				"readSeconds": {
+					"value": 4700,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeSeconds": {
+					"value": 3253,
+					"from": 4,
+					"outOf": 4
+				},
+				"readPct": {
+					"value": 59,
+					"from": 4,
+					"outOf": 4
+				},
+				"promptTokens": {
+					"value": 208275,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedTokens": {
+					"value": 26035,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedPct": {
+					"value": 11,
+					"from": 4,
+					"outOf": 4
+				},
+				"readTokensPerSecond": {
+					"value": 44.31382978723404,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeTokensPerSecond": {
+					"value": 8.375038426068246,
+					"from": 4,
+					"outOf": 4
+				},
+				"readSpread": {
+					"value": 1.16414408875706,
+					"from": 4,
+					"outOf": 4
+				},
+				"longestSequence": {
+					"value": 5951,
+					"from": 4,
+					"outOf": 4
+				},
+				"contextUsedPct": {
+					"value": 73,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestJobSeconds": {
+					"value": 3551,
+					"from": 4,
+					"outOf": 4
+				},
+				"jobUsedPct": {
+					"value": 39,
+					"from": 4,
+					"outOf": 4
+				},
+				"cpuModels": {
+					"value": [
+						"AMD EPYC 9V45",
+						"AMD EPYC 9V74"
+					],
+					"from": 4,
+					"outOf": 4
+				},
+				"lowestCpuBusyPct": {
+					"value": 87,
+					"from": 4,
+					"outOf": 4
+				},
+				"peakRssBytes": {
+					"value": 12911850523,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestModelLoadMs": {
+					"value": 3989,
+					"from": 4,
+					"outOf": 4
+				},
+				"slotsPerDecode": {
+					"value": 1,
+					"from": 4,
+					"outOf": 4
+				},
+				"clocks": {
+					"ledger": {
+						"tokens": 34552,
+						"seconds": 698.276,
+						"parts": 12,
+						"rate": 49.481866769013976
+					},
+					"server": {
+						"tokens": 208275,
+						"seconds": 4700,
+						"parts": 4,
+						"rate": 44.31382978723404
+					},
+					"gapPct": 11.662356890824963,
+					"agrees": false
+				}
+			},
+			{
+				"runId": "2026-05-01-2",
+				"date": "2026-05-01",
+				"shards": 4,
+				"reported": [
+					{
+						"shard": 0,
+						"scrapedAt": "2026-05-01T00:00:00Z",
+						"readSeconds": 1423,
+						"writeSeconds": 981,
+						"readPct": 59,
+						"promptTokens": 45655,
+						"cachedTokens": 5707,
+						"cachedPct": 11,
+						"writtenTokens": 7502,
+						"readTokensPerSecond": 32.083626141953616,
+						"writeTokensPerSecond": 7.64729867482161,
+						"longestSequence": 4309,
+						"contextUsedPct": 53,
+						"jobSeconds": 2955,
+						"jobUsedPct": 33,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 91,
+						"peakRssBytes": 12570780359,
+						"modelLoadMs": 3830,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 1,
+						"scrapedAt": "2026-05-01T01:00:00Z",
+						"readSeconds": 1270,
+						"writeSeconds": 714,
+						"readPct": 64,
+						"promptTokens": 45077,
+						"cachedTokens": 5635,
+						"cachedPct": 11,
+						"writtenTokens": 6911,
+						"readTokensPerSecond": 35.49370078740157,
+						"writeTokensPerSecond": 9.679271708683473,
+						"longestSequence": 4275,
+						"contextUsedPct": 52,
+						"jobSeconds": 2443,
+						"jobUsedPct": 27,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 92,
+						"peakRssBytes": 12400591368,
+						"modelLoadMs": 3966,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 2,
+						"scrapedAt": "2026-05-01T02:00:00Z",
+						"readSeconds": 1497,
+						"writeSeconds": 749,
+						"readPct": 67,
+						"promptTokens": 45593,
+						"cachedTokens": 5699,
+						"cachedPct": 11,
+						"writtenTokens": 6286,
+						"readTokensPerSecond": 30.4562458249833,
+						"writeTokensPerSecond": 8.392523364485982,
+						"longestSequence": 5032,
+						"contextUsedPct": 61,
+						"jobSeconds": 2734,
+						"jobUsedPct": 30,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 88,
+						"peakRssBytes": 12732275740,
+						"modelLoadMs": 3909,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 3,
+						"scrapedAt": "2026-05-01T03:00:00Z",
+						"readSeconds": 1225,
+						"writeSeconds": 886,
+						"readPct": 58,
+						"promptTokens": 44049,
+						"cachedTokens": 5506,
+						"cachedPct": 11,
+						"writtenTokens": 6390,
+						"readTokensPerSecond": 35.95836734693878,
+						"writeTokensPerSecond": 7.212189616252822,
+						"longestSequence": 4298,
+						"contextUsedPct": 52,
+						"jobSeconds": 2482,
+						"jobUsedPct": 28,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 92,
+						"peakRssBytes": 12981411989,
+						"modelLoadMs": 3521,
+						"slotsPerDecode": 1
+					}
+				],
+				"readSeconds": {
+					"value": 5415,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeSeconds": {
+					"value": 3330,
+					"from": 4,
+					"outOf": 4
+				},
+				"readPct": {
+					"value": 62,
+					"from": 4,
+					"outOf": 4
+				},
+				"promptTokens": {
+					"value": 180374,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedTokens": {
+					"value": 22547,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedPct": {
+					"value": 11,
+					"from": 4,
+					"outOf": 4
+				},
+				"readTokensPerSecond": {
+					"value": 33.31006463527239,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeTokensPerSecond": {
+					"value": 8.134834834834836,
+					"from": 4,
+					"outOf": 4
+				},
+				"readSpread": {
+					"value": 1.1806565902302404,
+					"from": 4,
+					"outOf": 4
+				},
+				"longestSequence": {
+					"value": 5032,
+					"from": 4,
+					"outOf": 4
+				},
+				"contextUsedPct": {
+					"value": 61,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestJobSeconds": {
+					"value": 2955,
+					"from": 4,
+					"outOf": 4
+				},
+				"jobUsedPct": {
+					"value": 33,
+					"from": 4,
+					"outOf": 4
+				},
+				"cpuModels": {
+					"value": [
+						"AMD EPYC 9V45",
+						"AMD EPYC 9V74"
+					],
+					"from": 4,
+					"outOf": 4
+				},
+				"lowestCpuBusyPct": {
+					"value": 88,
+					"from": 4,
+					"outOf": 4
+				},
+				"peakRssBytes": {
+					"value": 12981411989,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestModelLoadMs": {
+					"value": 3966,
+					"from": 4,
+					"outOf": 4
+				},
+				"slotsPerDecode": {
+					"value": 1,
+					"from": 4,
+					"outOf": 4
+				},
+				"clocks": {
+					"ledger": {
+						"tokens": 38806,
+						"seconds": 695.413,
+						"parts": 12,
+						"rate": 55.802810703855116
+					},
+					"server": {
+						"tokens": 180374,
+						"seconds": 5415,
+						"parts": 4,
+						"rate": 33.31006463527239
+					},
+					"gapPct": 67.52537503264077,
+					"agrees": false
+				}
+			},
+			{
+				"runId": "2026-05-01-1",
+				"date": "2026-05-01",
+				"shards": 4,
+				"reported": [
+					{
+						"shard": 0,
+						"scrapedAt": "2026-05-01T00:00:00Z",
+						"readSeconds": 1066,
+						"writeSeconds": 723,
+						"readPct": 60,
+						"promptTokens": 44807,
+						"cachedTokens": 5601,
+						"cachedPct": 11,
+						"writtenTokens": 6703,
+						"readTokensPerSecond": 42.0328330206379,
+						"writeTokensPerSecond": 9.27109266943292,
+						"longestSequence": 5693,
+						"contextUsedPct": 69,
+						"jobSeconds": 2502,
+						"jobUsedPct": 28,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 92,
+						"peakRssBytes": 12103644570,
+						"modelLoadMs": 3671,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 1,
+						"scrapedAt": "2026-05-01T01:00:00Z",
+						"readSeconds": 1062,
+						"writeSeconds": 807,
+						"readPct": 57,
+						"promptTokens": 55754,
+						"cachedTokens": 6969,
+						"cachedPct": 11,
+						"writtenTokens": 6719,
+						"readTokensPerSecond": 52.49905838041431,
+						"writeTokensPerSecond": 8.325898389095416,
+						"longestSequence": 5284,
+						"contextUsedPct": 65,
+						"jobSeconds": 2871,
+						"jobUsedPct": 32,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 90,
+						"peakRssBytes": 12668444850,
+						"modelLoadMs": 3819,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 2,
+						"scrapedAt": "2026-05-01T02:00:00Z",
+						"readSeconds": 1340,
+						"writeSeconds": 711,
+						"readPct": 65,
+						"promptTokens": 42536,
+						"cachedTokens": 5317,
+						"cachedPct": 11,
+						"writtenTokens": 7546,
+						"readTokensPerSecond": 31.743283582089553,
+						"writeTokensPerSecond": 10.613220815752461,
+						"longestSequence": 4251,
+						"contextUsedPct": 52,
+						"jobSeconds": 3091,
+						"jobUsedPct": 34,
+						"cpuModel": "AMD EPYC 9V45",
+						"cpuBusyPct": 86,
+						"peakRssBytes": 12361478312,
+						"modelLoadMs": 4239,
+						"slotsPerDecode": 1
+					},
+					{
+						"shard": 3,
+						"scrapedAt": "2026-05-01T03:00:00Z",
+						"readSeconds": 1337,
+						"writeSeconds": 714,
+						"readPct": 65,
+						"promptTokens": 56135,
+						"cachedTokens": 7017,
+						"cachedPct": 11,
+						"writtenTokens": 7935,
+						"readTokensPerSecond": 41.98578908002992,
+						"writeTokensPerSecond": 11.11344537815126,
+						"longestSequence": 5551,
+						"contextUsedPct": 68,
+						"jobSeconds": 2438,
+						"jobUsedPct": 27,
+						"cpuModel": "AMD EPYC 9V74",
+						"cpuBusyPct": 87,
+						"peakRssBytes": 12859514841,
+						"modelLoadMs": 3641,
+						"slotsPerDecode": 1
+					}
+				],
+				"readSeconds": {
+					"value": 4805,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeSeconds": {
+					"value": 2955,
+					"from": 4,
+					"outOf": 4
+				},
+				"readPct": {
+					"value": 62,
+					"from": 4,
+					"outOf": 4
+				},
+				"promptTokens": {
+					"value": 199232,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedTokens": {
+					"value": 24904,
+					"from": 4,
+					"outOf": 4
+				},
+				"cachedPct": {
+					"value": 11,
+					"from": 4,
+					"outOf": 4
+				},
+				"readTokensPerSecond": {
+					"value": 41.46347554630593,
+					"from": 4,
+					"outOf": 4
+				},
+				"writeTokensPerSecond": {
+					"value": 9.781049069373942,
+					"from": 4,
+					"outOf": 4
+				},
+				"readSpread": {
+					"value": 1.6538635092569864,
+					"from": 4,
+					"outOf": 4
+				},
+				"longestSequence": {
+					"value": 5693,
+					"from": 4,
+					"outOf": 4
+				},
+				"contextUsedPct": {
+					"value": 69,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestJobSeconds": {
+					"value": 3091,
+					"from": 4,
+					"outOf": 4
+				},
+				"jobUsedPct": {
+					"value": 34,
+					"from": 4,
+					"outOf": 4
+				},
+				"cpuModels": {
+					"value": [
+						"AMD EPYC 9V45",
+						"AMD EPYC 9V74"
+					],
+					"from": 4,
+					"outOf": 4
+				},
+				"lowestCpuBusyPct": {
+					"value": 86,
+					"from": 4,
+					"outOf": 4
+				},
+				"peakRssBytes": {
+					"value": 12859514841,
+					"from": 4,
+					"outOf": 4
+				},
+				"slowestModelLoadMs": {
+					"value": 4239,
+					"from": 4,
+					"outOf": 4
+				},
+				"slotsPerDecode": {
+					"value": 1,
+					"from": 4,
+					"outOf": 4
+				},
+				"clocks": {
+					"ledger": {
+						"tokens": 38905,
+						"seconds": 671.808,
+						"parts": 12,
+						"rate": 57.91089120701153
+					},
+					"server": {
+						"tokens": 199232,
+						"seconds": 4805,
+						"parts": 4,
+						"rate": 41.46347554630593
+					},
+					"gapPct": 39.667238319993984,
+					"agrees": false
+				}
+			}
+		],
+		"refused": []
+	},
+	"modelWork": [
+		{
+			"kind": "day",
+			"day": {
+				"date": "2026-05-04",
+				"summaries": 24,
+				"notSure": 2,
+				"unsupportedNumbers": 2,
+				"hedgeDropped": 0,
+				"readInPart": 0,
+				"readInPartPct": 0,
+				"readInPartOf": 24,
+				"copiedPct": 65,
+				"perItemMs": 216270.5,
+				"perItemCutMs": null,
+				"totalMs": 5038279,
+				"refusedForLength": 2,
+				"failed": 2,
+				"models": [
+					"newer-9b"
+				]
+			}
+		},
+		{
+			"kind": "day",
+			"day": {
+				"date": "2026-05-03",
+				"summaries": 24,
+				"notSure": 2,
+				"unsupportedNumbers": 2,
+				"hedgeDropped": 2,
+				"readInPart": 12,
+				"readInPartPct": 50,
+				"readInPartOf": 24,
+				"copiedPct": 77,
+				"perItemMs": 171576.5,
+				"perItemCutMs": 171245,
+				"totalMs": 4048457,
+				"refusedForLength": 2,
+				"failed": 2,
+				"models": [
+					"newer-9b"
+				]
+			}
+		},
+		{
+			"kind": "swap",
+			"date": "2026-05-03",
+			"model": "newer-9b"
+		},
+		{
+			"kind": "day",
+			"day": {
+				"date": "2026-05-02",
+				"summaries": 24,
+				"notSure": 3,
+				"unsupportedNumbers": 2,
+				"hedgeDropped": 2,
+				"readInPart": 0,
+				"readInPartPct": 0,
+				"readInPartOf": 24,
+				"copiedPct": 67,
+				"perItemMs": 143681.5,
+				"perItemCutMs": null,
+				"totalMs": 3755269,
+				"refusedForLength": 2,
+				"failed": 2,
+				"models": [
+					"older-9b"
+				]
+			}
+		},
+		{
+			"kind": "day",
+			"day": {
+				"date": "2026-05-01",
+				"summaries": 24,
+				"notSure": 4,
+				"unsupportedNumbers": 2,
+				"hedgeDropped": 2,
+				"readInPart": 12,
+				"readInPartPct": 50,
+				"readInPartOf": 24,
+				"copiedPct": 73,
+				"perItemMs": 205970,
+				"perItemCutMs": 233240.5,
+				"totalMs": 4891386,
+				"refusedForLength": 3,
+				"failed": 3,
+				"models": [
+					"older-9b"
+				]
+			}
+		}
+	],
+	"modelByDate": [
+		[
+			"2026-05-01",
+			"older-9b"
+		],
+		[
+			"2026-05-02",
+			"older-9b"
+		],
+		[
+			"2026-05-03",
+			"newer-9b"
+		],
+		[
+			"2026-05-04",
+			"newer-9b"
+		]
+	],
+	"runLengths": [
+		{
+			"runId": "2026-05-01-1",
+			"date": "2026-05-01",
+			"model": "older-9b",
+			"items": 12,
+			"low": 67,
+			"median": 116,
+			"high": 192,
+			"askLow": 70,
+			"askHigh": 230
+		},
+		{
+			"runId": "2026-05-01-2",
+			"date": "2026-05-01",
+			"model": "older-9b",
+			"items": 12,
+			"low": 56,
+			"median": 126,
+			"high": 198,
+			"askLow": 50,
+			"askHigh": 200
+		},
+		{
+			"runId": "2026-05-02-1",
+			"date": "2026-05-02",
+			"model": "older-9b",
+			"items": 12,
+			"low": 50,
+			"median": 150,
+			"high": 198,
+			"askLow": 50,
+			"askHigh": 230
+		},
+		{
+			"runId": "2026-05-02-2",
+			"date": "2026-05-02",
+			"model": "older-9b",
+			"items": 12,
+			"low": 43,
+			"median": 127,
+			"high": 194,
+			"askLow": 50,
+			"askHigh": 230
+		},
+		{
+			"runId": "2026-05-03-1",
+			"date": "2026-05-03",
+			"model": "newer-9b",
+			"items": 12,
+			"low": 60,
+			"median": 85,
+			"high": 197,
+			"askLow": 70,
+			"askHigh": 230
+		},
+		{
+			"runId": "2026-05-03-2",
+			"date": "2026-05-03",
+			"model": "newer-9b",
+			"items": 12,
+			"low": 84,
+			"median": 128,
+			"high": 192,
+			"askLow": 50,
+			"askHigh": 230
+		},
+		{
+			"runId": "2026-05-04-1",
+			"date": "2026-05-04",
+			"model": "newer-9b",
+			"items": 12,
+			"low": 51,
+			"median": 123,
+			"high": 186,
+			"askLow": 50,
+			"askHigh": 200
+		},
+		{
+			"runId": "2026-05-04-2",
+			"date": "2026-05-04",
+			"model": "newer-9b",
+			"items": 12,
+			"low": 58,
+			"median": 126,
+			"high": 191,
+			"askLow": 50,
+			"askHigh": 200
+		}
+	],
+	"sourceCuts": {
+		"rows": [
+			{
+				"sourceId": "source-0",
+				"cut": 4,
+				"articles": 14,
+				"lengths": {
+					"min": 541,
+					"median": 1173,
+					"max": 1771
+				}
+			},
+			{
+				"sourceId": "source-1",
+				"cut": 4,
+				"articles": 14,
+				"lengths": {
+					"min": 537,
+					"median": 1206,
+					"max": 2106
+				}
+			},
+			{
+				"sourceId": "source-4",
+				"cut": 4,
+				"articles": 14,
+				"lengths": {
+					"min": 536,
+					"median": 1252,
+					"max": 2709
+				}
+			},
+			{
+				"sourceId": "source-2",
+				"cut": 3,
+				"articles": 14,
+				"lengths": {
+					"min": 402,
+					"median": 1190,
+					"max": 1836
+				}
+			}
+		],
+		"moreSources": 3,
+		"moreCuts": 9,
+		"measured": true,
+		"cost": {
+			"n": 24,
+			"median": 573,
+			"max": 982
+		},
+		"caps": [
+			{
+				"words": 521,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 580,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 692,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 771,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 793,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 823,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 829,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 933,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 995,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 1305,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 1750,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 1828,
+				"first": "2026-05-01",
+				"last": "2026-05-01"
+			},
+			{
+				"words": 436,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 453,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 847,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 958,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 1061,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 1070,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 1144,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 1338,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 1488,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 1509,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 1829,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			},
+			{
+				"words": 1845,
+				"first": "2026-05-03",
+				"last": "2026-05-03"
+			}
+		],
+		"days": 6,
+		"articles": 96
+	},
+	"failureSeries": [
+		{
+			"stage": "fetch",
+			"label": "fetch",
+			"days": [
+				{
+					"date": "2026-05-01",
+					"planned": 20,
+					"reached": 16,
+					"failures": 1,
+					"rate": 0.0625,
+					"codes": {
+						"paywalled": 1
+					}
+				},
+				{
+					"date": "2026-05-02",
+					"planned": 20,
+					"reached": 17,
+					"failures": 0,
+					"rate": 0,
+					"codes": {}
+				},
+				{
+					"date": "2026-05-03",
+					"planned": 20,
+					"reached": 17,
+					"failures": 1,
+					"rate": 0.058823529411764705,
+					"codes": {
+						"paywalled": 1
+					}
+				},
+				{
+					"date": "2026-05-04",
+					"planned": 20,
+					"reached": 16,
+					"failures": 1,
+					"rate": 0.0625,
+					"codes": {
+						"paywalled": 1
+					}
+				},
+				{
+					"date": "2026-05-05",
+					"planned": 20,
+					"reached": 17,
+					"failures": 0,
+					"rate": 0,
+					"codes": {}
+				},
+				{
+					"date": "2026-05-06",
+					"planned": 20,
+					"reached": 17,
+					"failures": 1,
+					"rate": 0.058823529411764705,
+					"codes": {
+						"paywalled": 1
+					}
+				}
+			]
+		},
+		{
+			"stage": "extract",
+			"label": "extract",
+			"days": [
+				{
+					"date": "2026-05-01",
+					"planned": 20,
+					"reached": 15,
+					"failures": 1,
+					"rate": 0.06666666666666667,
+					"codes": {
+						"http_client_error": 1
+					}
+				},
+				{
+					"date": "2026-05-02",
+					"planned": 20,
+					"reached": 17,
+					"failures": 1,
+					"rate": 0.058823529411764705,
+					"codes": {
+						"http_client_error": 1
+					}
+				},
+				{
+					"date": "2026-05-03",
+					"planned": 20,
+					"reached": 16,
+					"failures": 2,
+					"rate": 0.125,
+					"codes": {
+						"http_client_error": 2
+					}
+				},
+				{
+					"date": "2026-05-04",
+					"planned": 20,
+					"reached": 15,
+					"failures": 1,
+					"rate": 0.06666666666666667,
+					"codes": {
+						"http_client_error": 1
+					}
+				},
+				{
+					"date": "2026-05-05",
+					"planned": 20,
+					"reached": 17,
+					"failures": 1,
+					"rate": 0.058823529411764705,
+					"codes": {
+						"http_client_error": 1
+					}
+				},
+				{
+					"date": "2026-05-06",
+					"planned": 20,
+					"reached": 16,
+					"failures": 2,
+					"rate": 0.125,
+					"codes": {
+						"http_client_error": 2
+					}
+				}
+			]
+		},
+		{
+			"stage": "summarize",
+			"label": "summarize",
+			"days": [
+				{
+					"date": "2026-05-01",
+					"planned": 20,
+					"reached": 14,
+					"failures": 1,
+					"rate": 0.07142857142857142,
+					"codes": {
+						"unknown": 1
+					}
+				},
+				{
+					"date": "2026-05-02",
+					"planned": 20,
+					"reached": 16,
+					"failures": 2,
+					"rate": 0.125,
+					"codes": {
+						"unknown": 2
+					}
+				},
+				{
+					"date": "2026-05-03",
+					"planned": 20,
+					"reached": 14,
+					"failures": 1,
+					"rate": 0.07142857142857142,
+					"codes": {
+						"unknown": 1
+					}
+				},
+				{
+					"date": "2026-05-04",
+					"planned": 20,
+					"reached": 14,
+					"failures": 1,
+					"rate": 0.07142857142857142,
+					"codes": {
+						"unknown": 1
+					}
+				},
+				{
+					"date": "2026-05-05",
+					"planned": 20,
+					"reached": 16,
+					"failures": 2,
+					"rate": 0.125,
+					"codes": {
+						"unknown": 2
+					}
+				},
+				{
+					"date": "2026-05-06",
+					"planned": 20,
+					"reached": 14,
+					"failures": 1,
+					"rate": 0.07142857142857142,
+					"codes": {
+						"unknown": 1
+					}
+				}
+			]
+		}
+	],
+	"distribution": {
+		"bins": [
+			{
+				"from": 0,
+				"to": 1,
+				"n": 66,
+				"throughPct": 17
+			},
+			{
+				"from": 1,
+				"to": 2,
+				"n": 32,
+				"throughPct": 25
+			},
+			{
+				"from": 2,
+				"to": 4,
+				"n": 33,
+				"throughPct": 33
+			},
+			{
+				"from": 4,
+				"to": 8,
+				"n": 30,
+				"throughPct": 40
+			},
+			{
+				"from": 8,
+				"to": 16,
+				"n": 37,
+				"throughPct": 50
+			},
+			{
+				"from": 16,
+				"to": 32,
+				"n": 30,
+				"throughPct": 57
+			},
+			{
+				"from": 32,
+				"to": 64,
+				"n": 32,
+				"throughPct": 65
+			},
+			{
+				"from": 64,
+				"to": 128,
+				"n": 41,
+				"throughPct": 75
+			},
+			{
+				"from": 128,
+				"to": 256,
+				"n": 41,
+				"throughPct": 86
+			},
+			{
+				"from": 256,
+				"to": 512,
+				"n": 24,
+				"throughPct": 92
+			},
+			{
+				"from": 512,
+				"to": 1024,
+				"n": 27,
+				"throughPct": 98
+			},
+			{
+				"from": 1024,
+				"to": 2048,
+				"n": 7,
+				"throughPct": 100
+			}
+		],
+		"n": 400,
+		"median": 17368,
+		"p95": 721176.1499999991,
+		"slowest": 1209809,
+		"fastest": 310
+	}
+}
