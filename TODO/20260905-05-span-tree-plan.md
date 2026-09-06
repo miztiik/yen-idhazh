@@ -27,7 +27,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | A rollup that holds only what no ledger holds | - | A | PENDING | - | - | - |
+| 1 | A rollup that holds only what no ledger holds | - | A | DONE #449 | span-r1 (removed) | #449 | worker |
 | 2 | Raw traces, briefly, so a recent run can be opened | 1 | B | PENDING | - | - | - |
 | 3 | Every second of a shard is accounted for | 1 | C | PENDING | - | - | - |
 | 4 | Tracing switches on | 2, 3 | D | PENDING | - | - | - |
