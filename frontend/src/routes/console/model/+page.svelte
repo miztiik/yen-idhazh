@@ -14,7 +14,7 @@
 	import { windowOfDays } from '$lib/charts/viewport';
 	import { grouped } from '$lib/charts/series';
 	import { rank, type Rankable, type RankedDisplay } from '$lib/charts/rank';
-	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
+	import { sparklineMarks } from '$lib/charts/sparkline';
 	import { stacked, type StackShape } from '$lib/charts/stacked';
 	import type { MovementPolarity } from '$lib/charts/theme';
 	import {
@@ -45,6 +45,7 @@
 		recordedText,
 		widerNote
 	} from '$lib/console/eval-instruments';
+	import { buildCardTrends, type CardTrend } from '$lib/console/model-cards';
 	import Chart from '$lib/charts/Chart.svelte';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
@@ -233,6 +234,11 @@
 		failed: (day) => day.failed
 	};
 
+	/** The eleven keys `SERIES` holds, in the order it declares them. Read once so
+	 * the single pass below walks the day list one time and fills every card's
+	 * series together, rather than the window once per card. */
+	const SERIES_KEYS = Object.keys(SERIES);
+
 	/** The card grid's minimum column, and the room a card leaves inside it. */
 	const CARD_MIN_PX = 220;
 	const CARD_PAD_PX = 16;
@@ -272,33 +278,18 @@
 	);
 	const tableDays = $derived(tableRows.filter((row) => row.kind === 'day').length);
 
-	/** One card's drawn points, and the swap rules that land on them. */
-	function trendFor(key: string): {
-		marks: SparklineMarks;
-		rules: { at: number; label: string }[];
-	} {
-		const read = SERIES[key];
-		const values: number[] = [];
-		const dates: string[] = [];
-		for (const day of modelWindow) {
-			const value = read(day);
-			if (value === null) continue;
-			values.push(value);
-			dates.push(day.date);
-		}
-		const marks = sparklineMarks(values);
-		if (marks.empty) return { marks, rules: [] };
-		const rules = modelSwaps.flatMap((swap) => {
-			const at = dates.findIndex((date) => date >= swap.date);
-			if (at < 1) return [];
-			return [
-				{
-					at: at / (dates.length - 1),
-					label: `The model changed to ${swap.model} on ${swap.date}.`
-				}
-			];
-		});
-		return { marks, rules };
+	/** Every card's drawn points, and the swap rules that land on them, built in
+	 * one pass over the open window rather than once per card. The single pass and
+	 * the per-column dates live in `buildCardTrends`, where a fabricated window can
+	 * exercise them: the canary runs one model start to finish, so no swap and no
+	 * two-day column reaches this page for them to be read off it. */
+	const cardTrends = $derived(
+		buildCardTrends(SERIES_KEYS, modelWindow, (day, key) => SERIES[key](day), modelSwaps)
+	);
+
+	/** One card's drawn points, read from the single pass above. */
+	function trendFor(key: string): CardTrend {
+		return cardTrends.get(key) ?? { marks: sparklineMarks([]), rules: [] };
 	}
 
 	/** What a quality figure is out of, printed beside it. */
@@ -332,9 +323,13 @@
 	 * each span the control offers. A percentile has to be taken over the values
 	 * themselves, so the browser picks the answer for the open window rather than
 	 * recomputing one off the bars. */
-	const span = $derived(data.windows[String(windowDays)] ?? null);
-	const writeTimes = $derived(data.writeTimes[String(windowDays)] ?? null);
-	const scoreCost = $derived(data.scoreCost[String(windowDays)] ?? null);
+	/** The open window as the key the server filed each preset's answer under.
+	 * One string, reused by every panel below, so a card and the reading beside it
+	 * cannot come to read two different windows. */
+	const windowKey = $derived(String(windowDays));
+	const span = $derived(data.windows[windowKey] ?? null);
+	const writeTimes = $derived(data.writeTimes[windowKey] ?? null);
+	const scoreCost = $derived(data.scoreCost[windowKey] ?? null);
 
 	/** Which sources the checker doubted, over the open window.
 	 *
@@ -343,7 +338,7 @@
 	 * two keys the server sorted on - the count, then the source's own name -
 	 * so the drawn order is the ranked order and not a second opinion of it.
 	 */
-	const doubts = $derived(data.sourceDoubts[String(windowDays)] ?? null);
+	const doubts = $derived(data.sourceDoubts[windowKey] ?? null);
 	const doubtEntries = $derived<Rankable<RankedDisplay>[]>(
 		(doubts?.rows ?? []).map((source) => ({
 			key: source.sourceId,
