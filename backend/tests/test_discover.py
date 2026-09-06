@@ -186,6 +186,58 @@ def test_a_published_date_becomes_a_utc_timestamp() -> None:
     assert first.published_at == "2026-08-21T06:00:00Z"
 
 
+def test_an_entry_with_no_date_of_its_own_takes_the_channel_s() -> None:
+    """The publisher's answer at a coarser grain, not a guess.
+
+    The alternative to the channel stamp is not a better date, it is
+    `first_seen` - our own ingest clock, which says nothing about when the story
+    was published. So a hand-rolled feed that dates the channel and not the
+    entry now yields the channel's date, and the rail stops attributing our
+    clock to a publisher who did give us one.
+    """
+    feed = (
+        '<?xml version="1.0"?><rss version="2.0"><channel>'
+        "<title>Undated entries</title>"
+        "<pubDate>Fri, 21 Aug 2026 06:00:00 GMT</pubDate>"
+        "<item><title>No date here</title><link>https://example.test/one</link></item>"
+        "</channel></rss>"
+    )
+
+    found = candidates_from_feed(LAB, feed)
+
+    assert [candidate.published_at for candidate in found] == ["2026-08-21T06:00:00Z"]
+
+
+def test_the_entry_s_own_date_still_wins_over_the_channel_s() -> None:
+    """The channel is the fallback, never the answer where the entry has one."""
+    feed = (
+        '<?xml version="1.0"?><rss version="2.0"><channel>'
+        "<title>Both dated</title>"
+        "<pubDate>Fri, 21 Aug 2026 06:00:00 GMT</pubDate>"
+        "<item><title>Dated</title><link>https://example.test/two</link>"
+        "<pubDate>Sat, 22 Aug 2026 09:30:00 GMT</pubDate></item>"
+        "</channel></rss>"
+    )
+
+    found = candidates_from_feed(LAB, feed)
+
+    assert [candidate.published_at for candidate in found] == ["2026-08-22T09:30:00Z"]
+
+
+def test_a_feed_that_dates_nothing_still_leaves_the_stamp_absent() -> None:
+    """No date anywhere is still no date. `rank.appeared_at` falls to first_seen."""
+    feed = (
+        '<?xml version="1.0"?><rss version="2.0"><channel>'
+        "<title>Undated</title>"
+        "<item><title>No date</title><link>https://example.test/three</link></item>"
+        "</channel></rss>"
+    )
+
+    found = candidates_from_feed(LAB, feed)
+
+    assert [candidate.published_at for candidate in found] == [None]
+
+
 def test_an_unpadded_year_is_a_stamp_nothing_downstream_can_read() -> None:
     """Why the year is padded here rather than left to `strftime`.
 
