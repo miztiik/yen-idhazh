@@ -269,6 +269,7 @@
   },
   "version": "2026-08-29T18:00",
   "visuals": {
+    "asset_base_url": "",
     "canvas_width": 800,
     "enabled_kinds": [
       "chart"

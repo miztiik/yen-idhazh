@@ -1411,11 +1411,17 @@ class FinetuneConfig(Model):
 
 
 class VisualsConfig(Model):
-    """Planning and rendering knobs. "Nothing" is the common answer, by design.
+    """Planning, rendering and serving knobs. "Nothing" is the common answer, by design.
 
     `enabled_kinds` is the gate that keeps an unbuilt renderer unreachable. It
     is a list rather than a flag so that a kind added later is switched on by a
     config edit rather than by a code change.
+
+    `asset_base_url` is the same shape at the other end of the pipeline: where a
+    browser asks for a drawing the pipeline already published. It ships empty,
+    which means this site, and the whole point of it existing empty is that
+    moving the bytes off the 1 GB Pages cap is then a config edit rather than a
+    project.
     """
 
     enabled_kinds: list[VisualKind] = Field(
@@ -1475,6 +1481,46 @@ class VisualsConfig(Model):
             "than the job it runs in, so it could never fire."
         ),
     )
+    asset_base_url: str = Field(
+        default="",
+        description=(
+            "Where a browser asks for a published drawing. Empty means this site, and "
+            "empty is what ships: the drawings sit in the bundle, and the bundle is what "
+            "the 1 GB Pages ceiling counts. An absolute `https://` prefix moves the "
+            "drawings a reader scrolls to off that ceiling, and the committed path is "
+            "joined onto it unchanged - so which file is asked for never moves, only "
+            "where it is asked for. Two costs, both measured 2026-09-02 against the "
+            "candidate host: it caches for five minutes, so a repeat reader refetches, "
+            "which is real on a slow connection; and the page's own `connect-src` gains "
+            "that one origin, so the browser stops being the thing that makes reaching "
+            "anywhere else impossible. Kept shut until the site's measured growth says "
+            "otherwise."
+        ),
+    )
+
+    @field_validator("asset_base_url")
+    @classmethod
+    def _the_valve_names_a_prefix_a_path_can_be_joined_onto(cls, value: str) -> str:
+        """Empty, or an absolute `https://` prefix carrying no trailing slash.
+
+        The value comes off our own config and never off the web (Rule #11), and
+        it is checked all the same, because it is about to become the front half
+        of every drawing address and the one origin the page's `connect-src`
+        admits. A trailing slash is refused rather than trimmed: the join writes
+        one, and trimming it silently is how an operator learns about the rule
+        from a broken page instead of from a failed build.
+        """
+        if not value:
+            return value
+        if not value.startswith("https://"):
+            raise ValueError("visuals.asset_base_url is empty or begins with https://")
+        if value.endswith("/"):
+            raise ValueError("visuals.asset_base_url carries no trailing slash")
+        if any(character in value for character in " \t?#"):
+            raise ValueError(
+                "visuals.asset_base_url carries no whitespace, query or fragment"
+            )
+        return value
 
     @property
     def canvas_height(self) -> int:
@@ -2307,6 +2353,27 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T12:00",
+            change=(
+                "visuals.asset_base_url is added. It defaults to the empty string, which "
+                "means this site, and is otherwise an absolute https prefix carrying no "
+                "trailing slash, no query and no fragment."
+            ),
+            why=(
+                "The published site has a 1 GB ceiling and the drawings are the part of it "
+                "that grows with every day. This is the release valve for that: an "
+                "operator names a host, the drawings a reader scrolls to are asked for "
+                "there instead, and the bytes stop counting against the ceiling - one "
+                "config edit rather than a project. It ships shut because nothing yet says "
+                "the bytes must move, and opening it costs something measured: the "
+                "candidate host caches for five minutes, so a repeat reader refetches, and "
+                "the page's connect-src has to admit that one origin. Additive and "
+                "backwards-compatible, so no read-side migration is owed - a config "
+                "written before this loads on the default and every drawing is asked for "
+                "at exactly the address it was asked for before."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06",
             change=(
