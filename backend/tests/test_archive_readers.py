@@ -21,6 +21,30 @@ carry a case the archive has never produced. The archive is checked by the
 producer instead, once per item at write time, by `idhazh validate-days` and by
 the contract models; re-checking a frozen day on every later run buys nothing.
 
+**Two rules decide what happens to a reader when it is migrated** (owner ruling,
+2026-09-06):
+
+1. **A test checks code functionality, not data hygiene.** A check that reads
+   committed data to ask whether the data is well-formed is not a test. It has
+   three legal fates and no fourth: delete it where a fixture-driven test
+   already covers the same rule; move it into the producer that writes the data,
+   the way the one-picture-one-story rule moved into `idhazh validate-days`; or
+   make it an operator surface under `backend/utilities/`, which pytest does not
+   run.
+2. **Drive it with a built parameter, never a loop over what the archive
+   happens to hold.** The awkward shape is a thing to build. `console-failures`
+   used to read every published telemetry shard because the real ledger has
+   eleven causes and a 529-to-1 spread; it now builds exactly that, plus a
+   source sitting on the cap, which the archive has never produced.
+
+**A walk over the archive tends to carry a fuse, and that is the second reason
+to remove one.** Six of the tests migrated in this work counted how many
+committed entries still LACK a migrated field and asserted the count was not
+zero - so each one goes red on the day the last unmigrated payload ages out of
+retention, which is a date on the calendar rather than a change anybody made.
+`docs/reference/agent-notes.md` records the day that fired and took every open
+pull request red at once.
+
 `ARCHIVE_READERS` below is the migration list, not a permission. Every entry is
 a test that still reads the tree and has yet to move to a fixture. It is
 expected to fall to one auditor per language. Nothing may be added to it: a new

@@ -351,25 +351,6 @@ def test_a_row_the_fixed_pipeline_wrote_is_left_alone() -> None:
         )
 
 
-def test_the_committed_score_ledger_never_reads_more_than_the_article_holds() -> None:
-    """The read-side migration for the nullable column is the file itself.
-
-    Every row the pipeline writes from 2026-08-27 goes through the `EvalRow`
-    validator that refuses this shape. The committed rows predate it, so the
-    file is what has to prove it - and the ledger is a directory of monthly
-    shards, so naming one month would quietly stop reading the newest rows on
-    the first of every month.
-    """
-    impossible = [
-        row["item_id"]
-        for row in writer.records(REPO_ROOT / "state")
-        if row["source_word_count"]
-        and int(row["source_seen_word_count"]) > int(row["source_word_count"])
-    ]
-
-    assert impossible == [], f"{len(impossible)} rows say the model read more than the article"
-
-
 def test_the_committed_published_ledger_has_the_shape_the_contract_writes() -> None:
     """The read-side migration for the narrowed row is the file itself.
 
