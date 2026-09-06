@@ -1,0 +1,9 @@
+{
+  "count": 8,
+  "date": "2026-08-21",
+  "run_id": "2026-08-21-1",
+  "shard": 0,
+  "span_name": "item",
+  "total_ms": 42000,
+  "version": "2026-09-06"
+}
