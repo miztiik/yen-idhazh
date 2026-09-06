@@ -2290,7 +2290,19 @@ DESK_SHORTFALL = ("considered", "too_old", "below_feed_floor")
 
 
 def committed_days() -> list[Path]:
-    return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))
+    """The published days a test may read: every date except the newest.
+
+    The pipeline publishes several times into the same date, so the last date on
+    disk is the one still being appended to and is a fraction of itself for most
+    of the day - measured 2026-09-06 one run of five in, 78 stories against the
+    374 the finished day beside it carries. Any assertion about a day's size or
+    fullness read off that date is an assertion about the time of day.
+
+    The rule lives here rather than at each call site so that a caller cannot
+    opt out of it by accident. Every earlier date can gain no more runs, so it
+    is finished by construction - no run count, no clock, nothing to tune.
+    """
+    return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))[:-1]
 
 
 def test_the_published_tree_holds_days_to_migrate() -> None:
