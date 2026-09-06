@@ -74,7 +74,7 @@ Three, in the order they bite:
 
 Not compute. The order in which limits bite is: how many good articles a day the sources actually supply, then how many summaries a person will read, then artifact storage, then repository growth, and only far behind all of those, concurrency.
 
-Note what is *not* on that list: an editorial number. There is no daily item cap chosen for how long a day should be. Supply, the score and `max_per_source` decide the shape of a day, and `run.safety_ceiling_per_run` bounds its size - a number that began as a crash guard, was overtaken by supply, and is now knowingly the cap ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is still a source-diversity question first: the ceiling only binds because 27 percent of every run was being spent on sources that could not be read.
+Note what is *not* what bounds a day: a reader's clock. The two-minute budget is held by ordering and hierarchy - the best items first, a long day a scroll rather than a truncation ([digest.md](digest.md)) - not by the ceiling. Supply, the score and `max_per_source` decide the shape of a day, and `run.safety_ceiling_per_run` bounds its size - a number that began as a crash guard, was overtaken by supply, and is now knowingly an editorial cap, brought down from 160 to 80 on 2026-09-05 so a day carries fewer but better-chosen stories ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is still a source-diversity question first: the ceiling binds where 27 percent of a run was being spent on sources that could not be read.
 
 ## Design rationale
 

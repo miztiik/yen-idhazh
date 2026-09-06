@@ -69,7 +69,9 @@ function canaryHealth(): Record<string, string>[] {
 	return rows;
 }
 
-/** 150 minutes, the committed `run.shard_timeout_minutes`, as seconds. */
+/** A fixed 150-minute job timeout as seconds, not read from config, so these
+ * fixtures' expectations do not move when `run.shard_timeout_minutes` does. The
+ * committed value is asserted against config further down. */
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
 
 /** Every cell the ledger carries, so a fixture row is a whole row. */

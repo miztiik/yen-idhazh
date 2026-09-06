@@ -66,7 +66,7 @@ export interface RunConfig {
 	 * worst case to be worth printing (Rule #10). */
 	safety_ceiling_per_run: number;
 	/** When the platform stops a work shard. The ceiling the machine page reads
-	 * `job_seconds` against - 4,208 seconds means nothing until 150 minutes sits
+	 * `job_seconds` against - 4,208 seconds means nothing until 200 minutes sits
 	 * beside it. */
 	shard_timeout_minutes: number;
 }
@@ -299,8 +299,8 @@ const DEFAULTS: UiConfig = {
 
 const RUN_DEFAULTS: RunConfig = {
 	success_floor_pct: 70,
-	safety_ceiling_per_run: 160,
-	shard_timeout_minutes: 150
+	safety_ceiling_per_run: 80,
+	shard_timeout_minutes: 200
 };
 const INFERENCE_DEFAULTS: InferenceConfig = { n_ctx: 8192 };
 const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };

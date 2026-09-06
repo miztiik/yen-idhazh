@@ -189,22 +189,23 @@ A collision - two addresses landing on the same ten digits - is rare and is a co
 
 There is no daily item cap and no per-vertical cap. What a day publishes is what survives the score, `max_per_source` (2), which stops one prolific outlet filling a vertical in one run, and `max_source_share_per_day` (0.05), which stops one filling the day.
 
-**`run.safety_ceiling_per_run` (160) is what sizes a run, and saying otherwise
+**`run.safety_ceiling_per_run` (80) is what sizes a run, and saying otherwise
 was wrong.** This page used to call it a crash guard that a normal day was
 nowhere near, and quoted 149 as the largest day ever planned. Both statements
 were false by 2026-08-25 and stayed here: `items_planned` has been **exactly the
-ceiling on every run since**, first at 200 and now at 160
+ceiling on every run since**, first at 200, then 160, and now 80
 ([../../reference/measurements.md](../../reference/measurements.md)). Supply
 overtook the guard, and a guard sitting inside the working range is a cap.
 
-It is now a cap on purpose. Owner decision, 2026-08-29: the number stays at 160
-rather than rising, and the gain comes from spending those 160 slots on articles
-that can actually be read - the source sweep in
-[discovery.md](discovery.md) and the same-day failure memory above. Raising it
-is a separate question with a separate risk, because `run.shard_timeout_minutes`
-kills a worker that overruns and **a killed worker uploads nothing**, so the run
-loses every item it held. Nobody has measured a run at the new yield yet, so
-nobody may set that number yet (Rule #10).
+It is now a cap on purpose. Owner decision, 2026-09-05: the number comes down to
+80 from 160, so a day publishes half as many stories and the gain is that those
+80 slots go to articles worth reading - the source sweep in
+[discovery.md](discovery.md) and the same-day failure memory above - rather than
+to a second copy of a story already chosen. Which half is dropped is an editorial
+call and not an arbitrary cut: a duplicate goes before a desk's only story.
+Lowering the ceiling also shrinks the worst case `run.shard_timeout_minutes` is
+checked against, because a smaller run is a smaller worst shard, and **a worker
+killed at that bound uploads nothing**.
 
 What still bounds the number from above is the worst case the `work` and `visuals`
 jobs both have to finish ([../../concepts/config.md](../../concepts/config.md)).
@@ -389,7 +390,7 @@ refused it.
 | The bound it adds already exists one stage later, and it is a clock rather than a count | `cli.stage_visual_planner` stops its loop at `run.visual_planner_budget_minutes` (40 minutes), inside the `visuals` job's 50-minute timeout. A count has to be set for the worst host, so the number that fits a slow host leaves a fast one idle. The planner-side version of the same proposal was refused for the same reason - see [../publishing/visuals.md](../publishing/visuals.md). |
 | The loss it answered is already prevented | The `visuals` artifact upload in `.github/workflows/digest.yml` carries `if: always()`. A visuals stage that runs out of clock still hands over every decision it made. What cost four of the six runs on 2026-08-24/25 their visuals was a cancelled job skipping an upload step that had no condition on it. That step has one now. |
 | The number behind it is contaminated | The 20.7 s and 40.3 s per-item planning figures were measured over 703 items that all ran with `diagram` in `visuals.enabled_kinds`, so the model was asked about every one of them: `asked=False` appears zero times in all 703. `diagram` is off now, and with it off a measured 68 of 145 items (46.9 percent) never reach the model at all. |
-| It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `visuals`. `summarize` runs as four worker jobs by default, eight at the ceiling, and has no stage clock at all - its only bound is the `work` job's timeout, which is `run.shard_timeout_minutes` and is 150 minutes. `visuals` is one job with a 40-minute stage clock. On 2026-08-24 the committed digest carries **731 items**; a 59-item budget over five runs caps that day at 295 and deletes about 436 of them. |
+| It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `visuals`. `summarize` runs as four worker jobs by default, eight at the ceiling, and has no stage clock at all - its only bound is the `work` job's timeout, which is `run.shard_timeout_minutes` and is 200 minutes. `visuals` is one job with a 40-minute stage clock. On 2026-08-24 the committed digest carries **731 items**; a 59-item budget over five runs caps that day at 295 and deletes about 436 of them. |
 
 **The corrected cost, labelled an estimate because that is what it is (Rule
 #10).** Multiply the measured per-item cost by the measured share that still
