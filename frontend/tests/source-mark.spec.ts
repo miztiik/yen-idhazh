@@ -35,7 +35,8 @@ import { monogram, swatchIndex } from '../src/lib/format';
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
 
-const READ_KEY = 'idhazh:read';
+/** Read marks are held one key a date. */
+const READ_PREFIX = 'idhazh:read:';
 const THEME_KEY = 'idhazh:theme';
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
 
@@ -121,12 +122,17 @@ async function open(
 	{ read = [] as string[], route = `/${DAY}/`, width = 1280 } = {}
 ) {
 	await page.setViewportSize({ width, height: 900 });
+	// A mark expires on a calendar window measured against the device clock, and
+	// the canary publishes one fixed date. Pin today to that date, or this spec
+	// passes when it is written and drops every seeded mark once the date ages
+	// out of the window.
+	await page.clock.setFixedTime(new Date(`${DAY}T12:00:00Z`));
 	await page.addInitScript(
 		(given: { themeKey: string; theme: string; readKey: string; marks: unknown }) => {
 			localStorage.setItem(given.themeKey, given.theme);
 			localStorage.setItem(given.readKey, JSON.stringify(given.marks));
 		},
-		{ themeKey: THEME_KEY, theme, readKey: READ_KEY, marks: { [DAY]: read } }
+		{ themeKey: THEME_KEY, theme, readKey: `${READ_PREFIX}${DAY}`, marks: read }
 	);
 	await page.goto(route);
 	await expect
