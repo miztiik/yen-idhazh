@@ -1044,7 +1044,13 @@ reading-against-writing split, the clock check and the latency curves read the
 newest run or the newest day the ledger holds, at every preset. A window is a
 span and a snapshot is not something a span can narrow - a board that emptied at
 7 days would say the run had stopped existing. The page states this once, above
-the four, and names the run they are about. Authority: Jony, 2026-08-31.
+the snapshots, and names the run they are about. Authority: Jony, 2026-08-31.
+
+**One snapshot reads its own ledger, and often a different run.** The span
+breakdown reads `state/span-rollup/` rather than the counters, and the span
+record started later than the counters did, so the newest run it can draw is
+often not the newest run the counters hold. It names the run it found instead of
+borrowing the counters' newest, so the two are never silently conflated.
 
 Seven surfaces on Hardware declare `data-windowed`, and each one prints the day
 count in its own words: the run count at the top, the prompt cache, context
@@ -1055,13 +1061,15 @@ cannot report a day count.
 
 ### What the Hardware route draws
 
-Eleven panels, all off `state/runtime-counters.csv` and `state/item-health/`,
-both read at build time under `$lib/server/` and neither published. The route
-added no telemetry column and no reader sees a cell of either ledger.
+Twelve panels. Eleven read `state/runtime-counters.csv` and `state/item-health/`;
+one - where a shard's clock went - reads `state/span-rollup/`. All three are read
+at build time under `$lib/server/` and none is published: the route added no
+telemetry column and no reader sees a cell of any of them.
 
 | Panel | Grain | The sentence it is for |
 | --- | --- | --- |
 | Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
+| Where a shard's clock went | one bar a shard | How much of a shard's time went to items, and how much to overhead nobody named. |
 | Peak memory, and how near the runner's ceiling it got | one bar a shard | How much of the runner's 16 GB one run needed. |
 | Reading against writing | the newest run | What a written token costs against a read one. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
@@ -1082,6 +1090,26 @@ is the average every throughput figure this project had quoted until this page.
 **Reading and writing are never one bar, anywhere.** Read speed varies more than
 4x inside a run on this ledger and write speed barely moves, so a single "model
 seconds" figure averages two different machines together.
+
+**The span breakdown draws where a shard's clock went, and the residual is the
+point.** Each shard's wall clock is `item.total_ms` - the time inside its items -
+plus `unattributed_ms`, the overhead outside every item that no span covers, and
+the fold commits the second on the item row so the two reconcile exactly. The
+panel draws that split per shard: the four sub-steps no ledger column times, the
+rest of the item work, and the overhead drawn hollow on the right - beside the
+stages rather than buried in them. It carries no threshold and no tint, because
+nobody has agreed how much overhead is too much and a colour would publish an
+alarm that does not exist. The record starts 2026-09-06, the day tracing went on
+across the pipeline; before it a run timed its stages but did not commit them, so
+the committed rollup is empty and the real page shows a named empty state that
+says so.
+[../../../frontend/tests/console-machine-spans.spec.ts](../../../frontend/tests/console-machine-spans.spec.ts)
+re-derives the drawn residual straight from the committed rollup cell and holds
+it against the number the page drew, and reaches the empty state through a rollup
+truncated to its header. The reader is
+[../../../frontend/src/lib/server/span-rollup.ts](../../../frontend/src/lib/server/span-rollup.ts),
+and the fixture rollup the canary draws is written in
+[../../../frontend/scripts/build-canary.mjs](../../../frontend/scripts/build-canary.mjs).
 
 **The board is five columns on a desktop and one card a shard at 1024px and
 under.** The column head is the only thing naming a value, so when the columns
