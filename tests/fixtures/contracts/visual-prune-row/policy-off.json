@@ -1,0 +1,17 @@
+{
+  "bytes_reclaimed": 0,
+  "candidates_found": 0,
+  "cutoff_date": null,
+  "date": "2026-09-06",
+  "deleted": 0,
+  "dry_run": true,
+  "fuse_tripped": false,
+  "max_deletes_per_run": 200,
+  "oldest_kept": "2024-03-01",
+  "payload_bytes_after": 1277996,
+  "payload_bytes_before": 1277996,
+  "policy_months": -1,
+  "run_id": "2026-09-06-33301000001",
+  "skipped_by_fuse": 0,
+  "version": "2026-09-06T13:00"
+}

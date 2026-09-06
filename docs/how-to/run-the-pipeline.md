@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -113,6 +113,15 @@ Turning live deletion on is a separate one-line commit, and this is the order:
    that is missing is a step that already refused.
 5. Only then drop `--dry-run` from the `prune-state` step, in a commit that
    changes nothing else.
+
+**Dropping that flag does not switch the picture cleanup on**, and it is worth
+knowing why before step 5. The same step also cleans the rendered visuals and
+appends a row to `state/visual-prunes.csv` saying what it found. That pass has
+two more guards of its own: `retention.dry_run` is `true` and
+`retention.image_months` is `-1`, so with the flag gone it still reports and
+still deletes nothing. Switching it on is a separate change with its own
+conditions
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-cleanup-says-what-it-did-not-clear-2026-09-06)).
 
 Two consequences to know before step 5. The published copy goes with its private
 source, so `/console/`'s per-item detail stops reaching back past the window. And

@@ -1,0 +1,1 @@
+version,date,run_id,policy_months,max_deletes_per_run,dry_run,cutoff_date,candidates_found,deleted,skipped_by_fuse,fuse_tripped,bytes_reclaimed,oldest_kept,payload_bytes_before,payload_bytes_after

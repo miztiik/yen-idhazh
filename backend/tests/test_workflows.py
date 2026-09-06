@@ -376,7 +376,7 @@ COMMIT_STAGED_PATHS: Final = {
 # The step that folds an out-of-window month before the step above commits it.
 # It runs after the day's own commit, so a retirement that loses its push costs
 # one run's bytes and never a published day.
-FOLD_STEP: Final = "Retire the ledger shards the pipeline no longer reads"
+FOLD_STEP: Final = "Retire the ledger shards and the visuals nothing still reads"
 FOLD_COMMAND: Final = "python -m idhazh prune-state"
 # Set on purpose. `prune.yml` force-pushes main on a schedule, so a state file
 # this step deletes stops being recoverable from history once the prune passes
@@ -2350,15 +2350,32 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
     it. Row 1 solved the same problem for `state/feed-retirements.csv` by
     committing a header-only file; there is no header-only form of a directory,
     so the answer here is to stage `state`, which is always there.
+
+    `state/visual-prunes.csv` is the third store this call covers and it needs no
+    change here, because staging `state` whole already reaches it.
     """
     staged = COMMIT_STAGED_PATHS["fold"]
 
     assert "state" in staged
+    assert ledger.visual_prunes_relpath().split("/")[0] in staged
     for late in ("telemetry-aggregate", "score-archive"):
         assert f"state/{late}" not in staged, f"state/{late} is not in a fresh checkout"
         assert not (REPO_ROOT / "state" / late).exists(), (
             f"state/{late} is now committed, so this test is asserting the wrong thing"
         )
+
+
+def test_the_cleanup_is_filed_under_the_run_that_published_the_day() -> None:
+    """The step passes the same `github.run_id` the plan job filed its ledgers under.
+
+    Without it the cleanup row would carry a run id counted off the committed
+    manifest, and that count is what two overlapping runs were able to read the
+    same answer from - so a row would join to the wrong run, or to a run that
+    never happened.
+    """
+    fold = _step(_load_workflows()["digest.yml"], "assemble", "name", FOLD_STEP)
+
+    assert "--execution \"${{ github.run_id }}\"" in _script(fold, "assemble fold step")
 
 
 def test_the_corpus_is_committed_but_never_rebuilt() -> None:
