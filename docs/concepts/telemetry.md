@@ -45,7 +45,7 @@ One name is emitted:
 
 A second shape of evidence, off by default, and the only one that carries a start instant and a parent.
 
-`observability.tracing_enabled` is false in the committed config. Turned on, a work shard opens a span per stage and one per sub-step, and writes one JSON line per span to `backend/var/traces/<date>/<run>-<shard>.jsonl`. That directory is gitignored, nothing downloads it and no page can read it.
+`observability.tracing_enabled` is false in the committed config. Turned on, a work shard opens a span per stage and one per sub-step, and writes one JSON line per span. A developer's local run lands under gitignored `backend/var/traces/`, which nothing downloads and no page can read; a short rolling window of the most recent runs is committed under `state/traces/` so a recent run stays openable from the repository - see [The committed traces, briefly](#the-committed-traces-briefly).
 
 **What a span buys that a ledger column does not**, stated so the feature can be judged: a start instant, a parent, and a step too small to earn a column of its own. `fetch_ms`, `extract_ms` and `summarize_ms` already split an item three ways. What they cannot say is which of these took the time:
 
@@ -110,6 +110,16 @@ The other six are left out because a ledger already holds their timing. `fetch`,
 **The rollup is derived, and it restates nothing.** It is a fold of the shard's own spans, not a parallel record. Its three measured columns - `count`, `total_ms` and `unattributed_ms` - are held disjoint, outside the key, from the columns of every committed ledger by a contract-tier test ([`backend/tests/test_contracts.py`](../../backend/tests/test_contracts.py)). That disjointness is the whole reason a fold of the spans can be committed where a raw span cannot: it cannot disagree with the item-health, eval, runtime-counter or visual ledgers, because it shares no measurement with any of them.
 
 **It costs the same on a busy day as an empty one** (Rule #12). The fold reads one shard's spans - a bounded input - and writes at most five rows per shard per run. A name the shard never opened produces no row rather than a zero, so an absent row reads as never opened and never as opened-and-measured-nothing.
+
+## The committed traces, briefly
+
+The rollup above is the **record** of a run and it lasts. A raw trace is **evidence with a short life**: the nested tree of spans an operator opens to walk one recent run step by step, for the question the rollup's per-stage totals cannot answer - which span inside a stage took the time. A short rolling window of the most recent runs is committed under `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl`, one JSON line per span, so a recent run stays openable from the repository rather than being lost with a gitignored file or a CI artifact that expires in days. The date is spelled once: the `<YYYY>/<MM>/` directories and the `<DD>` prefix are the run's day, and the run slot is the ordinal alone.
+
+**A trace is a lookup, so it is deleted rather than folded.** `retention.prune_traces` removes whole files whose published day is more than `observability.trace_window_days` behind today, and folds nothing - a summary of a raw trace would invent a total nobody reads, and the rollup already holds every total a reader asks for. It is the same shape as the `state/seen/` prune and for the same reason: a store nobody reads past a window is bytes answering no question, and its honest retention is deletion. There is no fuse, because the worst case is an operator losing a drill-down into a run that has already left the window, not a published byte - which is what the picture pruner's fuse exists to protect.
+
+**Bounded by construction** (Rule #12). The window makes the cost constant: at most `trace_window_days` days of traces on disk, whatever the project's age. Measured 2026-09-06 (Windows 11, Python 3.14.2, a real traced run over the committed fixture, n=3, deterministic to two bytes): about 2,943 bytes an item across the nine work spans, so a run at the 160-item `run.safety_ceiling_per_run` ceiling writes about 0.47 MB of work spans, a little more with the score and visual spans. Over the five scheduled runs a day and the default seven-day window, `state/traces/` is bounded near 21 MB - a fraction of the 1 GB Pages reference it is not even part of, since `state/` is committed but never published. The default is seven days, a week of runs; `observability.trace_window_days` is the knob.
+
+A trace is committed only while a run writes one, and a run writes one only with `observability.tracing_enabled` on, which is off by default. Until it is on, nothing writes a trace and the prune walks an empty tree - so the store costs nothing today and is bounded the moment it costs anything.
 
 ## The item-level census
 
