@@ -17,11 +17,10 @@ import json
 import math
 from array import array
 from base64 import b64decode
-from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.assemble import collapse_same_story, cosine_int8
@@ -314,31 +313,29 @@ def test_the_labelled_day_keeps_every_item_it_published() -> None:
 # --- the read side ---------------------------------------------------------
 
 
-def committed_days() -> list[Path]:
-    return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))
-
-
 def test_a_committed_day_reads_an_absent_duplicate_field_as_unknown() -> None:
-    """The read-side migration (CLAUDE.md section 11), over the real payloads.
+    """The read-side migration (CLAUDE.md section 11).
 
     A day written before the pass existed omits both fields, and each must come
     back as `None`. `0` for `also_covered_by` would claim no other source
     carried the story, which is a fact nobody measured.
-    """
-    assert committed_days(), "no digest.json under frontend/public/digest"
-    absent = 0
-    for path in committed_days():
-        text = read_text(path)
-        written = json.loads(text)["items"]
-        day = DigestDay.from_json(text)
-        for payload, one in zip(written, day.items, strict=True):
-            for name in ("also_covered_by", "same_story_as"):
-                if name in payload:
-                    continue
-                absent += 1
-                assert getattr(one, name) is None, f"{path.name} {one.item_id}: {name} invented"
 
-    assert absent, "every committed item carries both, so nothing here reads an absent field"
+    Driven from the fixture with both keys removed. Walking the committed tree
+    cost one parse per published day, and it counted the items that still LACK
+    the fields and failed at zero - so it went red on the day the last
+    unmigrated day aged out of retention, which is a date on the calendar rather
+    than a change anybody made.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    for item in payload["items"]:
+        item.pop("also_covered_by", None)
+        item.pop("same_story_as", None)
+    assert payload["items"], "the fixture holds no story, so removing the fields proved nothing"
+
+    day = DigestDay.model_validate(payload)
+    for one in day.items:
+        assert one.also_covered_by is None, f"{one.item_id}: also_covered_by invented"
+        assert one.same_story_as is None, f"{one.item_id}: same_story_as invented"
 
 
 def test_a_day_may_not_collapse_onto_an_item_it_also_collapses() -> None:

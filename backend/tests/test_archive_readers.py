@@ -61,7 +61,6 @@ ARCHIVE_READERS: Final = frozenset(
         "backend/tests/test_labels.py",
         "backend/tests/test_leading_stories.py",
         "backend/tests/test_ledger.py",
-        "backend/tests/test_measure_ledgers.py",
         "backend/tests/test_pipeline.py",
         "backend/tests/test_publish_telemetry.py",
         "backend/tests/test_same_story.py",
