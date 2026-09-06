@@ -701,13 +701,19 @@ export function observeWidth(
 	return { destroy: () => observer.disconnect() };
 }
 
-/** One mark a readout can land on: where it sits, and what it says. */
+/** One mark a readout can land on: where it sits.
+ *
+ * It carried a second field, `lines`, holding one preformatted sentence per
+ * series on the premise that the action would read them out. Nothing ever did.
+ * `ChartReadout.svelte` is the live region and it prints `DayReadout.rows`
+ * straight, so every hover target on every console chart was built with a
+ * string per series that no element and no reader saw. Deleted 2026-09-06
+ * after a grep over `frontend/` found one reader, and it was a test asserting
+ * the field's own shape.
+ */
 export interface ReadoutMark {
 	/** The mark's x in the chart's own pixels. The hit rule is nearest by x. */
 	x: number;
-	/** The sentences to print, in order. The first is the label, the rest the
-	 * numbers. A chart that already builds a sentence passes that sentence. */
-	lines: string[];
 }
 
 /** One row of a readout strip: a series, what it read, and the line's colour. */
@@ -742,16 +748,13 @@ export interface DayReadout {
  * chart on the three routes and fails on any that declares neither.
  */
 
-/** The action's marks, built from the strip's own rows.
+/** The action's marks: where each column of the strip sits.
  *
- * The strip draws the rows and the action announces the sentences, so both come
- * from one array and cannot disagree about what a column said.
+ * The strip and the action are built from one array, so the column a pointer
+ * lands on and the column the strip prints cannot be two different ones.
  */
 export function readoutMarks(columns: readonly DayReadout[]): ReadoutMark[] {
-	return columns.map((column) => ({
-		x: column.x,
-		lines: [column.date, ...column.rows.map((row) => `${row.label} ${row.value}`)]
-	}));
+	return columns.map((column) => ({ x: column.x }));
 }
 
 /** One series of a strip: what it is, what colour it is drawn in, what it read.
@@ -813,6 +816,151 @@ export function bandShares(count: number, width: number, grid: PlotGrid): number
 	);
 }
 
+/** How far a mark may sit from an evenly spaced one and still count as evenly
+ * spaced, as a share of one step.
+ *
+ * `dayColumns` computes `left + (index * (right - left)) / (columns - 1)`, so
+ * two neighbouring columns come out a bit or two of a double apart rather than
+ * exactly one step apart. A millionth of a step admits that and admits nothing
+ * else: over the widest axis this ships, 366 columns, the arithmetic below can
+ * then be out by at most a thousandth of a column, and it checks a whole column
+ * either side of its own answer.
+ */
+const EVEN_SPACING_SLACK = 1e-6;
+
+/** How a set of marks lies along x, which decides how a pointer is answered. */
+export type MarkSpacing = 'even' | 'ordered' | 'scan';
+
+/** Which of the three rules a set of marks gets, and the rule itself. */
+export interface ColumnLookup {
+	/** `even` where the marks are evenly spaced, so a column is one division;
+	 * `ordered` where they only ascend, so it is a binary search; `scan` where
+	 * they do neither. Published so a test can say which rule ran, rather than
+	 * only that the answer came out right - an implementation that quietly
+	 * walked every mark every time would pass a parity test in silence. */
+	rule: MarkSpacing;
+	/** The column a pointer at this x means, or null where there are none. */
+	at: (x: number) => number | null;
+}
+
+function spacingOf(xs: readonly number[]): MarkSpacing {
+	for (let index = 0; index < xs.length; index += 1) {
+		// A mark that is not a real number, or one sitting before the mark before
+		// it, is outside what either fast rule can promise. Neither happens on a
+		// console chart and both are cheap to hand back to the walk.
+		if (!Number.isFinite(xs[index])) return 'scan';
+		if (index > 0 && xs[index] < xs[index - 1]) return 'scan';
+	}
+	if (xs.length < 2) return 'ordered';
+	const first = xs[0];
+	const step = (xs[xs.length - 1] - first) / (xs.length - 1);
+	// Every mark at one x, which is what `columnStrip` builds before an
+	// engine-drawn chart is given its real shares. The search answers it.
+	if (!(step > 0)) return 'ordered';
+	const slack = step * EVEN_SPACING_SLACK;
+	for (let index = 1; index < xs.length - 1; index += 1) {
+		if (Math.abs(xs[index] - (first + index * step)) > slack) return 'ordered';
+	}
+	return 'even';
+}
+
+/** The first mark at or past `x`, looking only at the first `to` of them. */
+function firstAtOrPast(xs: readonly number[], x: number, to: number): number {
+	let low = 0;
+	let high = to;
+	while (low < high) {
+		const middle = (low + high) >> 1;
+		if (xs[middle] < x) low = middle + 1;
+		else high = middle;
+	}
+	return low;
+}
+
+/** Which column a pointer at an x means, worked out once for one set of marks.
+ *
+ * The walk this replaces measured every mark on every `pointermove`, so a chart
+ * with a column a day over a ninety-day window did ninety subtractions to
+ * answer a question a dragging thumb asks many times a second, and it did them
+ * again for a move that did not change the answer. The layout is settled once
+ * instead, when the marks change:
+ *
+ * - **Evenly spaced** - every day chart on the console, because `dayColumns`
+ *   and `bandShares` both divide the plot evenly. The column is then one
+ *   division, and only its two neighbours are measured to settle a pointer
+ *   sitting on a boundary.
+ * - **Ascending but not evenly spaced** - a chart placing its columns by a
+ *   value rather than by a count, and any strip whose marks share an x. A
+ *   binary search finds the first mark at or past the pointer and measures the
+ *   pair around it.
+ * - **Neither** - the walk, unchanged. Nothing on the console produces this,
+ *   and a rule that guessed here would be a rule nobody could check.
+ *
+ * All three answer the same, including the tie: where two marks are the same
+ * distance away the lower index wins, because the strip prints one column and
+ * a chart with two runs of one day at one x needs the pointer and the strip to
+ * agree which. `frame.spec.ts` holds every rule to the walk, at every mark,
+ * every midpoint and every duplicate.
+ */
+export function nearestColumn(marks: readonly ReadoutMark[]): ColumnLookup {
+	const xs = marks.map((mark) => mark.x);
+	const count = xs.length;
+	const rule = spacingOf(xs);
+
+	/** The nearest of a run of candidates, lowest index on a tie. The walk's own
+	 * comparison, so a fast rule that narrows the field cannot change the pick. */
+	const best = (x: number, from: number, to: number): number => {
+		let at = from;
+		let gap = Math.abs(xs[from] - x);
+		for (let index = from + 1; index <= to; index += 1) {
+			const distance = Math.abs(xs[index] - x);
+			if (distance < gap) {
+				gap = distance;
+				at = index;
+			}
+		}
+		return at;
+	};
+
+	if (count === 0) return { rule, at: () => null };
+
+	if (rule === 'even') {
+		const first = xs[0];
+		const step = (xs[count - 1] - first) / (count - 1);
+		return {
+			rule,
+			at: (x: number) => {
+				// The walk keeps its first candidate against every distance it cannot
+				// beat, so an x that is not a number picks the first column.
+				if (!Number.isFinite(x)) return 0;
+				// `ceil(t - 0.5)` is the nearest column with an exact halfway point
+				// sent down, which is the walk's tie rule.
+				const guess = Math.ceil((x - first) / step - 0.5);
+				const near = Math.min(count - 1, Math.max(0, guess));
+				return best(x, Math.max(0, near - 1), Math.min(count - 1, near + 1));
+			}
+		};
+	}
+
+	if (rule === 'ordered') {
+		return {
+			rule,
+			at: (x: number) => {
+				if (!Number.isFinite(x)) return 0;
+				const past = firstAtOrPast(xs, x, count);
+				if (past === 0) return 0;
+				// A second search rather than a walk back over the duplicates: a strip
+				// whose marks all share an x is the case that would make that walk the
+				// whole array again.
+				const firstOf = (index: number) => firstAtOrPast(xs, xs[index], index + 1);
+				if (past === count) return firstOf(count - 1);
+				return xs[past] - x < x - xs[past - 1] ? past : firstOf(past - 1);
+			}
+		};
+	}
+
+	return { rule, at: (x: number) => best(x, 0, count - 1) };
+}
+
 export interface ReadoutOptions {
 	marks: ReadoutMark[];
 	/** The width the chart drew at, so a client x can be scaled into chart
@@ -842,6 +990,7 @@ export function pointerReadout(
 ): { update: (next: ReadoutOptions) => void; destroy: () => void } {
 	let current = options;
 	let at: number | null = null;
+	let column = nearestColumn(options.marks);
 
 	const select = (next: number | null) => {
 		if (next === at) return;
@@ -856,17 +1005,7 @@ export function pointerReadout(
 		if (current.marks.length === 0) return null;
 		const rect = node.getBoundingClientRect();
 		if (rect.width === 0) return null;
-		const x = ((clientX - rect.left) * current.width) / rect.width;
-		let best = 0;
-		let gap = Number.POSITIVE_INFINITY;
-		current.marks.forEach((mark, index) => {
-			const distance = Math.abs(mark.x - x);
-			if (distance < gap) {
-				gap = distance;
-				best = index;
-			}
-		});
-		return best;
+		return column.at(((clientX - rect.left) * current.width) / rect.width);
 	};
 
 	const track = (event: PointerEvent) => select(nearest(event.clientX));
@@ -920,6 +1059,9 @@ export function pointerReadout(
 
 	return {
 		update(next: ReadoutOptions) {
+			// The layout of the marks is settled here rather than on every pointer
+			// move, which is the whole of what this action costs a dragging thumb.
+			if (next.marks !== current.marks) column = nearestColumn(next.marks);
 			current = next;
 			// The window moved, so the mark this index named may be gone. Holding
 			// the index would print one article's numbers under another's mark.
