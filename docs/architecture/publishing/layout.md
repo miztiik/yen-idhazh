@@ -447,9 +447,28 @@ The levers are ordered, and deletion is the last one:
 
 1. **Encode efficiently.** Images are the overwhelming majority of the bytes; the encoding choice alone moves the ceiling by years.
 2. **Honour the visual rule.** "Nothing" is the common and correct answer ([../../concepts/digest.md](../../concepts/digest.md)), so most items carry no image at all.
-3. **Then, and only if still needed, prune.**
+3. **Serve the drawings from somewhere else.** `visuals.asset_base_url`, below. The bytes still exist and every link still works; they stop being ours to fit under the cap.
+4. **Then, and only if still needed, prune.**
 
 After the first two, the knob may never need to be switched on. That is the intended outcome, not a fallback.
+
+### The valve: the drawings can be served from somewhere else (2026-09-06)
+
+`visuals.asset_base_url` is one config key with two effects, and it ships empty, which means this site.
+
+Name an absolute `https://` prefix and `frontend/scripts/copy-visuals.mjs` stops staging the rendered drawings into the bundle, while `ItemVisual.svelte` asks that prefix for them instead. They are one key because two would let the bundle keep a copy of every drawing the page is asking a host for, and the valve would move nothing. The page's own `connect-src` is derived from the same key for the same reason: `'self'` is what makes exfiltration from a planted instruction a browser-level impossibility, so it is also what refuses an off-origin drawing, and an operator who has to edit it by hand gets a site that fetches nothing and says why only in a console no reader opens.
+
+**What it buys, measured 2026-09-06 on an Intel Core i7-1265U, Windows 11, node 24.12.0, over the 17 committed days.** Shut, the built site is 685 files and 111,255,143 bytes. Open, it is 309 files and 106,474,222 bytes. So it removes 376 drawings and **4,780,921 bytes, which is 4.3 percent of the site** - about seven weeks of headroom at the 16,641,956 bytes a published day this page measures below, against a cap the same measurement puts at about 2026-10-22.
+
+**Say the small number first: 4.3 percent is not the answer to the cap.** The prerendered dated routes are 39.5 percent and they are what the cap date is a function of. This valve is worth having because it is one config edit and it costs nothing shut, not because it is the lever that saves the site. Anyone reaching for it as the fix has read the wrong number.
+
+**What it costs open, also measured.** The candidate host caches for five minutes, so a repeat reader refetches a drawing the bundle would have served from cache - real on a slow connection, and the reason the reading experience never waits on it: a drawing arrives after the sentence that repeats its numbers, and the page is complete without it. `connect-src` gains that one origin, computed at build time from our own config; no payload field, no model output and no fetched text can reach it (Rule #11), and the path is still matched by `publishedVisual()` before either half is joined.
+
+**The carrier does not move, only the URL.** The drawing is fetched as text and inlined, exactly as it is today. An `img` would be the obvious way to point at another host and it is refused: an SVG inside an `img` is a separate document, reads none of the page's custom properties, and comes back with the colours the renderer baked in - black axis type on a near-black card in the dark theme. That was removed on 2026-09-05 and moving bytes is not a reason to bring it back. Cross-origin `fetch()` returns text, and text inlined into our document is themed by our stylesheet whichever host sent it.
+
+**Shut is proven, not assumed.** At the default the whole built tree is byte-identical to one built without the valve: 685 files, 111,255,143 bytes, zero differing hashes over two builds at a pinned `BUILD_VERSION`, same hardware and date. The join is written `${__ASSET_BASE_URL__ || base}` so the minifier folds an empty constant away rather than shipping a branch. A release valve that changes the default output is not a valve, it is a change.
+
+**Whoever opens it puts the same `digest/` tree at that prefix first.** Nothing in the pipeline uploads it, and nothing checks that it is there. The day payloads and the month index are staged either way: they are read from this origin, and they are not what the ceiling is about.
 
 What the job may do: delete rendered visuals older than a configured age, never on a size trigger, dry-run by default, refusing to act above a maximum-deletions fuse, in its own scheduled workflow that can never take the daily digest down with it. A pruned visual is a **distinct state from a failed render** - "we could not make this" and "we made it and threw it away" are different facts, and one field must not mean both.
 

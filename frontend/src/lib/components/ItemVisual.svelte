@@ -62,6 +62,16 @@
 	 * labels inside it were written by a model that read a stranger's page
 	 * (Rule #11). The path is matched before it is joined onto `base`, for the
 	 * same reason `dayUrl` matches a date: it is about to become an address.
+	 *
+	 * **`__ASSET_BASE_URL__` moves where the drawing is asked for and nothing
+	 * else.** It is `visuals.asset_base_url`, injected at build time, and it
+	 * ships empty - so the join is `base`, this site, exactly as it was. Naming a
+	 * host there takes the drawings a reader scrolls to off the 1 GB published
+	 * ceiling without touching the carrier: the bytes still arrive as text and
+	 * are still inlined, so the page still repaints them from its own tokens, and
+	 * an `img` - which cannot be repainted, see above - is still not an option.
+	 * The origin comes from our config and can never come from a payload, and the
+	 * path is still matched by `publishedVisual` before either half is joined.
 	 */
 	async function read(file: string): Promise<string | null> {
 		if (!publishedVisual(file)) {
@@ -69,7 +79,7 @@
 			return null;
 		}
 		try {
-			const response = await fetch(`${base}/${file}`);
+			const response = await fetch(`${__ASSET_BASE_URL__ || base}/${file}`);
 			if (!response.ok) {
 				console.warn(`[digest] ${file}: not available (${response.status}), so it is not drawn`);
 				return null;

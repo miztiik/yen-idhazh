@@ -1,4 +1,5 @@
 import adapter from '@sveltejs/adapter-static';
+import { assetBaseUrl, connectSources } from './asset-base.js';
 import { handleUnseenRoutes } from './prerender-guard.js';
 
 // SvelteKit's own default for `kit.version.name` is one `Date.now()` taken when
@@ -60,11 +61,18 @@ export default {
 		// page can make, wherever in our source the URL was built - which is a
 		// stronger guarantee than a rule about how carefully `assist/day.ts`
 		// assembles a path.
+		//
+		// Which is why `connect-src` is derived rather than written: when
+		// `visuals.asset_base_url` names a host, the drawings are asked for there,
+		// and this directive is the thing that would otherwise refuse them. Both
+		// halves read the one config value, so the valve opens on a config edit and
+		// not on a second source edit nobody documented. At the shipped default the
+		// list is `['self']` and this meta tag is byte-identical to what it was.
 		csp: {
 			mode: 'auto',
 			directives: {
 				'default-src': ['self'],
-				'connect-src': ['self'],
+				'connect-src': connectSources(assetBaseUrl()),
 				// The encoder is WebAssembly, which needs its own compile permission.
 				// It does NOT need 'unsafe-eval'.
 				'script-src': ['self', 'wasm-unsafe-eval'],
