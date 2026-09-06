@@ -93,14 +93,16 @@ The planning step scores every story before a single model loads ([../sources/di
 
 ### The rail is what reads it, and what it can and cannot say (2026-09-02)
 
-The day's stream orders by `published_at`, newest first, and prints it on a rail. So `time_source` stopped being a field with no reader and became the thing that decides which of five strings a story gets ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Counted 2026-09-02 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over every committed day - 12 days, 4,713 stories:
+The day's stream orders by `published_at`, newest first, and prints it on a rail. So `time_source` stopped being a field with no reader and became the thing that decides how a story's stamp is drawn ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Counted 2026-09-02 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over every committed day - 12 days, 4,713 stories:
 
 | `time_source` | Stories | Share | What the rail prints |
 | --- | --- | --- | --- |
 | `feed` | 970 | 20.6 percent | the clock, unmarked |
-| `first_seen` | 10 | 0.2 percent | `First seen 06:20`, with a mark |
-| `unknown` | 0 | 0 | `No time given` |
+| `first_seen` | 10 | 0.2 percent | the clock, with a mark |
+| `unknown` | 0 | 0 | nothing - there is no number to print |
 | absent | 3,733 | 79.2 percent | the clock, unattributed and unmarked |
+
+The rail prints digits only, from 2026-09-06: a clock, and a date in front of it when the stamp is not from the day being read. The mark is what carries the `first_seen` case now that no word does.
 
 Three things follow from that table and each one moved the design.
 

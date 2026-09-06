@@ -1414,15 +1414,21 @@ whose feed stamps run years back, so the hour groups are sparse. 2026-08-24 has
 | `unknown` | 0 | 0 |
 | absent (published before the field existed) | 3,733 | 79.2 percent |
 
-And which of the rail's five strings each story gets:
+And which form each story gets. The counts are the 2026-09-02 census and have
+not been re-taken; the strings in the left column are what the rail prints from
+2026-09-06, when it collapsed to digits and the words came off:
 
 | Form | Stories | Share |
 | --- | --- | --- |
 | `14:05` - the day being read | 3,547 | 75.3 percent |
-| `11 Jun 08:15` - older than yesterday | 776 | 16.5 percent |
-| `Yesterday 23:40` | 380 | 8.1 percent |
-| `First seen 06:20` - our clock, marked | 10 | 0.2 percent |
-| `No time given` | 0 | 0 |
+| `06-11 08:15` - any earlier day, `2019-06-11 08:15` across a year | 1,156 | 24.5 percent |
+| `06:20` with a mark - our clock | 10 | 0.2 percent |
+| nothing - no stamp at all | 0 | 0 |
+
+The two dated rows were counted separately before the collapse - 776 stories,
+16.5 percent, older than the day before, and 380, 8.1 percent, on the day before
+itself, which printed `Yesterday 23:40`. They print the same shape now, so they
+are one row.
 
 **`unknown` is empty and that is why the canary day plants one.** A branch no
 fixture reaches ships with no test, and this one decides whether a story with no
@@ -1431,8 +1437,8 @@ every form.
 
 **47 of the 4,713 stories are stamped exactly `T00:00:00Z`**, 1.0 percent, which
 is what a date-only feed date parses to and also what a story genuinely
-published at midnight parses to. That figure is why the rail does not print
-`no time given` on a midnight stamp: it would mislabel the real midnight stories
+published at midnight parses to. That figure is why the rail still prints a
+clock on a midnight stamp: blanking it would hide the real midnight stories
 inside the same 1.0 percent, and the payload cannot say which they are
 ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-rail-is-what-reads-it-and-what-it-can-and-cannot-say-2026-09-02)).
 
@@ -1477,10 +1483,12 @@ takes its 104px from the item's own empty width rather than from the prose.
 
 On the canary day - eight stories planted to carry every state - the rail draws
 **7 markers and one glyph** at every one of those widths, in this order:
-`14:58`, `11:00`, `09:20`, `First seen 06:20`, `Yesterday 23:40`,
-`11 Jun 08:15`, `No time given`. The eighth story is at `14:05`, inside the
-first marker's hour, so it carries no label - which is the grouping doing its
-job on a fixture small enough to read by eye.
+`14:58`, `11:00`, `09:20`, `06:20` with the glyph, `08-19 23:40`, `06-11 08:15`,
+and an empty marker for the story with no stamp. The eighth story is at `14:05`,
+inside the first marker's hour, so it carries no label - which is the grouping
+doing its job on a fixture small enough to read by eye. The widths above were
+measured 2026-09-02 against the old word labels; the collapse to digits on
+2026-09-06 made every label shorter or the same, so the column was not re-taken.
 
 ### Why the visual did not get a column
 
