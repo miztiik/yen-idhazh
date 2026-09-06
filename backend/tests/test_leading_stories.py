@@ -1,8 +1,8 @@
 """The day's leading stories: what leads, what a cap costs, and what the block says.
 
-Unit and integration tier (CLAUDE.md section 13). Nothing here is mocked and no
-test touches the network: the arithmetic runs over stories built in the test,
-and the invariants run over the committed days on disk.
+Unit and integration tier (CLAUDE.md section 13). Nothing here is mocked, no
+test touches the network, and nothing reads the committed archive: every case is
+built in the test, including cases no published day has produced (Rule #12).
 
 The one thing every test here is defending is the promise in
 `docs/concepts/digest.md`: the block adds a way into the day and removes
@@ -14,11 +14,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import Counter
-from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh.assemble import leading_stories, subject_clusters
 from idhazh.contracts.app_config import UiConfig
@@ -28,8 +25,6 @@ from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.watchlist import EntityDef, Watchlist
 
-DIGEST_ROOT = REPO_ROOT / "frontend" / "public" / "digest"
-
 DESKS = {
     "ai": "AI",
     "energy": "Energy",
@@ -37,20 +32,6 @@ DESKS = {
     "india": "India",
     "business-economy": "Business",
 }
-
-# The refusals a story can only earn after it reached the block, so these and
-# the block itself are the candidate pool. `block-under-leading-min` is in the
-# set because it relabels stories the block had already taken.
-CAP_REFUSALS = frozenset(
-    {
-        "block-full",
-        "desk-full",
-        "source-already-leading",
-        "subject-already-leading",
-        "yesterday-full",
-        "block-under-leading-min",
-    }
-)
 
 
 def watchlist(*entries: tuple[str, str, list[str]]) -> Watchlist:
@@ -548,77 +529,16 @@ def test_a_notable_story_left_out_says_which_rule_left_it_out(
     assert f"omitted item={notable.item_id} because=" in said
 
 
-# --- the committed days -----------------------------------------------------
+# --- a real day is not read here -------------------------------------------
 #
-# One day is read here, not all of them. Every rule the block obeys is a rule of
-# `leading_stories`, and the twenty-odd tests above drive that function with
-# stories built to exercise each one - including cases no published day has ever
-# produced. Re-running the same rules over every committed day added a check per
-# day forever and told us nothing the twelfth day had not (`CLAUDE.md` Rule #12).
-#
-# What a real day still answers is different, and it is the one below: are the
-# rules so strict that ordinary news cannot fill the block?
-
-
-def committed_days() -> list[Path]:
-    """Published days a test may read. The newest date is still being written to."""
-    return sorted(DIGEST_ROOT.rglob("digest.json"))[:-1]
-
-
-def test_the_newest_finished_day_that_carries_the_signal_fills_the_block(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """The row's oracle, on the newest FINISHED day that records a rank score.
-
-    Finished, not newest, and `committed_days` is what makes it so - the date
-    still being written held 78 stories one run of five in on 2026-09-06,
-    against the 374 to 627 a finished day carries, 11 that could lead against
-    64 to 127, and a block of four. A full block there is a fact about the time
-    of day.
-
-    Bound to the data rather than to a date: a test naming one day stops
-    meaning anything the moment that day ages out of the retention window.
-
-    The failure prints the candidate pool beside the block, because a pool that
-    ran out and a cap that turned stories away are different failures with the
-    same lead count. The pool is the block's own omission log rather than a
-    second selection run here, so nothing in this file can drift from the rule
-    it is reporting - and a day that ran out is the day that records no
-    `block-full` at all.
-    """
-    day = next(
-        (
-            published
-            for published in (
-                DigestDay.from_json(read_text(path)) for path in reversed(committed_days())
-            )
-            if any(item.rank_score is not None for item in published.items)
-        ),
-        None,
-    )
-    if day is None:
-        pytest.skip("no finished day records a rank score yet")
-
-    registry = Watchlist.from_json(read_text(CONFIG_DIR / "watchlist.json"))
-    ui = UiConfig()
-    with caplog.at_level(logging.INFO, logger="idhazh"):
-        leads = leading_stories(
-            day.items, date=day.date, watchlist=registry, ui=ui, desk_names=DESKS
-        )
-    if len(leads) != ui.leading_stories:
-        refused: Counter[str] = Counter()
-        for record in caplog.records:
-            _, marker, rule = record.getMessage().partition("because=")
-            if marker and rule.split(":", 1)[0] in CAP_REFUSALS:
-                refused[rule.split(":", 1)[0]] += 1
-        runs = len(day.runs)
-        tally = ", ".join(f"{rule} {count}" for rule, count in sorted(refused.items()))
-        pytest.fail(
-            f"{day.date} published {len(day.items)} stories in {runs} "
-            f"run{'' if runs == 1 else 's'}, {len(leads) + sum(refused.values())} of which "
-            f"could lead, and filled {len(leads)} of {ui.leading_stories}; "
-            f"the caps refused {tally or 'nothing'}"
-        )
+# Two questions used to open every committed day. One is gone and one is built.
+# "Does a real day supply enough eligible stories to fill the block?" is about
+# the news, not the code, so it is not a pytest (Rule #12); the code property -
+# the block fills to its cap when the supply is there - is
+# `test_the_block_holds_the_configured_count_and_never_more` above, and the
+# data-supply signal, if wanted, is an operator surface under `backend/utilities/`.
+# The other question is below, driven from a built payload rather than from
+# whatever old day still sits in the tree.
 
 
 def test_a_day_written_before_the_block_existed_reads_as_no_block() -> None:
