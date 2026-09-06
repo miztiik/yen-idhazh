@@ -101,7 +101,7 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 	version: 'The schema stamp the row was written under.',
 	date: 'Which day. It is the x axis of every panel above, never a value on one.',
 	run_id: 'Which execution wrote the row.',
-	item_id: 'Which article.',
+	item_id: 'Which slot on that day\'s page the summary was published in.',
 	url_key: 'The key the ledger joins to the published item on.',
 	source_url: 'The address the article was read from.',
 	title: 'The headline, carried so a row can be read without a second file.',
@@ -112,7 +112,7 @@ export const NOT_A_MEASUREMENT: Readonly<Record<string, string>> = {
 	output_digest: 'A digest of the summary, kept so a re-run can be proved identical.',
 	source_digest: 'A digest of the article text, kept for the same reason.',
 	scorer_version: 'Which checker ran. It says the instrument changed, not that the summaries did.',
-	scored_at: 'When the check ran.',
+	scored_at: 'When the check ran, which is not always the day it scored.',
 	attempt:
 		'Which try wrote the row. Measured 2026-09-06 over 6,966 rows: every one of them is the first try.'
 };

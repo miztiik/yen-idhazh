@@ -2076,6 +2076,31 @@ markers, which is a count of phrases in about four pages.
 **Neither new panel declares `data-windowed`**, for the reason the doubt-reason
 panel does not, and each proves it honours the control in its own spec.
 
+**What it cost, measured 2026-09-06 on an Intel Core i7-1265U.** The three panels
+add **5,930 gzipped bytes** to `/console/model/`: the median of five builds is
+44,948 B against 39,018 B for `origin/main`'s own source built in place on the
+same tree and the same machine. Five builds of the shipping tree spanned 11 B and
+three of the control spanned 8 B, so the 64 B noise floor holds. `/console/` and
+`/console/machine/` moved by 2 B and 4 B between the arms, which is the same
+floor - the change reaches one route.
+
+That control arm reads 39,018 B where 2026-09-05 recorded 38,867 B for the same
+commit. The 151 B is a different machine, not a change: nothing between the two
+dates touched this route's source or the ledgers it reads.
+
+**The ceiling moved to 56,385 B, by the method that owns it.** Heaviest of five
+builds (44,953 B), plus seven published days, plus the 64 B floor. A published
+day now costs this route **1,624 gzipped bytes**, re-measured by the same method
+as before - removing 2026-08-31, the heaviest committed day, from every ledger
+the route reads and rebuilding: 44,948 B fell to 43,324 B. It was 1,291 B on
+2026-09-05, and these three panels are what added the other 333 B a day: one
+reduced day in the seed, two screen-reader rows, and two chart points. The page
+ships with 11,437 B of slack, which is seven published days and expires by
+design.
+
+`/console/` and `/console/machine/` are untouched by this change and their own
+re-derivation is still owed.
+
 ### The model-change rule, and the charts it means something on
 
 A dashed rule down a chart says one sentence: *everything left of this line was
