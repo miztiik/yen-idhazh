@@ -552,7 +552,19 @@ def test_a_notable_story_left_out_says_which_rule_left_it_out(
 
 
 def committed_days() -> list[Path]:
-    return sorted(DIGEST_ROOT.rglob("digest.json"))
+    """The published days a test may read: every date except the newest.
+
+    The pipeline publishes several times into the same date, so the last date on
+    disk is the one still being appended to and is a fraction of itself for most
+    of the day - measured 2026-09-06 one run of five in, 78 stories against the
+    374 the finished day beside it carries. Any assertion about a day's size or
+    fullness read off that date is an assertion about the time of day.
+
+    The rule lives here rather than at each call site so that a caller cannot
+    opt out of it by accident. Every earlier date can gain no more runs, so it
+    is finished by construction - no run count, no clock, nothing to tune.
+    """
+    return sorted(DIGEST_ROOT.rglob("digest.json"))[:-1]
 
 
 @pytest.mark.parametrize("path", committed_days(), ids=lambda p: p.parent.name)
@@ -596,14 +608,11 @@ def test_the_newest_finished_day_that_carries_the_signal_fills_the_block(
 ) -> None:
     """The row's oracle, on the newest FINISHED day that records a rank score.
 
-    Finished, not newest. The pipeline publishes several times a day into the
-    same date, so the most recent date on disk is the one still being appended
-    to and is a fraction of itself for most of the day: measured 2026-09-06 one
-    run in, 78 stories against the 374 to 627 a finished day carries, 11
-    stories that could lead against 64 to 127, and a block of four. A full
-    block there is a fact about the time of day. Every earlier date can gain no
-    more runs, so it is finished by construction - no run count, no clock, and
-    nothing to tune.
+    Finished, not newest, and `committed_days` is what makes it so - the date
+    still being written held 78 stories one run of five in on 2026-09-06,
+    against the 374 to 627 a finished day carries, 11 that could lead against
+    64 to 127, and a block of four. A full block there is a fact about the time
+    of day.
 
     Bound to the data rather than to a date: a test naming one day stops
     meaning anything the moment that day ages out of the retention window.
@@ -615,11 +624,12 @@ def test_the_newest_finished_day_that_carries_the_signal_fills_the_block(
     it is reporting - and a day that ran out is the day that records no
     `block-full` at all.
     """
-    finished = committed_days()[:-1]
     day = next(
         (
             published
-            for published in (DigestDay.from_json(read_text(path)) for path in reversed(finished))
+            for published in (
+                DigestDay.from_json(read_text(path)) for path in reversed(committed_days())
+            )
             if any(item.rank_score is not None for item in published.items)
         ),
         None,
