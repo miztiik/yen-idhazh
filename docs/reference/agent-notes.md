@@ -238,6 +238,24 @@ only resolution that is true of both. Before merging anything that rewrites
 `frontend/public/`, check `gh run list --workflow digest.yml --limit 3` for a run
 in flight and wait it out - the wait is minutes and the repair is not.
 
+**A test that reads the newest committed day is racing the pipeline, and it goes
+red in the morning and green by evening.** The digest publishes several times a
+day and appends to the same day payload, so the newest date on disk is always the
+one still being written. Measured 2026-09-06: at 09:00 that day held 78 stories
+after one run of five, where a finished day holds 374 to 582.
+`test_a_committed_day_that_carries_the_signal_fills_the_block` asserted a full
+lead block on it and failed - not because the block was broken, but because 78
+stories yielded a candidate pool of 11 against 64 and 104 on the two days before
+it. The tell that the pool ran out rather than the block filling: the refusal
+counts carry no `block-full` at all.
+
+The fix is structural rather than a clock or a run count - take the newest day
+that is **not** the newest date on disk, because an earlier date can gain no more
+runs. Fixed in `backend/tests/test_leading_stories.py` on 2026-09-06.
+`backend/tests/test_contracts.py::test_a_story_past_the_seed_is_the_one_this_gate_exists_for`
+still has the same race: it reads `committed_days()[-1]` and asserts a magnitude
+that grows through the day. It has far more headroom, so it has not fired yet.
+
 **`origin/main` moves under you.** The scheduled pipeline pushes `plan:` and
 `digest:` commits to `main` several times an hour, and the editor auto-fetches.
 A branch created "from `origin/main`" and a merge done "against `origin/main`"
