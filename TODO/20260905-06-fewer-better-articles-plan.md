@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | How much of a day is the same story twice | - | A | PENDING | - | - | - |
+| 1 | How much of a day is the same story twice | - | A | DONE | - | #458 | w1 |
 | 2 | A feed that publishes badly stops scoring as though it did not | - | A | PENDING | - | - | - |
 | 3 | The same story at two addresses is planned once | 1 | B | PENDING | - | - | - |
 | 4 | Half the day, and the clock the next plans need | 3 | C | PENDING | - | - | - |
