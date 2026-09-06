@@ -1,10 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { orderByTime } from '../src/lib/day-shape';
 import type { DigestItem } from '../src/lib/payload/types';
 import { shellSeedItems } from '../src/lib/server/config';
-import { dayShell, loadDay, publishedDates } from '../src/lib/server/payload';
+import { dayShell } from '../src/lib/server/payload';
 
 /**
  * Row #26's oracle: a dated day page holds the stories it used to inline, and a
@@ -35,58 +36,86 @@ import { dayShell, loadDay, publishedDates } from '../src/lib/server/payload';
 
 const FRONTEND = process.cwd();
 const BUILD = resolve(FRONTEND, 'build');
-/** The committed days, whichever tree the preview server happens to serve. */
-const COMMITTED = resolve(FRONTEND, 'public', 'digest');
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 test.describe('the day a document seeds', () => {
 	const seed = shellSeedItems();
+	const DEEP = '2026-01-02';
+	let scratch = '';
+	let ids: string[] = [];
+	let leads: string[] = [];
 
-	/** Where each of a day's leads sits in the published order. */
-	function leadPositions(date: string): number[] {
-		const day = loadDay(date, COMMITTED);
-		if (!day) return [];
-		const at = new Map(day.items.map((item, index) => [item.item_id, index]));
-		return (day.leads ?? []).map((lead) => at.get(lead.item_id) ?? -1);
-	}
+	/** A day whose leads sit past the head, written rather than looked for.
+	 *
+	 * The committed tree happens to carry such a day today and would stop the
+	 * moment the desks reorder - and the rule below would then pass without ever
+	 * having been exercised. It is also a rule about `dayShell`, which is a pure
+	 * function of one payload, so reading 16 days to check it 16 times buys the
+	 * sixteenth nothing (`CLAUDE.md` Rule #12).
+	 */
+	test.beforeAll(() => {
+		scratch = mkdtempSync(join(tmpdir(), 'dated-day-'));
+		const at = Date.parse(`${DEEP}T20:00:00Z`);
+		ids = Array.from({ length: seed + 5 }, (_, index) => `story-${index}`);
+		leads = [ids[0], ids[seed + 1], ids[seed + 4]];
+		const items: DigestItem[] = ids.map((item_id, index) => ({
+			item_id,
+			vertical: 'world',
+			title: `Story ${item_id}`,
+			source_url: `https://example.test/${item_id}`,
+			source_id: 'test',
+			source_name: 'Test',
+			source_kind: 'reporting',
+			published_at: new Date(at - index * 60_000).toISOString(),
+			summary: item_id,
+			key_points: [],
+			lenses: [],
+			events: [],
+			entities: [],
+			band: 'high',
+			band_reason: null,
+			source_form: 'article',
+			reader_note: null,
+			truncated: false,
+			visual: null,
+			introduced_by_run: 1,
+			updated_at: null
+		}));
+		const where = join(scratch, ...DEEP.split('-'));
+		mkdirSync(where, { recursive: true });
+		writeFileSync(
+			join(where, 'digest.json'),
+			JSON.stringify({
+				date: DEEP,
+				items,
+				leads: leads.map((item_id) => ({ item_id, reason: item_id }))
+			})
+		);
+	});
 
-	test('a committed day names a lead the head cannot reach, or the rest proves nothing', () => {
-		const dates = publishedDates(COMMITTED);
-		expect(dates.length, 'no day is committed').toBeGreaterThan(0);
-		const deep = dates.flatMap(leadPositions).filter((at) => at >= seed);
-		expect(
-			deep.length,
-			`no committed day leads with a story past position ${seed}, so keeping one is untested`
-		).toBeGreaterThan(0);
+	test.afterAll(() => {
+		if (scratch) rmSync(scratch, { recursive: true, force: true });
 	});
 
 	test('every lead is in the seed, whatever its position', () => {
-		for (const date of publishedDates(COMMITTED)) {
-			const day = loadDay(date, COMMITTED);
-			const leads = (day?.leads ?? []).map((lead) => lead.item_id);
-			const shell = dayShell(date, seed, { keep: leads, root: COMMITTED });
-			const seeded = new Set((shell?.seed ?? []).map((item) => item.item_id));
-			const lost = leads.filter((id) => !seeded.has(id));
-			expect(lost, `${date} leads with a story its document does not carry`).toEqual([]);
-		}
+		const shell = dayShell(DEEP, seed, { keep: leads, root: scratch })!;
+		const seeded = new Set(shell.seed.map((item) => item.item_id));
+		expect(
+			leads.filter((id) => !seeded.has(id)),
+			'the document leads with a story it does not carry'
+		).toEqual([]);
 	});
 
 	test('the seed is the head plus the leads and nothing else, and the day is not doubled', () => {
-		for (const date of publishedDates(COMMITTED)) {
-			const day = loadDay(date, COMMITTED);
-			if (!day) continue;
-			const leads = (day.leads ?? []).map((lead) => lead.item_id);
-			const shell = dayShell(date, seed, { keep: leads, root: COMMITTED })!;
-			expect(
-				shell.seed.length,
-				`${date} seeds more than the head and its leads`
-			).toBeLessThanOrEqual(seed + leads.length);
-			expect(
-				[...shell.seed, ...shell.rest].map((item) => item.item_id).sort(),
-				`${date} lost or doubled a story across the split`
-			).toEqual(day.items.map((item) => item.item_id).sort());
-		}
+		const shell = dayShell(DEEP, seed, { keep: leads, root: scratch })!;
+		// Two of the three leads sit past the head, so an implementation that only
+		// took a prefix would seed exactly `seed` and fail here rather than pass.
+		expect(shell.seed.length, 'the seed is not the head plus its two deep leads').toBe(seed + 2);
+		expect(
+			[...shell.seed, ...shell.rest].map((item) => item.item_id).sort(),
+			'a story was lost or doubled across the split'
+		).toEqual([...ids].sort());
 	});
 });
 

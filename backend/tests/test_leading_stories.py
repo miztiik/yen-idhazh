@@ -549,47 +549,20 @@ def test_a_notable_story_left_out_says_which_rule_left_it_out(
 
 
 # --- the committed days -----------------------------------------------------
+#
+# One day is read here, not all of them. Every rule the block obeys is a rule of
+# `leading_stories`, and the twenty-odd tests above drive that function with
+# stories built to exercise each one - including cases no published day has ever
+# produced. Re-running the same rules over every committed day added a check per
+# day forever and told us nothing the twelfth day had not (`CLAUDE.md` Rule #12).
+#
+# What a real day still answers is different, and it is the one below: are the
+# rules so strict that ordinary news cannot fill the block?
 
 
 def committed_days() -> list[Path]:
     """Published days a test may read. The newest date is still being written to."""
     return sorted(DIGEST_ROOT.rglob("digest.json"))[:-1]
-
-
-@pytest.mark.parametrize("path", committed_days(), ids=lambda p: p.parent.name)
-def test_every_committed_day_yields_a_block_inside_its_own_rules(path: Path) -> None:
-    """The Oracle, run over real published days rather than over a mock.
-
-    A day published before the ranking signal existed draws no block at all,
-    because every story reads `time_source: null` and a lead may only lead on
-    the feed's own clock. That is the null-is-unknown rule working, not a
-    failure.
-    """
-    day = DigestDay.from_json(read_text(path))
-    ui = UiConfig()
-    registry = Watchlist.from_json(read_text(CONFIG_DIR / "watchlist.json"))
-    leads = leading_stories(
-        day.items, date=day.date, watchlist=registry, ui=ui, desk_names=DESKS
-    )
-    by_id = {item.item_id: item for item in day.items}
-
-    assert len(leads) <= ui.leading_stories
-    assert len(leads) == 0 or len(leads) >= ui.leading_min, "the block never pads"
-    assert {lead.item_id for lead in leads} <= set(by_id), "a lead names a story the day holds"
-
-    chosen = [by_id[lead.item_id] for lead in leads]
-    for desk in {item.vertical for item in chosen}:
-        assert sum(1 for item in chosen if item.vertical == desk) <= ui.leading_per_desk
-    assert len({item.source_id for item in chosen}) == len(chosen), "one lead per publication"
-
-    titles = subject_clusters(day.items, registry)
-    per_subject: dict[str, int] = {}
-    for cluster in titles:
-        held = sum(1 for item in chosen if item.item_id in cluster.item_ids)
-        per_subject[cluster.entity] = held
-    assert all(held <= 1 for held in per_subject.values()), "one lead per subject"
-
-    assert all(lead.reason.strip() for lead in leads), "every lead says why it leads"
 
 
 def test_the_newest_finished_day_that_carries_the_signal_fills_the_block(
@@ -648,9 +621,30 @@ def test_the_newest_finished_day_that_carries_the_signal_fills_the_block(
         )
 
 
-def test_no_committed_day_carries_a_block_it_did_not_publish() -> None:
-    """A day written before this existed reads as no block, never as a broken one."""
-    for path in committed_days():
-        payload = json.loads(read_text(path))
-        day = DigestDay.from_json(read_text(path))
-        assert day.leads == [] or "leads" in payload
+def test_a_day_written_before_the_block_existed_reads_as_no_block() -> None:
+    """A payload with no `leads` key reads as an empty block, never as a broken one.
+
+    Driven from a payload with the key removed rather than by looking for an old
+    day in the tree. Whether such a day is still inside the retention window is a
+    fact about the calendar, and looking costs one parse per published day.
+    """
+    items = five_desks()
+    payload = json.loads(
+        DigestDay(
+            version=DigestDay.schema_version(),
+            date="2026-08-31",
+            generated_at="2026-08-31T10:00:00Z",
+            partial=False,
+            items_planned=len(items),
+            items_failed=0,
+            runs=[DigestRunRef(n=1, at="2026-08-31T10:00:00Z", items_added=len(items))],
+            verticals=[
+                DigestVerticalRef(id=desk, display_name=name, count=1)
+                for desk, name in DESKS.items()
+            ],
+            items=items,
+            leads=[],
+        ).to_json()
+    )
+    del payload["leads"]
+    assert DigestDay.model_validate(payload).leads == []

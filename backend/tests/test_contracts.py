@@ -1095,63 +1095,64 @@ def test_a_manifest_written_before_the_floor_was_recorded_reads_as_unknown() -> 
 
 
 def test_every_committed_run_manifest_still_reads_today() -> None:
-    """The release blocker this class of change carries, asked of the real files.
+    """The release blocker this class of change carries: a payload yesterday's run
+    wrote that today's build cannot open (section 11).
 
-    A payload yesterday's run wrote that today's build cannot open is a contract
-    break, and every one of these was written before the two fields existed.
+    Driven from the fixture with the two fields removed, not from the committed
+    tree. Walking the tree cost one parse per published day and carried a fuse:
+    it counted the desks that still LACK the field and failed at zero, so it goes
+    red on the day the last unmigrated day ages out of retention - a date on the
+    calendar rather than a change anybody made.
     """
-    manifests = sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/run.json"))
-    assert manifests, "no day is committed, so this proves nothing"
-    oldest = manifests[0]
-    assert oldest.parts[-4:-1] == ("2026", "08", "21"), (
-        f"the oldest committed run payload moved to {'/'.join(oldest.parts[-4:-1])}"
-    )
-    absent = 0
-    for path in manifests:
-        raw = json.loads(read_text(path))
-        parsed = RunManifest.from_json(read_text(path))
-        for record, verticals in zip(
-            parsed.runs, (run.get("verticals", []) for run in raw["runs"]), strict=True
-        ):
-            for count, written in zip(record.verticals, verticals, strict=True):
-                if "eligible_feeds" in written:
-                    continue
-                absent += 1
-                assert count.eligible_feeds is None, path.name
-                assert count.feed_floor is None, path.name
-    assert absent, "every committed desk already carries the field, so nothing was migrated"
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    stripped = 0
+    for run in payload["runs"]:
+        for written in run.get("verticals", []):
+            written.pop("eligible_feeds", None)
+            written.pop("feed_floor", None)
+            stripped += 1
+    assert stripped, "the fixture declares no desk, so removing the fields proved nothing"
+
+    parsed = RunManifest.model_validate(payload)
+    counts = [count for record in parsed.runs for count in record.verticals]
+    assert len(counts) == stripped
+    assert all(count.eligible_feeds is None for count in counts)
+    assert all(count.feed_floor is None for count in counts)
 
 
 def test_the_manifest_keeps_the_keys_its_python_names_stopped_matching() -> None:
     """Three Python names moved on 2026-09-05 and no published key was allowed to.
 
-    The counts are asserted rather than the spellings, and a zero fails: an
-    absence check over a tree with no matching file passes for the wrong reason,
-    which is exactly how a broken alias would read.
+    The rename is a read-side alias, so the payload keeps `items_routed` and
+    `route_ms` and the model answers to `items_decided` and `decision_ms`. That
+    is a property of the model against one payload, and the committed tree was
+    parsed once per published day to re-ask it.
     """
     assert ModelRole.VISUAL_PLANNER.value == "route"
 
-    manifests = sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/run.json"))
+    raw = read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json")
+    payload = json.loads(raw)
     carrying = 0
-    for path in manifests:
-        raw = json.loads(read_text(path))
-        parsed = RunManifest.from_json(read_text(path))
-        for record, written in zip(parsed.runs, raw["runs"], strict=True):
-            if "items_routed" not in written:
-                continue
-            carrying += 1
-            assert record.items_decided == written["items_routed"], path.name
-            assert record.decision_ms == written["route_ms"], path.name
-        assert "items_decided" not in read_text(path), path.name
-    assert carrying, (
-        f"{len(manifests)} committed manifests and not one carries items_routed, "
-        "so this test measured nothing"
-    )
+    for run in payload["runs"]:
+        if "items_routed" not in run:
+            continue
+        carrying += 1
+    assert carrying, "the fixture carries no items_routed, so the alias is untested"
+
+    parsed = RunManifest.model_validate(payload)
+    for record, written in zip(parsed.runs, payload["runs"], strict=True):
+        if "items_routed" not in written:
+            continue
+        assert record.items_decided == written["items_routed"]
+        assert record.decision_ms == written["route_ms"]
+    # The published key is the contract. A writer that started emitting the
+    # Python name would break every reader of every day already committed.
+    assert "items_decided" not in raw
+    assert "decision_ms" not in raw
 
     # And the round trip puts the keys back, which is what a reader fetches.
-    sample = RunManifest.from_json(read_text(manifests[-1]))
-    written = json.loads(sample.to_json())["runs"][-1]
-    assert "items_routed" in written and "route_ms" in written
+    written_back = json.loads(parsed.to_json())["runs"][-1]
+    assert "items_routed" in written_back and "route_ms" in written_back
 
 
 def test_the_watchlist_stays_inside_its_configured_cap() -> None:
@@ -2366,12 +2367,13 @@ def committed_days() -> list[Path]:
 
 
 def test_the_published_tree_holds_days_to_migrate() -> None:
-    """The denominator, asserted on its own.
+    """The denominator for the one check below that still opens a real day.
 
-    The migration test below loops over the committed days. An empty tree would
-    loop zero times and report the same pass as a tree that checked every day.
-    `committed_days` already drops the date still being written, so a tree
-    holding only that one date reads as empty here.
+    `a_day_that_validates` reads the newest committed payload, and an empty tree
+    would leave it reading nothing while reporting the same pass as a tree it
+    read. The read-side migrations beside it are driven from a fixture instead,
+    so they no longer need this. `committed_days` already drops the date still
+    being written, so a tree holding only that one date reads as empty here.
     """
     assert committed_days(), "frontend/public/digest holds no finished day"
 
@@ -2399,21 +2401,6 @@ def a_tree_holding(tmp_path: Path, day: dict[str, Any], date: str = "2026-08-30"
     where.mkdir(parents=True)
     (where / "digest.json").write_text(json.dumps(day), encoding="utf-8")
     return tmp_path / "digest"
-
-
-def test_every_committed_day_passes_the_gate_that_replaced_the_build(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """The CI step, run here so it is not first seen on a runner.
-
-    Until the reading routes were split on 2026-09-01 every story was serialised
-    into a document at build time, so a story the contract refused took the
-    build down. A reading document now carries a seed, so the build never opens
-    the stories past it. This is what took that over.
-    """
-    with caplog.at_level(logging.INFO):
-        assert stage_validate_days(REPO_ROOT / "frontend" / "public" / "digest") == 0
-    assert "committed days match both contracts" in caplog.text
 
 
 def test_a_story_past_the_seed_is_the_one_this_gate_exists_for(
@@ -2464,70 +2451,61 @@ def test_the_gate_defaults_to_the_one_committed_tree() -> None:
     assert main(["validate-days"]) == 0
 
 
+def a_day_missing(names: tuple[str, ...], where: str = "items") -> tuple[str, int]:
+    """The committed-day fixture with `names` removed from every `where` entry.
+
+    The read-side migration each of these checks is a property of one payload
+    (`CLAUDE.md` section 11), and the committed tree was parsed once per
+    published day to re-ask it. Worse, each of those walks counted how many
+    entries still LACK the field and failed at zero - a fuse timed to the day the
+    last unmigrated payload ages out of retention, which is a date rather than a
+    change. Removing the keys here cannot age out.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    stripped = 0
+    for entry in payload[where]:
+        for name in names:
+            entry.pop(name, None)
+        stripped += 1
+    return json.dumps(payload), stripped
+
+
 def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
-    """The read-side migration (`CLAUDE.md` section 11), over the real payloads.
+    """The read-side migration (`CLAUDE.md` section 11).
 
     A day written before the five fields existed omits them, and every one must
     come back as `None`. `0` for `carried_by` would claim no feed carried the
     story, `false` for `on_front_page` would claim a vote that was never
     counted, and `0.0` for `rank_score` would put the story bottom of its desk -
     three different false claims dressed as a default.
-
-    The oracle reads the raw payload beside the parsed day and only judges a
-    field the file does not carry. Asserting instead that no committed day
-    carries any of the five was true for one afternoon and false from the first
-    run that published with the new writer.
     """
-    items = 0
-    absent = 0
-    for path in committed_days():
-        text = read_text(path)
-        written = json.loads(text)["items"]
-        day = DigestDay.from_json(text)
-        for payload, item in zip(written, day.items, strict=True):
-            items += 1
-            for name in RANKING_SIGNAL:
-                if name in payload:
-                    continue
-                absent += 1
-                assert getattr(item, name) is None, f"{path.name} {item.item_id}: {name} invented"
+    text, stripped = a_day_missing(RANKING_SIGNAL)
+    assert stripped, "the fixture carries no story, so removing the fields proved nothing"
 
-    assert items, "the loop above must have had something to read"
-    assert absent, "every committed item carries all five, so nothing here reads an absent field"
+    day = DigestDay.from_json(text)
+    assert len(day.items) == stripped
+    for item in day.items:
+        for name in RANKING_SIGNAL:
+            assert getattr(item, name) is None, f"{item.item_id}: {name} invented"
 
 
 def test_every_committed_day_revalidates_with_no_shortfall_counts() -> None:
     """The read-side migration for the desk shortfall (`CLAUDE.md` section 11).
 
     Every day published before 2026-09-02 carries a desk as three keys - id,
-    name and count - so the three counts appended today have to be absent and
+    name and count - so the three counts appended later have to be absent and
     have to come back as `None`. A `0` for `considered` would say the sources
     offered that desk nothing, which is the opposite of what a day with 216
     stories on it means.
-
-    The oracle reads the raw payload beside the parsed day, so it keeps working
-    from the first run that publishes with the new writer: it judges only a key
-    the file does not carry.
     """
-    days = 0
-    desks = 0
-    absent = 0
-    for path in committed_days():
-        text = read_text(path)
-        written = json.loads(text)["verticals"]
-        day = DigestDay.from_json(text)
-        days += 1
-        for payload, desk in zip(written, day.verticals, strict=True):
-            desks += 1
-            for name in DESK_SHORTFALL:
-                if name in payload:
-                    continue
-                absent += 1
-                assert getattr(desk, name) is None, f"{path.name} {desk.id}: {name} invented"
+    text, stripped = a_day_missing(DESK_SHORTFALL, where="verticals")
+    assert stripped, "the fixture carries no desk, so removing the counts proved nothing"
 
-    assert days, "no committed day was read, so this proved nothing"
-    assert desks, "the committed days carry no desks to read"
-    assert absent, "every committed desk carries all three, so nothing read an absent field"
+    day = DigestDay.from_json(text)
+    assert len(day.verticals) == stripped
+    for desk in day.verticals:
+        for name in DESK_SHORTFALL:
+            assert getattr(desk, name) is None, f"{desk.id}: {name} invented"
 
 
 def test_a_desk_carries_every_shortfall_count_or_none_of_them() -> None:
@@ -2705,35 +2683,20 @@ def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
 
 
 def test_every_committed_day_serves_a_view_that_validates() -> None:
-    """The migration, over every day a reader can already fetch.
+    """The same migration on the projection a reader's browser fetches.
 
-    Each committed day must project to a payload the contract accepts, and a
-    field the file does not carry must come back unknown rather than as a number
-    the run never recorded.
-
-    The oracle reads the raw payload beside the served item and only judges a
-    field the file omits, for the same reason the published-day test next to it
-    does: asserting that no committed day carries any of the five was true for
-    one afternoon and false from the first run that published with the new
-    writer.
+    A day must project to a payload the served contract accepts, and a field the
+    file does not carry must come back unknown rather than as a number the run
+    never recorded.
     """
-    days = 0
-    items = 0
-    absent = 0
-    for path in committed_days():
-        written = json.loads(read_text(path))
-        view = DigestView.project(written)
-        days += 1
-        for payload, item in zip(written["items"], view.items, strict=True):
-            items += 1
-            for name in RANKING_SIGNAL:
-                if name in payload:
-                    continue
-                absent += 1
-                assert getattr(item, name) is None, f"{path.name} {item.item_id}: {name} invented"
+    text, stripped = a_day_missing(RANKING_SIGNAL)
+    assert stripped, "the fixture carries no story, so removing the fields proved nothing"
 
-    assert days and items, "the loop above must have had something to read"
-    assert absent, "every committed item carries all five, so nothing here reads an absent field"
+    view = DigestView.project(json.loads(text))
+    assert len(view.items) == stripped
+    for item in view.items:
+        for name in RANKING_SIGNAL:
+            assert getattr(item, name) is None, f"{item.item_id}: {name} invented"
 
 
 def test_a_served_day_refuses_a_field_it_does_not_know() -> None:
