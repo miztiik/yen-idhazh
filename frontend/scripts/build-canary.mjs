@@ -478,8 +478,65 @@ function writeRuntimeCountersCanary() {
 	].join('\n') + '\n');
 }
 
+/** One traced run's span rollup, so the console's span breakdown has a run to
+ * draw. `build_canary_day.py` fabricates a day rather than running the traced
+ * pipeline, so it writes no spans; without this the panel only ever shows its
+ * empty state, and the residual it exists to draw would never be tested.
+ *
+ * The one run sits on the day the span record begins, 2026-09-06, because a run
+ * before then could not have committed spans. Two shards, so the panel draws
+ * more than one bar and the overhead differs between them - the whole point of
+ * the residual is that it is not the same on every shard. Every number
+ * reconciles the way the fold requires: `total_ms` on the item row plus
+ * `unattributed_ms` is the shard's wall clock, and the four sub-steps sit inside
+ * the item time and never beyond it.
+ */
+function writeSpanRollupCanary() {
+	const COLUMNS = [
+		'version', 'date', 'run_id', 'shard', 'span_name', 'count', 'total_ms', 'unattributed_ms'
+	];
+	const line = (cells) => COLUMNS.map((name) => cells[name] ?? '').join(',');
+	// The residual is a cell on the item row alone; empty on the four sub-steps,
+	// the way the contract writes it.
+	const row = (shard, span_name, count, total_ms, unattributed_ms) =>
+		line({
+			version: '2026-09-06T15:00',
+			date: '2026-09-06',
+			run_id: '2026-09-06-1',
+			shard,
+			span_name,
+			count,
+			total_ms,
+			unattributed_ms: unattributed_ms ?? ''
+		});
+	const dir = join(STATE, 'span-rollup');
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(
+		join(dir, '2026-09.csv'),
+		[
+			COLUMNS.join(','),
+			// Shard 0: 6 items, 46.0 s inside them and 6.0 s of overhead - a 52.0 s
+			// clock. The four sub-steps sum to 6.6 s, well inside the item time.
+			row(0, 'item', 6, 46000, 6000),
+			row(0, 'robots', 6, 1800),
+			row(0, 'tag', 6, 2400),
+			row(0, 'render_prompt', 6, 900),
+			row(0, 'parse_reply', 6, 1500),
+			// Shard 1: 5 items, 39.0 s inside them and 12.0 s of overhead - a 51.0 s
+			// clock, so nearly a quarter of it fell outside every item. That gap
+			// between the two shards is what the panel exists to show.
+			row(1, 'item', 5, 39000, 12000),
+			row(1, 'robots', 5, 1500),
+			row(1, 'tag', 5, 2000),
+			row(1, 'render_prompt', 5, 800),
+			row(1, 'parse_reply', 5, 1300)
+		].join('\n') + '\n'
+	);
+}
+
 writeItemHealthCanary();
 writeRuntimeCountersCanary();
+writeSpanRollupCanary();
 execFileSync(
 	process.env.IDHAZH_PYTHON || 'python',
 	['-m', 'idhazh.publish_telemetry', '--state', STATE, '--public', join(STATE, 'telemetry')],
