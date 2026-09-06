@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -11,6 +11,17 @@ never read `state/item-health/` directly.
 `state/item-health/<YYYY-MM>.csv` and writes
 `frontend/public/telemetry/<YYYY-MM>.csv`. The browser fetches these monthly
 shards on demand as the operator pans the viewport.
+
+**This is a month partition, and it is the one in the tree that is not yet
+frozen.** The pattern - what closes a partition, and what a correction, a
+deletion or a late arrival does to a closed one - is
+[../../concepts/month-partitions.md](../../concepts/month-partitions.md). This
+writer does not honour it yet: `publish` globs `state/item-health/` and rewrites
+every month it finds, on every run, so an ordinary run pays for every month the
+project has ever published. That is finding 11 of
+[../../reference/data-growth-audit.md](../../reference/data-growth-audit.md).
+The shard is also deliberately not `merge=union` - it is a full rewrite of the
+source month, so a union of two rewrites is a file with every row twice.
 
 The published columns are exactly:
 
@@ -613,6 +624,7 @@ asserts that no mark falls inside a tinted span -
 
 - [frontend.md](frontend.md) - the console view that consumes these shards.
 - [../contracts/schemas.md](../contracts/schemas.md) - why a migrated row keeps the `version` cell it was written with.
+- [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern, and the freeze rule this writer does not yet hold.
 - [../sources/item-health.md](../sources/item-health.md) - the private item-grain ledger.
 - [../../concepts/design-system.md](../../concepts/design-system.md) - how a console figure is worded and printed.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - ledgers as records, logs as evidence.
