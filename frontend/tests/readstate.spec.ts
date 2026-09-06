@@ -19,6 +19,21 @@ import type { DigestItem } from '../src/lib/payload/types';
 const KEY = 'idhazh:read';
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
 
+/** How many days of marks the browser keeps, off the committed config.
+ *
+ * A literal here would stop asserting anything the day the knob moved: seed
+ * eight older days against a fourteen-day window and nothing is over the bound,
+ * so the pruning never runs and the test passes on a store that was never cut.
+ */
+function readMarkDays(): number {
+	const parsed = JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+	) as { digest?: { read_mark_days?: number } };
+	const days = parsed.digest?.read_mark_days;
+	expect(days, 'config/appearance.json no longer sets digest.read_mark_days').toBeDefined();
+	return days as number;
+}
+
 /** The day this build publishes, and the story the page draws first.
  *
  * The browser suite runs against the canary build, which carries one day. A
@@ -122,8 +137,10 @@ test('the old flat list of ids is dropped rather than guessed at', async ({ page
 });
 
 test('only the newest days survive a page load', async ({ page }) => {
-	// Nine days of marks against the seven-day window config holds.
-	const older = daysBefore(DAY, 8);
+	// Two days more than the window the config names, so the store is over the
+	// bound whatever that number is and the pruning has to run.
+	const span = readMarkDays();
+	const older = daysBefore(DAY, span + 1);
 	await seed(page, {
 		...Object.fromEntries(older.map((date) => [date, ['stale']])),
 		[DAY]: [FIRST]
@@ -133,7 +150,7 @@ test('only the newest days survive a page load', async ({ page }) => {
 	await expect(page.locator('article').first()).toHaveAttribute('data-read', 'true');
 
 	const kept = Object.keys(await stored(page)).sort();
-	expect(kept).toEqual([DAY, ...older.slice(0, 6)].sort());
+	expect(kept).toEqual([DAY, ...older.slice(0, span - 1)].sort());
 });
 
 test('a store the browser refuses does not stop the page rendering', async ({ page }) => {
