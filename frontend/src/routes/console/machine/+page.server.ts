@@ -37,6 +37,7 @@ import {
 	type RefusedRun,
 	type RunCounters
 } from '$lib/server/runtime-counters';
+import { loadSpanRollup, spanBreakdown } from '$lib/server/span-rollup';
 
 export const prerender = true;
 
@@ -237,6 +238,14 @@ export async function load() {
 	const clocks = clockAgreement(newest, health, CLOCKS_AGREE_WITHIN_PCT);
 	const clocksPlot = clocksChart(clocks.pairs);
 
+	// The newest run that folded its spans, and where its shards' seconds went.
+	// A snapshot like the board above, not a window: the residual is a per-shard
+	// quantity of one run, and a span cannot narrow a single run. It reads its
+	// own ledger - `state/span-rollup/`, empty until a traced run commits - so it
+	// is often a different run from `newest`, and its own empty state when the
+	// real rollup holds nothing.
+	const spanView = spanBreakdown(loadSpanRollup()[0] ?? null);
+
 	// The newest run the item ledger timed enough items on, which is not always
 	// the newest run the counters reached: a run can publish before its shards
 	// scrape. It is the last entry of the same array the multiples draw, so
@@ -293,6 +302,7 @@ export async function load() {
 		// two different day lists, and the two would eventually disagree.
 		modelChanges: pipelineChanges(evalRows().rows),
 		board,
+		spanBreakdown: spanView,
 		memory,
 		newestRunId: newest?.runId ?? null,
 		split,

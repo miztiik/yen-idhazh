@@ -36,6 +36,7 @@
 	import RateControl from '$lib/components/RateControl.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
+	import SpanPanel from './SpanPanel.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import {
@@ -476,14 +477,14 @@
 		</div>
 	{/if}
 
-	<!-- The next four panels are one run or one day, so the control above does
-	     not reach them. A window is a span; a snapshot is not something a span
-	     can narrow, and a board that emptied at 7 days would say the run had
-	     stopped existing. -->
+	<!-- The panels below are one run or one day, so the control above does not
+	     reach them. A window is a span; a snapshot is not something a span can
+	     narrow, and a board that emptied at 7 days would say the run had stopped
+	     existing. -->
 	<p class="mt-4 text-[0.8125rem] text-text-tertiary" data-window-exempt="newest-run">
 		{data.newestRunId === null
-			? 'The five panels below read the newest run the ledger holds. No run has committed one yet.'
-			: `The five panels below do not follow the window. They read one run or one day - the newest the ledger holds, ${data.newestRunId} - because a span cannot narrow a single run.`}
+			? 'The panels below read the newest run each ledger holds, and do not follow the window. No run has committed a counters row yet.'
+			: `The panels below do not follow the window; each reads one run or one day, because a span cannot narrow a single run. The hardware panels read the newest run the counters hold, ${data.newestRunId}. The span breakdown reads its own ledger and names the run it found.`}
 	</p>
 
 	<Panel
@@ -492,6 +493,14 @@
 		wide
 	>
 		<ShardBoard board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />
+	</Panel>
+
+	<Panel
+		title="Where a shard's clock went"
+		note="Each shard of the newest traced run as one bar of its whole clock: the four sub-steps no ledger column times, the rest of the item work, and - on the right, drawn hollow - the overhead between items that no span covers. The item time plus that overhead is the shard's whole clock, so the residual is a figure that reconciles rather than an estimate."
+		wide
+	>
+		<SpanPanel breakdown={data.spanBreakdown} />
 	</Panel>
 
 	<Panel
