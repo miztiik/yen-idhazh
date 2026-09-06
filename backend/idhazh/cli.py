@@ -486,6 +486,16 @@ def stage_plan(
         sorted(lens_weights),
     )
     day_carried = ledger.load_source_counts(state, date)
+    # A feed that has published badly over the trailing window - failed reads, or
+    # reads that parsed to nothing - scores below a dependable feed of the same
+    # tier. The factor is built once here off the committed health record and read
+    # inside rank.authority; a feed with no evidence in the window reads 1.0.
+    reliability_by_feed = ledger.reliability(
+        state,
+        today=date,
+        within_days=collect.reliability_window_days,
+        floor=collect.reliability_floor,
+    )
     verticals, items = _plan_desks(
         settings,
         candidates,
@@ -499,6 +509,7 @@ def stage_plan(
         cap=cap,
         retired_keys=gone,
         endpoints=endpoints,
+        reliability=reliability_by_feed,
     )
 
     items = _dedupe_planned_items(items)
@@ -541,6 +552,7 @@ def stage_plan(
             retired_keys=gone,
             endpoints=endpoints,
             day_ceiling=rank.DayCeiling(per_source=per_source, carried=dict(day_carried)),
+            reliability=reliability_by_feed,
         )
         capped = _dedupe_planned_items(capped)
         capped = _within_ceiling(capped, ceiling=settings.app.run.safety_ceiling_per_run)
@@ -587,6 +599,7 @@ def _plan_desks(
     retired_keys: set[str],
     endpoints: dict[str, source_health.EndpointRecord],
     day_ceiling: rank.DayCeiling | None = None,
+    reliability: dict[str, float] | None = None,
 ) -> tuple[list[VerticalPlan], list[PlannedItem]]:
     """Rank every desk once and return what they offered, desk by desk.
 
@@ -623,6 +636,7 @@ def _plan_desks(
             front_page_keys=front_page_keys,
             lens_bonuses=lens_bonuses,
             day_ceiling=day_ceiling,
+            reliability=reliability,
         )
         summaries.append(summary)
         if cap is not None and len(planned) > cap:

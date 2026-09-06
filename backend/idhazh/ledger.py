@@ -820,3 +820,42 @@ def _run_n(run_id: str) -> int:
     the sort is chronological across the change and on either side of it.
     """
     return int(run_id.rsplit("-", 1)[1])
+
+
+def feed_reliability(rows: Iterable[FeedHealthRow], *, floor: float) -> float:
+    """How often one feed's reads carried entries, over the rows given.
+
+    Evidence-bearing is every read that did not preserve the streak, so a rest
+    and a robots answer are set aside - neither asked the feed whether it works.
+    Everything else counts: a read that came back with entries, a read that
+    parsed to nothing, and an address we could not reach. Productive is the read
+    that came back with entries. The reliability is productive over
+    evidence-bearing, clamped so it never rises above 1.0 and never falls below
+    `floor`. A feed with no evidence-bearing read in the window scores 1.0 -
+    unknown is not the same as bad, and a rested or politely-refused feed is not
+    penalised for being asked to wait.
+    """
+    evidence = [row for row in rows if not row.preserves]
+    if not evidence:
+        return 1.0
+    productive = sum(1 for row in evidence if row.answered)
+    return max(floor, min(1.0, productive / len(evidence)))
+
+
+def reliability(
+    state_dir: Path, *, today: str, within_days: int, floor: float
+) -> dict[str, float]:
+    """Each feed's reliability over the trailing window, keyed by feed id.
+
+    Reads the same health shards `load_health` reads, groups them by feed, and
+    reduces each feed's rows through `feed_reliability`. The read is bounded by
+    `within_days` (Rule #12): it is the feeds' recent record, never the whole
+    ledger. A feed absent from the map had no evidence-bearing read in the
+    window, so a caller reads a miss as 1.0.
+    """
+    grouped: dict[str, list[FeedHealthRow]] = {}
+    for row in load_health(state_dir, today=today, within_days=within_days):
+        grouped.setdefault(row.feed_id, []).append(row)
+    return {
+        feed_id: feed_reliability(rows, floor=floor) for feed_id, rows in grouped.items()
+    }
