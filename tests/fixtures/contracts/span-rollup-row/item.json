@@ -5,5 +5,6 @@
   "shard": 0,
   "span_name": "item",
   "total_ms": 42000,
-  "version": "2026-09-06"
+  "unattributed_ms": 3000,
+  "version": "2026-09-06T15:00"
 }
