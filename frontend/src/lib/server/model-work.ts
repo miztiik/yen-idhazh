@@ -23,6 +23,7 @@
  * written relative for the same reason.
  */
 
+import { distribution, quantile, type Distribution, type WriteBin } from '../charts/series';
 import type { MovementPolarity } from '../charts/theme';
 import type { SummaryBand } from './config';
 
@@ -619,96 +620,11 @@ function within(rows: Record<string, string>[], window: DayWindow): Record<strin
 	});
 }
 
-function quantile(sorted: number[], fraction: number): number {
-	if (sorted.length === 1) return sorted[0];
-	const position = (sorted.length - 1) * fraction;
-	const low = Math.floor(position);
-	const high = Math.ceil(position);
-	return sorted[low] + (sorted[high] - sorted[low]) * (position - low);
-}
-
-/** One bar of the write-time histogram.
- *
- * `from` and `to` are whole seconds and `from` is zero on the first bar, which
- * is the one holding everything under a second. The edges double, so a bar is
- * one doubling wide wherever it sits on the axis - which is what lets a
- * distribution running from a third of a second to twelve minutes be read at
- * all.
- */
-export interface WriteBin {
-	/** Lower edge, whole seconds. Zero means "under one second". */
-	from: number;
-	/** Upper edge, whole seconds. The bar holds `from <= t < to`. */
-	to: number;
-	n: number;
-	/** Every article written in `to` seconds or less, as whole percent. */
-	throughPct: number;
-}
-
-/** How long one thing took, over every one of them a clock recorded.
- *
- * The bars and the two rules, and nothing about which window they came from -
- * that belongs to the caller, which knows what it asked for. Two panels on the
- * Summaries route draw this shape over two different clocks: the model writing
- * a summary, and the checker reading one afterwards. It is the same question
- * both times - how long did one take, and how bad does it get - so it is one
- * binning and one pair of rules rather than two that can drift apart.
- *
- * The median and the 95th are taken over the values themselves and never off
- * the bars: a percentile read out of a bin is a guess at where inside the bin
- * it fell, and these two are the figures somebody quotes.
- */
-export interface Distribution {
-	bins: WriteBin[];
-	/** Timings behind the chart. The denominator for every bar. */
-	n: number;
-	/** Milliseconds. */
-	median: number;
-	p95: number;
-	slowest: number;
-	fastest: number;
-}
-
-/** The bars and the rules, or null where nothing was timed.
- *
- * Null is the empty state and it is not a chart of zeroes. Nothing measured it;
- * it did not run instantly.
- */
-function distribution(values: number[]): Distribution | null {
-	const sorted = [...values].sort((a, b) => a - b);
-	if (sorted.length === 0) return null;
-
-	// The first edge is one second, so every label on the axis is a whole
-	// number. Everything below it shares one bar, labelled the way the console
-	// spells a measurement that rounds away.
-	const top = Math.max(1, sorted[sorted.length - 1] / 1000);
-	const edges = [0, 1];
-	while (edges[edges.length - 1] <= top) edges.push(edges[edges.length - 1] * 2);
-
-	const bins: WriteBin[] = [];
-	let through = 0;
-	for (let index = 0; index < edges.length - 1; index += 1) {
-		const from = edges[index];
-		const to = edges[index + 1];
-		const n = sorted.filter((ms) => ms / 1000 >= from && ms / 1000 < to).length;
-		through += n;
-		bins.push({ from, to, n, throughPct: Math.round((through / sorted.length) * 100) });
-	}
-
-	// Leading and trailing empty bars are axis, not data. A gap between two
-	// occupied bars stays: it is the distribution saying nothing landed there.
-	const first = bins.findIndex((bin) => bin.n > 0);
-	const last = bins.length - 1 - [...bins].reverse().findIndex((bin) => bin.n > 0);
-
-	return {
-		bins: bins.slice(first, last + 1),
-		n: sorted.length,
-		median: quantile(sorted, 0.5),
-		p95: quantile(sorted, 0.95),
-		slowest: sorted[sorted.length - 1],
-		fastest: sorted[0]
-	};
-}
+/** The binning both routes draw, re-exported so the Summaries route's own
+ * types keep their address. It moved to `$lib/charts/series` on 2026-09-05,
+ * when the Pipelines route needed the same doublings for the two model clocks
+ * and could not reach a `$lib/server/` module to get them. */
+export type { Distribution, WriteBin };
 
 /** How long one summary took, over every article the runtime timed in a window.
  *
