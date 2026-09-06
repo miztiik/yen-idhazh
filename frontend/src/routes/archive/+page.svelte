@@ -35,6 +35,7 @@
 	import { dayDate, type ArchiveMonth } from '$lib/archive-calendar';
 	import { itemOf, loadDay } from '$lib/assist/day';
 	import { loadMonth } from '$lib/assist/index';
+	import { monthsInWindow, windowStart } from '$lib/assist/month';
 	import { filterNeedle } from '$lib/day-shape';
 	import type { SearchHit, SearchOutcome } from '$lib/assist/search';
 	import type { DigestDay, SearchIndexEntry } from '$lib/payload/types';
@@ -58,39 +59,58 @@
 	 * list under it - otherwise a search that found nothing would leave an empty
 	 * page instead of the browse list it is supposed to fall back to. */
 	let asked = $state(false);
+	/** How many days back the browse list reaches. The reader widens or narrows
+	 * it over the presets; the loop then fetches only the months this window can
+	 * hold a story from, and a story older than the window is out of the list
+	 * until the window grows or a search reaches past it (Rule #12). */
+	// svelte-ignore state_referenced_locally
+	let windowDays = $state(data.window.default_days);
+	// The day the window is measured back from - the newest published day, baked
+	// at build time, so the window never drifts with the reader's own clock.
+	// svelte-ignore state_referenced_locally
+	const anchor = data.window.anchor;
 
 	const page = $derived(data.ui.archive_page_size);
 	const needle = $derived(asked ? null : filterNeedle(query, data.ui.filter_min_chars));
 	const filtering = $derived(needle !== null);
-	const topicTotals = $derived(
-		Object.fromEntries(data.verticals.map((ref) => [ref.id, ref.count]))
-	);
-	// The browse list, narrowed by whichever of the two controls a reader used.
-	// Both read the months already in hand and neither asks for a byte. Title
-	// only: the index carries no summary, so there is nothing else here to match.
+	// The oldest day the window reaches, and the months it can hold a story from.
+	// `windowMonths` is a newest-first prefix of `data.months`, which is what lets
+	// the loop below fetch it one month at a time.
+	const cutoff = $derived(windowStart(anchor, windowDays));
+	const windowMonths = $derived(monthsInWindow(data.months, anchor, windowDays));
+	// The browse list, narrowed by the window and by whichever of the two controls
+	// a reader used. All three read the months already in hand and none asks for a
+	// byte. The window is a date floor; the title filter has only the title to
+	// match, because the index carries no summary.
 	const browsable = $derived(
 		entries.filter(
 			(entry) =>
+				entry.date >= cutoff &&
 				(topic === null || entry.vertical === topic) &&
 				(needle === null || entry.title.toLowerCase().includes(needle))
 		)
 	);
 	const listed = $derived(browsable.slice(0, shown));
-	const allLoaded = $derived(loadedMonths.length >= data.months.length);
+	// Every month the window reaches is in hand. It is `>=`, not `===`, because a
+	// wider window loaded earlier leaves months a narrower one now filters out but
+	// never unloads.
+	const allWindowLoaded = $derived(loadedMonths.length >= windowMonths.length);
 	// A search with no answer leaves the browse list showing. That is the whole
 	// empty state, and it is why there is only one list here.
 	const showingResults = $derived(results !== null && results.hits.length > 0);
-	// While months are still unread, a count off the payload is the honest one -
-	// the whole archive, or one topic's share of it, both decided at build time. A
-	// title filter has no such number, so there it can only be what was read.
-	const reachable = $derived(
-		allLoaded || filtering
-			? browsable.length
-			: topic === null
-				? data.stories
-				: (topicTotals[topic] ?? browsable.length)
+	// The window's total is known only once every month it reaches is read - the
+	// payload's whole-archive counts are not the window's, so there is no honest
+	// denominator before then. Null means "do not print an of-N".
+	const reachable = $derived(allWindowLoaded || filtering ? browsable.length : null);
+	const remaining = $derived(reachable !== null ? Math.max(reachable - listed.length, 0) : page);
+	const widest = $derived(Math.max(...data.window.presets));
+	// Named when the browse list is empty, so a reader can tell "nothing in this
+	// window" from "nothing ever". A title filter has its own sentence below.
+	const emptySentence = $derived(
+		topic !== null
+			? `No ${data.verticalNames[topic] ?? topic} story in the last ${plural(windowDays, 'day', 'days')}.`
+			: `No story in the last ${plural(windowDays, 'day', 'days')}.`
 	);
-	const remaining = $derived(Math.max(reachable - listed.length, 0));
 
 	const retention = $derived(
 		data.retentionMonths > 0
@@ -115,10 +135,13 @@
 		if (status === 'loading') return;
 		status = 'loading';
 		const wanted = shown + page;
-		// Counted over what the reader would actually see: with a topic pill on, a
-		// month that holds none of it buys no rows, so the loop reads the next one.
-		while (browsable.length < wanted && loadedMonths.length < data.months.length) {
-			const month = data.months[loadedMonths.length]!;
+		// Bounded by the window, never by the archive: the loop reads the next month
+		// the window reaches until the page is full or the window is spent. A month
+		// that holds none of the current topic buys no rows, so it reads the one
+		// after. `windowMonths[loadedMonths.length]` is always the next unread month,
+		// because both lists are newest-first prefixes of `data.months` (Rule #12).
+		while (browsable.length < wanted && loadedMonths.length < windowMonths.length) {
+			const month = windowMonths[loadedMonths.length]!;
 			loadedMonths = [...loadedMonths, month];
 			const more = await loadMonth(month);
 			if (more !== null) entries = [...entries, ...more];
@@ -159,6 +182,18 @@
 		topic = id;
 		results = null;
 		if (shown === 0) void showMore();
+	}
+
+	/** Pick a window. It changes what the browse list holds, so it drops any
+	 * search answer and starts the list at the top: a narrower window only hides
+	 * months already in hand, a wider one fetches the months it now reaches, and
+	 * nothing already fetched is fetched again. */
+	function onWindow(days: number) {
+		if (days === windowDays) return;
+		windowDays = days;
+		results = null;
+		shown = 0;
+		void showMore();
 	}
 
 	onMount(() => {
@@ -277,6 +312,35 @@
 			{/if}
 		</div>
 
+		{#if !showingResults}
+			<!-- The window over the browse list. The same segmented control as the
+			     operator console's, over the same preset list, so the two windowed
+			     surfaces on the site read the same way. Hidden while a search answer is
+			     up, because a search reads its own scope, not this window. -->
+			<fieldset class="window" data-archive-window data-window-days={windowDays}>
+				<legend class="window-legend">Days shown</legend>
+				<div class="segments">
+					{#each data.window.presets as preset (preset)}
+						<label
+							class="segment"
+							data-window-preset={preset}
+							data-selected={preset === windowDays}
+						>
+							<input
+								class="segment-input"
+								type="radio"
+								name="archive-window"
+								value={preset}
+								checked={preset === windowDays}
+								onchange={() => onWindow(preset)}
+							/>
+							<span class="segment-days">{plural(preset, 'day', 'days')}</span>
+						</label>
+					{/each}
+				</div>
+			</fieldset>
+		{/if}
+
 		<noscript>
 			<p class="mt-1 text-base text-text-secondary">
 				The story list needs JavaScript. The days above work without it.
@@ -327,7 +391,9 @@
 			</ul>
 		{:else if listed.length > 0}
 			<p class="mt-1 text-sm text-text-tertiary" data-story-scope>
-				Showing {listed.length} of {reachable}, newest first.
+				{reachable !== null
+					? `Showing ${listed.length} of ${reachable}, newest first.`
+					: `Showing ${listed.length}, newest first.`}
 			</p>
 			<!-- The one list on the site that goes multi-column. It is a scan
 			     surface - a reader here is finding the one they remember, not
@@ -363,9 +429,23 @@
 			{/if}
 		{:else if status === 'loading'}
 			<p class="mt-1 text-base text-text-secondary">Loading the stories.</p>
-		{:else if status === 'ready' && (filtering || topic !== null)}
+		{:else if status === 'ready'}
 			<p class="mt-1 text-base text-text-secondary" data-story-list="empty">
-				No story on this page matches that. Press Search to look through the whole archive.
+				{#if filtering}
+					No loaded story matches that. Press Search to look through the whole archive.
+				{:else}
+					{emptySentence}
+					{#if windowDays < widest}
+						<button
+							type="button"
+							onclick={() => onWindow(widest)}
+							class="text-accent hover:underline"
+							data-window-widen>Look back {plural(widest, 'day', 'days')}</button>, or press
+						Search to look through the whole archive.
+					{:else}
+						Press Search to look through the whole archive.
+					{/if}
+				{/if}
 			</p>
 		{/if}
 	{/if}
@@ -509,5 +589,67 @@
 
 	.fold .fold:last-child {
 		border-block-end: none;
+	}
+
+	/* The window control. The same segmented pattern as the operator console's
+	   `WindowControl`, so a reader who has seen one reads the other with no
+	   relearning - the whole tile is the target, the tile carries the selected
+	   state, and the ring is on the tile because the input is a 1px square. */
+	.window {
+		margin-top: var(--space-4);
+		padding: var(--space-3) var(--space-4) var(--space-4);
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.window-legend {
+		padding-inline: var(--space-2);
+		font-size: var(--text-xs);
+		color: var(--color-text-tertiary);
+	}
+
+	.segments {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
+	.segment {
+		position: relative;
+		display: flex;
+		min-height: 2.75rem;
+		align-items: center;
+		padding: var(--space-2) var(--space-4);
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		cursor: pointer;
+	}
+
+	.segment[data-selected='true'] {
+		border-color: var(--color-accent);
+		background: var(--color-tint-accent);
+	}
+
+	.segment:has(.segment-input:focus-visible) {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
+	}
+
+	.segment-input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+
+	.segment-days {
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-text);
 	}
 </style>

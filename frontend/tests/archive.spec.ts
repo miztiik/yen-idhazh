@@ -158,3 +158,68 @@ test('the header states the retention window before anything is deleted', async 
 		/Nothing here is deleted\.|Charts older than \d+ months? are deleted\./
 	);
 });
+
+test('the browse window bounds the list, and states an empty window plainly', async ({ page }) => {
+	// The Oracle for Finding 89. The anchor is the canary's newest published day,
+	// 2026-08-20. These ten stories are dated the first of the month, so a
+	// thirty-day window reaches them and a one-day window - the anchor day alone -
+	// does not. The window bounds the fetch and the list; before this row the list
+	// walked back through the archive until a page filled (Rule #12).
+	const entries = Array.from({ length: 10 }, (_, at) => ({
+		date: '2026-08-01',
+		item_id: `ai-${at + 1}`,
+		title: `Story ${at + 1} on 2026-08-01`,
+		vertical: 'ai',
+		vector: null
+	}));
+
+	// Every index file this page asks the host for. The window spans one month, so
+	// there must be exactly one, whichever window the reader picks.
+	const fetched: string[] = [];
+	await page.route(MONTH, (route) => {
+		fetched.push(new URL(route.request().url()).pathname);
+		return route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				version: '2026-08-26',
+				month: '2026-08',
+				model_id: 'all-minilm-l6-v2-quantized',
+				dimensions: 384,
+				dtype: 'int8',
+				scale: 1 / 127,
+				entries
+			})
+		});
+	});
+
+	await page.goto('/archive/');
+
+	// The default window is thirty days, which reaches the first of the month, so
+	// the ten stories are on the page - and only the one month they live in was
+	// fetched, never a walk to an earlier one.
+	await expect(page.locator('[data-story-list="rows"] li').first()).toBeVisible();
+	expect(await page.locator('[data-story-list="rows"] li').count()).toBe(10);
+	expect(
+		new Set(fetched).size,
+		`the window spans one month, so one index file is fetched, not ${fetched.length}`
+	).toBe(1);
+
+	// Narrow to a single day. That day is the anchor, no story sits on it, and the
+	// list empties - stating which window emptied it and offering a wider one.
+	await page.locator('[data-window-preset="1"]').click();
+	await expect(page.locator('[data-archive-window]')).toHaveAttribute('data-window-days', '1');
+	const empty = page.locator('[data-story-list="empty"]');
+	await expect(empty).toBeVisible();
+	await expect(empty).toContainText('No story in the last 1 day.');
+	await expect(page.locator('[data-window-widen]')).toHaveText('Look back 90 days');
+	expect(await page.locator('[data-story-list="rows"] li').count()).toBe(0);
+	// Narrowing loaded no new month: the window only hides what was already here.
+	expect(new Set(fetched).size, 'narrowing the window must not fetch another month').toBe(1);
+
+	// The offer of a wider window brings the stories back, still from one file.
+	await page.locator('[data-window-widen]').click();
+	await expect(page.locator('[data-story-list="rows"] li').first()).toBeVisible();
+	expect(await page.locator('[data-story-list="rows"] li').count()).toBe(10);
+	expect(new Set(fetched).size, 'widening within the same month must not refetch it').toBe(1);
+});

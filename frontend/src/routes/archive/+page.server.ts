@@ -1,5 +1,5 @@
 import { indexMonths, loadDay, publishedDates } from '$lib/server/payload';
-import { archiveRecentDays, assistConfig } from '$lib/server/config';
+import { archiveRecentDays, archiveWindowDays, assistConfig, consoleConfig } from '$lib/server/config';
 import { archiveCalendar, type ArchiveDay } from '$lib/archive-calendar';
 import type { DigestDay, DigestVerticalRef } from '$lib/payload/types';
 
@@ -64,6 +64,17 @@ export function load() {
 		// to be here so on-device search could reach the vectors inside them, which
 		// cost every browsing visitor 1.7 MB gzipped. Search reads the month index
 		// now, and fetches a day only when a result from it is on screen.
-		assist: assistConfig()
+		assist: assistConfig(),
+		// The window the browse list opens on, the presets a reader can widen or
+		// narrow it over, and the day it is measured back from. The presets are the
+		// console's, so the two windowed surfaces on the site name spans from one
+		// list (decision 2). The anchor is the newest published day, so the loop
+		// fetches only the months that window can hold a story from and never one
+		// earlier (Rule #12).
+		window: {
+			presets: consoleConfig().window_presets,
+			default_days: archiveWindowDays(),
+			anchor: days[0]?.date ?? ''
+		}
 	};
 }
