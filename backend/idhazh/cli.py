@@ -29,7 +29,7 @@ import os
 import sys
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date as date_type
 from pathlib import Path
 from typing import Final, NamedTuple
@@ -496,6 +496,15 @@ def stage_plan(
         within_days=collect.reliability_window_days,
         floor=collect.reliability_floor,
     )
+    # The day's own encoder, built once and loaded only if the duplicate pass
+    # finds work. Each story's lead is joined by address so the pass reads the
+    # same headline-and-lead the design embeds; the first non-empty lead wins,
+    # because feeds carrying one story carry one story's lead.
+    embedder = Embedder(config.REPO_ROOT, settings.app.assist)
+    leads: dict[str, str] = {}
+    for candidate in candidates:
+        if candidate.lead is not None and candidate.url_key not in leads:
+            leads[candidate.url_key] = candidate.lead
     verticals, items = _plan_desks(
         settings,
         candidates,
@@ -513,6 +522,7 @@ def stage_plan(
     )
 
     items = _dedupe_planned_items(items)
+    items = _record_plan_duplicates(items, embedder=embedder, leads=leads, collect=collect)
     items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
 
     # How much of the day one feed may hold is a share, and a share needs the
@@ -555,6 +565,7 @@ def stage_plan(
             reliability=reliability_by_feed,
         )
         capped = _dedupe_planned_items(capped)
+        capped = _record_plan_duplicates(capped, embedder=embedder, leads=leads, collect=collect)
         capped = _within_ceiling(capped, ceiling=settings.app.run.safety_ceiling_per_run)
         if len(capped) < len(items):
             LOG.warning(
@@ -759,6 +770,68 @@ def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedIt
     keep = {item.item_id for item in ranked}
     LOG.warning("safety ceiling reached planned=%s ceiling=%s", len(items), ceiling)
     return [item for item in items if item.item_id in keep]
+
+
+def _record_plan_duplicates(
+    items: list[PlannedItem],
+    *,
+    embedder: Embedder,
+    leads: Mapping[str, str],
+    collect: CollectConfig,
+) -> list[PlannedItem]:
+    """Write down the day's same-story repeats, and cut them only when enforcing.
+
+    Record-only by default (`collect.dedup_enforce` is false): the pass computes
+    what it WOULD collapse - a story an earlier, stronger telling already
+    covers - logs each one against what it matched, and removes nothing. Turning
+    the flag on cuts the weaker telling before the safety ceiling and changes
+    nothing else, so enforcing is a config edit rather than a code change.
+
+    A record pass never stops a run (`degrade, do not fail`): an encoder that
+    will not load costs the run its duplicate record, never its plan.
+    """
+    if len(items) < 2 or not embedder.available:
+        return items
+    try:
+        embedder.load()
+        ids: list[str] = []
+        texts: list[str] = []
+        for item in items:
+            text = rank.dedup_text(item.title, leads.get(item.url_key))
+            if text is None:
+                continue
+            ids.append(item.item_id)
+            texts.append(text)
+        if len(ids) < 2:
+            return items
+        vectors = dict(zip(ids, embedder.encode(texts), strict=True))
+        findings = rank.duplicates_within_plan(
+            items, vectors, similarity_min=collect.dedup_similarity_min
+        )
+    except Exception as error:  # degrade, do not fail: a record pass never stops a run
+        LOG.warning("plan dedup skipped reason=%s: %s", type(error).__name__, error)
+        return items
+    for finding in findings:
+        LOG.info(
+            "plan duplicate would-collapse item=%s vertical=%s source=%s of=%s "
+            "matched_source=%s similarity=%.4f enforce=%s",
+            finding.item.item_id,
+            finding.item.vertical,
+            finding.item.source_id,
+            finding.duplicate_of.item_id,
+            finding.duplicate_of.source_id,
+            finding.similarity,
+            collect.dedup_enforce,
+        )
+    LOG.info(
+        "plan duplicates recorded count=%s enforce=%s",
+        len(findings),
+        collect.dedup_enforce,
+    )
+    if not collect.dedup_enforce:
+        return items
+    cut = {finding.item.item_id for finding in findings}
+    return [item for item in items if item.item_id not in cut]
 
 
 def _dedupe_planned_items(items: list[PlannedItem]) -> list[PlannedItem]:
