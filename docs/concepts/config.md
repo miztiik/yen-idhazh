@@ -417,14 +417,24 @@ state their tail in one sentence rather than offering more rows, because a
 ranking is read from the top and a tail is a number, not a page.
 
 `window_presets` is the list of spans the console's window control offers, and
-one control sets the span for every section that follows it. Four presets rather
+one control sets the span for every section that follows it. Five presets rather
 than a free number, because a wider window fetches a month file per month it
 reaches back into - so every value is a distinct transfer cost, and the values
-between these four cannot be told apart on the page. `default_window_days` must
-be one of them, or the page would open on a window its own control cannot name,
-and every preset must sit between `min_window_days` and `max_window_days`. All
-three rules are in the contract, so a config that breaks one fails the build
+between these five cannot be told apart on the page. The narrowest is one day,
+added 2026-09-06: it is the cheapest read the console can do, one month file and
+the run that has just finished, and it is what an operator wants when a run has
+gone wrong and the surrounding month is noise around it. `default_window_days`
+must be one of them, or the page would open on a window its own control cannot
+name, and every preset must sit between `min_window_days` and `max_window_days`.
+All three rules are in the contract, so a config that breaks one fails the build
 rather than the page.
+
+`max_window_days` (366) is not a viewport clamp and lowering it makes no page
+cheaper. **It is a retention floor**: `AppConfig` refuses a cleanup age shorter
+than the months a window this wide can touch, so the number decides how far back
+the month shards may not be deleted. Lower it and the pipeline is authorised to
+delete shards the console can still ask for, and a deleted shard draws as a gap
+that reads like a day the pipeline did nothing.
 
 `zoom_factor` has had no reader since the presets landed: the `+` and `-` keys
 step to the next preset instead of scaling the span, because a free span is the
@@ -690,18 +700,33 @@ to find one, so it opens on the same twenty-five the console's failure list
 does. It hides nothing - every story is one more click away, and the order is
 the published one.
 
-`ui.archive_recent_days` (7) is how many of the newest published days the
+`ui.archive_recent_days` (14) is how many of the newest published days the
 archive lists as rows of their own, each carrying the long date, the story count
 and whether every story finished. Every other day sits inside a disclosure for
 its month, and every month older than the newest published year sits inside a
 disclosure for that year - so the list a reader meets grows by twelve rows a
-year rather than by 365. Seven is a week, which is the span a reader who comes
-back after a break is looking for, and it is the number `ui.read_mark_days`
-already keeps for the same reason. The ceiling is 31, and the bound is the point:
+year rather than by 365. Fourteen because a row here invites a reader back to a
+day, so it has to be a day whose read marks are still there: `ui.read_mark_days`
+keeps a mark for the same fourteen days, and the two move together or the block
+starts offering days that come back looking unread. It was seven on both counts
+until 2026-09-06. The ceiling is 31, and the bound is the point:
 above a month the block is the wall of dates it replaced, and a month row
-already reaches any date in two clicks. It is one of two knobs in this block a
+already reaches any date in two clicks. It is one of three knobs in this block a
 browser is never told - the archive's `load` decides the list at build time and
 the page draws what it is handed.
+
+`ui.archive_window_days` (30) is the span the archive's window control opens on,
+and it is the third. **It names one of `console.window_presets` rather than
+declaring a second list of day counts**, and both config documents refuse a file
+where it does not - the same rule `console.default_window_days` has had since
+2026-08-29. So the contract holds exactly one list of spans, and the archive and
+the console cannot end up offering different day counts for the same idea. The
+cost of that is real and is the price of one list: a config that narrows the
+presets has to name the archive's span inside the narrowed list. Thirty is what
+the console opens on and about the reach `assist.search_months` already gives a
+search, so the control ships opening on what the archive costs today. Nothing
+reads it yet; the control is row 25 of
+[../../TODO/20260906-constant-cost-reads-plan.md](../../TODO/20260906-constant-cost-reads-plan.md).
 
 `ui.filter_min_chars` (2) is how many characters a reader types before an
 in-place filter narrows a list. It binds both surfaces, because the day page and
@@ -816,9 +841,11 @@ rather than from taste.
   so the same search reached 31 times less for a reason no reader could see, and
   finding nothing looked exactly like a story we never published. Below this
   floor a search reads one more shard, and one more only, so the cost is bounded
-  at a single extra fetch. Seven days because a week is already this site's unit
-  for what a reader still has in mind - `ui.read_mark_days` keeps a read mark for
-  seven days and `console.min_window_days` will not draw a narrower window. The
+  at a single extra fetch. Seven days, and it is now this knob's own number
+  rather than a borrowed one: it used to be justified as the week
+  `ui.read_mark_days` and `console.min_window_days` also kept, and on 2026-09-06
+  those moved to fourteen calendar days and to one day. The measurement is what
+  still holds. The
   extra fetch fires on the first 6 days of a month, 20 percent of them, and only
   when the shard already being read is small, so the bytes a search moves are
   levelled across the month rather than doubled. Widening either knob is visible

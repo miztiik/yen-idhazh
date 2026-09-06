@@ -71,14 +71,18 @@ test.describe('the calendar at seven hundred days', () => {
 		]);
 		expect(calendar.years.map((year) => year.year)).toEqual(['2025', '2024']);
 
+		// The day rows the config asks for, a row for each month of this year, and
+		// a row for each year before it: 14 + 9 + 2. The first term is
+		// `digest.archive_recent_days`, which moved from seven to fourteen on
+		// 2026-09-06 and took this total from 18 to 25 with it.
 		const atRest = recentDays() + calendar.months.length + calendar.years.length;
-		expect(atRest, 'the day list is meant to be scannable at 700 days').toBe(18);
+		expect(atRest, 'the day list is meant to be scannable at 700 days').toBe(25);
 
-		// And even with every year opened, the ceiling is a row a month.
+		// And even with every year opened, the ceiling is a row a month: 14 + 24 + 2.
 		const everyMonth =
 			calendar.months.length +
 			calendar.years.reduce((count, year) => count + year.months.length, 0);
-		expect(recentDays() + everyMonth + calendar.years.length).toBeLessThanOrEqual(33);
+		expect(recentDays() + everyMonth + calendar.years.length).toBeLessThanOrEqual(40);
 	});
 
 	test('no day is dropped, and no day is reachable twice from the calendar', () => {

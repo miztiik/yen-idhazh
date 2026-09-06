@@ -182,10 +182,17 @@ test('a window of N days is exactly N days, whatever the ledger holds', () => {
 });
 
 test('a step lands on a preset, and stops at the ends rather than wrapping', () => {
+	// The ends are read off the list, never written down. Seven was the narrowest
+	// preset until a one-day span was added on 2026-09-06, and a literal end
+	// stops testing the end the moment the list moves under it.
+	const narrowest = Math.min(...PRESETS);
+	const widest = Math.max(...PRESETS);
+
 	expect(stepPreset(30, PRESETS, 1)).toBe(90);
 	expect(stepPreset(30, PRESETS, -1)).toBe(14);
-	expect(stepPreset(90, PRESETS, 1)).toBe(90);
-	expect(stepPreset(7, PRESETS, -1)).toBe(7);
+	expect(stepPreset(widest, PRESETS, 1)).toBe(widest);
+	expect(stepPreset(narrowest, PRESETS, -1)).toBe(narrowest);
+	expect(stepPreset(7, PRESETS, -1)).toBe(1);
 	// A span that is not a preset still steps to the neighbouring one, so a
 	// window left by a pan cannot strand the keys.
 	expect(stepPreset(21, PRESETS, 1)).toBe(30);
