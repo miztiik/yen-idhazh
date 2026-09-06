@@ -184,6 +184,7 @@
     "score_archive_keep_months": null,
     "scores_full_grain_months": 14,
     "telemetry_publish": true,
+    "trace_window_days": 7,
     "tracing_enabled": false
   },
   "page_weight": {

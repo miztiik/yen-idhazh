@@ -123,7 +123,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger, publish_telemetry
+from idhazh import ledger, publish_telemetry, telemetry
 from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
@@ -816,6 +816,82 @@ def prune_seen(
         deleted=tuple(deleted),
         bytes_freed=freed,
         kept=tuple(kept),
+        dry_run=dry_run,
+    )
+
+
+# --- The trace tree ----------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class TracePruneResult:
+    """Which committed traces went, what they weighed, and how many stayed."""
+
+    deleted: tuple[str, ...]
+    bytes_freed: int
+    kept: int
+    dry_run: bool
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.deleted)
+
+
+def prune_traces(
+    state_dir: Path,
+    *,
+    today: date,
+    within_days: int,
+    dry_run: bool = False,
+) -> TracePruneResult:
+    """Delete every committed trace older than the window, and fold nothing.
+
+    A trace is a lookup an operator opens to walk one recent run step by step,
+    not a measurement, so its honest retention is deletion: a fold would invent a
+    total nobody reads (section 9.2, docs/concepts/telemetry.md). The record of a
+    run is the span rollup beside it under `state/span-rollup/`; this is the
+    evidence, kept only briefly.
+
+    A file is kept while its published day is within `within_days` of `today` and
+    goes once it is further back, so the last `within_days` days survive and
+    everything older is removed. A file dated ahead of `today` - a back-dated run
+    handed an older `--date` - is newer than the window and is kept, the same
+    property `prune_seen` holds for the first-sight shards.
+
+    There is no fuse and no max-per-run. A trace outside the window is not the
+    archive, and the worst case is an operator losing a drill-down into a run
+    that has already left the window - not a published byte, which is what the
+    picture pruner's fuse exists to protect.
+
+    `state/traces/` does not exist until `observability.tracing_enabled` is true,
+    so on every run before that this returns at once having walked nothing.
+    `deleted` carries the committed POSIX relpath of each file, so a dry run can
+    name what a live run would remove (section 2); `kept` is a count, because a
+    full window is many files and naming them all is noise.
+    """
+    root = state_dir / telemetry.TRACES_DIRNAME
+    if not root.is_dir():
+        return TracePruneResult((), 0, 0, dry_run)
+
+    deleted: list[str] = []
+    kept = 0
+    freed = 0
+    for path in sorted(root.rglob("*.jsonl")):
+        published = telemetry.trace_date(path, root)
+        if published is None:
+            continue
+        if (today - published).days < within_days:
+            kept += 1
+            continue
+        deleted.append(f"{ledger.STATE_DIRNAME}/{path.relative_to(state_dir).as_posix()}")
+        freed += path.stat().st_size
+        if not dry_run:
+            path.unlink()
+
+    return TracePruneResult(
+        deleted=tuple(deleted),
+        bytes_freed=freed,
+        kept=kept,
         dry_run=dry_run,
     )
 

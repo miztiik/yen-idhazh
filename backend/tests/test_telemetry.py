@@ -10,6 +10,7 @@ import csv
 import json
 import logging
 import re
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -903,3 +904,59 @@ def test_the_residual_may_not_ride_on_a_non_item_row() -> None:
             total_ms=40,
             unattributed_ms=300,
         )
+
+
+# --- committed trace paths ---------------------------------------------------
+
+
+def test_a_committed_trace_relpath_spells_the_date_once() -> None:
+    """state/traces/<YYYY>/<MM>/<DD>-<ordinal>-<shard>.jsonl, the run's date once.
+
+    The run id already spells the date, so the file name carries the ordinal
+    alone rather than repeating it: the `<YYYY>/<MM>/` directories and the `<DD>`
+    prefix are the date, and the run slot is `1`, not `2026-08-21-1`.
+    """
+    assert (
+        telemetry.committed_trace_relpath("2026-08-21-1", 0)
+        == "state/traces/2026/08/21-1-00.jsonl"
+    )
+
+
+def test_the_shard_is_zero_padded_and_a_multi_digit_ordinal_survives() -> None:
+    """The shard matches the run's other per-shard names; the ordinal is left as is."""
+    assert (
+        telemetry.committed_trace_relpath("2026-08-21-12", 3)
+        == "state/traces/2026/08/21-12-03.jsonl"
+    )
+
+
+def test_a_committed_trace_path_and_its_date_round_trip(tmp_path: Path) -> None:
+    """The path a run writes and the date the prune reads back are one thing.
+
+    Build the file under a state tree, read the date straight back out of the
+    path, and get the run's own day - the round trip `prune_traces` depends on to
+    decide which files are past the window.
+    """
+    state = tmp_path / "state"
+    path = telemetry.committed_trace_path(state, "2026-08-21-1", 0)
+    assert path == state / "traces" / "2026" / "08" / "21-1-00.jsonl"
+    assert telemetry.trace_date(path, state / "traces") == date(2026, 8, 21)
+
+
+def test_a_path_that_is_not_a_trace_reads_as_no_date(tmp_path: Path) -> None:
+    """A stray file under the tree is left alone, so it reports no date.
+
+    The prune deletes on a date and skips a None, so a file at the wrong depth or
+    with an unparseable day is never a candidate - the rule `month_shards` keeps
+    for the ledger directories.
+    """
+    root = tmp_path / "traces"
+    assert telemetry.trace_date(root / "2026" / "08" / "notaday-1-00.jsonl", root) is None
+    assert telemetry.trace_date(root / "2026" / "08.jsonl", root) is None
+    assert telemetry.trace_date(tmp_path / "elsewhere.jsonl", root) is None
+
+
+def test_a_run_id_that_is_not_a_date_and_ordinal_is_refused() -> None:
+    """The helper guards the shape the RunId type already promises upstream."""
+    with pytest.raises(ValueError, match="not <YYYY>-<MM>-<DD>-<ordinal>"):
+        telemetry.committed_trace_relpath("2026-08-21", 0)
