@@ -1621,7 +1621,7 @@ class ConsoleConfig(Model):
         ),
     )
     window_presets: list[int] = Field(
-        default_factory=lambda: [7, 14, 30, 90],
+        default_factory=lambda: [1, 7, 14, 30, 90],
         min_length=2,
         description=(
             "The day counts the console's window control offers, ascending and "
@@ -1629,7 +1629,11 @@ class ConsoleConfig(Model):
             "fetch cost, because a wider window pulls more month files, and most "
             "values in between are indistinguishable on the page. "
             "`default_window_days` must be one of them, or the console would open on "
-            "a window its own control cannot name."
+            "a window its own control cannot name. One day is the narrowest read the "
+            "console can offer - one month file, and the run that has just finished - "
+            "and it is the setting an operator wants when a run has gone wrong and "
+            "the surrounding month is noise around it. It is also the only preset a "
+            "reader can pick that reads no history at all."
         ),
     )
     today_anchor: TodayAnchor = Field(
@@ -1638,8 +1642,32 @@ class ConsoleConfig(Model):
     )
     pan_days: int = Field(default=7, ge=1, description="Days moved by one arrow-key pan.")
     zoom_factor: float = Field(default=1.5, gt=1.0)
-    min_window_days: int = Field(default=7, ge=1)
-    max_window_days: int = Field(default=366, ge=1)
+    min_window_days: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "The narrowest span a preset may name. One, because the preset list "
+            "offers a single day and a floor above it would refuse the list. It "
+            "bounds the presets and nothing else - a reader sets the span through "
+            "them and through no other control."
+        ),
+    )
+    max_window_days: int = Field(
+        default=366,
+        ge=1,
+        description=(
+            "The widest span a preset may name, and through that the oldest month "
+            "shard the pipeline may delete. It is a retention floor rather than a "
+            "viewport clamp: the preset radio buttons are the only span control a "
+            "reader can reach, so no page is held to this number and "
+            "`observability` is - `AppConfig` refuses a cleanup age shorter than the "
+            "months a window this wide can touch. Lowering it therefore does not "
+            "make any page cheaper; it authorises deleting shards the console can "
+            "still ask for, and a deleted shard draws as a gap that reads like a day "
+            "the pipeline did nothing. Three hundred and sixty-six is a leap year, "
+            "so a full year of history stays readable on every date."
+        ),
+    )
     min_attempts_for_rate: int = Field(
         default=5,
         ge=1,
@@ -2003,14 +2031,24 @@ class UiConfig(Model):
         min_length=1,
     )
     read_mark_days: int = Field(
-        default=7,
+        default=14,
         ge=1,
         description=(
-            "How many digest days of read marks the browser keeps. Marks are held per "
-            "digest date, so a mark made on one day can never grey out a different "
-            "day's article. Every page load keeps the newest days up to this number "
-            "and drops the rest, which bounds the store without trusting the device "
-            "clock. One week covers a reader who comes back after a break."
+            "How far back a read mark is kept, counted in calendar days from today. "
+            "Marks are held per digest date, so a mark made on one day can never "
+            "grey out a different day's article, and every page load drops the dates "
+            "that now sit outside this window. Fourteen days, the same span "
+            "`archive_recent_days` lists, so the days the archive offers as rows of "
+            "their own are exactly the days a reader can still see their own marks "
+            "on. THIS RULE TRUSTS THE DEVICE CLOCK AND THE RULE IT REPLACED "
+            "DELIBERATELY DID NOT: keeping the newest N dates present in the store "
+            "needed no clock at all, and expiry by calendar cannot work without one, "
+            "so a clock set wrong now keeps marks too long or drops them early. That "
+            "is the price. It is worth paying because the old rule bounded the store "
+            "by how often a reader came back rather than by time: a reader who opened "
+            "one day a month kept marks from seven different months, and every one "
+            "of them greyed out an article last seen most of a year ago. A wrong "
+            "mark is the thing this store exists to avoid."
         ),
     )
     archive_page_size: int = Field(
@@ -2024,19 +2062,40 @@ class UiConfig(Model):
         ),
     )
     archive_recent_days: int = Field(
-        default=7,
+        default=14,
         ge=1,
         le=31,
         description=(
             "How many of the newest published days the archive lists as rows of their "
             "own, each carrying the long date, the story count and whether every story "
             "finished. Every other day sits inside a disclosure for its month, so this "
-            "block is the shortcut and never the only way in. Seven is a week, which "
-            "is the span a reader who comes back after a break is looking for, and it "
-            "matches `read_mark_days` for the same reason. The ceiling is a month: "
+            "block is the shortcut and never the only way in. Fourteen, and it matches "
+            "`read_mark_days` for the same reason it matched it at seven: a row here is "
+            "an invitation back to a day, and a day whose marks have already been "
+            "dropped comes back looking unread. The two numbers move together or the "
+            "block starts offering days it misrepresents. The ceiling is a month: "
             "above that the block is the wall of dates it replaced, and a month row "
             "already reaches any date in two clicks. Read by the build alone, like "
             "`shell_seed_items`, so it never rides to a reader."
+        ),
+    )
+    archive_window_days: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "The span the archive's window control opens on, in days. IT MUST BE ONE "
+            "OF `console.window_presets`, and `AppConfig` and `AppearanceConfig` both "
+            "refuse a file where it is not - that is how the archive reuses the "
+            "console's list of spans instead of declaring a second one, so the two "
+            "surfaces cannot offer different day counts for the same idea. It names a "
+            "span rather than a list for the reason `console.default_window_days` "
+            "does: the list is the presets, and a second list is one more thing to "
+            "keep in step. Thirty, because that is the span the console opens on and "
+            "about the reach `assist.search_months` gives a search today, so the "
+            "control ships opening on what the archive already costs. NOTHING READS "
+            "IT YET - the control that will is row 25 of "
+            "TODO/20260906-constant-cost-reads-plan.md. Read by the build alone, like "
+            "`archive_recent_days`, so it never rides to a reader."
         ),
     )
     rail_group_minutes: int = Field(
@@ -2089,12 +2148,42 @@ class UiConfig(Model):
             "How many opened days the offline reader keeps on the reader's device. The "
             "worker caches a day only after that day has been fetched once - it never "
             "prefetches a day nobody asked for - and this is what stops the kept set "
-            "growing with the archive. Fourteen is two weeks, which is twice the seven "
-            "days of read marks a reader already keeps. Measured 2026-09-02 on Intel "
-            "Core i7-1265U / Windows 11 / node 24.12.0 over the 12 served days: a day "
-            "payload is 8,231 to 1,373,593 bytes uncompressed, median 727,622, so the "
-            "full fourteen is about 10 MB at the median and about 19 MB at the largest. "
-            "Arithmetic over committed payloads, so the spread is zero by construction. "
+            "growing with the archive. Fourteen is two weeks, the same span "
+            "`read_mark_days` keeps a read mark for, so a day a reader can still see "
+            "their marks on is a day they can still open with no network. Measured "
+            "2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 over the 12 "
+            "served days: a day payload is 8,231 to 1,373,593 bytes uncompressed, "
+            "median 727,622, so the full fourteen is about 10 MB at the median and "
+            "about 19 MB at the largest. Arithmetic over committed payloads, so the "
+            "spread is zero by construction. That 167-fold spread is why a day count "
+            "cannot be the only bound - `offline_bytes_kept` is the other one. Read by "
+            "the build alone, so it never rides to a reader."
+        ),
+    )
+    offline_bytes_kept: int = Field(
+        default=20_000_000,
+        ge=2_000_000,
+        le=100_000_000,
+        description=(
+            "The most bytes of cached day payloads the offline reader keeps on the "
+            "reader's device. A SECOND BOUND BESIDE `offline_days_kept`, NOT A "
+            "REPLACEMENT FOR IT, because a day count cannot bound bytes: measured "
+            "2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 over the 12 "
+            "served days, one day payload runs 8,231 to 1,373,593 bytes uncompressed, "
+            "median 727,622 - a factor of 167 between the smallest day and the largest, "
+            "so fourteen days is anything from 115 KB to 19 MB and the count alone "
+            "promises the reader nothing. Twenty million bytes is 20 MB, just over the "
+            "19,230,302 the day count already permits at the largest day measured, so "
+            "on today's payloads the day count still binds first and this is the "
+            "backstop for the day payloads grow. The floor is 2 MB, above the largest "
+            "single day measured, so no reachable value can leave the cache unable to "
+            "hold one day - a ceiling that evicts a day as fast as it arrives is worse "
+            "than no cache, because the reader pays the download and keeps nothing. "
+            "The ceiling is 100 MB, a little over twice the 43.2 MB the on-device "
+            "search model and its runtime already take, because taking a tenth of a "
+            "gigabyte of somebody's phone for a news digest is not a thing a config "
+            "edit should be able to do quietly. NOTHING READS IT YET - the eviction "
+            "rule that will is row 8 of TODO/20260906-constant-cost-reads-plan.md. "
             "Read by the build alone, so it never rides to a reader."
         ),
     )
@@ -2121,6 +2210,22 @@ class UiConfig(Model):
         if self.leading_per_desk > self.leading_stories:
             raise ValueError("leading_per_desk cannot exceed leading_stories")
         return self
+
+
+def refuse_an_archive_window_no_preset_offers(ui: UiConfig, console: ConsoleConfig) -> None:
+    """The archive's opening span has to be one the shared preset list names.
+
+    Checked here rather than on `UiConfig`, because the presets are
+    `ConsoleConfig`'s and the two blocks cannot see each other. Both config
+    documents call it, because both carry both blocks.
+
+    This IS the reuse: the archive declares one span and no list of its own, so
+    the only list of day counts in the contract is the console's. Let the two
+    drift and the archive opens on a window neither control can name, which is
+    the failure `console.default_window_days` is already checked against.
+    """
+    if ui.archive_window_days not in console.window_presets:
+        raise ValueError("ui.archive_window_days must be one of console.window_presets")
 
 
 class PageWeightConfig(Model):
@@ -2281,10 +2386,11 @@ class AssistConfig(Model):
             "and a search that finds nothing then looks exactly like a story that was "
             "never published. When the shards search_months names cover fewer days "
             "than this, a search reads ONE more shard - one more and no more, so the "
-            "cost is bounded at a single extra fetch. Seven, because a week is already "
-            "this site's unit for what a reader still has in mind: ui.read_mark_days "
-            "keeps a read mark for seven days and console.min_window_days will not "
-            "draw a narrower window. At the observed rate of 353.5 items a day the "
+            "cost is bounded at a single extra fetch. Seven, and it is this knob's own "
+            "number rather than a borrowed one: it used to be justified as the week "
+            "`ui.read_mark_days` and `console.min_window_days` also kept, and on "
+            "2026-09-06 those moved to fourteen calendar days and to one day. What "
+            "still holds is the measurement. At the observed rate of 353.5 items a day the "
             "extra fetch fires on the first 6 days of a month, 20 percent of them, "
             "and it fires only when the shard a search already reads is small: "
             "measured 2026-08-26, an entry costs 50.03 gzipped bytes of browse index "
@@ -2353,6 +2459,63 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T14:00",
+            change=(
+                "ui.read_mark_days moves from 7 to 14, and its meaning moves from 'the "
+                "newest 7 dates the store holds' to '14 calendar days back from today'. "
+                "ui.archive_recent_days moves from 7 to 14. console.window_presets "
+                "gains a 1-day span and is now [1, 7, 14, 30, 90]; console.min_window_days "
+                "moves from 7 to 1 so the new preset satisfies the existing range check. "
+                "console.max_window_days keeps 366 and gains a description. Two fields "
+                "are added: ui.offline_bytes_kept, defaulting to 20,000,000 and bounded "
+                "at 2,000,000 and 100,000,000, and ui.archive_window_days, defaulting to "
+                "30 and refused unless it names one of console.window_presets. The "
+                "shapes are `UiConfig` and `ConsoleConfig`, which this document and "
+                "`AppearanceConfig` share, so both schemas moved together. Every value "
+                "legal before today is legal now and both new fields carry defaults, so "
+                "a config written before today still validates and no read-side "
+                "migration is owed."
+            ),
+            why=(
+                "Read marks expired by position rather than by time. Keeping the newest "
+                "7 dates the store happens to hold needs no clock, which was the point, "
+                "but it bounds the store by how often a reader comes back instead of by "
+                "how long ago they read: a reader who opens one day a month kept marks "
+                "from seven different months, and each of them greyed out an article "
+                "last seen most of a year ago. Fourteen calendar days trusts the device "
+                "clock, which the old rule deliberately did not, and that cost is "
+                "stated in the field itself rather than hidden - a clock set wrong now "
+                "keeps marks too long or drops them early. A wrong mark is what the "
+                "store exists to avoid, so the trade is taken (owner decision, "
+                "2026-09-06). THE STATED RULE AND THE SHIPPED PRUNING ARE ONE COMMIT "
+                "APART ON PURPOSE: this document is the contract for every row of "
+                "TODO/20260906-constant-cost-reads-plan.md, so the knobs land once and "
+                "no later row edits the config file. Row 4 of that plan changes "
+                "frontend/src/lib/readstate.ts to prune by calendar. Until it merges "
+                "the browser still keeps the newest 14 dates, which is a superset of "
+                "the 14-day window and therefore never hides a mark a reader should "
+                "still see. ui.archive_recent_days follows to 14 for the reason it "
+                "matched read_mark_days at 7: a row in that block invites a reader back "
+                "to a day, and a day whose marks were already dropped comes back "
+                "looking unread. The presets gain one day because every span is a "
+                "distinct fetch cost - a window pulls a month file per month it reaches "
+                "- and there was no way to ask for the cheapest read of all, the run "
+                "that has just finished. min_window_days drops to 1 to admit it. "
+                "max_window_days does not move, and the description now says why: it is "
+                "a retention floor rather than a viewport clamp, the only span control "
+                "a reader can reach is the preset list, and lowering it would authorise "
+                "deleting month shards the console can still ask for. "
+                "ui.offline_bytes_kept exists because offline_days_kept cannot bound "
+                "bytes: measured 2026-09-02 over the 12 served days, one day payload "
+                "runs 8,231 to 1,373,593 bytes, a factor of 167, so fourteen days is "
+                "anything from 115 KB to 19 MB. ui.archive_window_days names a span out "
+                "of console.window_presets rather than declaring a second list of day "
+                "counts, so the contract holds exactly one list of spans and the two "
+                "surfaces cannot drift. Neither new knob has a reader yet; rows 8 and "
+                "25 of the same plan are the readers."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06T12:00",
             change=(
@@ -3925,6 +4088,11 @@ class AppConfig(Contract):
             if named not in roles:
                 spelled = ", ".join(sorted(roles))
                 raise ValueError(f"finetune.{field} must name one of models: {spelled}")
+        return self
+
+    @model_validator(mode="after")
+    def _the_archive_opens_on_a_span_the_presets_name(self) -> Self:
+        refuse_an_archive_window_no_preset_offers(self.ui, self.console)
         return self
 
     @model_validator(mode="after")

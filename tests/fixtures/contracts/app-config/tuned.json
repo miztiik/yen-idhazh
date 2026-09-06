@@ -255,6 +255,7 @@
   "ui": {
     "archive_page_size": 40,
     "archive_recent_days": 14,
+    "archive_window_days": 21,
     "desk_thin_max": 12,
     "filter_min_chars": 3,
     "items_per_topic": 5,
@@ -264,6 +265,7 @@
     "leading_min": 2,
     "leading_per_desk": 1,
     "leading_stories": 4,
+    "offline_bytes_kept": 8000000,
     "offline_days_kept": 14,
     "offline_retired_through": 0,
     "offline_version": 1,

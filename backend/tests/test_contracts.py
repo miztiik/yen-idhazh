@@ -375,13 +375,19 @@ def test_a_preset_list_that_is_out_of_order_or_out_of_bounds_is_refused() -> Non
 
     So `min_window_days` and `max_window_days` have no other reader, and a
     preset outside them would make both knobs decorative.
+
+    The out-of-bounds arm names its own `min_window_days` rather than leaning on
+    the default. The default was 7 until 2026-09-06 and is 1 now, so a case
+    written as `[3, 30]` against the default stopped being out of bounds without
+    anything about the rule changing - a test that reads as a bound check and
+    silently becomes a no-op.
     """
     with pytest.raises(ValidationError, match="ascending and distinct"):
         ConsoleConfig(window_presets=[30, 7, 90], default_window_days=30)
     with pytest.raises(ValidationError, match="ascending and distinct"):
         ConsoleConfig(window_presets=[7, 7, 30], default_window_days=30)
     with pytest.raises(ValidationError, match="min_window_days and max_window_days"):
-        ConsoleConfig(window_presets=[3, 30], default_window_days=30)
+        ConsoleConfig(window_presets=[3, 30], default_window_days=30, min_window_days=7)
     with pytest.raises(ValidationError, match="min_window_days and max_window_days"):
         ConsoleConfig(window_presets=[30, 400], default_window_days=30)
 
@@ -395,8 +401,8 @@ def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> Non
 
     The committed list leads for the same reason it does above: it is the last
     merge layer, so it is the list the control really offers. Measured
-    2026-09-05, all three copies read `[7, 14, 30, 90]` - unlike the chart size,
-    this one had not drifted.
+    2026-09-06, all three copies read `[1, 7, 14, 30, 90]` - unlike the chart
+    size, this one has never drifted.
     """
     offered = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json")).console
     assert offered.window_presets == ConsoleConfig().window_presets, (
@@ -407,6 +413,109 @@ def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> Non
     mirrored = re.search(r"window_presets:\s*\[([\d,\s]+)\]", reader)
     assert mirrored is not None, "the frontend console defaults dropped window_presets"
     assert [int(part) for part in mirrored.group(1).split(",")] == offered.window_presets
+
+
+def test_the_windows_and_the_reading_marks_are_the_spans_the_committed_config_names() -> None:
+    """The six spans row 1 of the constant-cost-reads plan settled, read off disk.
+
+    Each is asserted against `config/` rather than against the model, because a
+    default and a committed value are two different facts and only the second is
+    what ships. The console reads its window out of `config/appearance.json`,
+    which is the last merge layer, and `config/idhazh.json` still carries the
+    keys it carried before the split - so where both files name a span, both are
+    read here and the pair has to agree.
+
+    Why each number is what it is belongs in the field descriptions and in the
+    changelog entry dated 2026-09-06T14:00. This test only holds them still.
+    """
+    drawn = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json"))
+    legacy = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+
+    assert 1 in drawn.console.window_presets, (
+        "the console offers no one-day window, so the cheapest read it can do - one "
+        "month file and the run that just finished - is unreachable"
+    )
+    assert drawn.console.min_window_days == 1
+    assert drawn.console.max_window_days == 366, (
+        "max_window_days is a retention floor: lowering it makes no page cheaper and "
+        "authorises deleting month shards the console can still ask for"
+    )
+    assert drawn.digest.read_mark_days == 14
+    assert drawn.digest.archive_recent_days == 14, (
+        "the archive lists a different span from the one read marks survive, so it "
+        "offers days that come back looking unread"
+    )
+    assert drawn.digest.read_mark_days == drawn.digest.archive_recent_days
+
+    assert legacy.ui.read_mark_days == drawn.digest.read_mark_days
+    assert legacy.console.min_window_days == drawn.console.min_window_days
+    assert legacy.console.max_window_days == drawn.console.max_window_days
+
+    # The two knobs this row minted. Nothing reads either yet - rows 8 and 25 of
+    # TODO/20260906-constant-cost-reads-plan.md do - so the committed value and
+    # the bounds either side of it are the whole of what can be checked today.
+    assert drawn.digest.offline_bytes_kept == 20_000_000
+    assert drawn.digest.archive_window_days in drawn.console.window_presets
+
+
+def test_the_offline_cache_takes_a_byte_ceiling_that_can_still_hold_one_day() -> None:
+    """A day count cannot bound bytes, and a byte bound must fit a day.
+
+    Measured 2026-09-02 over the 12 served days, one day payload runs 8,231 to
+    1,373,593 bytes - a factor of 167 - so fourteen days is anything between
+    115 KB and 19 MB and `offline_days_kept` promises the reader nothing about
+    size. The floor is what stops the cure being worse: a ceiling under the
+    largest day evicts that day as fast as it arrives, so the reader pays the
+    download and keeps nothing. The ceiling stops a config edit quietly taking a
+    tenth of a gigabyte of somebody's phone.
+    """
+    for refused in (0, 1_999_999, 100_000_001):
+        with pytest.raises(ValidationError, match="offline_bytes_kept"):
+            UiConfig(offline_bytes_kept=refused)
+    assert UiConfig(offline_bytes_kept=2_000_000).offline_bytes_kept == 2_000_000
+    assert UiConfig(offline_bytes_kept=100_000_000).offline_bytes_kept == 100_000_000
+    assert UiConfig().offline_bytes_kept == 20_000_000
+    assert UiConfig().offline_bytes_kept > 1_373_593, (
+        "the ceiling is under the largest day payload measured, so the cache would "
+        "evict every large day the moment it arrived"
+    )
+
+
+def test_the_archive_window_names_a_span_the_console_presets_already_offer() -> None:
+    """One list of spans in the contract, not two.
+
+    The archive gets a window control in row 25 of
+    TODO/20260906-constant-cost-reads-plan.md, and it reuses the console's
+    presets. So `archive_window_days` names a member of that list rather than
+    declaring a second list of day counts, and both documents refuse a file
+    where it does not - which is the same rule `console.default_window_days`
+    has had since 2026-08-29.
+
+    Both documents are exercised, because a check on only one of them would pass
+    on the file the console does not read. The cost is stated rather than
+    hidden: a config that narrows the presets now has to name the archive's span
+    inside the narrowed list, exactly as it already had to for
+    `default_window_days`.
+    """
+    appearance = json.loads(read_text(CONFIG_DIR / "appearance.json"))
+    narrowed = {
+        **appearance,
+        "console": {**appearance["console"], "window_presets": [7, 60], "default_window_days": 7},
+    }
+    with pytest.raises(ValidationError, match="archive_window_days"):
+        AppearanceConfig.model_validate(narrowed)
+    named = {**narrowed, "digest": {**narrowed["digest"], "archive_window_days": 60}}
+    assert AppearanceConfig.model_validate(named).digest.archive_window_days == 60
+
+    pipeline = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    narrowed = {
+        **pipeline,
+        "console": {**pipeline["console"], "window_presets": [7, 60], "default_window_days": 7},
+    }
+    with pytest.raises(ValidationError, match="archive_window_days"):
+        AppConfig.model_validate(narrowed)
+    named = {**narrowed, "ui": {**narrowed["ui"], "archive_window_days": 60}}
+    assert AppConfig.model_validate(named).ui.archive_window_days == 60
 
 
 def test_the_readout_cap_is_a_knob_the_frontend_agrees_with() -> None:
