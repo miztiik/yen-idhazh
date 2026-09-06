@@ -41,7 +41,7 @@ const SCHEMA = resolve(process.cwd(), '..', 'schemas', 'digest-day.schema.json')
 const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 ) as { console?: { window_presets?: number[]; default_window_days?: number } };
-const PRESETS = CONFIG.console?.window_presets ?? [7, 14, 30, 90];
+const PRESETS = CONFIG.console?.window_presets ?? [1, 7, 14, 30, 90];
 const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 30;
 
 interface RawItem {
