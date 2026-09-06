@@ -74,7 +74,12 @@ test.describe('the valve moves the URL and not the carrier', () => {
 		// Measured 2026-09-06 on Intel Core i7-1265U / Windows 11 / node 24.12.0,
 		// two builds at a pinned `BUILD_VERSION`: 685 files, 111,255,143 bytes,
 		// zero differing hashes.
-		expect(component).toContain('await fetch(`${__ASSET_BASE_URL__ || base}/${file}`)');
+		//
+		// The address and not the whole call. What follows it is the caller's own
+		// business - a story that leaves the page aborts its request - and a test
+		// that pins the argument list goes red on a change that never touched the
+		// valve, which is how a valve test stops being one.
+		expect(component).toContain('fetch(`${__ASSET_BASE_URL__ || base}/${file}`');
 		// The response is read as text and inlined. An `img` cannot be repainted
 		// from the page's tokens, which is why it was removed and why moving the
 		// bytes must not bring it back.
