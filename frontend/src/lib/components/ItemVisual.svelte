@@ -36,6 +36,7 @@
 	import { base } from '$app/paths';
 	import { publishedVisual, refusedDrawing } from '$lib/payload/drawing';
 	import type { SeededVisual } from '$lib/payload/types';
+	import { whenNear } from '$lib/reveal';
 
 	let { visual }: { visual: SeededVisual | null } = $props();
 
@@ -73,13 +74,13 @@
 	 * The origin comes from our config and can never come from a payload, and the
 	 * path is still matched by `publishedVisual` before either half is joined.
 	 */
-	async function read(file: string): Promise<string | null> {
+	async function read(file: string, signal: AbortSignal): Promise<string | null> {
 		if (!publishedVisual(file)) {
 			console.warn(`[digest] ${file}: not a published visual path, so it is not drawn`);
 			return null;
 		}
 		try {
-			const response = await fetch(`${__ASSET_BASE_URL__ || base}/${file}`);
+			const response = await fetch(`${__ASSET_BASE_URL__ || base}/${file}`, { signal });
 			if (!response.ok) {
 				console.warn(`[digest] ${file}: not available (${response.status}), so it is not drawn`);
 				return null;
@@ -92,6 +93,9 @@
 			}
 			return markup;
 		} catch (error) {
+			// A story the reader scrolled away from cancelled its own request. That
+			// is the page working, so it says nothing.
+			if (signal.aborted) return null;
 			console.warn(`[digest] ${file} could not be read, so it is not drawn`, error);
 			return null;
 		}
@@ -108,21 +112,29 @@
 	 * tail of that day would open 43 requests at once, 534 KB, against the day
 	 * payload the same page is still waiting on.
 	 *
-	 * `100%` is one screen of the scrolling root rather than a pixel count, so a
-	 * phone asks one phone-screen early and a desktop one desktop-screen, and
-	 * there is no number here to maintain.
+	 * **Every waiting story shares one watcher**, which lives in `$lib/reveal`
+	 * and holds the margin. A story built its own until 2026-09-06, so a day that
+	 * published more drawings held more watchers - a cost that rose because a run
+	 * published more, which is what Rule #12 refuses.
+	 *
+	 * **A story that leaves the page takes its request with it.** Unmount stops
+	 * the watch and aborts the fetch, so a reader scrolling fast is not still
+	 * downloading drawings for stories that are gone, and an answer that was
+	 * already on its way is not written into a component nobody is reading.
 	 */
-	function whenNear(node: Element, file: string): { destroy: () => void } {
-		const observer = new IntersectionObserver(
-			(entries) => {
-				if (!entries.some((entry) => entry.isIntersecting)) return;
-				observer.disconnect();
-				void read(file).then((markup) => (arrived = markup));
-			},
-			{ rootMargin: '100% 0px' }
-		);
-		observer.observe(node);
-		return { destroy: () => observer.disconnect() };
+	function askWhenNear(node: Element, file: string): { destroy: () => void } {
+		const request = new AbortController();
+		const forget = whenNear(node, () => {
+			void read(file, request.signal).then((markup) => {
+				if (!request.signal.aborted) arrived = markup;
+			});
+		});
+		return {
+			destroy: () => {
+				request.abort();
+				forget();
+			}
+		};
 	}
 </script>
 
@@ -141,7 +153,7 @@
 	     border, no height. It exists so the fetch can wait until the story is
 	     nearly on screen, and a story whose drawing never arrives keeps exactly
 	     the height it has now. -->
-	<div class="slot" use:whenNear={wanted}></div>
+	<div class="slot" use:askWhenNear={wanted}></div>
 {/if}
 
 <style>
