@@ -363,6 +363,31 @@ class CollectConfig(Model):
         ),
     )
     tier_weights: TierWeights = Field(default_factory=TierWeights)
+    reliability_window_days: int = Field(
+        default=30,
+        ge=30,
+        description=(
+            "Trailing days of committed feed-health read to score a feed's "
+            "reliability - how often its reads carried entries rather than failing or "
+            "parsing to nothing. At least 30, because a feed publishes a few times a "
+            "day at most and a shorter window would let one bad afternoon set the "
+            "factor. The read is bounded by this window and never the whole ledger "
+            "(Rule #12)."
+        ),
+    )
+    reliability_floor: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The lowest a reliability factor may reach. The factor scales a feed's "
+            "authority and is clamped to the range [floor, 1.0], so it only ever "
+            "reduces a score and never removes a feed. At 0.5 the worst a feed's "
+            "record can do is halve its authority - a two-to-one cut, never more - so "
+            "a reliable feed of a lower tier can still be caught but a single desk is "
+            "never emptied by this alone."
+        ),
+    )
     repetition_weight: float = Field(default=1.0, ge=0.0)
     watchlist_bonus: float = Field(default=0.5, ge=0.0)
     front_page_bonus: float = Field(default=0.4, ge=0.0)
@@ -2477,6 +2502,27 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T17:00",
+            change=(
+                "collect.reliability_window_days added, defaulting to 30 and refused "
+                "below 30, and collect.reliability_floor added, defaulting to 0.5 and "
+                "bounded above 0.0 and at most 1.0. Together they drive a per-feed "
+                "reliability factor - productive reads over evidence-bearing reads in "
+                "the trailing window - that scales a feed's authority inside "
+                "rank.authority, clamped to [floor, 1.0]. Additive: an older config "
+                "validates and takes the defaults."
+            ),
+            why=(
+                "A feed that fails or parses to nothing kept scoring as though it had "
+                "published, because authority read only its tier and its hand-set "
+                "weight. The factor is derived from the committed feed-health record "
+                "rather than hand-tuned, it only ever reduces (the clamp caps it at "
+                "1.0), and a feed with no evidence in the window scores 1.0 so an "
+                "untested or politely-refused feed is never punished. The window bounds "
+                "the read (Rule #12) and the floor bounds the cut at two-to-one."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06T16:00",
             change=(

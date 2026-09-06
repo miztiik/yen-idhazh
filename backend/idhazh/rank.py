@@ -162,14 +162,27 @@ def tier_weight(tier: SourceTier, config: CollectConfig) -> float:
     }[tier]
 
 
-def authority(candidate: Candidate, config: CollectConfig) -> float:
-    """The source's tier score, scaled by that feed's own weight.
+def authority(
+    candidate: Candidate,
+    config: CollectConfig,
+    reliability: Mapping[str, float] | None = None,
+) -> float:
+    """The source's tier score, scaled by that feed's weight and its reliability.
 
     Weight is soft retirement: drop a feed to 0.5, watch what it costs, then
     decide. Multiplying rather than adding keeps a weighted-down institution
     below a full-weight one of the same tier, which is the point.
+
+    Reliability is the same scaling, derived from the feed's recent record
+    rather than set by hand: a feed that has published badly over the trailing
+    window - failed reads, or reads that parsed to nothing - carries a factor
+    below 1.0 and scores below a dependable feed of the same tier. The factor
+    only ever reduces, because it is clamped at 1.0, and a feed we have no
+    recent evidence on carries 1.0, so an untested feed is never punished. The
+    map is built once per run by `ledger.reliability`; a missing feed reads 1.0.
     """
-    return tier_weight(candidate.tier, config) * candidate.weight
+    factor = 1.0 if reliability is None else reliability.get(candidate.source_id, 1.0)
+    return tier_weight(candidate.tier, config) * candidate.weight * factor
 
 
 def merge(candidates: Iterable[Candidate]) -> dict[str, list[Candidate]]:
@@ -189,6 +202,7 @@ def score(
     lens_bonus: float = 0.0,
     appeared: str | None,
     now: str,
+    reliability: Mapping[str, float] | None = None,
 ) -> float:
     """Authority times reach, plus the bonuses.
 
@@ -200,7 +214,7 @@ def score(
     themes in one headline is not twice the story, and summing would let a
     keyword list outweigh the fact that three independent feeds carried it.
     """
-    best = max(authority(candidate, config) for candidate in carried)
+    best = max(authority(candidate, config, reliability) for candidate in carried)
     reach = 1.0 + config.repetition_weight * (len(carried) - 1)
     total = best * reach
     if watchlist_hit:
@@ -352,6 +366,7 @@ def plan_vertical(
     front_page_keys: frozenset[str] = frozenset(),
     lens_bonuses: Mapping[str, float] | None = None,
     day_ceiling: DayCeiling | None = None,
+    reliability: Mapping[str, float] | None = None,
 ) -> tuple[VerticalPlan, list[PlannedItem]]:
     """Rank one vertical's candidates and take what its feeds actually offered.
 
@@ -417,7 +432,10 @@ def plan_vertical(
     scored: list[Ranked] = []
     stale = 0
     for url_key, carried in grouped.items():
-        best = min(carried, key=lambda item: (-authority(item, config), item.source_id))
+        best = min(
+            carried,
+            key=lambda item: (-authority(item, config, reliability), item.source_id),
+        )
         watchlist_hit = url_key in watchlist_keys
         on_front_page = best.canonical_url in front_page_keys
         appeared = appeared_at(
@@ -440,6 +458,7 @@ def plan_vertical(
                     lens_bonus=theme,
                     appeared=appeared.at,
                     now=now,
+                    reliability=reliability,
                 ),
                 candidate=best,
                 appeared_at=appeared.at,
