@@ -249,9 +249,13 @@ stories yielded a candidate pool of 11 against 64 and 104 on the two days before
 it. The tell that the pool ran out rather than the block filling: the refusal
 counts carry no `block-full` at all.
 
-The fix is structural rather than a clock or a run count - take the newest day
-that is **not** the newest date on disk, because an earlier date can gain no more
-runs. Fixed in `backend/tests/test_leading_stories.py` on 2026-09-06.
+The first fix was structural rather than a clock or a run count - take the newest
+day that is **not** the newest date on disk, because an earlier date can gain no
+more runs. That test was then removed outright on 2026-09-06: reading the
+committed archive is itself the defect the producer already guards (Rule #12,
+`idhazh validate-days`), and the code property it checked - the block fills to its
+cap when the supply is there - is covered by a built fixture in the same file. The
+general lesson still binds the next such test.
 `backend/tests/test_contracts.py::test_a_story_past_the_seed_is_the_one_this_gate_exists_for`
 still has the same race: it reads `committed_days()[-1]` and asserts a magnitude
 that grows through the day. It has far more headroom, so it has not fired yet.
