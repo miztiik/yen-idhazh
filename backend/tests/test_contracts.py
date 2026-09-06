@@ -2361,7 +2361,19 @@ DESK_SHORTFALL = ("considered", "too_old", "below_feed_floor")
 
 
 def committed_days() -> list[Path]:
-    return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))
+    """The published days a test may read: every date except the newest.
+
+    The pipeline publishes several times into the same date, so the last date on
+    disk is the one still being appended to and is a fraction of itself for most
+    of the day - measured 2026-09-06 one run of five in, 78 stories against the
+    374 the finished day beside it carries. Any assertion about a day's size or
+    fullness read off that date is an assertion about the time of day.
+
+    The rule lives here rather than at each call site so that a caller cannot
+    opt out of it by accident. Every earlier date can gain no more runs, so it
+    is finished by construction - no run count, no clock, nothing to tune.
+    """
+    return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))[:-1]
 
 
 def test_the_published_tree_holds_days_to_migrate() -> None:
@@ -2369,11 +2381,10 @@ def test_the_published_tree_holds_days_to_migrate() -> None:
 
     The migration test below loops over the committed days. An empty tree would
     loop zero times and report the same pass as a tree that checked every day.
-
-    Two, not one: `a_day_that_validates` reads the newest FINISHED day, and a
-    tree holding only the day still being written has none.
+    `committed_days` already drops the date still being written, so a tree
+    holding only that one date reads as empty here.
     """
-    assert len(committed_days()) >= 2, "frontend/public/digest holds fewer than two days"
+    assert committed_days(), "frontend/public/digest holds no finished day"
 
 
 # --- the guard that replaced the one prerendering used to give free ---------
@@ -2383,18 +2394,12 @@ def a_day_that_validates() -> dict[str, Any]:
     """A finished committed day, taken off the real tree rather than written here.
 
     A day composed by hand drifts from the one the pipeline writes, and the
-    guard under test is about the real file.
-
-    Finished, not newest. The pipeline publishes several times into the same
-    date, so the last date on disk is a fraction of itself for most of the day -
-    measured 2026-09-06 one run in, 78 stories against the 374 to 627 a finished
-    day carries. The test below needs a day longer than `ui.shell_seed_items`,
-    which is 15, and a first run has no floor. Every earlier date can gain no
-    more runs, so it is finished by construction.
+    guard under test is about the real file. The test below needs a day longer
+    than `ui.shell_seed_items`, which is 15, and the date still being written
+    has no floor - one run in on 2026-09-06 it held 78 stories against 374.
+    `committed_days` is what keeps that date out of reach.
     """
-    finished = committed_days()[:-1]
-    assert finished, "the tree holds one date, and the newest date is never finished"
-    day: dict[str, Any] = json.loads(read_text(finished[-1]))
+    day: dict[str, Any] = json.loads(read_text(committed_days()[-1]))
     return day
 
 
