@@ -770,8 +770,10 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     legitimately changes it, which teaches people to edit the test.
 
     Tracing is the exception and is asserted by value, because its default is
-    the claim: a span tree is the one instrument nothing reads, so it stays off
-    until a developer asks for it and CI never builds one.
+    the claim: it was off until 2026-09-06, when the owner turned it on by
+    default. On or off, the committed file and a fresh clone must agree - the
+    point of this test is that the shipped config never silently diverges from
+    the defaults the code carries.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     fresh = AppConfig.model_validate({"models": committed.models.model_dump()})
@@ -780,7 +782,7 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     assert fresh.observability.evaluation_enabled
     assert fresh.observability.telemetry_publish
     assert fresh.observability.runtime_counters_scrape
-    assert not fresh.observability.tracing_enabled
+    assert fresh.observability.tracing_enabled
 
 
 def test_the_item_health_census_is_not_switchable() -> None:
@@ -791,11 +793,12 @@ def test_the_item_health_census_is_not_switchable() -> None:
     is the exact defect the census exists to prevent. The guard is the switch
     list itself, so adding a fifth boolean fails here and has to be argued for.
 
-    `tracing_enabled` was the fourth, added 2026-08-30. The argument it had to
-    make: it switches an instrument nothing else divides by. No page reads a
-    span, no gate consults one, and every rate the console prints still has its
-    denominator with tracing off - which is not true of any of the other three
-    in the same way, and is why it was allowed to be off by default.
+    `tracing_enabled` was the fourth, added 2026-08-30 and turned on by default
+    2026-09-06. The argument it had to make: it switches an instrument nothing
+    else divides by. No page reads a span, no gate consults one, and every rate
+    the console prints keeps its denominator whether tracing is on or off - which
+    is not true of any of the other three in the same way, and is why it is
+    allowed to be a switch at all.
     """
     switches = {
         name

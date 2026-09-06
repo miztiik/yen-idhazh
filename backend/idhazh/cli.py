@@ -155,10 +155,6 @@ PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
-#: Where a span tree lands. Under `backend/var/`, so it is gitignored, nothing
-#: downloads it and no page can read it: a trace is evidence and the three
-#: ledgers are the record (CLAUDE.md section 1b).
-TRACE_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "traces"
 
 
 def _index_root() -> Path:
@@ -222,9 +218,9 @@ def silent_tracer() -> telemetry.Tracer:
 
 
 def trace_sink(
-    settings: config.Settings, *, date: str, run_id: str, shard: int
+    settings: config.Settings, *, run_id: str, shard: int
 ) -> telemetry.SpanSink:
-    """Where this shard's spans go: nowhere, a file, or a file and a host.
+    """Where this shard's spans go: nowhere, a committed file, or a file and a host.
 
     A file by default and a host only when the environment names one, with its
     key pair (owner decision, 2026-08-30). No workflow sets those, so a daily
@@ -232,10 +228,14 @@ def trace_sink(
     hosted view exports three variables and gets both. The host is added to the
     file and never instead of it, so the record a test reads and the record a
     host receives are the same record.
+
+    The file is the committed trace under `state/traces/`, not a gitignored one,
+    so a recent run stays openable from the repository; `retention.prune_traces`
+    bounds the rolling window (CLAUDE.md section 1b, docs/concepts/telemetry.md).
     """
     if not settings.app.observability.tracing_enabled:
         return telemetry.NullSink()
-    local = telemetry.FileSink(TRACE_ROOT / date / f"{run_id}-{shard:02d}.jsonl")
+    local = telemetry.FileSink(telemetry.committed_trace_path(STATE_ROOT, run_id, shard))
     host = os.environ.get("LANGFUSE_HOST", "").strip()
     public_key = os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
     secret_key = os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
@@ -866,8 +866,12 @@ def stage_work(
     model_endpoint: str = DEFAULT_ENDPOINT,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
+    shard_started = time.monotonic()
+    tracing = settings.app.observability.tracing_enabled
+    collector = telemetry.CollectingSink()
+    base_sink = trace_sink(settings, run_id=plan.run_id, shard=shard)
     tracer = telemetry.Tracer(
-        sink=trace_sink(settings, date=plan.date, run_id=plan.run_id, shard=shard),
+        sink=telemetry.FanOut((base_sink, collector)) if tracing else base_sink,
         now=assemble.utc_now,
     )
     read_url = fetcher or live_fetcher(settings, tracer=tracer)
@@ -1004,6 +1008,19 @@ def stage_work(
                 score_ms,
             )
     tracer.flush()
+    if tracing:
+        # Fed by every span (the CollectingSink saw them all), reconciled to the
+        # shard's own monotonic wall clock so the item spans plus the residual it
+        # leaves add up to it - the invariant roll_up_spans enforces.
+        rows = telemetry.roll_up_spans(
+            collector.spans(),
+            date=plan.date,
+            run_id=plan.run_id,
+            shard=shard,
+            wall_clock_ms=int((time.monotonic() - shard_started) * 1000),
+        )
+        landed = ledger.append_span_rollup(STATE_ROOT, plan.date, rows)
+        LOG.info("rolled up spans shard=%s span_rows=%s", shard, landed)
 
 
 def _write_evidence(row: EvalRow, *, premise: str, summary: str) -> Path:
@@ -1293,7 +1310,7 @@ def stage_visual_planner(
     """
     items_dir = _run_dir(plan.date) / "items"
     tracer = telemetry.Tracer(
-        sink=trace_sink(settings, date=plan.date, run_id=plan.run_id, shard=0),
+        sink=trace_sink(settings, run_id=plan.run_id, shard=0),
         now=assemble.utc_now,
     )
     spent: list[int] = []

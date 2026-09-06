@@ -1047,18 +1047,19 @@ class ObservabilityConfig(Model):
         ),
     )
     tracing_enabled: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "Whether a work shard builds a span tree. The only switch here that is "
-            "OFF unconfigured, because it is the only instrument nothing reads: no "
-            "page renders a span, no gate consults one, and the ledgers stay the "
-            "record. It buys a developer the nesting a flat row cannot carry - the "
-            "robots read inside the fetch, the prompt render and the reply parse "
-            "either side of the model call. True writes one JSON line per span under "
-            "backend/var/traces/, which is gitignored and published nowhere. A host "
-            "is opt-in on top of that, through LANGFUSE_HOST with its key pair, and "
-            "CI names none - so an ordinary run reaches no third party whatever this "
-            "says."
+            "Whether a work shard builds a span tree. On by default (2026-09-06): a "
+            "span tree is the one thing the three ledgers cannot hold - a start "
+            "instant, a parent, and a step too small to earn a column, the robots "
+            "read inside the fetch and the prompt render and reply parse either side "
+            "of the model call. It stays an instrument nothing reads: no page renders "
+            "a span, no gate consults one, and the ledgers stay the record. True "
+            "writes one JSON line per span to the committed trace under state/traces/, "
+            "a short rolling window observability.trace_window_days bounds, and folds "
+            "the shard's spans into the committed span rollup. A host is opt-in on top "
+            "of that, through LANGFUSE_HOST with its key pair, and CI names none - so "
+            "an ordinary run reaches no third party whatever this says."
         ),
     )
     trace_window_days: int = Field(
@@ -2476,6 +2477,26 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T16:00",
+            change=(
+                "observability.tracing_enabled default moves from false to true. A "
+                "work shard now builds a span tree unconfigured, writes it to the "
+                "committed trace under state/traces/, and folds it into the span "
+                "rollup. The committed config sets the same value, so a fresh clone "
+                "and the shipped file still agree."
+            ),
+            why=(
+                "The owner turned tracing on by default (2026-09-06): the span tree "
+                "and the committed rollup are worth their runner cost, which Carmack "
+                "measured negligible. It is safe to run in CI because the sink is the "
+                "committed file and nothing else - no host, no key - and the closed "
+                "attribute vocabulary keeps article text out of every span (Rule #11). "
+                "The move is additive: the committed config sets the value explicitly, "
+                "so no persisted config changes meaning and no read-side migration is "
+                "needed."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06T15:00",
             change=(
