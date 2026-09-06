@@ -6,6 +6,9 @@
  * build's worker carries and the version through which workers must retire, and
  * this script puts each of them where it is read.
  *
+ * The bounds on what the worker keeps ride the same way, for the same reason: a
+ * worker cannot read `config/` at run time.
+ *
  * Two outputs, because they are read in two different places:
  *
  * - `src/lib/offline.generated.ts` is baked into the worker at build time. A
@@ -36,7 +39,8 @@ const SWITCH = join(FRONTEND, 'static', 'service-worker-kill.json');
 const DEFAULTS = {
 	offline_version: 1,
 	offline_retired_through: 0,
-	offline_days_kept: 14
+	offline_days_kept: 14,
+	offline_bytes_kept: 20_000_000
 };
 
 function digestBlock() {
@@ -52,6 +56,7 @@ const knobs = digestBlock();
 const version = Number(knobs.offline_version ?? DEFAULTS.offline_version);
 const retiredThrough = Number(knobs.offline_retired_through ?? DEFAULTS.offline_retired_through);
 const daysKept = Number(knobs.offline_days_kept ?? DEFAULTS.offline_days_kept);
+const bytesKept = Number(knobs.offline_bytes_kept ?? DEFAULTS.offline_bytes_kept);
 
 const constants = `/* Generated from config/appearance.json by scripts/build-worker-switch.mjs.
    Do not hand-edit: the build regenerates it and a diff fails the gate. */
@@ -61,6 +66,10 @@ export const OFFLINE_VERSION = ${version};
 
 /** How many opened days the offline reader keeps on the reader's device. */
 export const OFFLINE_DAYS_KEPT = ${daysKept};
+
+/** The most bytes of kept days the offline reader leaves on the reader's
+ * device. The second bound, because a day count cannot bound bytes. */
+export const OFFLINE_BYTES_KEPT = ${bytesKept};
 `;
 
 // One key and one number. The worker reads this file with the HTTP cache turned

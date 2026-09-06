@@ -422,10 +422,10 @@ interface RawConfig {
  * leading-block
  * knobs are read by the pipeline, which decides the block at assemble and
  * publishes the answer on the day - the page draws what it is handed and
- * re-decides nothing. The three `offline_` knobs are read by
+ * re-decides nothing. The four `offline_` knobs are read by
  * `scripts/build-worker-switch.mjs`, which bakes them into the service worker
- * and into the file that retires it; `offline_bytes_kept` is the fourth and has
- * no reader yet. `items_per_topic` is retired and read by nothing at all.
+ * and into the file that retires it.
+ * `items_per_topic` is retired and read by nothing at all.
  */
 const BUILD_ONLY_KEYS = [
 	'shell_seed_items',
