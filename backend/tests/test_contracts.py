@@ -819,6 +819,23 @@ def test_a_sample_rate_of_zero_is_refused_because_the_toggle_already_says_off() 
     assert ObservabilityConfig(sample_rate=1.0).sample_rate == 1.0
 
 
+def test_the_trace_window_is_a_positive_span_of_days() -> None:
+    """The raw-trace window is counted in days, not months.
+
+    A trace is a lookup an operator opens for a recent run, so its window is a
+    short span of days rather than a full-grain month count - which is also why
+    it is not in `full_grain_months()` above. At least one day, or the day being
+    written would have nowhere to land. The value lives in config; this holds the
+    floor the model enforces, without asserting a default that would fail the day
+    somebody legitimately changes it.
+    """
+    assert ObservabilityConfig().trace_window_days >= 1
+    assert "trace_window_days" not in ObservabilityConfig().full_grain_months()
+    with pytest.raises(ValidationError):
+        ObservabilityConfig(trace_window_days=0)
+    assert ObservabilityConfig(trace_window_days=1).trace_window_days == 1
+
+
 def test_a_month_may_not_be_deleted_before_it_has_been_downsampled() -> None:
     """A summary has to outlive the full-grain window it replaces, both times."""
     fresh = ObservabilityConfig()

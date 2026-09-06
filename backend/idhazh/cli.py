@@ -2586,15 +2586,15 @@ def stage_prune_state(
 ) -> int:
     """Retire what the ledgers no longer answer for: an item-health month and the
     browser's copy of it, a feed-health month, every seen shard outside the
-    window the planner reads, and every score month past its full-grain window.
-    Then clean the rendered visuals the archive policy has aged out, and record
-    what that pass found.
+    window the planner reads, every committed span trace past its short window,
+    and every score month past its full-grain window. Then clean the rendered
+    visuals the archive policy has aged out, and record what that pass found.
 
-    Five stores, one step, because they share the one property that makes this
+    Six stores, one step, because they share the one property that makes this
     safe: all of it runs after the day is committed, and none of it can cost a
     reader anything it has not already been given.
 
-    **The visuals are the sixth thing here and they do not share that property.**
+    **The visuals are the seventh thing here and they do not share that property.**
     Deleting a picture costs a reader the picture. They are in this step because
     it is the step that runs after the commit and because the pass is switched
     off - `retention.image_months` is -1 and the flag makes it report-only - so
@@ -2637,6 +2637,7 @@ def stage_prune_state(
 
     removed: list[str] = []
     removed += _prune_seen_shards(state, collect, today, dry_run=dry_run)
+    removed += _prune_trace_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
 
@@ -2783,6 +2784,39 @@ def _prune_seen_shards(
         ", ".join(seen.kept) or "no shard",
     )
     return [ledger.seen_relpath(f"{stem}-01") for stem in seen.deleted]
+
+
+def _prune_trace_shards(
+    state: Path, observability: ObservabilityConfig, today: date_type, *, dry_run: bool
+) -> list[str]:
+    """Delete the committed span traces past their window, and say what went.
+
+    A trace is a lookup an operator opens for a recent run, so it deletes rather
+    than folds - the same shape as the seen prune above and for the same reason.
+    `state/traces/` does not exist until tracing is switched on, so until then
+    this names the window it measured against and removes nothing.
+    """
+    traces = retention.prune_traces(
+        state,
+        today=today,
+        within_days=observability.trace_window_days,
+        dry_run=dry_run,
+    )
+    if not traces.changed:
+        LOG.info(
+            "trace prune: every committed trace is inside the %s-day window, so none "
+            "was deleted",
+            observability.trace_window_days,
+        )
+        return []
+    LOG.info(
+        "trace prune%s: deleted %s files, freed %s bytes, kept %s inside the window",
+        " (dry run)" if traces.dry_run else "",
+        len(traces.deleted),
+        traces.bytes_freed,
+        traces.kept,
+    )
+    return list(traces.deleted)
 
 
 def _prune_score_shards(
