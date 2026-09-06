@@ -21,6 +21,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
 from idhazh.llm.server import Completion
@@ -758,3 +759,89 @@ def test_the_concept_page_names_no_event_the_code_cannot_emit() -> None:
     named = set(re.findall(r"`((?:run|stage|item)\.[a-z.]+)`", page))
 
     assert named == {name.value for name in telemetry.EventName}
+
+
+# --- the span rollup ---------------------------------------------------------
+
+
+def a_span(name: telemetry.SpanName, duration_ms: int, *, index: int = 1) -> telemetry.Span:
+    """One finished span, built straight from the dataclass - no tracer, no clock."""
+    return telemetry.Span(
+        trace_id="2026-08-21-1-energy-01",
+        span_id=f"{name.value}-{index:03d}",
+        parent_id=None,
+        name=name,
+        kind=telemetry.SpanKind.SPAN,
+        started_at="2026-08-21T06:00:00Z",
+        duration_ms=duration_ms,
+        attributes={},
+    )
+
+
+def test_the_committed_spans_are_a_named_subset_of_the_tracer_vocabulary() -> None:
+    """The five committed span names must each be a name the tracer opens, so the
+    fold's contract enum cannot name a span that does not exist."""
+    committed = {member.value for member in RollupSpan}
+    assert committed == {"item", "robots", "tag", "render_prompt", "parse_reply"}
+    assert committed <= {name.value for name in telemetry.SpanName}
+
+
+def test_the_fold_keeps_only_the_five_committed_spans() -> None:
+    """Open every span the tracer knows; the fold keeps the five and drops the six
+    a ledger column already times."""
+    spans = [a_span(name, 5) for name in telemetry.SpanName]
+    rows = telemetry.roll_up_spans(spans, date="2026-08-21", run_id="2026-08-21-1", shard=0)
+    assert [row.span_name for row in rows] == list(RollupSpan)
+    dropped = {name.value for name in telemetry.SpanName} - {row.span_name.value for row in rows}
+    assert dropped == {"fetch", "extract", "summarize", "model_call", "score", "visual_planner"}
+
+
+def test_the_fold_counts_the_spans_and_sums_their_durations() -> None:
+    spans = [
+        a_span(telemetry.SpanName.ROBOTS, 10, index=1),
+        a_span(telemetry.SpanName.ROBOTS, 20, index=2),
+        a_span(telemetry.SpanName.ROBOTS, 0, index=3),
+        a_span(telemetry.SpanName.ITEM, 900, index=1),
+    ]
+    rows = telemetry.roll_up_spans(spans, date="2026-08-21", run_id="2026-08-21-1", shard=3)
+    by_name = {row.span_name: row for row in rows}
+    robots = by_name[RollupSpan.ROBOTS]
+    assert (robots.count, robots.total_ms) == (3, 30)
+    assert (robots.date, robots.run_id, robots.shard) == ("2026-08-21", "2026-08-21-1", 3)
+    item = by_name[RollupSpan.ITEM]
+    assert (item.count, item.total_ms) == (1, 900)
+
+
+def test_a_span_the_shard_never_opened_gets_no_row() -> None:
+    """An absent row reads as never opened; a zero row would read as opened and
+    measured nothing, which is a different fact."""
+    rows = telemetry.roll_up_spans(
+        [a_span(telemetry.SpanName.ITEM, 100)], date="2026-08-21", run_id="2026-08-21-1", shard=0
+    )
+    assert [row.span_name for row in rows] == [RollupSpan.ITEM]
+    assert all(row.count >= 1 for row in rows)
+
+
+def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Path) -> None:
+    """The shard's fold lands once. A re-run recomputes the same numbers, and the
+    append filters them against the grain rather than doubling every count."""
+    state = tmp_path / "state"
+    spans = [
+        a_span(telemetry.SpanName.ITEM, 900),
+        a_span(telemetry.SpanName.ROBOTS, 10),
+        a_span(telemetry.SpanName.TAG, 5),
+    ]
+    rows = telemetry.roll_up_spans(spans, date="2026-08-21", run_id="2026-08-21-1", shard=0)
+    assert ledger.append_span_rollup(state, "2026-08-21", rows) == 3
+    assert ledger.append_span_rollup(state, "2026-08-21", rows) == 0
+
+    shard = ledger.span_rollup_path(state, "2026-08")
+    written = [
+        SpanRollupRow.from_csv_row(raw) for raw in csv.DictReader(shard.read_text().splitlines())
+    ]
+    assert [row.span_name for row in written] == [RollupSpan.ITEM, RollupSpan.ROBOTS, RollupSpan.TAG]
+    assert {row.span_name: row.total_ms for row in written} == {
+        RollupSpan.ITEM: 900,
+        RollupSpan.ROBOTS: 10,
+        RollupSpan.TAG: 5,
+    }

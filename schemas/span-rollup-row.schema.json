@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "RollupSpan": {
+      "description": "The five spans a shard commits a count and a duration for.\n\nThis is the committed subset of `telemetry.SpanName`, and it lives in the\ncontract rather than beside the tracer because a committed column's ids are a\ncontract: a reader a year from now parses `span_name` against this enum, not\nagainst the tracer's wider list. `telemetry` derives its filter from this\nenum, so the two cannot drift and this is the one place the committed set is\nwritten down.\n\nDeclared in the order the fold emits them - the `item` parent first, then the\nfour sub-steps in the order the pipeline runs them.",
+      "enum": [
+        "item",
+        "robots",
+        "tag",
+        "render_prompt",
+        "parse_reply"
+      ],
+      "title": "RollupSpan",
+      "type": "string"
+    }
+  },
+  "$id": "span-rollup-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one row per (date, run_id, shard, span_name), carrying the span count and the summed duration for one of the five committed spans.",
+      "version": "2026-09-06",
+      "why": "Contracts before logic - the fold and the ledger are written against a fixed row. The row carries a count and a total and nothing else, because every other cut of a span's timing is already a ledger column and a second account of a number a ledger holds is what this row exists not to be. It commits five span names and not the eleven the tracer opens, for the same reason: the other six each have a column that already times them."
+    }
+  ],
+  "description": "One `(date, run_id, shard, span_name)` group's span count and summed duration.",
+  "properties": {
+    "count": {
+      "description": "How many spans of this name the shard opened. At least one: a name with no span produces no row rather than a zero row, so an absent row reads as never opened and never as opened-and-measured-nothing.",
+      "minimum": 1,
+      "title": "Count",
+      "type": "integer"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "shard": {
+      "description": "Which work shard of the run these spans came from.",
+      "minimum": 0,
+      "title": "Shard",
+      "type": "integer"
+    },
+    "span_name": {
+      "$ref": "#/$defs/RollupSpan",
+      "description": "Which of the five committed spans this row folds, as the enum spells it."
+    },
+    "total_ms": {
+      "description": "Every span of this name added together, in whole milliseconds. A total and not a mean, because a mean cannot be re-summed across shards and the reconciliation that reads this row needs the sum. Zero is possible and honest: a counted span can round to nothing.",
+      "minimum": 0,
+      "title": "Total Ms",
+      "type": "integer"
+    },
+    "version": {
+      "default": "2026-09-06",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "shard",
+    "span_name",
+    "count",
+    "total_ms"
+  ],
+  "title": "SpanRollupRow",
+  "type": "object",
+  "version": "2026-09-06"
+}

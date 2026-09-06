@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
@@ -20,6 +20,7 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.feed_health import RobotsOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.fetch import BLOCKED_REASONS, ROBOTS_REFUSALS
 from idhazh.sanitize import sanitize
@@ -861,3 +862,61 @@ def _classify_article(article: Article) -> tuple[FailureCode, ItemStage, int | N
         None,
         detail_cell("fetch failed for an untyped reason"),
     )
+
+
+# --- the span rollup ---------------------------------------------------------
+#
+# The fold that turns a shard's finished spans into the committed record under
+# `state/span-rollup/`. It commits five span names and not the eleven the tracer
+# opens - the five `RollupSpan` names, which are the steps no ledger column
+# already times (`contracts.span_rollup`, `docs/concepts/telemetry.md`).
+
+
+#: The five spans committed to `state/span-rollup`, as `SpanName` members. Derived
+#: from the contract's `RollupSpan` so that enum is the one place the committed
+#: set is written down; the `SpanName(member.value)` lookup also fails at import
+#: if a committed name ever stops naming a real span.
+_COMMITTED_SPANS: Final[frozenset[SpanName]] = frozenset(
+    SpanName(member.value) for member in RollupSpan
+)
+
+
+def roll_up_spans(
+    spans: Iterable[Span], *, date: str, run_id: str, shard: int
+) -> list[SpanRollupRow]:
+    """Fold one shard's finished spans to one row per committed span name.
+
+    Only the five spans `state/span-rollup` commits are kept; the other six each
+    have a ledger column that already times them, so a row here would restate a
+    number a ledger holds. A name the shard never opened produces no row rather
+    than a zero row. The rows come back in `RollupSpan` order, so a shard appends
+    the same bytes in the same order on every run.
+
+    The shard supplies its own `date`, `run_id` and `shard`. The sub-step spans
+    do not carry them, so the fold reads the identity from the caller rather than
+    guessing it from whichever span happens to hold an attribute.
+    """
+    counts: dict[SpanName, int] = {}
+    totals: dict[SpanName, int] = {}
+    for span in spans:
+        if span.name not in _COMMITTED_SPANS:
+            continue
+        counts[span.name] = counts.get(span.name, 0) + 1
+        totals[span.name] = totals.get(span.name, 0) + span.duration_ms
+    rows: list[SpanRollupRow] = []
+    for member in RollupSpan:
+        name = SpanName(member.value)
+        if name not in counts:
+            continue
+        rows.append(
+            SpanRollupRow(
+                version=SpanRollupRow.schema_version(),
+                date=date,
+                run_id=run_id,
+                shard=shard,
+                span_name=member,
+                count=counts[name],
+                total_ms=totals[name],
+            )
+        )
+    return rows
