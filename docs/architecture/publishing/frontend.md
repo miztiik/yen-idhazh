@@ -2076,6 +2076,18 @@ markers, which is a count of phrases in about four pages.
 **Neither new panel declares `data-windowed`**, for the reason the doubt-reason
 panel does not, and each proves it honours the control in its own spec.
 
+**The faithfulness plot fails a sufficiency check on purpose.** Its axis runs
+from zero to a hundred, so the fifteen committed days sit in the top fifth of
+the plot and four fifths of it is empty - which is
+[../../concepts/design-system.md](../../concepts/design-system.md)'s first check,
+does it use the space it is on, answered no. Cropping the axis to the data would
+fill the plot and would also turn a four-point drift into a cliff. This panel
+exists because a band could not show a four-point move; a plot that shows a
+four-point move as a collapse is the same failure with the sign flipped. The
+empty four fifths is what tells an operator the movement is small, and that is
+worth more than the space. Recorded here rather than waved through, per
+`CLAUDE.md` section 9.
+
 **What it cost, measured 2026-09-06 on an Intel Core i7-1265U.** The three panels
 add **5,930 gzipped bytes** to `/console/model/`: the median of five builds is
 44,948 B against 39,018 B for `origin/main`'s own source built in place on the
