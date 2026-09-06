@@ -1714,6 +1714,21 @@ naming the worker API for a test to assert on.
   jump the CSS does not contain. Take `rect.top + window.scrollY` and
   `rect.left + window.scrollX`, and call `scrollIntoViewIfNeeded()` before the
   rest reading as well. Measured 2026-08-31.
+- **`npx playwright test <group>` piped into `Select-String` prints nothing until
+  the whole group finishes**, so a run that is working and a run that has hung
+  look identical for as long as it takes. The console group runs on one worker,
+  and on 2026-09-06 it produced no readable line in fifteen minutes of polling
+  while CI ran the same suite on the same commit in under six. Redirect to a
+  file and read the file, or run the specs the change touches and let CI's
+  `browser` job be the group arm - it is the authoritative one either way
+  (`CLAUDE.md` section 9).
+- **`locator.screenshot()` on a console panel times out on "waiting for element
+  to be stable".** Something above the panel is still settling, and the wait is
+  for the whole page rather than the element. Scroll it into view with
+  `el.scrollIntoView({ behavior: 'instant' })` in an `evaluate`, wait once, then
+  take a viewport screenshot. Observed 2026-09-06 on `/console/model/`, where the
+  element screenshot failed twice at 10 s and the viewport one returned
+  immediately.
 
 ## Git Bash on Windows
 
