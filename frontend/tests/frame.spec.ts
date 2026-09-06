@@ -1,13 +1,18 @@
 import { expect, test } from '@playwright/test';
 import {
 	chartWidth,
+	coverage,
+	type Coverage,
+	coverageRegions,
 	dayColumns,
+	dayTicks,
 	frame,
 	linearAxis,
 	logAxis,
 	MARGIN,
 	nearestColumn,
-	type ReadoutMark
+	type ReadoutMark,
+	SPARSE_COVERAGE
 } from '../src/lib/charts/frame';
 
 /**
@@ -268,5 +273,138 @@ test('a mark that is not a real number costs the answer nothing', () => {
 	for (const x of [-10, 0, 100, 199, 200, 500]) {
 		expect(lookup.at(x), `at x=${x}`).toBe(scanned(marks, x));
 	}
+});
+
+/**
+ * The data-dependent geometry - an axis bound and a run of empty columns - is
+ * prepared in one pass over its input and comes out the same whether a data
+ * change, a window change or a resize asked for it. The Oracle for Row #14.
+ *
+ * `linearAxis` and `logAxis` used to filter their values into a fresh array and
+ * hand that to `d3.extent`; `coverage` counted its flags and then grouped them
+ * in a second pass. Every assertion here holds against the rule that replaced,
+ * so the output is unchanged - what the reads count pins is the one thing that
+ * did: each column is read once, not twice. The tick grid and the mark
+ * placement are Jony's to keep and are checked to move only with the box.
+ */
+
+/** The two-pass coverage this row replaced, kept as the parity reference. */
+function twoPassCoverage(measured: readonly boolean[], threshold = SPARSE_COVERAGE): Coverage {
+	const days = measured.length;
+	const count = measured.filter(Boolean).length;
+	const gaps: [number, number][] = [];
+	let open: number | null = null;
+	measured.forEach((seen, index) => {
+		if (!seen && open === null) open = index;
+		if (seen && open !== null) {
+			gaps.push([open, index - 1]);
+			open = null;
+		}
+	});
+	if (open !== null) gaps.push([open, days - 1]);
+	return {
+		days,
+		measured: count,
+		sparse: days > 0 && count > 0 && count / days < threshold,
+		gaps
+	};
+}
+
+/** An array that counts every read of a numbered cell, so a test can tell a
+ * one-pass reduction from a two-pass one that returns the same answer. */
+function countingReads(values: readonly boolean[]): { array: boolean[]; reads: () => number } {
+	let reads = 0;
+	const array = new Proxy([...values], {
+		get(target, key, receiver) {
+			if (typeof key === 'string' && /^\d+$/.test(key)) reads += 1;
+			return Reflect.get(target, key, receiver);
+		}
+	}) as boolean[];
+	return { array, reads: () => reads };
+}
+
+/** Every gap shape: none, one at each end, several inside, all measured, none
+ * measured, one column, and none. */
+const WINDOWS: boolean[][] = [
+	[true, false, false, true, true, false, true],
+	[false, false, true, true, true, false, false],
+	[true, true, true, true],
+	[false, false, false, false, false],
+	[true],
+	[false],
+	[]
+];
+
+test('coverage reads each column once, and still answers the same', () => {
+	for (const window of WINDOWS) {
+		const { array, reads } = countingReads(window);
+		const found = coverage(array);
+		expect(found, `over ${window.length} columns`).toEqual(twoPassCoverage(window));
+		expect(reads(), `${window.length} columns read once`).toBe(window.length);
+	}
+});
+
+test('a linear axis prepares its bound once and is unchanged by a resize', () => {
+	const values = [3, Number.NaN, 41, Number.POSITIVE_INFINITY, 12];
+	const narrow = linearAxis(values, [0, 100]);
+	const wide = linearAxis(values, [0, 500]);
+	// The domain and the ticks are the data's; only the pixel mapping is the
+	// frame's, so a resize moves the scale and nothing else.
+	expect(wide.domain).toEqual(narrow.domain);
+	expect(wide.ticks).toEqual(narrow.ticks);
+	expect(narrow.scale(narrow.domain[1])).toBeCloseTo(100, 6);
+	expect(wide.scale(wide.domain[1])).toBeCloseTo(500, 6);
+	// The non-finite values are dropped from the bound, exactly as the filter did.
+	expect(narrow.domain).toEqual(linearAxis([3, 41, 12], [0, 100]).domain);
+	// A data change moves the domain a resize could not.
+	expect(linearAxis([3, 41, 900], [0, 100]).domain).not.toEqual(narrow.domain);
+});
+
+test('a log axis prepares its bound once and is unchanged by a resize', () => {
+	const values = [37, 0, -5, 412, Number.NaN, 8412];
+	const narrow = logAxis(values, [0, 100]);
+	const wide = logAxis(values, [0, 360]);
+	expect(wide.domain).toEqual(narrow.domain);
+	expect(wide.ticks).toEqual(narrow.ticks);
+	// The values that cannot sit on a log axis are dropped from the bound, exactly
+	// as the filter did.
+	expect(narrow.domain).toEqual(logAxis([37, 412, 8412], [0, 100]).domain);
+});
+
+test('the empty span is the same gap across a data change and a resize', () => {
+	const measured = [true, false, false, false, false, false, false, false, true, true];
+	const dates = measured.map((_, index) => `2026-08-${String(index + 1).padStart(2, '0')}`);
+	const found = coverage(measured);
+	expect(found.sparse, 'the fixture has to be sparse for a span to draw').toBe(true);
+	// A resize changes only the box. The tinted span moves and scales with it; the
+	// gap it covers - its first and last date - does not.
+	const narrow = frame(400, 200);
+	const wide = frame(900, 200);
+	const narrowSpans = coverageRegions(found, dates, dayColumns(measured.length, narrow), narrow);
+	const wideSpans = coverageRegions(found, dates, dayColumns(measured.length, wide), wide);
+	expect(wideSpans.map((span) => [span.from, span.to])).toEqual(
+		narrowSpans.map((span) => [span.from, span.to])
+	);
+	expect(wideSpans[0].width, 'the geometry did move with the box').toBeGreaterThan(
+		narrowSpans[0].width
+	);
+	// A data change changes the gap a resize could not.
+	const filled = [...measured];
+	filled[1] = true;
+	expect(coverage(filled).gaps).not.toEqual(found.gaps);
+});
+
+test('the day-tick grid keeps its shape across a resize', () => {
+	const dates = Array.from(
+		{ length: 30 },
+		(_, index) => `2026-08-${String(index + 1).padStart(2, '0')}`
+	);
+	const density = 6;
+	const narrow = dayTicks(dates, { density, columns: dayColumns(30, frame(360, 200)) });
+	const wide = dayTicks(dates, { density, columns: dayColumns(30, frame(900, 200)) });
+	// The columns that carry a tick mark are chosen from the day count and the
+	// density, never from the pixels, so a resize leaves the grid where it was -
+	// only which labels survive the fit can change.
+	expect(wide.map((tick) => tick.index)).toEqual(narrow.map((tick) => tick.index));
 });
 
