@@ -16,6 +16,8 @@
     "availability_rest_runs": 3,
     "availability_strikes_before_rest": 3,
     "blocked_url_markers": [],
+    "dedup_enforce": true,
+    "dedup_similarity_min": 0.9,
     "feed_http_410_runs_before_retirement": 4,
     "front_page_bonus": 0.25,
     "max_age_hours": 24.0,

@@ -20,6 +20,7 @@ cannot disagree about the order.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -29,6 +30,7 @@ from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.run_plan import PlannedItem, TimeSource, VerticalPlan
 from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
+from idhazh.embed import cosine
 
 #: Bumped when the scoring shape changes. A published order that moved for a
 #: reason nobody recorded is a published order nobody can defend, and since
@@ -495,3 +497,82 @@ def plan_vertical(
         for item in taken
     ]
     return summary.model_copy(update={"planned": len(items), "too_old": stale}), items
+
+
+# --- day-wide duplicates: the same story at two addresses --------------------
+
+
+class DuplicateFinding(NamedTuple):
+    """One story the plan would fold into another it already kept.
+
+    `item` is the lower-ranked address that repeats `duplicate_of`. Record-only,
+    the pair is logged and both survive; enforcing, `item` is the one that goes.
+    """
+
+    item: PlannedItem
+    duplicate_of: PlannedItem
+    similarity: float
+
+
+def dedup_text(title: str | None, lead: str | None) -> str | None:
+    """The text that stands for a story when the plan looks for a repeat of it.
+
+    The headline and the feed's lead, which is what the assemble-stage duplicate
+    pass compares as well: a bare headline is too short for two outlets' wording
+    of one story to land close. An item with no title earns no text and is never
+    a duplicate, because there is nothing to compare.
+    """
+    if not title:
+        return None
+    return f"{title} {lead}".strip() if lead else title
+
+
+def duplicates_within_plan(
+    items: Sequence[PlannedItem],
+    vectors: Mapping[str, Sequence[float]],
+    *,
+    similarity_min: float,
+) -> list[DuplicateFinding]:
+    """What a semantic pass would collapse, keeping the higher-ranked of each pair.
+
+    The day's stories are walked in descending rank, so the first telling of a
+    story is its strongest and is kept; a later, weaker telling of the same story
+    from a DIFFERENT source is what is recorded. Same-source is never a duplicate
+    here - a feed carrying two near-identical posts of its own is a different
+    problem and `max_per_source` already bounds it.
+
+    A desk's only story is never recorded, whatever it resembles. A single-carrier
+    story scores lowest by construction, so a pass that cut the weakest would cut
+    the exclusive story first (decision, row 52); the guard is the desk's item
+    count, not the score.
+
+    The walk is honest about enforcement: a story recorded as a would-cut is not
+    itself offered as a match for a later story, because were the pass enforcing
+    it would already be gone. So the count is what enforcing would remove, not an
+    over-count matched against items that would not survive.
+
+    Cost is bounded by the day's plan, never by the archive (Rule #12): the
+    safety ceiling caps `items`, and the vectors are handed in already computed.
+    """
+    desk_size = Counter(item.vertical for item in items)
+    kept: list[PlannedItem] = []
+    findings: list[DuplicateFinding] = []
+    for item in sorted(items, key=lambda planned: (-planned.rank_score, planned.item_id)):
+        vector = vectors.get(item.item_id)
+        if vector is not None and desk_size[item.vertical] > 1:
+            best: DuplicateFinding | None = None
+            left = list(vector)
+            for other in kept:
+                if other.source_id == item.source_id:
+                    continue
+                right = vectors.get(other.item_id)
+                if right is None:
+                    continue
+                similarity = cosine(left, list(right))
+                if similarity >= similarity_min and (best is None or similarity > best.similarity):
+                    best = DuplicateFinding(item=item, duplicate_of=other, similarity=similarity)
+            if best is not None:
+                findings.append(best)
+                continue
+        kept.append(item)
+    return findings

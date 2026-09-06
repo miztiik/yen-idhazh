@@ -18,6 +18,8 @@
     "blocked_url_markers": [
       "fool.com/the-ascent/"
     ],
+    "dedup_enforce": false,
+    "dedup_similarity_min": 0.94,
     "feed_http_410_runs_before_retirement": 5,
     "front_page_bonus": 0.4,
     "max_age_hours": 24.0,
