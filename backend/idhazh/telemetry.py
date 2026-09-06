@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
+from datetime import date
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final, Protocol
@@ -23,6 +24,7 @@ from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.fetch import BLOCKED_REASONS, ROBOTS_REFUSALS
+from idhazh.ledger import STATE_DIRNAME
 from idhazh.sanitize import sanitize
 
 _FORMULA_PREFIXES: Final = ("=", "+", "-", "@", "\t", "\r")
@@ -882,7 +884,7 @@ _COMMITTED_SPANS: Final[frozenset[SpanName]] = frozenset(
 
 
 def roll_up_spans(
-    spans: Iterable[Span], *, date: str, run_id: str, shard: int
+    spans: Iterable[Span], *, date: str, run_id: str, shard: int, wall_clock_ms: int
 ) -> list[SpanRollupRow]:
     """Fold one shard's finished spans to one row per committed span name.
 
@@ -892,9 +894,17 @@ def roll_up_spans(
     than a zero row. The rows come back in `RollupSpan` order, so a shard appends
     the same bytes in the same order on every run.
 
-    The shard supplies its own `date`, `run_id` and `shard`. The sub-step spans
-    do not carry them, so the fold reads the identity from the caller rather than
-    guessing it from whichever span happens to hold an attribute.
+    The shard supplies its own `date`, `run_id`, `shard` and `wall_clock_ms`. The
+    sub-step spans do not carry them, so the fold reads the identity and the wall
+    clock from the caller rather than guessing them from whichever span happens to
+    hold an attribute.
+
+    Every second of the shard is accounted for. `wall_clock_ms` is how long the
+    shard ran; the item spans are its top-level spans; and `unattributed_ms`,
+    `wall_clock_ms` minus the item spans added together, is the overhead between
+    and around items that no span covers. It is carried on the `item` row, the one
+    row a working shard always produces. A set of spans that claims more time than
+    the shard had is unreconcilable and raises rather than rounding to zero.
     """
     counts: dict[SpanName, int] = {}
     totals: dict[SpanName, int] = {}
@@ -903,6 +913,13 @@ def roll_up_spans(
             continue
         counts[span.name] = counts.get(span.name, 0) + 1
         totals[span.name] = totals.get(span.name, 0) + span.duration_ms
+    item_ms = totals.get(SpanName.ITEM, 0)
+    unattributed_ms = wall_clock_ms - item_ms
+    if unattributed_ms < 0:
+        raise ValueError(
+            f"the shard's item spans claim {item_ms} ms but the shard ran for "
+            f"{wall_clock_ms} ms; the item spans overlap or the wall clock is wrong"
+        )
     rows: list[SpanRollupRow] = []
     for member in RollupSpan:
         name = SpanName(member.value)
@@ -917,6 +934,75 @@ def roll_up_spans(
                 span_name=member,
                 count=counts[name],
                 total_ms=totals[name],
+                unattributed_ms=unattributed_ms if member is RollupSpan.ITEM else None,
             )
         )
     return rows
+
+
+# --- committed traces --------------------------------------------------------
+#
+# Where a raw trace lands once it is committed rather than left under gitignored
+# `backend/var/`. The rollup above is the record of a run; a raw trace is
+# evidence with a short life, kept only so an operator can open a recent run.
+# `retention.prune_traces` deletes whole files past `observability.trace_window_days`,
+# because a trace is a lookup and a fold of it would invent a total nobody reads
+# (docs/concepts/telemetry.md).
+
+#: The committed trace tree, a child of `state/`.
+TRACES_DIRNAME: Final = "traces"
+
+
+def _trace_parts(run_id: str) -> tuple[str, str, str, str]:
+    """Split a run id into its date and ordinal: `2026-08-21-1` -> (2026, 08, 21, 1).
+
+    A `RunId` is `<YYYY>-<MM>-<DD>-<ordinal>` and the ordinal carries no dash, so
+    a plain split gives exactly four parts. The date is spelled once in the path -
+    as the `<YYYY>/<MM>/` directories and the `<DD>` filename prefix - so the run
+    slot in the file name is the ordinal alone, not the whole id, which already
+    spells the date.
+    """
+    parts = run_id.split("-")
+    if len(parts) != 4:
+        raise ValueError(f"run id {run_id!r} is not <YYYY>-<MM>-<DD>-<ordinal>")
+    year, month, day, ordinal = parts
+    return year, month, day, ordinal
+
+
+def committed_trace_relpath(run_id: str, shard: int) -> str:
+    """The POSIX relpath one shard's committed trace is filed under.
+
+    `state/traces/<YYYY>/<MM>/<DD>-<ordinal>-<shard>.jsonl` (section 2: relative,
+    POSIX, minimal). The shard is zero-padded to match the run's other per-shard
+    file names.
+    """
+    year, month, day, ordinal = _trace_parts(run_id)
+    return f"{STATE_DIRNAME}/{TRACES_DIRNAME}/{year}/{month}/{day}-{ordinal}-{shard:02d}.jsonl"
+
+
+def committed_trace_path(state_dir: Path, run_id: str, shard: int) -> Path:
+    """The file one shard's committed trace is written to and pruned from."""
+    year, month, day, ordinal = _trace_parts(run_id)
+    return state_dir / TRACES_DIRNAME / year / month / f"{day}-{ordinal}-{shard:02d}.jsonl"
+
+
+def trace_date(path: Path, traces_root: Path) -> date | None:
+    """The published day a committed trace path encodes, or None if it is not one.
+
+    The reverse of `committed_trace_path`: the year and month come from the
+    `<YYYY>/<MM>/` directories and the day from the `<DD>-...` file name. None for
+    a path the shape does not recognise, so a stray file under the tree is left
+    alone rather than deleted - the rule `retention.month_shards` keeps.
+    """
+    try:
+        rel = path.relative_to(traces_root)
+    except ValueError:
+        return None
+    if len(rel.parts) != 3:
+        return None
+    year, month, name = rel.parts
+    day = name.split("-", 1)[0]
+    try:
+        return date(int(year), int(month), int(day))
+    except ValueError:
+        return None

@@ -1188,6 +1188,14 @@ jobs:
       # and needs `frontend/public/digest` added to the commit call below, since
       # `git add` records a removal only for a path it is handed.
       #
+      # It also covers the trace prune, which joined this step on 2026-09-06 and
+      # is a lookup like the seen prune above: a raw span trace an operator opens
+      # for a recent run, deleted whole past `observability.trace_window_days`
+      # rather than folded. `state/traces/` is empty until
+      # `observability.tracing_enabled` is switched on in a later plan, so today
+      # this walks nothing - wiring the prune now is what makes the window bound
+      # the tree from the first run that ever writes one.
+      #
       # `--execution` is the same `github.run_id` the plan job filed its ledgers
       # under, so the cleanup row joins to the run that published the day.
       #
@@ -1200,7 +1208,8 @@ jobs:
       # `git add` runs under `set -euo pipefail` and would abort on a path a
       # fresh checkout does not carry, and neither `state/telemetry-aggregate/`
       # nor `state/score-archive/` exists until the first fold or the first
-      # archive writes it. `state` always does, and the day's own commit above
+      # archive writes it, nor `state/traces/` until tracing is switched on.
+      # `state` always does, and the day's own commit above
       # has already taken everything else in it. `state/visual-prunes.csv` ships
       # with its header committed so it is covered by the same call from the
       # first run.
