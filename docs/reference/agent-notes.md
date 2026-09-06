@@ -1949,6 +1949,24 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   `git ls-files --others --exclude-standard` for untracked and
   `git ls-files -- <path>` for tracked - or match with `.StartsWith('??')`,
   which has no wildcard grammar at all.
+- **`-match` and `-notmatch` against an ARRAY filter it instead of answering
+  yes or no, so a poll loop breaks on its first iteration and says it is
+  finished.** `gh api ... --jq` returns one string per check run, and
+  `if ($r -notmatch 'in_progress')` then tests the *filtered array* rather than
+  a boolean - non-empty the moment any single check has finished. Observed
+  2026-09-06 waiting on seven checks: the loop exited at poll 1, wrote its
+  "done" sentinel, and the log held one line reading
+  `browser=in_progress ... gates=in_progress`, which is a finished poll
+  reporting an unfinished run. Nothing errors and the exit code is 0. Join the
+  array before you match it:
+
+  ```powershell
+  if (($r -join ' ') -notmatch 'in_progress|queued') { break }
+  ```
+
+  The same shape bites any `Where-Object`-free array test. `-eq`, `-like` and
+  `-ne` all filter an array too, which is why `@('a','b') -ne 'a'` is `@('b')`
+  and not `$true`.
 - **A relative path inside a `[System.IO.File]` call does not follow
   `Push-Location` or `Set-Location`, and it reads and writes the wrong tree in
   silence.** .NET resolves against the process working directory, which neither
