@@ -104,6 +104,23 @@ The selector job and the backend test job declare the same Node version,
 because the workflow tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
 
+**A pull request runs the operator console's specs only when the change is the
+console's own, or the harness that chooses.** They are 584 of the browser
+suite's 997 tests, measured 2026-09-05, and the console is a page one operator
+opens rather than anything a reader is served. What that costs, stated rather
+than implied: a shared component or a token edit that breaks the console is
+found on the merge push to `main` instead of on the pull request. `main` runs
+every group, which is what the deferral leans on - there is no separate nightly
+job, because a second copy of the browser job would be a second thing to keep
+correct. `ciAnswer` in `test-scope.ts` is the one place that decides, and the
+truth table is in `frontend/scripts/tests/test-scope.test.mjs`.
+
+`ciAnswer` returns three answers, not two. The third is `validate_all`, which
+decides whether the `gates` job opens every committed day or none of them: a
+push to `main` and any change to the contracts, the tooling or a committed
+payload under `frontend/public/` open all of them, and every other pull request
+opens none.
+
 For a local contract change, the launcher compares schema files before and
 after export. Correct uncommitted generated files can pass; an exporter that
 changes them requires review and a new run. CI still compares its clean
@@ -277,12 +294,16 @@ in [../reference/measurements.md](../reference/measurements.md#what-the-gates-co
 Read it there rather than guessing from one run: on a machine several agents
 share, the same suite spans a factor of three depending on who else is working.
 
-**A test may not read the committed archive**, because its cost then grows with
-every published day rather than with the code it checks (`CLAUDE.md` section
-13). `backend/tests/test_archive_readers.py` fails naming any test that reaches
-for `frontend/public/digest/`, `frontend/public/telemetry/` or `state/`, and it
-carries the list of tests that still do. Drive a per-item rule from the canary
-day instead; ask a whole-tree question once and assert on the total.
+**A test may not walk a collection a run appends to**, because its cost then
+grows with every published day rather than with the code it checks (Rule #12 and
+`CLAUDE.md` section 13). That covers the committed days, the telemetry and state
+shards, the search index, the corpus, and anything added later. Drive a per-item
+rule from the canary day instead; ask a whole-tree question once and assert on
+the total. **This one is caught by review rather than by a check** - a guard
+that listed the paths was tried and deleted on 2026-09-06, because it enumerated
+two collections out of nineteen and its own upkeep grew with the rest. The
+question to ask in review is the rule's own: does a run that changed no code
+make this slower.
 
 ## The backend gates
 
@@ -340,9 +361,22 @@ prerendered, so a route that cannot render fails the build rather than the page.
 carries `ui.shell_seed_items` stories and the browser fetches the rest, so the
 build never opens the stories past the seed. `python -m idhazh validate-days`
 opens all of them, against the committed shape the build reads and the served
-shape a browser fetches, and it runs in `ci.yml` and before every publish. It
-takes no path - there is one committed digest tree - and a run that finds no day
-at all fails rather than passes.
+shape a browser fetches, and it runs in `ci.yml` and before every publish. A run
+that finds no day at all fails rather than passes.
+
+**It takes `--day` and the flag repeats**, so a pull request that touched no
+committed day checks nothing and a publish checks the day it just wrote:
+
+```powershell
+python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
+```
+
+Naming no day checks every committed day, which is what a push to `main` does.
+**A named day that is not there exits non-zero** rather than reporting a clean
+run over nothing - a workflow typo must not read as a pass. Measured 2026-09-06
+on an Intel Core i7-1265U: 0.27 s per published day, so the 16 committed days
+cost 6.6 to 7.1 s and a year of them would cost about 100 s a run. That is the
+reason the scope step decides.
 
 `site-weight` is the fourth, and it is the only one that measures the whole
 site rather than one page. It sums `frontend/build/` - the directory the Pages
@@ -468,8 +502,19 @@ npm run test:browser
 995 tests in 74 files (2026-09-05): 984 passed and 11 skipped, in 13.4 minutes
 on an i7-1265U. The same suite measured 954 tests and 19.2 minutes on
 2026-09-02, so read the minutes as the machine rather than the suite - the test
-count is what grew. Every skip reads a fact the fixture owns rather than a
-locator
+count is what grew.
+
+**`PLAYWRIGHT_WORKERS` sets how many run at once: one locally, four in CI, and
+the two machines disagree about which is right.** A runner is 4 vCPU with
+nothing else on it (Rule #2) and four workers took the browser step from 344 s
+to 207 s, 40 percent faster, measured 2026-09-05. The same change on an i7-1265U
+with six other checkouts building measured 233.7 s against 135.5 s - **72 percent
+slower**, because two performance cores shared with six sibling agents have no
+spare capacity to hand a second worker. Both arms passed all 268 tests, so the
+local result reads as a clean win and is not one. Raise it locally only on an
+idle box, and never read a local worker figure as a runner figure.
+
+Every skip reads a fact the fixture owns rather than a locator
 count - the canary day is eight stories on one desk, so it cannot fill a leading
 block and it never fetches. The
 failure surface has a file of its own, `console-failure.spec.ts`, split by what

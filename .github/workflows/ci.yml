@@ -34,6 +34,7 @@ jobs:
     outputs:
       browser: ${{ steps.decide.outputs.browser }}
       console: ${{ steps.decide.outputs.console }}
+      validate_all: ${{ steps.decide.outputs.validate_all }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -51,6 +52,7 @@ jobs:
         run: .github/scripts/browser-suite-needed.sh >> "$GITHUB_OUTPUT"
 
   gates:
+    needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -107,7 +109,15 @@ jobs:
       # rather than hidden: a broken day can no longer be built, it can only no
       # longer be MERGED. The publishing jobs run the same command before their
       # own commit, which is what covers a day the pipeline pushes on its own.
+      #
+      # Only when the shape can have moved. A published day is frozen, so a
+      # contract, schema, config or harness change - or an edit to the tree
+      # itself - is the only thing that can invalidate one, and a merge to `main`
+      # always counts. Measured 2026-09-05: 16 days took 6.6 s, about 0.27 s a
+      # day, so a year of publishing would be around 100 s of every run
+      # (Rule #12).
       - name: Every committed day still matches its contracts
+        if: needs.scope.outputs.validate_all == 'true'
         run: python -m idhazh validate-days
 
   # The one gate `gates` cannot be: it runs on ONE interpreter, and the thing
@@ -125,25 +135,21 @@ jobs:
   robots:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy:
-      # Both legs report. Knowing only that "one of them disagreed" is the
-      # answer this job exists to improve on.
-      fail-fast: false
-      matrix:
-        python-version: ['3.12', '3.14']
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python-version }}
+          # The newest supported interpreter, and the only thing this job adds:
+          # `gates` already runs the whole suite, this file included, on 3.12.
+          python-version: '3.14'
           cache: pip
           cache-dependency-path: pyproject.toml
 
       - name: Install
         run: pip install -e ".[dev]"
 
-      - name: The robots fixture matrix, on both ends of the supported range
+      - name: The robots fixtures, on the newest supported interpreter
         run: pytest backend/tests/test_extract.py
 
   site:
@@ -283,12 +289,18 @@ jobs:
       # Eight canaries on the published surface, plus the hand-labelled
       # retrieval bar. A single injection getting through fails the build.
       #
-      # The shared selector can exclude the console on a PR. Main always runs
-      # all browser groups; the site job runs the no-server logic group.
+      # A pull request buys the console's own specs only for a console change or
+      # a harness change - they are 584 of the suite's 997 tests and the console
+      # is an operator's page. Main runs every group, which is where a shared
+      # edit that broke the console is caught. The site job runs the no-server
+      # logic group.
       - name: Browser suite - canaries and retrieval
         working-directory: frontend
         env:
           SKIP_CONSOLE_SUITE: ${{ needs.scope.outputs.console == 'false' }}
+          # 4 vCPU with nothing else on it, so a worker per core: 344 s at one
+          # worker, 207 s at four, runs 33989034726 and 33991122503, 2026-09-05.
+          PLAYWRIGHT_WORKERS: '4'
         run: npm run test:browser
 
       - uses: actions/upload-artifact@v7

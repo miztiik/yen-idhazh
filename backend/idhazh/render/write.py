@@ -51,7 +51,7 @@ def assets_in_day(public_root: Path, date: str) -> set[str]:
     have, this one asks what is actually on disk. Reading the directory is no
     longer allowed to decide a *name* - that is what raced two runs onto one
     path - but a caller that needs to compare the directory against a payload
-    has to read it. `test_published_assets` is that caller: a file no item names
+    has to read it. `idhazh validate-days` is that caller: a file no item names
     is a picture the reader paid for and will never see.
 
     Relative to `public_root`, matching the strings a payload carries.

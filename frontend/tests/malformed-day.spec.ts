@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import path from 'node:path';
 import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/day-loader';
 
@@ -31,9 +39,10 @@ import { Intercepted, loaderSource, servedDayUrl, type Loader } from './support/
 const REPO = path.resolve(process.cwd(), '..');
 const scratch = path.join(process.cwd(), 'test-results', 'malformed-day');
 
-/** The newest committed day, as text. The tree is never empty -
- * `backend/tests/test_contracts.py` asserts that on its own. */
-function newestCommittedDay(): { date: string; text: string } {
+/** The newest committed day, as text, with the drawings that belong to it.
+ * The tree is never empty - `backend/tests/test_contracts.py` asserts that on
+ * its own. */
+function newestCommittedDay(): { date: string; text: string; drawings: string[] } {
 	const root = path.join(process.cwd(), 'public', 'digest');
 	const dirs = (at: string): string[] =>
 		readdirSync(at, { withFileTypes: true })
@@ -52,7 +61,14 @@ function newestCommittedDay(): { date: string; text: string } {
 	expect(found.length, 'no committed day to break, so arm one proves nothing').toBeGreaterThan(0);
 	const file = found[found.length - 1]!;
 	const parts = file.split(path.sep);
-	return { date: parts.slice(-4, -1).join('-'), text: readFileSync(file, 'utf8') };
+	const where = path.dirname(file);
+	return {
+		date: parts.slice(-4, -1).join('-'),
+		text: readFileSync(file, 'utf8'),
+		drawings: readdirSync(where)
+			.filter((name) => name.endsWith('.svg'))
+			.map((name) => path.join(where, name))
+	};
 }
 
 const COMMITTED = newestCommittedDay();
@@ -101,7 +117,14 @@ function python(): string {
 	return 'python';
 }
 
-/** One committed day on disk, in the layout the command globs for. */
+/** One committed day on disk, in the layout the command globs for.
+ *
+ * The day's pictures come with it. `validate-days` holds a payload against the
+ * directory it sits in - two stories on one chart, a chart the payload names
+ * and cannot find, a file no story claims - so a tree carrying the JSON and
+ * none of the drawings is not a healthy day with parts missing, it is a broken
+ * one, and the command is right to say so.
+ */
 function treeHolding(name: string, payload: string): string {
 	const root = path.join(scratch, name, 'digest');
 	rmSync(path.join(scratch, name), { recursive: true, force: true });
@@ -109,6 +132,9 @@ function treeHolding(name: string, payload: string): string {
 	const where = path.join(root, year!, month!, day!);
 	mkdirSync(where, { recursive: true });
 	writeFileSync(path.join(where, 'digest.json'), payload, 'utf8');
+	for (const drawing of COMMITTED.drawings) {
+		copyFileSync(drawing, path.join(where, path.basename(drawing)));
+	}
 	return root;
 }
 
