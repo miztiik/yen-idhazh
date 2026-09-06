@@ -32,6 +32,15 @@ DISCOVERY_VERSION: Final = "idhazh-discover-1"
 
 TITLE_MAX_CHARS: Final = 500
 
+#: The plan's duplicate pass reads the headline and the first of the feed's lead.
+#: 200 characters is enough to tell two outlets' wording of one story apart and
+#: short enough that the vector is still mostly the headline.
+LEAD_MAX_CHARS: Final = 200
+
+#: A feed lead is HTML. The markup is stripped before the text is embedded, or a
+#: shared `<p>` would read as similarity two unrelated stories both carry.
+_HTML_TAG: Final = re.compile(r"<[^>]+>")
+
 # Campaign and click identifiers. They differ per referrer for the same article,
 # so leaving them in means the same story arrives as several distinct stories.
 _TRACKING_PREFIXES: Final = ("utm_",)
@@ -86,6 +95,20 @@ def clean_title(raw: str | None) -> str | None:
     return cleaned or None
 
 
+def clean_lead(raw: str | None) -> str | None:
+    """A feed's lead is a stranger's HTML, kept only to tell two stories apart.
+
+    It is never rendered and never handed to a model as instruction (Rule #11):
+    it becomes one vector at plan time and, at most, a log line. Tags are
+    stripped first because the lead is HTML and `<p>` in the text embeds as noise
+    two unrelated stories would share.
+    """
+    if not raw:
+        return None
+    cleaned = " ".join(sanitize(_HTML_TAG.sub(" ", raw)).split())[:LEAD_MAX_CHARS].strip()
+    return cleaned or None
+
+
 def _published_at(entry: Any, channel: Any = None) -> str | None:
     """The feed's own date, spelled the one way every payload spells a timestamp.
 
@@ -132,6 +155,8 @@ class Candidate:
     published_at: str | None
     weight: float = 1.0
     """The feed's own weight, carried so ranking never has to look a feed up again."""
+    lead: str | None = None
+    """The feed's own summary, cleaned, carried only for plan-time duplicate detection."""
 
 
 def candidates_from_feed(feed: FeedDef, body: str | bytes) -> list[Candidate]:
@@ -164,6 +189,7 @@ def candidates_from_feed(feed: FeedDef, body: str | bytes) -> list[Candidate]:
                 title=clean_title(getattr(entry, "title", None)),
                 published_at=_published_at(entry, getattr(parsed, "feed", None)),
                 weight=feed.weight,
+                lead=clean_lead(getattr(entry, "summary", None)),
             )
         )
     return found
