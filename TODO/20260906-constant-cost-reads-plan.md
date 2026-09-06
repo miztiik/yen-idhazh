@@ -22,16 +22,16 @@ Growth claims cited per row come from [the research handover](20260906-data-grow
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Config knobs and contract | - | A | DONE #443 | ../yi-r01-knobs | #443 | worker |
-| 2 | One-pass build reductions | 1 | B | PENDING | - | - | - |
-| 3 | Pointer readout and dead readout work | 1 | B | PENDING | - | - | - |
-| 4 | Read marks on a calendar window | 1 | B | PENDING | - | - | - |
-| 5 | Day list order, filter and reveal | 1 | B | PENDING | - | - | - |
-| 6 | Day request ownership | 1 | B | PENDING | - | - | - |
-| 7 | One observer for waiting visuals | 1 | B | PENDING | - | - | - |
-| 8 | Offline cache discipline | 1 | B | PENDING | - | - | - |
-| 9 | Chart lifetime and style updates | 1 | B | PENDING | - | - | - |
-| 10 | Month-partition pattern and doc | 1 | B | PENDING | - | - | - |
+| 1 | Config knobs and contract | - | A | DONE #443 | removed | #443 | worker |
+| 2 | One-pass build reductions | 1 | B | DONE #447 | removed | #447 | worker |
+| 3 | Pointer readout and dead readout work | 1 | B | DONE #446 | removed | #446 | worker |
+| 4 | Read marks on a calendar window | 1 | B | DONE #448 | removed | #448 | worker |
+| 5 | Day list order, filter and reveal | 1 | B | DONE #451 | removed | #451 | worker |
+| 6 | Day request ownership | 1 | B | DONE #454 | removed | #454 | worker |
+| 7 | One observer for waiting visuals | 1 | B | DONE #455 | removed | #455 | worker |
+| 8 | Offline cache discipline | 1 | B | DONE #453 | removed | #453 | worker |
+| 9 | Chart lifetime and style updates | 1 | B | DONE #459 | removed | #459 | worker |
+| 10 | Month-partition pattern and doc | 1 | B | DONE #445 | removed | #445 | worker |
 | 11 | Failure panels and failure list | 2 | C | PENDING | - | - | - |
 | 12 | Band distance, stage timings, run family | 2 | C | PENDING | - | - | - |
 | 13 | Glance and ranked builders | 2 | C | PENDING | - | - | - |
@@ -51,6 +51,19 @@ Growth claims cited per row come from [the research handover](20260906-data-grow
 | 27 | Living docs sweep | 23, 24 | G | PENDING | - | - | - |
 
 Coverage: rows 2-26 carry all 43 findings exactly once. Rows 1, 10 and 27 carry no finding; they carry the knobs, the pattern and the docs the others need.
+
+### Defects found during execution
+
+Every entry is a defect a worker found, could not fix inside its own file list, and handed back. Each names the row that will close it, so none is a note.
+
+| Found in | Defect | Closes in |
+| --- | --- | --- |
+| Rows 1, 2 | Nine specs still carry a `?? [7, 14, 30, 90]` preset fallback. The committed list is now `[1, 7, 14, 30, 90]`, so each is a wrong answer waiting for the day the config file is missing. | Rows 11-18, whichever touches each spec |
+| Row 6 | The reading route's effect does not abort an in-flight day watch when the date changes, so a stale callback can deliver the wrong day. Part of finding 93. | Row 17 |
+| Row 6 | Finding 87's title map in `day-shape.ts` is still rebuilt per view; the `(date, item_id)` half is done. | Row 23 |
+| Row 9 | `docs/architecture/publishing/frontend.md` still describes the old chart lifetime, and six call sites keep a remount key they no longer need. | Row 27 |
+| Row 4 | The same doc still says a read mark lasts seven days and that the console will not draw narrower than a week. Both numbers changed in row 1. | Row 27 |
+| Row 10 | `evals.writer.append` reads the header of every committed shard before appending one row - a growing read inside a writer that otherwise honours the freeze rule. Outside ranks 1 and 10. | Not this plan; belongs to the Indexed State package |
 
 ## 2 - Row #1 - Config knobs and contract
 
