@@ -1438,23 +1438,21 @@ naming the worker API for a test to assert on.
 
 ## Running the gates
 
-- **A new `frontend/tests/*.spec.ts` can pass every frontend gate and still fail
-  the backend job.** `backend/tests/test_archive_readers.py` scans both test
-  directories and refuses any file that is not on its list and reads the
-  committed archive - in TypeScript the trigger is the literal
-  `'public', 'digest'` or `'public', 'telemetry'` in a `join`. The list may only
-  shrink, so the answer is a fixture, never a new entry. Nothing local catches
-  it: the module carries no mark, so `-m contract`, `-m visual` and
-  `-m "not slow"` all miss it, `npm run check` and the browser suite know
-  nothing about it, and the first red is CI's `gates` job about fifteen minutes
-  after the push. Run it directly when a spec reads a tree:
-
-  ```powershell
-  .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_archive_readers.py
-  ```
-
-  `backend/var/canary/` is deliberately outside the pattern, so the canary tree
-  is the fixture a per-item rule is driven from.
+- **A guard that lists the hazards is wrong the day after it is written, and
+  this repository has the receipt.** `backend/tests/test_archive_readers.py`
+  scanned both test directories for two hand-written path patterns and held the
+  matches against a list of approved names. It shipped and was deleted the same
+  day, 2026-09-06. Three things killed it, and they generalise to any guard of
+  this shape. It **enumerated the hazard rather than the safe set**, so it
+  covered two collections out of nineteen and looked complete - `corpus/`,
+  `assist/`, `source-health.json` and three ledgers that grow for ever were
+  never in it. **Its own upkeep grew with the number of collections**, which is
+  the defect it existed to catch. And it was **a list with no escape hatch**, so
+  a judgement call could only be expressed by editing the list. If you are about
+  to write a check that enumerates paths, enumerate the bounded set instead, or
+  accept that review is the control. Rule #12 is now stated as a property - does
+  a run that changed no code make this slower - precisely so it survives a
+  collection nobody has invented yet.
 
 - **`vite build` on its own is not the build, and a page measured that way is
   both lighter and noisier.** `npm run build` runs `build-icons.mjs`,

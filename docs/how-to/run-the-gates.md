@@ -294,12 +294,16 @@ in [../reference/measurements.md](../reference/measurements.md#what-the-gates-co
 Read it there rather than guessing from one run: on a machine several agents
 share, the same suite spans a factor of three depending on who else is working.
 
-**A test may not read the committed archive**, because its cost then grows with
-every published day rather than with the code it checks (`CLAUDE.md` section
-13). `backend/tests/test_archive_readers.py` fails naming any test that reaches
-for `frontend/public/digest/`, `frontend/public/telemetry/` or `state/`, and it
-carries the list of tests that still do. Drive a per-item rule from the canary
-day instead; ask a whole-tree question once and assert on the total.
+**A test may not walk a collection a run appends to**, because its cost then
+grows with every published day rather than with the code it checks (Rule #12 and
+`CLAUDE.md` section 13). That covers the committed days, the telemetry and state
+shards, the search index, the corpus, and anything added later. Drive a per-item
+rule from the canary day instead; ask a whole-tree question once and assert on
+the total. **This one is caught by review rather than by a check** - a guard
+that listed the paths was tried and deleted on 2026-09-06, because it enumerated
+two collections out of nineteen and its own upkeep grew with the rest. The
+question to ask in review is the rule's own: does a run that changed no code
+make this slower.
 
 ## The backend gates
 

@@ -179,17 +179,25 @@ the harness that chooses; `main` runs every group, which is what the deferral
 leans on. There is no nightly job, because a second copy of the browser job is a
 second thing to keep correct.
 
-**The bigger cost was not selection.** It was that a test may re-read the whole
-committed archive, so its cost grows with every day the pipeline publishes while
+**The bigger cost was not selection.** It was that a test may re-read a whole
+collection a run appends to, so its cost grows with every published day while
 its coverage does not. That became Rule #12 and three paragraphs of
 [../../CLAUDE.md](../../CLAUDE.md) section 13, with an owner ruling attached: a
 test checks code functionality rather than data hygiene, and it is driven with a
 built parameter rather than a loop over what the archive happens to hold. A
 hygiene check has three legal fates - delete it where a fixture already covers
 the rule, move it into the producer that writes the data, or make it an operator
-surface `pytest` does not run. `backend/tests/test_archive_readers.py` holds the
-list of tests that still read the tree; it went from 22 entries to 12 and may
-only shrink.
+surface `pytest` does not run.
+
+**A guard was written for this and deleted the same day**, and that is the more
+useful half of the story. It listed the path patterns a test may not reach for,
+which covered two of the nineteen collections this repository grows and looked
+complete; its own upkeep grew with the other seventeen; and being a list, it had
+no escape hatch for the case where a walk is the right answer. Rule #12 is now
+stated as a property rather than a list - **does a run that changed no code make
+this slower** - and the control is review. What that costs, stated rather than
+implied: nothing fails automatically, so a growing step can merge if nobody
+asks.
 
 The numbers behind both are in
 [measurements.md](measurements.md#what-the-suite-paid-to-re-read-the-archive-2026-09-06).

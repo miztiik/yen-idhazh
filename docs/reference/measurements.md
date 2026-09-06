@@ -4334,9 +4334,11 @@ and the coverage does not.
 
 ### What the migration removed
 
-`ARCHIVE_READERS` in `backend/tests/test_archive_readers.py` is the list of
-tests that still read the committed tree. **It went from 22 entries to 12**, and
-it may only shrink.
+A tracking list, `ARCHIVE_READERS`, counted the tests that still walked the
+committed tree. **It went from 22 entries to 12** over this work. The guard that
+held it, `backend/tests/test_archive_readers.py`, was deleted on 2026-09-06 -
+it enumerated two collections out of nineteen, and its own upkeep grew with the
+rest - so 12 is the last count anything took, not a live figure.
 
 | Change | Before | After |
 | --- | --- | --- |
