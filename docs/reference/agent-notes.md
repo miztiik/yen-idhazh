@@ -2682,8 +2682,24 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   complete, which is what makes it convincing. The fix is one more
   `npm run build`. Measured 2026-08-31. Prefer letting a queued gate finish;
   if you do kill one, rebuild before serving anything.
-- **This box gives the opposite answer to the runner on any question about
-  parallelism, and it gives it confidently.** Raising the Playwright worker
+- **A green local `svelte-check` says nothing about the `site` job, because CI
+  type-checks the MERGE with `main` and your worktree is not that tree.** A test
+  helper built a `TelemetryRow` by spreading `Partial<TelemetryRow>` over a
+  literal. `main` had meanwhile grown eight nullable timing and token columns on
+  that interface, and the spread widens every field to `| undefined`, which the
+  row type refuses - so `npm run check` was clean on this box and the `site` job
+  was red on four consecutive runs, 2026-09-06, with the failure naming a field
+  that does not exist in the local file. That last part is the tell: **an error
+  naming a symbol your working tree does not contain means you are reading the
+  wrong tree, not the wrong code.** `git merge origin/main` into the branch and
+  re-run before believing a green frontend check, which is what the section
+  above already says for the suite and applies exactly as hard to the types.
+- **Never build a fixture object by spreading `Partial<T>` over a literal.**
+  Every field of a `Partial` is optional, so the spread widens the result and
+  the target type refuses it - and because the error only appears once `T` grows
+  a field, it arrives on somebody else's commit. Name the fields the helper
+  actually varies and write the rest out.
+ Raising the Playwright worker
   count from one to four measured 233.7 s against 135.5 s on an i7-1265U with
   six other checkouts building, 2026-09-05 - 72 percent SLOWER, both arms
   passing the same 268 tests, so it reads as a clean result rather than as
