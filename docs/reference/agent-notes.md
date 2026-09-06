@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
