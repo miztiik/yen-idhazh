@@ -1061,6 +1061,23 @@ class ObservabilityConfig(Model):
             "says."
         ),
     )
+    trace_window_days: int = Field(
+        default=7,
+        ge=1,
+        description=(
+            "How many days of raw span traces state/traces/ keeps. A trace is the "
+            "evidence an operator opens to see one recent run step by step; the "
+            "committed record is the span rollup, so a trace has a short life and a "
+            "file past this window is deleted whole rather than folded - a fold would "
+            "invent a total nobody reads. Seven days covers a week of runs. Measured at "
+            "about 0.6 MB a run at the run.safety_ceiling_per_run item ceiling over the "
+            "five scheduled runs a day (2026-09-06), so the window bounds state/traces/ "
+            "at about 21 MB whatever the project's age - constant (Rule #12), and a "
+            "fraction of the 1 GB Pages reference it is not even part of. It does "
+            "nothing until observability.tracing_enabled is true: before that no trace "
+            "is written and the prune walks an empty tree."
+        ),
+    )
     item_health_full_grain_months: int = Field(
         default=14,
         ge=1,
@@ -2459,6 +2476,24 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T15:00",
+            change=(
+                "observability.trace_window_days added, defaulting to 7. It bounds "
+                "state/traces/, the raw span traces kept so an operator can open a "
+                "recent run; a trace whose published day is more than that many days "
+                "behind today is deleted whole. Additive - an older config validates "
+                "and takes the default."
+            ),
+            why=(
+                "Raw traces are evidence with a short life while the span rollup is the "
+                "record, so the traces need a rolling window of their own. A trace is a "
+                "lookup an operator opens, so it is deleted rather than folded - a fold "
+                "would invent a total nobody reads. Seven days is measured at about "
+                "0.6 MB a run over five runs a day, which bounds the tree at about "
+                "21 MB whatever the project's age (Rule #12)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06T14:00",
             change=(
