@@ -16,7 +16,6 @@
  * and `ticks()` are the part a hand-rolled axis gets wrong.
  */
 
-import { extent } from 'd3-array';
 import { scaleLinear, scaleLog } from 'd3-scale';
 
 import { dayMonth, shortDate } from '../format';
@@ -81,6 +80,28 @@ export interface LinearAxisOptions {
 	nice?: boolean;
 }
 
+/** The least and greatest of the values a predicate keeps, in one pass.
+ *
+ * The rule this replaces filtered the values into a fresh array and handed that
+ * to `d3.extent`, so an axis read its own numbers twice and built a throwaway
+ * array between the reads. The bounds are the same and the second scan is gone.
+ * `undefined` on a side nothing was kept, exactly as `extent` returns for an
+ * empty input.
+ */
+function keptBounds(
+	values: readonly number[],
+	keep: (value: number) => boolean
+): [number | undefined, number | undefined] {
+	let low: number | undefined;
+	let high: number | undefined;
+	for (const value of values) {
+		if (!keep(value)) continue;
+		if (low === undefined || value < low) low = value;
+		if (high === undefined || value > high) high = value;
+	}
+	return [low, high];
+}
+
 /** Domain rule one: rounded to human numbers, and zero-anchored by default.
  *
  * An empty series still returns a usable axis. A chart with no rows draws its
@@ -92,8 +113,7 @@ export function linearAxis(
 	options: LinearAxisOptions = {}
 ): Axis {
 	const { zero = true, tickCount = 4, nice = true } = options;
-	const finite = values.filter((value) => Number.isFinite(value));
-	const [low, high] = extent(finite);
+	const [low, high] = keptBounds(values, Number.isFinite);
 	let lower = low ?? 0;
 	let upper = high ?? 1;
 	if (zero) {
@@ -121,8 +141,7 @@ export function linearAxis(
  * where the data is.
  */
 export function logAxis(values: readonly number[], range: readonly [number, number]): Axis {
-	const positive = values.filter((value) => Number.isFinite(value) && value > 0);
-	const [low, high] = extent(positive);
+	const [low, high] = keptBounds(values, (value) => Number.isFinite(value) && value > 0);
 	const lower = 10 ** Math.floor(Math.log10(low ?? 1));
 	const upper = 10 ** Math.ceil(Math.log10(Math.max(high ?? 10, (low ?? 1) * 10)));
 	const scale = scaleLog().domain([lower, upper]).range([...range]);
@@ -537,16 +556,23 @@ export function coverage(
 	threshold: number = SPARSE_COVERAGE
 ): Coverage {
 	const days = measured.length;
-	const count = measured.filter(Boolean).length;
+	// One pass: count the measured columns and close each gap as its last unseen
+	// column ends. The rule this replaces read the flags once to count and again
+	// to group, so every window was scanned twice for one answer.
+	let count = 0;
 	const gaps: [number, number][] = [];
 	let open: number | null = null;
-	measured.forEach((seen, index) => {
-		if (!seen && open === null) open = index;
-		if (seen && open !== null) {
-			gaps.push([open, index - 1]);
-			open = null;
+	for (let index = 0; index < days; index += 1) {
+		if (measured[index]) {
+			count += 1;
+			if (open !== null) {
+				gaps.push([open, index - 1]);
+				open = null;
+			}
+		} else if (open === null) {
+			open = index;
 		}
-	});
+	}
 	if (open !== null) gaps.push([open, days - 1]);
 	return {
 		days,
