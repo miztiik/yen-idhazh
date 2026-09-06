@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -459,7 +459,68 @@ Two promises to the reader, both non-negotiable: **the window is stated before a
 
 The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts older than N months are deleted. Every story and every link stays." is the promise, and "Nothing here is deleted." is what ships today at `image_months: -1`. The footer used to say days were removed, which promised the opposite of what the code does; it now says the same thing the archive does, because two sentences disagreeing about deletion on one page is the exact failure this section exists to prevent.
 
-### Follow-up: the dated route trees are what decides the cap date (2026-08-27)
+### Unpublishing a day, a range or a month: the design (2026-09-06)
+
+**Designed, not built. Nothing below ships yet.** The request is an operator
+command that takes a day back off the site - one date, a range of dates, or a
+whole month - and the reason it is written down before it is written is that
+`retention.prune` cannot be stretched into it. That function selects files by
+suffix, deletes rendered charts only, and is explicitly forbidden from touching
+a day's payload or its date directory. Unpublishing is the opposite operation
+and it needs its own name.
+
+**A published day is eleven things, and a command that misses one leaves a
+reader on a broken page.** The daily publish stages exactly this set, so this
+set is what an unpublish has to answer for:
+
+| Artefact | Grain | What an unpublish owes it |
+| --- | --- | --- |
+| `frontend/public/digest/<Y>/<M>/<D>/digest.json` | day | remove |
+| `frontend/public/digest/<Y>/<M>/<D>/run.json` | day | remove |
+| `frontend/public/digest/<Y>/<M>/<D>/*.svg` | day | remove |
+| `frontend/public/assist/index/<Y>-<M>.json` and `.bin` | month | **rebuild**, never edit |
+| `frontend/public/telemetry/<Y>-<M>.csv` | month | rewrite without the day's rows |
+| `frontend/public/source-health.json` | whole site | rebuild |
+| `state/published.csv` | append-only | rewrite without the day |
+| `state/scores/<Y>-<M>.csv` | month | rewrite without the day |
+| `state/item-health/<Y>-<M>.csv` | month | rewrite without the day |
+| `state/runtime-counters.csv` | append-only | rewrite without the day |
+| `corpus/corpus.jsonl` | rolling window | rewrite without the day |
+
+The month-grain rows are the trap. Three of them are shards a later run appends
+to, so a command that deletes the shard takes the neighbouring days with it, and
+a command that leaves it alone publishes telemetry for a day that no longer
+exists. The index is worse: it is derived, and `assemble.rebuild_search_index`
+already regenerates a whole month from the days present - so the index needs a
+rebuild call rather than an edit, and it is the one artefact that repairs itself
+correctly for free.
+
+**`state/seen/` and `state/fingerprints.csv` are deliberately absent from that
+table.** They record that a URL was *seen*, not that it was published. Removing
+a day's rows there would let the next run rediscover every story it just
+unpublished, which turns one operator command into a loop.
+
+**The reader-facing half is already designed and must not be re-decided.** This
+page's retention rules bind an unpublished day exactly as they bind a pruned
+one: the day lands in the designed missing state, never a silent redirect to
+today, and the archive's own header says what happened. Today that header reads
+"Nothing here is deleted.", which is true and would stop being true - so the
+sentence is part of the change, not a follow-up to it.
+
+**What it costs, stated rather than implied.** `prune.yml` force-pushes `main`
+on a schedule ([../../../CLAUDE.md](../../../CLAUDE.md) section 8), so once a
+squash passes over the range, the unpublished day's bytes are gone from history
+as well as from the tree. Before that boundary an unpublish is a normal commit
+and is revertible; after it, it is permanent. That is an argument for the
+command writing what it removed into its own commit message, and for it never
+running on a schedule.
+
+**Nothing forces this yet.** Measured 2026-09-05: 16 committed days, and the
+1 GB cap is a function of the prerendered dated routes named in the follow-up
+above rather than of any day's payload. The command is worth having for a day
+published in error - a bad extraction, a source that asked to be removed - and
+that is a different need from bounding the site.
+
 
 **Recorded, not fixed. No row has addressed it.**
 
