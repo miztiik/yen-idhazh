@@ -882,7 +882,7 @@ _COMMITTED_SPANS: Final[frozenset[SpanName]] = frozenset(
 
 
 def roll_up_spans(
-    spans: Iterable[Span], *, date: str, run_id: str, shard: int
+    spans: Iterable[Span], *, date: str, run_id: str, shard: int, wall_clock_ms: int
 ) -> list[SpanRollupRow]:
     """Fold one shard's finished spans to one row per committed span name.
 
@@ -892,9 +892,17 @@ def roll_up_spans(
     than a zero row. The rows come back in `RollupSpan` order, so a shard appends
     the same bytes in the same order on every run.
 
-    The shard supplies its own `date`, `run_id` and `shard`. The sub-step spans
-    do not carry them, so the fold reads the identity from the caller rather than
-    guessing it from whichever span happens to hold an attribute.
+    The shard supplies its own `date`, `run_id`, `shard` and `wall_clock_ms`. The
+    sub-step spans do not carry them, so the fold reads the identity and the wall
+    clock from the caller rather than guessing them from whichever span happens to
+    hold an attribute.
+
+    Every second of the shard is accounted for. `wall_clock_ms` is how long the
+    shard ran; the item spans are its top-level spans; and `unattributed_ms`,
+    `wall_clock_ms` minus the item spans added together, is the overhead between
+    and around items that no span covers. It is carried on the `item` row, the one
+    row a working shard always produces. A set of spans that claims more time than
+    the shard had is unreconcilable and raises rather than rounding to zero.
     """
     counts: dict[SpanName, int] = {}
     totals: dict[SpanName, int] = {}
@@ -903,6 +911,13 @@ def roll_up_spans(
             continue
         counts[span.name] = counts.get(span.name, 0) + 1
         totals[span.name] = totals.get(span.name, 0) + span.duration_ms
+    item_ms = totals.get(SpanName.ITEM, 0)
+    unattributed_ms = wall_clock_ms - item_ms
+    if unattributed_ms < 0:
+        raise ValueError(
+            f"the shard's item spans claim {item_ms} ms but the shard ran for "
+            f"{wall_clock_ms} ms; the item spans overlap or the wall clock is wrong"
+        )
     rows: list[SpanRollupRow] = []
     for member in RollupSpan:
         name = SpanName(member.value)
@@ -917,6 +932,7 @@ def roll_up_spans(
                 span_name=member,
                 count=counts[name],
                 total_ms=totals[name],
+                unattributed_ms=unattributed_ms if member is RollupSpan.ITEM else None,
             )
         )
     return rows
