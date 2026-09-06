@@ -1720,6 +1720,150 @@ the first pipeline run, not before it.
 
 ### The prerendered page, on the wire
 
+#### All three console ceilings, re-derived on the backfill's tree (2026-09-06)
+
+Hardware: Intel Core i7-1265U, 12 logical cores, Windows 11, node 24.12.0. Date:
+2026-09-06. Method: `frontend/scripts/bundle-gate.mjs`, which is `gzip -9` over
+each prerendered `index.html` in `frontend/build`, heaviest page per route class.
+One tree at `76c2d27c`, sixteen published days, eight builds. Another agent ran
+the backend suite in a sibling worktree for part of the run, which moved one
+build from 47 s to 255 s and moved no byte: gzip over the same input is the same
+output whatever else the box is doing.
+
+**Two of the three had spent their runway and the third had not.** Nothing had
+fired. The pages read 222,819, 44,956 and 35,822 against committed ceilings of
+277,195, 56,385 and 39,743, so every route was under. But a ceiling here is the
+page plus seven published days of growth, and at the rates measured below the
+slack on `/console/` was **3.39 publishes** and on `/console/machine/` **3.12**.
+`/console/model/` was at **6.99**, because it was derived one commit earlier by
+this same method on this same tree, so it is left alone.
+
+**Five builds of one tree, heaviest per route, never a mean.** A mean fires on
+half of all builds:
+
+| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 222,812 | 222,819 | 222,817 | 222,818 | 222,816 | **222,819** | 7 |
+| `/console/model/` | 44,945 | 44,956 | 44,953 | 44,951 | 44,950 | **44,956** | 11 |
+| `/console/machine/` | 35,821 | 35,819 | 35,819 | 35,822 | 35,816 | **35,822** | 6 |
+
+**The control arm says the copied payload roots build the same site.** Both
+removal arms read their ledgers through `STATE_ROOT`, `TELEMETRY_ROOT` and
+`DIGEST_ROOT` off a copy in the temp directory, so a copy that built a different
+site would price a day against nothing. A sixth build off that copy with **no day
+removed** read 222,810, 44,945 and 35,813 - 2, 0 and 3 bytes below the bottom of
+the five-build range, so the honest spread is 9, 11 and 9 bytes on pages of 222.8,
+45.0 and 35.8 KB. All three are inside the 64-byte build noise floor. The three
+capped routes no arm can reach moved the same way: `/404` spanned 1,593 to 1,598
+and `/evals/` 3,103 to 3,107 across the five, with the control inside both.
+
+**Two removal arms, and each one prices all three routes.** A published day is
+priced by removing a real one, never by cloning one: a clone reads about 18
+percent cheap because gzip sees a near-copy of a block it already holds. Both
+arms drop a mature day - neither the newest nor the oldest, so the 30-day window
+anchor never moves - from `state/published.csv`, `state/scores/`,
+`state/item-health/`, `state/feed-health/`, `state/runtime-counters.csv`,
+`frontend/public/telemetry/` and the day's own directory under
+`frontend/public/digest/`. `frontend/public/assist/` and `source-health.json` are
+copied beside `digest/` in each arm, because `INDEX_ROOT` and
+`SOURCE_HEALTH_PATH` are derived from `DIGEST_ROOT` and have no switch of their
+own. Both are paired against the control, the same source and the same command.
+
+| Arm | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
+| --- | --- | ---: | ---: | ---: |
+| sixteen days (control) | - | 222,810 | 44,945 | 35,813 |
+| A: without 2026-08-31 | 601 published, 601 scored, 639 item-health, 710 feed-health, 639 telemetry rows, **20 counter rows over 5 runs** | 208,413 | 43,320 | 34,653 |
+| **cost of that day** | | 14,397 | 1,625 | 1,160, so 232 a run |
+| B: without 2026-09-01 | 627 published, 627 scored, 676 item-health, 710 feed-health, 676 telemetry rows, **20 counter rows over 5 runs** | 206,786 | 43,311 | 34,554 |
+| **cost of that day** | | **16,024** | **1,634** | **1,259, so 252 a run** |
+
+**Both arms carry counters, which the last pair could not manage, so the run rate
+and the day rate come off the same tree.** On 2026-08-31 the heavy day predated
+the counters entirely and a second, lighter day had to be dropped to get a
+per-run figure at all. Every mature day now runs three to five times, so both
+arms price all three routes and the larger of the two readings is taken on each -
+arm B on all three. Arm A's day is the one row #4 priced on 2026-09-06, and it
+returns 1,625 bytes against the 1,624 recorded there, which is the method
+reproducing itself to one byte.
+
+The ceilings follow the method that owns them - heaviest build, plus seven
+publishes, plus the 64-byte build noise floor - with Machine priced per run at
+the observed maximum of five runs a day:
+
+```text
+  222,819 + 7 x 16,024     + 64 = 335,051  /console/
+   44,956 + 7 x  1,634     + 64 =  56,458  /console/model/, NOT taken
+   35,822 + 7 x 5 x    252 + 64 =  44,706  /console/machine/
+```
+
+**`/console/model/` is left at 56,385 and that is a result, not an omission.**
+The re-derivation lands 73 bytes above the committed number, which is 0.13
+percent of a 56 KB ceiling and one byte a day of rate. The committed ceiling
+already carries 11,429 bytes of slack, which is **6.99 publishes** at the
+conservative rate - the seven this method asks for. Row #4 derived it one commit
+ago, on this tree, by this method. Moving it 73 bytes would buy 0.04 of a publish
+and would be a number raised for symmetry with its two siblings.
+
+**The raise decomposes exactly into a page term and a rate term, on both routes
+that moved.** The totals are +57,856 and +4,963 bytes, and the two halves sum to
+each:
+
+| Route | page since its ceiling was set | a day, or a run, since then | seven publishes of that | total |
+| --- | ---: | ---: | ---: | ---: |
+| `/console/` | 163,472 -> 222,819, **+59,347** | 16,237 -> 16,024 a day, **-213** | -1,491 | **+57,856** |
+| `/console/machine/` | 29,599 -> 35,822, **+6,223** | 288 -> 252 a run, **-36** | -1,260 | **+4,963** |
+
+**Both rates FELL and both raises are entirely page.** `/console/`'s day rate is
+213 bytes cheaper than the 16,237 the 2026-09-03 derivation used, and that is
+partly a change of method rather than a change of page: 16,237 was 9.38 bytes a
+ledger row extrapolated to the heaviest day on record, where 16,024 is a heavy
+mature day removed and measured. A measured day replaces an extrapolated one
+(Rule #10). `/console/machine/`'s run rate fell 36 bytes because the counter
+strip now reads one row per run where it read several.
+
+**Seven publishes, when the recorded rule would allow nine.** The horizon rule in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)
+is the largest whole number of measured publishes that keeps the 313,300-byte
+regression above 2x the slack. At today's rate that is nine on `/console/`:
+
+| Publishes | slack | regression / slack | slack as a share of the page |
+| ---: | ---: | ---: | ---: |
+| 7 | 112,232 | 2.79x | 50 percent |
+| 8 | 128,256 | 2.44x | 58 percent |
+| 9 | 144,280 | 2.17x | 65 percent |
+| 10 | 160,304 | 1.95x | 72 percent |
+
+Seven is taken instead. Nine publishes is 144,216 bytes on a 222,819-byte page,
+so the gate would stay silent while the page grew by two thirds - and the
+regression it exists to catch is one day payload, which is 313,300. A tripwire
+that lets a page absorb nearly half of one before it speaks is not a tripwire.
+Seven also keeps one horizon over all three routes, so "the runway expired" stays
+a single statement about the console rather than three.
+
+**What the three slacks are worth against that regression.** 112,232 on
+`/console/`, 11,429 on `/console/model/` and 8,884 on `/console/machine/`, so the
+313,300 is 2.79x, 27.4x and 35.3x each. The tightest is `/console/`, at 2.79x
+against 2.32x when it was last derived.
+
+**The 16,024 is not a rate for ever, and the fourteenth publish from here is
+where it stops.** `console.default_window_days` is 30 and sixteen days are
+committed, so a new day is still added to the seed rather than pushed through it.
+Once the ledger passes the window a new day drops the oldest out of the document
+and the marginal cost falls toward zero. Two more re-derivations at this rate and
+the third one should read a much smaller number - a ceiling raised at the
+un-windowed rate expires sooner rather than later, which is the safe direction
+and is what a ratchet is for.
+
+**The contract test's bound moved with them.**
+`test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
+every console ceiling under a constant that stands in for the page it cannot see:
+the heaviest console document plus the 313,300. That was 433,000 while the
+document was 119,700; the document is 222,819 now, so the constant is 536,000. At
+433,000 the next ordinary re-derivation of `/console/` would have crossed it -
+the page after seven publishes is about 335,000 and its ceiling about 447,000 -
+which is a contract test with a countdown in it. It is re-derived in the commit
+that re-derives the ceilings, for the same reason and on the same cadence.
+
 #### The `/console/` ceiling, re-derived 2026-09-03
 
 Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0. Date: 2026-09-03.

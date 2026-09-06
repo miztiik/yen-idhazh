@@ -397,9 +397,12 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
  * per arm, `npm run bundle-gate` on the real digest. `/console/` weighs
  * 198,624 gzipped bytes without them. Seeded with their real values it weighs
  * 375,377 - 176,753 more, an 89 percent page for numbers nothing renders, and
- * 98,182 over the 277,195 ceiling. Seeded as the nulls below it weighs 214,985,
- * which is 16,361 more and 62,210 under. The eight untouched routes moved -2 to
- * +5 bytes between the arms, so the 176,753 is the columns and not the build.
+ * 98,182 over the 277,195 ceiling of that day. Seeded as the nulls below it
+ * weighs 214,985, which is 16,361 more and 62,210 under. The eight untouched
+ * routes moved -2 to +5 bytes between the arms, so the 176,753 is the columns
+ * and not the build. The ceiling was re-derived to 335,051 on 2026-09-06 and the
+ * page read 222,819 that day; both arms above stay the dated record of what the
+ * columns cost, which is the figure this comment is for.
  *
  * A ceiling is re-recorded by the change that grows it, and bytes the first
  * paint does not use are not bytes to record a ceiling around.

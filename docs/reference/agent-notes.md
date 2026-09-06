@@ -169,6 +169,21 @@ $env:PYTHONPATH=''
 Set the variable only when you are deliberately borrowing another checkout's
 venv. Observed 2026-08-27.
 
+**It also leaks into the browser suite, through a spec that runs `python` off
+PATH.** `npm run test:changed` deletes `DIGEST_ROOT`, `STATE_ROOT`,
+`TELEMETRY_ROOT` and `PYTHONPATH` from the environment it hands each check
+(`frontend/scripts/run-checks.ts`), so this never bites through the launcher. A
+hand-rolled script that exports `PYTHONPATH` for the backend gates and then runs
+`npm run test:browser` in the same process bypasses that. Playwright passes the
+environment to its children, `frontend/tests/malformed-day.spec.ts` resolves
+`python` off PATH when the worktree has no `.venv`, and the system interpreter
+then finds your package and dies on its first third-party import:
+`ModuleNotFoundError: No module named 'feedparser'`. One spec out of 989 fails,
+inside a 14-minute suite, and the message names a dependency rather than a path -
+which reads like a broken install and is a leaked variable. Clear `PYTHONPATH`
+before any browser run, or set `IDHAZH_PYTHON` to an interpreter that has the
+dependencies. Observed 2026-09-06.
+
 **A header migration cannot survive a rebase, because `state/*.csv` is
 `merge=union`.** Union merge keeps every line from both sides, which is exactly
 right for an append-only ledger and exactly wrong for a file whose every line

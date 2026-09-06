@@ -2110,8 +2110,11 @@ reduced day in the seed, two screen-reader rows, and two chart points. The page
 ships with 11,437 B of slack, which is seven published days and expires by
 design.
 
-`/console/` and `/console/machine/` are untouched by this change and their own
-re-derivation is still owed.
+`/console/` and `/console/machine/` are untouched by this change, and their own
+re-derivation landed the next day: 335,051 and 44,706 on 2026-09-06, which also
+re-measured this route at 1,634 bytes a published day and left its ceiling where
+row #4 set it, 73 bytes below what a fresh derivation would have given
+([../../reference/measurements.md](../../reference/measurements.md#all-three-console-ceilings-re-derived-on-the-backfills-tree-2026-09-06)).
 
 ### The model-change rule, and the charts it means something on
 
@@ -2982,8 +2985,10 @@ retypes it.
 ## The console ceiling is a tripwire, and what to do when it fires
 
 **Since 2026-08-31 there are three of them, one per route.** `/console/` is
-capped at 251,324 bytes, `/console/model/` at 29,273 and `/console/machine/` at
-31,714. One key over three surfaces still fails when any of them grows and then
+capped at 335,051 bytes, `/console/model/` at 56,385 and `/console/machine/` at
+44,706, all re-derived on 2026-09-06
+([../../reference/measurements.md](../../reference/measurements.md#all-three-console-ceilings-re-derived-on-the-backfills-tree-2026-09-06)).
+One key over three surfaces still fails when any of them grows and then
 cannot say which one did, so the operator raises the shared number and the
 regression lands under it. Sizing them separately is what makes the split worth
 having. **They are meant to expire** - the first set did, on the day it was set,
@@ -2991,7 +2996,8 @@ when Model and Machine gained the panels they had been standing empty for, and
 the second set did once every row of the observability plan had merged.
 
 Each of the first two has the same three terms `/archive/` has, and only the
-middle one differs:
+middle one differs. The 2026-08-31 derivation, kept because it is the shape every
+later one follows:
 
 ```text
   116,153  heaviest of five builds of the tree that ships
@@ -3041,12 +3047,17 @@ near-copy of anything ([../../reference/measurements.md](../../reference/measure
 **Seven days, and not the year `/archive/` carries, because of what the headroom
 has to be smaller than.** The regression a page ceiling exists to catch on this
 route is a day payload inlined by a layout, which cost 313,300 gzipped bytes when
-it last happened. `/console/`'s slack is 134,814, so that regression is 2.32
-times it and the gate sees it land; eight days would put the margin under 2x. The
-horizon is the largest whole number of measured ordinary publishes that keeps the
-margin above 2x. On the other two routes the margins are 60.6x and 199.6x, so
-seven days is nowhere near binding there and the term that decides them is their
-own growth rather than the guard.
+it last happened. The horizon is **seven measured ordinary publishes**, and the
+2x margin is the bound that horizon has to clear rather than the number that sets
+it. On 2026-08-31 the two agreed: `/console/`'s slack was 134,814, so the
+regression was 2.32 times it and eight days would have put the margin under 2x.
+They stopped agreeing on 2026-09-06, when a cheaper measured day rate left room
+for nine - and nine publishes is 65 percent of the page, so the gate would have
+stayed silent while `/console/` grew by two thirds. **A margin the guard permits
+is not a runway the operator needs.** Seven is a week of publishing, it is one
+horizon over all three routes, and it keeps the margins at 2.79x, 27.4x and
+35.3x. On the two small routes the margin was never the binding term and the
+term that decides them is their own growth.
 
 **When one of them fires, the panel does not move.** The owner ruled on
 2026-08-31 that no approved feature is removed, deferred or shrunk to stay under
