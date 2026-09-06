@@ -5,8 +5,20 @@
  *
  * `frontend/public/` is where `backend/` writes, and the page reads those
  * payloads through the filesystem at build time - so the JSON never needs
- * serving. A rendered chart is different: it is an `<img src>` the browser
- * fetches at runtime, and only `static/` is copied into the served bundle.
+ * serving. A rendered chart is different: it is fetched by the browser for any
+ * story past the seed the document was built with, and only `static/` is copied
+ * into the served bundle.
+ *
+ * **`visuals.asset_base_url` is the switch that stops this staging the images.**
+ * It ships empty, which means this site, so the images are staged and the
+ * bundle is what it always was. Naming a host there is the release valve for
+ * the 1 GB published ceiling: `ItemVisual.svelte` asks that host for the
+ * drawing, so staging a second copy here would leave the bytes in the bundle
+ * and the valve would move nothing. The two are one switch for that reason -
+ * where a drawing is asked for and whether it also ships cannot disagree.
+ * Whoever opens it puts the same `digest/` tree at that prefix first; the day
+ * payloads and the month index are staged either way, because they are read
+ * from this origin and are not what the ceiling is about.
  *
  * Two earlier placements were wrong, both silently:
  *
@@ -54,6 +66,7 @@ import {
 	writeFileSync
 } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { assetBaseUrl } from '../asset-base.js';
 // The allow-list and the projector itself, shared with the build-time reader in
 // `src/lib/server/payload.ts`. The `.ts` extension and the full relative path
 // are both required: this script is run by plain `node`, which strips the types
@@ -61,6 +74,9 @@ import { join, resolve } from 'node:path';
 import { ITEM_FIELDS, VIEW_VERSION, projectDay } from '../src/lib/payload/project.ts';
 
 const IMAGE_SUFFIXES = ['.svg', '.webp', '.png', '.jpg', '.jpeg'];
+
+// Empty means this site, which is what ships, so the images are staged.
+const servedElsewhere = assetBaseUrl() !== '';
 
 // The same root the payload loader reads, so a canary build stages its own
 // visuals rather than the real day's.
@@ -120,6 +136,7 @@ if (!existsSync(source)) {
 let copied = 0;
 let payloads = 0;
 let skipped = 0;
+let elsewhere = 0;
 const walk = (relative) => {
 	for (const name of readdirSync(join(source, relative))) {
 		const next = join(relative, name);
@@ -147,6 +164,10 @@ const walk = (relative) => {
 			writeFileSync(join(target, next), projected);
 			payloads += 1;
 		} else if (IMAGE_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix))) {
+			if (servedElsewhere) {
+				elsewhere += 1;
+				continue;
+			}
 			mkdirSync(join(target, relative), { recursive: true });
 			cpSync(join(source, next), join(target, next));
 			copied += 1;
@@ -159,6 +180,12 @@ console.log(
 		`into static/digest at digest-view ${VIEW_VERSION}, ${ITEM_FIELDS.length} field(s) an item, ` +
 		`${skipped} unreadable.`
 );
+if (servedElsewhere) {
+	console.log(
+		`rendered visuals: ${elsewhere} image(s) left out of the bundle - visuals.asset_base_url ` +
+			`says they are served from ${assetBaseUrl()}.`
+	);
+}
 
 if (!existsSync(telemetrySource)) {
 	console.log(`telemetry: no projection tree at ${telemetrySource}, nothing to stage.`);
