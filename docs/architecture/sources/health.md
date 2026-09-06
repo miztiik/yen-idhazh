@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-06
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -400,26 +400,68 @@ stops the denominator counting sources nobody may ask. The section says so in
 one line, because the feeds list directly below it does read the whole record
 and its counts are therefore larger.
 
-## Per-source yield is measured, and it is not yet a judgement
+## Per-source yield is measured, and since 2026-09-06 it speaks
 
 Feed health can say whether a source answered. It cannot say whether that
 source yields publishable items over time, and the counts above are not that
 judgement. The denominator is different: one source can answer cleanly and
 still produce planned items that fail at fetch, extract or summarize.
 
-A yield judgement needs at least `collect.source_yield_min_complete_days`
-complete days of `state/item-health/` rows. The ledger started on 2026-08-23
-and the record is nine complete days deep on 2026-09-03, so the rubric is still
-blocked. Do not retire or demote a source by item-yield rule before the window
-exists. **Publishing the counts is what makes the wait honest rather than
-silent** - the page prints what has been offered and what was published and
-says in the same sentence that the record is too short to read as a rate, which
-is the shape Rule #10 asks for. A threshold taken over nine days would be an
-estimate wearing a measurement's clothes.
+**A run now names, on its own summary, a source that answers cleanly and
+returns almost nothing.** Two knobs set the bar and both live in
+`config/idhazh.json`: `collect.source_yield_alarm_point`, the yield below which
+a source is named, and `collect.source_yield_alarm_min_decisions`, the evidence
+it needs first. `publish_source_health.yield_alarm` reads the view this page
+describes and emits one line per run, worst first, naming each source and both
+its counts.
 
-**And a yield number reaches no decision, by design.** It is not a rank input,
-not a weight, and not a lifecycle input. It is published so a person can read
-it.
+**The denominator is the addresses the source itself decided - its publications
+plus its own losses - and never `opportunities`.** A model that would not
+answer, a rate limit and a robots refusal all cost an opportunity, and none of
+them is the publisher's doing. Measured 2026-09-06 over the committed view:
+`aljazeera-economy` is 78 of 115 offered and 78 of 79 decided, so the wide
+denominator calls a 99 percent source a 68 percent one. `SourceHealthRow.decisions`
+and `SourceHealthRow.source_yield` are derived properties rather than stored
+fields, so the payload gains nothing and the two halves cannot disagree.
+
+**Why two knobs and not one.** A low yield and a low volume are independent
+axes. Measured 2026-09-06 over 144 sources and 13 complete days, the record is
+bimodal: `news18-world` 0 of 73, `scmp-news` 4 of 111, `seekingalpha` 26 of 98,
+then nothing at all until `ht-business` at 68 of 88. That empty band is 50
+points wide, so the alarm point is cheap to choose and 0.5 sits in the middle of
+it. The evidence floor is not cheap: without it the alarm's first run also names
+`cnn-world` at 1 of 7, which [discovery.md](discovery.md) already ruled is a
+working feed carrying real reporting. Every other low-volume source in that
+record reads at 77.8 percent or better. The floor costs delay - at 8.5 decisions
+a day it arrives on day four - and buys the one false positive the record
+contains.
+
+`collect.source_yield_min_complete_days` still gates a *judgement* and is a
+different question: days of record, not decisions a source made. Do not retire
+or demote a source by item-yield rule before that window exists. **Publishing
+the counts is what makes the wait honest rather than silent** - the page prints
+what has been offered and what was published and says in the same sentence that
+the record is too short to read as a rate, which is the shape Rule #10 asks for.
+
+**And a yield number still reaches no decision.** It is not a rank input, not a
+weight, and not a lifecycle input. The alarm raises a flag and moves nothing: it
+never rests a feed, never scales a rank and never edits `config/sources.json`.
+Scaling rank by yield was refused, and the reason is the reader - a paywalled
+address is still planned, still requested and still fails whatever its source's
+authority, so a demotion stops no waste and pushes the few stories that did read
+further down the day.
+
+**The alarm names only the sources nothing else gives up on** - allowed,
+answering, not retired. A rested or refused source is already a decision an
+operator can see, and naming it would report the symptom over the decision.
+
+Recorded because it took a fortnight to notice the first time. `scmp-news` held
+permission `allowed`, availability `answering` and HTTP 200 with fifty dated
+entries every run while 123 of its 127 items failed extraction as `paywalled`,
+and `reliability` - which asks whether the feed answered - scored it 1.0. The
+ratio was already on this view and already on the console. Nothing applied a
+threshold and nothing spoke. **Reliability asks whether the door opened; yield
+asks whether anything was behind it.**
 
 ## The run never edits the source list
 

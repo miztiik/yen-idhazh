@@ -248,6 +248,8 @@ a refusal is persisted, so the next run asks the host again - and
 | `robots_denied_recheck_runs` | 1 | Runs to wait before asking `robots.txt` again after a refusal. |
 | `robots_unreachable_recheck_runs` | 1 | The same, after a `robots.txt` we could not read at all. |
 | `source_yield_min_complete_days` | 30 | Complete days of item-health evidence a per-source yield judgement needs before it may be made - and, since 2026-09-03, how far back the published source-health record reads. |
+| `source_yield_alarm_point` | 0.5 | The yield below which a run names a source on its own summary. A flag for a person; it moves nothing on its own. |
+| `source_yield_alarm_min_decisions` | 30 | Addresses a source must have decided before its yield may raise that flag. |
 
 **`quarantine_after_failures` was removed on 2026-09-03**, and a config still
 spelling it is refused with a message naming `availability_strikes_before_rest`.
@@ -272,6 +274,20 @@ measurement (Rule #10), and no source may be demoted on one. Since 2026-09-03 it
 is also the span the published source-health record reads, because how far back
 to look and how much is enough are one question, and a second knob would be a
 second answer to it. What the window is for is
+[../architecture/sources/health.md](../architecture/sources/health.md).
+
+**The two alarm knobs are a third question, and they are not that floor.** They
+decide when a run says out loud that a source answers cleanly and returns almost
+nothing - the `scmp-news` shape, where every other signal read healthy for a
+fortnight. `source_yield_alarm_point` is a threshold on a ratio, not a clamp:
+`reliability_floor` is the lowest a factor may reach, and calling this one a
+floor too is how the two get confused. `source_yield_alarm_min_decisions` counts
+decisions a source made, where `source_yield_min_complete_days` counts days of
+record - a busy source clears the first in four days and a weekly one may never
+clear it, which is the right answer for both. Measured 2026-09-06 over 144
+sources and 13 complete days: with the evidence knob at 30 the alarm names three
+sources and no false positive; at 1 it also names `cnn-world` on 1 of 7, a
+working feed. Both numbers and what they cost are in
 [../architecture/sources/health.md](../architecture/sources/health.md).
 
 ## Training-corpus surface

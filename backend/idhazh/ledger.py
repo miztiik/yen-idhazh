@@ -750,6 +750,26 @@ def load_item_health_shard(path: Path) -> list[ItemHealthRow]:
     return [ItemHealthRow.from_csv_row(row) for row in _read_rows(path)]
 
 
+def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[ItemHealthRow]:
+    """Every item-health row in the window, oldest shard first.
+
+    Bounded for the same reason `load_health` is (Rule #12): this is the
+    fastest-growing ledger in the repository and a run appends to it five times
+    a day, so a reader that globbed every shard would cost more every run for an
+    answer about the last few weeks. `shards_in_window` is the pruner's own
+    helper, so a shard this opens is a shard the pruner keeps.
+
+    A row that no longer parses is fatal here rather than skipped, which is the
+    opposite of `load_health` and deliberate: a census divides by these rows, so
+    a silently dropped one moves a ratio instead of costing a decision some
+    evidence.
+    """
+    rows: list[ItemHealthRow] = []
+    for stem in reversed(shards_in_window(today, within_days)):
+        rows.extend(load_item_health_shard(state_dir / ITEM_HEALTH_DIRNAME / f"{stem}.csv"))
+    return rows
+
+
 def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> int:
     """Write one month's folded summary whole, replacing whatever was there.
 

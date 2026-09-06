@@ -446,7 +446,8 @@ def test_publish_writes_the_view_where_the_console_reads_it(tmp_path) -> None:  
         [health("wire", date=DATE, n=1, outcome=FetchOutcome.OK, items=3)],
     )
     settings = config.load()
-    written = publish_source_health.publish(
+    path = tmp_path / "public" / publish_source_health.PUBLIC_FILENAME
+    returned = publish_source_health.publish(
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         collect=settings.app.collect,
@@ -454,11 +455,12 @@ def test_publish_writes_the_view_where_the_console_reads_it(tmp_path) -> None:  
         run_id=f"{DATE}-1",
         generated_at=f"{DATE}T06:20:00Z",
         state_root=state,
-        path=tmp_path / "public" / publish_source_health.PUBLIC_FILENAME,
+        path=path,
     )
-    assert written.name == "source-health.json"
+    assert path.name == "source-health.json"
     assert publish_source_health.public_relpath() == "frontend/public/source-health.json"
-    view = SourceHealthView.from_json(written.read_text(encoding="utf-8"))
+    view = SourceHealthView.from_json(path.read_text(encoding="utf-8"))
+    assert view.to_json() == returned.to_json()
     assert len(view.sources) == len(
         publish_source_health.active_feeds(
             settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
@@ -480,3 +482,194 @@ def test_the_active_census_is_exactly_the_addresses_a_run_would_ask() -> None:
     assert names, "the committed source list is empty"
     assert names & {feed.id for feed in settings.sources.retired} == set()
     assert len(names) == len(counted), "one address counted twice inflates a permission state"
+
+
+def _yielding(
+    feed_id: str, *, published: int, lost: int, outcome: FetchOutcome = FetchOutcome.OK
+) -> tuple[FeedDef, list[FeedHealthRow], list[ItemHealthRow]]:
+    """A source whose fate over one prior day is exactly `published` and `lost`.
+
+    Built rather than read, because the alarm has to be right on day 400 and the
+    committed record holds thirteen days (CLAUDE.md section 13, owner ruling
+    2026-09-06). A built source can also carry a shape the archive has never
+    produced - nought published out of seventy-three, say.
+    """
+    day = "2026-08-19"
+    rows = [item(feed_id, date=day, n=1, index=i, published=True) for i in range(published)] + [
+        item(
+            feed_id, date=day, n=1, index=published + i, published=False, code=FailureCode.PAYWALLED
+        )
+        for i in range(lost)
+    ]
+    return (
+        feed(feed_id),
+        [
+            health(
+                feed_id,
+                date=DATE,
+                n=1,
+                outcome=outcome,
+                items=published + lost,
+                robots=RobotsOutcome.ALLOWED,
+            )
+        ],
+        rows,
+    )
+
+
+def test_a_source_that_answers_but_does_not_read_is_named() -> None:
+    """The scmp-news shape, and the one this whole knob exists for.
+
+    Permission allowed, availability answering, HTTP 200 every run - and four
+    stories out of a hundred and eleven decisions. Every other signal reported
+    it healthy for a fortnight.
+    """
+    wall, wall_health, wall_items = _yielding("wall", published=4, lost=107)
+    view = fold(feeds=[wall], health_rows=wall_health, items=wall_items)
+
+    row = only(view)
+    assert row.availability is SourceAvailability.ANSWERING
+    assert row.permission is SourcePermission.ALLOWED
+    assert row.decisions == 111
+    assert row.source_yield == pytest.approx(4 / 111)
+
+    alarm = publish_source_health.yield_alarm(view, alarm_point=0.5, min_decisions=30)
+    assert alarm is not None
+    assert "wall 4/111 (4%)" in alarm
+    assert "probe_feeds.py" in alarm, "an alarm that names no next step is a nag"
+
+
+def test_a_thin_record_is_never_named_however_bad_it_looks() -> None:
+    """One of seven is 14 percent and it is not evidence about a source.
+
+    Measured 2026-09-06 over the committed view: without this floor the alarm's
+    first run names cnn-world, which the source docs already ruled is a working
+    feed carrying real reporting. A flag that is wrong on its first run is the
+    flag nobody reads.
+    """
+    thin, thin_health, thin_items = _yielding("thin", published=1, lost=6)
+    view = fold(feeds=[thin], health_rows=thin_health, items=thin_items)
+
+    assert only(view).source_yield == pytest.approx(1 / 7)
+    assert publish_source_health.yield_alarm(view, alarm_point=0.5, min_decisions=30) is None
+
+
+def test_a_source_is_not_charged_for_a_failure_it_does_not_own() -> None:
+    """A model that would not answer is our outage, not the publisher's.
+
+    Measured 2026-09-06 over the committed view: aljazeera-economy is 78 of 115
+    offered and 78 of 79 decided. Dividing by opportunities calls a 99 percent
+    source a 68 percent one, which is a false positive built into the ratio.
+    """
+    day = "2026-08-19"
+    rows = [item("ours", date=day, n=1, index=0, published=True)] + [
+        item("ours", date=day, n=1, index=i, published=False, code=FailureCode.MODEL_UNREACHABLE)
+        for i in range(1, 60)
+    ]
+    view = fold(
+        feeds=[feed("ours")],
+        health_rows=[
+            health(
+                "ours",
+                date=DATE,
+                n=1,
+                outcome=FetchOutcome.OK,
+                items=60,
+                robots=RobotsOutcome.ALLOWED,
+            )
+        ],
+        items=rows,
+    )
+
+    row = only(view)
+    assert row.opportunities == 60
+    assert row.source_failures == 0
+    assert row.decisions == 1, "only the address the source itself decided"
+    assert row.source_yield == 1.0
+    assert publish_source_health.yield_alarm(view, alarm_point=0.5, min_decisions=1) is None
+
+
+def test_a_source_nobody_asked_has_no_yield_rather_than_a_zero() -> None:
+    """0 of 0 is not nought percent, and printing it is an accusation."""
+    view = fold(
+        feeds=[feed("quiet")],
+        health_rows=[
+            health(
+                "quiet",
+                date=DATE,
+                n=1,
+                outcome=FetchOutcome.OK,
+                items=0,
+                robots=RobotsOutcome.ALLOWED,
+            )
+        ],
+    )
+    row = only(view)
+    assert row.decisions == 0
+    assert row.source_yield is None
+    assert publish_source_health.yield_alarm(view, alarm_point=0.5, min_decisions=0) is None
+
+
+def test_a_rested_or_retired_source_is_left_out_of_the_alarm() -> None:
+    """Naming a source the run already stopped asking reports the symptom.
+
+    The alarm exists for the source nothing gives up on. A rest is a decision an
+    operator can already see, and a retirement is one they already took.
+    """
+    resting, resting_health, resting_items = _yielding(
+        "gone", published=0, lost=40, outcome=FetchOutcome.PERMANENT
+    )
+    strikes = [
+        health(
+            "gone",
+            date=DATE,
+            n=n,
+            outcome=FetchOutcome.PERMANENT,
+            items=0,
+            robots=RobotsOutcome.ALLOWED,
+        )
+        for n in range(1, COLLECT.availability_strikes_before_rest + 1)
+    ]
+    rested = fold(feeds=[resting], health_rows=strikes, items=resting_items)
+    assert only(rested).permission is SourcePermission.ALLOWED, (
+        "the rest has to be the only reason this one is left out"
+    )
+    assert only(rested).availability is SourceAvailability.RESTING
+    assert publish_source_health.yield_alarm(rested, alarm_point=0.5, min_decisions=1) is None
+
+    retired = fold(
+        feeds=[resting],
+        health_rows=resting_health,
+        items=resting_items,
+        retired_on={derive_endpoint_key(resting.url): DATE},
+    )
+    assert only(retired).retired
+    assert publish_source_health.yield_alarm(retired, alarm_point=0.5, min_decisions=1) is None
+
+
+def test_a_healthy_source_raises_nothing_and_the_worst_is_named_first() -> None:
+    """Silence when nothing is wrong, and an order a person can act down."""
+    good, good_health, good_items = _yielding("good", published=95, lost=5)
+    assert (
+        publish_source_health.yield_alarm(
+            fold(feeds=[good], health_rows=good_health, items=good_items),
+            alarm_point=0.5,
+            min_decisions=30,
+        )
+        is None
+    )
+
+    bad, bad_health, bad_items = _yielding("bad", published=0, lost=73)
+    worse, worse_health, worse_items = _yielding("mid", published=26, lost=72)
+    alarm = publish_source_health.yield_alarm(
+        fold(
+            feeds=[good, bad, worse],
+            health_rows=[*good_health, *bad_health, *worse_health],
+            items=[*good_items, *bad_items, *worse_items],
+        ),
+        alarm_point=0.5,
+        min_decisions=30,
+    )
+    assert alarm is not None
+    assert "good" not in alarm
+    assert alarm.index("bad 0/73") < alarm.index("mid 26/98")
