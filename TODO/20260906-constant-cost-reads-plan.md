@@ -22,7 +22,7 @@ Growth claims cited per row come from [the research handover](20260906-data-grow
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Config knobs and contract | - | A | DONE #_pending_ | ../yi-r01-knobs | #_pending_ | worker |
+| 1 | Config knobs and contract | - | A | DONE #443 | ../yi-r01-knobs | #443 | worker |
 | 2 | One-pass build reductions | 1 | B | PENDING | - | - | - |
 | 3 | Pointer readout and dead readout work | 1 | B | PENDING | - | - | - |
 | 4 | Read marks on a calendar window | 1 | B | PENDING | - | - | - |
