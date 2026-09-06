@@ -228,6 +228,17 @@ test.describe('the live chart', () => {
 
 	test('a theme change repaints the marks', async ({ page }) => {
 		await page.goto('/console/');
+		// The engine draws a chart when a reader comes to it, so this one has to be
+		// come to. Before that the marks on screen are the server's, and those
+		// follow the theme through a custom property without being repainted at
+		// all - which is the whole point of them, and not what this test is about.
+		const host = page.locator('[data-flow="chart"] [data-chart]');
+		await host.scrollIntoViewIfNeeded();
+		await expect(host, 'the flow diagram never came alive').toHaveAttribute(
+			'data-chart',
+			'live',
+			{ timeout: 20_000 }
+		);
 		const fills = await page.evaluate(async () => {
 			const read = () =>
 				[
