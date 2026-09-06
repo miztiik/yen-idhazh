@@ -7,12 +7,17 @@
  * uses for the stories past its seed, so it is the one place in the browser
  * that reads a day.
  *
- * **Fetched once per page.** Ten results spanning ten days cost ten requests at
- * worst; ten results from one day cost one. A day already in hand is never
- * fetched again, and a day that failed is not retried on its own - a second
- * automatic attempt at a file the host does not have costs a reader a request
- * and tells them nothing. A reader who presses the retry control asks for one,
- * and `again` is how they get it.
+ * **Fetched once per ask, and shared.** Ten results spanning ten days cost ten
+ * requests at worst; ten results from one day cost one, and two callers that
+ * ask while the request is in flight get that one request rather than two.
+ *
+ * **A failure is not an answer, so it is not held.** Until 2026-09-06 a fetch
+ * that failed left a null in the held set and every later ask for that date got
+ * the null back, so one flaky connection finished that day for the rest of the
+ * session. The archive is where that bit: it fetches the day behind every
+ * search result and has no retry control at all. The next ask now really asks,
+ * and it is still one request per ask rather than one per render, because
+ * nothing on a render path asks.
  *
  * **Null is the designed state.** A result whose day cannot be read still
  * renders: it keeps the title, the date and the topic the index carried, and
@@ -22,7 +27,43 @@
 import { base } from '$app/paths';
 import type { DigestDay, DigestItem } from '$lib/payload/types';
 
-const days = new Map<string, Promise<DigestDay | null>>();
+/** One date this session has asked for.
+ *
+ * `revision` is the payload's own `generated_at`, which is what a republish
+ * moves and nothing else does. It is null while the request is in flight and
+ * for a payload that declares no revision, and both mean the same thing: this
+ * day may not be reused for one the host is serving now.
+ */
+interface HeldDay {
+	revision: string | null;
+	payload: DigestDay | null;
+	day: Promise<DigestDay | null>;
+}
+
+/** How many days one session keeps in hand.
+ *
+ * A reading route needs one - the day it is drawing. The archive needs a whole
+ * answer at once: it fetches the day behind every result on screen, and
+ * `assist.result_limit` is 10, so one search can put ten distinct dates in
+ * flight together. Twelve is that answer, plus the day the reader arrived from,
+ * plus one spare.
+ *
+ * **It is a count and not a byte ceiling, because a browser cannot measure a
+ * parsed payload.** What a count costs is measurable off the tree: over the 17
+ * committed days on 2026-09-06 a served day is 11,547 bytes of JSON at its
+ * smallest, 1,066,895 at the median and 1,924,051 at its largest, so twelve of
+ * them is about 12.8 MB of text at the median and 23.1 MB at the worst, and
+ * more once parsed. Uncapped there was no worst: this map only ever grew, so a
+ * session that ran five searches over fifty distinct days held all fifty for as
+ * long as the tab was open.
+ *
+ * **Dropping one costs a request and never a story.** A page that drew a day
+ * holds its own reference to it, so eviction only means the next ask for that
+ * date fetches again.
+ */
+const HELD_DAYS = 12;
+
+const days = new Map<string, HeldDay>();
 
 /** A published date, and nothing else. Three parts split on a dash is not the
  * same test: `not-a-date` splits into three truthy parts and would have become
@@ -54,11 +95,86 @@ export function dayUrl(date: string, root: string = base): string | null {
 
 /** The day published on that date, or null when it cannot be read. */
 export function loadDay(date: string, fetcher: typeof fetch = fetch): Promise<DigestDay | null> {
+	return requestDay(date, fetcher, false);
+}
+
+/** One ask for a date, answered from what the session holds or from the host.
+ *
+ * `again` is the reader pressing the retry control. It goes back to the host
+ * whatever this session holds, because the reader is asking about the host and
+ * not about this session.
+ */
+function requestDay(
+	date: string,
+	fetcher: typeof fetch,
+	again: boolean
+): Promise<DigestDay | null> {
 	const held = days.get(date);
-	if (held) return held;
-	const pending = readDay(date, fetcher);
-	days.set(date, pending);
-	return pending;
+	if (held !== undefined && !again) {
+		// Asked-for-last is held-longest, so the cap drops the day this session
+		// has come back to least recently rather than the one it met first.
+		days.delete(date);
+		days.set(date, held);
+		return held.day;
+	}
+	if (held !== undefined) days.delete(date);
+	return fetchDay(date, fetcher, held ?? null);
+}
+
+function fetchDay(
+	date: string,
+	fetcher: typeof fetch,
+	previous: HeldDay | null
+): Promise<DigestDay | null> {
+	// The record exists before the request settles, because the settling has to
+	// know whether it is still the request this date is holding. An `again` or an
+	// eviction between the two replaces it, and a late arrival may not overwrite
+	// what took its place.
+	const entry: HeldDay = { revision: null, payload: null, day: Promise.resolve(null) };
+	entry.day = readDay(date, fetcher).then((fresh) => settle(date, entry, previous, fresh));
+	hold(date, entry);
+	return entry.day;
+}
+
+function settle(
+	date: string,
+	entry: HeldDay,
+	previous: HeldDay | null,
+	fresh: DigestDay | null
+): DigestDay | null {
+	const ours = days.get(date) === entry;
+	if (fresh === null) {
+		// A day that could not be read is not an answer, so nothing holds one.
+		if (ours) days.delete(date);
+		return null;
+	}
+	// The revision is the key. A day that came back unchanged is the day the page
+	// already holds, so it is handed back as the same value and every index built
+	// on it survives; a day that came back at another revision, or at none this
+	// can read, replaces it.
+	const revision = typeof fresh.generated_at === 'string' && fresh.generated_at !== ''
+		? fresh.generated_at
+		: null;
+	const unchanged =
+		revision !== null && previous !== null && previous.payload !== null
+			? previous.revision === revision
+			: false;
+	const day = unchanged && previous?.payload ? previous.payload : fresh;
+	if (ours) {
+		entry.revision = revision;
+		entry.payload = day;
+	}
+	return day;
+}
+
+/** Newest ask last, oldest ask first, and never more than the cap. */
+function hold(date: string, entry: HeldDay): void {
+	days.delete(date);
+	days.set(date, entry);
+	for (const oldest of days.keys()) {
+		if (days.size <= HELD_DAYS) break;
+		days.delete(oldest);
+	}
 }
 
 /** Whether a story carries everything the page reads off it without a guard.
@@ -137,8 +253,11 @@ export interface DayWatch {
 	/** How long the wait may last before it is worth one sentence. It comes from
 	 * `ui.payload_slow_ms` and is never a number written here (Rule #6). */
 	slowMs: number;
-	/** Forget a held answer first. This is what a retry control calls, and it is
-	 * the only way a day that failed is fetched a second time. */
+	/** Go back to the host about a day this session already holds. This is what
+	 * the retry control calls. A failed day is no longer held, so a plain ask
+	 * already reaches the host; what this adds is asking about a day the session
+	 * has an answer for - and the answer is kept when the revision comes back
+	 * unchanged. */
 	again?: boolean;
 	fetcher?: typeof fetch;
 }
@@ -152,13 +271,12 @@ export interface DayWatch {
  * number does not carry.
  */
 export function watchDay(date: string, watch: DayWatch): Promise<DigestDay | null> {
-	if (watch.again) days.delete(date);
 	let settled = false;
 	watch.onStatus('loading', null);
 	const slow = setTimeout(() => {
 		if (!settled) watch.onStatus('slow', null);
 	}, watch.slowMs);
-	return loadDay(date, watch.fetcher).then((day) => {
+	return requestDay(date, watch.fetcher ?? fetch, watch.again === true).then((day) => {
 		settled = true;
 		clearTimeout(slow);
 		watch.onStatus(day === null ? 'unreachable' : 'ready', day);
@@ -197,7 +315,34 @@ export function restoreAnchor(hash?: string): boolean {
 	return true;
 }
 
-/** One item out of a day already in hand, or null. */
+/** One lookup index per day, built the first time anything asks that day a
+ * question and shared by everything that asks it another.
+ *
+ * **The key is the payload itself, and that is what makes it revision-owned.**
+ * A fetch that finds a republished day hands back a different object, so an
+ * index can never answer for a payload it was not built from; a fetch that
+ * finds the day unchanged hands back the same object, so the index survives.
+ * Keying on the date string would do neither. Weak, so an index is collected
+ * with the day it describes and holds nothing open.
+ */
+const lookups = new WeakMap<DigestDay, Map<string, DigestItem>>();
+
+/** One item out of a day already in hand, or null.
+ *
+ * A search result names a day and a story, and the archive resolves one of
+ * these per result on screen and again every time a day arrives. Walking the
+ * day for each of them costs the day's whole length per lookup - 731 stories on
+ * the heaviest committed day - for an answer the day could hold once.
+ *
+ * Both fallbacks are unchanged and both are designed states: a day that could
+ * not be read is null, and a story the day does not hold is null.
+ */
 export function itemOf(day: DigestDay | null, itemId: string): DigestItem | null {
-	return day?.items.find((item) => item.item_id === itemId) ?? null;
+	if (!day) return null;
+	let byId = lookups.get(day);
+	if (byId === undefined) {
+		byId = new Map(day.items.map((item) => [item.item_id, item]));
+		lookups.set(day, byId);
+	}
+	return byId.get(itemId) ?? null;
 }
