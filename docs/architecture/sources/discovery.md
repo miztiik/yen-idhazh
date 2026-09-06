@@ -490,8 +490,9 @@ entries, so a check that stopped at the feed would have added seven feeds and
 600 slots of nothing. Twenty of the twenty-one articles behind them are
 paywalled. The seventh feed technically passed on a single 105-word item from
 2021, which is a stale index page leaking through a paywall rather than a source:
-`min_source_words` is 60, so the length floor cannot catch it. The existing
-`scmp-news` feed stays as it is.
+`min_source_words` is 60, so the length floor cannot catch it. Asking the same
+publisher about the feed we already had is what retired it - see the next
+section.
 
 **`openai-news` is un-retired, and that reverses a decision this page recorded.**
 It was retired on 2026-08-29 under "the article answers 4xx, however the feed
@@ -511,6 +512,38 @@ emits spans through the project's own tracer, and its verdicts are `FailureCode`
 values, so a row of the table above is a row of the reasons table further down
 this page. Re-running it on a tombstone is now one command, which is the only
 reason the OpenAI reversal was found at all.
+
+### `scmp-news` is retired on 2026-09-06, and the live list is where the probe found it
+
+Probing the seven requested SCMP addresses raised the obvious question about the
+one already in `Sources.feeds`, so it was asked in the same session. Five of five
+sampled articles behind `https://www.scmp.com/rss/91/feed` answered with a
+publisher-declared paywall and zero words of prose, on 2026-09-06 from a
+developer machine.
+
+The item-health ledger says the same thing over fourteen days rather than one
+afternoon. Between 2026-08-24 and 2026-09-06 the pipeline attempted 127 items
+from this feed. **123 failed at extraction as `paywalled`, one as `not_prose`,
+and four reached a reader** - at 254, 195, 270 and 76 source words. A read rate
+of 3.1 percent, and the best of the four is a quarter of what a typical published
+item carries.
+
+So the feed is retired: the row moves to `Sources.retired` with `retired_on:
+2026-09-06`. `world` goes from 25 feeds to 24 against a floor of 21, so the desk
+stays publishable. SCMP is not replaced, because the seven addresses probed above
+are the replacements and every one of them is the same wall.
+
+**Three things about this are worth keeping, and the third is the reason this
+section exists.** First, the feed itself was never unhealthy - it answered 200
+with fifty dated entries every time, so [health.md](health.md) had nothing to
+rest and the automatic quarantine correctly never fired. Second, four successes
+in 127 attempts is exactly the shape a slot budget cannot afford: the feed was
+spending real requests on a wall. Third, **nothing was looking.** This feed was
+added in the 2026-08-29 sweep and verified the way that sweep verified everything
+- one article, once. It failed 123 times in the fortnight after, and the only
+reason anybody noticed is that somebody asked about a different SCMP address. The
+instrument that should have raised it is a read rate per feed over a window, and
+this page cannot claim one exists.
 
 ### The 2026-08-30 requested feed check: none entered live config
 
