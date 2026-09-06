@@ -93,6 +93,18 @@ test('a window with no flow to draw has no list to draw either', () => {
  * line height apart, and their line boxes touch by a pixel at every width. That
  * is line spacing. Comparing raw text nodes reports it as a collision on a
  * diagram that is perfectly readable, which is the wrong answer at every width.
+ *
+ * The gap that counts as line spacing is measured off the label rather than
+ * fixed, because the diagram is not always drawn at the size it is shown at.
+ * Before a reader comes to it the server's SVG is on screen, drawn 760 wide and
+ * stretched to the column - 1,076px at a 1440px window, which is every distance
+ * in it multiplied by 1.416. Measured 2026-09-06 on the canary build: the two
+ * lines of one label sit 21px apart there and 15px apart once the engine has
+ * redrawn at the column's own width, so a fixed 20px tolerance folded the live
+ * chart and split the server's, and reported seven collisions on a diagram
+ * nobody could fault. Two lines of one label are within one and a half line
+ * boxes of each other at any scale; two different nodes are 100px apart at the
+ * smaller of these two.
  */
 async function flowLabels(page: import('@playwright/test').Page) {
 	return page.evaluate(() => {
@@ -111,8 +123,9 @@ async function flowLabels(page: import('@playwright/test').Page) {
 		});
 		const labels: typeof raw = [];
 		for (const box of raw) {
+			const line = Math.max(box.bottom - box.top, 1) * 1.5;
 			const owner = labels.find(
-				(one) => Math.abs(one.left - box.left) <= 1.5 && Math.abs(one.top - box.top) <= 20
+				(one) => Math.abs(one.left - box.left) <= 1.5 && Math.abs(one.top - box.top) <= line
 			);
 			if (owner === undefined) labels.push({ ...box });
 			else {
