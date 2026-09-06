@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -1998,6 +1998,83 @@ published days and expires by design.
 That is one of the three ceilings the plan that grew them re-records, done for
 the one route this panel grew. `/console/` and `/console/machine/` are untouched
 and their own re-derivation is still owed.
+
+### Every instrument the checker writes, and the panel that owes it a number
+
+The Summaries route draws three more panels: the faithfulness score, the lead
+coverage, and a table of the six instruments nothing acts on. What matters more
+than any of the three is the map they ship with.
+
+**The artefact is `DRAWN_BY`, not the charts.**
+[../../../frontend/src/lib/console/eval-instruments.ts](../../../frontend/src/lib/console/eval-instruments.ts)
+assigns every measured column of `state/scores/` to exactly one panel, and
+`NOT_A_MEASUREMENT` says of every remaining column why it is not one - fifteen
+identity and provenance columns, each with a sentence. Between them the two must
+name every property of
+[../../../schemas/eval-row.schema.json](../../../schemas/eval-row.schema.json),
+once, and name nothing else.
+[../../../frontend/tests/console-model-instruments.spec.ts](../../../frontend/tests/console-model-instruments.spec.ts)
+compares the two sets in the ninety-second gate. So a column added to `EvalRow`
+next month fails a test rather than going undrawn, which is what happened here:
+`hhem` and `coverage` were scored on every summary from the first published day
+and read by nothing on the site for two weeks.
+
+**The scope said two panels and the survey said six columns more.** Row 4 of
+[../../../TODO/20260905-03-console-backfill-plan.md](../../../TODO/20260905-03-console-backfill-plan.md)
+named faithfulness and lead coverage and stated the goal as *every* existing
+instrument reaching the console. Counted 2026-09-06, ten of the ledger's twenty
+measured columns had no reader anywhere in `frontend/src`. The two named ones got
+their own panels; the other eight went to the third. Drawing two and calling the
+goal met would have left the map failing its own test on the day it was written.
+
+**`hhem_full` and `hhem_delta` are a sentence, not a second chart.** The checker
+scores each summary twice, once against the text the machine was given and once
+against the whole article, so a summary that only looks faithful because the
+article was cut cannot pass. Measured 2026-09-06 over 6,966 rows the two readings
+differ on **7 of them**, because production hands the same string to both - the
+finding recorded in [../../concepts/evaluation.md](../../concepts/evaluation.md).
+A chart of a number that is flat on 99.9 percent of rows teaches an operator to
+stop looking; a sentence saying how often it parts, and by how much, is the same
+fact at the size it is worth.
+
+**Nothing sets a bar, and that is decision 2 of the row.** No threshold line, no
+red, no band tint, no polarity - and the spec fails the build if a tinted element
+appears inside either score panel. The committed window is fifteen days and the
+summarizer is about to change twice, so a threshold taken off it would be a guess
+wearing a measurement's clothes. The one number that *is* a bar - the configured
+lead-coverage share - is printed as a count of summaries under it and never drawn
+as a line to fail against, because it caps a summary at "fairly sure" and has
+never on its own marked one "not sure".
+
+**Two lines on faithfulness, one on lead coverage.** Measured 2026-09-06 over the
+fifteen committed days, the middle summary's faithfulness sat between 88 and 95
+percent while the lower quarter swung from 73 to 94 - so the level and the tail
+are two different facts and both are drawn. Lead coverage does the opposite: the
+middle summary sat between 57 and 64 percent every single day, so a line of it
+beside a moving one would read as the important one. What moves there is the
+share of a day that fell under the floor, and that is what is drawn; the level is
+in the readout strip and the headline.
+
+**Lines, and no shape switch on either.** One percentile added to another is not
+a quantity, and neither is one day's share added to the next day's. The condition
+[../../concepts/design-system.md](../../concepts/design-system.md) sets for
+carrying that control is that both shapes read the same array honestly. Bars
+here would not.
+
+**A day is that day's middle summary, and the recorded table says so.** A median
+over the whole window needs every summary's reading, and carrying 6,966 of them
+into the page to print four figures is not a trade worth making. The table prints
+the quietest day, the middle day and the loudest day, each by its own middle
+summary, and names that in the panel rather than leaving a reader to assume a
+window median.
+
+**The two densities are drawn per thousand words, not per word.** Per word they
+are 0.011 and 0.004 - two numbers a reader cannot tell apart, neither of which
+reads as a quantity of anything. Per thousand words they are 11.0 and 4.0
+markers, which is a count of phrases in about four pages.
+
+**Neither new panel declares `data-windowed`**, for the reason the doubt-reason
+panel does not, and each proves it honours the control in its own spec.
 
 ### The model-change rule, and the charts it means something on
 

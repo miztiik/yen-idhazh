@@ -28,6 +28,23 @@
 		unexplainedNote,
 		REASONS
 	} from '$lib/console/doubt-reasons';
+	import {
+		evalColumnLabels,
+		evalWithin,
+		flagReadings,
+		leadColumns,
+		leadDays,
+		leadFloorNote,
+		leadHeadline,
+		leadSeries,
+		matchColumns,
+		matchDays,
+		matchHeadline,
+		matchSeries,
+		recordedReadings,
+		recordedText,
+		widerNote
+	} from '$lib/console/eval-instruments';
 	import Chart from '$lib/charts/Chart.svelte';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
@@ -411,6 +428,28 @@
 	const reasonGap = $derived(unexplainedNote(reasonWindow, windowDays));
 	const reasonMissing = $derived(neverSeenNote(reasonWindow, windowDays));
 
+	/** What the checker measured, over the same days the panels above name.
+	 *
+	 * One array, three panels. The server reduced every scored day inside the
+	 * widest preset, so narrowing the window filters and re-aggregates nothing -
+	 * which is what keeps the sentence, the strip and the plot on one number.
+	 */
+	const evalWindow = $derived(evalWithin(data.evaluated, modelSpan));
+	const matchWindow = $derived(matchDays(evalWindow));
+	const matchPlot = $derived(
+		stacked(evalColumnLabels(matchWindow), matchSeries(matchWindow), 'lines')
+	);
+	const matchStrip = $derived(matchColumns(matchWindow));
+	const matchHead = $derived(matchHeadline(evalWindow, windowDays));
+	const matchWider = $derived(widerNote(evalWindow, windowDays));
+	const leadWindow = $derived(leadDays(evalWindow));
+	const leadPlot = $derived(stacked(evalColumnLabels(leadWindow), leadSeries(leadWindow), 'lines'));
+	const leadStrip = $derived(leadColumns(leadWindow));
+	const leadHead = $derived(leadHeadline(evalWindow, windowDays));
+	const leadFloorText = $derived(leadFloorNote(evalWindow, windowDays, data.leadFloor));
+	const recorded = $derived(recordedReadings(evalWindow));
+	const flags = $derived(flagReadings(evalWindow));
+
 	/** Whole seconds off a millisecond clock, and `<1 s` where a real
 	 * measurement rounds away. */
 	function asSeconds(ms: number): string {
@@ -545,6 +584,7 @@
 					data-model-table-control
 					data-daily-figures="model"
 					data-daily-rows={tableDays}
+					data-eval-panel="daily-figures"
 					data-windowed="daily-figures"
 					data-window-days={windowDays}
 				>
@@ -700,6 +740,220 @@
 			{/if}
 		</div>
 
+		<!-- What the checker measured, as opposed to what it concluded. The panel
+		     above draws the verdicts; these three draw the numbers the verdicts
+		     were reached from, which is the only place a change too small to move
+		     a verdict can be seen at all. -->
+		<div
+			data-eval-panel="faithfulness"
+			data-model-match-days={windowDays}
+			data-model-match-from={modelSpan.start}
+			data-model-match-to={modelSpan.end}
+		>
+			<h2 class="console-h2">How closely a summary matched its article</h2>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-match-intro>
+				The checker reads each summary back against its own article and scores how much of it the
+				article supports. One point is one day over these {windowDays} days, and the two lines are
+				the middle summary of that day and the summary a quarter of the way up from the bottom.
+				<strong class="font-semibold text-text-secondary" data-model-match-rule
+					>Nothing here sets a bar</strong
+				>: no line is drawn for a score to fail against, and no day is coloured. The committed
+				record is fifteen days long and the summarizer is about to change, so a bar taken off it
+				would be a guess wearing a measurement's clothes.
+			</p>
+
+			{#if matchHead}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-match-headline>
+					{matchHead}
+				</p>
+			{/if}
+			{#if matchWider}
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-model-match-wider>
+					{matchWider}
+				</p>
+			{/if}
+
+			{#if matchWindow.length === 0}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-match="empty">
+					No day in these {windowDays} days carries a checked summary, so there is nothing to draw.
+				</p>
+			{:else}
+				{#key windowDays}
+					<Chart
+						svg={data.matchSvg ?? ''}
+						option={matchPlot.option}
+						width={data.console.chart_width}
+						height={data.console.chart_height}
+						label="How closely summaries matched their articles, per day, over {windowDays} days. One line is the middle summary of each day and the other is the summary a quarter of the way up from the bottom, both as a percentage."
+						columns={matchStrip}
+						readoutName="faithfulness"
+						readoutMaxShare={data.chart.readout_max_share}
+						restingNote=", the newest day"
+						hint="Point at a day to read both figures at once. Left and Right step through the days, Escape returns to the newest."
+					/>
+				{/key}
+				<!-- The numbers as text, for anybody who cannot see the plot and for
+				     the browser suite, which re-derives every one of them from the
+				     committed shards rather than from the module that drew them. -->
+				<ul class="sr-only" data-match-days>
+					{#each matchWindow as day (day.date)}
+						<li
+							data-match-day={day.date}
+							data-match-mid={day.matchMid}
+							data-match-low={day.matchLow}
+							data-match-high={day.matchHigh}
+							data-match-checked={day.matched}
+						>
+							{day.date}: half of {day.matched} summaries scored above {day.matchMid}%, a quarter
+							scored below {day.matchLow}%, and a quarter scored above {day.matchHigh}%.
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</div>
+
+		<!-- The one instrument that catches a summary leaving out what the article
+		     led with. It is drawn apart from faithfulness because a summary can be
+		     entirely supported by its article and still drop every name in it. -->
+		<div
+			data-eval-panel="lead-coverage"
+			data-model-lead-days={windowDays}
+			data-model-lead-from={modelSpan.start}
+			data-model-lead-to={modelSpan.end}
+		>
+			<h2 class="console-h2">How much of the opening survived</h2>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-lead-intro>
+				The checker counts the names and figures in the article's opening lines and asks how many
+				reached the summary. The line is how many of that day's summaries kept too few of them.
+				<strong class="font-semibold text-text-secondary" data-model-lead-rule
+					>The share is drawn, and the count is in the strip</strong
+				>: eleven of ninety and eleven of seven hundred are different days, and a bare count reads
+				as the same one.
+			</p>
+
+			{#if leadHead}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-lead-headline>
+					{leadHead}
+				</p>
+			{/if}
+			{#if leadFloorText}
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-model-lead-floor>
+					{leadFloorText}
+				</p>
+			{/if}
+
+			{#if leadWindow.length === 0}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-lead="empty">
+					No day in these {windowDays} days carries a checked summary, so there is nothing to draw.
+				</p>
+			{:else}
+				{#key windowDays}
+					<Chart
+						svg={data.leadSvg ?? ''}
+						option={leadPlot.option}
+						width={data.console.chart_width}
+						height={data.console.chart_height}
+						label="How many summaries kept too little of their article's opening, per day, over {windowDays} days, as a percentage of the summaries checked that day."
+						columns={leadStrip}
+						readoutName="lead-coverage"
+						readoutMaxShare={data.chart.readout_max_share}
+						restingNote=", the newest day"
+						hint="Point at a day to read the count and the middle summary together. Left and Right step through the days, Escape returns to the newest."
+					/>
+				{/key}
+				<ul class="sr-only" data-lead-days>
+					{#each leadWindow as day (day.date)}
+						<li
+							data-lead-day={day.date}
+							data-lead-under={day.leadUnder}
+							data-lead-under-pct={day.leadUnderPct}
+							data-lead-mid={day.leadMid}
+							data-lead-checked={day.led}
+						>
+							{day.date}: {day.leadUnder} of {day.led} summaries kept too little of the opening, and
+							the middle summary kept {day.leadMid}%.
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</div>
+
+		<!-- The rest of what the checker writes down. Every one of these is
+		     recorded on every summary and read by nothing: no band, no card, no
+		     rule. Drawing them is not an argument that they should be - it is so
+		     that the answer to "what else is being measured" is on the page
+		     rather than in the schema. -->
+		<div
+			data-eval-panel="recorded-only"
+			data-model-recorded-days={windowDays}
+			data-model-recorded-from={modelSpan.start}
+			data-model-recorded-to={modelSpan.end}
+		>
+			<h2 class="console-h2">Measured, and nothing acts on it</h2>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-recorded-intro>
+				Six more instruments run on every summary. None of them changes a band, a card or a rule.
+				<strong class="font-semibold text-text-secondary" data-model-recorded-rule
+					>A day here is that day's middle summary</strong
+				>, and the two columns beside it are the quietest and loudest day in these {windowDays} days
+				- not the quietest and loudest summary, which would need every reading on the page.
+			</p>
+
+			{#if evalWindow.length === 0}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-recorded="empty">
+					No day in these {windowDays} days carries a checked summary, so there is nothing to report.
+				</p>
+			{:else}
+				<div class="console-scroll mt-3">
+					<table class="w-full border-collapse text-[0.8125rem]" data-model-recorded-table>
+						<thead>
+							<tr class="border-b border-border-subtle text-left text-text-tertiary">
+								<th scope="col" class="py-1.5 pr-3 font-medium">What is measured</th>
+								<th scope="col" class="py-1.5 pr-3 text-right font-medium">Quietest day</th>
+								<th scope="col" class="py-1.5 pr-3 text-right font-medium">Middle day</th>
+								<th scope="col" class="py-1.5 pr-3 text-right font-medium">Loudest day</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each recorded as reading (reading.id)}
+								<tr class="border-b border-border-subtle/60" data-recorded-row={reading.id}>
+									<th scope="row" class="py-1.5 pr-3 text-left font-normal text-text-secondary">
+										{reading.label}
+										<span class="block text-[0.75rem] text-text-tertiary">{reading.note}</span>
+									</th>
+									<td class="py-1.5 pr-3 text-right tabular-nums" data-recorded-low
+										>{recordedText(reading, reading.low)}</td
+									>
+									<td class="py-1.5 pr-3 text-right tabular-nums" data-recorded-mid
+										>{recordedText(reading, reading.mid)}</td
+									>
+									<td class="py-1.5 pr-3 text-right tabular-nums" data-recorded-high
+										>{recordedText(reading, reading.high)}</td
+									>
+								</tr>
+							{/each}
+							{#each flags as reading (reading.id)}
+								<tr class="border-b border-border-subtle/60" data-flag-row={reading.id}>
+									<th scope="row" class="py-1.5 pr-3 text-left font-normal text-text-secondary">
+										{reading.label}
+										<span class="block text-[0.75rem] text-text-tertiary">{reading.note}</span>
+									</th>
+									<td
+										class="py-1.5 pr-3 text-right tabular-nums text-text-tertiary"
+										colspan="3"
+										data-flag-fired={reading.fired}
+										data-flag-of={reading.of}
+										>{reading.fired === 0
+											? `Never, on ${grouped(reading.of)} summaries`
+											: `${grouped(reading.fired)} of ${grouped(reading.of)} summaries`}</td
+									>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</div>
+
 		<!-- Which publishers the checker keeps stopping on. The cards above say how
 		     often it doubted something; this says where. -->
 		{#if doubts !== null}
@@ -812,7 +1066,9 @@
 			<!-- Scoring runs after the summary is written, so nothing waits on it.
 			     It sat beside fetch, extract and summarize until 2026-08-31, where a
 			     fourth bar on a critical-path chart read as a fourth constraint. -->
-			<h3 class="mt-8 text-[0.9375rem] font-semibold text-text">What checking one summary cost</h3>
+			<h3 class="mt-8 text-[0.9375rem] font-semibold text-text" data-eval-panel="score-cost">
+				What checking one summary cost
+			</h3>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-score-cost-intro>
 				The same shape over the checker's own clock. It runs after the model has finished, so the
 				run never waits on it - what the tail decides is whether the checker fits the job it runs
@@ -853,7 +1109,7 @@
 		</div>
 
 		<!-- Three marks a run, never one a summary. -->
-		<div data-model-lengths>
+		<div data-model-lengths data-eval-panel="summary-length">
 			<h2 class="console-h2">How long the summaries came out</h2>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-lengths-intro>
 				One column is one run: its shortest summary, its middle one and its longest. Read the
