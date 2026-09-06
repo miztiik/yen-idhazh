@@ -12,15 +12,28 @@ Rule #12 and the section 13 test policy).
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
-from idhazh.contracts.app_config import CollectConfig
+from idhazh import cli
+from idhazh.config import REPO_ROOT
+from idhazh.contracts.app_config import AssistConfig, CollectConfig
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.discover import Candidate
+from idhazh.embed import Embedder
 from idhazh.ledger import feed_reliability
-from idhazh.rank import authority, score, tier_weight
+from idhazh.rank import (
+    authority,
+    dedup_text,
+    duplicates_within_plan,
+    score,
+    tier_weight,
+)
 
 DATE = "2026-08-23"
 RUN = "2026-08-23-1"
@@ -214,3 +227,185 @@ def test_a_reduced_feed_scores_below_the_same_story_at_full_reliability() -> Non
     )
     assert reduced == pytest.approx(full * 0.5)
     assert reduced < full
+
+
+# --- the plan-stage duplicate pass: same story, two addresses ----------------
+
+#: Two orthogonal unit vectors, so a pair sharing one has cosine 1.0 and a pair
+#: split across the two has cosine 0.0 - the extremes the threshold sits between.
+_SAME = [1.0, 0.0]
+_OTHER = [0.0, 1.0]
+
+
+def _planned(
+    vertical: str,
+    number: int,
+    *,
+    source_id: str,
+    rank_score: float,
+    title: str | None = "A story",
+) -> PlannedItem:
+    """One planned item with a real url_key and a well-formed id, built in memory."""
+    url = f"https://{source_id}.example.org/{vertical}/{number}"
+    return PlannedItem(
+        item_id=f"{vertical}-{number:02d}",
+        url_key=derive_url_key(url),
+        source_url=url,
+        canonical_url=url,
+        source_id=source_id,
+        tier=SourceTier.INSTITUTION,
+        vertical=vertical,
+        title=title,
+        rank_score=rank_score,
+    )
+
+
+def test_dedup_text_joins_the_headline_and_the_lead() -> None:
+    assert dedup_text("Grid outage", "Power back by dawn") == "Grid outage Power back by dawn"
+
+
+def test_dedup_text_is_the_headline_alone_when_there_is_no_lead() -> None:
+    assert dedup_text("Grid outage", None) == "Grid outage"
+
+
+def test_a_story_with_no_headline_earns_no_text() -> None:
+    """No title, nothing to compare: the item is never a would-cut duplicate."""
+    assert dedup_text(None, "a lead with no headline") is None
+
+
+def test_the_weaker_telling_of_a_cross_source_pair_is_recorded() -> None:
+    strong = _planned("ai", 1, source_id="alpha", rank_score=10.0)
+    weak = _planned("ai", 2, source_id="beta", rank_score=5.0)
+    vectors = {strong.item_id: _SAME, weak.item_id: _SAME}
+    findings = duplicates_within_plan([strong, weak], vectors, similarity_min=0.94)
+    assert len(findings) == 1
+    assert findings[0].item is weak, "the lower-ranked telling is the one that would be cut"
+    assert findings[0].duplicate_of is strong, "it is recorded against the stronger telling"
+    assert findings[0].similarity == pytest.approx(1.0)
+
+
+def test_a_same_source_pair_is_never_a_duplicate() -> None:
+    """max_per_source already bounds a feed's own repeats; this pass is about two sources."""
+    first = _planned("ai", 1, source_id="alpha", rank_score=10.0)
+    second = _planned("ai", 2, source_id="alpha", rank_score=5.0)
+    vectors = {first.item_id: _SAME, second.item_id: _SAME}
+    assert duplicates_within_plan([first, second], vectors, similarity_min=0.94) == []
+
+
+def test_a_desks_only_story_is_never_recorded() -> None:
+    """A single-carrier story scores lowest, so a naive cut would take the exclusive one.
+
+    `ai` carries one story that repeats `ml`'s top story exactly. The guard is the
+    desk's item count, so the lone `ai` story is kept and never recorded (row 52).
+    """
+    lone = _planned("ai", 1, source_id="alpha", rank_score=5.0)
+    strong = _planned("ml", 1, source_id="beta", rank_score=10.0)
+    filler = _planned("ml", 2, source_id="gamma", rank_score=2.0)
+    vectors = {lone.item_id: _SAME, strong.item_id: _SAME, filler.item_id: _OTHER}
+    assert duplicates_within_plan([lone, strong, filler], vectors, similarity_min=0.94) == []
+
+
+def test_the_same_story_on_a_busy_desk_is_recorded() -> None:
+    """The contrast to the guard: when the repeat's desk has more than one story,
+    the weaker telling is recorded rather than protected.
+    """
+    strong = _planned("ai", 1, source_id="alpha", rank_score=10.0)
+    weak = _planned("ai", 2, source_id="beta", rank_score=5.0)
+    keeps_desk_busy = _planned("ai", 3, source_id="gamma", rank_score=1.0)
+    vectors = {strong.item_id: _SAME, weak.item_id: _SAME, keeps_desk_busy.item_id: _OTHER}
+    findings = duplicates_within_plan([strong, weak, keeps_desk_busy], vectors, similarity_min=0.94)
+    assert [finding.item.item_id for finding in findings] == [weak.item_id]
+
+
+def test_below_the_threshold_is_not_a_duplicate() -> None:
+    one = _planned("ai", 1, source_id="alpha", rank_score=10.0)
+    two = _planned("ai", 2, source_id="beta", rank_score=5.0)
+    vectors = {one.item_id: _SAME, two.item_id: _OTHER}  # cosine 0.0, below 0.94
+    assert duplicates_within_plan([one, two], vectors, similarity_min=0.94) == []
+
+
+def test_an_item_with_no_vector_is_never_a_duplicate() -> None:
+    """A titleless item earns no text and so no vector; it cannot be a would-cut."""
+    strong = _planned("ai", 1, source_id="alpha", rank_score=10.0)
+    untitled = _planned("ai", 2, source_id="beta", rank_score=5.0, title=None)
+    vectors = {strong.item_id: _SAME}  # untitled has no entry
+    assert duplicates_within_plan([strong, untitled], vectors, similarity_min=0.94) == []
+
+
+def test_a_cluster_of_three_keeps_only_the_strongest_telling() -> None:
+    """Three tellings from three sources: the two weaker are recorded, and both
+    against the top telling - a would-cut is never itself a match for a later one,
+    so the count is what enforcing would actually remove.
+    """
+    top = _planned("ai", 1, source_id="alpha", rank_score=10.0)
+    middle = _planned("ai", 2, source_id="beta", rank_score=6.0)
+    bottom = _planned("ai", 3, source_id="gamma", rank_score=4.0)
+    vectors = {top.item_id: _SAME, middle.item_id: _SAME, bottom.item_id: _SAME}
+    findings = duplicates_within_plan([top, middle, bottom], vectors, similarity_min=0.94)
+    assert {finding.item.item_id for finding in findings} == {middle.item_id, bottom.item_id}
+    assert all(finding.duplicate_of.item_id == top.item_id for finding in findings)
+
+
+# --- the real encoder, on the committed weights, reaching no network ---------
+
+
+def test_the_encoder_finds_a_repeat_and_reaches_no_network() -> None:
+    """The pass over the committed ONNX encoder: two sources spelling one headline
+    embed to the same vector and the weaker telling is recorded. The encoder is a
+    local file, so this reaches no network (Rule #7).
+    """
+    embedder = Embedder(REPO_ROOT, AssistConfig())
+    assert embedder.available, "the committed ONNX encoder must be present for this test"
+    embedder.load()
+    headline = "Grid restored after a day-long outage"
+    strong = _planned("ai", 1, source_id="alpha", rank_score=10.0, title=headline)
+    weak = _planned("ai", 2, source_id="beta", rank_score=5.0, title=headline)
+    text_strong = dedup_text(strong.title, None)
+    text_weak = dedup_text(weak.title, None)
+    assert text_strong is not None and text_weak is not None
+    vectors = dict(
+        zip(
+            [strong.item_id, weak.item_id],
+            embedder.encode([text_strong, text_weak]),
+            strict=True,
+        )
+    )
+    findings = duplicates_within_plan([strong, weak], vectors, similarity_min=0.94)
+    assert [finding.item.item_id for finding in findings] == [weak.item_id]
+    assert findings[0].similarity == pytest.approx(1.0, abs=1e-6)
+
+
+# --- the record-only wiring: what it writes down, and what it never cuts ------
+
+
+def test_record_only_logs_the_would_cut_pair_and_removes_nothing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The row's promise: on the shipping config the pass records and cuts nothing."""
+    headline = "Grid restored after a day-long outage"
+    strong = _planned("ai", 1, source_id="alpha", rank_score=10.0, title=headline)
+    weak = _planned("ai", 2, source_id="beta", rank_score=5.0, title=headline)
+    collect = CollectConfig()
+    assert collect.dedup_enforce is False, "the shipping default is record-only"
+    embedder = Embedder(REPO_ROOT, AssistConfig())
+    with caplog.at_level(logging.INFO):
+        kept = cli._record_plan_duplicates(
+            [strong, weak], embedder=embedder, leads={}, collect=collect
+        )
+    assert kept == [strong, weak], "record-only removes nothing"
+    assert any(
+        "would-collapse" in message and weak.item_id in message for message in caplog.messages
+    )
+    assert any("plan duplicates recorded count=1" in message for message in caplog.messages)
+
+
+def test_enforcing_cuts_the_weaker_telling() -> None:
+    """The same pass with the flag flipped: the lower-ranked telling is removed."""
+    headline = "Grid restored after a day-long outage"
+    strong = _planned("ai", 1, source_id="alpha", rank_score=10.0, title=headline)
+    weak = _planned("ai", 2, source_id="beta", rank_score=5.0, title=headline)
+    embedder = Embedder(REPO_ROOT, AssistConfig())
+    kept = cli._record_plan_duplicates(
+        [strong, weak], embedder=embedder, leads={}, collect=CollectConfig(dedup_enforce=True)
+    )
+    assert kept == [strong], "enforcing keeps the stronger telling and drops the weaker"
