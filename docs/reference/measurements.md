@@ -16,6 +16,111 @@ Two rules govern this page:
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
 
+## How much of a day is the same story twice, 2026-09-06
+
+**At its worst a committed day carries 3.74 percent of its items as a story a
+second source also told, and on the median day that carries the signal it is
+1.57 percent. No committed day reaches 5 percent.** That 3.74 percent is the
+upper bound on what a duplicate cut made at planning time could remove - and the
+true saving is lower still, for the two reasons below.
+
+**Hardware and method.** Intel Core i7-1265U, 12 logical CPUs, Windows 11 build
+26200, CPython 3.14.2 - a developer machine, not the runner. A one-off read of
+every committed day payload under `frontend/public/digest/`, counting per item
+the two fields `also_covered_by` and `carried_by`. **The spread is zero by
+construction**: the report is a pure read of committed JSON, so two runs on this
+checkout printed byte-identical figures, and any machine on this checkout gets
+the same figures - the hardware is recorded because Rule #10 asks, not because it
+moved anything. No utility is committed for it, because a reusable walk of the
+committed day payloads is the growing-cost read Rule #12 keeps out of the test
+suite; this ran once from a throwaway script.
+
+**17 committed days, 2026-08-21 to 2026-09-06, 7,112 items.** The two counts do
+not begin on the same day and are never pooled together, for the reason the
+second table gives.
+
+### also_covered_by - a story a second source also carried
+
+`also_covered_by` is how many OTHER of our sources carried the same story today.
+The assemble stage groups the day on the summary vectors the payload already
+holds and marks every item in a cross-source group; an item with a vector but no
+group reads 0, and a day with no vectors reads null on every item.
+
+| Day | Items | Second source (also_covered_by > 0) | Share of the day | Item the view drops (collapsed) |
+| --- | --- | --- | --- | --- |
+| 2026-09-01 | 627 | 8 | 1.28 percent | 5 |
+| 2026-09-02 | 537 | 10 | 1.86 percent | 5 |
+| 2026-09-03 | 593 | 16 | 2.70 percent | 9 |
+| 2026-09-04 | 582 | 4 | 0.69 percent | 2 |
+| 2026-09-05 | 374 | 14 | 3.74 percent | 8 |
+| 2026-09-06 | 313 | 2 | 0.64 percent | 1 |
+
+Across these six days the share runs **0.64 to 3.74 percent, median 1.57**. The
+other eleven days, 2026-08-21 to 2026-08-31, carry no value at all: the assemble
+duplicate pass and the committed vectors it reads began on 2026-09-01. Pooled
+over the six days that carry it, 54 of 3,026 items are a duplicate - **1.78
+percent**; pooled over all 17 days it is 54 of 7,112, 0.76 percent, but that
+smaller figure only looks smaller because eleven days cannot carry the field.
+The per-day rate is the honest one, which is why it is reported and not a single
+mean.
+
+**Why this is an upper bound on what a plan-time cut could save.** Two reasons,
+and they compound.
+
+- `also_covered_by` is computed at the assemble stage, after every article is
+  summarised, on the summary embeddings the payload carries. A cut made at
+  planning time runs before summarisation, so it has no summary and no vector to
+  compare and would match fewer stories, not more.
+- The count above is every item in a cross-source group, the kept one included.
+  The item a cut would actually drop is only the non-keeper - the "collapsed"
+  column, 30 items across the six days, not 54. A plan-time saving is bounded by
+  that smaller number.
+
+**No committed day's duplicate rate reaches 5 percent.** The worst is 3.74
+percent on 2026-09-05, and the removable subset that day is 8 items, 2.14
+percent. So the day-duplicate rate clears the editorial threshold the next step
+is sized against, with room to spare.
+
+### carried_by - one address, carried by several feeds
+
+**`carried_by` is a different count and is not pooled with the one above.** It
+is how many feeds carried one address - syndication of a single URL. Two outlets
+writing their own piece are two addresses and each reads 1. A syndicated address
+is already one item and one model call, so it is not a story told twice and
+cutting it would save nothing.
+
+| Day | Items | One address, 2+ feeds (carried_by >= 2) | Share of the day |
+| --- | --- | --- | --- |
+| 2026-08-31 | 601 | 22 | 3.66 percent |
+| 2026-09-01 | 627 | 27 | 4.31 percent |
+| 2026-09-02 | 537 | 21 | 3.91 percent |
+| 2026-09-03 | 593 | 24 | 4.05 percent |
+| 2026-09-04 | 582 | 28 | 4.81 percent |
+| 2026-09-05 | 374 | 19 | 5.08 percent |
+| 2026-09-06 | 313 | 18 | 5.75 percent |
+
+Over these seven days a syndicated address runs **3.66 to 5.75 percent of the
+day**. `carried_by` landed on 2026-08-31 with the other four ranking fields, so
+the ten earlier days carry no value, and 2026-08-31 itself is partial - 490 of
+its 601 items carry the field and the rest predate it within the day. Of the
+3,516 items that carry `carried_by`, **3,357 read 1, 150 read 2, and 9 read 3**;
+the most any address reached is three feeds.
+
+The two fields even begin on different days - `carried_by` from 2026-08-31,
+`also_covered_by` from 2026-09-01 - which is one more reason they are two series
+and not one.
+
+**The newest day is partial.** 2026-09-06 held 313 items when read, below the
+374 to 627 of the recent full days, because the pipeline appends to a day
+through the day and the newest date on disk is the one still being written. Its
+two rates are the lowest and the highest of their tables in turn, and both move
+as the day fills.
+
+**What to re-read.** Run this again after a plan-time duplicate pass ships, and
+compare what it catches before summarisation against the assemble-stage figure
+here. The gap between the two is the cost of cutting early, and it is what this
+upper bound exists to bound.
+
 ## What a score month weighs once it is summarised, 2026-09-03
 
 **Hardware and method.** Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM,
