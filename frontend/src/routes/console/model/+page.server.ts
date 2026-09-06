@@ -1,5 +1,21 @@
-import { chartConfig, consoleConfig, observabilityConfig, summarizeConfig, uiConfig } from '$lib/server/config';
+import {
+	chartConfig,
+	consoleConfig,
+	evaluationConfig,
+	observabilityConfig,
+	summarizeConfig,
+	uiConfig
+} from '$lib/server/config';
 import { countersWithoutScores, recordingNotes } from '$lib/console/recording';
+import {
+	evalColumnLabels,
+	evalDays,
+	evalWithin,
+	leadDays,
+	leadSeries,
+	matchDays,
+	matchSeries
+} from '$lib/console/eval-instruments';
 import {
 	reasonColumnLabels,
 	reasonDays,
@@ -43,6 +59,7 @@ export type {
 } from '$lib/server/model-work';
 
 export type { ReasonDay } from '$lib/console/doubt-reasons';
+export type { EvalDay } from '$lib/console/eval-instruments';
 
 /** Why the checker doubted each day's summaries, from the committed payloads.
  *
@@ -164,6 +181,41 @@ export async function load() {
 	const reasonsSvg = reasonsPlot.empty
 		? null
 		: await renderToSvg(reasonsPlot.option, {
+				width: console.chart_width,
+				height: console.chart_height
+			});
+
+	// What the checker measured on every summary, reduced to one small object a
+	// day. Seeded to the widest span for the same reason the reasons are: the
+	// browser filters this array and re-aggregates nothing, so the number in the
+	// strip and the number in the sentence cannot drift apart.
+	//
+	// The reduction is here rather than in the browser because the ledger is
+	// 6,966 rows and growing, and the page draws about a dozen numbers a day off
+	// it. Inlining the rows to re-derive those numbers in a browser would put the
+	// whole checker's output into every prerendered document.
+	const leadFloor = evaluationConfig().lead_coverage_min;
+	const evaluated = evalWithin(evalDays(rows, leadFloor), {
+		start: widest.start,
+		end: widest.end
+	});
+	const openEval = evalWithin(evaluated, windows.get(console.default_window_days) ?? widest);
+	// Lines, never bars, and no shape switch on either. One percentile added to
+	// another is not a quantity, and neither is one day's share added to the
+	// next day's - so the second shape `stacked()` offers would be a lie here.
+	const openMatch = matchDays(openEval);
+	const matchPlot = stacked(evalColumnLabels(openMatch), matchSeries(openMatch), 'lines');
+	const matchSvg = matchPlot.empty
+		? null
+		: await renderToSvg(matchPlot.option, {
+				width: console.chart_width,
+				height: console.chart_height
+			});
+	const openLead = leadDays(openEval);
+	const leadPlot = stacked(evalColumnLabels(openLead), leadSeries(openLead), 'lines');
+	const leadSvg = leadPlot.empty
+		? null
+		: await renderToSvg(leadPlot.option, {
 				width: console.chart_width,
 				height: console.chart_height
 			});
@@ -290,6 +342,16 @@ export async function load() {
 		// and one count per reason. The browser filters this to the open window.
 		reasons,
 		reasonsSvg,
+		// One entry per scored day inside the widest span, holding what the checker
+		// measured on that day's summaries: the faithfulness quartiles, how many
+		// summaries the whole article scores differently, the lead coverage, and
+		// the four instruments nothing bands. The browser filters this array.
+		evaluated,
+		matchSvg,
+		leadSvg,
+		// Printed beside the count it governs, so the panel says which share it is
+		// counting against instead of asking a reader to know it (Rule #6).
+		leadFloor,
 		// Not windowed. A swap is a point in time and its two sides are however
 		// many articles ran on each model.
 		modelSwap: modelSwap(rows, itemRows, bands, console.min_attempts_for_rate),

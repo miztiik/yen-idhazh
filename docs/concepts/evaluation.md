@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -1329,6 +1329,32 @@ the file already holds. Nothing in that recorded measurement identity changed,
 so a second row would only inflate the denominator every rate is computed
 against. Article-input identity is not part of this de-duplication key.
 `item_id` is deliberately absent too: it is a slot on a page, not the item.
+
+### Every column is answered for by exactly one console panel
+
+A measurement nobody can look at is a measurement nobody acts on. Counted
+2026-09-06, ten of the ledger's twenty measured columns had no reader anywhere
+in the published site - including `hhem` and `coverage`, the two the checker has
+written on every summary since the first published day. Nothing was broken and
+nothing failed; the columns were simply never projected, for two weeks.
+
+So the projection is now declared and tested. `DRAWN_BY` in
+[../../frontend/src/lib/console/eval-instruments.ts](../../frontend/src/lib/console/eval-instruments.ts)
+assigns each measured column one owning panel, `NOT_A_MEASUREMENT` gives each
+identity and provenance column a one-line reason, and
+[../../frontend/tests/console-model-instruments.spec.ts](../../frontend/tests/console-model-instruments.spec.ts)
+compares the two against this schema's property list. **Adding a column to
+`EvalRow` without deciding where it is shown now fails a test in the
+ninety-second gate.** The failure names the column and says what to do: give it a
+panel, or write the sentence saying why it is not a measurement.
+
+Where each one is drawn is recorded in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md);
+this page stays about what the columns mean.
+
+Authority: row 4 of
+[../../TODO/20260905-03-console-backfill-plan.md](../../TODO/20260905-03-console-backfill-plan.md),
+2026-09-06.
 
 Any of the four differing makes it a new measurement and it lands: different words under identical inputs is the determinism violation the ledger exists to catch, and the same words read by a different scorer is a reading worth keeping.
 
