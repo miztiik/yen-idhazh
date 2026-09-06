@@ -26,6 +26,8 @@
     "max_source_share_per_day": 0.05,
     "recency_half_life_hours": 18.0,
     "recency_weight": 0.6,
+    "reliability_floor": 0.5,
+    "reliability_window_days": 30,
     "repetition_weight": 1.0,
     "robots_denied_recheck_runs": 1,
     "robots_unreachable_recheck_runs": 1,
