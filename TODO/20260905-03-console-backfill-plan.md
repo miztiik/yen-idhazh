@@ -30,7 +30,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | Eight committed numbers become publishable | - | A | DONE #423 | yi-c01 | #423 | Carmack ruled the seed: the eight cost 176,753 gzipped bytes on `/console/` and no panel draws them, so the shard carries them and the prerendered seed does not |
 | 2 | What an item cost, drawn | 1 | B | PENDING | - | - | - |
 | 3 | The five doubt reasons get a shape | 1 | C | IN-FLIGHT #425 | yi-c03 | #425 | Andre, Jony, Susan, Reader - agent files read directly, no runSubagent |
-| 4 | Faithfulness and lead coverage join them | 3 | D | PENDING | - | - | - |
+| 4 | Faithfulness and lead coverage join them | 3 | D | IN-FLIGHT #428 | yi-c04 | #428 | Andre, Jony, Susan, Carmack, Reader - agent files read directly, no runSubagent |
 | 5 | The ceilings are re-recorded by the plan that grew them | 2, 4 | E | PENDING | - | - | - |
 
 ---
