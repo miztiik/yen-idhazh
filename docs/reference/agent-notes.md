@@ -2298,6 +2298,16 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   first one was a cold-cache outlier, which is the wrong conclusion. Alternate
   the arms and give every visit its own browser context: the same pair then read
   850, 818 and 811 ms against a plain visit's 399, 235 and 230.
+- **The same URL after a rebuild is served from the browser cache, and the page
+  it hands back is the tree you replaced.** Three times on 2026-09-05, on one
+  port, `page.goto('http://127.0.0.1:4173/console/')` returned the previous
+  build's document while `Invoke-WebRequest` on the same address returned the
+  new one - so the served byte count and the measured DOM disagreed and only the
+  DOM was read. It reads exactly like a change that did not land: a figure fixed
+  three commits earlier still printed its old value, and a page measured after a
+  degraded rebuild still carried the full one. Give every navigation its own
+  query string (`?v=<timestamp>`), and check a number the two builds must differ
+  on before trusting anything else on the page.
 - **Two builds of one unchanged tree do not agree on bytes unless
   `kit.version.name` is pinned.** It defaults to `Date.now()`, which reaches the
   `__sveltekit_<id>` global every prerendered document names and, through that,
@@ -2453,6 +2463,21 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   & .\.venv\Scripts\python.exe backend/utilities/build_canary_day.py
   cd frontend; npm run build:canary
   ```
+
+- **`build_canary_day.py` must be run from the repository root, and run from
+  `frontend/` it fails several frames away from the reason.** Every path it
+  holds is relative, so from `frontend/` it looks for the injection fixtures at
+  `frontend/tests/fixtures/canaries`, finds nothing, and dies on
+  `ValueError: zip() argument 2 is longer than argument 1` several frames inside
+  `published_items` - which reads as a fixture somebody deleted. Observed
+  2026-09-05 in a gate script that had `cd frontend` once at the top for `npm`.
+  Two more things make it worse than a plain failure: it writes an untracked
+  `frontend/backend/var/canary/` tree of about 60 files on its way down, which
+  `git status` then reports as a stray directory nobody recognises; and the
+  `npm run build:canary` after it exits **0** on the canary the previous run
+  left behind, so the browser suite goes green against a tree the failed command
+  was supposed to replace. Count the fixtures before believing the message -
+  `tests/fixtures/canaries/*.json` plus `browser/*.json` must equal `SCORED`.
 
   Run it before the suite, not after a red one. `backend/var/` is gitignored, so
   every fresh worktree pays this and CI pays it on every run - which is why

@@ -2203,6 +2203,114 @@ Authority: Andre (AI/LLM) on which measures a change moves, Fowler
 (Architecture) on one server-side derivation, Jony (UI/UX) on the mark being
 neutral ink; console chart-craft plan Row #3, 2026-08-31.
 
+## What one item cost the model is two clocks, drawn apart
+
+`What one item cost the model` is a section of the Pipelines route with two
+distributions and one split bar. It answers what a run total cannot: how long
+the model spent on **one** article, split into the part it spent reading and the
+part it spent writing.
+
+The Hardware route already pools both quantities per run and per shard, out of
+the model server's own counters. That is a different measurement of a different
+thing, and it cannot say that one item in nine got nothing from the prompt
+cache. This section reads the published projection, per item, and follows the
+window control.
+
+### Reading and writing are two charts, and pooling them is refused
+
+Measured 2026-09-05 over the 6,104 items of the committed projection that carry
+both clocks: a prompt token costs about **101 milliseconds** to read and a
+written token about **183** to write, so a written token costs **1.8 times** a
+read one. The two also move for different reasons - the article's length moves
+the first and the summary's length moves the second - so an operator acts on
+them separately. One `model seconds` chart would hide which of the two moved.
+Carmack, plan 03 Row #2 rejected alternative 1.
+
+The panel prints both rates and the ratio, and then says the thing the ratio is
+for: cutting a hundred tokens from the summary saves more time than cutting a
+hundred from the article. The sentence is derived from the measured ratio rather
+than written down, so it flips if the ratio ever does.
+
+Both are drawn as **doubling bins**, by the same `distribution()` the Summaries
+route's two clocks use. It moved to
+[frontend/src/lib/charts/series.ts](../../../frontend/src/lib/charts/series.ts)
+on 2026-09-05 so a route outside `$lib/server/` could reach it - four panels now
+share one binning and one pair of rules, rather than four that can drift apart.
+
+The axis is a doubling and not a linear one, and the ledger says why. Measured
+2026-09-05, reading one prompt runs from **1.4 seconds to 692**, which is nine
+doublings; on a linear axis every bar but one is a hairline against the left
+edge. Writing is the opposite shape and is drawn the same way on purpose:
+**4,456 of 6,104** items land in one bin, 32 to 64 seconds, and drawing it
+linearly would suggest a spread the measurement does not have. `fetch_ms`, whose
+worst is 43,627 ms against a middle of 567, is not in this section at all - it is
+a stage clock and `Time per item, by stage` above already draws it per day.
+
+### The prompt cache is a share, and the share is deliberately not a trend
+
+The split bar's geometry is **absolute prompt tokens** - the ones the model read
+against the ones it did not - and the share is printed beside it as whole
+percent. Four figures sit under it: the middle prompt, the middle summary, the
+middle item's own share, and how many items were read whole with nothing held
+over.
+
+**A falling share here does not mean the cache got worse, and the panel says
+so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is nearly a
+constant: the middle item kept **922** tokens and the widest kept **941**, while
+`input_tokens` runs from a middle of 1,688 to a worst of 7,093. So the share
+moves almost entirely because the denominator moves. Drawn as a line over time
+it would fall on a week of long articles and read as a cache regression, which is
+the one wrong thing an operator could act on. The share is a number and the token
+counts are the picture.
+
+**The plan's own illustrative range did not survive the measurement.** Plan 03
+Row #2 decision 1 quotes `0.72 to 0.90`. Measured over the committed projection
+the per-item share has a middle of **0.518**, a 5th percentile of **0.000** and a
+95th of **0.820** - and **667 of 6,104** items reused nothing at all. The
+decision itself stands: the share is drawn, and it is named in words beside it.
+
+### Every denominator is its own, because three of them differ
+
+An item that failed before the model saw it has no clock and no token count; one
+that failed before the fetch has no stage clock either. Measured 2026-09-05 over
+the committed projection: **8,300** rows in all, **6,873** with a stage clock and
+**6,104** with the model's own two. One "items" figure would be wrong for at
+least one column of this section whichever row set it counted, so each figure
+carries the count it answers for and the lead states the widest one.
+
+An empty cell stays empty. A mean that treats an absent instrument as a zero
+turns every fetch failure into a fetch that was infinitely fast, and zero reuse
+is a real answer that has to stay counted - which is why `readWhole` is a count
+and not an exclusion.
+
+### It follows the window's length, not a pan
+
+The reduction is taken on the server, once per entry in
+`console.window_presets`, and the browser picks the open one - the same
+arrangement `Sources cut short most often` and the Summaries route's
+distributions use.
+
+**That is a measured choice, not a preference.** The prerendered seed carries the
+eight columns as nulls, because seeded with their real values they cost
+`/console/` **176,753 gzipped bytes** - 198,624 to 375,377, and 98,182 over the
+recorded ceiling (measured 2026-09-05, recorded in
+[telemetry-series.md](telemetry-series.md)). The two alternatives the seed note
+offered were to seed the columns this section draws, or to drop the seeded months
+from `loadedMonths` and let a runtime fetch fill them. Both were refused: the
+first buys the ceiling problem the seed note was written to avoid, and the second
+puts a 244 KB fetch behind the first click of a control and leaves the section
+blank until it lands. Reducing on the server costs the page about a hundred
+numbers a preset and draws complete before any script runs.
+
+What it costs is stated on the page: panning does not move these days, and they
+always end on the newest day the ledger holds. The section says so in the same
+words `Sources cut short most often` does, because one rule stated two ways reads
+as two rules.
+
+Authority: Carmack (Engine & Runtime) on the two clocks and the axis, Fowler
+(Architecture) on one binning shared by four panels, Reader on the sentence
+beside the share; plan 03 Row #2, 2026-09-05.
+
 ## The chart arm is a flow, and every drop leaves it as a named branch
 
 `Visuals drawn for articles` opens with one diagram of where items go between the
