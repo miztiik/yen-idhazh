@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -1999,6 +1999,123 @@ That is one of the three ceilings the plan that grew them re-records, done for
 the one route this panel grew. `/console/` and `/console/machine/` are untouched
 and their own re-derivation is still owed.
 
+### Every instrument the checker writes, and the panel that owes it a number
+
+The Summaries route draws three more panels: the faithfulness score, the lead
+coverage, and a table of the six instruments nothing acts on. What matters more
+than any of the three is the map they ship with.
+
+**The artefact is `DRAWN_BY`, not the charts.**
+[../../../frontend/src/lib/console/eval-instruments.ts](../../../frontend/src/lib/console/eval-instruments.ts)
+assigns every measured column of `state/scores/` to exactly one panel, and
+`NOT_A_MEASUREMENT` says of every remaining column why it is not one - fifteen
+identity and provenance columns, each with a sentence. Between them the two must
+name every property of
+[../../../schemas/eval-row.schema.json](../../../schemas/eval-row.schema.json),
+once, and name nothing else.
+[../../../frontend/tests/console-model-instruments.spec.ts](../../../frontend/tests/console-model-instruments.spec.ts)
+compares the two sets in the ninety-second gate. So a column added to `EvalRow`
+next month fails a test rather than going undrawn, which is what happened here:
+`hhem` and `coverage` were scored on every summary from the first published day
+and read by nothing on the site for two weeks.
+
+**The scope said two panels and the survey said six columns more.** Row 4 of
+[../../../TODO/20260905-03-console-backfill-plan.md](../../../TODO/20260905-03-console-backfill-plan.md)
+named faithfulness and lead coverage and stated the goal as *every* existing
+instrument reaching the console. Counted 2026-09-06, ten of the ledger's twenty
+measured columns had no reader anywhere in `frontend/src`. The two named ones got
+their own panels; the other eight went to the third. Drawing two and calling the
+goal met would have left the map failing its own test on the day it was written.
+
+**`hhem_full` and `hhem_delta` are a sentence, not a second chart.** The checker
+scores each summary twice, once against the text the machine was given and once
+against the whole article, so a summary that only looks faithful because the
+article was cut cannot pass. Measured 2026-09-06 over 6,966 rows the two readings
+differ on **7 of them**, because production hands the same string to both - the
+finding recorded in [../../concepts/evaluation.md](../../concepts/evaluation.md).
+A chart of a number that is flat on 99.9 percent of rows teaches an operator to
+stop looking; a sentence saying how often it parts, and by how much, is the same
+fact at the size it is worth.
+
+**Nothing sets a bar, and that is decision 2 of the row.** No threshold line, no
+red, no band tint, no polarity - and the spec fails the build if a tinted element
+appears inside either score panel. The committed window is fifteen days and the
+summarizer is about to change twice, so a threshold taken off it would be a guess
+wearing a measurement's clothes. The one number that *is* a bar - the configured
+lead-coverage share - is printed as a count of summaries under it and never drawn
+as a line to fail against, because it caps a summary at "fairly sure" and has
+never on its own marked one "not sure".
+
+**Two lines on faithfulness, one on lead coverage.** Measured 2026-09-06 over the
+fifteen committed days, the middle summary's faithfulness sat between 88 and 95
+percent while the lower quarter swung from 73 to 94 - so the level and the tail
+are two different facts and both are drawn. Lead coverage does the opposite: the
+middle summary sat between 57 and 64 percent every single day, so a line of it
+beside a moving one would read as the important one. What moves there is the
+share of a day that fell under the floor, and that is what is drawn; the level is
+in the readout strip and the headline.
+
+**Lines, and no shape switch on either.** One percentile added to another is not
+a quantity, and neither is one day's share added to the next day's. The condition
+[../../concepts/design-system.md](../../concepts/design-system.md) sets for
+carrying that control is that both shapes read the same array honestly. Bars
+here would not.
+
+**A day is that day's middle summary, and the recorded table says so.** A median
+over the whole window needs every summary's reading, and carrying 6,966 of them
+into the page to print four figures is not a trade worth making. The table prints
+the quietest day, the middle day and the loudest day, each by its own middle
+summary, and names that in the panel rather than leaving a reader to assume a
+window median.
+
+**The two densities are drawn per thousand words, not per word.** Per word they
+are 0.011 and 0.004 - two numbers a reader cannot tell apart, neither of which
+reads as a quantity of anything. Per thousand words they are 11.0 and 4.0
+markers, which is a count of phrases in about four pages.
+
+**Neither new panel declares `data-windowed`**, for the reason the doubt-reason
+panel does not, and each proves it honours the control in its own spec.
+
+**The faithfulness plot fails a sufficiency check on purpose.** Its axis runs
+from zero to a hundred, so the fifteen committed days sit in the top fifth of
+the plot and four fifths of it is empty - which is
+[../../concepts/design-system.md](../../concepts/design-system.md)'s first check,
+does it use the space it is on, answered no. Cropping the axis to the data would
+fill the plot and would also turn a four-point drift into a cliff. This panel
+exists because a band could not show a four-point move; a plot that shows a
+four-point move as a collapse is the same failure with the sign flipped. The
+empty four fifths is what tells an operator the movement is small, and that is
+worth more than the space. Recorded here rather than waved through, per
+`CLAUDE.md` section 9.
+
+**What it cost, measured 2026-09-06 on an Intel Core i7-1265U.** The three panels
+add **5,930 gzipped bytes** to `/console/model/`: the median of five builds is
+44,948 B against 39,018 B for `origin/main`'s own source built in place on the
+same tree and the same machine. Five builds of the shipping tree spanned 11 B and
+three of the control spanned 8 B, so the 64 B noise floor holds. `/console/` and
+`/console/machine/` moved by 2 B and 4 B between the arms, which is the same
+floor - the change reaches one route.
+
+That control arm reads 39,018 B where 2026-09-05 recorded 38,867 B for the same
+commit. The 151 B is a different machine, not a change: nothing between the two
+dates touched this route's source or the ledgers it reads.
+
+**The ceiling moved to 56,385 B, by the method that owns it.** Heaviest of five
+builds (44,953 B), plus seven published days, plus the 64 B floor. A published
+day now costs this route **1,624 gzipped bytes**, re-measured by the same method
+as before - removing 2026-08-31, the heaviest committed day, from every ledger
+the route reads and rebuilding: 44,948 B fell to 43,324 B. It was 1,291 B on
+2026-09-05, and these three panels are what added the other 333 B a day: one
+reduced day in the seed, two screen-reader rows, and two chart points. The page
+ships with 11,437 B of slack, which is seven published days and expires by
+design.
+
+`/console/` and `/console/machine/` are untouched by this change, and their own
+re-derivation landed the next day: 335,051 and 44,706 on 2026-09-06, which also
+re-measured this route at 1,634 bytes a published day and left its ceiling where
+row #4 set it, 73 bytes below what a fresh derivation would have given
+([../../reference/measurements.md](../../reference/measurements.md#all-three-console-ceilings-re-derived-on-the-backfills-tree-2026-09-06)).
+
 ### The model-change rule, and the charts it means something on
 
 A dashed rule down a chart says one sentence: *everything left of this line was
@@ -2088,6 +2205,114 @@ which is the set the stamp actually covers.
 Authority: Andre (AI/LLM) on which measures a change moves, Fowler
 (Architecture) on one server-side derivation, Jony (UI/UX) on the mark being
 neutral ink; console chart-craft plan Row #3, 2026-08-31.
+
+## What one item cost the model is two clocks, drawn apart
+
+`What one item cost the model` is a section of the Pipelines route with two
+distributions and one split bar. It answers what a run total cannot: how long
+the model spent on **one** article, split into the part it spent reading and the
+part it spent writing.
+
+The Hardware route already pools both quantities per run and per shard, out of
+the model server's own counters. That is a different measurement of a different
+thing, and it cannot say that one item in nine got nothing from the prompt
+cache. This section reads the published projection, per item, and follows the
+window control.
+
+### Reading and writing are two charts, and pooling them is refused
+
+Measured 2026-09-05 over the 6,104 items of the committed projection that carry
+both clocks: a prompt token costs about **101 milliseconds** to read and a
+written token about **183** to write, so a written token costs **1.8 times** a
+read one. The two also move for different reasons - the article's length moves
+the first and the summary's length moves the second - so an operator acts on
+them separately. One `model seconds` chart would hide which of the two moved.
+Carmack, plan 03 Row #2 rejected alternative 1.
+
+The panel prints both rates and the ratio, and then says the thing the ratio is
+for: cutting a hundred tokens from the summary saves more time than cutting a
+hundred from the article. The sentence is derived from the measured ratio rather
+than written down, so it flips if the ratio ever does.
+
+Both are drawn as **doubling bins**, by the same `distribution()` the Summaries
+route's two clocks use. It moved to
+[frontend/src/lib/charts/series.ts](../../../frontend/src/lib/charts/series.ts)
+on 2026-09-05 so a route outside `$lib/server/` could reach it - four panels now
+share one binning and one pair of rules, rather than four that can drift apart.
+
+The axis is a doubling and not a linear one, and the ledger says why. Measured
+2026-09-05, reading one prompt runs from **1.4 seconds to 692**, which is nine
+doublings; on a linear axis every bar but one is a hairline against the left
+edge. Writing is the opposite shape and is drawn the same way on purpose:
+**4,456 of 6,104** items land in one bin, 32 to 64 seconds, and drawing it
+linearly would suggest a spread the measurement does not have. `fetch_ms`, whose
+worst is 43,627 ms against a middle of 567, is not in this section at all - it is
+a stage clock and `Time per item, by stage` above already draws it per day.
+
+### The prompt cache is a share, and the share is deliberately not a trend
+
+The split bar's geometry is **absolute prompt tokens** - the ones the model read
+against the ones it did not - and the share is printed beside it as whole
+percent. Four figures sit under it: the middle prompt, the middle summary, the
+middle item's own share, and how many items were read whole with nothing held
+over.
+
+**A falling share here does not mean the cache got worse, and the panel says
+so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is nearly a
+constant: the middle item kept **922** tokens and the widest kept **941**, while
+`input_tokens` runs from a middle of 1,688 to a worst of 7,093. So the share
+moves almost entirely because the denominator moves. Drawn as a line over time
+it would fall on a week of long articles and read as a cache regression, which is
+the one wrong thing an operator could act on. The share is a number and the token
+counts are the picture.
+
+**The plan's own illustrative range did not survive the measurement.** Plan 03
+Row #2 decision 1 quotes `0.72 to 0.90`. Measured over the committed projection
+the per-item share has a middle of **0.518**, a 5th percentile of **0.000** and a
+95th of **0.820** - and **667 of 6,104** items reused nothing at all. The
+decision itself stands: the share is drawn, and it is named in words beside it.
+
+### Every denominator is its own, because three of them differ
+
+An item that failed before the model saw it has no clock and no token count; one
+that failed before the fetch has no stage clock either. Measured 2026-09-05 over
+the committed projection: **8,300** rows in all, **6,873** with a stage clock and
+**6,104** with the model's own two. One "items" figure would be wrong for at
+least one column of this section whichever row set it counted, so each figure
+carries the count it answers for and the lead states the widest one.
+
+An empty cell stays empty. A mean that treats an absent instrument as a zero
+turns every fetch failure into a fetch that was infinitely fast, and zero reuse
+is a real answer that has to stay counted - which is why `readWhole` is a count
+and not an exclusion.
+
+### It follows the window's length, not a pan
+
+The reduction is taken on the server, once per entry in
+`console.window_presets`, and the browser picks the open one - the same
+arrangement `Sources cut short most often` and the Summaries route's
+distributions use.
+
+**That is a measured choice, not a preference.** The prerendered seed carries the
+eight columns as nulls, because seeded with their real values they cost
+`/console/` **176,753 gzipped bytes** - 198,624 to 375,377, and 98,182 over the
+recorded ceiling (measured 2026-09-05, recorded in
+[telemetry-series.md](telemetry-series.md)). The two alternatives the seed note
+offered were to seed the columns this section draws, or to drop the seeded months
+from `loadedMonths` and let a runtime fetch fill them. Both were refused: the
+first buys the ceiling problem the seed note was written to avoid, and the second
+puts a 244 KB fetch behind the first click of a control and leaves the section
+blank until it lands. Reducing on the server costs the page about a hundred
+numbers a preset and draws complete before any script runs.
+
+What it costs is stated on the page: panning does not move these days, and they
+always end on the newest day the ledger holds. The section says so in the same
+words `Sources cut short most often` does, because one rule stated two ways reads
+as two rules.
+
+Authority: Carmack (Engine & Runtime) on the two clocks and the axis, Fowler
+(Architecture) on one binning shared by four panels, Reader on the sentence
+beside the share; plan 03 Row #2, 2026-09-05.
 
 ## The chart arm is a flow, and every drop leaves it as a named branch
 
@@ -2760,8 +2985,10 @@ retypes it.
 ## The console ceiling is a tripwire, and what to do when it fires
 
 **Since 2026-08-31 there are three of them, one per route.** `/console/` is
-capped at 251,324 bytes, `/console/model/` at 29,273 and `/console/machine/` at
-31,714. One key over three surfaces still fails when any of them grows and then
+capped at 335,051 bytes, `/console/model/` at 56,385 and `/console/machine/` at
+44,706, all re-derived on 2026-09-06
+([../../reference/measurements.md](../../reference/measurements.md#all-three-console-ceilings-re-derived-on-the-backfills-tree-2026-09-06)).
+One key over three surfaces still fails when any of them grows and then
 cannot say which one did, so the operator raises the shared number and the
 regression lands under it. Sizing them separately is what makes the split worth
 having. **They are meant to expire** - the first set did, on the day it was set,
@@ -2769,7 +2996,8 @@ when Model and Machine gained the panels they had been standing empty for, and
 the second set did once every row of the observability plan had merged.
 
 Each of the first two has the same three terms `/archive/` has, and only the
-middle one differs:
+middle one differs. The 2026-08-31 derivation, kept because it is the shape every
+later one follows:
 
 ```text
   116,153  heaviest of five builds of the tree that ships
@@ -2819,12 +3047,17 @@ near-copy of anything ([../../reference/measurements.md](../../reference/measure
 **Seven days, and not the year `/archive/` carries, because of what the headroom
 has to be smaller than.** The regression a page ceiling exists to catch on this
 route is a day payload inlined by a layout, which cost 313,300 gzipped bytes when
-it last happened. `/console/`'s slack is 134,814, so that regression is 2.32
-times it and the gate sees it land; eight days would put the margin under 2x. The
-horizon is the largest whole number of measured ordinary publishes that keeps the
-margin above 2x. On the other two routes the margins are 60.6x and 199.6x, so
-seven days is nowhere near binding there and the term that decides them is their
-own growth rather than the guard.
+it last happened. The horizon is **seven measured ordinary publishes**, and the
+2x margin is the bound that horizon has to clear rather than the number that sets
+it. On 2026-08-31 the two agreed: `/console/`'s slack was 134,814, so the
+regression was 2.32 times it and eight days would have put the margin under 2x.
+They stopped agreeing on 2026-09-06, when a cheaper measured day rate left room
+for nine - and nine publishes is 65 percent of the page, so the gate would have
+stayed silent while `/console/` grew by two thirds. **A margin the guard permits
+is not a runway the operator needs.** Seven is a week of publishing, it is one
+horizon over all three routes, and it keeps the margins at 2.79x, 27.4x and
+35.3x. On the two small routes the margin was never the binding term and the
+term that decides them is their own growth.
 
 **When one of them fires, the panel does not move.** The owner ruled on
 2026-08-31 that no approved feature is removed, deferred or shrunk to stay under

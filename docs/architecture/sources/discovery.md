@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-06
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -342,6 +342,21 @@ cannot be gamed and two builds of one day are identical.
 
 **Below `ui.leading_min` the block does not render.** Four real leads beat five
 with one filler.
+
+**A full block is a property of a finished day.** The caps only bind when there
+are stories left for them to turn away, and a day is built up over several runs
+into one `date -u +%F`, so the most recent date on disk is a fraction of itself
+for most of the day. Measured 2026-09-06 on this checkout, one run in: 78
+stories and 11 that could lead, giving a block of four with the pool exhausted
+and no `block-full` refusal recorded at all. The six finished days before it
+that carry the signal ran 374 to 627 stories and 64 to 127 that could lead, and
+every one of them filled all five. So anything asking whether the block fills
+has to read a finished day - which is any date except the newest one on disk,
+because an earlier date can gain no more runs.
+`backend/tests/test_leading_stories.py` does exactly that, and it counts the
+pool from the line the build log already writes for every story a cap turned
+away, rather than running the selection a second time, so a day that ran out of
+stories and a cap that refused them cannot be read as the same failure.
 
 #### Where the weight came from
 

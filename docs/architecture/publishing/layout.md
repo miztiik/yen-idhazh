@@ -449,7 +449,8 @@ The levers are ordered, and deletion is the last one:
 
 1. **Encode efficiently.** Images are the overwhelming majority of the bytes; the encoding choice alone moves the ceiling by years.
 2. **Honour the visual rule.** "Nothing" is the common and correct answer ([../../concepts/digest.md](../../concepts/digest.md)), so most items carry no image at all.
-3. **Then, and only if still needed, prune.**
+3. **Serve the drawings from somewhere else.** `visuals.asset_base_url`, below. The bytes still exist and every link still works; they stop being ours to fit under the cap.
+4. **Then, and only if still needed, prune.**
 
 After the first two, the knob may never need to be switched on. That is the intended outcome, not a fallback.
 
@@ -544,6 +545,42 @@ for a day published in error - a bad extraction, a source that asked to be
 removed - and that is a different need from bounding the site.
 
 
+### The valve: the drawings can be served from somewhere else (2026-09-06)
+
+`visuals.asset_base_url` is one config key with two effects, and it ships empty, which means this site.
+
+Name an absolute `https://` prefix and `frontend/scripts/copy-visuals.mjs` stops staging the rendered drawings into the bundle, while `ItemVisual.svelte` asks that prefix for them instead. They are one key because two would let the bundle keep a copy of every drawing the page is asking a host for, and the valve would move nothing. The page's own `connect-src` is derived from the same key for the same reason: `'self'` is what makes exfiltration from a planted instruction a browser-level impossibility, so it is also what refuses an off-origin drawing, and an operator who has to edit it by hand gets a site that fetches nothing and says why only in a console no reader opens.
+
+**What it buys, measured 2026-09-06 on an Intel Core i7-1265U, Windows 11, node 24.12.0, over the 17 committed days.** Shut, the built site is 685 files and 111,255,143 bytes. Open, it is 309 files and 106,474,222 bytes. So it removes 376 drawings and **4,780,921 bytes, which is 4.3 percent of the site** - about seven weeks of headroom at the 16,641,956 bytes a published day this page measures below, against a cap the same measurement puts at about 2026-10-22.
+
+**Say the small number first: 4.3 percent is not the answer to the cap.** The prerendered dated routes are 39.5 percent and they are what the cap date is a function of. This valve is worth having because it is one config edit and it costs nothing shut, not because it is the lever that saves the site. Anyone reaching for it as the fix has read the wrong number.
+
+**What it costs open, also measured.** The candidate host caches for five minutes, so a repeat reader refetches a drawing the bundle would have served from cache - real on a slow connection, and the reason the reading experience never waits on it: a drawing arrives after the sentence that repeats its numbers, and the page is complete without it. `connect-src` gains that one origin, computed at build time from our own config; no payload field, no model output and no fetched text can reach it (Rule #11), and the path is still matched by `publishedVisual()` before either half is joined.
+
+**The carrier does not move, only the URL.** The drawing is fetched as text and inlined, exactly as it is today. An `img` would be the obvious way to point at another host and it is refused: an SVG inside an `img` is a separate document, reads none of the page's custom properties, and comes back with the colours the renderer baked in - black axis type on a near-black card in the dark theme. That was removed on 2026-09-05 and moving bytes is not a reason to bring it back. Cross-origin `fetch()` returns text, and text inlined into our document is themed by our stylesheet whichever host sent it.
+
+**Shut is proven, not assumed.** At the default the whole built tree is byte-identical to one built without the valve: 685 files, 111,255,143 bytes, zero differing hashes over two builds at a pinned `BUILD_VERSION`, same hardware and date. The join is written `${__ASSET_BASE_URL__ || base}` so the minifier folds an empty constant away rather than shipping a branch. A release valve that changes the default output is not a valve, it is a change.
+
+**Whoever opens it puts the same `digest/` tree at that prefix first.** Nothing in the pipeline uploads it, and nothing checks that it is there. The day payloads and the month index are staged either way: they are read from this origin, and they are not what the ceiling is about.
+
+### The cleanup says what it did not clear (2026-09-06)
+
+Every run appends one row to `state/visual-prunes.csv` describing the cleanup pass over the rendered visuals - the policy in force, the cutoff it drew, what it found, what it took, what the fuse held back, the oldest day still carrying a picture, and the payload tree before and after. `VisualPruneRow` is the contract.
+
+**`skipped_by_fuse` is the field the row exists for, and it is the one nobody would have added.** `deleted` looks like the answer and cannot be one: `retention.max_deletes_per_run` caps it at 200, so it reads 200 on a run that has just cleared its backlog and 200 on a run that has twenty more passes to go. Only the pair separates them. A run that deleted 200 and skipped none is finished; a run that deleted 200 and skipped 4,000 is not, and nothing else on the row would say so.
+
+**It means the same thing on a dry run as on a live one**: the candidates the fuse would not have let that run reach. It is deliberately not "everything still there afterwards". Every run that ships today is a dry run - `image_months` is -1 and the step passes `--dry-run` - so counting the deletions a dry run declined to make would set `skipped_by_fuse` equal to `candidates_found` on every row this project will ever write, and the field would say nothing at all. That is the same failure `deleted` already has, arrived at from the other side. `dry_run` is the cell that says nothing was deleted, and the arithmetic reads it: on a live run `deleted + skipped_by_fuse` is `candidates_found` exactly, and on a dry run it falls short by what a live run would have taken. The contract refuses a row that breaks either rule.
+
+**The two byte figures are the tree the cleanup walks, not the published site.** Those are two different trees - eighteen times apart when they were last measured together - so the row names the one it read. The site is measured by `idhazh site-weight` against the built bundle, and never here.
+
+**The row lands on every run, including the runs where the policy is off and nothing is a candidate.** A ledger written only when something was deleted has no baseline: its first row would arrive on the day the deletion started working, with nothing to compare it against.
+
+One file rather than month shards, because the question it answers - is the backlog shrinking - carries no time bound, so every shard would be opened anyway ([../contracts/schemas.md](../contracts/schemas.md#a-ledger-shards-by-month-only-when-its-read-carries-a-window)). It ships with its header committed for the reason `state/feed-retirements.csv` does: `commit-and-push.sh` runs `git add "$@"` under `set -euo pipefail`, so a path that appears only on the first interesting run would abort the whole commit step before then. The step that writes it commits through a call that stages `state` whole, which already covers it.
+
+**Two things have to move with the deletion when plan 13 switches it on**, and neither is done here. The commit call after the cleanup step stages `state` and `frontend/public/telemetry`, so a deleted picture under `frontend/public/digest/` would be removed from the runner and never from the repository - `git add` records a removal only for a path it is handed. And the paragraph above about a scheduled workflow of its own has to be met or re-decided: the cleanup currently rides in the assemble job's `prune-state` step, which is safe only while it deletes nothing.
+
+### Follow-up: the dated route trees are what decides the cap date (2026-08-27)
+
 **Recorded, not fixed. No row has addressed it.**
 
 The prerendered dated routes are **50,598,258 bytes, 39.5 percent of the published site** - measured 2026-08-27 on an Intel Core i7-1265U, Windows 11, node 24.12.0, over the six committed days and 2,237 items ([../../reference/measurements.md](../../archive/measurements-2026-08.md#what-is-left-and-where-it-is)). They were 65,197,022 bytes and 44.4 percent before PR #171 narrowed the staged payload.
@@ -569,6 +606,8 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 **The fold covers `state/item-health/`, its browser copy, and `state/feed-health/`.** A month older than `observability.item_health_full_grain_months` is read whole, folded to one row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv`, the full-grain shard is deleted, and `frontend/public/telemetry/<YYYY-MM>.csv` goes with it - in that order, with the aggregate read back before the shard is unlinked, so a fold that cannot be written leaves both files where they were. Fourteen months, and the fourteenth is not spare: `console.max_window_days` is 366, `ledger.shards_in_window` walks 367 inclusive days, and a window ending on the first of a month starts on the last day of another - so a read can open 14 month files. The knob carried 13 until 2026-09-02, because the check behind it compared `13 * 30` against 366 rather than against the shards that window selects. Measured over all 146,097 end dates of one 400-year Gregorian cycle, 13 deletes a shard the console still opens on 3,636 of them, 2.5 percent ([../../concepts/config.md](../../concepts/config.md#why-14-and-not-13)).
 
 **Feed health is deleted rather than folded, and that is a decision.** `state/feed-health/<YYYY-MM>.csv` is one row per feed per run. The quarantine reads 31 days and the console reaches at most 366, so no summary of a month past `observability.feed_health_keep_months` has a reader - and a shape nothing consumes, persisted for ever, is the cost of inventing one. `state/feed-retirements.csv` sits beside that directory and is never a candidate: it carries no time window, and a run that forgot a retired address would start asking a dead one again.
+
+**`state/visual-prunes.csv` is bounded by arithmetic rather than by a rule.** Counted 2026-09-06 from rows a real pass wrote: 105 bytes for the row the shipped policy produces and 125 for a live pass over a 300-picture backlog. Serializing a row is deterministic, so the spread is zero. Five scheduled runs a day is 1,825 rows a year, which is about 187 KB a year against a `state/` tree already measured in megabytes - the smallest thing in it by a wide margin. Nothing deletes from it, and asking it whether the backlog is shrinking across more than one year is the whole reason it is kept.
 
 **The step ships in dry run, and that is what makes it safe to have written at all.** `idhazh prune-state` logs every file a live run would remove and removes none of them. The reason is `.github/workflows/prune.yml`: it squashes and force-pushes `main` on a schedule, so a state file deleted here stops being recoverable from history once that prune passes over it (`CLAUDE.md` section 8) - `git revert` is not a recovery path for a file older than `finetune.prune_keep_days`. Turning the deletion on is a one-line commit somebody takes after a scheduled run has printed the list.
 
@@ -785,7 +824,9 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 
 **The tree has no default.** A default is how the old call came to name the wrong one. The workflow names it at the call site, and a contract test reads the path back off `pages.yml`'s own upload step - so the thing measured and the thing published are pinned to be one directory, and pointing the gate anywhere else fails the suite rather than being noticed a month later.
 
-**Two lines, and only one of them fails a build.** Over `retention.site_budget_mb` (800 MB) the step prints an Actions warning and passes; past the 1 GiB cap it fails. Failing at 800 MB would stop publishing about two weeks before it had to, and a reader would lose a working site to a budget that still had room. Past the cap the bytes cannot be published at all, and failing in the job that measured them names the cause - a deploy that refuses them names nothing.
+**Two lines, and only one of them fails a build.** Over `retention.site_budget_mb` (800 MB) the step prints an Actions warning and passes; past `retention.pages_hard_cap_mb` (1024 MB) it fails. Failing at 800 MB would stop publishing about two weeks before it had to, and a reader would lose a working site to a budget that still had room. Past the cap the bytes cannot be published at all, and failing in the job that measured them names the cause - a deploy that refuses them names nothing.
+
+**The cap is a knob in one direction only.** It was a `Final` in `backend/idhazh/retention.py` until 2026-09-06, which made Rule #2's "the budget is the platform, not a preference" true only for as long as nobody edited the constant. It is now a config field bounded `le=1024`: an operator can name a smaller cap and the schema refuses a larger one, with a message naming the bound. Lowering it is the reason it is here - it buys an earlier and louder failure while there is still headroom to act in - and there is no value that buys more room, because the 1 GB is GitHub's and not ours. The console's site band still draws against the platform's own 1 GB rather than the configured cap: it reports the ceiling that exists, not the one this run chose to stop at.
 
 **`site_bytes` on the run manifest stays what it always was.** It is the committed payload tree, six days of published manifests carry it, and changing what it means would be a contract break for a number that is genuinely useful about repository growth. What changed is that it now says which tree it holds, so nobody reads it as the site again ([../contracts/schemas.md](../contracts/schemas.md)).
 

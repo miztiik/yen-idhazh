@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,20 @@ DESKS = {
     "india": "India",
     "business-economy": "Business",
 }
+
+# The refusals a story can only earn after it reached the block, so these and
+# the block itself are the candidate pool. `block-under-leading-min` is in the
+# set because it relabels stories the block had already taken.
+CAP_REFUSALS = frozenset(
+    {
+        "block-full",
+        "desk-full",
+        "source-already-leading",
+        "subject-already-leading",
+        "yesterday-full",
+        "block-under-leading-min",
+    }
+)
 
 
 def watchlist(*entries: tuple[str, str, list[str]]) -> Watchlist:
@@ -550,29 +565,60 @@ def committed_days() -> list[Path]:
     return sorted(DIGEST_ROOT.rglob("digest.json"))[:-1]
 
 
-def test_a_committed_day_that_carries_the_signal_fills_the_block() -> None:
-    """The row's oracle, on the newest committed day that records a rank score.
+def test_the_newest_finished_day_that_carries_the_signal_fills_the_block(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The row's oracle, on the newest FINISHED day that records a rank score.
 
-    Bound to the data rather than to a date: the pipeline publishes every day,
-    and a test naming one of them stops meaning anything the moment that day
-    ages out of the retention window.
+    Finished, not newest, and `committed_days` is what makes it so - the date
+    still being written held 78 stories one run of five in on 2026-09-06,
+    against the 374 to 627 a finished day carries, 11 that could lead against
+    64 to 127, and a block of four. A full block there is a fact about the time
+    of day.
 
-    It stops at the first day that carries the signal, newest first, so an
-    ordinary run parses one payload however long the archive gets.
+    Bound to the data rather than to a date: a test naming one day stops
+    meaning anything the moment that day ages out of the retention window.
+
+    The failure prints the candidate pool beside the block, because a pool that
+    ran out and a cap that turned stories away are different failures with the
+    same lead count. The pool is the block's own omission log rather than a
+    second selection run here, so nothing in this file can drift from the rule
+    it is reporting - and a day that ran out is the day that records no
+    `block-full` at all.
     """
-    for path in reversed(committed_days()):
-        day = DigestDay.from_json(read_text(path))
-        if not any(item.rank_score is not None for item in day.items):
-            continue
-        registry = Watchlist.from_json(read_text(CONFIG_DIR / "watchlist.json"))
+    day = next(
+        (
+            published
+            for published in (
+                DigestDay.from_json(read_text(path)) for path in reversed(committed_days())
+            )
+            if any(item.rank_score is not None for item in published.items)
+        ),
+        None,
+    )
+    if day is None:
+        pytest.skip("no finished day records a rank score yet")
+
+    registry = Watchlist.from_json(read_text(CONFIG_DIR / "watchlist.json"))
+    ui = UiConfig()
+    with caplog.at_level(logging.INFO, logger="idhazh"):
         leads = leading_stories(
-            day.items, date=day.date, watchlist=registry, ui=UiConfig(), desk_names=DESKS
+            day.items, date=day.date, watchlist=registry, ui=ui, desk_names=DESKS
         )
-        assert len(leads) == UiConfig().leading_stories, (
-            f"{day.date} publishes {len(day.items)} stories and fills only {len(leads)} leads"
+    if len(leads) != ui.leading_stories:
+        refused: Counter[str] = Counter()
+        for record in caplog.records:
+            _, marker, rule = record.getMessage().partition("because=")
+            if marker and rule.split(":", 1)[0] in CAP_REFUSALS:
+                refused[rule.split(":", 1)[0]] += 1
+        runs = len(day.runs)
+        tally = ", ".join(f"{rule} {count}" for rule, count in sorted(refused.items()))
+        pytest.fail(
+            f"{day.date} published {len(day.items)} stories in {runs} "
+            f"run{'' if runs == 1 else 's'}, {len(leads) + sum(refused.values())} of which "
+            f"could lead, and filled {len(leads)} of {ui.leading_stories}; "
+            f"the caps refused {tally or 'nothing'}"
         )
-        return
-    pytest.skip("no committed day records a rank score yet")
 
 
 def test_a_day_written_before_the_block_existed_reads_as_no_block() -> None:

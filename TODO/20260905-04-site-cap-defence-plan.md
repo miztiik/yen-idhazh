@@ -27,10 +27,10 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | How fast is it actually filling | - | A | PENDING | - | - | - |
-| 2 | The cap moves into config and can only be lowered | 1 | B | PENDING | - | - | - |
-| 3 | A way to put bytes somewhere else | 1 | C | PENDING | - | - | - |
-| 4 | The cleanup says what it did not clear | 2 | D | PENDING | - | - | - |
+| 1 | How fast is it actually filling | - | A | DONE #431 | yi-d01 | #431 | 3,023,156 B a published day, 5,572 an item; 240.6 published days to the 800 MiB alarm, so no escalation |
+| 2 | The cap moves into config and can only be lowered | 1 | B | DONE #432 | yi-d02 | #432 | `retention.pages_hard_cap_mb`, `ge=1, le=1024`; both arms asserted - 1025 fails validation naming the bound, 2 loads and fails a 3 MB tree |
+| 3 | A way to put bytes somewhere else | 1 | C | DONE #433 | yi-d03 | #433 | `visuals.asset_base_url`, default `""` = this site. Byte-identical at the default: 685 files, 111,255,143 B, 0 differing hashes. Open, 376 files and 4,780,921 B (4.3 percent) leave the bundle. The valve moves the URL, not the carrier - the drawing is still fetched as text and inlined, so it is still themed. Three readers, one key: the fetch, `connect-src`, and the staging step |
+| 4 | The cleanup says what it did not clear | 2 | D | DONE #436 | yi-d04 | #436 | `VisualPruneRow` -> `state/visual-prunes.csv`, one row a run. Oracle: 300 candidates against the shipped 200-file fuse gives `deleted` 200 AND `skipped_by_fuse` 100. `skipped_by_fuse` means the same on a dry run - the candidates the fuse would not have reached - so it never collapses into `deleted`. Staging was already right; no concept doc, per the row's own ruling |
 
 ---
 

@@ -190,9 +190,9 @@
     "ceilings_bytes": {
       "/404": 1706,
       "/archive/": 7553,
-      "/console/": 277195,
-      "/console/machine/": 39743,
-      "/console/model/": 47974,
+      "/console/": 335051,
+      "/console/machine/": 44706,
+      "/console/model/": 56385,
       "/evals/": 3279
     }
   },
@@ -200,6 +200,7 @@
     "dry_run": true,
     "image_months": -1,
     "max_deletes_per_run": 200,
+    "pages_hard_cap_mb": 1024,
     "site_budget_mb": 800
   },
   "run": {
@@ -268,6 +269,7 @@
   },
   "version": "2026-08-29T18:00",
   "visuals": {
+    "asset_base_url": "",
     "canvas_width": 800,
     "enabled_kinds": [
       "chart"

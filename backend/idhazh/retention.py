@@ -11,6 +11,15 @@ deliberately not the same thing:
 - **The prune** removes rendered visuals older than a configured window. It
   ships disabled, in dry-run, behind a per-run delete fuse.
 
+**The alarm and the cap are two instruments and they stay apart.**
+`retention.site_budget_mb` is the alarm: it prints and stops nothing.
+`retention.pages_hard_cap_mb` is the cap: past it the step fails, because past
+it the bytes cannot be published at all. Merging them would leave one number
+doing a job it can only do badly - a warning nobody can ignore, or a failure
+that arrives with no notice. The cap is a knob in one direction only. Its field
+is bounded by `PAGES_HARD_CAP_MB`, the platform's own ceiling, so a config edit
+can make this gate stricter and can never make it looser (Rule #2).
+
 **The alarm measures the built bundle and never the committed payload tree.**
 Those are two different trees and they grow at different rates, so one cannot
 stand in for the other. Measured 2026-08-27 on this checkout: the payload tree
@@ -29,6 +38,13 @@ Three rules the prune obeys, each one a way this goes wrong otherwise:
   error.
 - **A fuse.** An off-by-one in a date parse must not eat the archive, so no run
   may delete more than a configured number of files.
+- **A record.** Every pass appends one row to `state/visual-prunes.csv`, and that
+  row carries `skipped_by_fuse` beside `deleted`. The fuse caps `deleted`, so on
+  its own it is the same number on a run that finished its backlog and on one
+  that could not get near it. Only the pair says which, and the pass runs and
+  reports on every run - including today's, where the policy is off and nothing
+  is a candidate - so the day it starts working is visible in a committed file
+  rather than in a job log.
 
 **A level is not a date, and only a date answers the ceiling question.** The
 alarm used to print one megabyte figure and one headroom figure, and neither is
@@ -108,16 +124,14 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger, publish_telemetry
-from idhazh.contracts.app_config import ObservabilityConfig, RetentionConfig
+from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
+from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 
 BYTES_PER_MB: Final = 1024 * 1024
-#: The platform's own hard ceiling. Not a knob: it is a property of the host,
-#: and making it editable would invite raising it instead of shrinking the site.
-PAGES_HARD_CAP_MB: Final = 1024
 
 _VISUAL_SUFFIXES: Final[frozenset[str]] = frozenset({".png", ".webp", ".jpg", ".jpeg", ".svg"})
 
@@ -211,11 +225,12 @@ def over_budget(size: SiteSize, config: RetentionConfig) -> bool:
 
 
 def over_cap(size: SiteSize, *, cap_mb: int = PAGES_HARD_CAP_MB) -> bool:
-    """Past the platform's own ceiling, which is where reporting stops being enough.
+    """Past the cap in force, which is where reporting stops being enough.
 
     `cap_mb` is a parameter for the same reason `prune` takes `today`: a test has
-    to be able to cross the line without building a one-gigabyte fixture. No
-    caller passes it, and the CLI offers no flag for it.
+    to be able to cross the line without building a one-gigabyte fixture. The
+    step passes `retention.pages_hard_cap_mb` down from config, and the default
+    here is the platform's own ceiling, which is the most that knob may name.
     """
     return size.megabytes > cap_mb
 
@@ -248,17 +263,17 @@ def days_to_cap(size: SiteSize, items_per_day: int, *, cap_mb: int = PAGES_HARD_
     return headroom_mb(size, cap_mb=cap_mb) * BYTES_PER_MB / daily_growth_bytes(size, items_per_day)
 
 
-def budget_alarm(
-    size: SiteSize, config: RetentionConfig, *, cap_mb: int = PAGES_HARD_CAP_MB
-) -> str | None:
+def budget_alarm(size: SiteSize, config: RetentionConfig) -> str | None:
     """The alarm's words, or None when the built site is inside budget.
 
-    Below the platform cap the alarm only reports - it fails no build and deletes
-    nothing - so the run that meets it needs a line it can act on: the size, the
-    alarm point it crossed, and the headroom left to the cap.
+    Below the cap the alarm only reports - it fails no build and deletes nothing -
+    so the run that meets it needs a line it can act on: the size, the alarm point
+    it crossed, and the headroom left to the cap. Both numbers come from the same
+    config, so an operator who lowers the cap sees the shorter headroom here too.
     """
     if not over_budget(size, config):
         return None
+    cap_mb = config.pages_hard_cap_mb
     return (
         f"published site is {size.megabytes:.0f} MB, past the "
         f"{config.site_budget_mb} MB alarm point, with "
@@ -318,29 +333,141 @@ def _date_of(path: Path, root: Path) -> date | None:
         return None
 
 
+def oldest_visual(root: Path) -> date | None:
+    """The published day of the oldest rendered visual still on disk, or None.
+
+    Read against the cutoff, this is what says whether the policy has caught up:
+    while it is older than the cutoff there is backlog left, whatever one run's
+    `deleted` says. None means the tree carries no visual at all, which is a
+    different fact from "the oldest one is recent" and is spelled differently.
+    """
+    oldest: date | None = None
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in _VISUAL_SUFFIXES:
+            continue
+        published = _date_of(path, root)
+        if published is not None and (oldest is None or published < oldest):
+            oldest = published
+    return oldest
+
+
 @dataclass(frozen=True, slots=True)
 class PruneResult:
+    """What one cleanup pass found, took, and left behind.
+
+    `skipped_by_fuse` was computable from the first day and thrown away every
+    run. It is the difference between a run that finished its backlog and a run
+    that could not get near it, and `deleted` cannot show it because the fuse
+    caps `deleted` at the same number in both cases.
+
+    It means the same thing on a dry run as on a live one - the candidates the
+    fuse would not have let this run reach - so it is never inflated by the
+    deletions a dry run declined to make. `dry_run` is the field that says
+    nothing was deleted.
+    """
+
     considered: int
     deleted: int
     dry_run: bool
     fuse_tripped: bool
+    skipped_by_fuse: int
+    bytes_reclaimed: int
+    cutoff_date: date | None
+    oldest_kept: date | None
+    bytes_before: int
+    bytes_after: int
 
 
-def prune(root: Path, config: RetentionConfig, today: date) -> PruneResult:
-    """Delete nothing unless configured to, and never more than the fuse allows."""
+def prune(
+    root: Path, config: RetentionConfig, today: date, *, dry_run: bool = False
+) -> PruneResult:
+    """Delete nothing unless configured to, and never more than the fuse allows.
+
+    `dry_run` is an override the caller adds on top of `retention.dry_run`, never
+    one that cancels it: the step passes its own flag and either source is enough
+    to make the pass report-only. There is no argument that turns deletion on.
+
+    The bytes are measured either side rather than accumulated inside the loop,
+    so `bytes_reclaimed` is the difference two readings show and not a total this
+    function assembled about itself.
+    """
+    pretend = dry_run or config.dry_run
+    before = measure(root).bytes_used
     limit = cutoff(today, config.image_months)
     if limit is None:
-        return PruneResult(0, 0, config.dry_run, False)
+        return PruneResult(
+            considered=0,
+            deleted=0,
+            dry_run=pretend,
+            fuse_tripped=False,
+            skipped_by_fuse=0,
+            bytes_reclaimed=0,
+            cutoff_date=None,
+            oldest_kept=oldest_visual(root),
+            bytes_before=before,
+            bytes_after=before,
+        )
 
     candidates = visuals_older_than(root, limit)
-    fuse_tripped = len(candidates) > config.max_deletes_per_run
     allowed = candidates[: config.max_deletes_per_run]
-    if config.dry_run:
-        return PruneResult(len(candidates), 0, True, fuse_tripped)
+    skipped = len(candidates) - len(allowed)
+    if pretend:
+        return PruneResult(
+            considered=len(candidates),
+            deleted=0,
+            dry_run=True,
+            fuse_tripped=skipped > 0,
+            skipped_by_fuse=skipped,
+            bytes_reclaimed=0,
+            cutoff_date=limit,
+            oldest_kept=oldest_visual(root),
+            bytes_before=before,
+            bytes_after=before,
+        )
 
     for path in allowed:
         path.unlink(missing_ok=True)
-    return PruneResult(len(candidates), len(allowed), False, fuse_tripped)
+    after = measure(root).bytes_used
+    return PruneResult(
+        considered=len(candidates),
+        deleted=len(allowed),
+        dry_run=False,
+        fuse_tripped=skipped > 0,
+        skipped_by_fuse=skipped,
+        bytes_reclaimed=before - after,
+        cutoff_date=limit,
+        oldest_kept=oldest_visual(root),
+        bytes_before=before,
+        bytes_after=after,
+    )
+
+
+def prune_row(
+    result: PruneResult, config: RetentionConfig, *, date_stamp: str, run_id: str
+) -> VisualPruneRow:
+    """The committed account of one cleanup pass.
+
+    Built here rather than in the caller so the row and the result can never
+    describe two different runs, and so the contract's own arithmetic checks
+    whatever this module produces.
+    """
+    return VisualPruneRow(
+        version=VisualPruneRow.schema_version(),
+        date=date_stamp,
+        run_id=run_id,
+        policy_months=config.image_months,
+        max_deletes_per_run=config.max_deletes_per_run,
+        dry_run=result.dry_run,
+        cutoff_date=result.cutoff_date.isoformat() if result.cutoff_date else None,
+        candidates_found=result.considered,
+        deleted=result.deleted,
+        skipped_by_fuse=result.skipped_by_fuse,
+        fuse_tripped=result.fuse_tripped,
+        bytes_reclaimed=result.bytes_reclaimed,
+        oldest_kept=result.oldest_kept.isoformat() if result.oldest_kept else None,
+        payload_bytes_before=result.bytes_before,
+        payload_bytes_after=result.bytes_after,
+    )
 
 
 # --- The telemetry fold ------------------------------------------------------

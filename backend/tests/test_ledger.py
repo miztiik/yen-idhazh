@@ -17,6 +17,7 @@ from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
 from utilities import migrate_score_ledger as migrate
@@ -498,6 +499,22 @@ def test_the_retirement_ledger_exists_in_a_fresh_checkout() -> None:
     assert ledger.feed_retirements_relpath() == "state/feed-retirements.csv"
 
 
+def test_the_cleanup_ledger_exists_in_a_fresh_checkout() -> None:
+    """The same rule, for the ledger the cleanup gained on 2026-09-06.
+
+    The step that writes it is committed by a call that stages `state` whole, so
+    a file appearing only on the first run that cleans something would be staged
+    fine - and would still be missing on every run before it, which is the run
+    somebody reads to find out that nothing has ever been cleaned. The header
+    ships with the contract instead.
+    """
+    path = ledger.visual_prunes_path(REPO_ROOT / "state")
+
+    assert path.exists(), "the cleanup ledger must exist before the first cleanup"
+    assert ledger.read_header(path) == VisualPruneRow.csv_columns()
+    assert ledger.visual_prunes_relpath() == "state/visual-prunes.csv"
+
+
 def test_committed_state_csv_rows_match_their_headers() -> None:
     mismatches: list[str] = []
     for path in sorted((REPO_ROOT / "state").rglob("*.csv")):
@@ -611,6 +628,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     assert keyed == [
         ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
+        ("visual-prunes.csv", ledger.VISUAL_PRUNE_KEY),
         (f"feed-health/{DATE[:7]}.csv", ledger.FEED_HEALTH_KEY),
         (f"item-health/{DATE[:7]}.csv", ledger.ITEM_HEALTH_KEY),
     ]

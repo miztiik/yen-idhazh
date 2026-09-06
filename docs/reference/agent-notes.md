@@ -169,6 +169,21 @@ $env:PYTHONPATH=''
 Set the variable only when you are deliberately borrowing another checkout's
 venv. Observed 2026-08-27.
 
+**It also leaks into the browser suite, through a spec that runs `python` off
+PATH.** `npm run test:changed` deletes `DIGEST_ROOT`, `STATE_ROOT`,
+`TELEMETRY_ROOT` and `PYTHONPATH` from the environment it hands each check
+(`frontend/scripts/run-checks.ts`), so this never bites through the launcher. A
+hand-rolled script that exports `PYTHONPATH` for the backend gates and then runs
+`npm run test:browser` in the same process bypasses that. Playwright passes the
+environment to its children, `frontend/tests/malformed-day.spec.ts` resolves
+`python` off PATH when the worktree has no `.venv`, and the system interpreter
+then finds your package and dies on its first third-party import:
+`ModuleNotFoundError: No module named 'feedparser'`. One spec out of 989 fails,
+inside a 14-minute suite, and the message names a dependency rather than a path -
+which reads like a broken install and is a leaked variable. Clear `PYTHONPATH`
+before any browser run, or set `IDHAZH_PYTHON` to an interpreter that has the
+dependencies. Observed 2026-09-06.
+
 **A header migration cannot survive a rebase, because `state/*.csv` is
 `merge=union`.** Union merge keeps every line from both sides, which is exactly
 right for an append-only ledger and exactly wrong for a file whose every line
@@ -198,6 +213,48 @@ migration misses it entirely. Seen twice on 2026-09-02 in one plan. Make the
 repair unconditional after every merge and every rebase: take the upstream file
 whole with `git checkout origin/main -- <path>`, re-run the migration on it, and
 read the result back through its contract.
+
+**`frontend/public/telemetry/*.csv` is the opposite case, and the conflict it
+raises is the feature.** That path is deliberately not union-merged, because a
+shard there is a full rewrite of `state/item-health/` rather than an append. So
+a branch that widens the projection collides loudly instead of quietly
+concatenating. What causes the collision is not another agent: the scheduled
+`digest.yml` run stages `frontend/public/telemetry` from a checkout pinned to
+the SHA it started on, so a run in flight while your PR is open republishes both
+shards with the **old** publisher and pushes them to `main`. Measured 2026-09-06
+on run `33979150677`: a green PR turned `CONFLICTING` about a minute after the
+run's `assemble` job finished.
+
+Do not hand-merge it, and do not keep your side. Both sides are machine output,
+and yours was generated from a census that has since moved:
+
+```powershell
+git restore --source=origin/main -- frontend/public/telemetry
+python -m idhazh.publish_telemetry
+```
+
+That rebuilds the shards with the new code from the current census, which is the
+only resolution that is true of both. Before merging anything that rewrites
+`frontend/public/`, check `gh run list --workflow digest.yml --limit 3` for a run
+in flight and wait it out - the wait is minutes and the repair is not.
+
+**A test that reads the newest committed day is racing the pipeline, and it goes
+red in the morning and green by evening.** The digest publishes several times a
+day and appends to the same day payload, so the newest date on disk is always the
+one still being written. Measured 2026-09-06: at 09:00 that day held 78 stories
+after one run of five, where a finished day holds 374 to 582.
+`test_a_committed_day_that_carries_the_signal_fills_the_block` asserted a full
+lead block on it and failed - not because the block was broken, but because 78
+stories yielded a candidate pool of 11 against 64 and 104 on the two days before
+it. The tell that the pool ran out rather than the block filling: the refusal
+counts carry no `block-full` at all.
+
+The fix is structural rather than a clock or a run count - take the newest day
+that is **not** the newest date on disk, because an earlier date can gain no more
+runs. Fixed in `backend/tests/test_leading_stories.py` on 2026-09-06.
+`backend/tests/test_contracts.py::test_a_story_past_the_seed_is_the_one_this_gate_exists_for`
+still has the same race: it reads `committed_days()[-1]` and asserts a magnitude
+that grows through the day. It has far more headroom, so it has not fired yet.
 
 **`origin/main` moves under you.** The scheduled pipeline pushes `plan:` and
 `digest:` commits to `main` several times an hour, and the editor auto-fetches.
@@ -1712,6 +1769,21 @@ naming the worker API for a test to assert on.
   jump the CSS does not contain. Take `rect.top + window.scrollY` and
   `rect.left + window.scrollX`, and call `scrollIntoViewIfNeeded()` before the
   rest reading as well. Measured 2026-08-31.
+- **`npx playwright test <group>` piped into `Select-String` prints nothing until
+  the whole group finishes**, so a run that is working and a run that has hung
+  look identical for as long as it takes. The console group runs on one worker,
+  and on 2026-09-06 it produced no readable line in fifteen minutes of polling
+  while CI ran the same suite on the same commit in under six. Redirect to a
+  file and read the file, or run the specs the change touches and let CI's
+  `browser` job be the group arm - it is the authoritative one either way
+  (`CLAUDE.md` section 9).
+- **`locator.screenshot()` on a console panel times out on "waiting for element
+  to be stable".** Something above the panel is still settling, and the wait is
+  for the whole page rather than the element. Scroll it into view with
+  `el.scrollIntoView({ behavior: 'instant' })` in an `evaluate`, wait once, then
+  take a viewport screenshot. Observed 2026-09-06 on `/console/model/`, where the
+  element screenshot failed twice at 10 s and the viewport one returned
+  immediately.
 
 ## Git Bash on Windows
 
@@ -1893,6 +1965,24 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   `git ls-files --others --exclude-standard` for untracked and
   `git ls-files -- <path>` for tracked - or match with `.StartsWith('??')`,
   which has no wildcard grammar at all.
+- **`-match` and `-notmatch` against an ARRAY filter it instead of answering
+  yes or no, so a poll loop breaks on its first iteration and says it is
+  finished.** `gh api ... --jq` returns one string per check run, and
+  `if ($r -notmatch 'in_progress')` then tests the *filtered array* rather than
+  a boolean - non-empty the moment any single check has finished. Observed
+  2026-09-06 waiting on seven checks: the loop exited at poll 1, wrote its
+  "done" sentinel, and the log held one line reading
+  `browser=in_progress ... gates=in_progress`, which is a finished poll
+  reporting an unfinished run. Nothing errors and the exit code is 0. Join the
+  array before you match it:
+
+  ```powershell
+  if (($r -join ' ') -notmatch 'in_progress|queued') { break }
+  ```
+
+  The same shape bites any `Where-Object`-free array test. `-eq`, `-like` and
+  `-ne` all filter an array too, which is why `@('a','b') -ne 'a'` is `@('b')`
+  and not `$true`.
 - **A relative path inside a `[System.IO.File]` call does not follow
   `Push-Location` or `Set-Location`, and it reads and writes the wrong tree in
   silence.** .NET resolves against the process working directory, which neither
@@ -2281,6 +2371,16 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   first one was a cold-cache outlier, which is the wrong conclusion. Alternate
   the arms and give every visit its own browser context: the same pair then read
   850, 818 and 811 ms against a plain visit's 399, 235 and 230.
+- **The same URL after a rebuild is served from the browser cache, and the page
+  it hands back is the tree you replaced.** Three times on 2026-09-05, on one
+  port, `page.goto('http://127.0.0.1:4173/console/')` returned the previous
+  build's document while `Invoke-WebRequest` on the same address returned the
+  new one - so the served byte count and the measured DOM disagreed and only the
+  DOM was read. It reads exactly like a change that did not land: a figure fixed
+  three commits earlier still printed its old value, and a page measured after a
+  degraded rebuild still carried the full one. Give every navigation its own
+  query string (`?v=<timestamp>`), and check a number the two builds must differ
+  on before trusting anything else on the page.
 - **Two builds of one unchanged tree do not agree on bytes unless
   `kit.version.name` is pinned.** It defaults to `Date.now()`, which reaches the
   `__sveltekit_<id>` global every prerendered document names and, through that,
@@ -2436,6 +2536,21 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   & .\.venv\Scripts\python.exe backend/utilities/build_canary_day.py
   cd frontend; npm run build:canary
   ```
+
+- **`build_canary_day.py` must be run from the repository root, and run from
+  `frontend/` it fails several frames away from the reason.** Every path it
+  holds is relative, so from `frontend/` it looks for the injection fixtures at
+  `frontend/tests/fixtures/canaries`, finds nothing, and dies on
+  `ValueError: zip() argument 2 is longer than argument 1` several frames inside
+  `published_items` - which reads as a fixture somebody deleted. Observed
+  2026-09-05 in a gate script that had `cd frontend` once at the top for `npm`.
+  Two more things make it worse than a plain failure: it writes an untracked
+  `frontend/backend/var/canary/` tree of about 60 files on its way down, which
+  `git status` then reports as a stray directory nobody recognises; and the
+  `npm run build:canary` after it exits **0** on the canary the previous run
+  left behind, so the browser suite goes green against a tree the failed command
+  was supposed to replace. Count the fixtures before believing the message -
+  `tests/fixtures/canaries/*.json` plus `browser/*.json` must equal `SCORED`.
 
   Run it before the suite, not after a red one. `backend/var/` is gitignored, so
   every fresh worktree pays this and CI pays it on every run - which is why

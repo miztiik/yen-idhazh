@@ -26,7 +26,7 @@ import json
 import logging
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
@@ -34,6 +34,7 @@ from conftest import CONTRACT_FIXTURES_DIR, read_text
 from idhazh import ledger, publish_telemetry
 from idhazh.cli import main, stage_prune_state, stage_site_weight
 from idhazh.contracts.app_config import (
+    PAGES_HARD_CAP_MB,
     CollectConfig,
     ConsoleConfig,
     ObservabilityConfig,
@@ -44,11 +45,11 @@ from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
+from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 from idhazh.retention import (
     BYTES_PER_MB,
-    PAGES_HARD_CAP_MB,
     SiteSize,
     budget_alarm,
     cap_breach,
@@ -67,6 +68,7 @@ from idhazh.retention import (
     over_cap,
     prune,
     prune_feed_health,
+    prune_row,
     prune_scores,
     prune_seen,
     prune_telemetry,
@@ -78,6 +80,13 @@ pytestmark = pytest.mark.slow
 #: The widest span the console's control can select, from the config that owns
 #: it. The prune may never delete a shard a read that wide names.
 CONSOLE_MAX_WINDOW_DAYS: Final = ConsoleConfig().max_window_days
+
+#: The run every row these tests write is filed under. One value, so a test that
+#: writes twice is writing a repeat rather than a second run.
+RUN_ID: Final = "2026-08-30-33270983446"
+#: The same, for the cleanup tests below, which run against the day the rest of
+#: that section already uses.
+PRUNE_RUN_ID: Final = "2026-08-21-33270983446"
 
 
 def site(root: Path, days: dict[str, list[str]]) -> Path:
@@ -364,14 +373,49 @@ def test_the_alarm_fires_when_the_built_site_crosses_the_alarm_point(
     assert f"{PAGES_HARD_CAP_MB} MB Pages cap" in printed
 
 
-def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(tmp_path: Path) -> None:
+def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """Past the cap the bytes cannot be published, so the build stops here.
 
     The alarm point stays at its shipped 800 MB, so this proves the cap is
-    checked on its own rather than as a louder alarm.
+    checked on its own rather than as a louder alarm. The cap is lowered to 2 MB
+    through config, because that is now the only way to move it - the step reads
+    `retention.pages_hard_cap_mb` and takes no override.
+
+    This is also the permitted arm of the bound. `test_contracts.py` holds the
+    refusal, and neither arm alone is a bound: one shows the number can be lowered
+    and the other shows it cannot be raised.
     """
     tree = built_site(tmp_path / "build", 3)
-    assert stage_site_weight(tree, RetentionConfig(), cap_mb=2) == 1
+    with caplog.at_level(logging.ERROR, logger="idhazh"):
+        assert stage_site_weight(tree, RetentionConfig(pages_hard_cap_mb=2)) == 1
+    assert "2 MB Pages cap" in caplog.text, "the failure names the cap that stopped it"
+
+
+def test_lowering_the_cap_moves_the_gate_and_the_headroom_it_prints(tmp_path: Path) -> None:
+    """The same tree, two caps, two answers - and the alarm point unmoved.
+
+    3 MB of site passes under the shipped 1024 MB cap and fails under a 2 MB one,
+    which is the gate firing earlier. The alarm's words follow the cap too, since
+    the headroom it prints is headroom to the cap and a lowered cap leaves less.
+    What does not move is the alarm point itself: it is a different instrument and
+    stays where config put it.
+    """
+    tree = built_site(tmp_path / "build", 3)
+    assert stage_site_weight(tree, RetentionConfig()) == 0
+    assert stage_site_weight(tree, RetentionConfig(pages_hard_cap_mb=2)) == 1
+
+    size = measure(tree, published_items=count_published_items(tree))
+    shipped = budget_alarm(size, RetentionConfig(site_budget_mb=2))
+    lowered = budget_alarm(size, RetentionConfig(site_budget_mb=2, pages_hard_cap_mb=500))
+    assert shipped is not None
+    assert lowered is not None
+    assert "2 MB alarm point" in shipped
+    assert "2 MB alarm point" in lowered
+    assert f"{PAGES_HARD_CAP_MB} MB Pages cap" in shipped
+    assert "500 MB Pages cap" in lowered
+    assert shipped != lowered, "the headroom the alarm prints is headroom to the cap in force"
 
 
 def test_the_cap_line_says_what_it_costs_and_what_to_do() -> None:
@@ -483,6 +527,267 @@ def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     assert result.deleted == 3
     assert result.fuse_tripped
     assert result.considered == 10
+
+
+# --- What the run says it did not clear --------------------------------------
+
+
+def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> None:
+    """The row's whole point. `deleted` is capped, so `deleted` cannot answer this.
+
+    300 candidates against the shipped 200-file fuse, and the shipped fuse rather
+    than a scaled-down one - the question is whether the number an operator
+    actually reads can distinguish a finished run from a stuck one.
+
+    A run that deleted 200 and skipped 0 has cleared its backlog. A run that
+    deleted 200 and skipped 100 has not. `deleted` is 200 in both.
+    """
+    root = site(tmp_path, {"2020-01-01": [f"{n}.webp" for n in range(300)]})
+    config = RetentionConfig(image_months=6, dry_run=False)
+    assert config.max_deletes_per_run == 200
+
+    result = prune(root, config, date(2026, 8, 21))
+
+    assert result.deleted == config.max_deletes_per_run
+    assert result.skipped_by_fuse == 100, "the 100 the fuse would not let this run reach"
+    assert result.fuse_tripped
+    assert result.deleted + result.skipped_by_fuse == result.considered == 300
+
+    finished = prune(root, config, date(2026, 8, 21))
+    assert finished.deleted == 100
+    assert finished.skipped_by_fuse == 0, "a second pass clears what the first could not"
+    assert not finished.fuse_tripped
+
+
+def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -> None:
+    """"Held back by the fuse" and "not deleted because we were pretending" differ.
+
+    Every run that ships today is a dry run, so a `skipped_by_fuse` that counted
+    the deletions a dry run declined to make would equal `candidates_found` on
+    every row this project will ever write, and the field would say nothing.
+
+    The dry run's own tell is the sum falling short: 0 deleted plus 100 skipped
+    against 300 found is a run that reported, and it is readable off the numbers
+    without cross-referencing the `dry_run` cell.
+    """
+    root = site(tmp_path, {"2020-01-01": [f"{n}.webp" for n in range(300)]})
+    config = RetentionConfig(image_months=6, dry_run=True)
+
+    result = prune(root, config, date(2026, 8, 21))
+
+    assert result.dry_run
+    assert result.deleted == 0
+    assert result.considered == 300
+    assert result.skipped_by_fuse == 100, "the fuse's own count, unchanged by the pretending"
+    assert result.deleted + result.skipped_by_fuse < result.considered
+    assert len(list(root.rglob("*.webp"))) == 300
+
+
+def test_the_flag_can_only_make_a_run_report_and_never_delete(tmp_path: Path) -> None:
+    """The step's flag is added to `retention.dry_run`, never subtracted from it.
+
+    There is no argument that turns deletion on, which is what keeps the two
+    guards independent: a workflow edit alone cannot make this delete.
+    """
+    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    live = RetentionConfig(image_months=6, dry_run=False)
+
+    assert prune(root, live, date(2026, 8, 21), dry_run=True).deleted == 0
+    assert (root / "2020" / "01" / "01" / "old.webp").exists()
+
+    shipped = RetentionConfig(image_months=6, dry_run=True)
+    assert prune(root, shipped, date(2026, 8, 21), dry_run=False).deleted == 0
+    assert (root / "2020" / "01" / "01" / "old.webp").exists()
+
+
+def test_the_bytes_are_two_measurements_of_the_tree_and_not_a_running_total(
+    tmp_path: Path,
+) -> None:
+    """`bytes_reclaimed` is the difference two readings show, so it cannot inflate.
+
+    A total accumulated inside the deletion loop would still be written when an
+    unlink did not happen, and nothing would disagree with it.
+    """
+    root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
+    config = RetentionConfig(image_months=6, dry_run=False)
+
+    result = prune(root, config, date(2026, 8, 21))
+
+    assert result.deleted == 2
+    assert result.bytes_reclaimed == 2000, "the two 1,000-byte pictures and nothing else"
+    assert result.bytes_before - result.bytes_after == result.bytes_reclaimed
+    assert result.bytes_after == measure(root).bytes_used
+
+
+def test_the_oldest_picture_kept_says_whether_the_policy_has_caught_up(tmp_path: Path) -> None:
+    """Read against the cutoff, and a tree with no picture at all says so.
+
+    None is a different fact from "the oldest one is recent", and a stand-in date
+    would read like the second.
+    """
+    root = site(tmp_path, {"2020-01-01": ["old.webp"], "2026-08-20": ["new.webp"]})
+    config = RetentionConfig(image_months=6, dry_run=False)
+
+    result = prune(root, config, date(2026, 8, 21))
+
+    assert result.cutoff_date is not None
+    assert result.oldest_kept == date(2026, 8, 20)
+    assert result.oldest_kept >= result.cutoff_date, "nothing older than the line is left"
+
+    text_only = site(tmp_path / "text", {"2026-08-20": []})
+    assert prune(text_only, config, date(2026, 8, 21)).oldest_kept is None
+
+
+def test_a_switched_off_policy_still_reports_the_tree_it_looked_at(tmp_path: Path) -> None:
+    """What ships today. A report of "nothing to do" is not a row worth skipping.
+
+    A ledger written only on the runs that deleted something has no baseline, so
+    the first row would arrive on the day the policy started working and there
+    would be nothing to compare it against.
+    """
+    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+
+    result = prune(root, RetentionConfig(), date(2026, 8, 21))
+
+    assert result.cutoff_date is None, "a disabled policy draws no line"
+    assert result.considered == 0
+    assert result.skipped_by_fuse == 0
+    assert result.oldest_kept == date(2020, 1, 1), "the backlog is still reported"
+    assert result.bytes_before == result.bytes_after == measure(root).bytes_used
+
+
+def test_the_row_carries_the_policy_that_produced_it(tmp_path: Path) -> None:
+    """Every cell an operator needs to read one run without opening config.
+
+    The policy is on the row rather than looked up, because config moves and a
+    row read a year later has to say which policy it was written under.
+    """
+    root = site(tmp_path, {"2020-01-01": [f"{n}.webp" for n in range(300)]})
+    config = RetentionConfig(image_months=6, dry_run=False)
+
+    row = prune_row(
+        prune(root, config, date(2026, 8, 21)),
+        config,
+        date_stamp="2026-08-21",
+        run_id=PRUNE_RUN_ID,
+    )
+
+    assert row.policy_months == 6
+    assert row.max_deletes_per_run == 200
+    assert row.cutoff_date == "2026-02-22", "six 30-day months back from 2026-08-21"
+    assert row.candidates_found == 300
+    assert row.deleted == 200
+    assert row.skipped_by_fuse == 100
+    assert row.fuse_tripped
+    assert row.bytes_reclaimed == 200_000
+    assert row.payload_bytes_before - row.payload_bytes_after == row.bytes_reclaimed
+    assert VisualPruneRow.from_csv_row(row.csv_row()) == row
+
+
+def test_the_row_refuses_arithmetic_that_does_not_add_up() -> None:
+    """The cells are cross-checked, so a hand-written row cannot claim two things.
+
+    Both directions, because a rule tested one way is not a rule: a live run's
+    deletions and skips have to account for everything it found, and a dry run
+    has to have deleted nothing.
+    """
+    honest: dict[str, Any] = {
+        "date": "2026-08-21",
+        "run_id": PRUNE_RUN_ID,
+        "policy_months": 6,
+        "max_deletes_per_run": 200,
+        "dry_run": False,
+        "cutoff_date": "2025-02-22",
+        "candidates_found": 300,
+        "deleted": 200,
+        "skipped_by_fuse": 100,
+        "fuse_tripped": True,
+        "bytes_reclaimed": 200_000,
+        "oldest_kept": "2025-03-01",
+        "payload_bytes_before": 500_000,
+        "payload_bytes_after": 300_000,
+    }
+    assert VisualPruneRow(**honest).candidates_found == 300
+
+    with pytest.raises(ValueError, match="add up"):
+        VisualPruneRow(**{**honest, "skipped_by_fuse": 0, "fuse_tripped": False})
+    with pytest.raises(ValueError, match="say the same thing"):
+        VisualPruneRow(**{**honest, "fuse_tripped": False})
+    with pytest.raises(ValueError, match="difference"):
+        VisualPruneRow(**{**honest, "bytes_reclaimed": 1})
+    with pytest.raises(ValueError, match="deletes nothing"):
+        VisualPruneRow(**{**honest, "dry_run": True})
+    with pytest.raises(ValueError, match="no cutoff"):
+        VisualPruneRow(**{**honest, "policy_months": -1})
+
+
+def test_the_step_commits_one_row_a_run_and_names_what_it_left(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """End to end through the stage, on the shipped policy and on a live one.
+
+    `state_dir` and `digest_root` are named together, so nothing here can reach
+    the committed archive.
+    """
+    state = tmp_path / "state"
+    digest = site(tmp_path / "public", {"2020-01-01": [f"{n}.webp" for n in range(300)]})
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                retention_config=RetentionConfig(image_months=6, dry_run=False),
+                run_id=PRUNE_RUN_ID,
+                today=date(2026, 8, 21),
+                state_dir=state,
+                digest_root=digest,
+            )
+            == 0
+        )
+
+    written = ledger.visual_prunes_path(state)
+    assert ledger.read_header(written) == VisualPruneRow.csv_columns()
+    rows = ledger.load_visual_prunes(state)
+    assert len(rows) == 1
+    assert (rows[0].deleted, rows[0].skipped_by_fuse) == (200, 100)
+    assert "100 held back by the 200-file fuse" in caplog.text
+
+    repeat = stage_prune_state(
+        observability=ObservabilityConfig(),
+        collect=CollectConfig(),
+        retention_config=RetentionConfig(image_months=6, dry_run=False),
+        run_id=PRUNE_RUN_ID,
+        today=date(2026, 8, 21),
+        state_dir=state,
+        digest_root=digest,
+    )
+    assert repeat == 0
+    assert len(ledger.load_visual_prunes(state)) == 1, (
+        "a second attempt at one execution is one cleanup written twice"
+    )
+
+
+def test_the_step_leaves_the_pictures_alone_when_no_tree_is_named(tmp_path: Path) -> None:
+    """The pairing that stops a test run cleaning the committed archive.
+
+    `digest_root` defaults to the real tree only beside the real state tree,
+    exactly as `public_root` does and for the same reason.
+    """
+    state = tmp_path / "state"
+
+    assert (
+        stage_prune_state(
+            observability=ObservabilityConfig(),
+            collect=CollectConfig(),
+            retention_config=RetentionConfig(image_months=6, dry_run=False),
+            run_id=PRUNE_RUN_ID,
+            today=date(2026, 8, 21),
+            state_dir=state,
+        )
+        == 0
+    )
+    assert not ledger.visual_prunes_path(state).exists()
 
 
 def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:
@@ -1094,6 +1399,8 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
     first = stage_prune_state(
         observability=config,
         collect=CollectConfig(),
+        retention_config=RetentionConfig(),
+        run_id=RUN_ID,
         today=TODAY,
         state_dir=state,
         public_root=public,
@@ -1139,6 +1446,8 @@ def test_the_oracle_fifteen_months_leave_fourteen_of_each_and_one_verified_summa
         stage_prune_state(
             observability=config,
             collect=CollectConfig(),
+            retention_config=RetentionConfig(),
+            run_id=RUN_ID,
             today=TODAY,
             state_dir=state,
             public_root=public,
@@ -1175,6 +1484,8 @@ def test_the_stage_names_every_file_a_live_run_would_remove(
             stage_prune_state(
                 observability=config,
                 collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                run_id=RUN_ID,
                 today=TODAY,
                 state_dir=state,
                 public_root=public,
@@ -1216,6 +1527,8 @@ def test_the_stage_says_so_when_there_is_nothing_to_remove(
             stage_prune_state(
                 observability=ObservabilityConfig(),
                 collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                run_id=RUN_ID,
                 today=TODAY,
                 state_dir=state,
             )
@@ -1235,6 +1548,8 @@ def test_the_stage_reports_what_it_folded(
             stage_prune_state(
                 observability=ObservabilityConfig(),
                 collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                run_id=RUN_ID,
                 today=TODAY,
                 state_dir=state,
             )
@@ -1258,6 +1573,8 @@ def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
             stage_prune_state(
                 observability=ObservabilityConfig(),
                 collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                run_id=RUN_ID,
                 today=TODAY,
                 state_dir=state,
             )
@@ -1367,6 +1684,8 @@ def test_the_stage_says_so_when_every_seen_shard_is_inside_the_window(
             stage_prune_state(
                 observability=ObservabilityConfig(),
                 collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                run_id=RUN_ID,
                 today=TODAY,
                 state_dir=state,
             )
@@ -1759,6 +2078,8 @@ def test_the_stage_names_the_score_shard_a_live_run_would_remove(
             stage_prune_state(
                 observability=config,
                 collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                run_id=RUN_ID,
                 today=TODAY,
                 state_dir=state,
                 dry_run=True,
@@ -1788,6 +2109,8 @@ def test_the_stage_says_so_when_every_score_month_is_at_full_grain(
             stage_prune_state(
                 observability=ObservabilityConfig(),
                 collect=CollectConfig(),
+                retention_config=RetentionConfig(),
+                run_id=RUN_ID,
                 today=TODAY,
                 state_dir=state,
             )

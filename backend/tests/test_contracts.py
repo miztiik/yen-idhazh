@@ -33,6 +33,7 @@ from idhazh import ledger, source_health
 from idhazh.cli import main, stage_validate_days
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
+    PAGES_HARD_CAP_MB,
     SUPERSEDED_COLLECT_NAMES,
     SUPERSEDED_RETENTION_NAMES,
     AppConfig,
@@ -41,6 +42,7 @@ from idhazh.contracts.app_config import (
     EvaluationConfig,
     ObservabilityConfig,
     PageWeightConfig,
+    RetentionConfig,
     UiConfig,
     VisualSide,
     months_a_window_can_touch,
@@ -235,6 +237,67 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
     assert minimal.retention.image_months == -1, "retention ships disabled"
     assert minimal.retention.dry_run is True
+    assert minimal.retention.pages_hard_cap_mb == PAGES_HARD_CAP_MB, (
+        "an unconfigured clone enforces the platform's own ceiling"
+    )
+
+
+def test_the_config_refuses_a_pages_cap_above_the_platforms_own() -> None:
+    """The direction the bound exists for. A cap config can raise is not a cap.
+
+    Rule #2 says the budget is the platform and not a preference. That held while
+    the 1024 was a module constant only because nobody edited it, which is not a
+    control. It is a control now: the schema refuses the edit, and the message
+    names the number it refused, so an operator reading it learns the bound
+    rather than only that the file is wrong.
+    """
+    with pytest.raises(ValidationError) as raised:
+        RetentionConfig(pages_hard_cap_mb=PAGES_HARD_CAP_MB + 1)
+    assert "less than or equal to 1024" in str(raised.value)
+
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw["retention"]["pages_hard_cap_mb"] = 2048
+    with pytest.raises(ValidationError) as from_file:
+        AppConfig.model_validate(raw)
+    assert "pages_hard_cap_mb" in str(from_file.value)
+    assert "1024" in str(from_file.value)
+
+
+def test_the_config_takes_a_pages_cap_below_the_platforms_own() -> None:
+    """The other arm, and the reason the field is here at all.
+
+    A bound only tested in the direction it permits is not a bound - it is a
+    default nobody has pushed on. Lowering is the whole use: it buys an earlier
+    and louder failure while there is still headroom to act in. The tuned fixture
+    carries 900 so a lowered cap is exercised by every round trip, not only here.
+    """
+    assert RetentionConfig(pages_hard_cap_mb=1).pages_hard_cap_mb == 1
+
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw["retention"]["pages_hard_cap_mb"] = 512
+    assert AppConfig.model_validate(raw).retention.pages_hard_cap_mb == 512
+
+    tuned = AppConfig.from_json(read_text(CONTRACT_FIXTURES_DIR / "app-config" / "tuned.json"))
+    assert tuned.retention.pages_hard_cap_mb == 900
+
+
+def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
+    """One reports and one stops, so one number cannot do both jobs.
+
+    Collapsing them gives a warning nobody may ignore or a failure that arrives
+    with no notice. The committed file spells both, 224 MB apart, and the tuned
+    fixture moves them independently - which is the shape that proves they are
+    two instruments rather than one written twice.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).retention
+    assert committed.site_budget_mb == 800
+    assert committed.pages_hard_cap_mb == PAGES_HARD_CAP_MB
+    assert committed.site_budget_mb < committed.pages_hard_cap_mb
+
+    tuned = AppConfig.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "app-config" / "tuned.json")
+    ).retention
+    assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
 
 
 def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
@@ -859,6 +922,15 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     inlined by a layout, which cost 313,300 gzipped bytes when it last happened,
     so a ceiling more than that above the page could never see it land again.
 
+    **The 536,000 bound is a stand-in for the page, and it is re-derived whenever
+    the ceilings are.** This test reads the config and never a build, so it cannot
+    subtract the real page weight; the constant is the heaviest console document
+    plus that regression - 222,819 measured 2026-09-06 plus 313,300, rounded down
+    to the thousand. It therefore decays as the page grows, and the commit that
+    re-derives the three ceilings re-derives this with them. It held 433,000 from
+    2026-08-31, when the heaviest console document was 119,700, and at that value
+    the next ordinary re-derivation of `/console/` would have crossed it.
+
     All three console routes are asserted, and that is the point of splitting
     them: one key over three surfaces still fails when any of them grows and
     cannot say which one did, so the operator raises the shared number and the
@@ -879,7 +951,7 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
             f"{route} is a prerendered route with no ceiling - the bundle gate reports "
             "an unnamed route without failing it, so this one would grow unwatched"
         )
-        assert ceilings[route] < 433_000, (
+        assert ceilings[route] < 536_000, (
             f"the ceiling on {route} is above the heaviest console document plus the "
             "313,300 a day payload cost when a layout last inlined one - a ceiling that "
             "high cannot catch the one regression this surface has actually had"
@@ -2300,19 +2372,23 @@ def test_the_published_tree_holds_days_to_migrate() -> None:
     `a_day_that_validates` reads the newest committed payload, and an empty tree
     would leave it reading nothing while reporting the same pass as a tree it
     read. The read-side migrations beside it are driven from a fixture instead,
-    so they no longer need this.
+    so they no longer need this. `committed_days` already drops the date still
+    being written, so a tree holding only that one date reads as empty here.
     """
-    assert committed_days(), "no digest.json under frontend/public/digest"
+    assert committed_days(), "frontend/public/digest holds no finished day"
 
 
 # --- the guard that replaced the one prerendering used to give free ---------
 
 
 def a_day_that_validates() -> dict[str, Any]:
-    """A committed day, taken off the real tree rather than written here.
+    """A finished committed day, taken off the real tree rather than written here.
 
     A day composed by hand drifts from the one the pipeline writes, and the
-    guard under test is about the real file.
+    guard under test is about the real file. The test below needs a day longer
+    than `ui.shell_seed_items`, which is 15, and the date still being written
+    has no floor - one run in on 2026-09-06 it held 78 stories against 374.
+    `committed_days` is what keeps that date out of reach.
     """
     day: dict[str, Any] = json.loads(read_text(committed_days()[-1]))
     return day

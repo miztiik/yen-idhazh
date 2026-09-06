@@ -1728,6 +1728,150 @@ the first pipeline run, not before it.
 
 ### The prerendered page, on the wire
 
+#### All three console ceilings, re-derived on the backfill's tree (2026-09-06)
+
+Hardware: Intel Core i7-1265U, 12 logical cores, Windows 11, node 24.12.0. Date:
+2026-09-06. Method: `frontend/scripts/bundle-gate.mjs`, which is `gzip -9` over
+each prerendered `index.html` in `frontend/build`, heaviest page per route class.
+One tree at `76c2d27c`, sixteen published days, eight builds. Another agent ran
+the backend suite in a sibling worktree for part of the run, which moved one
+build from 47 s to 255 s and moved no byte: gzip over the same input is the same
+output whatever else the box is doing.
+
+**Two of the three had spent their runway and the third had not.** Nothing had
+fired. The pages read 222,819, 44,956 and 35,822 against committed ceilings of
+277,195, 56,385 and 39,743, so every route was under. But a ceiling here is the
+page plus seven published days of growth, and at the rates measured below the
+slack on `/console/` was **3.39 publishes** and on `/console/machine/` **3.12**.
+`/console/model/` was at **6.99**, because it was derived one commit earlier by
+this same method on this same tree, so it is left alone.
+
+**Five builds of one tree, heaviest per route, never a mean.** A mean fires on
+half of all builds:
+
+| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 222,812 | 222,819 | 222,817 | 222,818 | 222,816 | **222,819** | 7 |
+| `/console/model/` | 44,945 | 44,956 | 44,953 | 44,951 | 44,950 | **44,956** | 11 |
+| `/console/machine/` | 35,821 | 35,819 | 35,819 | 35,822 | 35,816 | **35,822** | 6 |
+
+**The control arm says the copied payload roots build the same site.** Both
+removal arms read their ledgers through `STATE_ROOT`, `TELEMETRY_ROOT` and
+`DIGEST_ROOT` off a copy in the temp directory, so a copy that built a different
+site would price a day against nothing. A sixth build off that copy with **no day
+removed** read 222,810, 44,945 and 35,813 - 2, 0 and 3 bytes below the bottom of
+the five-build range, so the honest spread is 9, 11 and 9 bytes on pages of 222.8,
+45.0 and 35.8 KB. All three are inside the 64-byte build noise floor. The three
+capped routes no arm can reach moved the same way: `/404` spanned 1,593 to 1,598
+and `/evals/` 3,103 to 3,107 across the five, with the control inside both.
+
+**Two removal arms, and each one prices all three routes.** A published day is
+priced by removing a real one, never by cloning one: a clone reads about 18
+percent cheap because gzip sees a near-copy of a block it already holds. Both
+arms drop a mature day - neither the newest nor the oldest, so the 30-day window
+anchor never moves - from `state/published.csv`, `state/scores/`,
+`state/item-health/`, `state/feed-health/`, `state/runtime-counters.csv`,
+`frontend/public/telemetry/` and the day's own directory under
+`frontend/public/digest/`. `frontend/public/assist/` and `source-health.json` are
+copied beside `digest/` in each arm, because `INDEX_ROOT` and
+`SOURCE_HEALTH_PATH` are derived from `DIGEST_ROOT` and have no switch of their
+own. Both are paired against the control, the same source and the same command.
+
+| Arm | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
+| --- | --- | ---: | ---: | ---: |
+| sixteen days (control) | - | 222,810 | 44,945 | 35,813 |
+| A: without 2026-08-31 | 601 published, 601 scored, 639 item-health, 710 feed-health, 639 telemetry rows, **20 counter rows over 5 runs** | 208,413 | 43,320 | 34,653 |
+| **cost of that day** | | 14,397 | 1,625 | 1,160, so 232 a run |
+| B: without 2026-09-01 | 627 published, 627 scored, 676 item-health, 710 feed-health, 676 telemetry rows, **20 counter rows over 5 runs** | 206,786 | 43,311 | 34,554 |
+| **cost of that day** | | **16,024** | **1,634** | **1,259, so 252 a run** |
+
+**Both arms carry counters, which the last pair could not manage, so the run rate
+and the day rate come off the same tree.** On 2026-08-31 the heavy day predated
+the counters entirely and a second, lighter day had to be dropped to get a
+per-run figure at all. Every mature day now runs three to five times, so both
+arms price all three routes and the larger of the two readings is taken on each -
+arm B on all three. Arm A's day is the one row #4 priced on 2026-09-06, and it
+returns 1,625 bytes against the 1,624 recorded there, which is the method
+reproducing itself to one byte.
+
+The ceilings follow the method that owns them - heaviest build, plus seven
+publishes, plus the 64-byte build noise floor - with Machine priced per run at
+the observed maximum of five runs a day:
+
+```text
+  222,819 + 7 x 16,024     + 64 = 335,051  /console/
+   44,956 + 7 x  1,634     + 64 =  56,458  /console/model/, NOT taken
+   35,822 + 7 x 5 x    252 + 64 =  44,706  /console/machine/
+```
+
+**`/console/model/` is left at 56,385 and that is a result, not an omission.**
+The re-derivation lands 73 bytes above the committed number, which is 0.13
+percent of a 56 KB ceiling and one byte a day of rate. The committed ceiling
+already carries 11,429 bytes of slack, which is **6.99 publishes** at the
+conservative rate - the seven this method asks for. Row #4 derived it one commit
+ago, on this tree, by this method. Moving it 73 bytes would buy 0.04 of a publish
+and would be a number raised for symmetry with its two siblings.
+
+**The raise decomposes exactly into a page term and a rate term, on both routes
+that moved.** The totals are +57,856 and +4,963 bytes, and the two halves sum to
+each:
+
+| Route | page since its ceiling was set | a day, or a run, since then | seven publishes of that | total |
+| --- | ---: | ---: | ---: | ---: |
+| `/console/` | 163,472 -> 222,819, **+59,347** | 16,237 -> 16,024 a day, **-213** | -1,491 | **+57,856** |
+| `/console/machine/` | 29,599 -> 35,822, **+6,223** | 288 -> 252 a run, **-36** | -1,260 | **+4,963** |
+
+**Both rates FELL and both raises are entirely page.** `/console/`'s day rate is
+213 bytes cheaper than the 16,237 the 2026-09-03 derivation used, and that is
+partly a change of method rather than a change of page: 16,237 was 9.38 bytes a
+ledger row extrapolated to the heaviest day on record, where 16,024 is a heavy
+mature day removed and measured. A measured day replaces an extrapolated one
+(Rule #10). `/console/machine/`'s run rate fell 36 bytes because the counter
+strip now reads one row per run where it read several.
+
+**Seven publishes, when the recorded rule would allow nine.** The horizon rule in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)
+is the largest whole number of measured publishes that keeps the 313,300-byte
+regression above 2x the slack. At today's rate that is nine on `/console/`:
+
+| Publishes | slack | regression / slack | slack as a share of the page |
+| ---: | ---: | ---: | ---: |
+| 7 | 112,232 | 2.79x | 50 percent |
+| 8 | 128,256 | 2.44x | 58 percent |
+| 9 | 144,280 | 2.17x | 65 percent |
+| 10 | 160,304 | 1.95x | 72 percent |
+
+Seven is taken instead. Nine publishes is 144,216 bytes on a 222,819-byte page,
+so the gate would stay silent while the page grew by two thirds - and the
+regression it exists to catch is one day payload, which is 313,300. A tripwire
+that lets a page absorb nearly half of one before it speaks is not a tripwire.
+Seven also keeps one horizon over all three routes, so "the runway expired" stays
+a single statement about the console rather than three.
+
+**What the three slacks are worth against that regression.** 112,232 on
+`/console/`, 11,429 on `/console/model/` and 8,884 on `/console/machine/`, so the
+313,300 is 2.79x, 27.4x and 35.3x each. The tightest is `/console/`, at 2.79x
+against 2.32x when it was last derived.
+
+**The 16,024 is not a rate for ever, and the fourteenth publish from here is
+where it stops.** `console.default_window_days` is 30 and sixteen days are
+committed, so a new day is still added to the seed rather than pushed through it.
+Once the ledger passes the window a new day drops the oldest out of the document
+and the marginal cost falls toward zero. Two more re-derivations at this rate and
+the third one should read a much smaller number - a ceiling raised at the
+un-windowed rate expires sooner rather than later, which is the safe direction
+and is what a ratchet is for.
+
+**The contract test's bound moved with them.**
+`test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
+every console ceiling under a constant that stands in for the page it cannot see:
+the heaviest console document plus the 313,300. That was 433,000 while the
+document was 119,700; the document is 222,819 now, so the constant is 536,000. At
+433,000 the next ordinary re-derivation of `/console/` would have crossed it -
+the page after seven publishes is about 335,000 and its ceiling about 447,000 -
+which is a contract test with a countdown in it. It is re-derived in the commit
+that re-derives the ceilings, for the same reason and on the same cadence.
+
 #### The `/console/` ceiling, re-derived 2026-09-03
 
 Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0. Date: 2026-09-03.
@@ -3190,6 +3334,143 @@ is long by the same kind of factor. It measures a different tree and answers to
 an operator rather than to a reader; it was left alone deliberately and is filed
 here rather than fixed.
 
+#### How fast the site actually fills (2026-09-06)
+
+**The published site is 47.2 MB smaller than it was six published days ago,
+while carrying 3,314 more items.** Differencing the two committed dates the way
+this page's earlier rows were taken gives **-47,215,748 bytes**, which is 29.8
+percent off the level it started at. That is a real saving and it is not a
+growth rate: the day pages stopped inlining their payload between the two dates,
+so the difference is dominated by a code change rather than by six days of news.
+
+The same change, on one identical day measured in both builds: `build/2026-08-24/`
+holds **16,376,153 bytes** at the earlier commit and **631,201** at the later
+one - 25.9 times smaller for the same 731 items.
+
+**So a fill rate needs one code and two corpora, not two dates.** Three builds
+were taken. Hardware: Intel Core i7-1265U, Windows 11 10.0.26200, node v24.12.0.
+Date: 2026-09-06. n=1 per arm - a byte count over a fixed tree has no spread, and
+the spread that matters is on the rate and is given below.
+
+| Arm | What it is | Bytes | Files | Items | Published days |
+| --- | --- | ---: | ---: | ---: | ---: |
+| E | `f75f42bc`, the 2026-08-31 tip | 158,567,231 | 380 | 3,485 | 10 |
+| Aug | today's code, September removed | 96,235,704 | 440 | 4,086 | 11 |
+| T | `40a96ef7`, the 2026-09-06 tip | 111,351,483 | 666 | 6,799 | 16 |
+
+Arm Aug is arm T's code built against a copy of `frontend/public/` and `state/`
+with every September day taken out - the digest days, the month's search-index
+shard, the month's telemetry and ledger shards, and the 2,713 September rows of
+`state/published.csv`. September is cut whole because every ledger here is
+sharded by month, so a month boundary is the only cut that leaves each shard
+either untouched or absent. **No day was cloned or synthesised**; both corpora
+are real published days.
+
+**Arm E is the control that proves the method.** The 2026-08-30 reading above is
+147,986,756 bytes over 3,054 items; arm E is 158,567,231 over 3,485. The step
+between them is **24,549 bytes an item**, against **24,378** measured
+independently on 2026-08-29 over seven mature days - **0.7 percent apart**, from
+a different tree state and a different method. A local build of an older commit
+reproduces the committed record.
+
+**The rate, at today's code.**
+
+| Quantity | Value | Over |
+| --- | ---: | --- |
+| The whole site | **3,023,156 B a published day** | 5 days |
+| The whole site | **5,572 B an item** | 2,713 items |
+| The dated day pages - route plus staged payload | 11,335,261 B, 75.0 percent of it | 5 days |
+| Everything undated | 3,780,518 B, 25.0 percent of it | 5 days |
+
+**Two methods, 4.4 percent apart on the part both can see.** The first fits
+`bytes = fixed + rate x items` over the thirteen mature per-date subtrees of the
+arm T build alone - a partition of one tree, never reading arm Aug - and gets
+**1,197,991 bytes a published day plus 1,785 an item**, with a root-mean-square
+residual of 178,369 bytes a day, 8.5 percent of a mean day. Applied to the five
+removed days and their 2,713 items it predicts **10,831,453** bytes against the
+**11,335,261** the two builds measure. Either is inside the other by less than a
+twentieth.
+
+**A per-date method cannot see a quarter of the fill, and that is the finding.**
+The 25.0 percent it misses is not day pages at all:
+
+| Where | Bytes over 5 days | A published day | Driven by |
+| --- | ---: | ---: | --- |
+| `console/` | 2,539,469 | 507,894 | days and runs, out to `console.max_window_days` = 366 |
+| `index/` - the search index | 1,501,352 | 300,270 | items, at 553 B each |
+| `telemetry/` | 424,320 | 84,864 | rows |
+| `archive/` | 1,026 | 205 | one day link a day |
+| `index.html` and `__data.json` | -685,586 | -137,117 | not growth: the home page carries the newest day, and 2026-09-05 published 374 items where 2026-08-31 published 601 |
+
+The home page swing is a level artefact rather than a rate. Removing it raises
+the whole-site figure to 3,160,273 bytes a published day, 4.5 percent higher and
+inside the residual above. The measured figure is the one recorded.
+
+**The committed payload tree, measured separately, and it agrees with itself to
+0.8 percent.** The tree under `frontend/public/digest/` is **22,830,395 bytes in
+402 files** over the same 6,799 items and 16 days at `40a96ef7`.
+
+| Method | Bytes an item | Bytes a published day |
+| --- | ---: | ---: |
+| Differencing two commits: 11,269,707 B at `f75f42bc` to 22,830,395 at `40a96ef7`, by summing git blob sizes | 3,488 | 1,926,781 |
+| The runner's own `site_bytes`, median over the twelve mature day-to-day steps of the sixteen committed run manifests | 3,517 +/- 448 | 1,910,234 +/- 642,682 |
+
+These two are independent in every input: a different machine (a GitHub-hosted
+runner against this laptop), a different code path (`retention.measure` during
+the run against `git ls-tree -l` afterwards), and a different arithmetic (a
+dated level series against a two-endpoint difference). The last committed
+`site_bytes`, 22,827,239, is 0.014 percent under the tree measured here, which is
+the manifest the run wrote after it measured.
+
+**The per-day figure carries a 34 percent spread and the per-item figure 12.7
+percent, because a published day is 117 to 731 items.** The rate per item is the
+one that holds still, which is why `site-weight` prints that one.
+
+**The repository pack, differenced across the same two commits** (Rule #2's other
+budget: the prune bounds the past, and nothing bounds a growing present). Each
+figure is a fresh clone of one commit followed by `git gc --aggressive
+--prune=now`, so it is a repacked size and not an accident of how the local
+repository happened to be packed.
+
+| What | 2026-08-31 `f75f42bc` | 2026-09-06 `40a96ef7` | A published day | An item |
+| --- | ---: | ---: | ---: | ---: |
+| One snapshot of the tree, no history | 35,697,900 B | 43,098,644 B | 1,233,457 B | 2,233 B |
+| A full clone, with history | 41,399,433 B, 530 commits | 49,579,643 B, 818 commits | 1,363,368 B | 2,468 B |
+
+**History costs 10.5 percent more than the tree it carries, so the prune reaches
+an eighth of the problem.** Six published days added 7,400,744 bytes to the
+working tree and 8,180,210 to a clone of it, so only the 779,466-byte difference
+- 9.5 percent of the growth - is history that `prune.yml` can ever squash. On
+the level it is the same story: 6,480,999 bytes of the 49,579,643-byte clone are
+history, 13.1 percent. A clone today is 47.3 MiB against a site of 106.2, and it
+grows at 45 percent of the site's rate.
+
+**The runway, from the arm T level at the measured rate.**
+
+| Quantity | Value |
+| --- | ---: |
+| The site now | 111,351,483 B, 106.19 MiB, **10.4 percent of the 1 GiB cap** |
+| Published days to the 800 MiB alarm | **240.6** |
+| Published days to the 1 GiB cap | **318.3** |
+| The same, at the heaviest day on record (731 items, 3,258,604 B) | **223.3** and **295.3** |
+
+**The layout change bought about 151 published days of alarm headroom.** The
+2026-08-30 reading above printed 89.1 days to the alarm and 119.4 to the cap.
+Both were correct for the tree they measured.
+
+**`site-weight`'s printed runway is no longer the floor it is documented as.**
+On the arm T tree it prints 277.6 published days to the alarm against the 240.6
+measured here - **15.4 percent long**. It counts the right bytes: its 106.2 MB
+and 6,799 items match the independent sum above exactly. Two recorded premises
+in its arithmetic now point opposite ways and nearly cancel. Charging the fixed
+directories to the items makes its per-item rate 16,378 bytes against a measured
+5,572, which is 2.94 times too high; pricing a day at `run.safety_ceiling_per_run`
+= 160 items against the 543 a published day the differenced interval actually ran
+is 3.39 times too low. The second premise is the one already filed above as long
+by the same kind of factor. It was left alone again here, because the measurement
+found no defect in what it counts and the premise belongs to a decision about the
+knob rather than to this row.
+
 ### Where the alarm fires, and what it buys
 
 `retention.site_budget_mb` is the size at which a build logs a warning. It is an
@@ -4428,7 +4709,7 @@ to justify a design decision.
 | **A work shard's fixed cost on more than one run** | **one run measured: 335.1 s a shard, 5.6 minutes** | only run `2026-08-29-2` has four clocks and one execution each; `2026-08-29-3` filed six counter rows for four shards and cannot be joined, and the six runs before 2026-08-29 have no `job_seconds` cell at all ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). Re-run `python backend/utilities/measure_ledgers.py` after a few more clocked days, and read the spread rather than the single figure. | | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Whether a day at eight work shards publishes** | **answered 2026-08-27: it does** | run `33114410534` published the 2026-08-27 day at `shards = 8`, with 25 charts over 25 distinct paths and 25 files in the tree ([Eight work shards, paired](#eight-work-shards-paired-2026-08-27)). What remains is a decision about `run.max_parallel`, not a measurement. |
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
-| **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |
+| **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two arms of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
 | **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs on an i7-1265U ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). A laptop measures the laptop, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
 | **What makes a visuals host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Exactly one run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. Then: **two runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
 | **Which CPU the visuals job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). The `visuals` job runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give it a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |

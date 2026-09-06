@@ -381,11 +381,13 @@ reason the scope step decides.
 `site-weight` is the fourth, and it is the only one that measures the whole
 site rather than one page. It sums `frontend/build/` - the directory the Pages
 deploy uploads - and holds it against two lines: over `retention.site_budget_mb`
-in `config/idhazh.json` it prints a warning and passes, and past the 1 GiB Pages
-cap it fails. **Point it at anything else and the suite fails**, because the tree
-is read back off `pages.yml`'s own upload step. It measures nothing until the
-site is built, so run it after `npm run build`, and a run that reports zero files
-fails rather than passes.
+in `config/idhazh.json` it prints a warning and passes, and past
+`retention.pages_hard_cap_mb` in the same file it fails. That second one ships at
+the platform's own 1 GiB and the schema refuses any value above it, so an edit
+can only ever make this step fail sooner. **Point it at anything else and the
+suite fails**, because the tree is read back off `pages.yml`'s own upload step.
+It measures nothing until the site is built, so run it after `npm run build`, and
+a run that reports zero files fails rather than passes.
 
 It prints three more lines and none of them fails anything. `by directory` is the
 top-level children of `build/` largest first, so a directory that grew can be
@@ -416,7 +418,7 @@ script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
 lighter needs no permission, so there is no lower bound. A route is named when
 its growth has been priced: `/404` and `/evals/` move only when the source moves,
 `/archive/` grows by one day link a published day, and `/console/` grows by about
-20 gzipped bytes a published telemetry row. A day page and the home page weigh what the
+24 gzipped bytes a published telemetry row. A day page and the home page weigh what the
 day published, so a fixed ceiling on either would cap the news instead of
 catching a regression - the only way under it is to publish fewer items, which
 [layout.md](../architecture/publishing/layout.md) forbids. Those two are covered
@@ -444,26 +446,28 @@ and it expires by design: when the gate fires on an ordinary day, the answer is
 to re-measure and re-derive the number, not to add a digit
 ([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
-**The console is three routes and takes three ceilings, all re-derived on
-2026-08-31 once every row that touches those routes had merged.** One key over
+**The console is three routes and takes three ceilings, last re-derived on
+2026-09-06 once every row of the console backfill had merged.** One key over
 three surfaces fails without saying which surface failed, so `/console/`,
-`/console/model/` and `/console/machine/` each carry their own: **251,324**,
-**29,273** and **31,714** bytes.
+`/console/model/` and `/console/machine/` each carry their own: **335,051**,
+**56,385** and **44,706** bytes.
 
 Each is the heaviest of five builds of the tree that ships, plus seven publishes,
 plus the 64-byte build noise floor. What a publish costs is measured by removing
-one real mature day from every ledger the console reads and rebuilding - 19,301
-gzipped bytes on `/console/` and 1,179 on `/console/model/`. `/console/machine/`
-is priced in RUNS instead, at 244 bytes a run over seven days at the observed
+one real mature day from every ledger the console reads and rebuilding - 16,024
+gzipped bytes on `/console/` and 1,634 on `/console/model/`. `/console/machine/`
+is priced in RUNS instead, at 252 bytes a run over seven days at the observed
 maximum of five runs a day, because a day that ran three times and a day that ran
 five cost it differently
-([../reference/measurements.md](../reference/measurements.md#all-three-console-ceilings-re-derived-once-every-row-had-merged-2026-08-31)).
+([../reference/measurements.md](../reference/measurements.md#all-three-console-ceilings-re-derived-on-the-backfills-tree-2026-09-06)).
 
-**None of the three had fired when they were raised, and that is the normal
+**None of the three had fired when they were re-derived, and that is the normal
 case.** A ceiling is re-derived because its runway expired, not because a gate
-went red: the pages measured 116,153, 20,956 and 23,110 against the numbers they
-replaced. All three are meant to expire again, and `/console/` expires first -
-its slack is exactly seven published days.
+went red: the pages measured 222,819, 44,956 and 35,822 against the numbers they
+replaced, and every one was under. `/console/model/` came out 73 bytes above the
+number already committed, which is 0.13 percent, so it was left alone - a ceiling
+that still carries its seven publishes does not move. All three are meant to
+expire again, and each slack is seven published days at its own measured rate.
 
 **When a console ceiling fires, the panel does not move.** The owner ruled on
 2026-08-31 that no approved feature is removed, deferred or shrunk to stay under
