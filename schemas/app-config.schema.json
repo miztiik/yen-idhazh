@@ -1224,6 +1224,13 @@
           "title": "Telemetry Publish",
           "type": "boolean"
         },
+        "trace_window_days": {
+          "default": 7,
+          "description": "How many days of raw span traces state/traces/ keeps. A trace is the evidence an operator opens to see one recent run step by step; the committed record is the span rollup, so a trace has a short life and a file past this window is deleted whole rather than folded - a fold would invent a total nobody reads. Seven days covers a week of runs. Measured at about 0.6 MB a run at the run.safety_ceiling_per_run item ceiling over the five scheduled runs a day (2026-09-06), so the window bounds state/traces/ at about 21 MB whatever the project's age - constant (Rule #12), and a fraction of the 1 GB Pages reference it is not even part of. It does nothing until observability.tracing_enabled is true: before that no trace is written and the prune walks an empty tree.",
+          "minimum": 1,
+          "title": "Trace Window Days",
+          "type": "integer"
+        },
         "tracing_enabled": {
           "default": false,
           "description": "Whether a work shard builds a span tree. The only switch here that is OFF unconfigured, because it is the only instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. It buys a developer the nesting a flat row cannot carry - the robots read inside the fetch, the prompt render and the reply parse either side of the model call. True writes one JSON line per span under backend/var/traces/, which is gitignored and published nowhere. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says.",
@@ -1789,6 +1796,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability.trace_window_days added, defaulting to 7. It bounds state/traces/, the raw span traces kept so an operator can open a recent run; a trace whose published day is more than that many days behind today is deleted whole. Additive - an older config validates and takes the default.",
+      "version": "2026-09-06T15:00",
+      "why": "Raw traces are evidence with a short life while the span rollup is the record, so the traces need a rolling window of their own. A trace is a lookup an operator opens, so it is deleted rather than folded - a fold would invent a total nobody reads. Seven days is measured at about 0.6 MB a run over five runs a day, which bounds the tree at about 21 MB whatever the project's age (Rule #12)."
+    },
+    {
       "change": "ui.read_mark_days moves from 7 to 14, and its meaning moves from 'the newest 7 dates the store holds' to '14 calendar days back from today'. ui.archive_recent_days moves from 7 to 14. console.window_presets gains a 1-day span and is now [1, 7, 14, 30, 90]; console.min_window_days moves from 7 to 1 so the new preset satisfies the existing range check. console.max_window_days keeps 366 and gains a description. Two fields are added: ui.offline_bytes_kept, defaulting to 20,000,000 and bounded at 2,000,000 and 100,000,000, and ui.archive_window_days, defaulting to 30 and refused unless it names one of console.window_presets. The shapes are `UiConfig` and `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Every value legal before today is legal now and both new fields carry defaults, so a config written before today still validates and no read-side migration is owed.",
       "version": "2026-09-06T14:00",
       "why": "Read marks expired by position rather than by time. Keeping the newest 7 dates the store happens to hold needs no clock, which was the point, but it bounds the store by how often a reader comes back instead of by how long ago they read: a reader who opens one day a month kept marks from seven different months, and each of them greyed out an article last seen most of a year ago. Fourteen calendar days trusts the device clock, which the old rule deliberately did not, and that cost is stated in the field itself rather than hidden - a clock set wrong now keeps marks too long or drops them early. A wrong mark is what the store exists to avoid, so the trade is taken (owner decision, 2026-09-06). THE STATED RULE AND THE SHIPPED PRUNING ARE ONE COMMIT APART ON PURPOSE: this document is the contract for every row of TODO/20260906-constant-cost-reads-plan.md, so the knobs land once and no later row edits the config file. Row 4 of that plan changes frontend/src/lib/readstate.ts to prune by calendar. Until it merges the browser still keeps the newest 14 dates, which is a superset of the 14-day window and therefore never hides a mark a reader should still see. ui.archive_recent_days follows to 14 for the reason it matched read_mark_days at 7: a row in that block invites a reader back to a day, and a day whose marks were already dropped comes back looking unread. The presets gain one day because every span is a distinct fetch cost - a window pulls a month file per month it reaches - and there was no way to ask for the cheapest read of all, the run that has just finished. min_window_days drops to 1 to admit it. max_window_days does not move, and the description now says why: it is a retention floor rather than a viewport clamp, the only span control a reader can reach is the preset list, and lowering it would authorise deleting month shards the console can still ask for. ui.offline_bytes_kept exists because offline_days_kept cannot bound bytes: measured 2026-09-02 over the 12 served days, one day payload runs 8,231 to 1,373,593 bytes, a factor of 167, so fourteen days is anything from 115 KB to 19 MB. ui.archive_window_days names a span out of console.window_presets rather than declaring a second list of day counts, so the contract holds exactly one list of spans and the two surfaces cannot drift. Neither new knob has a reader yet; rows 8 and 25 of the same plan are the readers."
@@ -2260,7 +2272,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-06T14:00",
+      "default": "2026-09-06T15:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2274,5 +2286,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-06T14:00"
+  "version": "2026-09-06T15:00"
 }
