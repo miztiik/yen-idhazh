@@ -388,13 +388,17 @@ function pooledRate(
  * is. A row missing either required cell predates token capture and is evidence
  * in neither direction, so it is skipped rather than counted as an item that
  * read nothing.
+ *
+ * The rows handed in are the run's own. `machineCounters` groups the ledger by
+ * run once; this used to take the whole ledger and skip every row belonging to
+ * another run, which cost every accepted run a walk over every item ever
+ * published.
  */
-function poolLedger(health: Record<string, string>[], runId: string): Pooled {
+function poolLedger(health: Record<string, string>[]): Pooled {
 	let tokens = 0;
 	let milliseconds = 0;
 	let parts = 0;
 	for (const row of health) {
-		if (row.run_id !== runId) continue;
 		const read = itemRead(row);
 		if (read === null) continue;
 		tokens += read.tokens;
@@ -414,8 +418,8 @@ function poolServer(shards: ShardCounters[]): Pooled {
 	return { tokens, seconds, parts: counted.length, rate: rate(tokens, seconds) };
 }
 
-function clockCheck(shards: ShardCounters[], health: Record<string, string>[], runId: string): ClockCheck {
-	const ledger = poolLedger(health, runId);
+function clockCheck(shards: ShardCounters[], health: Record<string, string>[]): ClockCheck {
+	const ledger = poolLedger(health);
 	const server = poolServer(shards);
 	if (ledger.rate === null || server.rate === null) {
 		return { ledger, server, gapPct: null, agrees: null };
@@ -431,6 +435,8 @@ function clockCheck(shards: ShardCounters[], health: Record<string, string>[], r
  * different servers when any cell differs. The second case cannot be summed and
  * cannot be picked between, so the run is refused whole: a page that prints
  * half a reconcilable run is worse than one that says which run it cannot read.
+ *
+ * `health` is this run's own item rows, already picked out by the caller.
  */
 function oneRun(
 	runId: string,
@@ -453,7 +459,9 @@ function oneRun(
 		// any other row, so the set the rest of this function relies on cannot be
 		// built. Reading it as shard zero would merge it into a real shard's row.
 		if (measured(key) === null) return refuse('a row does not say which shard it came from');
-		byShard.set(key, [...(byShard.get(key) ?? []), row]);
+		const held = byShard.get(key);
+		if (held === undefined) byShard.set(key, [row]);
+		else held.push(row);
 	}
 	const kept: Record<string, string>[] = [];
 	for (const [shard, sameShard] of byShard) {
@@ -564,7 +572,7 @@ function oneRun(
 		peakRssBytes: over((shard) => shard.peakRssBytes, highest),
 		slowestModelLoadMs: over((shard) => shard.modelLoadMs, highest),
 		slotsPerDecode: over((shard) => shard.slotsPerDecode, highest),
-		clocks: clockCheck(reported, health, runId)
+		clocks: clockCheck(reported, health)
 	};
 }
 
@@ -573,6 +581,12 @@ function oneRun(
  * Pure: it takes rows and the two ceilings, so a test drives a fixture ledger
  * without touching the disk and `loadMachineCounters` is the only thing that
  * knows where the files are.
+ *
+ * Both ledgers are grouped by run in one pass each, and each run is then handed
+ * its own rows. The join used to run the other way round - every accepted run
+ * walked the whole item-health ledger - so four runs over sixteen item rows
+ * cost 64 checks and sixteen runs over sixty-four cost 1,024. It is now one
+ * check a row whatever the run count is (Rule #12).
  */
 export function machineCounters(
 	counters: Record<string, string>[],
@@ -583,7 +597,17 @@ export function machineCounters(
 	for (const row of counters) {
 		const runId = row.run_id ?? '';
 		if (!runId) continue;
-		byRun.set(runId, [...(byRun.get(runId) ?? []), row]);
+		const held = byRun.get(runId);
+		if (held === undefined) byRun.set(runId, [row]);
+		else held.push(row);
+	}
+	const itemsByRun = new Map<string, Record<string, string>[]>();
+	for (const row of health) {
+		const runId = row.run_id ?? '';
+		if (!runId) continue;
+		const held = itemsByRun.get(runId);
+		if (held === undefined) itemsByRun.set(runId, [row]);
+		else held.push(row);
 	}
 	const runs: RunCounters[] = [];
 	const refused: RefusedRun[] = [];
@@ -591,7 +615,7 @@ export function machineCounters(
 	// correctly and orders the days too - up to run ten of one day, which this
 	// pipeline has never reached and which `run.max_parallel` of 4 bounds.
 	for (const runId of [...byRun.keys()].sort().reverse()) {
-		const result = oneRun(runId, byRun.get(runId) ?? [], health, limits);
+		const result = oneRun(runId, byRun.get(runId) ?? [], itemsByRun.get(runId) ?? [], limits);
 		if ('why' in result) refused.push(result);
 		else runs.push(result);
 	}

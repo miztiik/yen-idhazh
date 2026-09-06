@@ -134,16 +134,30 @@ function measured(value: string | undefined): number | null {
 	return Number.isFinite(parsed) ? parsed : null;
 }
 
-function median(values: number[]): number | null {
-	return values.length === 0 ? null : quantile([...values].sort((a, b) => a - b), 0.5);
+/** The middle of a list already in ascending order. */
+function medianOfSorted(sorted: readonly number[]): number | null {
+	return sorted.length === 0 ? null : quantile(sorted, 0.5);
 }
 
+function median(values: readonly number[]): number | null {
+	return medianOfSorted([...values].sort((a, b) => a - b));
+}
+
+/** One bucket per date, filled in one pass.
+ *
+ * Appended in place. Rebuilding the bucket as `[...held, row]` copies every row
+ * already in it, so a day the pipeline published a lot on costs the square of
+ * its own size - and a concentrated day is exactly the day an operator opens
+ * this page for.
+ */
 function byDate(rows: Record<string, string>[]): Map<string, Record<string, string>[]> {
 	const grouped = new Map<string, Record<string, string>[]>();
 	for (const row of rows) {
 		const date = row.date ?? '';
 		if (!date) continue;
-		grouped.set(date, [...(grouped.get(date) ?? []), row]);
+		const held = grouped.get(date);
+		if (held === undefined) grouped.set(date, [row]);
+		else held.push(row);
 	}
 	return grouped;
 }
@@ -504,7 +518,9 @@ export function sourceCuts(
 
 	const bySource = new Map<string, Article[]>();
 	for (const article of articles.values()) {
-		bySource.set(article.sourceId, [...(bySource.get(article.sourceId) ?? []), article]);
+		const held = bySource.get(article.sourceId);
+		if (held === undefined) bySource.set(article.sourceId, [article]);
+		else held.push(article);
 	}
 
 	const lost: number[] = [];
@@ -585,7 +601,7 @@ function capPoints(articles: Article[]): CapPoint[] {
  */
 function spread(values: number[]): LengthRange {
 	const sorted = [...values].sort((a, b) => a - b);
-	const middle = median(sorted);
+	const middle = medianOfSorted(sorted);
 	return {
 		min: sorted[0] ?? 0,
 		median: middle === null ? 0 : Math.round(middle),
@@ -874,15 +890,29 @@ export function sourceDoubts(
 	};
 }
 
+/** The band ladder in ascending order, sorted once for a whole pass.
+ *
+ * Sorted here rather than inside `askFor`, because `askFor` is asked once per
+ * article and the ladder is the same ladder every time. Copied rather than
+ * sorted in place: the caller's array is the config block, which is frozen.
+ */
+function ladder(bands: readonly SummaryBand[]): SummaryBand[] {
+	return [...bands].sort((a, b) => a.min_source_words - b.min_source_words);
+}
+
 /** The band the summarizer was asked to write to, for an article of this length.
  *
  * The highest band the article clears, which is how `backend/idhazh/summarize.py`
  * picks it. A length nothing covers has no ask, and null says so.
+ *
+ * `ascending` is a ladder `ladder()` has already sorted. The walk stops at the
+ * first rung the article does not reach, because every rung after it is higher.
  */
-function askFor(bands: readonly SummaryBand[], sourceWords: number): SummaryBand | null {
+function askFor(ascending: readonly SummaryBand[], sourceWords: number): SummaryBand | null {
 	let found: SummaryBand | null = null;
-	for (const band of [...bands].sort((a, b) => a.min_source_words - b.min_source_words)) {
-		if (sourceWords >= band.min_source_words) found = band;
+	for (const band of ascending) {
+		if (sourceWords < band.min_source_words) break;
+		found = band;
 	}
 	return found;
 }
@@ -918,11 +948,14 @@ export function runLengths(
 	scores: Record<string, string>[],
 	bands: readonly SummaryBand[]
 ): RunLength[] {
+	const rungs = ladder(bands);
 	const byRun = new Map<string, Record<string, string>[]>();
 	for (const row of scores) {
 		const runId = row.run_id ?? '';
 		if (runId === '') continue;
-		byRun.set(runId, [...(byRun.get(runId) ?? []), row]);
+		const held = byRun.get(runId);
+		if (held === undefined) byRun.set(runId, [row]);
+		else held.push(row);
 	}
 
 	const found: RunLength[] = [];
@@ -935,7 +968,7 @@ export function runLengths(
 		const asks = rows
 			.map((row) => measured(row.source_word_count) ?? measured(row.source_seen_word_count))
 			.filter((count): count is number => count !== null)
-			.map((count) => askFor(bands, count))
+			.map((count) => askFor(rungs, count))
 			.filter((band): band is SummaryBand => band !== null);
 		const models = [...new Set(rows.map((row) => row.model_id ?? '').filter((id) => id !== ''))];
 		found.push({
@@ -1025,6 +1058,7 @@ function sideMeasures(
 	health: Record<string, string>[],
 	bands: readonly SummaryBand[]
 ): SideMeasure[] {
+	const rungs = ladder(bands);
 	const times = summarizeMs(health);
 	const words = scores
 		.map((row) => measured(row.summary_word_count))
@@ -1035,7 +1069,7 @@ function sideMeasures(
 		const wrote = measured(row.summary_word_count);
 		const read = measured(row.source_word_count) ?? measured(row.source_seen_word_count);
 		if (wrote === null || read === null) return false;
-		const ask = askFor(bands, read);
+		const ask = askFor(rungs, read);
 		return ask !== null && (wrote < ask.target_words_min || wrote > ask.target_words_max);
 	});
 	return [

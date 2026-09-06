@@ -557,35 +557,73 @@ export function rowsInWindow<T extends { date: string }>(rows: T[], window: Time
 	return rows.filter((row) => row.date >= window.start && row.date <= window.end);
 }
 
+/** What one day of rows adds up to, before the stages are laid out in order. */
+interface DayTally {
+	/** Every row the day holds. */
+	planned: number;
+	/** Rows that left `plan`, which is the first stage's denominator. */
+	reached: number;
+	/** Failures, one count per `FAILURE_STAGES` entry. */
+	failures: number[];
+	/** The codes behind those failures, one record per `FAILURE_STAGES` entry,
+	 * in the order the rows arrived. */
+	codes: Record<string, number>[];
+}
+
+function emptyTally(): DayTally {
+	return {
+		planned: 0,
+		reached: 0,
+		failures: FAILURE_STAGES.map(() => 0),
+		codes: FAILURE_STAGES.map(() => ({}) as Record<string, number>)
+	};
+}
+
+/** One pass over the window's rows, then the stages laid out in pipeline order.
+ *
+ * Every fact a day's three columns need is counted while the rows go past, so a
+ * row is read once rather than once for the day's size and again for each
+ * stage. The buckets are filled in place too: rebuilding a day's array as
+ * `[...held, row]` copies every row already in it, and a day with many rows is
+ * the day this chart is opened for.
+ */
 export function failureSeries(rows: TelemetryRow[], window: TimeWindow): StageFailureSeries[] {
-	const byDate = new Map<string, TelemetryRow[]>();
+	const stageAt = new Map<string, number>(FAILURE_STAGES.map((stage, index) => [stage, index]));
+	const tallied = new Map<string, DayTally>();
 	for (const row of rowsInWindow(rows, window)) {
-		byDate.set(row.date, [...(byDate.get(row.date) ?? []), row]);
-	}
-	// One pass per day, down the pipeline order, because each stage's denominator
-	// is whatever the stage before it let through.
-	const perDay = daysInWindow(window).map((date) => {
-		const group = byDate.get(date) ?? [];
+		let day = tallied.get(row.date);
+		if (day === undefined) {
+			day = emptyTally();
+			tallied.set(row.date, day);
+		}
+		day.planned += 1;
 		// A row that never left `plan` was never fetched, so it belongs to no
 		// stage's denominator - only to the day's size.
-		let reached = group.filter((row) => row.stage !== 'plan').length;
-		return FAILURE_STAGES.map((stage) => {
-			const failures = group.filter((row) => row.outcome === 'failed' && row.stage === stage);
-			const codes: Record<string, number> = {};
-			for (const row of failures) {
-				const key = row.code || 'unknown';
-				codes[key] = (codes[key] ?? 0) + 1;
-			}
-			const day: StageFailureDay = {
+		if (row.stage !== 'plan') day.reached += 1;
+		if (row.outcome !== 'failed') continue;
+		const index = stageAt.get(row.stage);
+		if (index === undefined) continue;
+		day.failures[index] += 1;
+		const key = row.code || 'unknown';
+		day.codes[index][key] = (day.codes[index][key] ?? 0) + 1;
+	}
+	// Down the pipeline order, because each stage's denominator is whatever the
+	// stage before it let through.
+	const perDay = daysInWindow(window).map((date) => {
+		const day = tallied.get(date) ?? emptyTally();
+		let reached = day.reached;
+		return FAILURE_STAGES.map((_stage, index) => {
+			const failures = day.failures[index];
+			const drawn: StageFailureDay = {
 				date,
-				planned: group.length,
+				planned: day.planned,
 				reached,
-				failures: failures.length,
-				rate: reached === 0 ? null : failures.length / reached,
-				codes
+				failures,
+				rate: reached === 0 ? null : failures / reached,
+				codes: day.codes[index]
 			};
-			reached -= failures.length;
-			return day;
+			reached -= failures;
+			return drawn;
 		});
 	});
 	return FAILURE_STAGES.map((stage, index) => ({
@@ -973,10 +1011,20 @@ export function distribution(values: readonly number[]): Distribution | null {
 
 	const bins: WriteBin[] = [];
 	let through = 0;
+	// One advancing cursor down the sorted values rather than a full scan per
+	// bin. The values are ascending and the edges are ascending, so every value
+	// belongs to the bin the cursor is standing in.
+	let cursor = 0;
+	// Anything below the first edge belongs to no bin, which is what a full scan
+	// did too: the first bin asks for `>= from` and every later one starts at or
+	// above one second.
+	while (cursor < sorted.length && sorted[cursor] / 1000 < edges[0]) cursor += 1;
 	for (let index = 0; index < edges.length - 1; index += 1) {
 		const from = edges[index];
 		const to = edges[index + 1];
-		const n = sorted.filter((ms) => ms / 1000 >= from && ms / 1000 < to).length;
+		const opened = cursor;
+		while (cursor < sorted.length && sorted[cursor] / 1000 < to) cursor += 1;
+		const n = cursor - opened;
 		through += n;
 		bins.push({ from, to, n, throughPct: Math.round((through / sorted.length) * 100) });
 	}
