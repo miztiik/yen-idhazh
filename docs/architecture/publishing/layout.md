@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -702,7 +702,9 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 
 **The tree has no default.** A default is how the old call came to name the wrong one. The workflow names it at the call site, and a contract test reads the path back off `pages.yml`'s own upload step - so the thing measured and the thing published are pinned to be one directory, and pointing the gate anywhere else fails the suite rather than being noticed a month later.
 
-**Two lines, and only one of them fails a build.** Over `retention.site_budget_mb` (800 MB) the step prints an Actions warning and passes; past the 1 GiB cap it fails. Failing at 800 MB would stop publishing about two weeks before it had to, and a reader would lose a working site to a budget that still had room. Past the cap the bytes cannot be published at all, and failing in the job that measured them names the cause - a deploy that refuses them names nothing.
+**Two lines, and only one of them fails a build.** Over `retention.site_budget_mb` (800 MB) the step prints an Actions warning and passes; past `retention.pages_hard_cap_mb` (1024 MB) it fails. Failing at 800 MB would stop publishing about two weeks before it had to, and a reader would lose a working site to a budget that still had room. Past the cap the bytes cannot be published at all, and failing in the job that measured them names the cause - a deploy that refuses them names nothing.
+
+**The cap is a knob in one direction only.** It was a `Final` in `backend/idhazh/retention.py` until 2026-09-06, which made Rule #2's "the budget is the platform, not a preference" true only for as long as nobody edited the constant. It is now a config field bounded `le=1024`: an operator can name a smaller cap and the schema refuses a larger one, with a message naming the bound. Lowering it is the reason it is here - it buys an earlier and louder failure while there is still headroom to act in - and there is no value that buys more room, because the 1 GB is GitHub's and not ours. The console's site band still draws against the platform's own 1 GB rather than the configured cap: it reports the ceiling that exists, not the one this run chose to stop at.
 
 **`site_bytes` on the run manifest stays what it always was.** It is the committed payload tree, six days of published manifests carry it, and changing what it means would be a contract break for a number that is genuinely useful about repository growth. What changed is that it now says which tree it holds, so nobody reads it as the site again ([../contracts/schemas.md](../contracts/schemas.md)).
 

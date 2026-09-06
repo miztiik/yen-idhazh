@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -347,11 +347,13 @@ at all fails rather than passes.
 `site-weight` is the fourth, and it is the only one that measures the whole
 site rather than one page. It sums `frontend/build/` - the directory the Pages
 deploy uploads - and holds it against two lines: over `retention.site_budget_mb`
-in `config/idhazh.json` it prints a warning and passes, and past the 1 GiB Pages
-cap it fails. **Point it at anything else and the suite fails**, because the tree
-is read back off `pages.yml`'s own upload step. It measures nothing until the
-site is built, so run it after `npm run build`, and a run that reports zero files
-fails rather than passes.
+in `config/idhazh.json` it prints a warning and passes, and past
+`retention.pages_hard_cap_mb` in the same file it fails. That second one ships at
+the platform's own 1 GiB and the schema refuses any value above it, so an edit
+can only ever make this step fail sooner. **Point it at anything else and the
+suite fails**, because the tree is read back off `pages.yml`'s own upload step.
+It measures nothing until the site is built, so run it after `npm run build`, and
+a run that reports zero files fails rather than passes.
 
 It prints three more lines and none of them fails anything. `by directory` is the
 top-level children of `build/` largest first, so a directory that grew can be

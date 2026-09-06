@@ -34,6 +34,7 @@ from conftest import CONTRACT_FIXTURES_DIR, read_text
 from idhazh import ledger, publish_telemetry
 from idhazh.cli import main, stage_prune_state, stage_site_weight
 from idhazh.contracts.app_config import (
+    PAGES_HARD_CAP_MB,
     CollectConfig,
     ConsoleConfig,
     ObservabilityConfig,
@@ -48,7 +49,6 @@ from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
 from idhazh.retention import (
     BYTES_PER_MB,
-    PAGES_HARD_CAP_MB,
     SiteSize,
     budget_alarm,
     cap_breach,
@@ -364,14 +364,49 @@ def test_the_alarm_fires_when_the_built_site_crosses_the_alarm_point(
     assert f"{PAGES_HARD_CAP_MB} MB Pages cap" in printed
 
 
-def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(tmp_path: Path) -> None:
+def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """Past the cap the bytes cannot be published, so the build stops here.
 
     The alarm point stays at its shipped 800 MB, so this proves the cap is
-    checked on its own rather than as a louder alarm.
+    checked on its own rather than as a louder alarm. The cap is lowered to 2 MB
+    through config, because that is now the only way to move it - the step reads
+    `retention.pages_hard_cap_mb` and takes no override.
+
+    This is also the permitted arm of the bound. `test_contracts.py` holds the
+    refusal, and neither arm alone is a bound: one shows the number can be lowered
+    and the other shows it cannot be raised.
     """
     tree = built_site(tmp_path / "build", 3)
-    assert stage_site_weight(tree, RetentionConfig(), cap_mb=2) == 1
+    with caplog.at_level(logging.ERROR, logger="idhazh"):
+        assert stage_site_weight(tree, RetentionConfig(pages_hard_cap_mb=2)) == 1
+    assert "2 MB Pages cap" in caplog.text, "the failure names the cap that stopped it"
+
+
+def test_lowering_the_cap_moves_the_gate_and_the_headroom_it_prints(tmp_path: Path) -> None:
+    """The same tree, two caps, two answers - and the alarm point unmoved.
+
+    3 MB of site passes under the shipped 1024 MB cap and fails under a 2 MB one,
+    which is the gate firing earlier. The alarm's words follow the cap too, since
+    the headroom it prints is headroom to the cap and a lowered cap leaves less.
+    What does not move is the alarm point itself: it is a different instrument and
+    stays where config put it.
+    """
+    tree = built_site(tmp_path / "build", 3)
+    assert stage_site_weight(tree, RetentionConfig()) == 0
+    assert stage_site_weight(tree, RetentionConfig(pages_hard_cap_mb=2)) == 1
+
+    size = measure(tree, published_items=count_published_items(tree))
+    shipped = budget_alarm(size, RetentionConfig(site_budget_mb=2))
+    lowered = budget_alarm(size, RetentionConfig(site_budget_mb=2, pages_hard_cap_mb=500))
+    assert shipped is not None
+    assert lowered is not None
+    assert "2 MB alarm point" in shipped
+    assert "2 MB alarm point" in lowered
+    assert f"{PAGES_HARD_CAP_MB} MB Pages cap" in shipped
+    assert "500 MB Pages cap" in lowered
+    assert shipped != lowered, "the headroom the alarm prints is headroom to the cap in force"
 
 
 def test_the_cap_line_says_what_it_costs_and_what_to_do() -> None:

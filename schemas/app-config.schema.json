@@ -1271,6 +1271,14 @@
           "title": "Max Deletes Per Run",
           "type": "integer"
         },
+        "pages_hard_cap_mb": {
+          "default": 1024,
+          "description": "The size at which the built site can no longer be published, in MB. `idhazh site-weight` fails the job above it, and that failure is the whole difference between this knob and site_budget_mb: the other one warns and this one stops. Bounded on purpose - the 1 GB belongs to GitHub Pages, so config can lower the cap a run enforces and can never raise it (Rule #2). Lowering it buys an earlier and louder failure while there is still headroom to act in; no value buys more room. The console's site band is drawn against the platform's own 1 GB rather than this, because it reports the ceiling that exists and not the one this run chose to stop at.",
+          "maximum": 1024,
+          "minimum": 1,
+          "title": "Pages Hard Cap Mb",
+          "type": "integer"
+        },
         "site_budget_mb": {
           "default": 800,
           "description": "Logs a warning above this, and does nothing else: it never fails a build and never deletes. Sized in days of warning, not in round numbers. It sits 224 MB below the platform's 1 GB ceiling, which is 26 days of warning at the fastest growth this project has measured (a PNG on every item, 8,537 KB/day, 2026-08-23), against a 14-day target. The target is a judgement about one maintainer acting on one warning, not a measurement (Rule #10). The arithmetic and its inputs are in docs/reference/measurements.md, 'Where the alarm fires, and what it buys'.",
@@ -1758,6 +1766,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "retention.pages_hard_cap_mb is added. It defaults to the 1024 MB the published-site gate already failed at, and is bounded ge=1, le=1024.",
+      "version": "2026-09-06",
+      "why": "The cap was a module constant in backend/idhazh/retention.py, so the one number that stops a deploy could not be read out of config or tightened without a source edit. The bound is what makes exposing it safe: config can only ever lower the cap, which is Rule #2's 'the budget is the platform, not a preference' held by the schema rather than by trusting nobody to edit a constant. Additive and backwards-compatible, so no read-side migration is owed - a config written before this loads on the default and the gate fires at exactly the size it fired at before."
+    },
+    {
       "change": "VisualKind, which types visuals.enabled_kinds, lost diagram and image. A config naming either value no longer loads.",
       "version": "2026-09-05T18:00",
       "why": "The diagram renderer went with the Mermaid round trip it read, and image never had a renderer at all (pseudo-plan row 63), so a config could ask for a kind nothing could draw. No read-side migration is owed: the committed config/idhazh.json names chart alone, which is the only value left, so the shipped file loads unchanged."
@@ -2214,7 +2227,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-05T18:00",
+      "default": "2026-09-06",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2228,5 +2241,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-05T18:00"
+  "version": "2026-09-06"
 }

@@ -3146,14 +3146,13 @@ def _report_site_growth(
     config: RetentionConfig,
     *,
     items_per_day: int,
-    cap_mb: int,
 ) -> None:
     """The rate, the runway, and which directory is holding the bytes.
 
     Reporting only, and deliberately: `npm run bundle-gate` already fails a build
     on a crossed per-route ceiling and `cap_breach` above fails one past the
-    platform's, so a third gate here would be a third thing to keep green for no
-    coverage it does not already have.
+    configured cap, so a third gate here would be a third thing to keep green for
+    no coverage it does not already have.
 
     The runway is the point of the whole step. A megabyte figure and a headroom
     figure are both levels, and no level yields a date - only a rate does.
@@ -3187,8 +3186,8 @@ def _report_site_growth(
         "%s MB Pages cap",
         retention.days_to_alarm(size, config, items_per_day),
         config.site_budget_mb,
-        retention.days_to_cap(size, items_per_day, cap_mb=cap_mb),
-        cap_mb,
+        retention.days_to_cap(size, items_per_day, cap_mb=config.pages_hard_cap_mb),
+        config.pages_hard_cap_mb,
     )
 
 
@@ -3197,7 +3196,6 @@ def stage_site_weight(
     config: RetentionConfig,
     *,
     items_per_day: int = 0,
-    cap_mb: int = retention.PAGES_HARD_CAP_MB,
 ) -> int:
     """Measure the built bundle against the alarm point and the Pages cap.
 
@@ -3209,6 +3207,12 @@ def stage_site_weight(
 
     There is no default tree. A default is how this pointed at the wrong one.
 
+    The cap comes from `retention.pages_hard_cap_mb` and not from a flag. A flag
+    is a per-invocation override, which is the one shape a ceiling must not have -
+    the job that is about to breach it is the job that would pass the flag. The
+    config field is bounded, so the only edit that reaches this line is one that
+    makes the gate stricter.
+
     Three outcomes: an empty tree fails, because a measurement of nothing reads
     exactly like a site inside budget; over the cap fails, because those bytes
     cannot be published; over the alarm point reports and passes, because they
@@ -3216,6 +3220,7 @@ def stage_site_weight(
     not only the one over the alarm point - the day the alarm fires is not the
     day anybody wanted to first learn the date.
     """
+    cap_mb = config.pages_hard_cap_mb
     size = retention.measure(tree, published_items=retention.count_published_items(tree))
     if size.files == 0:
         LOG.error(
@@ -3238,9 +3243,9 @@ def stage_site_weight(
         retention.headroom_mb(size, cap_mb=cap_mb),
         cap_mb,
     )
-    _report_site_growth(size, config, items_per_day=items_per_day, cap_mb=cap_mb)
+    _report_site_growth(size, config, items_per_day=items_per_day)
 
-    alarm = retention.budget_alarm(size, config, cap_mb=cap_mb)
+    alarm = retention.budget_alarm(size, config)
     if alarm is not None:
         # An Actions workflow command, so the line lands on the run's summary
         # rather than three thousand lines into a log nobody opens. Outside
