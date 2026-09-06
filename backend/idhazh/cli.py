@@ -3111,7 +3111,7 @@ def stage_assemble(
     # than from anything in memory here: the view is a projection of the
     # committed record, so a run that failed to append has to publish the record
     # as it stands rather than as it hoped.
-    publish_source_health.publish(
+    source_health = publish_source_health.publish(
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         collect=settings.app.collect,
@@ -3121,6 +3121,17 @@ def stage_assemble(
         state_root=STATE_ROOT,
         path=PUBLIC_ROOT.parent / publish_source_health.PUBLIC_FILENAME,
     )
+    yield_alarm = publish_source_health.yield_alarm(
+        source_health,
+        alarm_point=settings.app.collect.source_yield_alarm_point,
+        min_decisions=settings.app.collect.source_yield_alarm_min_decisions,
+    )
+    if yield_alarm is not None:
+        # Same shape as the site-budget alarm below: an Actions workflow command,
+        # so a person sees it on the run summary. The console has carried these
+        # counts all along and nobody read them, which is why this speaks.
+        print(f"::warning title=Sources answering but not reading::{yield_alarm}")
+        LOG.warning("%s", yield_alarm)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
         "new_fingerprints=%s search_index=%s/%s",

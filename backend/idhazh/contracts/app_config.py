@@ -318,6 +318,40 @@ class CollectConfig(Model):
             "rather than a measurement (Rule #10), and no source may be demoted on one."
         ),
     )
+    source_yield_alarm_point: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The yield below which a run names a source on its own summary - the share "
+            "of the addresses a source decided that it turned into a story. It raises a "
+            "flag for a person and moves nothing on its own: it never rests a feed, "
+            "never scales a rank and never edits config/sources.json. Measured "
+            "2026-09-06 over the committed source-health view, 144 sources and 13 "
+            "complete days: the record is bimodal, and between 26.5 percent and 77.3 "
+            "percent there is not one source with 30 or more decisions. The default "
+            "sits in the middle of that 50-point empty band, so anywhere from 30 to 75 "
+            "percent names the same three sources and the exact number is cheap. It is "
+            "an alarm point and not a floor - reliability_floor clamps a factor, this "
+            "compares a ratio, and one word for both is how the two get confused."
+        ),
+    )
+    source_yield_alarm_min_decisions: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "Addresses a source must have decided before its yield may raise the alarm. "
+            "A low yield and a low volume are independent axes, and without this floor "
+            "the alarm's first run names a source the project already ruled it keeps: "
+            "measured 2026-09-06, cnn-world reads 1 of 7 and every other low-volume "
+            "source reads at 77.8 percent or better. Distinct from "
+            "source_yield_min_complete_days, which counts days of record rather than "
+            "decisions a source made, because a busy source clears this in four days "
+            "and a weekly one may never clear it - which is the correct answer for "
+            "both. The cost is delay: at 8.5 decisions a day the alarm arrives on day "
+            "four, and the roughly 25 addresses spent getting there buy the protection."
+        ),
+    )
     watchlist_max_entities: int = Field(default=30, ge=1)
     settled_failure_codes: tuple[FailureCode, ...] = Field(
         default=(
@@ -2536,6 +2570,28 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T23:55",
+            change=(
+                "collect.source_yield_alarm_point added, defaulting to 0.5 and bounded "
+                "above 0.0 and at most 1.0, and collect.source_yield_alarm_min_decisions "
+                "added, defaulting to 30 and at least 1. Together they name, on a run's "
+                "own summary, a source that answers cleanly and returns almost nothing. "
+                "Additive: an older config validates and takes the defaults."
+            ),
+            why=(
+                "Every existing signal asked whether we could ask, and none asked "
+                "whether asking was worth it. scmp-news held permission allowed, "
+                "availability answering and HTTP 200 with fifty dated entries every run "
+                "for a fortnight while 123 of its 127 items failed extraction as "
+                "paywalled - and reliability, which measures whether a feed answered, "
+                "scored it 1.0. The ratio was already computed and already published; "
+                "nothing applied a threshold and nothing spoke. Two knobs rather than "
+                "one because a low yield and a low volume are independent axes, and a "
+                "single number answering both fires on cnn-world at 1 of 7, which the "
+                "source docs already ruled is a working feed."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06T22:30",
             change=(
