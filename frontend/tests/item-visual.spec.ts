@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { keepDrawings } from '../src/lib/day-shape';
 import { publishedVisual, refusedDrawing } from '../src/lib/payload/drawing';
 import { projectDay } from '../src/lib/payload/project';
+import { whenNear } from '../src/lib/reveal';
 import { dayShell, publishedDates } from '../src/lib/server/payload';
 import type { DigestItem, SeededVisual } from '../src/lib/payload/types';
 
@@ -42,6 +43,15 @@ import type { DigestItem, SeededVisual } from '../src/lib/payload/types';
  * drawing that kept a baked colour fails one arm whichever colour it kept - and
  * a test written against a literal would have to be edited every time the
  * palette moves, which is how a colour test stops being one.
+ *
+ * **The watcher arm at the foot of this file is driven directly rather than in
+ * a browser, for the same reason the fetch is not exercised here.** A waiting
+ * story is one past the document's seed, the seed is fifteen and the canary day
+ * is eight, so a canary page holds no waiting story and a count taken there
+ * would read zero however many watchers the page builds. The reveal is a rule
+ * the fixture cannot stress, so it lives in its own module and the test drives
+ * it with a stand-in watcher; the browser half is the section 12 smoke on the
+ * real build, where a day has stories past the seed.
  */
 
 const ROOT = resolve(process.cwd(), '..');
@@ -331,4 +341,146 @@ test.describe('what may not be drawn, on either side of the move', () => {
 			).not.toBeNull();
 		});
 	}
+});
+
+/** A stand-in for the browser's watcher that counts what the page built.
+ *
+ * The page never builds one of these in a browser - it builds the browser's
+ * own. What this class adds is a count, a record of which stories are being
+ * watched, and a way to say "this story just crossed" without a viewport.
+ */
+class Watching {
+	/** How many watchers the page has built. The number this row is about. */
+	static built = 0;
+	/** Every watcher built, so a test can deliver a crossing through the live one. */
+	static all: Watching[] = [];
+
+	readonly watched = new Set<Element>();
+	readonly margin: string;
+
+	constructor(
+		private readonly report: (entries: IntersectionObserverEntry[]) => void,
+		options?: IntersectionObserverInit
+	) {
+		Watching.built += 1;
+		Watching.all.push(this);
+		this.margin = options?.rootMargin ?? '';
+	}
+
+	observe(node: Element): void {
+		this.watched.add(node);
+	}
+
+	unobserve(node: Element): void {
+		this.watched.delete(node);
+	}
+
+	disconnect(): void {
+		this.watched.clear();
+	}
+
+	/** What the browser does when stories cross the margin, or leave it. */
+	crosses(nodes: Element[], near = true): void {
+		this.report(
+			nodes.map((target) => ({ target, isIntersecting: near }) as IntersectionObserverEntry)
+		);
+	}
+}
+
+test.describe('THE ORACLE: one watcher, however many stories are waiting', () => {
+	test.beforeAll(() => {
+		// Node has no watcher of its own, so this installs one rather than
+		// replacing one. Removed again below so nothing else in the process
+		// inherits it.
+		globalThis.IntersectionObserver = Watching as unknown as typeof IntersectionObserver;
+	});
+
+	test.afterAll(() => {
+		Reflect.deleteProperty(globalThis, 'IntersectionObserver');
+	});
+
+	/** One waiting story's slot. The module only ever uses it as a key. */
+	function slot(name: string): Element {
+		return { nodeName: name } as unknown as Element;
+	}
+
+	/** The one watcher the page is allowed to hold. */
+	function watcher(): Watching {
+		expect(Watching.all.length, 'the page is holding more than one watcher').toBe(1);
+		return Watching.all[0];
+	}
+
+	test('one watcher serves every waiting story, however many are waiting', () => {
+		// Until 2026-09-06 each waiting story built its own watcher, so this count
+		// was the number of stories: a day that published more drawings held more
+		// watchers, for the life of the page. That is a cost that rises because a
+		// run published more, which CLAUDE.md Rule #12 refuses.
+		const drawn: string[] = [];
+		const forget: Array<() => void> = [];
+		const waitFor = (stories: number): void => {
+			for (let n = 0; n < stories; n += 1) {
+				const name = `story-${forget.length}`;
+				forget.push(whenNear(slot(name), () => drawn.push(name)));
+			}
+		};
+
+		waitFor(1);
+		expect(Watching.built, 'one waiting story built no watcher').toBe(1);
+		waitFor(49);
+		expect(Watching.built, '50 waiting stories built more than one watcher').toBe(1);
+		waitFor(450);
+		expect(Watching.built, '500 waiting stories built more than one watcher').toBe(1);
+
+		expect(watcher().watched.size, 'the one watcher is not watching every waiting story').toBe(500);
+		expect(watcher().margin, 'the shared watcher lost the one-screen margin').toBe('100% 0px');
+		expect(drawn, 'a story asked for its drawing before it was anywhere near').toEqual([]);
+
+		for (const stop of forget) stop();
+		expect(watcher().watched.size, 'a story that left the page is still watched').toBe(0);
+	});
+
+	test('a story that comes near draws, once, and its neighbours do not', () => {
+		const drawn: string[] = [];
+		const names = ['first', 'second', 'third'];
+		const slots = names.map((name) => slot(name));
+		const forget = slots.map((node, index) => whenNear(node, () => drawn.push(names[index])));
+		try {
+			watcher().crosses([slots[1]]);
+			expect(drawn, 'the crossing drew the wrong story, or drew more than one').toEqual(['second']);
+			expect(watcher().watched.has(slots[1]), 'a story that drew is still watched').toBe(false);
+			expect(watcher().watched.has(slots[0]), 'a story that did not cross was dropped').toBe(true);
+			expect(watcher().watched.has(slots[2]), 'a story that did not cross was dropped').toBe(true);
+
+			// The reader scrolls it past and back. The story already has its answer.
+			watcher().crosses([slots[1]]);
+			expect(drawn, 'a story asked for the same drawing twice').toEqual(['second']);
+		} finally {
+			for (const stop of forget) stop();
+		}
+	});
+
+	test('a story reported as not near keeps waiting', () => {
+		const drawn: string[] = [];
+		const node = slot('below the fold');
+		const stop = whenNear(node, () => drawn.push('below the fold'));
+		try {
+			watcher().crosses([node], false);
+			expect(drawn, 'a story drew on a report that it is not near').toEqual([]);
+			expect(watcher().watched.has(node), 'a story still below the fold stopped being watched').toBe(
+				true
+			);
+		} finally {
+			stop();
+		}
+	});
+
+	test('a story that leaves the page is neither watched nor drawn', () => {
+		const drawn: string[] = [];
+		const node = slot('gone');
+		whenNear(node, () => drawn.push('gone'))();
+		expect(watcher().watched.has(node), 'a story that left the page is still watched').toBe(false);
+		// A browser can still deliver a crossing it recorded before the unwatch.
+		watcher().crosses([node]);
+		expect(drawn, 'a story that left the page still asked for its drawing').toEqual([]);
+	});
 });
