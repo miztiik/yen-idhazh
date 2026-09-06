@@ -54,6 +54,7 @@ name here is the defect this module exists to refuse.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Final
 
 from conftest import REPO_ROOT, read_text
@@ -71,31 +72,61 @@ ARCHIVE_IN_TYPESCRIPT: Final = re.compile(r"""['"]public['"]\s*,\s*['"](?:digest
 AN_IMPORT: Final = re.compile(r"^\s*(?:from|import)\s")
 
 #: Every test that still reads the committed archive, and therefore still gets
-#: slower every day the pipeline publishes. **This list may only shrink.**
+#: slower every day the pipeline publishes. **This list may only shrink**, and
+#: an entry may not be a bare name: each one states why that test is allowed to
+#: cost more tomorrow than it costs today, so adding a name is a sentence a
+#: person has to write and a reviewer has to agree with (Rule #12).
 #:
-#: Two of them are deliberate and stay: `whole-day.spec.ts` and
-#: `reading-page.spec.ts` ask what a reading page does at a real day's scale,
-#: which is a question the eight-story canary cannot answer, and both are held
-#: to one day rather than to the whole tree. Every other entry is scheduled to
-#: move to a fixture, with the per-item rules driven from the canary and one
-#: aggregate auditor left per language.
-ARCHIVE_READERS: Final = frozenset(
-    {
-        "backend/tests/test_contracts.py",
-        "backend/tests/test_leading_stories.py",
-        "backend/tests/test_ledger.py",
-        "backend/tests/test_pipeline.py",
-        "backend/tests/test_publish_telemetry.py",
-        "backend/tests/test_search_index.py",
-        "backend/tests/test_telemetry.py",
-        "backend/tests/test_workflows.py",
-
-        "frontend/tests/malformed-day.spec.ts",
-        "frontend/tests/reading-page.spec.ts",
-        "frontend/tests/staged-day.spec.ts",
-        "frontend/tests/whole-day.spec.ts",
-    }
-)
+#: Two of them are permanent. `whole-day.spec.ts` and `reading-page.spec.ts` ask
+#: what a reading page does at a real day's scale, which the eight-story canary
+#: cannot answer, and both are held to one day rather than to the whole tree.
+#: Every other entry is a migration that has not happened yet.
+ARCHIVE_READERS: Final[Mapping[str, str]] = {
+    "backend/tests/test_contracts.py": (
+        "Globs every day to take the newest one. The parse is O(1) behind an O(N) "
+        "glob, so the walk is the whole cost and a newest-day helper removes it."
+    ),
+    "backend/tests/test_leading_stories.py": (
+        "Stops at the first day carrying a rank score, so it is O(1) on a healthy "
+        "tree and O(N) on a tree whose recent days lost their scores."
+    ),
+    "backend/tests/test_ledger.py": (
+        "One header read off the published ledger. O(1), and it is a contract "
+        "check on a file the producer appends to rather than a walk."
+    ),
+    "backend/tests/test_pipeline.py": (
+        "One header per eval shard and no row parsed. Genuinely about ALL headers "
+        "- a column added to one shard and not another is the fault it catches."
+    ),
+    "backend/tests/test_publish_telemetry.py": (
+        "Newest shard only, resolved at module import. O(1) in rows, O(N) in the "
+        "glob that finds it."
+    ),
+    "backend/tests/test_search_index.py": (
+        "Newest month only. A month is bounded by the retention config, the archive is not."
+    ),
+    "backend/tests/test_telemetry.py": (
+        "Newest item-health shard only. O(1) in rows, O(N) in the glob."
+    ),
+    "backend/tests/test_workflows.py": (
+        "One .exists() on a path that must not be there. O(1), and the cheapest entry on this list."
+    ),
+    "frontend/tests/malformed-day.spec.ts": (
+        "Takes the base digest path, copies one day to scratch and breaks it. "
+        "O(1): it reads the tree's location, never its contents."
+    ),
+    "frontend/tests/reading-page.spec.ts": (
+        "PERMANENT. What a reading page does at a real day's scale - about 400 "
+        "stories - which the eight-story canary cannot answer. Held to one day."
+    ),
+    "frontend/tests/staged-day.spec.ts": (
+        "Newest day only. O(1) in stories, O(N) in the walk that finds the day."
+    ),
+    "frontend/tests/whole-day.spec.ts": (
+        "PERMANENT. The same day-scale question as reading-page.spec.ts, on the "
+        "whole document rather than the reading surface. Held to one day."
+    ),
+}
 
 
 def _reads_archive(source: str, pattern: re.Pattern[str]) -> str | None:
@@ -130,7 +161,7 @@ def test_a_test_that_is_not_named_here_may_not_read_the_committed_archive() -> N
     found = archive_readers()
     assert found, "nothing reads the archive, so the patterns above stopped matching"
 
-    appeared = sorted(set(found) - ARCHIVE_READERS)
+    appeared = sorted(set(found) - set(ARCHIVE_READERS))
     named = "\n".join(f"  {path}: {found[path]}" for path in appeared)
     assert not appeared, (
         "these tests read the committed archive, so they get slower every day the "
@@ -144,9 +175,24 @@ def test_a_test_that_is_not_named_here_may_not_read_the_committed_archive() -> N
 
 def test_a_name_here_that_no_longer_reads_the_archive_leaves_the_list() -> None:
     """The list is a migration, so a finished migration has to show up in it."""
-    vanished = sorted(ARCHIVE_READERS - set(archive_readers()))
+    vanished = sorted(set(ARCHIVE_READERS) - set(archive_readers()))
     assert not vanished, (
         f"ARCHIVE_READERS names {vanished}, which no longer reads the committed "
         "archive. Drop the entry: the list is the work left to do, and an entry "
         "that is done hides how much of it remains."
+    )
+
+
+def test_every_entry_says_why_it_is_allowed_to_cost_more_tomorrow() -> None:
+    """A bare name is an exemption nobody argued for.
+
+    Rule #12 makes O(1) the default and an O(N) reader the rare exception, so the
+    exception is written down where the reader is named rather than in a commit
+    message somebody would have to go looking for. A person adding a name has to
+    finish this sentence, and a reviewer has to agree with it.
+    """
+    silent = sorted(path for path, why in ARCHIVE_READERS.items() if not why.strip())
+    assert not silent, (
+        f"{silent} are on the list with no reason. Say what the test reads, how its "
+        "cost grows with the archive, and why a fixture cannot answer the question."
     )
