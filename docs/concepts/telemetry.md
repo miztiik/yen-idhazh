@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -89,6 +89,26 @@ Two things the host sink does not do, measured against Langfuse 4.14.4 rather th
 - **It does not reproduce the nesting on the host.** A child span closes before its parent, so when a child is handed over its parent has no handle yet and the SDK generates its own span ids. The file keeps the exact tree; the host gets one trace per item with the parent named on each observation.
 - **It does not send a completion start time.** The reply carries prefill and decode as totals and no first-token instant, so the field would be a number we invented.
 
+## The committed rollup
+
+The span tree is evidence and expires with the run. One summary of it is a record and is committed: `state/span-rollup/<YYYY-MM>.csv`, one row per `(date, run_id, shard, span_name)`, carrying how many spans of that name the shard opened and how long they took added together. The fold lives in `telemetry.roll_up_spans` and the row is `SpanRollupRow`.
+
+**It commits five span names, not the eleven the tracer opens**, and the five are the steps no ledger column already times:
+
+| Committed span | Why it earns a row |
+| --- | --- |
+| `item` | the per-item wall clock the three stage columns never add into one |
+| `robots` | the slow `robots.txt` read buried inside `fetch` |
+| `tag` | the taxonomy match buried inside `extract` |
+| `render_prompt` | building the JSON schema, buried inside `summarize` |
+| `parse_reply` | the verbatim check, buried inside `summarize` |
+
+The other six are left out because a ledger already holds their timing. `fetch`, `extract` and `summarize` are `fetch_ms`, `extract_ms` and `summarize_ms` on the item-health row; `score` is `score_ms` on the eval row; `visual_planner` is `decision_ms` on the visual decision; and `model_call` is `prefill_ms` plus `decode_ms`. A row for any of those would be a second account of a number a ledger already keeps.
+
+**The rollup is derived, and it restates nothing.** It is a fold of the shard's own spans, not a parallel record. Its two measured columns - `count` and `total_ms` - are held disjoint, outside the key, from the columns of every committed ledger by a contract-tier test ([`backend/tests/test_contracts.py`](../../backend/tests/test_contracts.py)). That disjointness is the whole reason a fold of the spans can be committed where a raw span cannot: it cannot disagree with the item-health, eval, runtime-counter or visual ledgers, because it shares no measurement with any of them.
+
+**It costs the same on a busy day as an empty one** (Rule #12). The fold reads one shard's spans - a bounded input - and writes at most five rows per shard per run. A name the shard never opened produces no row rather than a zero, so an absent row reads as never opened and never as opened-and-measured-nothing.
+
 ## The item-level census
 
 The item-health ledger is the durable item-level census. It records every
@@ -158,6 +178,8 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 
 **One claim made when the row was planned turned out to be wrong, and it is recorded because it shaped a decision.** The plan said that Langfuse being OpenTelemetry underneath made the local file sink "a configuration rather than a second code path". It is not. The `Langfuse` client is wired to the OTLP HTTP exporter and a Langfuse host; getting a file out of it means either taking the OpenTelemetry SDK as a direct dependency - the thing that was rejected - or writing the sink. So the sink is written, in about thirty lines of standard library, and that is what makes the default path free of the optional package and testable with no network. Measured against Langfuse 4.14.4, 2026-08-30. The version in the plan was also stale: it said v3, and the client is v4.
 
+**A fold of the spans became a committed record on 2026-09-06, and it is not the fourth record the table below rejects.** The veto was against committing a raw span as a parallel account of a run - a shape free to disagree with the item-health, eval and runtime-counter ledgers. The rollup cannot disagree with them: a contract test holds its columns disjoint from theirs, so it carries a per-span count and duration no ledger holds and nothing else. What made a raw span a fourth record - restating a number three files already keep - is exactly what the disjointness check forbids. So the fold is committed and the raw span stays evidence under `backend/var/`. Authority: Fowler, pseudo-plan sections 14.4 and 14.4a, 2026-08-30.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -171,7 +193,7 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 | Writing emitters for the 19 event names this page used to list | Every fact they would report is already in the item-health ledger, the eval ledger or the run manifest, and a CI log expires in two days. It is 19 emitters written into a store that forgets, beside a record that does not. | Fowler, 2026-08-30 |
 | Sending `input` and `output` as the Langfuse client intends | They are free text, its own decorator fills them with the prompt and the completion, and this repository is public - so a default left alone republishes article bodies, which section 0a forbids outside `corpus/`. Both fields are passed explicitly as null, the attribute bag rides in `metadata`, and the client's own `mask` hook is wired to refuse whatever it is handed. | Andre, 2026-08-30 |
 | Tracing on by default, or on in CI | A publish job that can fail on a third party's availability, for a view nothing in the job reads. Off is also what means CI needs no secret. | Carmack, 2026-08-30 |
-| Making a span a committed record | A fourth record of the same run, free to disagree with the other three. The ledgers stay the record and a span stays evidence. | Fowler, 2026-08-30 |
+| Committing a raw span as a record | A fourth account of the same run, free to disagree with the other three. A *derived* fold that restates nothing is the committed rollup above; a raw span stays evidence under `backend/var/`. | Fowler, 2026-08-30 |
 | Reproducing the nesting on the host with the SDK's own context managers | It works, and it costs a second code path for a sink that is opt-in and untestable here (no test touches the network, Rule #7). The file sink keeps the exact tree; the host gets one trace per item with the parent named. | Carmack, 2026-08-30 |
 
 ## See also

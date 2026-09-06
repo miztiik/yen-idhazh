@@ -76,6 +76,7 @@ from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -84,6 +85,7 @@ SEEN_DIRNAME: Final = "seen"
 HEALTH_DIRNAME: Final = "feed-health"
 ITEM_HEALTH_DIRNAME: Final = "item-health"
 TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
+SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_FILENAME: Final = "published.csv"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
@@ -114,6 +116,14 @@ ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
 #: re-run's items are skipped there too, so the two files stay describing the
 #: same attempt.
 RUNTIME_COUNTERS_KEY: Final = ("date", "run_id", "shard")
+
+#: What makes two span-rollup rows the same record. One shard's fold of one span
+#: name, in one run. The row is derived from the shard's spans, so a re-run of a
+#: failed shard recomputes the same fold and a second row would add a count to
+#: itself rather than record a new fact. The first row wins, which matches
+#: `RUNTIME_COUNTERS_KEY`: a re-run's items are skipped there too, so the two
+#: files stay describing the same attempt.
+SPAN_ROLLUP_KEY: Final = ("date", "run_id", "shard", "span_name")
 
 #: What makes two cleanup rows the same record. One cleanup pass per run, so a
 #: second row under one run id is a second attempt at one execution rather than
@@ -203,6 +213,22 @@ def telemetry_aggregate_path(state_dir: Path, month: str) -> Path:
     different shape and would fail that read.
     """
     return state_dir / TELEMETRY_AGGREGATE_DIRNAME / f"{month}.csv"
+
+
+def span_rollup_relpath(month: str) -> str:
+    """`state/span-rollup/<YYYY-MM>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{SPAN_ROLLUP_DIRNAME}/{month}.csv"
+
+
+def span_rollup_path(state_dir: Path, month: str) -> Path:
+    """Where one month's folded span counts live.
+
+    Its own directory rather than a filename beside the item-health shards, for
+    the reason `telemetry_aggregate_path` gives: a reader that globs a directory
+    for month shards reads every file it finds as that directory's shape, and the
+    rollup is a different shape from a census row.
+    """
+    return state_dir / SPAN_ROLLUP_DIRNAME / f"{month}.csv"
 
 
 def published_path(state_dir: Path) -> Path:
@@ -537,6 +563,34 @@ def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow])
 def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
     """Every shard the file already carries a snapshot for."""
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
+
+
+def append_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
+    """Append one shard's folded span counts to the month shard. Never windowed here.
+
+    Filters against `SPAN_ROLLUP_KEY` the way `append_runtime_counters` does. The
+    row is a fold of a shard's spans, so a re-run of a failed shard recomputes the
+    same numbers and a second row would double a count rather than add a fact. The
+    first row wins.
+
+    Returns how many landed, so a caller can log the count.
+    """
+    path = span_rollup_path(state_dir, date[:7])
+    already = recorded_span_rollup(path)
+    payloads = []
+    for row in rows:
+        payload = row.csv_row()
+        key = tuple(payload[name] for name in SPAN_ROLLUP_KEY)
+        if key in already:
+            continue
+        already.add(key)
+        payloads.append(payload)
+    return _append(path, SpanRollupRow.csv_columns(), payloads)
+
+
+def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
+    """Every (date, run, shard, span) the month's shard already carries a fold for."""
+    return {tuple(row[name] for name in SPAN_ROLLUP_KEY) for row in _read_rows(path)}
 
 
 def append_visual_prunes(state_dir: Path, rows: Iterable[VisualPruneRow]) -> int:
