@@ -517,11 +517,31 @@ and is revertible; after it, it is permanent. That is an argument for the
 command writing what it removed into its own commit message, and for it never
 running on a schedule.
 
+**The command carries no threshold of its own, and may not grow one.** It takes
+the dates an operator names and nothing else - no "older than", no "down to N
+megabytes", no day count written into the code. Every bound this repository
+honours is already a key in `config/` with a contract behind it
+([../../../CLAUDE.md](../../../CLAUDE.md) Rule #6): `retention.image_months`,
+`retention.max_deletes_per_run`, `retention.site_budget_mb`, and the
+`observability.*_keep_months` family that bounds the ledgers a day writes into,
+all at 14 months today. A number in the source that decides what to delete is
+the defect, whatever the number is.
+
+If a scheduled variant is ever wanted, it reuses that shape rather than minting
+a figure: months as an integer, `-1` meaning never, defaulting to never, and the
+same `dry_run` and `max_deletes_per_run` guards `retention.prune` already
+answers to. **It would also have to clear a higher bar than the manual command.**
+The manual one removes a day somebody decided was wrong; a scheduled one removes
+a day nobody looked at, and the archive's own header would have to say so before
+the first run.
+
 **Nothing forces this yet.** Measured 2026-09-05: 16 committed days, and the
-1 GB cap is a function of the prerendered dated routes named in the follow-up
-above rather than of any day's payload. The command is worth having for a day
-published in error - a bad extraction, a source that asked to be removed - and
-that is a different need from bounding the site.
+site's ceiling is a function of the prerendered dated routes named in the
+follow-up above rather than of any day's payload - so deleting days is not the
+lever that buys room, and sizing this command against `site_budget_mb` would be
+solving the wrong problem with the destructive tool. The command is worth having
+for a day published in error - a bad extraction, a source that asked to be
+removed - and that is a different need from bounding the site.
 
 
 **Recorded, not fixed. No row has addressed it.**
