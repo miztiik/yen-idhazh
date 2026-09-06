@@ -2268,6 +2268,19 @@ rather than add a digit. If the page ever renders per-story markup again the
 per-day figure above is void and the ceiling has to be re-derived before it is
 raised.
 
+**Twelve of those days were spent on 2026-09-06, and the runway is shorter for
+it.** `ui.archive_recent_days` moved from seven to fourteen, so the block of day
+rows above the month list is twice as long. Hardware: Intel Core i7-1265U,
+Windows 11, node 24.12.0. Date: 2026-09-06. Method: `npm run build` then
+`frontend/scripts/bundle-gate.mjs` on one worktree at 16 committed days, once at
+each setting. Spread: not taken - one build an arm, and the 64-byte noise floor
+derived above is four hundred times smaller than the move. `/archive/` weighs
+**5,015 bytes at seven rows and 5,163 at fourteen**, so seven extra rows cost
+148 bytes, which is 21.1 a row. That is a one-off step and not a change of
+slope: the knob fixes the row count, so it does not grow with publishing. At the
+12.21 bytes a day a year averages, it spends about **twelve of the 370 days**,
+putting the re-derivation around day 358. Nothing else in the derivation moves.
+
 Hardware: Intel Core i7-1265U, Windows, onnxruntime 1.29.0. Date: 2026-08-26.
 Method: decode each committed vector, re-encode its item's `title. summary`
 through `idhazh.embed`, and compare - cosine on the decoded pair, and the item's

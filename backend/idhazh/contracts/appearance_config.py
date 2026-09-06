@@ -28,7 +28,12 @@ from typing import ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.app_config import AssistConfig, ConsoleConfig, UiConfig
+from idhazh.contracts.app_config import (
+    AssistConfig,
+    ConsoleConfig,
+    UiConfig,
+    refuse_an_archive_window_no_preset_offers,
+)
 from idhazh.contracts.base import ChangelogEntry, Contract, Model
 
 #: The measure, in characters, outside which a line stops being comfortable to
@@ -513,6 +518,53 @@ class AppearanceConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T14:00",
+            change=(
+                "digest.read_mark_days moves from 7 to 14, and its meaning moves from "
+                "'the newest 7 dates the store holds' to '14 calendar days back from "
+                "today'. digest.archive_recent_days moves from 7 to 14. "
+                "console.window_presets gains a 1-day span and is now [1, 7, 14, 30, "
+                "90]; console.min_window_days moves from 7 to 1 so the new preset "
+                "satisfies the existing range check. console.max_window_days keeps 366 "
+                "and gains a description. Two fields are added: "
+                "digest.offline_bytes_kept, defaulting to 20,000,000 and bounded at "
+                "2,000,000 and 100,000,000, and digest.archive_window_days, defaulting "
+                "to 30 and refused unless it names one of console.window_presets. The "
+                "shapes are `UiConfig` and `ConsoleConfig`, which this document and "
+                "`AppConfig` share, so both schemas moved together. Every value legal "
+                "before today is legal now and both new fields carry defaults, so an "
+                "appearance file written before today still validates."
+            ),
+            why=(
+                "This file owns everything the published surface is drawn from "
+                "(docs/concepts/config.md), and all four moved knobs are drawn here: "
+                "the read marks on a day page, the day rows on the archive, and the "
+                "console's window control. Read marks used to expire by position - the "
+                "newest 7 dates the store happened to hold - which needs no clock but "
+                "bounds the store by how often a reader comes back rather than by how "
+                "long ago they read. A reader who opens one day a month kept marks from "
+                "seven different months and each greyed out an article last seen most "
+                "of a year ago. Fourteen calendar days trusts the device clock, which "
+                "the old rule deliberately did not, and the field says so. "
+                "archive_recent_days follows it because a row in that block invites a "
+                "reader back to a day, and a day whose marks were already dropped comes "
+                "back looking unread. The presets gain one day because every span is a "
+                "distinct fetch cost and there was no way to ask for the cheapest read "
+                "of all - the run that has just finished - and min_window_days drops to "
+                "1 to admit it. max_window_days is unchanged: it is a retention floor "
+                "rather than a viewport clamp, so lowering it would make no page "
+                "cheaper and would authorise deleting month shards the console can "
+                "still ask for. offline_bytes_kept exists because a day count cannot "
+                "bound bytes - measured 2026-09-02 over the 12 served days, one day "
+                "payload runs 8,231 to 1,373,593 bytes, a factor of 167. "
+                "archive_window_days names a span out of console.window_presets rather "
+                "than declaring a second list, so this file holds exactly one list of "
+                "spans. Neither new knob has a reader yet; rows 8 and 25 of "
+                "TODO/20260906-constant-cost-reads-plan.md are the readers, and the "
+                "knobs land in one commit so no later row edits the config contract."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-05T13:00",
             change=(
@@ -1011,4 +1063,9 @@ class AppearanceConfig(Contract):
                 "chart.width_px must not exceed frame.console_max_px: the server would "
                 "prerender every chart wider than its container can ever be"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _the_archive_opens_on_a_span_the_presets_name(self) -> Self:
+        refuse_an_archive_window_no_preset_offers(self.digest, self.console)
         return self

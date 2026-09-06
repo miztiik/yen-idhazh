@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
 ## The shell is deliberately thin
@@ -110,7 +110,7 @@ The site ships a web app manifest, an icon set, a `theme-color` and a service wo
 
 **It caches what a reader has already opened, and nothing else.** On install, the shell's own assets and its stylesheets - the font, the icons, the manifest, the CSS. **Not the app's JavaScript**, and that was measured rather than assumed: the built client is 23.56 MB, of which 21.60 MB is the search encoder's runtime and 1.47 MB is two libraries only the console and the search panel ever load (measured 2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0). Downloading those for a reader who opened one day is the same spend that argued against precaching days. The code a page needs is kept when that page asks for it, which is what makes a day already opened read again.
 
-A day payload is kept only after that day has been fetched once, and never a day nobody asked for. The kept days are bounded by `ui.offline_days_kept`. Never the encoder's model and runtime, which are 43.2 MB together and keep their own store, and never the switch itself.
+A day payload is kept only after that day has been fetched once, and never a day nobody asked for. The kept days are bounded twice: by `ui.offline_days_kept` (14), and by `ui.offline_bytes_kept` (20,000,000 bytes) since 2026-09-06. Two bounds because a day count cannot bound bytes - measured 2026-09-02 over the 12 served days, one day payload runs 8,231 to 1,373,593 bytes, a factor of 167, so fourteen days is anything between 115 KB and 19 MB. The byte ceiling is a backstop rather than the binding rule today: 20 MB is just over the 19 MB fourteen days already reach at the largest day measured. Nothing reads it yet - the eviction rule is row 8 of [../../TODO/20260906-constant-cost-reads-plan.md](../../TODO/20260906-constant-cost-reads-plan.md). Never the encoder's model and runtime, which are 43.2 MB together and keep their own store, and never the switch itself.
 
 **The shell is network-first, and a day is served from the device first.** The shell changes on every deploy, so a stale one is the bug the switch exists for. A day is different: an archived day never changes again, so reading it off the device is correct. **Today's day is the exception, and it is why this is not a plain cache-first.** The pipeline republishes the current day several times an hour, so a reader who opened it at nine would otherwise be held at nine for the rest of the day. What ships returns the copy on the device at once and refreshes it behind the reader, which costs exactly the request they would have made with no worker at all.
 
