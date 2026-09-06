@@ -94,19 +94,25 @@
 	const slot = $derived(box.innerWidth / Math.max(1, load.columns.length));
 	const barWidth = $derived(Math.max(1, Math.min(26, slot - 2)));
 
-	const codes = $derived(
-		[...new Set(series.flatMap((s) => s.days.flatMap((d) => Object.keys(d.codes))))]
-			.filter(Boolean)
-			.map((code) => ({
-				code,
-				count: series.reduce(
-					(total, s) => total + s.days.reduce((sum, d) => sum + (d.codes[code] ?? 0), 0),
-					0
-				)
-			}))
-			.filter((entry) => entry.count > 0)
-			.sort((a, b) => b.count - a.count || a.code.localeCompare(b.code))
-	);
+	// One pass over the series totals every code, rather than re-summing the
+	// whole series once for each distinct code it holds. The order is set by the
+	// sort - most failures first, then the code - so the array is the same
+	// whatever order the totals were gathered in.
+	const codes = $derived.by(() => {
+		const totals = new Map<string, number>();
+		for (const s of series) {
+			for (const day of s.days) {
+				for (const [code, count] of Object.entries(day.codes)) {
+					if (!code) continue;
+					totals.set(code, (totals.get(code) ?? 0) + count);
+				}
+			}
+		}
+		return [...totals]
+			.filter(([, count]) => count > 0)
+			.map(([code, count]) => ({ code, count }))
+			.sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+	});
 
 	const anyLowSample = $derived(load.stages.some((stage) => stage.lowSample));
 	// The band only draws where the run listed an item it never fetched, so the
@@ -193,10 +199,23 @@
 		return runs.map((run) => run.join(' '));
 	}
 
+	// The base each band stacks on - the running total of the bands beneath it,
+	// gathered once per column rather than re-summed for every band and again on
+	// every resize. Band 0 sits on nothing, so its base is 0.
+	const bandBase = $derived(
+		load.columns.map((column) => {
+			const bases: number[] = [];
+			let stacked = 0;
+			for (const band of column.bands) {
+				bases.push(stacked);
+				stacked += band.value;
+			}
+			return bases;
+		})
+	);
+
 	function below(index: number, band: number): number {
-		return load.columns[index].bands
-			.slice(0, band)
-			.reduce((sum, entry) => sum + entry.value, 0);
+		return bandBase[index][band];
 	}
 
 	function bandTop(index: number, band: number): number {
