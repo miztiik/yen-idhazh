@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
