@@ -79,25 +79,65 @@ export function percentOf(fraction: number): string {
 	return `${(clamped * 100).toFixed(4)}%`;
 }
 
+/** The order two ranked entries fall in: magnitude first, then the caller's
+ * tiebreak, then the key. A total order, so the bounded selection below lands
+ * exactly the rows a full sort would - ties and all. */
+function outranks<T extends RankedDisplay>(a: Rankable<T>, b: Rankable<T>): number {
+	return b.value - a.value || (b.tiebreak ?? 0) - (a.tiebreak ?? 0) || a.key.localeCompare(b.key);
+}
+
+/** The top `cap` entries in rank order, chosen in one pass.
+ *
+ * A full sort would order the whole tail this discards as well. The tail is
+ * only counted and summed for the "N more not shown" line and never drawn, so
+ * it is thrown away here rather than ordered (finding 105). An entry enters only
+ * when it outranks the worst one kept, and it lands after every entry it ties,
+ * which is the arrival order a stable sort holds a tie in - so the kept list is
+ * byte-identical to sorting everything and slicing to `cap`.
+ */
+function topRanked<T extends RankedDisplay>(
+	entries: readonly Rankable<T>[],
+	cap: number
+): Rankable<T>[] {
+	const kept: Rankable<T>[] = [];
+	for (const entry of entries) {
+		if (kept.length >= cap && outranks(entry, kept[kept.length - 1]) >= 0) continue;
+		let lo = 0;
+		let hi = kept.length;
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1;
+			if (outranks(entry, kept[mid]) < 0) hi = mid;
+			else lo = mid + 1;
+		}
+		kept.splice(lo, 0, entry);
+		if (kept.length > cap) kept.pop();
+	}
+	return kept;
+}
+
 /** Rank by magnitude and cap the list.
  *
  * An entry whose value is not a finite number is dropped rather than ranked: it
  * has no magnitude, so it has no place in an order and no share of a sum the
  * tail sentence would report.
+ *
+ * Only the `cap` rows the list draws are ordered. Below the cap every entry is
+ * shown, so the whole set is sorted and the sort costs its size; at or above it
+ * the tail is selected without being ordered, so a longer field of candidates
+ * does not cost a longer sort for the same few rows.
  */
 export function rank<T extends RankedDisplay>(
 	entries: readonly Rankable<T>[],
 	cap: number
 ): Ranked<T> {
 	const measured = entries.filter((e) => Number.isFinite(e.value));
-	const ordered = [...measured].sort(
-		(a, b) =>
-			b.value - a.value || (b.tiebreak ?? 0) - (a.tiebreak ?? 0) || a.key.localeCompare(b.key)
-	);
+	const kept =
+		cap > 0 && cap < measured.length
+			? topRanked(measured, cap)
+			: [...measured].sort((a, b) => outranks(a, b));
 
-	const kept = cap > 0 ? ordered.slice(0, cap) : ordered;
-	const dropped = ordered.slice(kept.length);
 	const max = kept.reduce((high, e) => Math.max(high, e.value), 0);
+	const hidden = measured.length - kept.length;
 
 	return {
 		rows: kept.map((e) => {
@@ -105,8 +145,16 @@ export function rank<T extends RankedDisplay>(
 			return { key: e.key, value: e.value, fraction, percent: percentOf(fraction), row: e.row };
 		}),
 		max,
-		hidden: dropped.length,
-		hiddenValue: dropped.reduce((sum, e) => sum + e.value, 0),
+		hidden,
+		// The hidden magnitudes summed, taken as the whole finite set's total less
+		// the kept set's - the discarded tail is gone, so it cannot be folded
+		// directly. Nothing is hidden unless the cap bit, so an untouched tail is
+		// exactly zero rather than a floating-point remainder of the subtraction.
+		hiddenValue:
+			hidden === 0
+				? 0
+				: measured.reduce((sum, e) => sum + e.value, 0) -
+					kept.reduce((sum, e) => sum + e.value, 0),
 		empty: kept.length === 0
 	};
 }
