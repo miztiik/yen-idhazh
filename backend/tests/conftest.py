@@ -7,6 +7,7 @@ from typing import Final
 
 import pytest
 
+from idhazh import cli
 from idhazh.contracts.app_config import AppConfig, InferenceConfig, ModelRef
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_output_digest, derive_url_key
@@ -81,6 +82,21 @@ def no_tracing_host(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     for named in ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
         monkeypatch.delenv(named, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def isolate_committed_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test writes the repository's own state/ tree, whatever stage it runs.
+
+    Tracing is on in the committed config (2026-09-06), so `stage_work` folds a
+    span rollup into `state/span-rollup/` and both it and `stage_visual_planner`
+    write a raw trace under `state/traces/` - committed paths keyed off
+    `cli.STATE_ROOT`. A stage test that only redirected `VAR_ROOT` would otherwise
+    write real committed files. This points `STATE_ROOT` at the test's own tree; a
+    test that sets it itself still wins, because its `monkeypatch` call runs after
+    this fixture and the last write to an attribute is the one that holds.
+    """
+    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
 
 
 @pytest.fixture

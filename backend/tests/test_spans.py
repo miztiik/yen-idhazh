@@ -162,6 +162,28 @@ def traced_settings() -> config.Settings:
     )
 
 
+def untraced_settings() -> config.Settings:
+    """The committed config with tracing switched off, and nothing else moved.
+
+    Tracing ships on now, so the off position is reached by moving one field
+    rather than by loading the committed file - the NullSink path stays covered.
+    """
+    settings = config.load(CONFIG_DIR)
+    return config.Settings(
+        app=settings.app.model_copy(
+            update={
+                "observability": settings.app.observability.model_copy(
+                    update={"tracing_enabled": False}
+                )
+            }
+        ),
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        watchlist=settings.watchlist,
+        digests=settings.digests,
+    )
+
+
 def spans_of(trace_dir: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for path in sorted(trace_dir.rglob("*.jsonl")):
@@ -181,7 +203,6 @@ def trace_a_run(
     """One real work stage over one planted page, and every span it produced."""
     run_plan = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "TRACE_ROOT", tmp_path / "traces")
     monkeypatch.setattr(cli, "EVIDENCE_ROOT", tmp_path / "evidence")
 
     with RecordedCompletionEndpoint(reply) as server:
@@ -192,7 +213,7 @@ def trace_a_run(
             fetcher=lambda _url: FetchResult(FetchOutcome.OK, status=200, body=page),
             model_endpoint=server.endpoint,
         )
-    return spans_of(tmp_path / "traces")
+    return spans_of(cli.STATE_ROOT / telemetry.TRACES_DIRNAME)
 
 
 def assert_nothing_leaked(spans: list[dict[str, Any]], planted: tuple[str, ...]) -> None:
@@ -289,12 +310,16 @@ def test_a_sub_span_names_its_parent(tmp_path: Path, monkeypatch: MonkeyPatch) -
 
 
 def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """The committed default. The same run, the same code path, no file."""
+    """The off position, still reachable: the same run, the same code path, no file.
+
+    Tracing ships on now, so this constructs the off config rather than loading
+    the committed one. With it off the sink is a NullSink, so neither the raw
+    trace nor the span rollup is written.
+    """
     run_plan = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
-    monkeypatch.setattr(cli, "TRACE_ROOT", tmp_path / "traces")
     monkeypatch.setattr(cli, "EVIDENCE_ROOT", tmp_path / "evidence")
-    settings = config.load(CONFIG_DIR)
+    settings = untraced_settings()
     assert not settings.app.observability.tracing_enabled
 
     with RecordedCompletionEndpoint(completion_carrying(SENTINEL_REPLY)) as server:
@@ -310,7 +335,8 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
             model_endpoint=server.endpoint,
         )
 
-    assert not (tmp_path / "traces").exists()
+    assert not (cli.STATE_ROOT / telemetry.TRACES_DIRNAME).exists()
+    assert not (cli.STATE_ROOT / "span-rollup").exists()
 
 
 # --- The second control -----------------------------------------------------
@@ -358,7 +384,7 @@ def test_a_span_records_nothing_for_a_value_nobody_measured() -> None:
 
 
 def test_a_named_host_with_no_package_falls_back_to_the_file(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+    monkeypatch: MonkeyPatch,
 ) -> None:
     """A publish job may not fail on an observability dependency (section 1a).
 
@@ -366,30 +392,28 @@ def test_a_named_host_with_no_package_falls_back_to_the_file(
     variables could be set and the package is not installed. The run keeps its
     file sink and says so in the log.
     """
-    monkeypatch.setattr(cli, "TRACE_ROOT", tmp_path / "traces")
     monkeypatch.setenv("LANGFUSE_HOST", "https://cloud.langfuse.test")
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-fixture")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-fixture")
 
-    sink = cli.trace_sink(traced_settings(), date="2026-08-30", run_id="2026-08-30-1", shard=0)
+    sink = cli.trace_sink(traced_settings(), run_id="2026-08-30-1", shard=0)
 
     assert isinstance(sink, telemetry.FileSink | telemetry.FanOut)
 
 
 def test_a_host_is_never_reached_unless_all_three_variables_are_set(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+    monkeypatch: MonkeyPatch,
 ) -> None:
     """Owner decision, 2026-08-30: a file by default, a host only when named.
 
     Asserted one variable at a time, because a check written as `if host` would
     pass this with the keys missing and then fail inside the client.
     """
-    monkeypatch.setattr(cli, "TRACE_ROOT", tmp_path / "traces")
     for named in ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
         for variable in ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
             monkeypatch.delenv(variable, raising=False)
         monkeypatch.setenv(named, "set")
-        sink = cli.trace_sink(traced_settings(), date="2026-08-30", run_id="2026-08-30-1", shard=0)
+        sink = cli.trace_sink(traced_settings(), run_id="2026-08-30-1", shard=0)
         assert isinstance(sink, telemetry.FileSink)
 
 

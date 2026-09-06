@@ -36,6 +36,7 @@ from idhazh.contracts.run_manifest import RunManifest, RunRecord
 from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
+from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.contracts.visual_decision import VisualDecision
@@ -1095,6 +1096,52 @@ def test_a_run_records_its_stamp_in_the_committed_ledger_exactly_once(
     assert set(expansions) == {stamp}
     assert expansions[stamp].first_seen_run == run_plan.run_id
     assert ledger.read_header(committed) == FingerprintRow.csv_columns()
+
+
+def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Row #4: tracing on, a work shard folds its own spans into the committed
+    rollup and the item row's residual reconciles against the shard wall clock.
+
+    The model is a closed loopback, so the summaries fail - which is fine, the
+    fold is over the spans the shard opened (the item, the tagger, the prompt
+    render), not over a scored run. `roll_up_spans` raises if the spans claim more
+    time than the shard ran, so a residual on the item row is proof they did not.
+    The raw trace lands under state/traces/, the committed path the sink now
+    writes in place of the gitignored one.
+    """
+    run_plan = plan()
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    settings = config.load(CONFIG_DIR)
+    assert settings.app.observability.tracing_enabled, "the committed config traces by default"
+
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+
+    shard = ledger.span_rollup_path(cli.STATE_ROOT, run_plan.date[:7])
+    rows = [
+        SpanRollupRow.from_csv_row(raw)
+        for raw in csv.DictReader(shard.read_text(encoding="utf-8").splitlines())
+    ]
+    by_name = {row.span_name: row for row in rows}
+    assert RollupSpan.ITEM in by_name, "the shard opened no item span"
+    assert len(by_name) >= 2, "only the item span was folded; a sub-step should have too"
+    assert set(by_name) <= set(RollupSpan), "a non-committed span reached the rollup"
+
+    item = by_name[RollupSpan.ITEM]
+    assert item.unattributed_ms is not None and item.unattributed_ms >= 0
+    for name, row in by_name.items():
+        rides_on_item = name is RollupSpan.ITEM
+        assert (row.unattributed_ms is not None) is rides_on_item
+
+    traces = list((cli.STATE_ROOT / telemetry.TRACES_DIRNAME).rglob("*.jsonl"))
+    assert traces, "no committed trace was written under state/traces/"
 
 
 def test_a_second_run_with_the_same_inputs_appends_no_stamp(

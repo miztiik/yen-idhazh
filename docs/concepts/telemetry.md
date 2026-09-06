@@ -43,9 +43,9 @@ One name is emitted:
 
 ## The span tree
 
-A second shape of evidence, off by default, and the only one that carries a start instant and a parent.
+A second shape of evidence, on by default since 2026-09-06, and the only one that carries a start instant and a parent.
 
-`observability.tracing_enabled` is false in the committed config. Turned on, a work shard opens a span per stage and one per sub-step, and writes one JSON line per span. A developer's local run lands under gitignored `backend/var/traces/`, which nothing downloads and no page can read; a short rolling window of the most recent runs is committed under `state/traces/` so a recent run stays openable from the repository - see [The committed traces, briefly](#the-committed-traces-briefly).
+`observability.tracing_enabled` is true in the committed config (2026-09-06 - see [Design rationale](#design-rationale)). A work shard opens a span per stage and one per sub-step and writes one JSON line per span to the committed trace under `state/traces/`, so a recent run stays openable from the repository and a rolling window bounds it - see [The committed traces, briefly](#the-committed-traces-briefly). The switch is still real: turned off, a shard traces into a sink that drops every span and writes neither a trace nor a rollup.
 
 **What a span buys that a ledger column does not**, stated so the feature can be judged: a start instant, a parent, and a step too small to earn a column of its own. `fetch_ms`, `extract_ms` and `summarize_ms` already split an item three ways. What they cannot say is which of these took the time:
 
@@ -78,9 +78,9 @@ The second sentinel in that test is deliberate: one is a sentence, which the sha
 
 ### Where a span goes
 
-**A local file by default. A host is opt-in, through the environment.** Owner decision, 2026-08-30.
+**A committed file by default. A host is opt-in, through the environment.** Owner decision, 2026-08-30.
 
-A run writes to the file whenever tracing is on. It additionally sends to a Langfuse host only when `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are all set - all three, checked separately, so a half-configured environment is a file-only run rather than a failure inside the client. No workflow sets any of them and CI holds no such secret, so an ordinary run reaches no third party whatever the toggle says.
+A run writes to the committed trace under `state/traces/` whenever tracing is on. It additionally sends to a Langfuse host only when `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are all set - all three, checked separately, so a half-configured environment is a file-only run rather than a failure inside the client. No workflow sets any of them and CI holds no such secret, so an ordinary run reaches no third party whatever the toggle says.
 
 `langfuse` is an optional extra and is not in `.[dev]`. Measured 2026-08-30 (Windows 11, Python 3.14.2, three clean venvs): **32,656,612 installed bytes** and **260.9 s to install**, spread 24.9 s over n=3. Two thirds of the bytes are the three OpenTelemetry distributions the client is built on. A missing package degrades to the file sink and logs that it did; it never stops a run (section 1a).
 
@@ -119,7 +119,7 @@ The rollup above is the **record** of a run and it lasts. A raw trace is **evide
 
 **Bounded by construction** (Rule #12). The window makes the cost constant: at most `trace_window_days` days of traces on disk, whatever the project's age. Measured 2026-09-06 (Windows 11, Python 3.14.2, a real traced run over the committed fixture, n=3, deterministic to two bytes): about 2,943 bytes an item across the nine work spans, so a run at the 160-item `run.safety_ceiling_per_run` ceiling writes about 0.47 MB of work spans, a little more with the score and visual spans. Over the five scheduled runs a day and the default seven-day window, `state/traces/` is bounded near 21 MB - a fraction of the 1 GB Pages reference it is not even part of, since `state/` is committed but never published. The default is seven days, a week of runs; `observability.trace_window_days` is the knob.
 
-A trace is committed only while a run writes one, and a run writes one only with `observability.tracing_enabled` on, which is off by default. Until it is on, nothing writes a trace and the prune walks an empty tree - so the store costs nothing today and is bounded the moment it costs anything.
+A trace is committed only while a run writes one, and a run writes one only with `observability.tracing_enabled` on - the committed default since 2026-09-06. A run before that day wrote none, so the window fills forward from the flip and never reaches behind it, which is [the discontinuity every panel must name](#design-rationale).
 
 ## The item-level census
 
@@ -168,7 +168,7 @@ There is no runtime call home (Rule #1), and there is nowhere to send a log even
 
 **Secrets never reach a log record.** Not a token, not a signed URL, not a request header.
 
-The span tree is the one thing here that CAN reach a host, and it is off, opt-in, and carries no text - see [Where a span goes](#where-a-span-goes). It does not reverse this section: with `tracing_enabled` false, which is the committed default, there is nothing to send and nothing that could send it.
+The span tree is the one thing here that CAN reach a host, and the host is opt-in and carries no text - see [Where a span goes](#where-a-span-goes). It does not reverse this section: tracing is on by default now, but a host is reached only when three environment variables are all set, no workflow sets them, and CI holds no such secret - so an ordinary run still sends nothing anywhere.
 
 Because every event is a plain serializable payload, a captured stream is a fixture: it can be replayed and asserted against in tests with no mocks and no network (Rule #7).
 
@@ -194,6 +194,10 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 
 **The rollup became self-checking on 2026-09-06T15:00, and where the residual lives was the real decision.** A rollup that only says how long each step took cannot say whether the steps add up to the shard's wall clock, so time could go missing between items and nothing would catch it. `unattributed_ms` closes that: `item.total_ms` plus `unattributed_ms` is the wall clock the shard ran, and the fold refuses a set of spans that claims more. The residual is a per-shard quantity, so it needs exactly one row per shard to live on; the `item` span is the shard's top-level span and the one row every rollup already carries, so the residual rides there, null on the four sub-steps and null on any row an earlier run wrote - which is what keeps the field additive, with no read-side migration. It is reported as its own number and never folded into the nearest stage's total: a stage that absorbed the leftover would read as slower than it was, and the leftover is the shard's, not the stage's. Authority: Fowler on the contract shape, Andre on reporting the residual rather than absorbing it, 2026-09-06.
 
+**Tracing switched on by default on 2026-09-06, and the CI hazard that kept it off never applied to the file sink.** It was off because a publish job that can fail on a third party's availability is a worse job (below) - but that hazard is the *host*, and CI never had the host: no workflow sets the three Langfuse variables and CI holds no such secret, so a traced run in CI writes the committed file and reaches nothing. On by default is what makes the committed trace and the span rollup exist for the runs a reader actually looks at, rather than only for a developer who remembered to export a variable. The runner cost is negligible - Carmack measured the span collection at about one part in 128,000 of a shard's time. Rule #11 still holds it safe: the attribute vocabulary is closed, and `backend/tests/test_spans.py` and `backend/tests/test_canaries.py` now run that guard in CI over real spans. Authority: owner, 2026-09-06.
+
+**The flip is a discontinuity, and every panel that plots a span number must name it.** A committed rollup row exists only from 2026-09-06 forward, because no run before that day wrote one. A sub-step series that begins on the flip date is the instrument switching on, not the pipeline slowing down, and a chart that reads the gap as a regression is reading an artefact of the switch. The date is recorded as a discontinuity in [`../reference/measurements.md`](../reference/measurements.md), for the same reason a hardware change is.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -206,7 +210,8 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 | The OpenTelemetry SDK, taken directly | What it sells is a wire protocol to a collector, and Rule #1 forbids the collector. Its span attributes also carry the prompt by default, and this repository is public, so a default left alone is a Rule #11 breach with no undo. It is taken instead inside Langfuse's Python client, which is built on it - one dependency rather than two for one span tree - and the conditions ride with it: off in CI, digests and counts where the text would go, and the ledgers stay the record. | Andre, Carmack and Fowler, 2026-08-30 |
 | Writing emitters for the 19 event names this page used to list | Every fact they would report is already in the item-health ledger, the eval ledger or the run manifest, and a CI log expires in two days. It is 19 emitters written into a store that forgets, beside a record that does not. | Fowler, 2026-08-30 |
 | Sending `input` and `output` as the Langfuse client intends | They are free text, its own decorator fills them with the prompt and the completion, and this repository is public - so a default left alone republishes article bodies, which section 0a forbids outside `corpus/`. Both fields are passed explicitly as null, the attribute bag rides in `metadata`, and the client's own `mask` hook is wired to refuse whatever it is handed. | Andre, 2026-08-30 |
-| Tracing on by default, or on in CI | A publish job that can fail on a third party's availability, for a view nothing in the job reads. Off is also what means CI needs no secret. | Carmack, 2026-08-30 |
+| Tracing on by default, or on in CI (2026-08-30) | Rejected then as a publish job that could fail on a third party's availability, for a view nothing in the job reads. Reversed 2026-09-06: the hazard was the host, and CI has no host - the sink there is the committed file, no key, no third party (see Design rationale). | Carmack 2026-08-30; owner 2026-09-06 |
+| Sampling the span collection | The committed rollup is folded from every span to reconcile the shard's wall clock, so dropping any span breaks that reconciliation. The collection cost is negligible in any case - Carmack measured it at about one part in 128,000 of a shard. | owner, 2026-09-06 |
 | Committing a raw span as a record | A fourth account of the same run, free to disagree with the other three. A *derived* fold that restates nothing is the committed rollup above; a raw span stays evidence under `backend/var/`. | Fowler, 2026-08-30 |
 | Reproducing the nesting on the host with the SDK's own context managers | It works, and it costs a second code path for a sink that is opt-in and untestable here (no test touches the network, Rule #7). The file sink keeps the exact tree; the host gets one trace per item with the parent named. | Carmack, 2026-08-30 |
 
