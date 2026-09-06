@@ -2334,6 +2334,19 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   specs is the tell - a real regression fails in different ways at different
   points. One spec re-run on a fresh `PREVIEW_PORT` passed 7 of 7 in 11.9 s.
   Always take a fresh port before diagnosing a wide, uniform failure.
+- **A drawing is fetched through the service worker, so `page.route` never sees
+  it.** Playwright routes a page's own requests; a response the worker answers
+  goes around them. Measured 2026-09-06 while checking that a day page degrades
+  with no drawing: `page.route('**/*.svg', r => r.fulfill({ status: 404 }))` was
+  registered, 43 requests went out, all 43 drawings drew, and `page.on('response')`
+  saw nothing at or above 400. That reads as a bad glob, and it is not.
+  `browser.newContext({ serviceWorkers: 'block' })` is what makes the route
+  bite. **And the copy list above is one short: `frontend/public/` is Vite's
+  default `publicDir`, and `vite preview` serves it too.** With `build/` and
+  `.svelte-kit/output/client/` both renamed, the file still came back HTTP 200
+  at the right byte count. **Renaming a directory under a running preview also
+  proves nothing**, because sirv builds its file map once at startup - restart
+  the server or it keeps answering from the map it took when it began.
 - **`vite preview --outDir build` still serves static assets out of
   `.svelte-kit/output/client`.** So the section 12 step-5 check - delete the
   page's data file and confirm it degrades - fails to prove anything if you only
