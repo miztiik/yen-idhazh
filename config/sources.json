@@ -1278,17 +1278,6 @@
       "weight": 1.0
     },
     {
-      "id": "scmp-news",
-      "kind": "reporting",
-      "retired_on": null,
-      "status": "active",
-      "tier": 2,
-      "title": "South China Morning Post",
-      "url": "https://www.scmp.com/rss/91/feed",
-      "vertical": "world",
-      "weight": 1.0
-    },
-    {
       "id": "scroll-in",
       "kind": "reporting",
       "retired_on": null,
@@ -1982,6 +1971,17 @@
       "tier": 1,
       "title": "ReliefWeb",
       "url": "https://reliefweb.int/updates/rss.xml",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "scmp-news",
+      "kind": "reporting",
+      "retired_on": "2026-09-06",
+      "status": "retired",
+      "tier": 2,
+      "title": "South China Morning Post",
+      "url": "https://www.scmp.com/rss/91/feed",
       "vertical": "world",
       "weight": 1.0
     },
