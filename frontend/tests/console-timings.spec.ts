@@ -25,8 +25,7 @@ import {
 	dayColumnX,
 	dayTicks,
 	frame,
-	readoutCapStyle,
-	readoutMarks
+	readoutCapStyle
 } from '../src/lib/charts/frame';
 import { readCsv } from '../src/lib/server/payload';
 
@@ -170,21 +169,12 @@ test.describe('a day column', () => {
 });
 
 test.describe('the readout strip', () => {
-	test('the announcement is built from the rows the strip draws', () => {
-		const marks = readoutMarks([
-			{
-				x: 12,
-				date: '20 Aug 2026',
-				rows: [
-					{ label: 'fetch', value: '200 ms', colour: 'var(--series-1)' },
-					{ label: 'summarize', value: 'not timed', colour: 'var(--series-3)' }
-				]
-			}
-		]);
-		expect(marks).toEqual([
-			{ x: 12, lines: ['20 Aug 2026', 'fetch 200 ms', 'summarize not timed'] }
-		]);
-	});
+	// The strip used to carry a second test here, asserting that `readoutMarks`
+	// preformatted one sentence per series onto every mark. Nothing printed those
+	// sentences - `ChartReadout.svelte` is the live region and it prints the rows
+	// - so the field went on 2026-09-06 and this test went with it. Which column
+	// a mark stands for is now held in `frame.spec.ts`, against the walk it
+	// replaced.
 
 	test('the cap is a share of the plot, and it is clamped to one', () => {
 		expect(readoutCapStyle(0.33)).toBe('max-width: 33.00%');
