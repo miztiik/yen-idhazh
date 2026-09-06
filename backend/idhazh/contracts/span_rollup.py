@@ -32,7 +32,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, ClassVar, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId
 
@@ -63,6 +63,25 @@ class SpanRollupRow(Contract):
 
     __schema_stem__: ClassVar[str] = "span-rollup-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-06T15:00",
+            change=(
+                "Add `unattributed_ms`, an optional whole-millisecond count carried on the "
+                "`item` row only: the shard's wall clock minus the time inside its item "
+                "spans. Null on the other four rows and on every row written before this."
+            ),
+            why=(
+                "The rollup could say how long each step took but not whether the steps "
+                "added up to the shard's wall clock, so time could go missing between "
+                "items - model load, file writes, scheduling - and nothing caught it. This "
+                "makes the reconciliation self-checking: item.total_ms plus "
+                "unattributed_ms is the shard's wall clock, and the fold refuses a set of "
+                "spans that claims more time than the shard had. It rides on the `item` "
+                "row because item is the shard's top-level span and the one row every "
+                "rollup already carries; optional and null-by-default so a row an earlier "
+                "run wrote still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06",
             change=(
@@ -105,6 +124,34 @@ class SpanRollupRow(Contract):
             "honest: a counted span can round to nothing."
         ),
     )
+    unattributed_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The shard's wall clock minus the time inside its item spans, in whole "
+            "milliseconds - the overhead between and around items that no span covers. "
+            "Carried on the `item` row only; null on the other four spans and on any row "
+            "written before this field existed. Null reads as not-this-row, never as zero "
+            "overhead measured."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _residual_rides_on_the_item_row(self) -> Self:
+        """The shard residual belongs to the shard, filed on its one top-level row.
+
+        `unattributed_ms` is a per-shard quantity and the `item` span is the shard's
+        top-level span, so the residual is carried on the item row and nowhere else. A
+        value on any other span's row would be a second, smaller thing wearing the
+        shard's number. Null is allowed on the item row too, so a row written before
+        this field existed still validates.
+        """
+        if self.unattributed_ms is not None and self.span_name is not RollupSpan.ITEM:
+            raise ValueError(
+                "unattributed_ms is the shard residual and rides on the item row; "
+                f"span_name={self.span_name.value!r} may not carry it"
+            )
+        return self
 
     @classmethod
     def csv_columns(cls) -> tuple[str, ...]:
