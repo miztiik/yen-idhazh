@@ -859,6 +859,15 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     inlined by a layout, which cost 313,300 gzipped bytes when it last happened,
     so a ceiling more than that above the page could never see it land again.
 
+    **The 536,000 bound is a stand-in for the page, and it is re-derived whenever
+    the ceilings are.** This test reads the config and never a build, so it cannot
+    subtract the real page weight; the constant is the heaviest console document
+    plus that regression - 222,819 measured 2026-09-06 plus 313,300, rounded down
+    to the thousand. It therefore decays as the page grows, and the commit that
+    re-derives the three ceilings re-derives this with them. It held 433,000 from
+    2026-08-31, when the heaviest console document was 119,700, and at that value
+    the next ordinary re-derivation of `/console/` would have crossed it.
+
     All three console routes are asserted, and that is the point of splitting
     them: one key over three surfaces still fails when any of them grows and
     cannot say which one did, so the operator raises the shared number and the
@@ -879,7 +888,7 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
             f"{route} is a prerendered route with no ceiling - the bundle gate reports "
             "an unnamed route without failing it, so this one would grow unwatched"
         )
-        assert ceilings[route] < 433_000, (
+        assert ceilings[route] < 536_000, (
             f"the ceiling on {route} is above the heaviest console document plus the "
             "313,300 a day payload cost when a layout last inlined one - a ceiling that "
             "high cannot catch the one regression this surface has actually had"
