@@ -466,19 +466,50 @@ function readJson<T>(...segments: string[]): T | null {
 	return JSON.parse(readFileSync(path, 'utf8')) as T;
 }
 
-/** The pipeline file, or nothing. A fresh clone runs on the defaults (section 1a). */
-function raw(): RawConfig {
-	return readJson<RawConfig>('config', 'idhazh.json') ?? {};
+/** Freeze a parsed file whole, not just its top level.
+ *
+ * A block the merge hands out by reference - `summarize.bands`,
+ * `frame.breakpoints_px`, `digest.sections` - is now the same object on every
+ * call. A caller that sorted or pushed in place would move a knob for every
+ * later reader on the same build, and nothing on the page would look wrong.
+ * Freezing turns that into a throw at the line that does it.
+ */
+function frozen<T>(value: T): T {
+	if (value !== null && typeof value === 'object') {
+		for (const held of Object.values(value as Record<string, unknown>)) frozen(held);
+		Object.freeze(value);
+	}
+	return value;
 }
+
+/** Read, parse and freeze one config file the first time it is asked for.
+ *
+ * A build reads a file nothing rewrites while it runs, so parsing it again for
+ * every accessor buys an answer already held: `config/idhazh.json` is opened by
+ * ten accessors and every route's `load` asks one of them something.
+ *
+ * What that costs, stated rather than hidden: the parse is held for the life of
+ * the process, so a config file edited part-way through a build is not seen by
+ * the rest of it. That is the same rule the build already runs under - a source
+ * edit during compilation cannot certify the output either.
+ */
+function once<T extends object>(...segments: string[]): () => T {
+	let held: T | undefined;
+	return () => {
+		if (held === undefined) held = frozen(readJson<T>(...segments) ?? ({} as T));
+		return held;
+	};
+}
+
+/** The pipeline file, or nothing. A fresh clone runs on the defaults (section 1a). */
+const raw = once<RawConfig>('config', 'idhazh.json');
 
 /** The appearance file, or nothing.
  *
  * Absent on a checkout taken before 2026-08-29, which is exactly the case the
  * fallback below exists for.
  */
-function appearance(): RawAppearance {
-	return readJson<RawAppearance>('config', 'appearance.json') ?? {};
-}
+const appearance = once<RawAppearance>('config', 'appearance.json');
 
 /** Three layers, most specific last: defaults, the legacy block, the new file.
  *

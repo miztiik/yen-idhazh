@@ -168,6 +168,13 @@ Two consequences worth stating so nobody re-derives them:
   [../sources/item-health.md](../sources/item-health.md). The readers glob the
   directory, so the period is a layout change and not a contract change.
 
+**What a shard obliges its writer to do is a separate rule, and it is defined
+once.** A closed month is rewritten only when a correction targets it; every
+other run touches the current partition alone. That rule, the closed rule for
+each partitioned collection above, and what the pattern does with a correction, a
+deletion, a late arrival and a row whose date changes are in
+[../../concepts/month-partitions.md](../../concepts/month-partitions.md).
+
 Authority: Carmack (cache and shard economics), 2026-08-25.
 
 The eval ledger and source-state CSV ledgers compare the committed header to the row contract before writing. A mismatch stops the append and tells the operator to migrate the ledger. Padding is forbidden: readers map cells by header position, so a stale header would put correct-looking names over the wrong values.
@@ -341,6 +348,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [determinism.md](determinism.md) - the pipeline fingerprint, its ledger, and the skip rule built on it.
 - [../sources/freshness.md](../sources/freshness.md) - why the published ledger is one file and its dedupe read has no window.
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
+- [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
