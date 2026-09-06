@@ -1232,8 +1232,8 @@
           "type": "integer"
         },
         "tracing_enabled": {
-          "default": false,
-          "description": "Whether a work shard builds a span tree. The only switch here that is OFF unconfigured, because it is the only instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. It buys a developer the nesting a flat row cannot carry - the robots read inside the fetch, the prompt render and the reply parse either side of the model call. True writes one JSON line per span under backend/var/traces/, which is gitignored and published nowhere. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says.",
+          "default": true,
+          "description": "Whether a work shard builds a span tree. On by default (2026-09-06): a span tree is the one thing the three ledgers cannot hold - a start instant, a parent, and a step too small to earn a column, the robots read inside the fetch and the prompt render and reply parse either side of the model call. It stays an instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. True writes one JSON line per span to the committed trace under state/traces/, a short rolling window observability.trace_window_days bounds, and folds the shard's spans into the committed span rollup. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says.",
           "title": "Tracing Enabled",
           "type": "boolean"
         }
@@ -1796,6 +1796,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability.tracing_enabled default moves from false to true. A work shard now builds a span tree unconfigured, writes it to the committed trace under state/traces/, and folds it into the span rollup. The committed config sets the same value, so a fresh clone and the shipped file still agree.",
+      "version": "2026-09-06T16:00",
+      "why": "The owner turned tracing on by default (2026-09-06): the span tree and the committed rollup are worth their runner cost, which Carmack measured negligible. It is safe to run in CI because the sink is the committed file and nothing else - no host, no key - and the closed attribute vocabulary keeps article text out of every span (Rule #11). The move is additive: the committed config sets the value explicitly, so no persisted config changes meaning and no read-side migration is needed."
+    },
+    {
       "change": "observability.trace_window_days added, defaulting to 7. It bounds state/traces/, the raw span traces kept so an operator can open a recent run; a trace whose published day is more than that many days behind today is deleted whole. Additive - an older config validates and takes the default.",
       "version": "2026-09-06T15:00",
       "why": "Raw traces are evidence with a short life while the span rollup is the record, so the traces need a rolling window of their own. A trace is a lookup an operator opens, so it is deleted rather than folded - a fold would invent a total nobody reads. Seven days is measured at about 0.6 MB a run over five runs a day, which bounds the tree at about 21 MB whatever the project's age (Rule #12)."
@@ -2272,7 +2277,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-06T15:00",
+      "default": "2026-09-06T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2286,5 +2291,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-06T15:00"
+  "version": "2026-09-06T16:00"
 }

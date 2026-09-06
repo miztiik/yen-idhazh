@@ -338,6 +338,31 @@ class FanOut:
             sink.flush()
 
 
+class CollectingSink:
+    """Keeps every span in memory so a shard can fold its own tree at the end.
+
+    Fanned out beside the file sink, never instead of it, so `roll_up_spans`
+    folds the span objects themselves rather than re-reading the file it just
+    wrote. The committed rollup and the committed trace then come off one set of
+    spans and cannot disagree about what the shard did - and the fold is fed by
+    every span, which is what the shard's wall-clock reconciliation depends on.
+    """
+
+    __slots__ = ("_spans",)
+
+    def __init__(self) -> None:
+        self._spans: list[Span] = []
+
+    def emit(self, span: Span) -> None:
+        self._spans.append(span)
+
+    def flush(self) -> None:
+        return None
+
+    def spans(self) -> Sequence[Span]:
+        return tuple(self._spans)
+
+
 class OpenSpan:
     """A span that has started and has not finished.
 
