@@ -124,10 +124,13 @@
 			unitMany: 'failures'
 		})
 	);
-	// Keyed by cause, because the snippet is handed a ranked row and the ranking
-	// caps and reorders what it was built from.
+	// A trend is built only where the ranking drew its cause. `ranked` caps and
+	// reorders `ledger.causes`, and the snippet is handed a drawn row, so a
+	// sparkline for a capped-off cause is a line nothing renders. Keyed by cause,
+	// which is what the snippet looks a row up by.
+	const dailyByCause = $derived(new Map(ledger.causes.map((cause) => [cause.key, cause.daily])));
 	const trends = $derived(
-		new Map(ledger.causes.map((cause) => [cause.key, sparklineMarks(cause.daily)]))
+		new Map(ranked.rows.map((row) => [row.key, sparklineMarks(dailyByCause.get(row.key) ?? [])]))
 	);
 
 	const sourceEntries = $derived<Rankable<RankedDisplay>[]>(
