@@ -1476,37 +1476,21 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
     assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
 
-#: A change, and what it has to pay for: the browser half at all, and the
-#: operator console's own 233 specs inside it. The backend rows are the trap the
-#: allow-list exists to avoid - a module the canary day is built through, and a
-#: fixture the attack text is read from, can move a published page without
-#: touching `frontend/`. The two reading-route rows are the saving: they publish
-#: a page and draw nothing the console draws.
+#: What the shipped script has to answer through a real git history.
+#:
+#: The truth table itself is in `frontend/scripts/tests/test-scope.test.mjs`,
+#: where a case is a function call. Here a case is a temporary repository, two
+#: commits and a shell, and twenty-four of them cost 168 s of this module's
+#: 585 s on an i7-1265U, 2026-09-05 - for an answer the pure function already
+#: gives. These four are the plumbing rather than the policy: one change that
+#: buys everything, one that buys the browser half without the console, one that
+#: re-reads the archive because it moved the shape a day is read through, and
+#: one that buys nothing.
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True, True),
-    ("frontend/src/lib/charts/engine.ts", True, True),
-    ("frontend/src/lib/components/KpiCard.svelte", True, True),
-    ("frontend/src/lib/server/payload.ts", True, True),
-    ("frontend/tests/console-feeds.spec.ts", True, True),
-    ("config/idhazh.json", True, True),
-    ("backend/idhazh/contracts/item_health.py", True, True),
-    ("backend/utilities/build_canary_day.py", True, True),
-    ("frontend/src/routes/[date]/+page.svelte", True, False),
-    ("frontend/src/lib/assist/loader.ts", True, False),
-    ("frontend/src/app.html", True, True),
-    ("frontend/src/styles/tokens.css", True, True),
-    ("frontend/src/routes/+layout.svelte", True, True),
-    ("frontend/package.json", True, True),
-    ("frontend/package-lock.json", True, True),
-    ("frontend/tests/frame.spec.ts", False, False),
-    ("backend/idhazh/render/write.py", True, True),
-    ("unknown-area/module.ts", True, True),
-    ("backend/idhazh/sanitize.py", True, False),
-    ("tests/fixtures/canaries/fake-system-delimiter.json", True, True),
-    ("docs/reference/measurements.md", False, False),
-    ("backend/tests/test_discover.py", False, False),
-    ("backend/idhazh/discover.py", False, False),
-    ("TODO/some-plan.md", False, False),
+    ("frontend/src/routes/console/+page.svelte", True, True, False),
+    ("frontend/src/routes/[date]/+page.svelte", True, False, False),
+    ("config/idhazh.json", True, False, True),
+    ("docs/reference/measurements.md", False, False, False),
 )
 
 
@@ -1565,9 +1549,9 @@ def _browser_scope(
 
 
 @requires_bash
-@pytest.mark.parametrize(("changed", "browser", "console"), BROWSER_SCOPE_CASES)
+@pytest.mark.parametrize(("changed", "browser", "console", "validate_all"), BROWSER_SCOPE_CASES)
 def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
-    changed: str, browser: bool, console: bool, tmp_path: Path
+    changed: str, browser: bool, console: bool, validate_all: bool, tmp_path: Path
 ) -> None:
     """The filter is executed, not read.
 
@@ -1575,23 +1559,16 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     shipped script skipped a change that breaks a published page. So the test
     builds a real two-commit history, runs the script the workflow runs, and
     reads the lines it writes to `$GITHUB_OUTPUT`.
+
+    What is under test here is the plumbing - the shell, the git range and the
+    output format. Which paths select which groups is decided by a pure function
+    and checked case by case in `frontend/scripts/tests/test-scope.test.mjs`.
     """
     assert _browser_scope(tmp_path, [changed]) == {
         "browser": str(browser).lower(),
         "console": str(console).lower(),
+        "validate_all": str(validate_all).lower(),
     }
-
-
-@requires_bash
-def test_the_console_half_is_never_bought_without_the_browser_half(tmp_path: Path) -> None:
-    """A containment the two patterns must satisfy for any input.
-
-    `SKIP_CONSOLE_SUITE` is only read inside the `browser` job, so a change that
-    needed the console specs and not the job would silently run neither. Every
-    case in the table is checked rather than the design being asserted in prose.
-    """
-    for changed, browser, console in BROWSER_SCOPE_CASES:
-        assert not (console and not browser), f"{changed} asks for the console with no job"
 
 
 @requires_bash
@@ -1615,6 +1592,7 @@ def test_a_push_to_main_never_consults_the_list(tmp_path: Path) -> None:
     assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == {
         "browser": "true",
         "console": "true",
+        "validate_all": "true",
     }
 
 
@@ -1664,6 +1642,59 @@ def test_every_committed_day_is_validated_where_the_build_stopped_doing_it(
     assert calls, f"{filename}/{job_name} never validates the committed days"
     assert "continue-on-error" not in steps[calls[0]], (
         "a day that fails its contract is a day no reader can read; the step still fails"
+    )
+
+
+def test_the_daily_publish_validates_the_day_it_wrote_and_not_every_other_one() -> None:
+    """A published day is frozen, so re-opening all of them buys nothing.
+
+    Measured 2026-09-05 on an i7-1265U: 16 committed days took 6.6 s to 7.1 s,
+    about 0.27 s a day on top of a fixed start. The pipeline publishes five
+    times a day, so a year of days would spend roughly eight minutes a day
+    re-deriving an answer settled when each of those days was written
+    (`CLAUDE.md` Rule #12).
+
+    `backfill.yml` is deliberately not here: it repairs days it chooses, so the
+    day it has to check is not one this file can name.
+    """
+    steps = _steps(_load_workflows()["digest.yml"], "assemble")
+    call = next(
+        shlex.split(str(step.get("run", "")))
+        for step in steps
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+    )
+    assert "--day" in call, "the daily publish still opens every committed day"
+    named = call[call.index("--day") + 1]
+    assert "needs.plan.outputs.date" in named, (
+        f"the day is {named!r}, which is not the day this run was planned for"
+    )
+
+
+def test_the_whole_tree_is_re_read_only_when_the_shape_it_is_read_through_moves() -> None:
+    """The other half: `ci.yml` pays the full price on the change that earns it.
+
+    A contract, schema, config or harness edit can invalidate a day nobody
+    touched, and a merge to `main` always counts. Anything else leaves every
+    committed day exactly as valid as it was when it was pushed.
+    """
+    workflow = _load_workflows()["ci.yml"]
+    # `needs:` is a bare string for one dependency and a list for several.
+    declared = _job(workflow, "gates").get("needs")
+    waits_for = [declared] if isinstance(declared, str) else declared
+    assert isinstance(waits_for, list) and "scope" in waits_for, (
+        "gates cannot read the selector's answer without waiting for it"
+    )
+    outputs = _job(workflow, "scope").get("outputs")
+    assert isinstance(outputs, dict) and "validate_all" in outputs, (
+        "the selector's answer is not published for another job to read"
+    )
+    step = next(
+        step
+        for step in _steps(workflow, "gates")
+        if tuple(shlex.split(str(step.get("run", "")))[:4]) == VALIDATE_DAYS_CALL
+    )
+    assert "validate_all" in str(step.get("if", "")), (
+        "the full pass over the archive runs on every change, whatever moved"
     )
 
 

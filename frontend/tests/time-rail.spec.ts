@@ -61,9 +61,9 @@ const GROUP_MINUTES = ((): number => {
 /** Every shape a reader could mistake for a clock that rewrites itself.
  *
  * Written as separate patterns rather than one alternation, so a failure names
- * which form was found. `Yesterday` is deliberately absent: it is relative to
- * the day the page IS, which is printed at the top of that page and never
- * moves, so it stays true on an archived day for ever.
+ * which form was found. The rail now prints digits only, so `Yesterday` cannot
+ * appear either - the letter check in the truth table below catches it, and
+ * this list stays the record of the specific forms that were argued about.
  */
 const RELATIVE = [
 	/\bago\b/i,
@@ -71,6 +71,7 @@ const RELATIVE = [
 	/\bin \d/i,
 	/\b(a|an|\d+)\s+(second|minute|hour|day|week|month|year)s?\b/i,
 	/\bmoments?\b/i,
+	/\byesterday\b/i,
 	/\btoday\b/i,
 	/\btomorrow\b/i
 ];
@@ -162,17 +163,12 @@ test.describe('the day runs newest first, and every time it prints is attributed
 		const cases: { at: string | null; source: string | null; form: RailForm; label: string }[] = [
 			{ at: `${day}T14:05:00Z`, source: 'feed', form: 'clock', label: '14:05' },
 			{ at: `${day}T14:05:00Z`, source: null, form: 'clock', label: '14:05' },
-			{ at: '2026-08-19T23:40:00Z', source: 'feed', form: 'yesterday', label: 'Yesterday 23:40' },
-			{ at: '2026-08-19T23:40:00Z', source: null, form: 'yesterday', label: 'Yesterday 23:40' },
-			{ at: '2026-06-11T08:15:00Z', source: null, form: 'dated', label: '11 Jun 08:15' },
-			{ at: '2019-06-11T08:15:00Z', source: null, form: 'dated', label: '11 Jun 2019 08:15' },
-			{
-				at: `${day}T06:20:00Z`,
-				source: 'first_seen',
-				form: 'first-seen',
-				label: 'First seen 06:20'
-			},
-			{ at: null, source: 'unknown', form: 'none', label: 'No time given' }
+			{ at: '2026-08-19T23:40:00Z', source: 'feed', form: 'dated', label: '08-19 23:40' },
+			{ at: '2026-08-19T23:40:00Z', source: null, form: 'dated', label: '08-19 23:40' },
+			{ at: '2026-06-11T08:15:00Z', source: null, form: 'dated', label: '06-11 08:15' },
+			{ at: '2019-06-11T08:15:00Z', source: null, form: 'dated', label: '2019-06-11 08:15' },
+			{ at: `${day}T06:20:00Z`, source: 'first_seen', form: 'first-seen', label: '06:20' },
+			{ at: null, source: 'unknown', form: 'none', label: '' }
 		];
 
 		for (const one of cases) {
@@ -182,11 +178,15 @@ test.describe('the day runs newest first, and every time it prints is attributed
 			expect(time.form, named).toBe(one.form);
 			refuseRelative(time.label, named);
 
-			// Our own clock never prints as a bare reading, and no other clock claims
-			// a first sight the payload does not record.
-			expect(time.label.startsWith('First seen'), named).toBe(one.source === 'first_seen');
-			// A story with no time says so, and one with a time never does.
+			// The rail is digits. A label carrying a letter is a word that crept back
+			// in, whichever branch put it there.
+			expect(/[A-Za-z]/.test(time.label), `${named} prints a word`).toBe(false);
+			// Our own clock is still marked as ours - by `form`, which the column
+			// draws an icon from, never by a phrase in the label.
+			expect(time.form === 'first-seen', named).toBe(one.source === 'first_seen');
+			// A story with no time prints nothing, and one with a time always prints.
 			expect(time.form === 'none', named).toBe(!one.at);
+			expect(time.label === '', named).toBe(!one.at);
 		}
 
 		// Exhaustive by construction, which the census could only approximate: it
@@ -195,7 +195,7 @@ test.describe('the day runs newest first, and every time it prints is attributed
 		expect(
 			[...new Set(cases.map((one) => one.form))].sort(),
 			'a form no case reaches is a branch with no test'
-		).toEqual(['clock', 'dated', 'first-seen', 'none', 'yesterday']);
+		).toEqual(['clock', 'dated', 'first-seen', 'none']);
 	});
 
 	test('the canary day carries the one state no committed day has', () => {
@@ -208,7 +208,7 @@ test.describe('the day runs newest first, and every time it prints is attributed
 		const undated = items.filter((item) => item.time_source === 'unknown');
 		expect(undated.length, 'the canary day no longer plants an undated story').toBe(1);
 		const time = railTime(undated[0].published_at, undated[0].time_source, DAY, GROUP_MINUTES);
-		expect(time.label).toBe('No time given');
+		expect(time.label).toBe('');
 		expect(time.form).toBe('none');
 
 		// And every other form, on the same fixture, so the browser check below
@@ -218,7 +218,7 @@ test.describe('the day runs newest first, and every time it prints is attributed
 				(item) => railTime(item.published_at, item.time_source, DAY, GROUP_MINUTES).form
 			)
 		);
-		expect([...drawn].sort()).toEqual(['clock', 'dated', 'first-seen', 'none', 'yesterday']);
+		expect([...drawn].sort()).toEqual(['clock', 'dated', 'first-seen', 'none']);
 	});
 
 	test('the rail draws one marker per group, not one per story', () => {
@@ -329,9 +329,8 @@ test.describe('the rail on the page', () => {
 		const rank: Record<string, number> = {
 			clock: 0,
 			'first-seen': 0,
-			yesterday: 1,
-			dated: 2,
-			none: 3
+			dated: 1,
+			none: 2
 		};
 		let previous = -1;
 		for (const mark of seen.marks) {
@@ -354,8 +353,7 @@ test.describe('the rail on the page', () => {
 			'clock',
 			'dated',
 			'first-seen',
-			'none',
-			'yesterday'
+			'none'
 		]);
 	});
 
@@ -387,7 +385,7 @@ test.describe('the rail on the page', () => {
 		const rows = railRows(orderByTime(items), DAY, GROUP_MINUTES);
 		expect(rows.length).toBe(items.length);
 		expect(rows.filter((row) => row.mark !== null).length, 'one group, one marker').toBe(1);
-		expect(rows[0].mark?.label).toBe('No time given');
+		expect(rows[0].mark?.label, 'no stamp, no number, no word').toBe('');
 
 		// And on the page: the canary's own undated story is on it, and the day
 		// around it rendered.

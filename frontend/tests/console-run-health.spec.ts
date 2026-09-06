@@ -223,7 +223,11 @@ test('THE ORACLE: a strip with room to spare is centred in its grid', async ({ p
 	// calendar now, so its last column IS today and there is nothing to the
 	// right of it - spare room there reads as a run that stopped.
 	await openConsole(page, 'light', UNDERFULL);
-	await setWindow(page, Math.min(...WINDOW_PRESETS));
+	// The narrowest preset that draws more than one column. A one-day window is a
+	// single square: it has no inside to be centred in, so every assertion below
+	// would pass on it while proving nothing about a strip. The count guard is
+	// what catches that, and this is what keeps the guard from firing.
+	await setWindow(page, Math.min(...WINDOW_PRESETS.filter((days) => days > 1)));
 
 	const geometry = await page.evaluate(() => {
 		const box = (node: Element | null) => {
@@ -246,7 +250,7 @@ test('THE ORACLE: a strip with room to spare is centred in its grid', async ({ p
 	const room = (geometry.strip as { width: number }).width;
 	// The premise. On a full strip every alignment is the same picture, so
 	// without this the test passes on a strip that proves nothing. The narrowest
-	// preset, because the default window fills a page-wide frame.
+	// strip the presets offer, because the default window fills a page-wide frame.
 	expect(drawn, `the strip is full at ${UNDERFULL.width}px, so alignment cannot be told apart`).toBeLessThan(room - 2);
 
 	// The grid still starts where the columns do; what moved is the grid.
