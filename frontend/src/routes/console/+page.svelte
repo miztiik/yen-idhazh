@@ -41,6 +41,7 @@
 		type TimeWindow
 	} from '$lib/charts/viewport';
 	import StageTimings from '$lib/components/StageTimings.svelte';
+	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
@@ -180,6 +181,36 @@
 		data.sourceCutsByWindow.find((table) => table.days === windowDays) ??
 			data.sourceCutsByWindow[0]
 	);
+	/** What one item cost the model, for the window in force. Reduced once per
+	 * preset at build time, the same way the source table above it is.
+	 *
+	 * It cannot be recomputed here: the seeded rows carry the model's clocks and
+	 * token counts as nulls, because seeding their real values cost this page
+	 * 176,753 gzipped bytes and put it 98,182 over its ceiling. So the section
+	 * follows the window's length and not a pan, and says so.
+	 */
+	const cost = $derived(
+		data.itemCostByWindow.find((entry) => entry.days === windowDays) ?? data.itemCostByWindow[0]
+	);
+
+	/** Whole seconds, and `<1` where a real measurement rounds away. The console
+	 * prints no decimal, and a `0` there would say the work was free. */
+	function asSeconds(ms: number): string {
+		const value = Math.round(ms / 1000);
+		return value === 0 && ms > 0 ? '<1 s' : `${grouped(value)} s`;
+	}
+
+	/** A count, or a dash where the ledger holds no answer. Null and zero are
+	 * different facts, and a zero that was really an absence is the one number
+	 * nobody checks. */
+	function count(value: number | null): string {
+		return value === null ? '-' : grouped(value);
+	}
+
+	/** The same rule for a share, which the console prints as whole percent. */
+	function pct(value: number | null): string {
+		return value === null ? '-' : `${value}%`;
+	}
 	/** The chart arm's own rule, read from config rather than written into a
 	 * component. An operator moves a threshold in `config/appearance.json`. */
 	const thresholds = $derived({
@@ -1234,6 +1265,230 @@
 		modelChanges={data.modelChanges}
 	/>
 
+	<!-- Reading and writing are drawn apart and never pooled. Measured over the
+	     committed projection they cost different amounts per token, and an
+	     operator acts on them differently: the article's length moves the first
+	     and the summary's length moves the second. One "model seconds" chart
+	     would hide which of the two moved. -->
+	<div data-windowed="item-cost" data-window-days={cost.days}>
+		<h2 class="console-h2">What one item cost the model</h2>
+
+		<p class="mt-2 text-[0.9375rem] text-text-secondary" data-item-cost-lead data-item-cost-rows={cost.rows}>
+			{#if cost.rows === 0}
+				No item is on the published record for these {cost.days} days, so there is nothing here to
+				measure yet. It fills as runs publish.
+			{:else}
+				{grouped(cost.timed)} of the {grouped(cost.rows)} items in these {cost.days} days were
+				timed by the model itself. The rest failed before it saw them, or were kept without ever
+				being sent to it.
+			{/if}
+			Panning does not move these days: they always end on the newest day the ledger holds.
+		</p>
+
+		{#if cost.reading === null && cost.writing === null}
+			{#if cost.rows > 0}
+				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost="unmeasured">
+					Nothing recorded a model clock in these {cost.days} days. This fills as runs publish.
+				</p>
+			{/if}
+		{:else}
+			{#if cost.reading === null}
+				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-reading="empty">
+					Nothing timed the reading of a prompt in these {cost.days} days.
+				</p>
+			{:else if cost.reading.n < data.console.min_attempts_for_rate}
+				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-reading="thin">
+					{grouped(cost.reading.n)}
+					{cost.reading.n === 1 ? 'prompt was' : 'prompts were'} timed in these {cost.days} days. Too
+					few to give a middle or a slowest one in twenty - {data.console.min_attempts_for_rate}
+					needed. The fastest took {asSeconds(cost.reading.fastest)} and the slowest {asSeconds(
+						cost.reading.slowest
+					)}.
+				</p>
+			{:else}
+				<Panel
+					title="Reading the prompt"
+					note="How long the model spent taking in one article and its instructions, before it wrote a word. This is what the article's length costs."
+					wide
+				>
+					<TimeHistogram
+						times={cost.reading}
+						name="reading-the-prompt"
+						subject="Time to read one prompt"
+						verb="read"
+						noun="prompt"
+						nouns="prompts"
+						noRuleReason="one distribution over the window, with no day axis to place a boundary on"
+						width={data.console.chart_width}
+						height={data.console.chart_height}
+						readoutMaxShare={data.chart.readout_max_share}
+					/>
+					<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-item-cost-reading="readout">
+						Half of the {grouped(cost.reading.n)} prompts were read inside
+						<span data-item-cost-reading="median">{asSeconds(cost.reading.median)}</span>, and one
+						in twenty took longer than
+						<span data-item-cost-reading="p95">{asSeconds(cost.reading.p95)}</span>. Over
+						{cost.timedDays} of these {cost.days} days.
+					</p>
+				</Panel>
+			{/if}
+
+			{#if cost.writing === null}
+				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-writing="empty">
+					Nothing timed the writing of a summary in these {cost.days} days.
+				</p>
+			{:else if cost.writing.n < data.console.min_attempts_for_rate}
+				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-writing="thin">
+					{grouped(cost.writing.n)}
+					{cost.writing.n === 1 ? 'summary was' : 'summaries were'} timed in these {cost.days} days.
+					Too few to give a middle or a slowest one in twenty - {data.console.min_attempts_for_rate}
+					needed. The fastest took {asSeconds(cost.writing.fastest)} and the slowest {asSeconds(
+						cost.writing.slowest
+					)}.
+				</p>
+			{:else}
+				<Panel
+					title="Writing the summary"
+					note="How long it spent writing the summary itself, after it had read the whole prompt. This is what the summary's length costs."
+					wide
+				>
+					<TimeHistogram
+						times={cost.writing}
+						name="writing-the-summary"
+						subject="Time to write one summary"
+						verb="written"
+						noRuleReason="one distribution over the window, with no day axis to place a boundary on"
+						width={data.console.chart_width}
+						height={data.console.chart_height}
+						readoutMaxShare={data.chart.readout_max_share}
+					/>
+					<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-item-cost-writing="readout">
+						Half of the {grouped(cost.writing.n)} summaries were written inside
+						<span data-item-cost-writing="median">{asSeconds(cost.writing.median)}</span>, and one
+						in twenty took longer than
+						<span data-item-cost-writing="p95">{asSeconds(cost.writing.p95)}</span>. Over
+						{cost.timedDays} of these {cost.days} days.
+					</p>
+				</Panel>
+			{/if}
+
+			{#if cost.msPerReadToken !== null && cost.msPerWrittenToken !== null}
+				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-item-cost-rates>
+					A prompt token costs
+					<span
+						class="tabular-nums"
+						data-item-cost-ms-per-read-token={Math.round(cost.msPerReadToken)}
+						>{grouped(Math.round(cost.msPerReadToken))} ms</span
+					>
+					to read and a written one costs
+					<span
+						class="tabular-nums"
+						data-item-cost-ms-per-written-token={Math.round(cost.msPerWrittenToken)}
+						>{grouped(Math.round(cost.msPerWrittenToken))} ms</span
+					>
+					to write, so a written token costs
+					<strong data-item-cost-write-ratio={(cost.writeCostRatio ?? 0).toFixed(1)}
+						>{(cost.writeCostRatio ?? 0).toFixed(1)}x</strong
+					>
+					a read one.
+					{#if (cost.writeCostRatio ?? 0) >= 1}
+						Cutting a hundred tokens from the summary saves more time than cutting a hundred from
+						the article.
+					{:else}
+						Cutting a hundred tokens from the article saves more time than cutting a hundred from
+						the summary.
+					{/if}
+				</p>
+			{/if}
+
+			{#if cost.counted === 0}
+				<p class="mt-4 text-[0.9375rem] text-text-secondary" data-item-cost-cache="unmeasured">
+					No item in these {cost.days} days recorded a token count, so nothing here can say what
+					the prompt cost or what was already in memory.
+				</p>
+			{:else}
+				<Panel
+					title="How much of each prompt was already in memory"
+					note="Prompt tokens the model had to read, against the ones it did not - the instructions in front of every article stay in memory between items."
+				>
+					<div
+						class="cost-track"
+						role="img"
+						data-item-cost-read-tokens={cost.readTokens}
+						data-item-cost-reused-tokens={cost.reusedTokens}
+						data-item-cost-reused-pct={cost.reusedPct}
+						aria-label="{grouped(cost.readTokens)} prompt tokens were read and {grouped(
+							cost.reusedTokens
+						)} were already in memory, which is {cost.reusedPct} percent of the {grouped(
+							cost.readTokens + cost.reusedTokens
+						)} the window needed."
+					>
+						<span
+							class="cost-seg read"
+							style="inline-size: {100 - (cost.reusedPct ?? 0)}%"
+						></span>
+						<span class="cost-seg held" style="inline-size: {cost.reusedPct ?? 0}%"></span>
+					</div>
+					<p class="cost-key" data-item-cost-key>
+						<span class="cost-swatch read"></span>read {grouped(cost.readTokens)} tokens
+						<span class="cost-swatch held"></span>already in memory {grouped(cost.reusedTokens)} tokens
+						({pct(cost.reusedPct)})
+					</p>
+
+					<div class="cost-figures">
+						<p class="cost-figure">
+							<span class="cost-figure-value tabular-nums" data-item-cost-prompt-tokens={cost.promptTokens}
+								>{count(cost.promptTokens)}</span
+							>
+							<span class="cost-figure-label"
+								>tokens in the middle prompt, over {grouped(cost.counted)} items</span
+							>
+						</p>
+						<p class="cost-figure">
+							<span
+								class="cost-figure-value tabular-nums"
+								data-item-cost-written-tokens={cost.writtenTokens}>{count(cost.writtenTokens)}</span
+							>
+							<span class="cost-figure-label"
+								>tokens in the middle summary, over {grouped(cost.counted)} items</span
+							>
+						</p>
+						<p class="cost-figure">
+							<span
+								class="cost-figure-value tabular-nums"
+								data-item-cost-item-reused-pct={cost.itemReusedPct}>{pct(cost.itemReusedPct)}</span
+							>
+							<span class="cost-figure-label"
+								>of the middle item's prompt was already in memory</span
+							>
+						</p>
+						<p class="cost-figure">
+							<span class="cost-figure-value tabular-nums" data-item-cost-read-whole={cost.readWhole}
+								>{grouped(cost.readWhole)}</span
+							>
+							<span class="cost-figure-label"
+								>items of {grouped(cost.counted)} were read whole, with nothing held over</span
+							>
+						</p>
+					</div>
+
+					<!-- The share is printed and never plotted as a trend, and this is why.
+					     The held part barely moves; the prompt does. A falling line here
+					     would read as the cache getting worse when it means the articles
+					     got longer, and that is the one wrong conclusion this panel could
+					     cause somebody to act on. -->
+					<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-item-cost-share-note>
+						The share follows the article, not the memory. The held part hardly changes - the
+						middle item kept {count(cost.reusedMedian)} tokens and the largest kept {count(
+							cost.reusedWidest
+						)} - so a longer article reads as a smaller share while exactly as much is held. Read
+						the token counts above, not the direction of the percentage.
+					</p>
+				</Panel>
+			{/if}
+		{/if}
+	</div>
+
 	{#if data.charts.length > 0}
 		<h2 class="console-h2">Visuals drawn for articles</h2>
 		<div
@@ -1402,6 +1657,88 @@
 /* Route-specific only. The shapes every console route shares - the h2, the
    framed table, the disclosure, the carry sentence - are in app.css, so three
    routes cannot drift into three identities that merely agree today. */
+
+/* One track, two segments, the same shape the Hardware route splits reading
+   against writing with. Absolute tokens set the geometry and the share is
+   printed beside it: a share over a prompt that keeps changing length is not
+   the question this panel answers. */
+.cost-track {
+display: flex;
+block-size: 0.75rem;
+overflow: hidden;
+border-radius: var(--radius-sm);
+background: var(--color-surface-sunken);
+}
+
+.cost-seg {
+display: block;
+block-size: 100%;
+}
+
+.cost-seg.read {
+background: var(--chart-1);
+}
+
+.cost-seg.held {
+background: var(--chart-3);
+}
+
+.cost-key {
+display: flex;
+flex-wrap: wrap;
+align-items: center;
+gap: var(--space-2);
+margin: var(--space-2) 0 0;
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
+
+.cost-swatch {
+display: inline-block;
+inline-size: 0.625rem;
+block-size: 0.625rem;
+border-radius: var(--radius-sm);
+}
+
+.cost-swatch.read {
+background: var(--chart-1);
+}
+
+.cost-swatch.held {
+background: var(--chart-3);
+}
+
+/* Four figures on one auto-fit grid, the same shape the measure cards take.
+   Each carries its own denominator, because the two clocks and the token
+   counts answer for different numbers of items. */
+.cost-figures {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+gap: var(--space-4);
+margin-block-start: var(--space-4);
+}
+
+.cost-figure {
+display: flex;
+flex-direction: column;
+gap: var(--space-1);
+margin: 0;
+min-inline-size: 0;
+}
+
+.cost-figure-value {
+font-size: var(--text-xl);
+font-weight: 600;
+line-height: var(--leading-sm);
+color: var(--color-text);
+}
+
+.cost-figure-label {
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
 
 /* Two figures, side by side where there is room and stacked where there is
    not. The rule names both, so reading one without the other answers half a
