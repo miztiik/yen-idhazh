@@ -1,0 +1,136 @@
+{
+  "$id": "visual-prune-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the policy in force, the cutoff it computed, what it found, what it took, what the fuse held back, the oldest day still carrying a picture, and the tree it walked before and after.",
+      "version": "2026-09-06T13:00",
+      "why": "The cleanup counted what it deleted into a job log that GitHub keeps for a while and nothing kept afterwards. That count is capped by the fuse, so it is the same number on a run that finished its backlog and on one that could not reach it, and no committed file said which. `skipped_by_fuse` is the half that answers it, and it is the half nobody would have added, because `deleted` looks like the answer."
+    }
+  ],
+  "description": "One cleanup pass, one row.",
+  "properties": {
+    "bytes_reclaimed": {
+      "description": "What the deletions freed, measured. 0 on a dry run.",
+      "minimum": 0,
+      "title": "Bytes Reclaimed",
+      "type": "integer"
+    },
+    "candidates_found": {
+      "description": "Rendered visuals older than the cutoff. The whole backlog.",
+      "minimum": 0,
+      "title": "Candidates Found",
+      "type": "integer"
+    },
+    "cutoff_date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The day the policy drew its line at. Empty when the policy is off, because a disabled policy has no line and a stand-in date would read like one.",
+      "title": "Cutoff Date"
+    },
+    "date": {
+      "description": "The digest date the cleaning run was for.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "deleted": {
+      "description": "How many this run removed. Always 0 on a dry run.",
+      "minimum": 0,
+      "title": "Deleted",
+      "type": "integer"
+    },
+    "dry_run": {
+      "description": "True when this run was only reporting. Set by config or by the step's own flag, and either one is enough.",
+      "title": "Dry Run",
+      "type": "boolean"
+    },
+    "fuse_tripped": {
+      "description": "Whether the backlog was larger than the fuse.",
+      "title": "Fuse Tripped",
+      "type": "boolean"
+    },
+    "max_deletes_per_run": {
+      "description": "`retention.max_deletes_per_run` in force - the fuse.",
+      "minimum": 0,
+      "title": "Max Deletes Per Run",
+      "type": "integer"
+    },
+    "oldest_kept": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The oldest published day still carrying a rendered visual after this run. Empty when the tree carries none at all. Read against `cutoff_date`, it says whether the policy has caught up.",
+      "title": "Oldest Kept"
+    },
+    "payload_bytes_after": {
+      "description": "The same tree, after the run.",
+      "minimum": 0,
+      "title": "Payload Bytes After",
+      "type": "integer"
+    },
+    "payload_bytes_before": {
+      "description": "The committed payload tree under `frontend/public/digest/`, before the run. Never the built site - two trees, and one cannot stand in for the other.",
+      "minimum": 0,
+      "title": "Payload Bytes Before",
+      "type": "integer"
+    },
+    "policy_months": {
+      "description": "`retention.image_months` in force. -1 is what ships and means the cleanup is switched off, so the row reports and nothing is ever a candidate.",
+      "minimum": -1,
+      "title": "Policy Months",
+      "type": "integer"
+    },
+    "run_id": {
+      "description": "The run that did the cleaning.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "skipped_by_fuse": {
+      "description": "Candidates the fuse would not let this run reach. The same fact on a dry run as on a live one, which is what stops it collapsing into `deleted`.",
+      "minimum": 0,
+      "title": "Skipped By Fuse",
+      "type": "integer"
+    },
+    "version": {
+      "default": "2026-09-06T13:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "policy_months",
+    "max_deletes_per_run",
+    "dry_run",
+    "candidates_found",
+    "deleted",
+    "skipped_by_fuse",
+    "fuse_tripped",
+    "bytes_reclaimed",
+    "payload_bytes_before",
+    "payload_bytes_after"
+  ],
+  "title": "VisualPruneRow",
+  "type": "object",
+  "version": "2026-09-06T13:00"
+}

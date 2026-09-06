@@ -359,7 +359,7 @@ def stage_plan(
     generated_at = clock()
     # Named by the execution that made it, not by a count of what is committed.
     # See `_next_run_n` for what the count could not do.
-    run_id = f"{date}-{execution if execution is not None else _next_run_n(date)}"
+    run_id = _run_id(date, execution)
 
     candidates: list[discover.Candidate] = []
     health: list[FeedHealthRow] = []
@@ -793,6 +793,16 @@ def _next_run_n(date: str) -> int:
     target = assemble.day_dir(PUBLIC_ROOT, date)
     manifest = _load_manifest(target / "run.json", day=_load_day(target / "digest.json"))
     return manifest.runs[-1].n + 1 if manifest else 1
+
+
+def _run_id(date: str, execution: int | None) -> str:
+    """The run address every ledger row of this execution is filed under.
+
+    Written once because two stages now need it - the plan, which opens the run,
+    and the cleanup, which closes it - and a second spelling of it would file
+    one run's rows under two names.
+    """
+    return f"{date}-{execution if execution is not None else _next_run_n(date)}"
 
 
 # --- work -------------------------------------------------------------------
@@ -2565,18 +2575,35 @@ def stage_prune_state(
     *,
     observability: ObservabilityConfig,
     collect: CollectConfig,
+    retention_config: RetentionConfig,
+    run_id: str,
     today: date_type,
     state_dir: Path | None = None,
     public_root: Path | None = None,
+    digest_root: Path | None = None,
     dry_run: bool = False,
 ) -> int:
     """Retire what the ledgers no longer answer for: an item-health month and the
     browser's copy of it, a feed-health month, every seen shard outside the
     window the planner reads, and every score month past its full-grain window.
+    Then clean the rendered visuals the archive policy has aged out, and record
+    what that pass found.
 
     Five stores, one step, because they share the one property that makes this
     safe: all of it runs after the day is committed, and none of it can cost a
     reader anything it has not already been given.
+
+    **The visuals are the sixth thing here and they do not share that property.**
+    Deleting a picture costs a reader the picture. They are in this step because
+    it is the step that runs after the commit and because the pass is switched
+    off - `retention.image_months` is -1 and the flag makes it report-only - so
+    what runs today is a measurement of the backlog and nothing else. Switching
+    the deletion on is a separate change, and it needs two more things this step
+    does not have: the commit call below it has to stage
+    `frontend/public/digest` as well, because `git add` records a removal only
+    for a path it is handed, and the promise in
+    `docs/architecture/publishing/layout.md` about a workflow of its own has to
+    be met or re-decided.
 
     Runs after the day is committed, never before. A fold that ran first and then
     failed would leave a month deleted from a tree nothing pushed, and the next
@@ -2600,6 +2627,12 @@ def stage_prune_state(
     public = public_root
     if public is None and state_dir is None:
         public = publish_telemetry.DEFAULT_PUBLIC_ROOT
+    # The day payloads pair with the state tree the same way and for the same
+    # reason: a test that named its own state must not have this one default to
+    # the committed archive.
+    digest = digest_root
+    if digest is None and state_dir is None:
+        digest = PUBLIC_ROOT
 
     removed: list[str] = []
     removed += _prune_seen_shards(state, collect, today, dry_run=dry_run)
@@ -2632,8 +2665,52 @@ def stage_prune_state(
             ledger.telemetry_aggregate_relpath(stem) for stem in result.hard_deleted
         ]
 
+    if digest is not None:
+        _clean_the_visuals(
+            digest,
+            retention_config,
+            today,
+            run_id=run_id,
+            state_dir=state,
+            dry_run=dry_run,
+        )
+
     _report_removals(sorted(removed), dry_run=dry_run)
     return 0
+
+
+def _clean_the_visuals(
+    digest_root: Path,
+    config: RetentionConfig,
+    today: date_type,
+    *,
+    run_id: str,
+    state_dir: Path,
+    dry_run: bool,
+) -> None:
+    """Run the archive cleanup over the day payloads and commit what it found.
+
+    The row lands whatever happened, including the run where the policy is off
+    and nothing was a candidate. A ledger written only on the interesting runs
+    cannot show that a backlog is shrinking, because the runs it skips are the
+    ones that would have been the baseline.
+    """
+    result = retention.prune(digest_root, config, today, dry_run=dry_run)
+    row = retention.prune_row(result, config, date_stamp=today.isoformat(), run_id=run_id)
+    landed = ledger.append_visual_prunes(state_dir, [row])
+    LOG.info(
+        "visual cleanup%s: %s candidates older than %s, %s deleted, %s held back by the "
+        "%s-file fuse, %s bytes reclaimed, oldest picture still kept %s (%s row)",
+        " (dry run)" if result.dry_run else "",
+        result.considered,
+        row.cutoff_date or "no cutoff - the policy is off",
+        result.deleted,
+        result.skipped_by_fuse,
+        config.max_deletes_per_run,
+        result.bytes_reclaimed,
+        row.oldest_kept or "none",
+        landed,
+    )
 
 
 def _report_removals(paths: list[str], *, dry_run: bool) -> None:
@@ -3655,10 +3732,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "prune-state":
         # And this one only reads and deletes committed files. A fold that opened
         # a socket would be reading the open web to decide what to delete.
+        pruned_on = args.date or _today()
         return stage_prune_state(
             observability=settings.app.observability,
             collect=settings.app.collect,
-            today=date_type.fromisoformat(args.date or _today()),
+            retention_config=settings.app.retention,
+            run_id=_run_id(pruned_on, args.execution),
+            today=date_type.fromisoformat(pruned_on),
             dry_run=args.dry_run,
         )
 
