@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -141,6 +141,7 @@ carry a time window?**
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
+| `state/visual-prunes.csv` | one file | is the picture backlog shrinking? | no - the question has no time bound, and one row a run stays small |
 
 A window turns a shard into a skipped file open. `ledger.shards_in_window`
 walks the days the window can touch and opens only those stems, so a plan run

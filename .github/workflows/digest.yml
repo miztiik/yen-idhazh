@@ -1173,6 +1173,18 @@ jobs:
       # earliest it removes anything is `state/scores/2026-08.csv` on 2027-10-01,
       # and its dry run prints what the archive would weigh against the shard.
       #
+      # It also covers the archive cleanup, which joined this step on 2026-09-06
+      # and is the one thing here that would cost a reader something it can see.
+      # `retention.image_months` is -1, so nothing is ever a candidate and the
+      # pass is a measurement of the backlog: it appends one row to
+      # `state/visual-prunes.csv` every run, carrying what it found and what the
+      # fuse would have held back. Switching that deletion on is plan 13's job
+      # and needs `frontend/public/digest` added to the commit call below, since
+      # `git add` records a removal only for a path it is handed.
+      #
+      # `--execution` is the same `github.run_id` the plan job filed its ledgers
+      # under, so the cleanup row joins to the run that published the day.
+      #
       # `continue-on-error` on both, for the reason the harvest carries it: what
       # this job owes a reader is the published day, and thirteen-month-old
       # telemetry must never be what stops one. A month it does not fold today it
@@ -1183,18 +1195,21 @@ jobs:
       # fresh checkout does not carry, and neither `state/telemetry-aggregate/`
       # nor `state/score-archive/` exists until the first fold or the first
       # archive writes it. `state` always does, and the day's own commit above
-      # has already taken everything else in it.
+      # has already taken everything else in it. `state/visual-prunes.csv` ships
+      # with its header committed so it is covered by the same call from the
+      # first run.
       #
       # `frontend/public/telemetry` is named beside it because the fold deletes
       # the browser's copy of a month in the same step it folds the ledger, and
       # `git add` records a removal only for a path it is given. The directory is
       # in every checkout - the day's own commit above stages it - so naming it
       # cannot abort the step.
-      - name: Retire the ledger shards the pipeline no longer reads
+      - name: Retire the ledger shards and the visuals nothing still reads
         continue-on-error: true
         run: >-
           python -m idhazh prune-state
-          --date "${{ needs.plan.outputs.date }}" --dry-run
+          --date "${{ needs.plan.outputs.date }}"
+          --execution "${{ github.run_id }}" --dry-run
 
       - name: Commit the folded telemetry
         continue-on-error: true

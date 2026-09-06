@@ -48,6 +48,12 @@ per retired feed endpoint, read whole because a retirement has no time bound -
 so it is one file. It is also the smallest: a row is written only when a server
 has reported one address permanently gone on five distinct runs.
 
+`state/visual-prunes.csv` answers "is the picture backlog shrinking?" One row
+per cleanup run, read whole because the question carries no time bound - so it
+is one file. It is written on every run, including the runs where the policy is
+switched off and there is nothing to clean, because a report of "nothing to do"
+is what makes the day the policy starts working visible.
+
 No reader fails on a missing file. A fresh clone has no history, and a run with
 no history is a run where nothing was seen, nothing was published and no feed
 has a record yet - which is exactly what an empty result says.
@@ -71,6 +77,7 @@ from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
+from idhazh.contracts.visual_prune import VisualPruneRow
 
 STATE_DIRNAME: Final = "state"
 SEEN_DIRNAME: Final = "seen"
@@ -80,6 +87,7 @@ TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 PUBLISHED_FILENAME: Final = "published.csv"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
+VISUAL_PRUNES_FILENAME: Final = "visual-prunes.csv"
 
 #: What makes two feed-health rows the same record. One feed, read once, in one
 #: run. The ledger always meant that - `docs/architecture/sources/health.md`
@@ -106,6 +114,13 @@ ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
 #: re-run's items are skipped there too, so the two files stay describing the
 #: same attempt.
 RUNTIME_COUNTERS_KEY: Final = ("date", "run_id", "shard")
+
+#: What makes two cleanup rows the same record. One cleanup pass per run, so a
+#: second row under one run id is a second attempt at one execution rather than
+#: a second cleanup. Both attempts walked the same tree and would report the
+#: same counts, so the first row wins and there is nothing for a preference rule
+#: to choose between.
+VISUAL_PRUNE_KEY: Final = ("date", "run_id")
 
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
@@ -210,6 +225,15 @@ def feed_retirements_relpath() -> str:
 
 def feed_retirements_path(state_dir: Path) -> Path:
     return state_dir / FEED_RETIREMENTS_FILENAME
+
+
+def visual_prunes_relpath() -> str:
+    """`state/visual-prunes.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{VISUAL_PRUNES_FILENAME}"
+
+
+def visual_prunes_path(state_dir: Path) -> Path:
+    return state_dir / VISUAL_PRUNES_FILENAME
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
@@ -515,6 +539,39 @@ def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
 
 
+def append_visual_prunes(state_dir: Path, rows: Iterable[VisualPruneRow]) -> int:
+    """Append what each cleanup pass found and took. Never windowed.
+
+    Settled against `VISUAL_PRUNE_KEY` straight after the write, the way
+    `append_retirements` is, because the two writers that can produce one key are
+    two attempts at one execution rather than two cleanups. Each walks the same
+    tree and reports the same counts, so the first row wins and there is nothing
+    to choose between them.
+
+    Returns how many rows the file gained, so a caller can log the count.
+    """
+    payloads = [row.csv_row() for row in rows]
+    path = visual_prunes_path(state_dir)
+    landed = _append(path, VisualPruneRow.csv_columns(), payloads)
+    return landed - drop_repeated_rows(path, VISUAL_PRUNE_KEY)
+
+
+def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
+    """Every cleanup pass on record, in file order. Never windowed.
+
+    A row that no longer parses is skipped rather than fatal, for the reason
+    `load_retirements` gives: this ledger is a report, and refusing to start
+    because an old report cannot be read would cost a reader the day.
+    """
+    rows: list[VisualPruneRow] = []
+    for raw in _read_rows(visual_prunes_path(state_dir)):
+        try:
+            rows.append(VisualPruneRow.from_csv_row(raw))
+        except (KeyError, ValueError):
+            continue
+    return rows
+
+
 def keyed_paths(state_dir: Path) -> list[tuple[Path, tuple[str, ...]]]:
     """Every ledger here that says what makes two of its rows the same record.
 
@@ -531,10 +588,15 @@ def keyed_paths(state_dir: Path) -> list[tuple[Path, tuple[str, ...]]]:
     settlement runs over whatever it finds and a missing file settles to nothing.
     Registering it with the shape rather than with its first writer is what stops
     two stale checkouts leaving one address retired twice.
+
+    `state/visual-prunes.csv` is listed for the same reason and needs it more:
+    the step that writes it commits through a call that names no settlement
+    command, so the pass that settles it is the next run's, over the merged file.
     """
     return [
         (runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY),
         (feed_retirements_path(state_dir), FEED_RETIREMENT_KEY),
+        (visual_prunes_path(state_dir), VISUAL_PRUNE_KEY),
         *(
             (path, FEED_HEALTH_KEY)
             for path in sorted((state_dir / HEALTH_DIRNAME).glob("*.csv"))
