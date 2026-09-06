@@ -1,6 +1,6 @@
 # Test Execution Audit
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 Historical test executions and the current selection controls, checked against
 `main` at `3b425be8`. This records an investigation, not a change to the testing
