@@ -22,9 +22,12 @@ import type { TimeWindow } from '../src/lib/charts/viewport';
  *
  * So the partition is proved rather than assumed: the causes' counts sum to the
  * window's failed rows, and selecting each cause in turn yields row sets with
- * no overlap and no remainder. It is proved over the committed projection
- * rather than over invented rows, because a made-up ledger has whatever shape
- * the test wanted and the real one has eleven causes with a 529-to-1 spread.
+ * no overlap and no remainder. It is proved over rows built to carry the
+ * awkward shape - eleven causes running 529 down to 1, fourteen sources against
+ * a cap of ten - rather than over the committed projection, which used to be
+ * read in full on every run and which answers a question about the news
+ * whenever it is asked whether it still holds enough failures to be worth
+ * reading.
  *
  * The same shape is proved of the source ranking beside it, and there the
  * dedupe is the thing that can be plausibly wrong: a source's losses are
@@ -41,7 +44,6 @@ import type { TimeWindow } from '../src/lib/charts/viewport';
  */
 
 const frontend = process.cwd();
-const PUBLIC_TELEMETRY = resolve(frontend, 'public', 'telemetry');
 const CANARY_TELEMETRY = resolve(frontend, '..', 'backend', 'var', 'canary', 'state', 'telemetry');
 
 /** The cap the source ranking draws with, from the file the page reads it
@@ -62,23 +64,70 @@ function shardRows(root: string): TelemetryRow[] {
 		.flatMap((name) => parseTelemetryCsv(readFileSync(join(root, name), 'utf8')));
 }
 
+/** Rows built to carry the shape a ledger can be plausibly wrong about.
+ *
+ * This file used to read every published shard, on the argument that a made-up
+ * ledger has whatever shape the test wanted while the real one has eleven
+ * causes and a 529-to-1 spread. Both halves of that were true and neither was a
+ * reason to read the archive: the awkward shape is a thing to BUILD, and a
+ * built one also carries cases the archive has never produced - a source
+ * sitting exactly on the cap, an article that failed twice in one day - at one
+ * parse instead of one per published month (`CLAUDE.md` Rule #12). It also
+ * removed the guard that used to ask whether the corpus still held enough
+ * failures to prove anything, which was a question about the news.
+ *
+ * Eleven causes, counts running 529 down to 1. Fourteen sources against a cap
+ * of ten. One article failing twice on one day, under two runs.
+ */
+function builtRows(): TelemetryRow[] {
+	const COUNTS = [529, 97, 61, 40, 25, 16, 10, 6, 4, 2, 1];
+	const STAGES = ['fetch', 'extract', 'summarize'];
+	const rows: TelemetryRow[] = [];
+	const row = (over: Partial<TelemetryRow> & { item_id: string }): TelemetryRow => ({
+		date: '2026-08-20',
+		run_id: '1',
+		vertical: 'world',
+		source_id: 'src-00',
+		stage: 'fetch',
+		outcome: 'failed',
+		code: 'unreachable',
+		source_words: null,
+		summary_words: null,
+		source_words_before_cap: null,
+		...over
+	});
+
+	let made = 0;
+	COUNTS.forEach((count, cause) => {
+		for (let index = 0; index < count; index += 1) {
+			made += 1;
+			rows.push(
+				row({
+					date: `2026-08-${String(20 + (made % 5)).padStart(2, '0')}`,
+					item_id: `world-${String(made).padStart(10, '0')}`,
+					source_id: `src-${String(made % 14).padStart(2, '0')}`,
+					stage: STAGES[cause % STAGES.length],
+					code: `code-${String(cause).padStart(2, '0')}`
+				})
+			);
+		}
+	});
+
+	// The dedupe case: one article, one day, two runs. A source's losses are
+	// articles; the rows under them are one per stage per run.
+	rows.push(row({ item_id: 'world-0000000001', run_id: '2', date: '2026-08-21' }));
+	// A row that succeeded, so `failed` is a filter rather than a row count.
+	rows.push(row({ item_id: 'world-9999999999', outcome: 'ok', code: '' }));
+	return rows;
+}
+
 function wholeSpan(rows: TelemetryRow[]): TimeWindow {
 	const dates = datesIn(rows);
 	return { start: dates[0], end: dates[dates.length - 1] };
 }
 
-test.describe('the failure ledger, over the committed projection', () => {
-	const rows = shardRows(PUBLIC_TELEMETRY);
-
-	test('the fixture holds enough failures to prove anything', () => {
-		// Everything below passes trivially on a ledger with no failures in it.
-		// This is the guard that says the corpus can still answer the question.
-		expect(rows.length, 'no committed telemetry shard - the read is broken').toBeGreaterThan(0);
-		const failed = failedRows(rows, wholeSpan(rows), null);
-		expect(failed.length, 'the projection records no failure at all').toBeGreaterThan(0);
-		const ledger = failureLedger(rows, wholeSpan(rows));
-		expect(ledger.causes.length, 'one cause cannot show a ranking').toBeGreaterThan(1);
-	});
+test.describe('the failure ledger', () => {
+	const rows = builtRows();
 
 	test('the counts sum to the failed rows in the window', () => {
 		const window = wholeSpan(rows);
@@ -250,16 +299,14 @@ function sourceEntries(rows: TelemetryRow[], window: TimeWindow): Rankable<Ranke
 }
 
 test.describe('THE ORACLE: sources ranked by the articles their failures cost', () => {
-	const rows = shardRows(PUBLIC_TELEMETRY);
+	const rows = builtRows();
 
-	test('the fixture holds more sources than the cap draws', () => {
-		// Everything below passes trivially on a ledger the cap never bites. This
-		// is the guard that says the corpus can still answer the question.
+	test('the rows carry more sources than the cap draws', () => {
+		// Everything below passes trivially on a ledger the cap never bites, so
+		// the built shape is asserted before anything leans on it.
 		const window = wholeSpan(rows);
 		const byHand = lossesByHand(rows, window);
-		expect(byHand.length, 'the projection records no source with a loss').toBeGreaterThan(
-			SOURCE_ROWS
-		);
+		expect(byHand.length, 'no source carries a loss').toBeGreaterThan(SOURCE_ROWS);
 		expect(
 			byHand.reduce((total, source) => total + source.lost, 0),
 			'no article was lost, so a ranking of losses says nothing'
