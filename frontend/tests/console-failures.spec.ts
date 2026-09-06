@@ -83,18 +83,37 @@ function builtRows(): TelemetryRow[] {
 	const COUNTS = [529, 97, 61, 40, 25, 16, 10, 6, 4, 2, 1];
 	const STAGES = ['fetch', 'extract', 'summarize'];
 	const rows: TelemetryRow[] = [];
-	const row = (over: Partial<TelemetryRow> & { item_id: string }): TelemetryRow => ({
-		date: '2026-08-20',
-		run_id: '1',
+	// Named rather than spread from a `Partial`: an optional field widens to
+	// `| undefined`, which the row type refuses, and this file cannot see a
+	// column added on main until CI builds the merge.
+	const row = (over: {
+		date?: string;
+		run_id?: string;
+		item_id: string;
+		source_id?: string;
+		stage?: string;
+		outcome?: string;
+		code?: string;
+	}): TelemetryRow => ({
+		date: over.date ?? '2026-08-20',
+		run_id: over.run_id ?? '1',
+		item_id: over.item_id,
 		vertical: 'world',
-		source_id: 'src-00',
-		stage: 'fetch',
-		outcome: 'failed',
-		code: 'unreachable',
+		source_id: over.source_id ?? 'src-00',
+		stage: over.stage ?? 'fetch',
+		outcome: over.outcome ?? 'failed',
+		code: over.code ?? 'unreachable',
 		source_words: null,
 		summary_words: null,
 		source_words_before_cap: null,
-		...over
+		fetch_ms: null,
+		extract_ms: null,
+		summarize_ms: null,
+		prefill_ms: null,
+		decode_ms: null,
+		input_tokens: null,
+		output_tokens: null,
+		cached_tokens: null
 	});
 
 	let made = 0;
