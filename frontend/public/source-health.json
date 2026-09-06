@@ -1,10 +1,10 @@
 {
   "complete_dates": 13,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-06T08:46:40Z",
+  "generated_at": "2026-09-06T12:29:38Z",
   "last_date": "2026-09-05",
   "min_complete_days": 30,
-  "run_id": "2026-09-06-34018397592",
+  "run_id": "2026-09-06-34029041463",
   "sources": [
     {
       "availability": "answering",
@@ -547,7 +547,7 @@
       "vertical": "world"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 17,
       "permission": "allowed",
       "publications": 10,
@@ -1363,7 +1363,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "opportunities": 48,
       "permission": "allowed",
       "publications": 46,
