@@ -1569,6 +1569,19 @@ class FinetuneConfig(Model):
             "which teaches the model to stop mid-summary."
         ),
     )
+    prompt_iterations: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "How many write-critique-revise rounds the offline prompt loop runs before "
+            "it stops (`backend/utilities/prompt_loop.py`). Nothing here runs on the "
+            "runner or in the daily pipeline: the loop is manual, reads a frozen "
+            "committed article set, and a candidate replaces the incumbent prompt only "
+            "when it beats it on the deterministic, model-free scorers. More rounds cost "
+            "more local model calls and buy more chances at a candidate that clears the "
+            "gate; they change no digest a reader sees."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -2652,6 +2665,23 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-07T02:00",
+            change=(
+                "finetune.prompt_iterations added, defaulting to 3 and at least 1. It "
+                "bounds the offline write-critique-revise prompt loop "
+                "(`backend/utilities/prompt_loop.py`): how many rounds it runs before it "
+                "stops. Additive - a config without the knob takes the default."
+            ),
+            why=(
+                "The summarizer prompt was argued in prose and never measured. The loop "
+                "proposes a revised prompt with a model judge and an Editor rubric, then "
+                "keeps it only when it beats the incumbent on the deterministic, "
+                "model-free scorers over a frozen committed article set. The bound lives "
+                "under finetune because it sizes an offline maintenance job that never "
+                "runs on the runner, beside the corpus and prune schedules it sits with."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-07T00:30",
             change=(

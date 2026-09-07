@@ -83,7 +83,7 @@ A persona's own worldview shapes what it says, never how plainly it says it.
 - **Runtime telemetry / analytics SDKs / third-party runtime scripts.**
 - **Republishing article bodies to a reader.** Publish the link and our own summary. `corpus/` is the one exception: it holds source text as training samples, and nothing renders it, links to it, or serves it.
 - **Paywalled or login-walled sources.** If `robots.txt` or a paywall says no, the answer is no.
-- **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement.
+- **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement. It never grades a published summary or visual and never selects what publishes. One offline exception: the write-critique-revise prompt loop (`backend/utilities/prompt_loop.py`) may use a model judge to PROPOSE a revised summariser prompt, because a deterministic, model-free gate DISPOSES; the judge promotes nothing and nothing it produces reaches a reader. See `CLAUDE.md` section 0a.
 - **Training on the runner, GPU runners, and models that do not fit the runner.** Training elsewhere is allowed; the runner only opens finished weights. A fine-tuned model is an ordinary candidate and enters through the same qualification as any other.
 - **Accessibility framework / audit tooling.** Descoped at project level; basic ARIA and keyboard navigation ARE in scope. See `CLAUDE.md` section 0a.
 

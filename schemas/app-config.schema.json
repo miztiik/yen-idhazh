@@ -784,6 +784,13 @@
           "title": "Min Rows",
           "type": "integer"
         },
+        "prompt_iterations": {
+          "default": 3,
+          "description": "How many write-critique-revise rounds the offline prompt loop runs before it stops (`backend/utilities/prompt_loop.py`). Nothing here runs on the runner or in the daily pipeline: the loop is manual, reads a frozen committed article set, and a candidate replaces the incumbent prompt only when it beats it on the deterministic, model-free scorers. More rounds cost more local model calls and buy more chances at a candidate that clears the gate; they change no digest a reader sees.",
+          "minimum": 1,
+          "title": "Prompt Iterations",
+          "type": "integer"
+        },
         "prune_every_days": {
           "default": 30,
           "description": "How often `prune.yml` fires. Each firing costs one force-push of `main` - the single exception CLAUDE.md section 8 carries, and the reason it carries one is that git history is append-only, so deleting a corpus row does not delete its bytes.",
@@ -1848,6 +1855,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "finetune.prompt_iterations added, defaulting to 3 and at least 1. It bounds the offline write-critique-revise prompt loop (`backend/utilities/prompt_loop.py`): how many rounds it runs before it stops. Additive - a config without the knob takes the default.",
+      "version": "2026-09-07T02:00",
+      "why": "The summarizer prompt was argued in prose and never measured. The loop proposes a revised prompt with a model judge and an Editor rubric, then keeps it only when it beats the incumbent on the deterministic, model-free scorers over a frozen committed article set. The bound lives under finetune because it sizes an offline maintenance job that never runs on the runner, beside the corpus and prune schedules it sits with."
+    },
+    {
       "change": "summarize.key_point_restatement_ceiling added, defaulting to 0.5 and bounded above 0.0 and at most 1.0. to_summary now drops any key point whose share of four-word phrases already in the summary exceeds it, keeping the item and the surviving key points; the drop never falls below the band's key_points_min, so an item never loses its last key point. Additive: a config without the knob takes the default.",
       "version": "2026-09-07T00:30",
       "why": "The rule against a key point that only restates the summary was a sentence in the prompt, which gives the model no definition it can compute, and the restatement rate ran at seven in eight. A deterministic post-check makes 'restates' a measure code applies - the share of the key point's four-grams already in the summary - and drops the thin line rather than failing the item, because a restating key point is thin, not wrong."
@@ -2359,7 +2371,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-07T00:30",
+      "default": "2026-09-07T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2373,5 +2385,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-07T00:30"
+  "version": "2026-09-07T02:00"
 }

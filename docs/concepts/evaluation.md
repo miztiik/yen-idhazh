@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-07
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -485,6 +485,47 @@ questions before it is registered. Which population does it read, and has an
 earlier stage already refused on the property it grades? If the answer to the
 second is yes, the gate measures the refusal. If the population is narrower than
 the run, the gate's `measured` string has to say so.
+
+## The prompt loop: the judge proposes, the scorers dispose
+
+The summariser prompt used to be argued in prose and never measured, so every
+change to it was a matter of taste - the exact thing rule 2 above warns against,
+seen from the other side. The offline prompt loop
+([../../backend/utilities/prompt_loop.py](../../backend/utilities/prompt_loop.py))
+turns the argument into a measurement, and it is built so that neither of the two
+rules is broken.
+
+It runs write-critique-revise, bounded by `finetune.prompt_iterations`. A model
+judge and the Editor rubric
+([../../backend/utilities/prompt_loop_rubric.md](../../backend/utilities/prompt_loop_rubric.md))
+**propose** a revised prompt. The deterministic, model-free scorers above
+**dispose**: a candidate replaces the incumbent only when it beats it, over a
+frozen committed article set, on `unsupported_numbers`, `lead_missing`,
+`hedge_dropped` and `verbatim_run`. The gate is a Pareto beat - no worse on every
+target, strictly better on at least one - not a weighted sum and not an optimiser.
+The judge's preference is recorded and promotes nothing.
+
+That is how it honours both rules at once. **Rule 2** - the model does not grade
+the model - takes a narrow, offline-only exception: the judge authors a
+maintenance artefact, never a verdict on a published summary or visual, and
+selects nothing that publishes ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
+**Rule 1** - the metric that selects can no longer alarm - is why the gate reads
+those four defect rates and not the new-fact rate. New-fact rate is recorded for
+every candidate, because a run's scores are its evidence, but acting on it is the
+Goodhart form its own section forbids, so it steers nothing here either.
+
+Nothing the loop produces reaches a reader. It runs on a developer machine or a
+manual dispatch, never in the daily pipeline, and it never edits the live prompt
+itself: promoting a winner into `backend/idhazh/prompts/summarize.txt` is a human
+act, taken after reading the committed scores. The committed artefacts are the
+winning prompt, the rubric, the scores of every candidate and the seed - never the
+transcripts.
+
+The load-bearing guard is a test, not a sentence. When the model judge prefers a
+candidate the deterministic scorers refuse, the incumbent stands
+([../../backend/tests/test_prompt_loop.py](../../backend/tests/test_prompt_loop.py)).
+A disagreement between the judge and the scorers is always a stop, never a
+promotion - which is the whole reason a model is allowed to propose at all.
 
 ## Bands, not raw numbers
 
