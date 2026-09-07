@@ -118,6 +118,7 @@ checks that what reads back still describes the file it is about to delete.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -174,9 +175,54 @@ class SiteSize:
             )
         return self.bytes_used / self.published_items
 
+    def minus(self, root: Path, removed: Mapping[Path, int]) -> SiteSize:
+        """This total once those files have left the tree. It reads no file.
+
+        The maintained total (Rule #12). A pass that deletes already knows what it
+        removed and how big each one was, so asking the whole tree again is a walk
+        that grows with the archive to learn a number the caller is holding.
+
+        Each entry names a file and the bytes it held. The caller reads the size
+        while the file is still there, because a file that has gone cannot be
+        asked, and passes only the files that really went - a total that subtracts
+        a deletion which did not happen has nothing to disagree with it.
+
+        `measure` stays the audit: run it and the two have to agree, which is what
+        `test_a_retracted_deletion_equals_an_independent_walk` holds.
+        """
+        by_directory = dict(self.by_directory)
+        files = self.files
+        for path, size in removed.items():
+            parts = path.relative_to(root).parts
+            if len(parts) == 1:
+                # A file directly under the root is its own entry, so the entry
+                # goes with the file - which is what a fresh walk would report.
+                by_directory.pop(parts[0], None)
+            else:
+                # `unlink` never removes the directory, so its entry survives at
+                # whatever is left, down to zero.
+                by_directory[parts[0]] = by_directory.get(parts[0], 0) - size
+            files -= 1
+        return SiteSize(sum(by_directory.values()), files, by_directory, self.published_items)
+
 
 def measure(root: Path, *, published_items: int = 0) -> SiteSize:
-    """Recorded every run from the first one, long before any policy exists."""
+    """Walk the whole tree and read every file's size. The audit, not the ordinary path.
+
+    **This read grows with the tree, deliberately, and that is what it is for.**
+    It is the independent reading a maintained total is checked against, and the
+    only honest way to certify a tree this process did not write - the built
+    bundle comes out of `npm run build`, so nothing here saw those bytes land and
+    nothing here can carry a total forward across them. A pass that both writes
+    and deletes inside one process carries its total with `SiteSize.minus`
+    instead and calls this once.
+
+    Measured 2026-09-07 on an Intel Core i7-1265U over `frontend/public/digest/`:
+    443 files, 25,070,521 bytes, 276.8 ms best and 352.3 ms worst over five runs.
+
+    It streams rather than listing every path first, so the walk costs one file's
+    memory instead of the whole tree's.
+    """
     if not root.exists():
         return SiteSize(0, 0)
     by_directory: dict[str, int] = {}
@@ -186,9 +232,14 @@ def measure(root: Path, *, published_items: int = 0) -> SiteSize:
             by_directory[child.name] = child.stat().st_size
             files += 1
         elif child.is_dir():
-            inside = [path for path in child.rglob("*") if path.is_file()]
-            by_directory[child.name] = sum(path.stat().st_size for path in inside)
-            files += len(inside)
+            inside = 0
+            counted = 0
+            for path in child.rglob("*"):
+                if path.is_file():
+                    inside += path.stat().st_size
+                    counted += 1
+            by_directory[child.name] = inside
+            files += counted
     return SiteSize(sum(by_directory.values()), files, by_directory, published_items)
 
 
@@ -200,12 +251,18 @@ def count_published_items(root: Path) -> int:
     trees are eighteen times apart and a prune would move one before the other,
     so a rate taken across them divides a numerator by somebody else's
     denominator.
+
+    **This read grows with the archive**: one more published day is one more
+    payload to open and parse. It stays that way for the same reason `measure`
+    does - the tree is written by the site build rather than by this process, so
+    there is no total to carry - and it runs once a build, in the step that has
+    just spent minutes producing the tree it reads.
     """
     staged = root / _STAGED_DIGEST_DIRNAME
     if not staged.is_dir():
         return 0
     total = 0
-    for payload in sorted(staged.rglob("digest.json")):
+    for payload in staged.rglob("digest.json"):
         day = json.loads(payload.read_text(encoding="utf-8"))
         items = day.get("items")
         if isinstance(items, list):
@@ -387,12 +444,19 @@ def prune(
     one that cancels it: the step passes its own flag and either source is enough
     to make the pass report-only. There is no argument that turns deletion on.
 
-    The bytes are measured either side rather than accumulated inside the loop,
-    so `bytes_reclaimed` is the difference two readings show and not a total this
-    function assembled about itself.
+    The tree is read once, at the top, and the after-total is that reading with
+    the deleted files retracted from it (`SiteSize.minus`). It used to be two
+    whole-tree readings, so learning the size of two pictures cost a second walk
+    of everything ever published - the cost Rule #12 refuses, and it rose every
+    time a day was added. The reason the old shape existed still holds and is
+    kept: a total that subtracts what the pass *meant* to delete would still be
+    written when an unlink did not happen, so a file is retracted only once it
+    has actually gone. `bytes_reclaimed` is then what left the tree rather than
+    what the loop intended, and `test_the_after_total_counts_only_the_files_that_actually_left`
+    is that distinction.
     """
     pretend = dry_run or config.dry_run
-    before = measure(root).bytes_used
+    before = measure(root)
     limit = cutoff(today, config.image_months)
     if limit is None:
         return PruneResult(
@@ -404,8 +468,8 @@ def prune(
             bytes_reclaimed=0,
             cutoff_date=None,
             oldest_kept=oldest_visual(root),
-            bytes_before=before,
-            bytes_after=before,
+            bytes_before=before.bytes_used,
+            bytes_after=before.bytes_used,
         )
 
     candidates = visuals_older_than(root, limit)
@@ -421,24 +485,33 @@ def prune(
             bytes_reclaimed=0,
             cutoff_date=limit,
             oldest_kept=oldest_visual(root),
-            bytes_before=before,
-            bytes_after=before,
+            bytes_before=before.bytes_used,
+            bytes_after=before.bytes_used,
         )
 
+    # One reading of each file the fuse lets through, taken while it is still
+    # there. The fuse bounds this, so it does not grow with the archive.
+    gone: dict[Path, int] = {}
     for path in allowed:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
         path.unlink(missing_ok=True)
-    after = measure(root).bytes_used
+        if not path.exists():
+            gone[path] = size
+    after = before.minus(root, gone)
     return PruneResult(
         considered=len(candidates),
         deleted=len(allowed),
         dry_run=False,
         fuse_tripped=skipped > 0,
         skipped_by_fuse=skipped,
-        bytes_reclaimed=before - after,
+        bytes_reclaimed=before.bytes_used - after.bytes_used,
         cutoff_date=limit,
         oldest_kept=oldest_visual(root),
-        bytes_before=before,
-        bytes_after=after,
+        bytes_before=before.bytes_used,
+        bytes_after=after.bytes_used,
     )
 
 
