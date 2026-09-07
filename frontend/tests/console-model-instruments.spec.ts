@@ -12,6 +12,8 @@ import {
 	leadFloorNote,
 	leadHeadline,
 	matchHeadline,
+	newFactBands,
+	newFactDays,
 	recordedReadings,
 	recordedText,
 	widerNote,
@@ -339,6 +341,37 @@ test.describe('the arithmetic', () => {
 				column
 			);
 		}
+	});
+
+	test('the new-fact rate is bucketed by length band and pooled over the window', () => {
+		// Two bands, a floor at zero and a floor at 700 words - the same ladder
+		// `bandFor` reads on the page and `band_for` reads in the pipeline.
+		const bands = [
+			{ min_source_words: 0, target_words_min: 30, target_words_max: 45 },
+			{ min_source_words: 700, target_words_min: 70, target_words_max: 150 }
+		];
+		const rows: EvalInput[] = [
+			{ date: '2026-04-01', source_word_count: '100', new_fact_rate: '0.20' },
+			{ date: '2026-04-01', source_word_count: '120', new_fact_rate: '0.40' },
+			{ date: '2026-04-02', source_word_count: '1500', new_fact_rate: '1.00' },
+			// Measured no rate: stays out of the mean rather than entering as a zero.
+			{ date: '2026-04-02', source_word_count: '900', new_fact_rate: '' },
+			// No length to place it on: stays out rather than landing in the first band.
+			{ date: '2026-04-02', source_word_count: '', new_fact_rate: '0.50' }
+		];
+
+		const reading = newFactBands(newFactDays(rows, bands), bands);
+
+		expect(reading.map((band) => band.key)).toEqual(['0', '700']);
+		// Short band: 0.20 and 0.40 over two items, a mean of 0.30 -> 30 percent.
+		expect(reading[0].items).toBe(2);
+		expect(reading[0].rate).toBe(30);
+		expect(reading[0].label).toBe('0-699 words');
+		// Long band: one placed item at 1.00. The blank rate and the blank length
+		// are both out, so it is one item and not three.
+		expect(reading[1].items).toBe(1);
+		expect(reading[1].rate).toBe(100);
+		expect(reading[1].label).toBe('700+ words');
 	});
 });
 

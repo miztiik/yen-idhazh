@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Final, NamedTuple
 
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.app_config import EvaluationConfig, SummarizeConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.run_plan import PlannedItem
@@ -22,6 +22,11 @@ from idhazh.fingerprint import text_digest
 
 _DELTA_PLACES: Final = 6
 _UNTITLED: Final = "Untitled item"
+#: The distinctness ceiling `to_summary` drops a restating key point on, reused
+#: here so the recorded new-fact rate and the drop can never disagree about a
+#: single line. The production caller passes the configured value; this default
+#: keeps the pure composition callable without a summarize config in hand.
+_DEFAULT_RESTATEMENT_CEILING: Final = SummarizeConfig().key_point_restatement_ceiling
 
 
 class Verdict(NamedTuple):
@@ -109,6 +114,7 @@ def to_eval_row(
     scored_at: str,
     extraction_suspect: bool = False,
     determinism_violation: bool = False,
+    restatement_ceiling: float = _DEFAULT_RESTATEMENT_CEILING,
 ) -> EvalRow:
     """Everything measured about one item, in the shape the ledger keeps forever.
 
@@ -137,6 +143,12 @@ def to_eval_row(
     neither the article nor the pair, and it is recorded and not banded for the
     same reason.
 
+    `new_fact_rate` takes the item's key points against the summary. It is the
+    aggregate inverse of the drop `to_summary` makes, read at the same
+    `restatement_ceiling`, so a key point that counts here is exactly one the drop
+    keeps. Recorded and not banded: it is the instrument for whether the reordered
+    key-point prompt found facts, and nothing acts on it (`docs/concepts/evaluation.md`).
+
     `source_word_count` and `source_seen_word_count` both come off `article`,
     never off a text this function counts for itself. They are a before-the-cap
     and after-the-cap pair, and a pair is only readable when one counter
@@ -148,6 +160,7 @@ def to_eval_row(
     coverage = metrics.lead_coverage(text, full_text)
     hedge = metrics.hedge_dropped(text, full_text)
     verbatim = metrics.verbatim_run(text, full_text)
+    new_fact = metrics.new_fact_rate(summary.key_points, text, ceiling=restatement_ceiling)
     # An article payload written before extract recorded the pre-cap length knows
     # its own full length only when nothing was cut. Otherwise it stays None: the
     # post-cap count would say the article was exactly as long as the part we read.
@@ -184,6 +197,7 @@ def to_eval_row(
         evidential_density=metrics.evidential_density(full_text),
         speculative_density=metrics.speculative_density(full_text),
         self_repetition=metrics.self_repetition(text),
+        new_fact_rate=new_fact,
         extraction_suspect=extraction_suspect,
         band=band(
             hhem,
