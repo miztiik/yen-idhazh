@@ -24,6 +24,7 @@ import hashlib
 import io
 import json
 import logging
+from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Final
@@ -31,7 +32,7 @@ from typing import Any, Final
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import ledger, publish_telemetry, telemetry
+from idhazh import ledger, publish_telemetry, retention, telemetry
 from idhazh.cli import main, stage_prune_state, stage_site_weight
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
@@ -266,6 +267,74 @@ def test_published_items_are_counted_from_the_tree_that_was_measured(tmp_path: P
     root = staged_days(tmp_path / "build", {"2026-08-21": 3, "2026-08-22": 5})
     assert count_published_items(root) == 8
     assert count_published_items(tmp_path / "never-built") == 0
+
+
+# --- The maintained total ------------------------------------------------------
+
+
+def reads_during(work: Callable[[], object]) -> int:
+    """How many files an operation asks for a size.
+
+    Counted rather than timed. A timing assertion is flaky and says nothing about
+    what the code read, and what this row is about is what gets read: `measure`
+    asks every file in the tree, so its count rises with the archive, and the
+    maintained total asks none, so its count does not.
+    """
+    seen = 0
+    real = Path.stat
+
+    def counted(self: Path, *args: Any, **kwargs: Any) -> Any:
+        nonlocal seen
+        seen += 1
+        return real(self, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(Path, "stat", counted)
+        work()
+    return seen
+
+
+def test_a_retracted_deletion_equals_an_independent_walk(tmp_path: Path) -> None:
+    """The oracle. A total carried forward has to agree with one taken fresh.
+
+    Both shapes a deletion takes: a file inside a dated directory, where the
+    directory survives and keeps its entry, and a file sitting directly under the
+    root, where the entry goes with the file.
+    """
+    root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
+    (root / "sitemap.xml").write_bytes(b"x" * 40)
+    before = measure(root)
+
+    doomed = [root / "2020" / "01" / "01" / "a.webp", root / "sitemap.xml"]
+    sizes = {path: path.stat().st_size for path in doomed}
+    for path in doomed:
+        path.unlink()
+
+    assert before.minus(root, sizes) == measure(root)
+
+
+def test_maintaining_the_total_does_not_read_more_as_the_tree_grows(tmp_path: Path) -> None:
+    """Rule #12, counted. The walk grows with the archive and the retraction does not."""
+    small = site(tmp_path / "small", {"2026-08-20": ["a.webp", "b.webp"]})
+    large = site(
+        tmp_path / "large",
+        {f"2026-08-{day:02d}": [f"{n}.webp" for n in range(6)] for day in range(1, 11)},
+    )
+
+    walked_small = reads_during(lambda: measure(small))
+    walked_large = reads_during(lambda: measure(large))
+    assert walked_large > walked_small, (
+        "the independent walk is supposed to grow with the tree - it is the audit"
+    )
+
+    carried_small = measure(small)
+    carried_large = measure(large)
+    assert (
+        reads_during(lambda: carried_small.minus(small, {small / "2026/08/20/a.webp": 1000})) == 0
+    )
+    assert (
+        reads_during(lambda: carried_large.minus(large, {large / "2026/08/01/0.webp": 1000})) == 0
+    )
 
 
 def test_the_runway_is_headroom_over_the_marginal_rate(tmp_path: Path) -> None:
@@ -562,7 +631,7 @@ def test_the_run_reports_the_backlog_the_fuse_left_behind(tmp_path: Path) -> Non
 
 
 def test_a_dry_run_reports_the_same_backlog_it_would_have_left(tmp_path: Path) -> None:
-    """"Held back by the fuse" and "not deleted because we were pretending" differ.
+    """ "Held back by the fuse" and "not deleted because we were pretending" differ.
 
     Every run that ships today is a dry run, so a `skipped_by_fuse` that counted
     the deletions a dry run declined to make would equal `candidates_found` on
@@ -602,13 +671,16 @@ def test_the_flag_can_only_make_a_run_report_and_never_delete(tmp_path: Path) ->
     assert (root / "2020" / "01" / "01" / "old.webp").exists()
 
 
-def test_the_bytes_are_two_measurements_of_the_tree_and_not_a_running_total(
+def test_the_bytes_are_the_files_that_actually_left_the_tree(
     tmp_path: Path,
 ) -> None:
-    """`bytes_reclaimed` is the difference two readings show, so it cannot inflate.
+    """`bytes_reclaimed` is what the deletions removed, and it agrees with a fresh walk.
 
-    A total accumulated inside the deletion loop would still be written when an
-    unlink did not happen, and nothing would disagree with it.
+    It used to be the difference between two whole-tree readings, which is a
+    second walk of everything ever published to learn the size of two pictures.
+    The reading that made that safe - a total cannot inflate past what the tree
+    really holds - is kept by the last line here, and by
+    `test_the_after_total_counts_only_the_files_that_actually_left` below.
     """
     root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
     config = RetentionConfig(image_months=6, dry_run=False)
@@ -618,6 +690,59 @@ def test_the_bytes_are_two_measurements_of_the_tree_and_not_a_running_total(
     assert result.deleted == 2
     assert result.bytes_reclaimed == 2000, "the two 1,000-byte pictures and nothing else"
     assert result.bytes_before - result.bytes_after == result.bytes_reclaimed
+    assert result.bytes_after == measure(root).bytes_used
+
+
+def test_a_prune_reaches_its_after_total_without_walking_the_tree_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One reading of the tree a pass, not two.
+
+    The second walk answered a question the pass already knew the answer to: it
+    had just removed the files, so it had their sizes. Counted rather than timed,
+    because the cost this row is about is what gets read.
+    """
+    root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
+    walked = 0
+    unpatched = retention.measure
+
+    def counted(*args: Any, **kwargs: Any) -> SiteSize:
+        nonlocal walked
+        walked += 1
+        return unpatched(*args, **kwargs)
+
+    monkeypatch.setattr(retention, "measure", counted)
+    result = prune(root, RetentionConfig(image_months=6, dry_run=False), date(2026, 8, 21))
+
+    assert result.deleted == 2
+    assert walked == 1, "the tree is read once and the after-total retracts what left it"
+    assert result.bytes_after == unpatched(root).bytes_used
+
+
+def test_the_after_total_counts_only_the_files_that_actually_left(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The hazard a carried total has that two readings did not.
+
+    A total that subtracts every file the pass meant to delete would still be
+    written when an unlink did not happen, and nothing would disagree with it. So
+    the pass retracts a file only once the file is gone, and one that stayed is
+    charged to neither number.
+    """
+    root = site(tmp_path, {"2020-01-01": ["a.webp", "b.webp"], "2026-08-20": ["new.webp"]})
+    stubborn = root / "2020" / "01" / "01" / "b.webp"
+    unpatched = Path.unlink
+
+    def refuse(self: Path, *args: Any, **kwargs: Any) -> None:
+        if self != stubborn:
+            unpatched(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+    result = prune(root, RetentionConfig(image_months=6, dry_run=False), date(2026, 8, 21))
+    monkeypatch.undo()
+
+    assert stubborn.exists(), "the fixture has to leave one file behind or it proves nothing"
+    assert result.bytes_reclaimed == 1000, "one picture left the tree, not the two it tried"
     assert result.bytes_after == measure(root).bytes_used
 
 
@@ -905,9 +1030,7 @@ def totals_from_shard(text: str) -> dict[tuple[str, str], tuple[int, int, int]]:
 def totals_from_aggregate(
     rows: list[TelemetryAggregateRow],
 ) -> dict[tuple[str, str], tuple[int, int, int]]:
-    return {
-        (row.date, row.stage.value): (row.items, row.failed, row.sum_ms or 0) for row in rows
-    }
+    return {(row.date, row.stage.value): (row.items, row.failed, row.sum_ms or 0) for row in rows}
 
 
 def a_state_tree(tmp_path: Path) -> Path:
@@ -990,7 +1113,9 @@ def test_a_group_that_timed_nothing_says_so_rather_than_saying_zero(tmp_path: Pa
     """An instrument that did not run writes an empty cell. Empty is not zero."""
     day = "2024-01-04"
     state = tmp_path / "state"
-    ledger.append_item_health(state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PLAN)])
+    ledger.append_item_health(
+        state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PLAN)]
+    )
 
     folded = fold_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
 
@@ -1020,13 +1145,15 @@ def test_a_percentile_is_a_number_some_item_really_took(tmp_path: Path) -> None:
 def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
     state = a_state_tree(tmp_path)
     before = {
-        path.relative_to(state).as_posix(): path.read_bytes() for path in sorted(state.rglob("*.csv"))
+        path.relative_to(state).as_posix(): path.read_bytes()
+        for path in sorted(state.rglob("*.csv"))
     }
 
     result = prune_telemetry(state, ObservabilityConfig(), TODAY, dry_run=True)
 
     after = {
-        path.relative_to(state).as_posix(): path.read_bytes() for path in sorted(state.rglob("*.csv"))
+        path.relative_to(state).as_posix(): path.read_bytes()
+        for path in sorted(state.rglob("*.csv"))
     }
     assert result.dry_run is True
     assert result.folded, "it still has to report what it would have done"
@@ -1226,7 +1353,8 @@ def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
     state, public = a_published_tree(tmp_path)
     config = ObservabilityConfig()
     doomed = [
-        path for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
+        path
+        for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
         if path.stem < oldest_month_kept(TODAY, config.item_health_full_grain_months)
     ]
     assert doomed, "the fixture has to reach past the window or this proves nothing"
@@ -1287,9 +1415,7 @@ def test_a_feed_health_month_past_its_own_age_is_deleted_rather_than_folded(
     assert list(result.deleted) == [stem for stem in months if stem < boundary]
     assert list(result.kept) == [stem for stem in months if stem >= boundary]
     assert result.bytes_freed > 0
-    assert [path.stem for path in month_shards(state / ledger.HEALTH_DIRNAME)] == list(
-        result.kept
-    )
+    assert [path.stem for path in month_shards(state / ledger.HEALTH_DIRNAME)] == list(result.kept)
     assert not (state / ledger.TELEMETRY_AGGREGATE_DIRNAME).exists(), (
         "feed health is deleted rather than folded; an aggregate here has no reader"
     )
@@ -1540,9 +1666,7 @@ def test_the_stage_says_so_when_there_is_nothing_to_remove(
     assert "prune-state removes no file today" in caplog.text
 
 
-def test_the_stage_reports_what_it_folded(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_the_stage_reports_what_it_folded(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """What a person reads off the run: which months went, and how many rows they held."""
     state = a_state_tree(tmp_path)
     with caplog.at_level(logging.INFO):
@@ -1970,9 +2094,7 @@ def test_a_score_month_past_the_window_is_summarised_and_then_deleted(tmp_path: 
     state = a_score_tree(tmp_path)
     config = ObservabilityConfig()
     boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
-    doomed = [
-        path.stem for path in score_writer.ledger_shards(state) if path.stem < boundary
-    ]
+    doomed = [path.stem for path in score_writer.ledger_shards(state) if path.stem < boundary]
     assert doomed, "the fixture has to reach past the window or this proves nothing"
 
     result = prune_scores(state, config, TODAY)
@@ -1990,8 +2112,7 @@ def test_a_score_month_past_the_window_is_summarised_and_then_deleted(tmp_path: 
         assert sum(cohort.rows for cohort in stored.cohorts) == stored.source_rows
         assert len(stored.observation_digests) == stored.source_rows
     assert result.rows_archived == sum(
-        score_archive.read(score_archive.archive_path(state, month)).source_rows
-        for month in doomed
+        score_archive.read(score_archive.archive_path(state, month)).source_rows for month in doomed
     )
 
 
@@ -2100,7 +2221,8 @@ def test_an_archive_that_does_not_reconcile_leaves_its_shard(
     state = a_score_tree(tmp_path)
     config = ObservabilityConfig()
     doomed = [
-        path for path in score_writer.ledger_shards(state)
+        path
+        for path in score_writer.ledger_shards(state)
         if path.stem < oldest_month_kept(TODAY, config.scores_full_grain_months)
     ]
     assert doomed
@@ -2174,14 +2296,10 @@ def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repea
     state = a_score_tree(tmp_path)
     config = ObservabilityConfig()
     boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
-    shard = next(
-        path for path in score_writer.ledger_shards(state) if path.stem < boundary
-    )
+    shard = next(path for path in score_writer.ledger_shards(state) if path.stem < boundary)
     raw = list(csv.DictReader(io.StringIO(shard.read_text(encoding="utf-8"))))
     fingerprint = hashlib.sha256(shard.read_bytes()).hexdigest()
-    keys = {
-        tuple(row[name] for name in score_writer.OBSERVATION_KEY) for row in raw
-    }
+    keys = {tuple(row[name] for name in score_writer.OBSERVATION_KEY) for row in raw}
     hhem_by_cohort: dict[tuple[str, ...], list[float]] = {}
     for row in raw:
         cohort = tuple(row[name] for name in score_archive.COHORT_KEY)
@@ -2206,8 +2324,10 @@ def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repea
 
     # The second half. Every row of the deleted month, offered again.
     assert not shard.exists()
-    replayed = [EvalRow.model_validate({key: value for key, value in row.items() if value != ""})
-                for row in doomed]
+    replayed = [
+        EvalRow.model_validate({key: value for key, value in row.items() if value != ""})
+        for row in doomed
+    ]
     assert score_writer.append(state, replayed) == 0, (
         "a deleted month made its measurements new again"
     )
