@@ -411,6 +411,22 @@ This also closed a hole: `summary_words_min` and `summary_words_max` decide whic
 summaries are publishable and were absent from the fingerprint, so a cached
 summary survived a change to the rule it was written under.
 
+## The changes are not retroactive
+
+A change to what the summariser writes - the decode reorder, the per-band
+key-point counts, the deterministic restatement drop - takes effect from the run
+it lands in onward and never rewrites an already-published day. Two things hold
+the archive still, and neither is the fingerprint skip above, which production
+does not write yet: a committed digest is frozen output the site reads as-is, and
+the plan stage drops every already-run address (`ledger.load_published`, in
+`backend/idhazh/cli.py`) before the summariser is called, so a URL summarised
+last week is not summarised again under the new rules. The gain arrives going
+forward, which is the right trade for the runner budget - regenerating the whole
+archive would be a model sweep bounded only by its own size (Rule #2). Changing
+the prompt WORDING would behave the same way; it is a separate lever from the
+band numbers and the decode order, and moving it is the job of the offline loop
+in `backend/utilities/prompt_loop.py`, not a hand edit.
+
 ## A rule, not the argument for it
 
 The prompt is instructions to a decoder, not documentation for a person. A
