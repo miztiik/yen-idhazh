@@ -296,53 +296,73 @@ function writeItemHealthCanary() {
 		);
 	}
 
-	writeFileSync(
-		join(dir, `${year}-${month}.csv`),
-		[
-			COLUMNS.join(','),
-			// The oldest day found three pages too short to be articles and
-			// summarised none of them. Parsing 200 characters finished inside the
-			// millisecond clock, so extract reads 0 on all three: a measurement,
-			// not a gap. The score ledger recorded exactly that on 2026-08-22, on
-			// all ten of that day's rows. Summarize has no number at all here,
-			// which is the other fact - and the chart must not draw them alike.
-			dropped(earliest, 1, 'ai-06', 'too_short', 214, 32, 130, 0),
-			dropped(earliest, 1, 'ai-07', 'too_short', 186, 27, 220, 0),
-			dropped(earliest, 1, 'ai-08', 'too_short', 241, 35, 270, 0),
-			// fetch,extract,summarize | prefill,decode,input,output,cached
-			published(earlier, 1, 'ai-01', [120, 20, 610], [53309, 40210, 1497, 215, 900]),
-			published(earlier, 1, 'ai-02', [210, 30, 720], [77778, 43436, 1765, 230, 900]),
-			published(earlier, 1, 'ai-03', [260, 35, 780], [63586, 50753, 1608, 270, 900]),
-			// The newest day's fetch, extract and summarize values straddle 200, 30
-			// and 700 so its medians stay where the stage-timing test pins them.
-			published(date, 1, 'ai-01', [100, 20, 600], [79100, 29062, 942, 170, 0]),
-			published(date, 1, 'ai-02', [150, 25, 650], [7120, 28206, 975, 167, 900]),
-			published(date, 2, 'ai-03', [250, 35, 750], [8883, 22537, 999, 129, 900]),
-			// The one cut row, so both shapes of the cell are on the day: a body the
-			// cap trimmed from 2612 words to 1923, beside four rows that carry nothing.
-			// Its 4200 ms is a fixture value like the three word counts beside it: at
-			// 800 the day's split by cut printed the same second as the day itself, so
-			// a table that never split at all read the same. It sits either side of
-			// this day's summarize median, so the median does not move.
-			published(date, 2, 'ai-04', [300, 40, 4200], [82146, 33203, 1337, 189, 383], [12800, 1923, 2612]),
-			// A whole page parsed, then thrown away for boilerplate. It makes the
-			// newest day a partly timed one for summarize: four items of five. Its
-			// fetch and extract are that day's own medians, so neither median moves
-			// and the fifth item only widens the denominator.
-			dropped(date, 2, 'ai-05', 'boilerplate', 1180, 174, 200, 30),
-			// Forty days back, on the day the counters fixture already uses for its
-			// widest-preset run. Two runs of six timed items each - the only rows
-			// here that clear `console.min_attempts_for_rate`, so the latency plots
-			// have a line to draw at 90 days and an empty state at every narrower
-			// preset. The six values a run climb steeply on purpose: the p99 is
-			// about eight times the p50, which is what the shared scale across the
-			// five plots exists to show, and two plots on two scales would draw the
-			// same shape twice.
-			...tailRows(longAgo, 1, [520, 640, 700, 810, 1100, 4300]),
-			...tailRows(longAgo, 2, [560, 690, 760, 880, 1250, 4900]),
-			...sourceCutRows()
-		].join('\n') + '\n'
+	const currentRows = [
+		// The oldest day found three pages too short to be articles and
+		// summarised none of them. Parsing 200 characters finished inside the
+		// millisecond clock, so extract reads 0 on all three: a measurement,
+		// not a gap. The score ledger recorded exactly that on 2026-08-22, on
+		// all ten of that day's rows. Summarize has no number at all here,
+		// which is the other fact - and the chart must not draw them alike.
+		dropped(earliest, 1, 'ai-06', 'too_short', 214, 32, 130, 0),
+		dropped(earliest, 1, 'ai-07', 'too_short', 186, 27, 220, 0),
+		dropped(earliest, 1, 'ai-08', 'too_short', 241, 35, 270, 0),
+		// fetch,extract,summarize | prefill,decode,input,output,cached
+		published(earlier, 1, 'ai-01', [120, 20, 610], [53309, 40210, 1497, 215, 900]),
+		published(earlier, 1, 'ai-02', [210, 30, 720], [77778, 43436, 1765, 230, 900]),
+		published(earlier, 1, 'ai-03', [260, 35, 780], [63586, 50753, 1608, 270, 900]),
+		// The newest day's fetch, extract and summarize values straddle 200, 30
+		// and 700 so its medians stay where the stage-timing test pins them.
+		published(date, 1, 'ai-01', [100, 20, 600], [79100, 29062, 942, 170, 0]),
+		published(date, 1, 'ai-02', [150, 25, 650], [7120, 28206, 975, 167, 900]),
+		published(date, 2, 'ai-03', [250, 35, 750], [8883, 22537, 999, 129, 900]),
+		// The one cut row, so both shapes of the cell are on the day: a body the
+		// cap trimmed from 2612 words to 1923, beside four rows that carry nothing.
+		// Its 4200 ms is a fixture value like the three word counts beside it: at
+		// 800 the day's split by cut printed the same second as the day itself, so
+		// a table that never split at all read the same. It sits either side of
+		// this day's summarize median, so the median does not move.
+		published(date, 2, 'ai-04', [300, 40, 4200], [82146, 33203, 1337, 189, 383], [12800, 1923, 2612]),
+		// A whole page parsed, then thrown away for boilerplate. It makes the
+		// newest day a partly timed one for summarize: four items of five. Its
+		// fetch and extract are that day's own medians, so neither median moves
+		// and the fifth item only widens the denominator.
+		dropped(date, 2, 'ai-05', 'boilerplate', 1180, 174, 200, 30),
+		...sourceCutRows()
+	];
+	// Forty days back, on the day the counters fixture already uses for its
+	// widest-preset run. Two runs of six timed items each - the only rows
+	// here that clear `console.min_attempts_for_rate`, so the latency plots
+	// have a line to draw at 90 days and an empty state at every narrower
+	// preset. The six values a run climb steeply on purpose: the p99 is
+	// about eight times the p50, which is what the shared scale across the
+	// five plots exists to show, and two plots on two scales would draw the
+	// same shape twice.
+	//
+	// These rows are dated a month before the rest, so they are a telemetry
+	// shard of their own - the file a run in that month would have written,
+	// which is how the real ledger shards item-health. A browser that widens the
+	// window fetches this file, and `console-telemetry-heal.spec.ts` fails that
+	// fetch to prove a retry heals it.
+	const longAgoRows = [
+		...tailRows(longAgo, 1, [520, 640, 700, 810, 1100, 4300]),
+		...tailRows(longAgo, 2, [560, 690, 760, 880, 1250, 4900])
+	];
+	const currentMonth = `${year}-${month}`;
+	const longAgoMonth = longAgo.slice(0, 7);
+	const shards = new Map([[currentMonth, currentRows]]);
+	// The back-dated run stands alone in its month on this fixture. The guard is
+	// only there so a fixture edit that moved it into the current month could not
+	// write one file twice and lose the rows above.
+	shards.set(
+		longAgoMonth,
+		longAgoMonth === currentMonth ? [...currentRows, ...longAgoRows] : longAgoRows
 	);
+	for (const [shardMonth, shardRows] of shards) {
+		writeFileSync(
+			join(dir, `${shardMonth}.csv`),
+			[COLUMNS.join(','), ...shardRows].join('\n') + '\n'
+		);
+	}
 }
 
 /** What llama-server counted, for the two canary runs the item ledger already has.
