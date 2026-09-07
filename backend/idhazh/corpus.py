@@ -101,7 +101,15 @@ def from_line(line: str) -> CorpusRow:
 
 
 def read_rows(corpus_dir: Path) -> list[CorpusRow]:
-    """Every row in the window. A missing file is an empty window, not an error."""
+    """Every row in the window. A missing file is an empty window, not an error.
+
+    Cover: the window itself - at most `finetune.corpus_rows` rows, read once
+    every `finetune.harvest_every_days` days. Unbounded in code and bounded by
+    design, because `roll` evicts the oldest on every harvest, so the file this
+    opens does not grow however long the project runs. A cover here would only
+    hide a `roll` that stopped evicting, and `census` recounts the whole window
+    from the whole window - a windowed read would report a census that is wrong.
+    """
     path = rows_path(corpus_dir)
     if not path.is_file():
         return []
@@ -204,6 +212,12 @@ def scored_from_items(items_dir: Path) -> list[Scored]:
     The directory is the record of what was worked, so nothing here reads the run
     plan. That is what lets a backfill replay a finished run from its artifacts
     alone, months after the plan artifact expired.
+
+    Cover: one run. Bounded by construction rather than by a clock - the input is
+    this run's own items directory, which is written and read in the same job and
+    does not grow with history. `render.write` and `assemble.days_in_month` are
+    bounded the same way, by one run and by one month. A cover in days would put
+    a clock on an input that never had one, and could only lose work this run did.
     """
     found: list[Scored] = []
     for path in sorted(items_dir.rglob("*.article.json")):

@@ -316,12 +316,31 @@ def classify(
 
 
 def read_ledger(path: Path) -> dict[str, FingerprintRow]:
-    """Every stamp ever written, keyed by its digest. Missing file means none yet."""
+    """Every stamp ever written, keyed by its digest. Missing file means none yet.
+
+    The whole row, for a caller that wants what a stamp recorded - when it was
+    first seen, and on which machine. A caller that only wants to know whether a
+    digest is on record wants `recorded_fingerprints` instead.
+    """
     if not path.exists():
         return {}
     with path.open("r", encoding="utf-8", newline="") as handle:
         rows = [FingerprintRow.from_csv_row(row) for row in csv.DictReader(handle)]
     return {row.pipeline_fingerprint: row for row in rows}
+
+
+def recorded_fingerprints(path: Path) -> set[str]:
+    """Every identity on record, by digest alone, one line at a time.
+
+    `read_ledger` builds a `FingerprintRow` per stored line and holds the whole
+    list before the first one is looked at, so its cost follows the file. This
+    read costs the distinct identities, which is the answer, and the answer stops
+    growing once the inputs stop changing (Rule #12).
+    """
+    if not path.exists():
+        return set()
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return {row["pipeline_fingerprint"] for row in csv.DictReader(handle)}
 
 
 def append_new(path: Path, rows: Iterable[FingerprintRow]) -> list[FingerprintRow]:
@@ -334,6 +353,11 @@ def append_new(path: Path, rows: Iterable[FingerprintRow]) -> list[FingerprintRo
     append-only and its header is written once, so a new input would otherwise
     put more cells on a row than the header names, and every reader that maps by
     position would read one input under another input's name.
+
+    Cover: the identities on record, not the file. The one question asked of the
+    ledger is whether a digest is already there, so the read carries digests and
+    the file is streamed a line at a time. The set stops growing when the inputs
+    stop changing, and the file never does.
     """
     pending = list(rows)
     if not pending:
@@ -343,7 +367,7 @@ def append_new(path: Path, rows: Iterable[FingerprintRow]) -> list[FingerprintRo
     if path.exists():
         require_matching_header(path, columns)
 
-    known = set(read_ledger(path))
+    known = recorded_fingerprints(path)
     fresh: list[FingerprintRow] = []
     for row in pending:
         if row.pipeline_fingerprint not in known:
