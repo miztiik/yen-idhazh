@@ -41,6 +41,7 @@ from idhazh.evals.metrics import (
     extractiveness,
     hedge_dropped,
     lead_coverage,
+    restates_summary,
     scorer_version,
     self_repetition,
     speculative_density,
@@ -321,6 +322,42 @@ def test_a_summary_shorter_than_one_window_cannot_repeat_itself() -> None:
 def test_self_repetition_stays_inside_the_bounds_the_ledger_declares() -> None:
     for text in (LOOPED, CONTROL, FAITHFUL, ARTICLE, SOURCED, SPECULATIVE, ""):
         assert 0.0 <= self_repetition(text) <= 1.0
+
+
+# --- A key point that restates the summary -----------------------------------
+#
+# `restates_summary` is the copying measure pointed at our own summary instead
+# of the article: the share of a key point's four-grams already in the summary.
+# It is a distinctness floor for one key point, and the drop that reads it lives
+# in `to_summary`. The point of the measure is the gap - a lifted phrase scores
+# near one, a new fact scores near zero even when it reuses the summary's words.
+
+_KP_SUMMARY = (
+    "The bank held its policy rate at four percent and said inflation is easing "
+    "faster than it forecast in June, though it warned that energy prices remain "
+    "the largest risk to the outlook."
+)
+
+
+def test_a_key_point_lifted_from_the_summary_scores_near_one() -> None:
+    assert restates_summary("The bank held its policy rate at four percent", _KP_SUMMARY) > 0.9
+
+
+def test_a_new_fact_that_reuses_the_summarys_words_scores_low() -> None:
+    """The floor is on distinctness, not on any shared word. This key point shares
+    "rate" and "bank" with the summary and still adds when the bank last met."""
+    distinct = "The rate has not moved since the bank last met in July."
+    assert restates_summary(distinct, _KP_SUMMARY) < 0.2
+
+
+def test_a_key_point_shorter_than_one_four_gram_reads_as_distinct() -> None:
+    """No four-gram to measure, so the safe direction is to keep the fragment."""
+    assert restates_summary("Rate held", _KP_SUMMARY) == 0.0
+
+
+def test_restatement_stays_inside_the_zero_to_one_bound() -> None:
+    for point in ("The bank held its policy rate", "energy prices remain", "", "one two three"):
+        assert 0.0 <= restates_summary(point, _KP_SUMMARY) <= 1.0
 
 
 def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -> None:

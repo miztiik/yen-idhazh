@@ -256,6 +256,7 @@
         "target_words_min": 150
       }
     ],
+    "key_point_restatement_ceiling": 0.5,
     "max_verbatim_words": 20,
     "title_words_max": 14,
     "title_words_min": 6
