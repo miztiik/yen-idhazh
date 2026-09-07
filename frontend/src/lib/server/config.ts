@@ -418,7 +418,8 @@ interface RawConfig {
  * ever. `shell_seed_items` is read by the build alone, and so is
  * `archive_recent_days` - the archive's day list is decided in its `load` and
  * the page draws what it is handed. `archive_window_days` is the span the
- * archive's window control will open on and has no reader yet. The six
+ * archive's window control opens on, read the same way in the archive's `load`
+ * so it never rides to a page that has no such control. The six
  * leading-block
  * knobs are read by the pipeline, which decides the block at assemble and
  * publishes the answer on the day - the page draws what it is handed and
@@ -586,6 +587,26 @@ export function archiveRecentDays(): number {
 		appearance().digest?.archive_recent_days ??
 		raw().ui?.archive_recent_days ??
 		ARCHIVE_RECENT_DAYS
+	);
+}
+
+/** How many days back the archive's browse list opens on.
+ *
+ * The window the reader can widen or narrow over `console.window_presets`.
+ * Read on its own like `archive_recent_days`, so a browser is never told the
+ * number on a page that has no window control - only the archive's `load`
+ * reads it, and only the archive draws the control.
+ *
+ * The fallback is the same number `UiConfig.archive_window_days` defaults to,
+ * and the contract refuses a value that is not one of `console.window_presets`.
+ */
+const ARCHIVE_WINDOW_DAYS = 30;
+
+export function archiveWindowDays(): number {
+	return (
+		appearance().digest?.archive_window_days ??
+		raw().ui?.archive_window_days ??
+		ARCHIVE_WINDOW_DAYS
 	);
 }
 
