@@ -132,10 +132,26 @@ a cut piece the model never saw either. A 230-word summary that reads as
 complete and omits the denial is the worst item this pipeline can publish, and
 the sentence is what stops it.
 
-**`summarize.key_points_max` stays 5 for every rung.** Seven bullets would suit
-an investigation and would be padding on a 700-word analysis, and the knob lives
-on `SummarizeConfig` rather than on `SummaryBand`, so it cannot be raised for one
-rung without a contract change. The longer prose ask buys the depth instead.
+**`summarize.bands[].key_points_max` grades with the rung: 1, 2, 3, 4, 5 from the
+brief band to the investigation.** The count moved off `SummarizeConfig` and onto
+`SummaryBand` on 2026-09-07, so each rung asks for its own. The shortest asks for
+one, because a 30-to-45-word note carries about one distinct fact, and asking it
+for five requests facts the article does not hold - the extra bullets then
+restate the summary. The longest keeps five, where a long read genuinely carries
+that many. `key_points_min` moved with it - 1 at the brief band, 2 at the top -
+because the prompt reads both numbers off the band, and the shortest rung's
+ceiling of one sits below the old global floor of two. The decoder is held to the
+same per-band range, so the ceiling is a control and not a request: a note cannot
+emit the five bullets that would pad it.
+
+Each rung is checked against a simple bound: a key point is one sentence of about
+20 words, so a summary of W words carries about W/20 distinct facts, and no rung
+may ask for more key points than that. At the five committed rungs that bound is
+2, 4, 7, 10 and 11 facts against asks of 1, 2, 3, 4 and 5, so every rung sits
+under it with room to spare.
+`test_no_band_asks_for_more_key_points_than_its_summary_can_carry` reads the
+ladder from `config/` and asserts it per band, so a sixth rung cannot be added at
+five by accident.
 
 **No existing rung moved.** Rung 2 covers about 30 percent of a day, so re-asking
 it would put a measured cost on a third of every run to fix a seam nobody has
@@ -291,7 +307,7 @@ in a failure detail.
 | --- | --- |
 | **Framing** | Names the task as epistemological, then says in plain words what that means to do: a reader must be able to tell, from the summary alone, how the article knows what it says. |
 | **Title** | A new title, written from the body and the headline together, `title_words_min` to `title_words_max` words, with the headline styles it must not adopt named. See below. |
-| **Length** | The band's word range, plus `key_points_min` to `key_points_max` key points. Each key point must add something the summary did not say. |
+| **Length** | The band's word range, plus the band's `key_points_min` to `key_points_max` key points - one at the brief band, five at the longest. Each key point must add something the summary did not say. |
 | **Source form** | The trusted line before the fenced text can say `Source form: abstract`. In that case the prompt tells the model to write "The authors report that..." or equivalent, because an abstract is the authors describing their own work. |
 | **Attribution** | Who said a thing, named as the article names it. Never "sources say" when the article named the source, never a source the article did not name, and a figure an organisation reports about itself is marked as its own. |
 | **Certainty** | Hedges are protected in both directions. Dropping one turns a claim into a fact; adding one turns a fact into a rumour. A plan, a proposal, a target, a forecast and a result stay apart, because the kind of claim is the claim. |

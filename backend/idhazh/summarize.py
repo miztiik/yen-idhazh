@@ -109,7 +109,7 @@ def _template() -> Template:
     return Template(PROMPT_PATH.read_text(encoding="utf-8"))
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=16)
 def _draft_model(
     key_points_min: int,
     key_points_max: int,
@@ -127,16 +127,52 @@ def _draft_model(
     )
 
 
+def _key_point_rail(
+    ask: SummarizeConfig, source_words: int | None, brief: bool
+) -> tuple[int, int]:
+    """The key-point floor and ceiling the decoder is held to.
+
+    When an article is named - the production path, through `build_request` and
+    the matching `parse_draft` - the rail is the chosen band's own range, so the
+    band's ceiling is a control the decoder enforces rather than a request the
+    prompt makes: a note is held to one key point, an investigation to five.
+
+    When no article is named - the fingerprint, an offline harness, a schema
+    check - the rail is the union across every band, the permissive envelope any
+    band's valid reply fits inside.
+    """
+    if brief:
+        band = ask.band_for(0)
+        return band.key_points_min, band.key_points_max
+    if source_words is not None:
+        band = ask.band_for(source_words)
+        return band.key_points_min, band.key_points_max
+    return (
+        min(band.key_points_min for band in ask.bands),
+        max(band.key_points_max for band in ask.bands),
+    )
+
+
 def draft_model(
     prompt_config: SummarizeConfig | None = None,
     evaluation: EvaluationConfig | None = None,
+    *,
+    source_words: int | None = None,
+    brief: bool = False,
 ) -> type[SummaryDraft]:
-    """The shape the decoder is held to, built from the numbers config holds."""
+    """The shape the decoder is held to, built from the numbers config holds.
+
+    `source_words` and `brief` pick the band, so the key-point count the decoder
+    enforces is the one that band asks for. With neither, the rail is the union
+    across every band - the envelope the fingerprint and the offline harnesses
+    hold a reply to when no single article applies.
+    """
     ask = prompt_config or SummarizeConfig()
     bounds = evaluation or EvaluationConfig()
+    key_points_min, key_points_max = _key_point_rail(ask, source_words, brief)
     return _draft_model(
-        ask.key_points_min,
-        ask.key_points_max,
+        key_points_min,
+        key_points_max,
         bounds.summary_words_min * _MIN_CHARS_PER_WORD,
         bounds.summary_words_max * _MAX_CHARS_PER_WORD,
         ask.title_words_max * _MAX_CHARS_PER_WORD,
@@ -146,17 +182,32 @@ def draft_model(
 def output_schema(
     prompt_config: SummarizeConfig | None = None,
     evaluation: EvaluationConfig | None = None,
+    *,
+    source_words: int | None = None,
+    brief: bool = False,
 ) -> dict[str, Any]:
     """Generated from the model, never hand-written (Rule #3)."""
-    return draft_model(prompt_config, evaluation).model_json_schema()
+    return draft_model(
+        prompt_config, evaluation, source_words=source_words, brief=brief
+    ).model_json_schema()
 
 
 def output_schema_text(
     prompt_config: SummarizeConfig | None = None,
     evaluation: EvaluationConfig | None = None,
+    *,
+    source_words: int | None = None,
+    brief: bool = False,
 ) -> str:
-    """One serialization, so the fingerprint's schema digest is stable."""
-    return canonical_json(output_schema(prompt_config, evaluation))
+    """One serialization, so the fingerprint's schema digest is stable.
+
+    The fingerprint calls this with no article, so it hashes the union rail: a
+    stable value that still moves when any band's key-point envelope moves, while
+    `prompt_inputs` hashes every band's exact numbers besides.
+    """
+    return canonical_json(
+        output_schema(prompt_config, evaluation, source_words=source_words, brief=brief)
+    )
 
 
 def system_prompt(
@@ -257,7 +308,12 @@ def build_request(
             prompt_config, source_words=article.band_source_words, brief=article.brief
         ),
         user=user_turn(article),
-        output_schema=output_schema(prompt_config, evaluation),
+        output_schema=output_schema(
+            prompt_config,
+            evaluation,
+            source_words=article.band_source_words,
+            brief=article.brief,
+        ),
         inference=inference,
     )
 
@@ -281,12 +337,17 @@ def parse_draft(
     *,
     prompt_config: SummarizeConfig | None = None,
     evaluation: EvaluationConfig | None = None,
+    source_words: int | None = None,
+    brief: bool = False,
 ) -> SummaryDraft:
     """Believe the response only after it has proved its shape.
 
     A thinking block with content in it is a failure, not a curiosity: the flag
     that was supposed to disable reasoning did not take, and reasoning
     measurably costs faithfulness when summarizing.
+
+    `source_words` and `brief` pick the same band the reply was asked under, so
+    the decoder validates a key-point count against the band that requested it.
     """
     content, thought = split_thinking(raw)
     if thought is not None and thought.strip():
@@ -294,7 +355,9 @@ def parse_draft(
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
-    return draft_model(prompt_config, evaluation).model_validate_json(content)
+    return draft_model(
+        prompt_config, evaluation, source_words=source_words, brief=brief
+    ).model_validate_json(content)
 
 
 def _failed(
@@ -404,7 +467,13 @@ def to_summary(
             failure_code=FailureCode.BAD_SHAPE,
         )
     try:
-        draft = parse_draft(completion.content, prompt_config=prompt_config, evaluation=bounds)
+        draft = parse_draft(
+            completion.content,
+            prompt_config=prompt_config,
+            evaluation=bounds,
+            source_words=article.band_source_words,
+            brief=article.brief,
+        )
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
         return _failed(
             article,

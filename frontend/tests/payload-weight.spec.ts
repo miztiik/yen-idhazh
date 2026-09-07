@@ -49,8 +49,11 @@ import { leadingStories, shellSeedItems } from '../src/lib/server/config';
 
 const BUILD = resolve(process.cwd(), 'build');
 
-/** On every published item, and on nothing else this site serializes. */
-const MARKER = 'key_points';
+/** On every published item, and on nothing else this site serializes. The
+ * trailing colon matters: it matches a day item's `key_points:` field but not
+ * the config's `key_points_min` / `key_points_max`, which the console inlines
+ * alongside the summary bands and which are not a day payload. */
+const MARKER = 'key_points:';
 
 const DATED = /^\/\d{4}-\d{2}-\d{2}(\/|$)/;
 /** A topic route: a date and one desk under it. */
