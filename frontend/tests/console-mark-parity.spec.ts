@@ -16,11 +16,17 @@
  * tree before this row and prove nothing; the published extent is what lets the
  * oracle fail there.
  *
- * The bite. On the tree before Row #12 none of the six charts publishes a
- * `data-*-domain`, so `getAttribute` returns null and every case fails at its
- * first assertion - "must publish its data-only extent". Restore the six
- * components and all six pass. That is the RED before the GREEN: the oracle
+ * The bite. On the tree before Row #12 none of the charts publishes a
+ * `data-*-domain`, so `getAttribute` returns null and every case that draws
+ * fails at its first assertion - "must publish its data-only extent". Restore
+ * the components and they pass. That is the RED before the GREEN: the oracle
  * cannot pass without the split it is named for.
+ *
+ * Five of the six draw on the canary. The swap panel draws only where the
+ * ledger recorded a model change, and the canary is a single-model day, so its
+ * case skips there rather than fails - the same guard the sibling swap tests
+ * use. `console-model-panels.spec.ts` covers the swap panel with a built swap;
+ * this oracle picks it up automatically on any tree whose ledger carries one.
  *
  * Both routes ship every preset's aggregate inline, so a window change costs no
  * fetch here (`console/+page.svelte`), which is why the case can read the new
@@ -51,6 +57,11 @@ interface Chart {
 	/** The drawn marks, and the data attributes a resize must leave alone. */
 	itemSel: string;
 	attrs: string[];
+	/** A chart the canary cannot always draw. The swap panel appears only where
+	 * the ledger recorded a model change, and the canary is a single-model day,
+	 * so on it the swap plot is absent. Such a case skips rather than fails - the
+	 * same guard `console-model-panels.spec.ts` already applies to the panel. */
+	optional?: boolean;
 }
 
 const CHARTS: Chart[] = [
@@ -105,7 +116,8 @@ const CHARTS: Chart[] = [
 			'data-movement',
 			'data-polarity',
 			'data-movement-verdict'
-		]
+		],
+		optional: true
 	},
 	{
 		name: 'time histogram',
@@ -178,6 +190,13 @@ for (const chart of CHARTS) {
 	test(`${chart.name}: the drawn marks survive a window change and a resize`, async ({ page }) => {
 		await page.setViewportSize(WIDE);
 		await page.goto(chart.route);
+		// The swap panel is the one chart the canary cannot guarantee: it draws only
+		// where the ledger holds a model change, and the canary is a single-model
+		// day. Where its root is absent, skip rather than fail - the same guard the
+		// sibling swap tests use. The other five always draw on the canary.
+		if (chart.optional && (await page.locator(chart.root).count()) === 0) {
+			test.skip(true, `${chart.name} needs a model change the canary ledger does not carry`);
+		}
 		await expect(page.locator(chart.root).first(), `${chart.name} never drew`).toBeVisible();
 
 		// The extent the split publishes. Absent on the tree before this row, so
