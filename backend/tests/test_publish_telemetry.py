@@ -309,15 +309,17 @@ def _month_shard(state: Path, month: str, rows: list[ItemHealthRow]) -> None:
 
 
 def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path) -> None:
-    """Nothing appends to a past month, so re-reading it produces the same bytes.
+    """A run that appends nothing new writes no shard at all.
 
-    Measured 2026-09-07 on an Intel Core i7-1265U over the committed ledger: 342
-    ms per month, and at the 14-month retention cap thirteen of the fourteen
-    months rewritten every run cannot have changed.
+    Two freezes compose here. The closed month (2026-08) the caller never names,
+    so it is skipped without a read. The current month (2026-09) is read and
+    re-derived, but its bytes match what is already published, so the write is
+    skipped too. The earlier month filter still rewrote the current month every
+    run; a partition now writes only when its bytes change (finding 11).
 
-    The check is that the file was not touched at all, not that its bytes match.
-    Identical bytes are what the old code produced too, so a byte assertion
-    would pass whether or not the read was skipped.
+    The mechanism is a byte comparison, not a timestamp: the mtime checks below
+    are evidence that an unchanged month was not touched, never how the skip is
+    decided.
     """
     state = tmp_path / "state"
     public = tmp_path / "public"
@@ -326,14 +328,15 @@ def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path
 
     publish(state_root=state, public_root=public)
     august = public / "2026-08.csv"
-    before = august.stat().st_mtime_ns
-    august_bytes = august.read_bytes()
+    september = public / "2026-09.csv"
+    mtimes = {path.name: path.stat().st_mtime_ns for path in (august, september)}
+    payloads = {path.name: path.read_bytes() for path in (august, september)}
 
     written = publish(state_root=state, public_root=public, months={"2026-09"})
 
-    assert [path.name for path in written] == ["2026-09.csv"]
-    assert august.stat().st_mtime_ns == before, "a frozen month was rewritten"
-    assert august.read_bytes() == august_bytes
+    assert written == []
+    assert {path.name: path.stat().st_mtime_ns for path in (august, september)} == mtimes
+    assert {path.name: path.read_bytes() for path in (august, september)} == payloads
 
 
 def test_a_month_that_was_never_published_is_written_whatever_was_asked_for(
@@ -375,3 +378,94 @@ def test_seeding_an_empty_month_never_blanks_a_shard_that_holds_rows(tmp_path: P
     publish(state_root=state, public_root=public, months={"2026-09"}, ensure_month="2026-08")
 
     assert (public / "2026-08.csv").read_text(encoding="utf-8") == full
+
+
+def test_a_rerun_with_no_new_data_writes_no_shard(tmp_path: Path) -> None:
+    """The oracle for finding 11: a no-op run must publish nothing.
+
+    A full rebuild (`months=None`) and a caller-hinted run (`months={...}`) both
+    re-derive the current month, and both leave it alone when the bytes already
+    on disk are the bytes they would write. The comparison is the shard's own
+    bytes; the mtime check is a witness that the file was never opened for
+    writing.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    _month_shard(state, "2026-08", [_row()])
+    _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
+
+    publish(state_root=state, public_root=public)
+    shards = sorted(public.glob("*.csv"))
+    payloads = {path.name: path.read_bytes() for path in shards}
+    mtimes = {path.name: path.stat().st_mtime_ns for path in shards}
+
+    assert publish(state_root=state, public_root=public) == []
+    assert publish(state_root=state, public_root=public, months={"2026-09"}) == []
+
+    after = sorted(public.glob("*.csv"))
+    assert {path.name: path.read_bytes() for path in after} == payloads
+    assert {path.name: path.stat().st_mtime_ns for path in after} == mtimes
+
+
+def test_adding_a_day_rewrites_only_that_month(tmp_path: Path) -> None:
+    """The second half of the oracle: one changed month, one file written.
+
+    The changed month costs its full output bytes - a projection is a whole-file
+    rewrite, not an append (the shard is deliberately not `merge=union`). The
+    saving is the month that did not change, which is neither read nor written.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    _month_shard(state, "2026-08", [_row()])
+    _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
+
+    publish(state_root=state, public_root=public)
+    august = public / "2026-08.csv"
+    september = public / "2026-09.csv"
+    august_bytes = august.read_bytes()
+    august_mtime = august.stat().st_mtime_ns
+    september_bytes = september.read_bytes()
+
+    _month_shard(
+        state,
+        "2026-09",
+        [
+            _row(date="2026-09-02", run_id="2026-09-02-1"),
+            _row(date="2026-09-03", run_id="2026-09-03-1", item_id="ai-02"),
+        ],
+    )
+    written = publish(state_root=state, public_root=public, months={"2026-09"})
+
+    assert [path.name for path in written] == ["2026-09.csv"]
+    assert august.read_bytes() == august_bytes
+    assert august.stat().st_mtime_ns == august_mtime, "the unchanged month was rewritten"
+    assert september.read_bytes() != september_bytes
+
+
+def test_a_correction_to_a_closed_month_rewrites_only_that_month(tmp_path: Path) -> None:
+    """The freeze rule permits one write to a closed month: a correction.
+
+    The caller decides a closed month changed by naming it in `months`; the
+    publish then re-derives it, sees the bytes differ, and rewrites that month
+    alone. The current month, unnamed, is left untouched.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    _month_shard(state, "2026-08", [_row(summary_words=65)])
+    _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
+
+    publish(state_root=state, public_root=public)
+    august = public / "2026-08.csv"
+    september = public / "2026-09.csv"
+    september_bytes = september.read_bytes()
+    september_mtime = september.stat().st_mtime_ns
+
+    _month_shard(state, "2026-08", [_row(summary_words=41)])
+    written = publish(state_root=state, public_root=public, months={"2026-08"})
+
+    assert [path.name for path in written] == ["2026-08.csv"]
+    assert september.read_bytes() == september_bytes
+    assert september.stat().st_mtime_ns == september_mtime, "an untargeted month was rewritten"
+    corrected = read_shard(august)
+    assert len(corrected) == 1
+    assert corrected[0].csv_row()["summary_words"] == "41", "the correction did not land"
