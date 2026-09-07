@@ -68,6 +68,24 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-07T01:00",
+            change=(
+                "Added new_fact_rate, nullable, at the end of the row. The ledger's "
+                "header is migrated in the same commit."
+            ),
+            why=(
+                "Rows 1 to 3 reordered the key-point decode, moved the count onto the "
+                "band and dropped a restating key point rather than failing the item, "
+                "and nothing measured whether any of it worked. new_fact_rate is that "
+                "instrument: the share of an item's key points that add a fact the "
+                "summary does not already carry, the aggregate inverse of the drop, "
+                "read at the same distinctness ceiling. Null and not 0.0 on the rows "
+                "that predate it: 0.0 is a scored reply whose every key point restated, "
+                "which is not what an unscored row can claim. Recorded only - no band "
+                "reads it, so METRICS_VERSION did not move."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-30T20:00",
             change=(
                 "hhem_delta, truncation_flagged and score_ms each say what they hold "
@@ -471,6 +489,26 @@ class EvalRow(Contract):
             "this item by hand can prove they are reading the same text the scorer read; "
             "without it a disagreement between them measures a premise mismatch rather "
             "than a scorer error. Null on a row scored before 2026-08-27."
+        ),
+    )
+    # Appended for the same layout reason as the block above, and null for the
+    # same meaning reason: 0.0 is a reply whose every key point restated the
+    # summary, which a row written before the column existed never measured.
+    new_fact_rate: Score | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Share of the item's key points that state a fact the summary prose does "
+            "not already carry - the aggregate inverse of the restatement drop "
+            "to_summary makes, read at the same distinctness ceiling, so a key point "
+            "that counts here is exactly one the drop keeps. The instrument for whether "
+            "the key-point prompt finds facts or paraphrases the summary. Lexical, and "
+            "the element table (plan 08) supersedes it with span-anchored ids that "
+            "carry no false positive. Recorded only - no band reads it, and best-of-N "
+            "against it is the Goodhart form of the number. Null on a row scored before "
+            "the column existed; 0.0 only on a scored reply whose every key point "
+            "restated."
         ),
     )
 

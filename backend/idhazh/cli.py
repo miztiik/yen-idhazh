@@ -1076,6 +1076,7 @@ def stage_work(
                     hhem=hhem,
                     hhem_full=hhem_full,
                     config=settings.app.evaluation,
+                    restatement_ceiling=settings.app.summarize.key_point_restatement_ceiling,
                     date=plan.date,
                     run_id=plan.run_id,
                     scorer_version=scorer_version,
