@@ -360,6 +360,49 @@ test.describe('what one session keeps in hand', () => {
 		]);
 	});
 
+	test('an aborted watch is told nothing more, so a stale day cannot arrive', async ({ page }) => {
+		// Handback #93. A reading route reuses its component when only the date
+		// moves, so a watch still in flight for the old date could deliver the old
+		// day onto the new page. The effect aborts the old watch on the change; the
+		// signal is honoured here. The shared request still runs to completion - the
+		// day-cache and any other caller waiting on it want the answer - but this
+		// watcher hears nothing past the abort, so the old day never arrives.
+		const served = new Intercepted();
+		await page.route(PATTERN, async (route) => {
+			served.take(route.request().url());
+			await route.fulfill({ contentType: 'application/json', body: PAYLOAD });
+		});
+
+		await armed(page);
+		const seen = await page.evaluate(
+			async ([date, ms]: [string, number]) => {
+				const loader = (window as unknown as { dayLoader: Loader }).dayLoader;
+				const states: string[] = [];
+				const controller = new AbortController();
+				const done = loader.watchDay(date, {
+					slowMs: ms,
+					signal: controller.signal,
+					onStatus: (status: string) => states.push(status)
+				});
+				// The date changed before the fetch settled.
+				controller.abort();
+				await done;
+				// Give any late status a tick to arrive, so a pass means it was
+				// suppressed rather than merely not yet delivered.
+				await new Promise((resolve) => setTimeout(resolve, 0));
+				return states;
+			},
+			[DATE, 30_000] as [string, number]
+		);
+
+		console.log(`[payload-state] aborted-watch interceptions: ${served.count}`);
+		expect(
+			served.count,
+			'the request never ran, so nothing proves the ready state was suppressed'
+		).toBeGreaterThan(0);
+		expect(seen, 'an aborted watch was still told the day arrived').toEqual(['loading']);
+	});
+
 	test('one lookup index is built per day, and a second day gets its own', async ({ page }) => {
 		// Finding 87. A result list resolves an id against a day it already holds,
 		// once per result and again on every arrival. The count below is the whole

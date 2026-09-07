@@ -34,7 +34,7 @@ const CONFIG = JSON.parse(
 	readFileSync(resolve(FRONTEND, '..', 'config', 'appearance.json'), 'utf8')
 ) as { console?: { window_presets?: number[]; default_window_days?: number } };
 
-const PRESETS = CONFIG.console?.window_presets ?? [7, 14, 30, 90];
+const PRESETS = CONFIG.console?.window_presets ?? [1, 7, 14, 30, 90];
 const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 30;
 
 /** The two cards, in the order the strip draws them. Articles first: the visual

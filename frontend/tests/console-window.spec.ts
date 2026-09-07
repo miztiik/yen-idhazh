@@ -45,7 +45,7 @@ const APP = JSON.parse(
 	};
 };
 
-const PRESETS = CONFIG.console?.window_presets ?? [7, 14, 30, 90];
+const PRESETS = CONFIG.console?.window_presets ?? [1, 7, 14, 30, 90];
 const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 30;
 
 /** The tree the site was built from. The suite builds from the canaries. */

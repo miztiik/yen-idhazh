@@ -51,10 +51,19 @@
 		held = dates.map((date) => ({ label: longDate(date), href: `${base}/${date}/` }));
 	}
 
+	/** The watch in flight, so a change of date or topic, or a retry, can abort
+	 * it. A stale callback would otherwise deliver the previous desk's stories
+	 * onto this page, because the served day arrives after the parameters moved. */
+	let watcher: AbortController | null = null;
+
 	function fetchRest(date: string, vertical: string, again: boolean) {
+		watcher?.abort();
+		const controller = new AbortController();
+		watcher = controller;
 		watchDay(date, {
 			slowMs: data.ui.payload_slow_ms,
 			again,
+			signal: controller.signal,
 			onStatus: (next, whole) => {
 				reported = next;
 				if (next === 'unreachable') void offerHeldDays(date);
@@ -77,13 +86,19 @@
 
 	// Keyed on the parameters rather than on mount: SvelteKit reuses this
 	// component when only the date or the topic moves, and a fetch that ran once
-	// would leave the previous desk's stories on the new desk's page.
+	// would leave the previous desk's stories on the new desk's page. The cleanup
+	// aborts the in-flight watch, so a change of date or topic - or leaving the
+	// page - cannot deliver the old desk.
 	$effect(() => {
 		const { date, vertical, awaiting } = data;
 		arrived = null;
 		reported = null;
 		held = [];
 		if (awaiting > 0) fetchRest(date, vertical, false);
+		return () => {
+			watcher?.abort();
+			watcher = null;
+		};
 	});
 </script>
 

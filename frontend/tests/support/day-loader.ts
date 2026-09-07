@@ -47,6 +47,7 @@ export interface Loader {
 			onStatus: (status: string, day: LoadedDay | null) => void;
 			slowMs: number;
 			again?: boolean;
+			signal?: AbortSignal;
 		}
 	) => Promise<LoadedDay | null>;
 	/** The archive's own call: no wait states, no retry control, one day. */

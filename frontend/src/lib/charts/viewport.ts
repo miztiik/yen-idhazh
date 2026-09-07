@@ -39,10 +39,21 @@ export function daysInWindow(window: TimeWindow): string[] {
 }
 
 export function monthsInWindow(window: TimeWindow): string[] {
+	// By month, not by day. Walking every day and testing `includes` per day
+	// costs the window's width times the month count for an answer that is pure
+	// calendar arithmetic: step the year and month from the first to the last.
+	const last = window.end.slice(0, 7);
+	let year = Number(window.start.slice(0, 4));
+	let month = Number(window.start.slice(5, 7));
 	const months: string[] = [];
-	for (const day of daysInWindow(window)) {
-		const month = day.slice(0, 7);
-		if (!months.includes(month)) months.push(month);
+	for (let cursor = window.start.slice(0, 7); cursor <= last; ) {
+		months.push(cursor);
+		month += 1;
+		if (month > 12) {
+			month = 1;
+			year += 1;
+		}
+		cursor = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
 	}
 	return months;
 }
