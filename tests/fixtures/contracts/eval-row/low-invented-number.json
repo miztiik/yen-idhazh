@@ -14,6 +14,7 @@
   "hhem_full": 0.39,
   "item_id": "world-01",
   "model_id": "qwen3-8b-q4-k-m",
+  "new_fact_rate": null,
   "output_digest": "f782599c553e1e9ed7e1a0f9b0b0ecabdf9d454c2929067d2d283b3b0d91b580",
   "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
   "run_id": "2026-08-21-1",

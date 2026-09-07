@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added new_fact_rate, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "version": "2026-09-07T01:00",
+      "why": "Rows 1 to 3 reordered the key-point decode, moved the count onto the band and dropped a restating key point rather than failing the item, and nothing measured whether any of it worked. new_fact_rate is that instrument: the share of an item's key points that add a fact the summary does not already carry, the aggregate inverse of the drop, read at the same distinctness ceiling. Null and not 0.0 on the rows that predate it: 0.0 is a scored reply whose every key point restated, which is not what an unscored row can claim. Recorded only - no band reads it, so METRICS_VERSION did not move."
+    },
+    {
       "change": "hhem_delta, truncation_flagged and score_ms each say what they hold and how to read them. No column was added, removed or retyped.",
       "version": "2026-08-30T20:00",
       "why": "The owner had to ask what two of these columns meant, which is the definition of a description not doing its job, and each of the three carries a trap a reader cannot see from the cell. hhem_delta is derived and recomputed on read, so it is not an independent measurement, and the window geometry moves it by more than the whole medium band. truncation_flagged means one thing before 2026-08-29T09:00 and another after, so a query without the version branch reads two facts as one. score_ms is off the critical path and exists to size the census-versus-sample decision, which observability.sample_rate now implements. The generated schema moves because a description is part of it; every committed row still validates unchanged."
@@ -168,6 +173,21 @@
       "title": "Model Id",
       "type": "string"
     },
+    "new_fact_rate": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Share of the item's key points that state a fact the summary prose does not already carry - the aggregate inverse of the restatement drop to_summary makes, read at the same distinctness ceiling, so a key point that counts here is exactly one the drop keeps. The instrument for whether the key-point prompt finds facts or paraphrases the summary. Lexical, and the element table (plan 08) supersedes it with span-anchored ids that carry no false positive. Recorded only - no band reads it, and best-of-N against it is the Goodhart form of the number. Null on a row scored before the column existed; 0.0 only on a scored reply whose every key point restated.",
+      "title": "New Fact Rate"
+    },
     "output_digest": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Output Digest",
@@ -309,7 +329,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-08-30T20:00",
+      "default": "2026-09-07T01:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -346,5 +366,5 @@
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-30T20:00"
+  "version": "2026-09-07T01:00"
 }

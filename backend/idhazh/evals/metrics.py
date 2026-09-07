@@ -49,6 +49,14 @@ from idhazh.evals.hhem import CHUNK_ANCHOR
 #: so bumping it would assert a change to the counterweights that did not happen.
 #: The new `window=` field in `scorer_version` records that change where it
 #: belongs.
+#:
+#: And it did not move for `new_fact_rate`. That column is recorded only - no
+#: band and no derived column reads it, and the standing trap forbids anything
+#: acting on it (`docs/concepts/evaluation.md`) - so every row written under
+#: `metrics-3` still says exactly what it said. `METRICS_VERSION` folds into
+#: `scorer_version`, so bumping it would restart the ten-run-day count that page
+#: requires before any threshold moves, to record a fact no threshold reads.
+#: `self_repetition` and `compression` are the precedent. Authority: Andre, Fowler.
 METRICS_VERSION: Final = "3"
 
 LEAD_SENTENCES: Final = 3
@@ -320,6 +328,36 @@ def restates_summary(key_point: str, summary: str) -> float:
     point_grams = _ngrams(point_tokens)
     summary_grams = _ngrams(_normalise(words(summary)))
     return len(point_grams & summary_grams) / len(point_grams)
+
+
+def new_fact_rate(key_points: Sequence[str], summary: str, *, ceiling: float) -> float:
+    """Share of the key points that add a fact the summary does not already carry.
+
+    The aggregate inverse of `restates_summary`, and the instrument for whether a
+    prompt that decodes key points before the prose is finding facts or only
+    paraphrasing what it just wrote. A key point adds a fact when its restatement
+    measure is at or below `ceiling` - the same distinctness floor `to_summary`
+    drops a key point on, so a key point that counts here is exactly one the drop
+    keeps, and the two can never disagree about a single line.
+
+    A rate over no key points is not a rate, so it reads 0.0: a reply that carried
+    no key point added no fact, and 0.0 is the safe direction for a number nothing
+    acts on.
+
+    This is the LEXICAL new-fact rate, and it can be fooled the way every n-gram
+    measure in this file can: a key point that states the summary's own fact in
+    fresh words scores as new. The two-call planner unlocks the honest version - a
+    key point whose span-anchored element ids are all already cited by the summary
+    is a restatement by construction, with no lexical false positive (the element
+    table, plan 08). Until that ships this is the baseline, and it is read and never
+    acted on: best-of-N against it optimises key points for lexical difference from
+    the summary, which is the Goodhart form of this exact number and stops the
+    instrument detecting the thing it was built for.
+    """
+    if not key_points:
+        return 0.0
+    adds_a_fact = sum(1 for point in key_points if restates_summary(point, summary) <= ceiling)
+    return adds_a_fact / len(key_points)
 
 
 def _checkable_numbers(text: str) -> set[str]:

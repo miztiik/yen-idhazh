@@ -300,6 +300,57 @@ Until 2026-08-29 that same comparison also set `truncation_flagged`. It no
 longer does. One column answers one question, and a brief the model copied is a
 fact `verbatim_run` and `extractiveness` already carry.
 
+## How often a key point adds a fact
+
+Rows 1 to 3 reordered the key-point decode, moved the count onto the length band,
+and dropped a key point that only restated the summary rather than failing the
+item. **New-fact rate is the instrument that says whether any of it worked**: the
+share of a summary's key points that state a fact the summary prose does not
+already carry.
+
+It is the aggregate inverse of `restates_summary`, read at the same distinctness
+ceiling `to_summary` drops a key point on (`summarize.key_point_restatement_ceiling`,
+0.5). A key point that counts here is exactly one the drop keeps, so the recorded
+number and the published item can never disagree about a single line.
+
+**It is reported per length band, never pooled into one figure.** The shortest
+band asks for one key point and the longest for five, so a note has little to add
+on top of a 40-word summary of a 60-word post and its rate is expected low -
+redundancy is structural there, not a prompt defect. Pooling the note's band with
+the feature's band would hide the very thing the split exists to show. The console
+at `/console/model/` draws one figure a band, over the same window the panels
+beside it name.
+
+**The baseline is 11 of 89 key points, 12.4 percent** (section 10.5 of the
+visual-planner disposition), measured over the committed corpus before Rows 1 to 3
+took effect. It is a baseline, not a result: the number a later run has to beat,
+recomputed from the committed key points and summaries whenever it is quoted
+(Rule #10). The per-band figure the console draws is a mean of per-item shares
+within a band, which is not the pooled key-point rate the baseline quotes; the two
+are named apart because a band homogenises item length but does not erase it.
+
+**Nothing acts on it, and that is a standing rule, not a passing convenience.**
+Best-of-N against this rate produces key points optimised for lexical difference
+from the summary, which is the Goodhart form of this exact metric - the alarm then
+stops detecting the thing it was built for. No band reads it, no card sets a tint
+from it, and it is never a selection input. It sits with `self_repetition` and the
+two densities: measured on every summary, acted on by none.
+
+**This is the lexical reading, and a better one is coming.** A key point that
+states the summary's own fact in fresh words scores as new here, because the
+measure is four-gram overlap. The element table (plan 08) unlocks the honest
+version: a key point whose span-anchored element ids are all already cited by the
+summary is a restatement by construction, with no lexical false positive. Until
+that ships this is the baseline, and `metrics.py` says so in the function's own
+docstring.
+
+**`METRICS_VERSION` did not move for it.** The constant folds into `scorer_version`,
+and this page requires ten distinct run-days at one `scorer_version` before any
+threshold moves. A column no band and no derived column reads changes nothing a
+row written under `metrics-3` says, so bumping would spend a banked run-day to
+record a fact about nothing. `self_repetition` and `compression` are the
+precedent. Authority: Andre, Fowler.
+
 ## The cut flag says the article was cut
 
 `truncation_flagged` is `Article.truncated`: extract found the body longer than

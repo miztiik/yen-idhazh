@@ -26,7 +26,7 @@
  */
 
 import type { DayReadout } from '../charts/frame';
-import { grouped } from '../charts/series';
+import { bandFor, grouped, type SummaryBand } from '../charts/series';
 import type { StackSeries } from '../charts/stacked';
 import { dayMonth } from '../format';
 
@@ -53,7 +53,12 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 	{ id: 'lead-coverage', title: 'How much of the opening survived', route: '/console/model/' },
 	{ id: 'recorded-only', title: 'Measured, and nothing acts on it', route: '/console/model/' },
 	{ id: 'summary-length', title: 'How long the summaries came out', route: '/console/model/' },
-	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
+	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' },
+	{
+		id: 'new-fact-rate',
+		title: 'How often a key point says something new',
+		route: '/console/model/'
+	}
 ];
 
 /** Which panel answers for which ledger column.
@@ -86,7 +91,8 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 	summary_word_count: 'summary-length',
 	source_word_count: 'summary-length',
 	source_seen_word_count: 'summary-length',
-	score_ms: 'score-cost'
+	score_ms: 'score-cost',
+	new_fact_rate: 'new-fact-rate'
 };
 
 /** Every remaining column, and why no panel owes it a number.
@@ -354,6 +360,115 @@ export function evalWithin(
 	span: { start: string; end: string }
 ): EvalDay[] {
 	return days.filter((day) => day.date >= span.start && day.date <= span.end);
+}
+
+// --- How often a key point adds a fact, by length band ----------------------
+//
+// `new_fact_rate` is a per-item share on the eval row, recorded and acted on by
+// nothing (the standing trap: best-of-N against it is the Goodhart form of the
+// number). It is bucketed by the SummaryBand the article fell in, because the
+// shortest band asks for one key point and the longest for five, so redundancy
+// is structural at the short end and one pooled figure would hide it. `bandFor`
+// reads the same length ladder the summarizer wrote the item under.
+//
+// The item count and the summed rate ride per day, never the rate itself: a rate
+// averaged across days is meaningless, so the window sums the parts and divides
+// once. One small object a day over five bands, so a wider window filters this
+// array and re-aggregates nothing - the same shape `evalDays` keeps.
+
+export interface NewFactDay {
+	date: string;
+	byBand: Readonly<Record<string, { items: number; sum: number }>>;
+}
+
+export function newFactDays(
+	rows: readonly EvalInput[],
+	bands: readonly SummaryBand[]
+): NewFactDay[] {
+	const byDate = new Map<string, EvalInput[]>();
+	for (const row of rows) {
+		const date = (row.date ?? '').trim();
+		if (date === '') continue;
+		const found = byDate.get(date);
+		if (found) found.push(row);
+		else byDate.set(date, [row]);
+	}
+
+	const days: NewFactDay[] = [];
+	for (const date of [...byDate.keys()].sort()) {
+		const byBand: Record<string, { items: number; sum: number }> = {};
+		for (const row of byDate.get(date) ?? []) {
+			const rate = measured(row.new_fact_rate);
+			if (rate === null) continue;
+			// The length the band was chosen on, pre-cap where the row still knows it,
+			// falling back to what the model saw - the same order `band_source_words`
+			// reads on the producing side.
+			const words = measured(row.source_word_count) ?? measured(row.source_seen_word_count);
+			if (words === null) continue;
+			const band = bandFor(bands, words);
+			if (band === null) continue;
+			const key = String(band.min_source_words);
+			const bucket = byBand[key] ?? { items: 0, sum: 0 };
+			bucket.items += 1;
+			bucket.sum += rate;
+			byBand[key] = bucket;
+		}
+		days.push({ date, byBand });
+	}
+	return days;
+}
+
+export function newFactWithin(
+	days: readonly NewFactDay[],
+	span: { start: string; end: string }
+): NewFactDay[] {
+	return days.filter((day) => day.date >= span.start && day.date <= span.end);
+}
+
+/** One band's reading over a window: the typical item's share of key points that
+ * add a fact, and how many items that is out of. */
+export interface NewFactReading {
+	/** The band's floor word count as a string - the stable key across days. */
+	key: string;
+	/** The length range a reader sees, e.g. "700-1,999 words". */
+	label: string;
+	/** Items in the window that fell in this band and carried a rate. */
+	items: number;
+	/** The average of those items' shares, whole percent, or null where the band
+	 * held no item in the window. */
+	rate: number | null;
+}
+
+export function newFactBands(
+	days: readonly NewFactDay[],
+	bands: readonly SummaryBand[]
+): NewFactReading[] {
+	const totals = new Map<string, { items: number; sum: number }>();
+	for (const day of days) {
+		for (const [key, bucket] of Object.entries(day.byBand)) {
+			const running = totals.get(key) ?? { items: 0, sum: 0 };
+			running.items += bucket.items;
+			running.sum += bucket.sum;
+			totals.set(key, running);
+		}
+	}
+
+	const sorted = [...bands].sort((a, b) => a.min_source_words - b.min_source_words);
+	return sorted.map((band, index) => {
+		const key = String(band.min_source_words);
+		const next = sorted[index + 1];
+		const label =
+			next === undefined
+				? `${grouped(band.min_source_words)}+ words`
+				: `${grouped(band.min_source_words)}-${grouped(next.min_source_words - 1)} words`;
+		const running = totals.get(key);
+		return {
+			key,
+			label,
+			items: running?.items ?? 0,
+			rate: running && running.items > 0 ? pct(running.sum / running.items) : null
+		};
+	});
 }
 
 /** The days that carry a faithfulness reading, which is what the plot draws. */
