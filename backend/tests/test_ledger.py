@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import tracemalloc
 from pathlib import Path
 
 import pytest
@@ -152,6 +153,71 @@ def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: 
 
     assert len(rows) == 2, "the append path does not deduplicate"
     assert ledger.load_published(state) == {URL_KEY: DATE}, "the read keeps the earliest date"
+
+
+def _published_fixture(state: Path, *, rows: int, keys: int) -> dict[str, str]:
+    """`rows` records over `keys` distinct addresses. Returns what the read owes."""
+    state.mkdir(parents=True, exist_ok=True)
+    expected: dict[str, str] = {}
+    with ledger.published_path(state).open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
+        out.writeheader()
+        for number in range(rows):
+            key = derive_url_key(f"https://example.org/items/{number % keys}")
+            on = f"2026-{8 + number % 4:02d}-0{1 + number % 9}"
+            out.writerow(
+                {
+                    "version": PublishedRow.schema_version(),
+                    "url_key": key,
+                    "published_on": on,
+                    "item_id": f"ai-{number:06d}",
+                }
+            )
+            if key not in expected or on < expected[key]:
+                expected[key] = on
+    return expected
+
+
+def _peak_of_load_published(state: Path) -> tuple[dict[str, str], int]:
+    tracemalloc.start()
+    try:
+        published = ledger.load_published(state)
+        return published, tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
+def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> None:
+    """The one unwindowed read over the one ledger with no time bound streams.
+
+    `state/published.csv` is the only ledger here whose read carries no window,
+    so it was the only one whose peak was the whole file. Measured 2026-09-07 on
+    an Intel Core i7-1265U over the committed 7,243 rows, the materialising read
+    peaked at 500.9 B a row against a stored row of 106.9 B - 3.63 MB then, and
+    265 MB at the third year of the measured 483 rows a day.
+
+    A threshold in bytes a row would pass for the wrong reason, because what a
+    reduction legitimately keeps is its mapping. So the property is asserted
+    directly: hold the answer still, double the file, and the peak must not
+    follow. Both populations are built and fixed, so this costs the same on the
+    day the archive holds ten times either (Rule #12, section 13).
+    """
+    keys = 20_000
+    small = tmp_path / "small"
+    large = tmp_path / "large"
+    expected_small = _published_fixture(small, rows=keys * 2, keys=keys)
+    expected_large = _published_fixture(large, rows=keys * 4, keys=keys)
+
+    published_small, peak_small = _peak_of_load_published(small)
+    published_large, peak_large = _peak_of_load_published(large)
+
+    assert published_small == expected_small, "the reduction must keep the earliest date"
+    assert published_large == expected_large
+    assert len(published_large) == keys, "the fixture has to hold repeats or it proves nothing"
+    assert peak_large < peak_small * 1.1, (
+        f"twice the rows over the same addresses moved peak from {peak_small} B to "
+        f"{peak_large} B, so the read is still holding the file rather than the answer"
+    )
 
 
 def carried_row(
