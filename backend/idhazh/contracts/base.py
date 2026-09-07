@@ -288,6 +288,12 @@ class Contract(Model):
         Use this wherever a payload one job wrote is read back by another. A
         config file or a committed ledger read at the start of a run cannot
         straddle a contract change, and `from_json` stays the right call there.
+
+        Cover: one payload. Unbounded because there is nothing to bound - this
+        reads a single file, never a collection, so the cost follows the payload
+        and not the archive. A partial read is not the cheaper answer either: a
+        validator cannot pass what it has not read, and half a payload validated
+        is a payload reported good on the half that happened to be first.
         """
         text = path.read_text(encoding="utf-8")
         try:
