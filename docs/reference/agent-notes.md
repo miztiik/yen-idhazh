@@ -2842,6 +2842,21 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   `gh api repos/OWNER/REPO/actions/runs/<id>/jobs`. That measurement is free and
   it is the only one that describes what ships.
 
+## A new backend test module fails CI unless a mark or `UNMARKED_MODULES` names it
+
+A test module under `backend/tests/` fails the `gates` CI job unless it carries a
+registered `pytestmark` or is named in `UNMARKED_MODULES` in
+`backend/tests/test_marks.py`. The registered marks are `contract`, `visual`,
+`slow` and `workflow` (`pyproject.toml`, run under `--strict-markers`) - **there
+is no `unit` mark**, so a plain unit-test module matches none of them and must be
+listed in `UNMARKED_MODULES`. The trap is that `test_marks.py` is in no focused
+selection: `pytest backend/tests/test_yourfile.py` does not run it, and neither
+does the frontend `test:changed` selector, so a new module is green on your box
+and red on the first CI run - and the failure names `test_marks.py`, not your
+file. Add the module to `UNMARKED_MODULES`, or give it a mark, in the same commit
+that creates it. Cost one CI round each on two separate plans: `test_rank.py`
+(2026-09-06) and `test_prompt_loop.py` (2026-09-07).
+
 ## See also
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands these traps interfere with.
