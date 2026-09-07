@@ -50,11 +50,11 @@ from idhazh.contracts.app_config import (
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract, StalePayloadError
-from idhazh.contracts.day_facts import (
+from idhazh.contracts.day_metrics import (
     DayBands,
     DayDistribution,
-    DayFacts,
     DayInstrument,
+    DayMetrics,
     DayReasons,
     DaySource,
     DayStageTiming,
@@ -179,10 +179,10 @@ def test_every_contract_has_at_least_one_fixture() -> None:
 # Andre's additive/non-additive split read back the way a later reducer needs.
 
 
-def _day_facts_sample() -> DayFacts:
+def _day_metrics_sample() -> DayMetrics:
     """One coherent published day, built to satisfy every cross-field invariant."""
-    return DayFacts(
-        version=DayFacts.schema_version(),
+    return DayMetrics(
+        version=DayMetrics.schema_version(),
         date="2026-08-24",
         revision=5,
         runs=5,
@@ -242,11 +242,11 @@ def _day_facts_sample() -> DayFacts:
     )
 
 
-def test_day_facts_round_trips_and_a_built_record_reads_back_identically() -> None:
+def test_day_metrics_round_trips_and_a_built_record_reads_back_identically() -> None:
     """A record the producer will write validates, and an additive count and a
     non-additive statistic both read back unchanged (Andre's split)."""
-    once = _day_facts_sample().to_json()
-    reloaded = DayFacts.from_json(once)
+    once = _day_metrics_sample().to_json()
+    reloaded = DayMetrics.from_json(once)
     assert reloaded.to_json() == once
     # Additive: stored as the number a reader adds across days.
     assert reloaded.items_published == 6
@@ -260,18 +260,18 @@ def test_day_facts_round_trips_and_a_built_record_reads_back_identically() -> No
     assert reloaded.revision == 5
 
 
-def test_day_facts_keeps_an_empty_aggregate_apart_from_a_zero_one() -> None:
+def test_day_metrics_keeps_an_empty_aggregate_apart_from_a_zero_one() -> None:
     """A timed-nothing stage and an empty instrument keep their absent figures;
     empty is not zero (the all-or-nothing validators), so a reducer never reads a
     missing median as a real 0."""
-    reloaded = DayFacts.from_json(_day_facts_sample().to_json())
+    reloaded = DayMetrics.from_json(_day_metrics_sample().to_json())
     plan = next(stage for stage in reloaded.stage_timing if stage.stage == ItemStage.PLAN)
     assert plan.timed == 0 and plan.sum_ms is None and plan.p50_ms is None
     empty = next(item for item in reloaded.instruments if item.column == "new_fact_rate")
     assert empty.stat.count == 0 and empty.stat.total == 0.0 and empty.stat.p50 is None
 
 
-def test_day_facts_bands_and_reasons_mirror_the_eval_vocabulary() -> None:
+def test_day_metrics_bands_and_reasons_mirror_the_eval_vocabulary() -> None:
     """The day's partitions only hold if its buckets are the eval bands and
     reasons themselves. Coupling them here turns a new band or reason added to
     EvalRow red, rather than letting a doubted item go uncounted."""

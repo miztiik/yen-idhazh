@@ -360,7 +360,7 @@
       "type": "string"
     }
   },
-  "$id": "day-facts.schema.json",
+  "$id": "day-metrics.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
@@ -536,7 +536,7 @@
     "bands",
     "reasons"
   ],
-  "title": "DayFacts",
+  "title": "DayMetrics",
   "type": "object",
   "version": "2026-09-07"
 }

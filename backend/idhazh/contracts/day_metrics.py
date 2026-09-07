@@ -1,7 +1,10 @@
 """What a run wrote once about one published day, for the console to read back.
 
-One file per published day, at `state/day-facts/<YYYY-MM-DD>.json`, rewritten
-when that day is corrected. It is never a running total: a total needs a
+One file per published day, at `state/day-metrics/<YYYY>/<MM>/<DD>.json`,
+rewritten when that day is corrected. The path nests by year and month to mirror
+the published digest-day layout (`frontend/public/digest/<YYYY>/<MM>/<DD>/`), so
+one month's folder holds about 31 files rather than one directory that grows
+with every published day. It is never a running total: a total needs a
 decrement path for every correction, and a missed decrement is silent and
 permanent (owner, 2026-09-06). So this record is always the whole truth about
 the day as of the run that wrote it, and a later correction rewrites it whole.
@@ -254,10 +257,10 @@ class DaySource(Model):
         return self
 
 
-class DayFacts(Contract):
+class DayMetrics(Contract):
     """Everything a run settled about one published day, for a later reducer to read."""
 
-    __schema_stem__: ClassVar[str] = "day-facts"
+    __schema_stem__: ClassVar[str] = "day-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-07",
