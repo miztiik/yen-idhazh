@@ -44,7 +44,7 @@ from idhazh.assemble import (
     to_digest_visual,
     write_atomic,
 )
-from idhazh.contracts.app_config import EvaluationConfig, ModelRef
+from idhazh.contracts.app_config import EvaluationConfig, ModelRef, SummarizeConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
@@ -967,6 +967,13 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         hedge_dropped=measured.hedge_dropped,
         evidential_density=_EVIDENTIAL_DENSITY,
         speculative_density=_SPECULATIVE_DENSITY,
+        # Computed from the fixture's own key points and summary, so the console's
+        # new-fact panel draws a real per-band figure rather than an empty state.
+        new_fact_rate=metrics.new_fact_rate(
+            item.key_points,
+            item.summary,
+            ceiling=SummarizeConfig().key_point_restatement_ceiling,
+        ),
         extraction_suspect=False,
         band=item.band,
         source_word_count=measured.source_words if measured.full_length_known else None,
