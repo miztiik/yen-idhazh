@@ -45,6 +45,7 @@ from idhazh import (
     extract,
     fetch,
     ledger,
+    publish_day_metrics,
     publish_source_health,
     publish_telemetry,
     rank,
@@ -3128,6 +3129,16 @@ def stage_assemble(
         state_root=STATE_ROOT,
         path=PUBLIC_ROOT.parent / publish_source_health.PUBLIC_FILENAME,
     )
+    # Written last, and from the ledgers this stage has already appended rather
+    # than from anything in memory: the record is a projection of the committed
+    # day, so a correction reads the whole day across every run. One writer at
+    # the publication step, never a second stage (Fowler).
+    publish_day_metrics.publish(
+        state_root=STATE_ROOT,
+        date=plan.date,
+        day=day,
+        manifest=manifest,
+    )
     yield_alarm = publish_source_health.yield_alarm(
         source_health,
         alarm_point=settings.app.collect.source_yield_alarm_point,
@@ -3141,7 +3152,7 @@ def stage_assemble(
         LOG.warning("%s", yield_alarm)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
-        "new_fingerprints=%s search_index=%s/%s",
+        "new_fingerprints=%s search_index=%s/%s day_metrics=%s",
         plan.date,
         len(day.items),
         day.partial,
@@ -3151,6 +3162,7 @@ def stage_assemble(
         [row.pipeline_fingerprint[:12] for row in stamps],
         len(index.entries),
         index.vector_bytes // index.dimensions,
+        publish_day_metrics.day_metrics_relpath(plan.date),
     )
     return day
 
