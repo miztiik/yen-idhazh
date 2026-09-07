@@ -183,7 +183,9 @@ def test_publish_telemetry_carries_the_stage_timings_and_the_token_counts(tmp_pa
     _write_item_health(
         state,
         [
-            _row(prefill_ms=180, decode_ms=420, input_tokens=1500, output_tokens=90, cached_tokens=0),
+            _row(
+                prefill_ms=180, decode_ms=420, input_tokens=1500, output_tokens=90, cached_tokens=0
+            ),
             _row(item_id="ai-02", fetch_ms=None, extract_ms=None, summarize_ms=None),
         ],
     )
@@ -197,7 +199,9 @@ def test_publish_telemetry_carries_the_stage_timings_and_the_token_counts(tmp_pa
     timings = ("fetch_ms", "extract_ms", "summarize_ms", "prefill_ms", "decode_ms")
     tokens = ("input_tokens", "output_tokens", "cached_tokens")
     assert set(timings + tokens) <= set(header)
-    assert header[-len(timings + tokens) :] == timings + tokens, "appended at the end, never inserted"
+    assert header[-len(timings + tokens) :] == timings + tokens, (
+        "appended at the end, never inserted"
+    )
     assert not (FORBIDDEN_COLUMNS & set(projected[0]))
     assert [projected[0][name] for name in timings] == ["100", "20", "600", "180", "420"]
     assert [projected[0][name] for name in tokens] == ["1500", "90", "0"]
@@ -293,3 +297,81 @@ def test_a_published_failure_without_a_reason_is_refused() -> None:
                 "source_words_before_cap": "",
             }
         )
+
+
+def _month_shard(state: Path, month: str, rows: list[ItemHealthRow]) -> None:
+    path = state / "item-health" / f"{month}.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=ItemHealthRow.csv_columns(), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(row.csv_row() for row in rows)
+
+
+def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path) -> None:
+    """Nothing appends to a past month, so re-reading it produces the same bytes.
+
+    Measured 2026-09-07 on an Intel Core i7-1265U over the committed ledger: 342
+    ms per month, and at the 14-month retention cap thirteen of the fourteen
+    months rewritten every run cannot have changed.
+
+    The check is that the file was not touched at all, not that its bytes match.
+    Identical bytes are what the old code produced too, so a byte assertion
+    would pass whether or not the read was skipped.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    _month_shard(state, "2026-08", [_row()])
+    _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
+
+    publish(state_root=state, public_root=public)
+    august = public / "2026-08.csv"
+    before = august.stat().st_mtime_ns
+    august_bytes = august.read_bytes()
+
+    written = publish(state_root=state, public_root=public, months={"2026-09"})
+
+    assert [path.name for path in written] == ["2026-09.csv"]
+    assert august.stat().st_mtime_ns == before, "a frozen month was rewritten"
+    assert august.read_bytes() == august_bytes
+
+
+def test_a_month_that_was_never_published_is_written_whatever_was_asked_for(
+    tmp_path: Path,
+) -> None:
+    """The skip is an optimisation, so a missing shard overrides it.
+
+    A fresh clone, a deleted file and a month the run did not touch all land
+    here. Without this the projection would be permanently short of a month that
+    no later run ever names again.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    _month_shard(state, "2026-08", [_row()])
+    _month_shard(state, "2026-09", [_row(date="2026-09-02", run_id="2026-09-02-1")])
+
+    written = publish(state_root=state, public_root=public, months={"2026-09"})
+
+    assert [path.name for path in written] == ["2026-08.csv", "2026-09.csv"]
+    assert (public / "2026-08.csv").exists()
+
+
+def test_seeding_an_empty_month_never_blanks_a_shard_that_holds_rows(tmp_path: Path) -> None:
+    """`ensure_month` writes an empty shard; it must not empty a full one.
+
+    Before the month filter every shard was rebuilt, so `ensure_month` could
+    only fire for a month with no file. A skipped month is now absent from the
+    returned list while its file is on disk, and blanking it would delete
+    published telemetry the source can no longer re-derive.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    _month_shard(state, "2026-08", [_row()])
+
+    publish(state_root=state, public_root=public)
+    full = (public / "2026-08.csv").read_text(encoding="utf-8")
+    assert full.count("\n") == 2, "the fixture month should hold one row"
+
+    publish(state_root=state, public_root=public, months={"2026-09"}, ensure_month="2026-08")
+
+    assert (public / "2026-08.csv").read_text(encoding="utf-8") == full
