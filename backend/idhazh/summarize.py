@@ -97,9 +97,11 @@ class SummaryDraft(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # Field order is decode order: key points before the summary, so the model
+    # finds the facts first and then writes prose that connects them.
     title: str = Field(min_length=1)
-    summary: str = Field(min_length=1)
     key_points: list[str] = Field(min_length=1)
+    summary: str = Field(min_length=1)
 
 
 @lru_cache(maxsize=1)
@@ -120,8 +122,8 @@ def _draft_model(
         "SummaryDraft",
         __base__=SummaryDraft,
         title=(str, Field(min_length=1, max_length=title_max_chars)),
-        summary=(str, Field(min_length=min_chars, max_length=max_chars)),
         key_points=(list[str], Field(min_length=key_points_min, max_length=key_points_max)),
+        summary=(str, Field(min_length=min_chars, max_length=max_chars)),
     )
 
 

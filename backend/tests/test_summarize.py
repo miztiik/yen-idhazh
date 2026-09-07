@@ -417,6 +417,20 @@ def test_the_prompt_and_the_decoder_count_key_points_the_same_way() -> None:
     assert "3 to 4 key points" in system_prompt(asked)
 
 
+def test_the_key_points_decode_before_the_summary() -> None:
+    """The model finds the facts before it writes the prose that connects them.
+
+    Grammar-constrained decoding emits the properties in schema order, so this
+    order is what the model produces: the key points first, then a summary
+    written after them. Nothing else pins it - llama.cpp's order-preserving
+    grammar is not a guarantee this project may assume - so the order is
+    asserted rather than trusted.
+    """
+    order = list(output_schema()["properties"])
+    assert order.index("key_points") < order.index("summary"), order
+    assert order == ["title", "key_points", "summary"]
+
+
 def test_the_decoder_rail_never_catches_a_summary_the_word_gate_would_pass() -> None:
     """A publishable summary fails on "words" if it fails at all, never on shape.
 
