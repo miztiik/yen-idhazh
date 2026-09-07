@@ -41,6 +41,7 @@ from idhazh.evals.metrics import (
     extractiveness,
     hedge_dropped,
     lead_coverage,
+    new_fact_rate,
     restates_summary,
     scorer_version,
     self_repetition,
@@ -360,6 +361,46 @@ def test_restatement_stays_inside_the_zero_to_one_bound() -> None:
         assert 0.0 <= restates_summary(point, _KP_SUMMARY) <= 1.0
 
 
+# --- How often a key point adds a fact ---------------------------------------
+#
+# `new_fact_rate` is the aggregate inverse of `restates_summary`, read at the
+# ceiling `to_summary`'s drop uses, so a key point that counts here is exactly
+# one the drop keeps. Recorded and never acted on - it is the instrument for
+# whether the reordered key-point prompt found facts, not an input to any band.
+
+_KP_LIFTED = "The bank held its policy rate at four percent"
+_KP_DISTINCT = "The rate has not moved since the bank last met in July."
+
+
+def test_every_key_point_restating_the_summary_adds_nothing() -> None:
+    assert new_fact_rate([_KP_LIFTED, _KP_LIFTED], _KP_SUMMARY, ceiling=0.5) == 0.0
+
+
+def test_every_key_point_stating_a_new_fact_adds_one_each() -> None:
+    assert new_fact_rate([_KP_DISTINCT, _KP_DISTINCT], _KP_SUMMARY, ceiling=0.5) == 1.0
+
+
+def test_a_mixed_reply_reports_the_share_that_added() -> None:
+    assert new_fact_rate([_KP_LIFTED, _KP_DISTINCT], _KP_SUMMARY, ceiling=0.5) == 0.5
+
+
+def test_a_reply_with_no_key_points_added_no_fact() -> None:
+    assert new_fact_rate([], _KP_SUMMARY, ceiling=0.5) == 0.0
+
+
+def test_the_new_fact_rate_stays_inside_the_zero_to_one_bound() -> None:
+    for points in ([], [_KP_LIFTED], [_KP_DISTINCT], [_KP_LIFTED, _KP_DISTINCT]):
+        assert 0.0 <= new_fact_rate(points, _KP_SUMMARY, ceiling=0.5) <= 1.0
+
+
+def test_a_key_point_counts_here_exactly_when_the_drop_would_keep_it() -> None:
+    """One ceiling, read by the metric and by the drop, so they never disagree."""
+    ceiling = 0.5
+    points = [_KP_LIFTED, _KP_DISTINCT]
+    kept = sum(1 for point in points if restates_summary(point, _KP_SUMMARY) <= ceiling)
+    assert new_fact_rate(points, _KP_SUMMARY, ceiling=ceiling) == kept / len(points)
+
+
 def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -> None:
     """The wiring, and the one metric this suite cannot compute itself.
 
@@ -404,6 +445,49 @@ def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -
     assert control.self_repetition == 0.0
     assert looped.self_repetition is not None
     assert looped.self_repetition > 0.0
+
+
+def test_the_row_carries_the_new_fact_rate_of_the_summarys_key_points() -> None:
+    """The wiring, not the metric: a scored row reports the share of its own key
+    points that add a fact, read at the ceiling the drop uses (0.5 by default)."""
+    item = RunPlan.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
+    ).items[0]
+    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    written = Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
+
+    row = to_eval_row(
+        item=item,
+        article=article,
+        summary=written,
+        full_text=ARTICLE,
+        premise=ARTICLE,
+        hhem=0.91,
+        hhem_full=0.89,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+
+    assert written.key_points, "the summary fixture must carry key points to measure"
+    assert row.new_fact_rate == new_fact_rate(
+        written.key_points, written.summary or "", ceiling=0.5
+    )
+
+
+def test_an_eval_row_written_before_the_new_fact_rate_column_still_loads() -> None:
+    """Nullable, so a row already in the ledger is not a release blocker (section 11).
+
+    The pre-change shape is a committed row with the key removed, which is what
+    every row in `state/scores/` carried before the migration. Null is the honest
+    value: 0.0 would claim a scored reply whose every key point restated.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
+    del payload["new_fact_rate"]
+
+    assert EvalRow.model_validate(payload).new_fact_rate is None
 
 
 def test_an_eval_row_written_before_this_column_still_loads() -> None:

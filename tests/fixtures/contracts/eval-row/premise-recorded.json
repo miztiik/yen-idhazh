@@ -14,6 +14,7 @@
   "hhem_full": 0.89,
   "item_id": "ai-01",
   "model_id": "qwen3-8b-q4-k-m",
+  "new_fact_rate": null,
   "output_digest": "3469c80fe6cf09abdc1ad5e9dca09031d233386da57930506138f7f5318e98bf",
   "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
   "run_id": "2026-08-27-1",
