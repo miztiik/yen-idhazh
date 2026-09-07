@@ -204,7 +204,7 @@ def test_the_committed_fixture_is_what_the_harvest_really_writes(settings: AppCo
 def test_the_assistant_turn_is_spelled_in_decode_order(settings: AppConfig) -> None:
     """Field order is decode order under a grammar.
 
-    `canonical_json` sorts keys, which would put `key_points` first and teach a
+    `canonical_json` sorts keys, which would put `title` last and teach a
     sequence the constrained decoder is not allowed to emit. So the target is
     dumped in the model's own field order, and this is the assertion that keeps
     it there.
@@ -212,7 +212,7 @@ def test_the_assistant_turn_is_spelled_in_decode_order(settings: AppConfig) -> N
     row = CorpusRow.from_json(contract_fixture("corpus-row", "harvested"))
     target = json.loads(row.assistant)
 
-    assert list(target) == ["title", "summary", "key_points"]
+    assert list(target) == ["title", "key_points", "summary"]
 
 
 # --- Config ----------------------------------------------------------------
