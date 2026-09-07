@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { shortDate } from '../src/lib/format';
+import { daysBetween } from '../src/lib/charts/viewport';
 
 /**
  * The throughput trend, held to the contract the timing trend above it holds.
@@ -27,10 +28,16 @@ import { shortDate } from '../src/lib/format';
 
 const APPEARANCE = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
-) as { chart: { tick_density: number; readout_max_share: number } };
+) as {
+	chart: { tick_density: number; readout_max_share: number };
+	console: { window_presets: number[] };
+};
 
 const TICK_DENSITY = APPEARANCE.chart.tick_density;
 const READOUT_MAX_SHARE = APPEARANCE.chart.readout_max_share;
+/** The presets the one window control offers, read from the file that sets them
+ * rather than written down here where an edit could drift them apart. */
+const PRESETS = APPEARANCE.console.window_presets;
 
 const PLOT = '[data-throughput="chart"] svg';
 
@@ -65,6 +72,56 @@ async function box(page: Page, selector: string) {
 	expect(found, `${selector} has no box`).not.toBeNull();
 	return found as { x: number; y: number; width: number; height: number };
 }
+
+/** Drive the one window control the page carries to a preset, and wait for the
+ * page to agree it moved. The control is inert in the prerendered document, so
+ * this also stands in for waiting on hydration. */
+async function setWindow(page: Page, days: number) {
+	await page.locator(`[data-window-preset="${days}"]`).click();
+	await expect(page.locator('[data-window-control]')).toHaveAttribute(
+		'data-window-days',
+		String(days)
+	);
+}
+
+test('the chart draws the selected window, not the whole published history', async ({ page }) => {
+	await page.goto('/console/model/');
+	// Inert until the page has hydrated, so waiting for it is waiting for the
+	// control to be able to move the chart at all.
+	await expect(page.locator(`[data-window-preset="${PRESETS[0]}"] input`)).toBeEnabled();
+
+	const widest = Math.max(...PRESETS);
+	const narrowest = Math.min(...PRESETS);
+	expect(widest, 'a control with one preset cannot narrow anything').toBeGreaterThan(narrowest);
+
+	await setWindow(page, widest);
+	const wide = await axisDays(page);
+	expect(
+		wide.days,
+		'the widest window drew one column or none, so there is nothing to narrow'
+	).toBeGreaterThan(1);
+	// The axis is a full calendar over its own range, so an empty day inside the
+	// window is a column and not a bridge across the gap. Filtering the array to
+	// the window left that behaviour with the component, which still expands its
+	// own range - this is the second oracle for this row.
+	expect(wide.days).toBe(daysBetween(wide.first, wide.last));
+
+	await setWindow(page, narrowest);
+	await expect(page.locator(PLOT)).toBeVisible();
+	const narrow = await axisDays(page);
+
+	// The row's whole point. Before this change the chart read `data.throughputDays`
+	// straight and drew the same span at every preset; now it draws only the days
+	// inside the chosen window, so the narrowest window draws strictly fewer.
+	expect(narrow.days, 'the chart ignored the window and drew the whole history').toBeLessThan(
+		wide.days
+	);
+	// It kept the newest day, the one the narrow window ends on, and dropped the
+	// older day the window excludes.
+	expect(narrow.last).toBe(wide.last);
+	// Still a full calendar over its own, narrower, range.
+	expect(narrow.days).toBe(daysBetween(narrow.first, narrow.last));
+});
 
 test('the axis names a day per column, thinned to the density knob', async ({ page }) => {
 	await page.goto('/console/model/');

@@ -454,6 +454,16 @@
 		newFactBands(newFactWithin(data.newFactRate, modelSpan), data.summarizeBands)
 	);
 
+	/** The throughput candles, over the same window the cards and the eval panels
+	 * name. Each day is already one small object, so narrowing is a filter and
+	 * never a re-aggregation - the same move `evalWindow` and `reasonWindow` make
+	 * above. The chart draws only the chosen window rather than the whole
+	 * published history, and a calendar gap inside the window stays a gap because
+	 * the component still expands its own range. */
+	const throughputWindow = $derived(
+		data.throughputDays.filter((day) => day.date >= modelSpan.start && day.date <= modelSpan.end)
+	);
+
 	/** Whole seconds off a millisecond clock, and `<1 s` where a real
 	 * measurement rounds away. */
 	function asSeconds(ms: number): string {
@@ -526,7 +536,7 @@
 			     state, so a window with nothing in it says so instead of taking the
 			     heading away with it. -->
 			<ThroughputTrend
-				days={data.throughputDays}
+				days={throughputWindow}
 				height={data.console.chart_height}
 				width={data.console.chart_width}
 				reference={data.throughputReference}

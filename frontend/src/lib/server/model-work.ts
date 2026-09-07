@@ -23,7 +23,14 @@
  * written relative for the same reason.
  */
 
-import { distribution, quantile, type Distribution, type WriteBin } from '../charts/series';
+import {
+	distribution,
+	quantile,
+	type Distribution,
+	type RateSpread,
+	type ThroughputDay,
+	type WriteBin
+} from '../charts/series';
 import type { MovementPolarity } from '../charts/theme';
 import type { SummaryBand } from './config';
 
@@ -751,6 +758,101 @@ export function itemRates(row: Record<string, string>): {
 				? written / (decodeMs / 1000)
 				: null
 	};
+}
+
+/** The five-number summary a candle draws, or null for a day with no rate.
+ *
+ * Distinct from `spread` above, which answers the length panels: that one
+ * carries the range a word count needs, this one the quartiles a per-item rate
+ * needs, and nothing measures a rate in words. */
+function rateSpread(values: number[]): RateSpread | null {
+	if (values.length === 0) return null;
+	const sorted = [...values].sort((a, b) => a - b);
+	return {
+		min: sorted[0],
+		p25: quantile(sorted, 0.25),
+		median: quantile(sorted, 0.5),
+		p75: quantile(sorted, 0.75),
+		max: sorted[sorted.length - 1]
+	};
+}
+
+/** The token-rate candles, one per timed day inside the window.
+ *
+ * Bounded to the widest span the control can reach, for the same reason the
+ * doubt reasons and the eval days are: a day older than the widest preset can
+ * never be drawn, so building it would only inline a candle no window will ask
+ * for into every prerendered document. The filter is on the entries, before the
+ * reduction, so the ceiling on the shipped array is the widest preset's days
+ * whatever the archive holds, and a dropped day costs nothing to leave out.
+ *
+ * Nothing a kept day computes changes with the window. Two statistics ride each
+ * day on purpose: the candle is the spread of per-item rates, because the worker
+ * sorts short articles first and the two ends of a day drift apart; the day
+ * figure is the whole day's tokens over the whole day's milliseconds, weighted
+ * by work done, because a rate is a ratio and averaging per-item rates weighs a
+ * release note like a feature. Oldest first: the chart reads left to right.
+ */
+export function throughputWithin(
+	itemHealthByDate: Map<string, Record<string, string>[]>,
+	modelOnDate: Map<string, string>,
+	span: { start: string; end: string }
+): ThroughputDay[] {
+	return [...itemHealthByDate.entries()]
+		.filter(([date]) => date >= span.start && date <= span.end)
+		.map(([date, group]) => {
+			const reads: number[] = [];
+			const writes: number[] = [];
+			const perRun = new Map<string, { read: number[]; write: number[] }>();
+			let prefillMs = 0;
+			let decodeMs = 0;
+			let cached = 0;
+			let prompt = 0;
+			let written = 0;
+			for (const row of group) {
+				const rate = itemRates(row);
+				if (rate.read === null && rate.write === null) continue;
+				const bucket = perRun.get(row.run_id ?? '') ?? { read: [], write: [] };
+				if (rate.read !== null) {
+					reads.push(rate.read);
+					bucket.read.push(rate.read);
+				}
+				if (rate.write !== null) {
+					writes.push(rate.write);
+					bucket.write.push(rate.write);
+				}
+				perRun.set(row.run_id ?? '', bucket);
+				prefillMs += measured(row.prefill_ms) ?? 0;
+				decodeMs += measured(row.decode_ms) ?? 0;
+				cached += measured(row.cached_tokens) ?? 0;
+				prompt += measured(row.input_tokens) ?? 0;
+				written += measured(row.output_tokens) ?? 0;
+			}
+			const read = rateSpread(reads);
+			const write = rateSpread(writes);
+			if (read === null || write === null) return null;
+			const evaluated = Math.max(prompt - cached, 0);
+			return {
+				date,
+				items: Math.max(reads.length, writes.length),
+				read,
+				write,
+				readTps: prefillMs > 0 ? evaluated / (prefillMs / 1000) : 0,
+				writeTps: decodeMs > 0 ? written / (decodeMs / 1000) : 0,
+				cacheHitPct: prompt > 0 ? (cached / prompt) * 100 : 0,
+				model: modelOnDate.get(date) ?? null,
+				runs: [...perRun.entries()]
+					.map(([runId, bucket]) => ({
+						runId,
+						items: Math.max(bucket.read.length, bucket.write.length),
+						read: rateSpread(bucket.read)?.median ?? 0,
+						write: rateSpread(bucket.write)?.median ?? 0
+					}))
+					.sort((a, b) => a.runId.localeCompare(b.runId))
+			};
+		})
+		.filter((day): day is ThroughputDay => day !== null)
+		.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** The source each article came from, keyed by the article.
