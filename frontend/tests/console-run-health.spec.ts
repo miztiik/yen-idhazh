@@ -61,7 +61,7 @@ const WINDOW_PRESETS = (
 	JSON.parse(
 		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 	) as { console?: { window_presets?: number[] } }
-).console?.window_presets ?? [7, 14, 30, 90];
+).console?.window_presets ?? [1, 7, 14, 30, 90];
 
 /** Click the label, never the input: a span inside it takes the pointer. */
 async function setWindow(page: Page, days: number) {
