@@ -256,6 +256,12 @@ def read_a_renamed_key(block: str, data: Any, names: Mapping[str, str]) -> Any:
     return migrated
 
 
+#: The one sentinel a lookback window uses to say "never forget". Not 0, which
+#: reads as "look back nothing", and not a very large number, which is a cover
+#: that silently becomes finite the day the archive outgrows it.
+UNBOUNDED_WINDOW: Final = -1
+
+
 class CollectConfig(Model):
     availability_strikes_before_rest: int = Field(
         default=5,
@@ -472,6 +478,20 @@ class CollectConfig(Model):
             "committed and readable; they are just not evidence about today."
         ),
     )
+    published_window_days: int = Field(
+        default=-1,
+        description=(
+            "How far back the published record is consulted before an address is "
+            "treated as never published. -1 means never forget, and it is the only "
+            "sentinel for unbounded - not 0, not null, and not a very large number, "
+            "because a large number is a cover that silently becomes finite the day "
+            "the archive outgrows it. A finite value must be strictly longer than "
+            "seen_window_days: the two stores answer the same question from opposite "
+            "ends, and a cover that expires first hands an address to a first-sight "
+            "store that has already forgotten it. Nothing reads this yet - the knob "
+            "lands switched off and a later change wires it up."
+        ),
+    )
     blocked_url_markers: list[str] = Field(
         default_factory=list,
         description=(
@@ -515,6 +535,34 @@ class CollectConfig(Model):
     @classmethod
     def _refuse_a_removed_knob(cls, data: Any) -> Any:
         return refuse_a_removed_knob("collect", data, SUPERSEDED_COLLECT_NAMES)
+
+    @model_validator(mode="after")
+    def _the_published_window_outlives_the_first_sight_store(self) -> Self:
+        """The one mistake this knob must make impossible is a republication.
+
+        An address the published record has forgotten, whose first-sighting row
+        expires in the same week, reads as first-seen-today. It clears the
+        freshness gate and goes out as new, and nothing anywhere holds the
+        evidence that it ran before. So EQUAL IS A HOLE, NOT A BOUND: at 90 and
+        90 both stores forget the same address on the same day. Only two answers
+        are safe - never forget, or forget later than the first-sight store does.
+
+        Checked after the model rather than on the field, so it re-runs whenever
+        either number moves. Raising `seen_window_days` past a finite cover fails
+        the config instead of opening the hole quietly.
+        """
+        if self.published_window_days == UNBOUNDED_WINDOW:
+            return self
+        if self.published_window_days <= self.seen_window_days:
+            raise ValueError(
+                f"collect.published_window_days is {self.published_window_days}, which is "
+                f"not longer than collect.seen_window_days, which is {self.seen_window_days}. "
+                f"Use {UNBOUNDED_WINDOW} to never forget, or a value above "
+                f"{self.seen_window_days}. A cover that expires no later than the "
+                "first-sight store hands it an address neither one remembers, and an "
+                "undated re-listing then republishes as new."
+            )
+        return self
 
 
 class ExtractConfig(Model):
@@ -2665,6 +2713,30 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-07T03:00",
+            change=(
+                "collect.published_window_days added, defaulting to -1 for unbounded. A "
+                "finite value must be strictly greater than collect.seen_window_days; -1 "
+                "or anything above 90 is accepted today and everything else, including "
+                "90 itself, is refused by name. The check sits on CollectConfig after "
+                "validation, so raising seen_window_days past a finite cover fails the "
+                "config too. Nothing reads the knob yet. Additive and optional with a "
+                "default, so no read-side migration is needed - a config written before "
+                "the field existed takes -1 and behaves exactly as it did."
+            ),
+            why=(
+                "The published record is about to gain a lookback window, and the one "
+                "mistake that window can make is a republication: an address the record "
+                "has forgotten, whose first-sighting row expires in the same week, reads "
+                "as first-seen-today and goes out as new. Equal is a hole rather than a "
+                "bound, because at 90 and 90 both stores forget the same address on the "
+                "same day and neither is left holding the evidence. The knob ships "
+                "unbounded so the machinery lands switched off, and the schema is what "
+                "makes the unsafe pairing unspellable rather than a comment asking an "
+                "operator to be careful."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-07T02:00",
             change=(

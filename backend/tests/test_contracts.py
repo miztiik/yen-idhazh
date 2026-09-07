@@ -1137,6 +1137,58 @@ def test_the_console_falls_back_to_the_strike_count_the_pipeline_reads() -> None
         assert removed not in source, f"config.ts still reads collect.{removed}"
 
 
+def test_the_published_window_is_unbounded_or_outlives_the_first_sight_store() -> None:
+    """The Oracle for the cover setting: `-1`, or strictly longer than the seen window.
+
+    The mistake this makes impossible is a republication. An address the archive
+    has forgotten, whose first-sighting row expires in the same week, reads as
+    first-seen-today: it clears the freshness gate and goes out as new. So EQUAL
+    IS A HOLE, NOT A BOUND - at 90 and 90 the two stores forget the same address
+    on the same day and neither one is left holding the evidence. Only two
+    answers are safe: never forget, or forget later than the first-sight store
+    does.
+
+    `-1` is the only sentinel for unbounded. Not `0`, not `null`, and not a very
+    large number - a large number is a cover that silently becomes finite the
+    day the archive outgrows it, and it fails quietly at exactly the size where
+    the hole matters most.
+    """
+    fresh = CollectConfig()
+    assert fresh.published_window_days == -1, "the machinery ships unbounded"
+    assert fresh.seen_window_days == 90
+
+    for refused in (0, 89, 90):
+        with pytest.raises(ValidationError) as raised:
+            CollectConfig(published_window_days=refused)
+        message = str(raised.value)
+        assert "collect.seen_window_days, which is 90" in message, message
+
+    for accepted in (-1, 91, 120):
+        assert CollectConfig(published_window_days=accepted).published_window_days == accepted
+
+    # Cross-field, so it re-runs when the OTHER number moves. Raising the
+    # first-sight window past a finite cover must fail the config rather than
+    # open the hole quietly.
+    with pytest.raises(ValidationError) as widened:
+        CollectConfig(published_window_days=120, seen_window_days=180)
+    assert "collect.seen_window_days, which is 180" in str(widened.value)
+    assert (
+        CollectConfig(published_window_days=120, seen_window_days=119).published_window_days == 120
+    )
+
+    # A finite cover under an unbounded first-sight store is not expressible -
+    # `seen_window_days` is `ge=1` - so the only pairing left to check is the
+    # committed one, and it must ship unbounded.
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    assert raw["collect"]["published_window_days"] == -1, (
+        "the committed config must ship the cover unbounded"
+    )
+    assert (
+        AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).collect.published_window_days
+        == -1
+    )
+
+
 def test_no_configured_age_deletes_a_shard_a_366_day_read_still_selects() -> None:
     """The oracle: every end date in one 400-year Gregorian cycle.
 
