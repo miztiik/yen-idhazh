@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+import io
 from collections.abc import Collection
 from pathlib import Path
 from typing import Final
@@ -90,13 +91,34 @@ def read_shard(path: Path) -> list[PublicTelemetryRow]:
         return [PublicTelemetryRow.from_csv_row(row) for row in reader]
 
 
+def _encode(rows: list[PublicTelemetryRow]) -> bytes:
+    """The exact bytes a shard holds, so a write can be skipped when they match."""
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=PUBLIC_COLUMNS, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(row.csv_row() for row in rows)
+    return buffer.getvalue().encode("utf-8")
+
+
 def _write(path: Path, rows: list[PublicTelemetryRow]) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=PUBLIC_COLUMNS, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(row.csv_row() for row in rows)
+    path.write_bytes(_encode(rows))
     return len(rows)
+
+
+def _write_if_changed(path: Path, rows: list[PublicTelemetryRow]) -> bool:
+    """Write the shard only when its bytes would change; report whether they did.
+
+    The freeze rule binds a closed month; this binds an unchanged one. The
+    comparison is the shard's own bytes - a timestamp says when a file was
+    written, never whether its content moved.
+    """
+    payload = _encode(rows)
+    if path.exists() and path.read_bytes() == payload:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload)
+    return True
 
 
 def publish(
@@ -106,22 +128,26 @@ def publish(
     ensure_month: str | None = None,
     months: Collection[str] | None = None,
 ) -> list[Path]:
-    """Write one public telemetry shard for each item-health month.
+    """Write a public telemetry shard for each item-health month that changed.
 
-    `months` names the months to rebuild. A month outside it is skipped **only
-    when its shard already exists**, so a fresh clone, a deleted file or a month
-    never published still gets written whatever the caller asked for. `None`
-    rebuilds everything, which is what a migration and a backfill want.
+    A month is written only when its projected bytes differ from the shard
+    already on disk. The returned list is the shards this call wrote; a run that
+    re-derives every month byte-for-byte writes nothing and returns `[]`.
 
-    Why a caller names them at all: a past month is frozen. Nothing appends to
-    `state/item-health/2026-08.csv` once August is over, so re-reading 5,227
-    rows and writing back a byte-identical file is work with no output. Measured
-    2026-09-07 on an Intel Core i7-1265U over the committed ledger: 685 ms a run
-    for two months, 342 ms of it per month, spread 562-863 ms over five runs.
-    That is bounded at `observability.item_health_full_grain_months` (14) rather
-    than growing for ever, so it is waste rather than a Rule #12 breach - but at
-    the cap it is 4.8 s a run, five runs a day, and thirteen of the fourteen
-    months cannot have changed.
+    `months` names the months a caller believes changed. A month outside it is
+    skipped without being read, **unless its shard is missing** - so a fresh
+    clone, a deleted file or a month never published still lands whatever the
+    caller asked for. `None` reads every month and rebuilds the ones that
+    differ, which is what a migration and a backfill want; the daily caller
+    passes the one month it appended to, so it reads and writes that month
+    alone.
+
+    Two freezes compose. The month filter keeps a closed month from being read
+    at all; the byte comparison keeps a re-derived month from being rewritten
+    when nothing moved. The first is the freeze rule of
+    `docs/concepts/month-partitions.md`; the second is how it decides "only when
+    a correction targets it" - a correction changes the bytes, an ordinary
+    re-run does not.
     """
     source_dir = state_root / ledger.ITEM_HEALTH_DIRNAME
     public_root.mkdir(parents=True, exist_ok=True)
@@ -131,8 +157,8 @@ def publish(
             target = shard_path(public_root, source.stem)
             if months is not None and source.stem not in months and target.exists():
                 continue
-            _write(target, _read(source))
-            written.append(target)
+            if _write_if_changed(target, _read(source)):
+                written.append(target)
     if ensure_month is not None and all(path.stem != ensure_month for path in written):
         target = shard_path(public_root, ensure_month)
         if not target.exists():
