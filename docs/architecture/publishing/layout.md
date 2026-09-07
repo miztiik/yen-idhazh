@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-07
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -22,6 +22,7 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg           optional visual
 frontend/public/assist/index/<YYYY-MM>.json             one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin              that month's vectors, raw int8
 state/scores/<YYYY-MM>.csv                              the ledger - one row per measurement, never published twice
+state/score-index/<YYYY-MM>.csv                         the identity of every measurement that shard holds, 76 bytes each
 state/score-archive/<YYYY-MM>.json                      a score month past its full-grain window, as totals plus a dedupe index
 ```
 
@@ -613,7 +614,9 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 
 **Measured on this checkout on 2026-09-03, that list is empty and stays empty for a year.** Every committed shard is inside its own window, so a live run today would remove nothing at all. The first file any store loses is `state/seen/2026-08.csv` on **2026-11-30**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four files go together - `state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv`, `state/feed-health/2026-08.csv` and `state/scores/2026-08.csv`. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
 
-**A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and `evals.writer` refuses a repeat measurement by reading the rows themselves - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past `observability.scores_full_grain_months` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the shard's SHA-256 and row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of the shard; only then is the shard unlinked.
+**A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and until 2026-09-07 `evals.writer` refused a repeat measurement by reading those rows - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past `observability.scores_full_grain_months` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the shard's SHA-256 and row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of the shard; only then is the shard unlinked.
+
+**The writer reads the identities rather than the rows, and that costs 76 bytes a measurement.** A repeat is refused against `state/score-index/<YYYY-MM>.csv` - a ten-character stamp, a comma, the observation digest and a newline - and the rows are not opened at all. Measured on this checkout on 2026-09-07 over 7,636 measurements in two shards: 566.8 KB of index against 6,111.8 KB of rows, 10.8 times smaller, and 819.6 bytes a row against a fixed 76. Both figures are file sizes, so the spread is zero. Nothing is forgotten and no clock is involved: `OBSERVATION_KEY` carries no date, so a January measurement re-taken in February is still the same measurement. A live index is dropped only once the archive that supersedes it is on disk, so the two records of one month never both exist and neither is ever the last one removed.
 
 **Measured 2026-09-03** on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM, Windows 11 (build 26200), CPython 3.14.2, over both committed shards, three reads each:
 

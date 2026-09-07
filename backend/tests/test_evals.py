@@ -14,7 +14,9 @@ import csv
 import hashlib
 import json
 import statistics
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
@@ -25,6 +27,7 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
@@ -1014,6 +1017,233 @@ def test_an_archive_is_written_whole_or_not_at_all(tmp_path: Path) -> None:
     assert score_archive.read(target) == built
     assert target.read_bytes() == built.to_json().encode("utf-8")
     assert list(target.parent.iterdir()) == [target], "a temp file survived the write"
+
+
+# --- The observation index -------------------------------------------------
+#
+# The writer used to answer "have we measured this already?" by reading every
+# score row it had ever written - 800 bytes a row, and every run paid it again.
+# The identity is four fields wide and the answer only needs the digest, so the
+# ledger keeps a second, fixed-width record of the same identities and the rows
+# are not read at all.
+#
+# Every fixture here is built in the test (Rule #12, CLAUDE.md section 13). None
+# of it reads `state/scores/`.
+
+
+def _opened_bytes(
+    monkeypatch: pytest.MonkeyPatch, root: Path, work: Callable[[], object]
+) -> dict[str, int]:
+    """What `work` opened under `root`, by relative path, in bytes.
+
+    Measured at the file boundary rather than by timing, so the answer is the
+    same on a loaded machine. `Path.open` is where every read in this module
+    goes, so a spy on it counts real I/O and mocks nothing (Rule #7).
+    """
+    real = Path.open
+    opened: dict[str, int] = {}
+
+    def spy(self: Path, *args: Any, **kwargs: Any) -> Any:
+        try:
+            relative = self.resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            relative = ""
+        if relative:
+            opened[relative] = opened.get(relative, 0) + (
+                self.stat().st_size if self.is_file() else 0
+            )
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", spy)
+    try:
+        work()
+    finally:
+        monkeypatch.undo()
+    return opened
+
+
+def _measurement(number: int) -> EvalRow:
+    """One eval row, unique in every identity field and legal at any count.
+
+    `_archive_row` walks its faithfulness score up the band and runs out of
+    range past ten rows. Nothing here is about the scores, so this one moves
+    only the four fields `OBSERVATION_KEY` reads.
+    """
+    return _archive_row(0).model_copy(
+        update={
+            "item_id": f"ai-{number:05d}",
+            "url_key": hashlib.sha256(f"index-url-{number}".encode("ascii")).hexdigest(),
+            "output_digest": hashlib.sha256(f"index-out-{number}".encode("ascii")).hexdigest(),
+        }
+    )
+
+
+def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
+    """A ledger holding `rows`, with each row written `copies` times.
+
+    More than one copy is a real state, not a contrivance: `merge=union`
+    concatenates two runs that both appended, and `idhazh dedupe-ledgers`
+    settles it afterwards. It is also the arm that separates "the read grows
+    with the rows" from "the read grows with the measurements".
+    """
+    shard = writer.ledger_path(state, rows[0].date)
+    shard.parent.mkdir(parents=True, exist_ok=True)
+    _write_shard(shard, [row for row in rows for _ in range(copies)])
+
+
+def test_a_repeat_is_still_refused_when_the_index_is_the_only_thing_read(tmp_path: Path) -> None:
+    """The invariant. Nothing about how the answer is stored may move it.
+
+    Same address, same pipeline, same words, same scorer is the same
+    measurement, and the ledger counts measurements rather than times the
+    pipeline looked.
+    """
+    state = tmp_path / "state"
+    rows = [_measurement(number) for number in range(4)]
+
+    assert writer.append(state, rows) == 4
+    assert writer.append(state, rows) == 0, "a measurement already held came back as new"
+    assert writer.append(state, [_measurement(9)]) == 1, "a new measurement was refused"
+
+
+def test_the_writers_read_does_not_grow_with_the_rows_the_shard_holds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule #12, as bytes rather than as a clock.
+
+    Two trees hold the same 200 measurements. One shard carries each row once,
+    the other carries it ten times, so the rows are ten times the bytes and the
+    identities are identical. What the writer opens has to be the same figure,
+    and the score shard has to be absent from it entirely.
+    """
+    rows = [_measurement(number) for number in range(200)]
+    lean = tmp_path / "lean" / "state"
+    fat = tmp_path / "fat" / "state"
+    _seeded(lean, rows)
+    _seeded(fat, rows, copies=10)
+    for state in (lean, fat):
+        writer.recorded_observations(state)  # the first read fills the index
+
+    thin = _opened_bytes(monkeypatch, lean, lambda: writer.recorded_observations(lean))
+    thick = _opened_bytes(monkeypatch, fat, lambda: writer.recorded_observations(fat))
+
+    shard = writer.ledger_path(fat, rows[0].date).relative_to(fat).as_posix()
+    assert shard not in thick, f"the writer opened {shard}, which is what this row removes"
+    assert thin == thick, (
+        "the writer's read moved with the rows: "
+        f"{sum(thin.values())} B against {sum(thick.values())} B over the same 200 measurements"
+    )
+    assert sum(thick.values()) > 0, "the writer read nothing at all, so this proves nothing"
+
+
+def test_an_archived_month_whose_rows_are_gone_still_refuses_its_observations(
+    tmp_path: Path,
+) -> None:
+    """The half that cannot be bounded, and the reason the archive keeps digests.
+
+    A month past `observability.scores_full_grain_months` has no rows left. Its
+    digests are the only record those measurements were ever made, so dropping
+    them would make every one of them new again on the day the shard went.
+    """
+    state = tmp_path / "state"
+    rows = [_measurement(number) for number in range(3)]
+    assert writer.append(state, rows) == 3
+
+    shard = writer.ledger_shards(state)[0]
+    built = score_archive.summarise(shard, observation_key=writer.OBSERVATION_KEY)
+    score_archive.write(score_archive.archive_path(state, shard.stem), built)
+    shard.unlink()
+
+    assert writer.append(state, rows) == 0, "a deleted shard made its rows new again"
+
+
+def test_a_tree_with_shards_and_no_index_answers_the_same_as_one_with_an_index(
+    tmp_path: Path,
+) -> None:
+    """The read-side migration, stated as an equality rather than as a procedure.
+
+    The first run after this lands meets shards and no index. It has to refuse
+    exactly what it refuses today, and it has to leave an index behind so the
+    second run does not read the rows either.
+    """
+    rows = [_measurement(number) for number in range(5)]
+    fresh = tmp_path / "fresh" / "state"
+    carried = tmp_path / "carried" / "state"
+    _seeded(fresh, rows)
+    _seeded(carried, rows)
+    writer.recorded_observations(carried)  # this one already has its index
+
+    assert not writer.index_shards(fresh), "the fresh tree was not the un-migrated one"
+    assert writer.recorded_observations(fresh) == writer.recorded_observations(carried)
+    assert writer.append(fresh, rows) == 0, "the migrated tree let a held measurement back in"
+    assert [path.stem for path in writer.index_shards(fresh)] == [
+        path.stem for path in writer.index_shards(carried)
+    ]
+    assert writer.index_path(fresh, rows[0].date[:7]).read_bytes() == (
+        writer.index_path(carried, rows[0].date[:7]).read_bytes()
+    )
+
+
+def test_a_month_that_became_an_archive_drops_its_live_index(tmp_path: Path) -> None:
+    """Two records of one month's identities is one too many.
+
+    The archive carries them for ever; the live index carries them while the
+    rows do. The moment the rows go the live copy is redundant, and leaving it
+    would double the 11.9 MB a year this index is supposed to cost.
+
+    A live index is only ever dropped when the archive that supersedes it is on
+    disk. Nothing here removes the last record of a measurement.
+    """
+    state = tmp_path / "state"
+    rows = [_measurement(number) for number in range(3)]
+    assert writer.append(state, rows) == 3
+    month = rows[0].date[:7]
+    assert writer.index_path(state, month).exists()
+
+    shard = writer.ledger_shards(state)[0]
+    built = score_archive.summarise(shard, observation_key=writer.OBSERVATION_KEY)
+    score_archive.write(score_archive.archive_path(state, shard.stem), built)
+    shard.unlink()
+    held = writer.recorded_observations(state)
+
+    assert not writer.index_path(state, month).exists(), "two copies of one month survived"
+    assert held == writer.recorded_observations(state), "dropping the copy moved the answer"
+
+
+def test_a_live_index_with_no_shard_and_no_archive_is_left_alone(tmp_path: Path) -> None:
+    """The guard on the drop, asserted from the side that would lose a record.
+
+    A shard removed by hand, or by a prune whose archive would not reconcile,
+    leaves the index as the only thing that remembers the month. Dropping it
+    there would silently make every measurement in it new again.
+    """
+    state = tmp_path / "state"
+    rows = [_measurement(number) for number in range(3)]
+    assert writer.append(state, rows) == 3
+    writer.ledger_shards(state)[0].unlink()
+
+    assert writer.append(state, rows) == 0, "the last record of those measurements was dropped"
+    assert writer.index_path(state, rows[0].date[:7]).exists()
+
+
+def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) -> None:
+    """The measured price of the cover this row declares, held to arithmetic.
+
+    A stamp, a comma, sixty-four hex characters and a newline. It is fixed by
+    construction rather than by a corpus, which is why a count is an assertion
+    here and not a measurement that drifts.
+    """
+    state = tmp_path / "state"
+    rows = [_measurement(number) for number in range(10)]
+    writer.append(state, rows)
+    index = writer.index_path(state, rows[0].date[:7])
+
+    header = ",".join(ObservationIndexRow.csv_columns()) + "\n"
+    a_row = len(ObservationIndexRow.schema_version()) + 1 + 64 + 1
+
+    assert ObservationIndexRow.csv_columns() == ("version", "observation_digest")
+    assert index.stat().st_size == len(header) + 10 * a_row
+    assert a_row == 76
 
 
 def _archive_row(number: int) -> EvalRow:

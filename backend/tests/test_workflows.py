@@ -31,6 +31,7 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
+from idhazh.evals import writer as score_writer
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
@@ -356,7 +357,16 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health", "state/feed-retirements.csv"],
-    "work": ["state/item-health", "state/scores", "state/runtime-counters.csv"],
+    # `state/score-index` is beside `state/scores` because it is the record of
+    # what those rows are, and the writer reads it instead of them. A shard
+    # committed without its index is a month the next run cannot recognise, so
+    # it would append every measurement in it a second time.
+    "work": [
+        "state/item-health",
+        "state/scores",
+        "state/score-index",
+        "state/runtime-counters.csv",
+    ],
     "assemble": [
         "frontend/public/digest",
         "frontend/public/telemetry",
@@ -456,6 +466,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "frontend/public/source-health.json",
         "state/published.csv",
         "state/scores",
+        "state/score-index",
         "state/item-health",
         "state/runtime-counters.csv",
     ],
@@ -2675,6 +2686,7 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     written = {
         "state/item-health": f"state/item-health/{SUBSTITUTED_DATE[:7]}.csv",
         "state/scores": f"state/scores/{SUBSTITUTED_DATE[:7]}.csv",
+        "state/score-index": f"state/score-index/{SUBSTITUTED_DATE[:7]}.csv",
         "state/runtime-counters.csv": "state/runtime-counters.csv",
     }
     assert set(written) == set(COMMIT_STAGED_PATHS["work"])
@@ -2688,6 +2700,35 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     ).stdout.splitlines()
 
     assert answered == [f"{path}: merge: union" for path in written.values()]
+
+
+def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
+    """The index is what the writer reads instead of the rows, so it has to be committed.
+
+    A shard pushed without its index is a month the next run cannot recognise.
+    The dedupe would read an index that stops short of the rows beside it, call
+    every measurement past that point new, and append each one a second time -
+    the one promise the eval ledger makes about itself.
+
+    The assemble job refreshes it for the mirror-image reason. A retry hands the
+    rows back to origin's tip and runs the producer again; an index left holding
+    the first attempt's digests would make the producer refuse the day it just
+    rebuilt, and the day's measurements would be lost rather than doubled.
+
+    The directory is named rather than derived, and `git add` on a path that is
+    not there aborts the whole step, so a fresh checkout has to carry it.
+    """
+    assert score_writer.INDEX_RELDIR in COMMIT_STAGED_PATHS["work"]
+    assert score_writer.INDEX_RELDIR in COMMIT_REFRESH_PATHS["assemble"]
+    assert (REPO_ROOT / score_writer.INDEX_RELDIR).is_dir()
+    tracked = subprocess.run(
+        ["git", "ls-files", score_writer.INDEX_RELDIR],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert tracked, f"{score_writer.INDEX_RELDIR} must be in a fresh checkout"
 
 
 def test_the_retirement_ledger_needs_no_gitattributes_edit() -> None:

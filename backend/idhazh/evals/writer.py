@@ -16,6 +16,21 @@ becomes `state/score-archive/<YYYY-MM>.json` (`idhazh.evals.archive`). That is
 why `recorded_observations` reads two places: the promise above has to hold for
 a month whose rows are gone, and the archive's sorted digest index is the only
 thing that can still answer it.
+
+**The dedupe does not read the rows.** Answering "do we already hold this one?"
+meant every run paid for every row it had ever written. Measured on this
+repository on 2026-09-07: 7,636 rows over two shards, 6,111.8 KB, 819.6 bytes a
+row, and about 173 MB once the ledger reaches steady state - a bill that rises
+on a day nobody wrote any code, which is what Rule #12 refuses. The identity is
+64 hex characters wide, so the ledger keeps a second record of exactly that:
+`state/score-index/<YYYY-MM>.csv`, 76 bytes an observation, beside the shard it
+describes. Over the same 7,636 measurements that is 566.8 KB against 6,111.8 KB,
+so the read is 10.8 times smaller and 90.7 percent of it is gone.
+
+Nothing is forgotten and there is no clock. `OBSERVATION_KEY` carries no date on
+purpose - re-measuring an article a year later under an unchanged pipeline is
+the same measurement - so a window would be the wrong shape here as well as a
+cheaper one (`idhazh.contracts.observation_index`).
 """
 
 from __future__ import annotations
@@ -26,6 +41,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.evals import archive
 from idhazh.ledger import STATE_DIRNAME, require_matching_header
@@ -33,6 +49,9 @@ from idhazh.ledger import read_header as _read_header
 
 LEDGER_DIRNAME: Final = "scores"
 LEDGER_RELDIR: Final = f"{STATE_DIRNAME}/{LEDGER_DIRNAME}"
+
+INDEX_DIRNAME: Final = "score-index"
+INDEX_RELDIR: Final = f"{STATE_DIRNAME}/{INDEX_DIRNAME}"
 
 #: What makes two rows the same measurement. The address says which article, the
 #: fingerprint says which inputs produced it, the digest says which words came
@@ -64,7 +83,11 @@ def ledger_shards(state_dir: Path) -> list[Path]:
     archives and then deletes out of this directory, so it names what it
     recognises rather than acting on what it does not.
     """
-    directory = state_dir / LEDGER_DIRNAME
+    return _month_files(state_dir / LEDGER_DIRNAME)
+
+
+def _month_files(directory: Path) -> list[Path]:
+    """The `<YYYY-MM>.csv` files in one directory, oldest first, and nothing else."""
     if not directory.is_dir():
         return []
     found = [
@@ -113,7 +136,7 @@ def observation_digest(payload: Mapping[str, object]) -> str:
 
 
 def recorded_observations(state_dir: Path) -> set[str]:
-    """Every measurement the ledger already holds, live rows and archived months alike.
+    """Every measurement the ledger already holds, live months and archived months alike.
 
     Deliberately not scoped to the shard being written. An observation is the
     same measurement whichever month it is re-taken in, and a dedupe that only
@@ -128,12 +151,130 @@ def recorded_observations(state_dir: Path) -> set[str]:
     union, and it is why the archive stores them sorted (`docs/concepts/
     evaluation.md`).
 
+    **Neither half reads a score row.** Both are fixed-width digest records, so
+    what this costs follows the measurements the ledger holds rather than the
+    bytes it spent describing them - 76 bytes an observation against a measured
+    819.6. The cover is still every observation, with nothing forgotten.
+
     A missing directory on either side is a ledger with no history, which is
     what a fresh clone has.
     """
-    return {observation_digest(record) for record in records(state_dir)} | (
-        archive.archived_observations(state_dir)
-    )
+    refresh_index(state_dir)
+    return indexed_observations(state_dir) | archive.archived_observations(state_dir)
+
+
+def index_relpath(month: str) -> str:
+    """`state/score-index/<YYYY-MM>.csv` - the POSIX form, for a log line."""
+    return f"{INDEX_RELDIR}/{month[:7]}.csv"
+
+
+def index_path(state_dir: Path, month: str) -> Path:
+    """The index beside one month's shard. A caller passes the month, never the name."""
+    return state_dir / INDEX_DIRNAME / f"{month[:7]}.csv"
+
+
+def index_shards(state_dir: Path) -> list[Path]:
+    """Every month of the index, oldest first."""
+    return _month_files(state_dir / INDEX_DIRNAME)
+
+
+def index_columns() -> tuple[str, ...]:
+    """One definition, so a writer and a reader cannot disagree about the shape."""
+    return ObservationIndexRow.csv_columns()
+
+
+def indexed_observations(state_dir: Path) -> set[str]:
+    """The digests the live index holds. A raw read of the cell, not a row build.
+
+    The header is checked against the contract first, which is the same guard
+    `append` puts on a shard and for the same reason: a file whose columns moved
+    would otherwise be read one column under another column's name.
+    """
+    held: set[str] = set()
+    for path in index_shards(state_dir):
+        require_matching_header(path, index_columns())
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            held.update(record["observation_digest"] for record in csv.DictReader(handle))
+    return held
+
+
+def refresh_index(state_dir: Path) -> int:
+    """Bring the index in step with the shards. Returns how many digests it wrote.
+
+    Two jobs, and both are about a month whose index and shard disagree.
+
+    **A shard with no index is filled from its rows, once.** That is the
+    read-side migration: the first run after this landed meets a ledger written
+    before the index existed, and it has to refuse exactly what it refuses
+    today. It pays one read of the rows to never read them again.
+
+    **An index whose month became an archive is dropped.** The archive carries
+    those digests for ever, so a live copy beside it is a second record of one
+    month and would double what this index costs. The guard is the one that
+    matters: the drop happens only when the archive is on disk, so nothing here
+    can remove the last record of a measurement. A shard that went without an
+    archive - deleted by hand, or by a prune whose archive would not reconcile -
+    leaves the index standing as the only thing that remembers the month.
+
+    A partial fill is safe in the direction that matters. It under-reports, so a
+    measurement lands twice and `idhazh dedupe-ledgers` settles it against
+    `OBSERVATION_KEY` on the next run. Over-reporting is the one that cannot be
+    repaired, and nothing here can produce it.
+    """
+    live = {shard.stem: shard for shard in ledger_shards(state_dir)}
+    written = 0
+    for month, shard in sorted(live.items()):
+        path = index_path(state_dir, month)
+        if path.exists():
+            continue
+        with shard.open("r", encoding="utf-8", newline="") as handle:
+            digests = _distinct(observation_digest(row) for row in csv.DictReader(handle))
+        written += _append_index(path, digests)
+
+    archived = {path.stem for path in archive.archive_files(state_dir)}
+    for path in index_shards(state_dir):
+        if path.stem not in live and path.stem in archived:
+            path.unlink()
+    return written
+
+
+def _distinct(digests: Iterable[str]) -> list[str]:
+    """The digests in the order they were first seen, each one once.
+
+    A shard can hold the same observation twice between a `merge=union` and the
+    `dedupe-ledgers` pass that settles it. The index is a set, so it records the
+    identity once and the repeat costs nothing.
+    """
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for digest in digests:
+        if digest in seen:
+            continue
+        seen.add(digest)
+        ordered.append(digest)
+    return ordered
+
+
+def _append_index(path: Path, digests: Iterable[str]) -> int:
+    """Append digests to one month's index, writing the header once."""
+    pending = list(digests)
+    if not pending:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    exists = path.exists()
+    if exists:
+        require_matching_header(path, index_columns())
+    stamp = ObservationIndexRow.schema_version()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=index_columns(), lineterminator="\n")
+        if not exists:
+            out.writeheader()
+        for digest in pending:
+            row = ObservationIndexRow.model_validate(
+                {"version": stamp, "observation_digest": digest}
+            )
+            out.writerow(row.csv_row())
+    return len(pending)
 
 
 def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
@@ -165,13 +306,16 @@ def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
 
     already = recorded_observations(state_dir)
     fresh: dict[str, list[dict[str, object]]] = {}
+    minted: dict[str, list[str]] = {}
     for row in pending:
         payload = row.model_dump(mode="json")
         key = observation_digest(payload)
         if key in already:
             continue
         already.add(key)
-        fresh.setdefault(str(payload["date"])[:7], []).append(payload)
+        month = str(payload["date"])[:7]
+        fresh.setdefault(month, []).append(payload)
+        minted.setdefault(month, []).append(key)
     if not fresh:
         return 0
 
@@ -186,6 +330,13 @@ def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
                 writer.writeheader()
             for payload in payloads:
                 writer.writerow({name: payload[name] for name in columns()})
+        # The rows first, then the index, and the order is the whole argument. A
+        # crash between the two leaves a measurement recorded and not indexed,
+        # which the next run appends a second time and `dedupe-ledgers` settles
+        # against `OBSERVATION_KEY`. The other order leaves a digest whose row
+        # was never written - a measurement nothing will ever take again, and
+        # nothing on disk that says it is missing.
+        _append_index(index_path(state_dir, month), minted[month])
         landed += len(payloads)
     return landed
 
