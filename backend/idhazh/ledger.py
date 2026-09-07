@@ -548,6 +548,9 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     of that failure is the safe one: an unreadable retirement costs one request
     to an address that is probably still gone, and the next run reads the same
     evidence and files it again. Refusing to start would cost the reader the day.
+
+    Cover: -1, unbounded on purpose. A retirement is permanent, so any cover in
+    days would forget the oldest ones and the run would ask a dead server again.
     """
     rows: list[FeedRetirementRow] = []
     for raw in _read_rows(feed_retirements_path(state_dir)):
