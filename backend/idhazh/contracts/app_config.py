@@ -777,8 +777,12 @@ class SummarizeConfig(Model):
     actually matters - every ask sits inside the gate - because only there are
     both blocks visible.
 
-    Every value here is substituted into the prompt text at render time, so the
-    prompt cannot drift from the bounds the pipeline enforces (Rule #6).
+    Every band and title number here is substituted into the prompt text at
+    render time, so the prompt cannot drift from the bounds the pipeline enforces
+    (Rule #6). `key_point_restatement_ceiling` is the one value that is not asked
+    for: it is a post-parse check `to_summary` runs on what the model returned,
+    and it lives here because the count it protects - the band's key_points_min -
+    does too.
     """
 
     bands: list[SummaryBand] = Field(
@@ -820,6 +824,24 @@ class SummarizeConfig(Model):
             "cannot become the article. The ledger measures the run that actually came "
             "back (`verbatim_run`), so this number is the ask and that column is the "
             "answer."
+        ),
+    )
+    key_point_restatement_ceiling: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Above this share of a key point's four-word phrases already appearing in "
+            "the summary, `to_summary` drops the key point as a restatement and keeps the "
+            "item with the rest. A distinctness floor, not a word ban: only the overlap "
+            "ratio counts, never a single shared word, so a key point may reuse the "
+            "summary's words and still add a fact. A starting point, not a calibrated "
+            "threshold (Rule #10): measured 2026-09-07 on the one well-formed reply "
+            "fixture, its three distinct key points score 0.00, 0.11 and 0.14 while a "
+            "verbatim slice of the summary scores 1.00, so 0.5 sits in the wide gap "
+            "between a new fact and a copy. The drop never removes the last key point - "
+            "the payload requires one - so a reply whose every key point restates still "
+            "publishes with the least-restating up to the band's key_points_min."
         ),
     )
 
@@ -2630,6 +2652,26 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-07T00:30",
+            change=(
+                "summarize.key_point_restatement_ceiling added, defaulting to 0.5 and "
+                "bounded above 0.0 and at most 1.0. to_summary now drops any key point "
+                "whose share of four-word phrases already in the summary exceeds it, "
+                "keeping the item and the surviving key points; the drop never falls "
+                "below the band's key_points_min, so an item never loses its last key "
+                "point. Additive: a config without the knob takes the default."
+            ),
+            why=(
+                "The rule against a key point that only restates the summary was a "
+                "sentence in the prompt, which gives the model no definition it can "
+                "compute, and the restatement rate ran at seven in eight. A "
+                "deterministic post-check makes 'restates' a measure code applies - the "
+                "share of the key point's four-grams already in the summary - and drops "
+                "the thin line rather than failing the item, because a restating key "
+                "point is thin, not wrong."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-07",
             change=(
