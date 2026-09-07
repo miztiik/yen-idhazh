@@ -34,12 +34,19 @@
 	import {
 		daysInWindow,
 		defaultWindow,
-		monthsToFetch,
 		panWindow,
 		stepPreset,
 		windowOfDays,
 		type TimeWindow
 	} from '$lib/charts/viewport';
+	import {
+		applyShard,
+		holdRows,
+		monthCeiling,
+		monthsToLoad,
+		seedHold,
+		type TelemetryHold
+	} from '$lib/charts/telemetry-hold';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
@@ -91,12 +98,29 @@
 
 	// svelte-ignore state_referenced_locally
 	let windowDays = $state(data.console.default_window_days);
+	/** The window the page opens on, computed once so the seed and the first
+	 * viewport agree on how far back the seed reaches. */
 	// svelte-ignore state_referenced_locally
-	let rows = $state<TelemetryRow[]>(data.telemetryRows);
+	const opening = defaultWindow(datesIn(data.telemetryRows), data.today, data.console);
+	/** The telemetry this session holds, as revision-owned month shards. Seeded
+	 * with the one window the server inlined and grown by month fetch. */
 	// svelte-ignore state_referenced_locally
-	let loadedMonths = $state([...new Set(datesIn(data.telemetryRows).map((d) => d.slice(0, 7)))]);
+	let hold = $state<TelemetryHold>(seedHold(data.telemetryRows, opening.start));
+	/** Every held row, and the array every chart reads. Derived from the hold,
+	 * so a shard that arrives - or a correction that retracts a row - redraws
+	 * with none of the whole-cache rebuild the old merge did on every fetch. */
+	const rows = $derived(holdRows(hold));
+	/** How many fetched months to keep at most: the months the widest window can
+	 * touch, so the open window is always in hand and memory does not climb with
+	 * a long session's panning. */
 	// svelte-ignore state_referenced_locally
-	let viewport = $state<TimeWindow>(defaultWindow(datesIn(data.telemetryRows), data.today, data.console));
+	const monthCap = monthCeiling(data.console.max_window_days);
+	/** Months a fetch is in flight for, so a second widen started before the
+	 * first settles does not ask for the same file twice. Not reactive: nothing
+	 * on the page reads it, and `inFlight` below is what drives the busy note. */
+	const pending = new Set<string>();
+	// svelte-ignore state_referenced_locally
+	let viewport = $state<TimeWindow>(opening);
 	/** How many month files are in the air. A count, not a flag: a pan can start
 	 * a second fetch while the first is still running, and a flag would clear the
 	 * busy state on the first one to finish. */
@@ -116,31 +140,36 @@
 		if (presets.includes(stored) && stored !== windowDays) show(stored);
 	});
 
-	function merge(next: TelemetryRow[]) {
-		const byKey = new Map(rows.map((row) => [`${row.run_id}-${row.item_id}`, row]));
-		for (const row of next) byKey.set(`${row.run_id}-${row.item_id}`, row);
-		rows = [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date));
+	function merge(month: string, next: TelemetryRow[]) {
+		hold = applyShard(hold, month, next, monthCap);
 	}
 
 	/** Fetch the month files the window reaches into and does not already hold.
 	 *
 	 * Widening re-uses this path rather than reloading the page: the rows already
-	 * paid for stay in hand, and only the months past them cost anything.
+	 * paid for stay in hand, and only the months past them cost anything. A month
+	 * is marked in hand only when its shard arrives, so a fetch that fails leaves
+	 * it unfetched for a later widen to fill rather than marking it done and
+	 * hiding the gap for the rest of the session.
 	 */
 	async function loadVisibleMonths() {
-		const wanted = monthsToFetch(viewport, data.telemetryMonths, loadedMonths);
+		const wanted = monthsToLoad(hold, viewport, data.telemetryMonths).filter(
+			(month) => !pending.has(month)
+		);
 		if (wanted.length === 0) return;
-		loadedMonths = [...loadedMonths, ...wanted];
+		for (const month of wanted) pending.add(month);
 		inFlight += wanted.length;
 		for (const month of wanted) {
 			try {
 				const response = await fetch(`${base}/telemetry/${month}.csv`);
-				if (response.ok) merge(parseTelemetryCsv(await response.text()));
+				if (response.ok) merge(month, parseTelemetryCsv(await response.text()));
 				else console.warn(`telemetry ${month} unavailable; showing a gap`);
 			} catch (error) {
 				console.warn(`telemetry ${month} could not be read; showing a gap`, error);
+			} finally {
+				pending.delete(month);
+				inFlight -= 1;
 			}
-			inFlight -= 1;
 		}
 	}
 
@@ -165,10 +194,10 @@
 
 	/** The month files a preset would fetch, counted before it is picked. */
 	function monthsFor(days: number): number {
-		return monthsToFetch(
+		return monthsToLoad(
+			hold,
 			windowOfDays(datesIn(rows), data.today, days, data.console.today_anchor),
-			data.telemetryMonths,
-			loadedMonths
+			data.telemetryMonths
 		).length;
 	}
 
@@ -364,10 +393,15 @@
 	 * The other two thirds read as a chart that failed to load. An empty column
 	 * is the fact this strip exists to show: nothing ran that day.
 	 */
-	const windowGrid = $derived.by(() => {
-		const byDate = new Map(data.grid.map((day) => [day.date, day.squares]));
-		return daysInWindow(viewport).map((date) => ({ date, squares: byDate.get(date) ?? [] }));
-	});
+	// Built once from the committed grid, not per pan. `data.grid` holds every
+	// recorded day and never changes in the browser, so rebuilding this index on
+	// every window move re-read the whole history to answer a windowed question
+	// (finding 109). The window walk below is output-sized: one lookup a day in
+	// view.
+	const gridByDate = $derived(new Map(data.grid.map((day) => [day.date, day.squares])));
+	const windowGrid = $derived(
+		daysInWindow(viewport).map((date) => ({ date, squares: gridByDate.get(date) ?? [] }))
+	);
 	const windowRuns = $derived(windowGrid.reduce((count, day) => count + day.squares.length, 0));
 
 	/** A label is placed inside its column, not laid out by it, so the widest

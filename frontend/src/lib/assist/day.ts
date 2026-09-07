@@ -260,6 +260,13 @@ export interface DayWatch {
 	 * unchanged. */
 	again?: boolean;
 	fetcher?: typeof fetch;
+	/** Stop telling this watcher anything once it aborts. The shared request is
+	 * never cancelled - another caller may be waiting on the same one, and the
+	 * day-cache still fills for the next ask - but a status past the abort is a
+	 * status about a day this watcher no longer wants. A reading page whose date
+	 * changed while a watch was in flight aborts the old one here, so the old
+	 * day cannot arrive on the new page. */
+	signal?: AbortSignal;
 }
 
 /** The day, with the wait reported as it happens.
@@ -271,15 +278,27 @@ export interface DayWatch {
  * number does not carry.
  */
 export function watchDay(date: string, watch: DayWatch): Promise<DigestDay | null> {
+	const { signal } = watch;
 	let settled = false;
-	watch.onStatus('loading', null);
+	// Every status goes through here, so an aborted watch is told nothing - not
+	// the slow note, not the final one. The request itself runs on, because the
+	// day-cache and any other caller waiting on it still want the answer.
+	const report = (status: DayStatus, day: DigestDay | null) => {
+		if (signal?.aborted !== true) watch.onStatus(status, day);
+	};
+	report('loading', null);
 	const slow = setTimeout(() => {
-		if (!settled) watch.onStatus('slow', null);
+		if (!settled) report('slow', null);
 	}, watch.slowMs);
-	return requestDay(date, watch.fetcher ?? fetch, watch.again === true).then((day) => {
+	const stop = () => {
 		settled = true;
 		clearTimeout(slow);
-		watch.onStatus(day === null ? 'unreachable' : 'ready', day);
+	};
+	signal?.addEventListener('abort', stop, { once: true });
+	return requestDay(date, watch.fetcher ?? fetch, watch.again === true).then((day) => {
+		stop();
+		signal?.removeEventListener('abort', stop);
+		report(day === null ? 'unreachable' : 'ready', day);
 		return day;
 	});
 }
