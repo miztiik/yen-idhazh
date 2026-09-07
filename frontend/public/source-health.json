@@ -1,10 +1,10 @@
 {
   "complete_dates": 14,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-07T08:28:03Z",
+  "generated_at": "2026-09-07T14:12:39Z",
   "last_date": "2026-09-06",
   "min_complete_days": 30,
-  "run_id": "2026-09-07-34095143140",
+  "run_id": "2026-09-07-34123084462",
   "sources": [
     {
       "availability": "answering",
@@ -547,7 +547,7 @@
       "vertical": "world"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "opportunities": 17,
       "permission": "allowed",
       "publications": 10,
@@ -1063,7 +1063,7 @@
       "vertical": "business-economy"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 0,
       "permission": "allowed",
       "publications": 0,
@@ -1399,7 +1399,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "opportunities": 52,
       "permission": "allowed",
       "publications": 50,
@@ -1483,7 +1483,7 @@
       "vertical": "energy"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 4,
       "permission": "allowed",
       "publications": 4,
