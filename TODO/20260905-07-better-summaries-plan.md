@@ -30,7 +30,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The facts are found before the prose that connects them | - | A | DONE | - | #474 | w1 |
-| 2 | A short article stops being asked for five key points | - | A | PENDING | - | - | - |
+| 2 | A short article stops being asked for five key points | - | A | DONE | - | #476 | w2 |
 | 3 | A restating key point is dropped, not the item | 1, 2 | B | PENDING | - | - | - |
 | 4 | How often a key point says something new | 3 | C | PENDING | - | - | - |
 | 5 | The prompt stops being argued about and starts being measured | 4 | D | PENDING | - | - | - |
