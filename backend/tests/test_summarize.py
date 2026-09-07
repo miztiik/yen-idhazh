@@ -1015,6 +1015,96 @@ def test_a_well_formed_reply_becomes_a_summary() -> None:
     )
 
 
+# --- A key point that only restates the summary is dropped, not failed --------
+
+# A 29-word summary and slices lifted from it. Each slice shares a four-word run
+# with the summary, so it restates; the distinct line reuses words the summary
+# used and shares no run, so it adds a fact.
+RESTATE_SUMMARY = (
+    "The city council approved a five percent budget increase for the district "
+    "schools on Tuesday evening after a long and at times heated public debate "
+    "over the coming year."
+)
+_DISTINCT_POINT = "The increase is the first the schools have seen since 2019."
+_RESTATING_POINT = "The city council approved a five percent budget increase"
+
+
+def _one_band(ceiling: float = 0.5, floor: int = 1) -> SummarizeConfig:
+    return SummarizeConfig(
+        bands=[
+            SummaryBand(
+                min_source_words=0,
+                target_words_min=30,
+                target_words_max=240,
+                key_points_min=floor,
+                key_points_max=5,
+            )
+        ],
+        key_point_restatement_ceiling=ceiling,
+    )
+
+
+def test_a_key_point_that_restates_the_summary_is_dropped_and_the_item_kept() -> None:
+    result = replied(
+        body(summary=RESTATE_SUMMARY, key_points=[_DISTINCT_POINT, _RESTATING_POINT]),
+        prompt_config=_one_band(),
+    )
+    assert result.status is SummaryStatus.OK
+    assert result.failure_code is None
+    assert result.key_points == [_DISTINCT_POINT]
+    assert result.output_digest == derive_output_digest(
+        result.summary, [_DISTINCT_POINT], title=result.title
+    )
+
+
+def test_a_reply_whose_every_key_point_restates_publishes_the_floor() -> None:
+    """The oracle. Every key point restates, so the item publishes with fewer key
+    points and never a failure code - the drop stops at the band's floor, and the
+    payload's one-key-point minimum is never breached."""
+    all_restate = [
+        _RESTATING_POINT,
+        "budget increase for the district schools on Tuesday evening",
+        "after a long and at times heated public debate",
+    ]
+    result = replied(
+        body(summary=RESTATE_SUMMARY, key_points=all_restate),
+        prompt_config=_one_band(),
+    )
+    assert result.status is SummaryStatus.OK
+    assert result.failure_code is None
+    assert len(result.key_points) == 1
+    assert result.key_points[0] in all_restate
+
+
+def test_the_restatement_drop_keeps_the_bands_key_points_min_not_just_one() -> None:
+    """The floor is the band's key_points_min, so a band that asks for two keeps
+    two even when every key point restates."""
+    all_restate = [
+        _RESTATING_POINT,
+        "budget increase for the district schools on Tuesday evening",
+        "after a long and at times heated public debate",
+    ]
+    result = replied(
+        body(summary=RESTATE_SUMMARY, key_points=all_restate),
+        prompt_config=_one_band(floor=2),
+    )
+    assert result.status is SummaryStatus.OK
+    assert len(result.key_points) == 2
+
+
+def test_the_restatement_ceiling_is_read_from_config_and_not_written_in_the_code() -> None:
+    """Rule #6. Move the knob and the same restating key point changes side."""
+    points = [_DISTINCT_POINT, _RESTATING_POINT]
+    lenient = replied(
+        body(summary=RESTATE_SUMMARY, key_points=points), prompt_config=_one_band(ceiling=1.0)
+    )
+    strict = replied(
+        body(summary=RESTATE_SUMMARY, key_points=points), prompt_config=_one_band(ceiling=0.5)
+    )
+    assert lenient.key_points == [_DISTINCT_POINT, _RESTATING_POINT]
+    assert strict.key_points == [_DISTINCT_POINT]
+
+
 def test_an_injected_tool_call_cannot_reach_a_payload() -> None:
     """The canary's own attack, run against the real parser."""
     result = summarised("injected-tool-call")

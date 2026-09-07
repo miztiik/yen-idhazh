@@ -39,7 +39,7 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_output_digest
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.evals.metrics import verbatim_run
+from idhazh.evals.metrics import restates_summary, verbatim_run
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
@@ -416,6 +416,30 @@ def _publishable_title(raw: str, ask: SummarizeConfig) -> str | None:
     return title
 
 
+def _distinct_key_points(
+    points: list[str], summary: str, *, ceiling: float, floor: int
+) -> list[str]:
+    """Drop each key point that restates the summary, and keep the item.
+
+    `restates_summary` is the measure the prompt could only ask for: the share of
+    a key point's four-word phrases already in the summary. Above `ceiling` the
+    key point carries more of the summary's phrasing than a fact of its own, so
+    it is dropped - a restating key point is a thin line, not a wrong one, so the
+    item degrades and never fails (section 1a).
+
+    The drop never falls below `floor`, the band's own `key_points_min`, which is
+    never below one because the published payload requires at least one key point
+    (`DigestItem.key_points`). When every key point restates, the least-restating
+    up to the floor stay and the item still publishes. Order is preserved for the
+    survivors, so the payload reads in the order the model wrote them.
+    """
+    scored = [(restates_summary(point, summary), index) for index, point in enumerate(points)]
+    distinct = sum(1 for score, _ in scored if score <= ceiling)
+    keep = max(floor, distinct)
+    kept = {index for _, index in sorted(scored)[:keep]}
+    return [point for index, point in enumerate(points) if index in kept]
+
+
 def to_summary(
     article: Article,
     completion: Completion | None,
@@ -509,8 +533,20 @@ def to_summary(
             failure_code=FailureCode.COPIED_SOURCE,
         )
 
+    # A key point that only restates the summary is dropped, not failed, and the
+    # drop never removes the last one, so the item always keeps a publishable
+    # floor of key points. The address check below then reads what we will
+    # actually publish.
+    band = ask.band_for(article.band_source_words)
+    key_points = _distinct_key_points(
+        draft.key_points,
+        draft.summary,
+        ceiling=ask.key_point_restatement_ceiling,
+        floor=band.key_points_min,
+    )
+
     published: list[tuple[str, str]] = [("summary", draft.summary)]
-    published += [("key point", point) for point in draft.key_points]
+    published += [("key point", point) for point in key_points]
     for field, text in published:
         leaked = _leaked_address(text)
         if leaked is not None:
@@ -529,9 +565,9 @@ def to_summary(
         url_key=article.url_key,
         title=title,
         summary=draft.summary,
-        key_points=draft.key_points,
+        key_points=key_points,
         pipeline_fingerprint=pipeline_fingerprint,
-        output_digest=derive_output_digest(draft.summary, draft.key_points, title=title),
+        output_digest=derive_output_digest(draft.summary, key_points, title=title),
         model_id=model_id,
         attempt=attempt,
         source_truncated=article.truncated,
