@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+from collections.abc import Collection
 from pathlib import Path
 from typing import Final
 
@@ -103,19 +104,39 @@ def publish(
     state_root: Path = config.REPO_ROOT / ledger.STATE_DIRNAME,
     public_root: Path = DEFAULT_PUBLIC_ROOT,
     ensure_month: str | None = None,
+    months: Collection[str] | None = None,
 ) -> list[Path]:
-    """Write one public telemetry shard for each item-health month."""
+    """Write one public telemetry shard for each item-health month.
+
+    `months` names the months to rebuild. A month outside it is skipped **only
+    when its shard already exists**, so a fresh clone, a deleted file or a month
+    never published still gets written whatever the caller asked for. `None`
+    rebuilds everything, which is what a migration and a backfill want.
+
+    Why a caller names them at all: a past month is frozen. Nothing appends to
+    `state/item-health/2026-08.csv` once August is over, so re-reading 5,227
+    rows and writing back a byte-identical file is work with no output. Measured
+    2026-09-07 on an Intel Core i7-1265U over the committed ledger: 685 ms a run
+    for two months, 342 ms of it per month, spread 562-863 ms over five runs.
+    That is bounded at `observability.item_health_full_grain_months` (14) rather
+    than growing for ever, so it is waste rather than a Rule #12 breach - but at
+    the cap it is 4.8 s a run, five runs a day, and thirteen of the fourteen
+    months cannot have changed.
+    """
     source_dir = state_root / ledger.ITEM_HEALTH_DIRNAME
     public_root.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     if source_dir.exists():
         for source in sorted(source_dir.glob("*.csv")):
             target = shard_path(public_root, source.stem)
+            if months is not None and source.stem not in months and target.exists():
+                continue
             _write(target, _read(source))
             written.append(target)
     if ensure_month is not None and all(path.stem != ensure_month for path in written):
         target = shard_path(public_root, ensure_month)
-        _write(target, [])
+        if not target.exists():
+            _write(target, [])
         written.append(target)
     return written
 
