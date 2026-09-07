@@ -979,12 +979,13 @@
 			data-model-new-fact-from={modelSpan.start}
 			data-model-new-fact-to={modelSpan.end}
 		>
-			<h2 class="console-h2">How often a key point says something new</h2>
+			<h2 class="console-h2">How often a key point adds to the summary</h2>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-new-fact-intro>
 				A key point earns its line by stating a fact the summary does not already carry. This is
 				the share that did, by article length - the shortest band asks for one key point and the
 				longest for five, so a low share is expected where the article is short and there is little
-				to add.
+				to add. It is measured against our own summary, not the article, so it is not a check for
+				invented facts - the faithfulness panel is.
 				<strong class="font-semibold text-text-secondary" data-model-new-fact-rule
 					>Nothing acts on it</strong
 				>: it measures whether the prompt found facts, and is never an input to a band. This is the
