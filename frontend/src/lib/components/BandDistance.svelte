@@ -220,6 +220,15 @@
 		};
 	}
 
+	/** Every column's centre x, and its three stacked segments, built once. Both
+	 * were functions the template called per column - `centre` on every bar and
+	 * every tick, `segment` twice a part for its y and its height - so a resize or
+	 * a pointer move restacked all the columns for a picture that had not moved. */
+	const centres = $derived(split.map((_, index) => centre(index)));
+	const stacks = $derived(
+		split.map((day) => PARTS.map((_, position) => segment(day, position)))
+	);
+
 	function columnTitle(day: BandDay): string {
 		const noun = day.items === 1 ? 'summary' : 'summaries';
 		return `${dayMonth(day.date)} - ${day.items} ${noun}: ${day.inside} inside the band, ${day.short} shorter, ${day.long} longer.`;
@@ -233,7 +242,7 @@
 	 * top are the ones anybody acts on. */
 	const columns = $derived<DayReadout[]>(
 		split.map((day, index) => ({
-			x: centre(index),
+			x: centres[index],
 			date: dayMonth(day.date),
 			rows:
 				day.items > 0
@@ -301,6 +310,7 @@
 		class="mt-4 rounded-md border border-rule bg-surface p-3"
 		data-band-distance
 		data-readout-columns={columns.length}
+		data-band-domain={tallest}
 		data-model-rule="yes"
 		data-model-rule-name="band-distance"
 		data-model-rule-from={split[0]?.date ?? ''}
@@ -426,10 +436,10 @@
 								{#each PARTS as part, position (part.place)}
 									{#if day[part.place] > 0}
 										<rect
-											x={px(centre(index) - bar / 2)}
-											y={segment(day, position).y}
+											x={px(centres[index] - bar / 2)}
+											y={stacks[index][position].y}
 											width={px(bar)}
-											height={segment(day, position).height}
+											height={stacks[index][position].height}
 											fill={part.colour}
 											data-band-part={part.place}
 										/>
@@ -444,8 +454,8 @@
 				     columns keeps the grid. -->
 				{#each ticks as tick (tick.index)}
 					<line
-						x1={centre(tick.index)}
-						x2={centre(tick.index)}
+						x1={centres[tick.index]}
+						x2={centres[tick.index]}
 						y1={box.bottom}
 						y2={box.bottom + 4}
 						stroke="var(--color-text-tertiary)"
@@ -453,7 +463,7 @@
 					/>
 					{#if tick.text}
 						<text
-							x={centre(tick.index)}
+							x={centres[tick.index]}
 							y={box.bottom + 16}
 							text-anchor={tick.anchor}
 							fill="var(--color-text-tertiary)"
