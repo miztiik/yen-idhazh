@@ -23,6 +23,11 @@ measured 214.9 B a row that is 78.4 MB on disk, and `load_published` peaks
 around 261 MB reading it - in the one job that loads no model, on a 16 GB
 runner. See `docs/reference/measurements.md`.
 
+It is moving to `state/published/YYYY/MM/DD.csv`, the grain the published tree
+itself already uses. `load_published` reads both shapes, so no step of that
+move can lose an address - which is why the reader learned the day tree before
+anything wrote one.
+
 `state/feed-health/<YYYY-MM>.csv` answers "is this source still working?" One
 row per feed per run, read through `HEALTH_WINDOW_DAYS`, so it shards.
 
@@ -65,11 +70,12 @@ fact, and it lives here.
 from __future__ import annotations
 
 import csv
+import re
 from collections.abc import Callable, Collection, Iterable, Iterator
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
-from typing import Final
+from typing import Final, NoReturn
 
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -86,6 +92,7 @@ HEALTH_DIRNAME: Final = "feed-health"
 ITEM_HEALTH_DIRNAME: Final = "item-health"
 TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
+PUBLISHED_DIRNAME: Final = "published"
 PUBLISHED_FILENAME: Final = "published.csv"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
@@ -402,18 +409,75 @@ def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str
     return first_seen
 
 
+#: What a directory under `state/published/` must be named to be a year, and a
+#: month or a day. The names are matched rather than globbed, so that a file
+#: none of them describes is refused instead of quietly passed over.
+_YEAR: Final = re.compile(r"\d{4}")
+_TWO_DIGITS: Final = re.compile(r"\d{2}")
+
+
+def _refuse_stray(entry: Path, root: Path) -> NoReturn:
+    """Nothing under `state/published/` may be ignored, so an odd name stops the read."""
+    raise ValueError(
+        f"{STATE_DIRNAME}/{PUBLISHED_DIRNAME} holds "
+        f"{entry.relative_to(root).as_posix()}, which is not a YYYY/MM/DD published "
+        "day. A file the reader cannot place is how it starts missing rows, so it "
+        "refuses the read rather than skipping the file."
+    )
+
+
+def _published_days(state_dir: Path) -> Iterator[Path]:
+    """Every `state/published/YYYY/MM/DD.csv`, oldest first.
+
+    Walked rather than globbed. A glob answers "what matched" and says nothing
+    about what did not, so an unexplained file would sit in a state directory
+    unread and unmentioned. This names every entry it meets and refuses the
+    ones it cannot place.
+
+    A missing directory yields nothing, because a clone with no history is what
+    a fresh checkout has and not a fault.
+    """
+    root = state_dir / PUBLISHED_DIRNAME
+    if not root.is_dir():
+        return
+    for year in sorted(root.iterdir()):
+        if not (year.is_dir() and _YEAR.fullmatch(year.name)):
+            _refuse_stray(year, root)
+        for month in sorted(year.iterdir()):
+            if not (month.is_dir() and _TWO_DIGITS.fullmatch(month.name)):
+                _refuse_stray(month, root)
+            for day in sorted(month.iterdir()):
+                if not (day.is_file() and day.suffix == ".csv"):
+                    _refuse_stray(day, root)
+                if not _TWO_DIGITS.fullmatch(day.stem):
+                    _refuse_stray(day, root)
+                try:
+                    date_type.fromisoformat(f"{year.name}-{month.name}-{day.stem}")
+                except ValueError:
+                    _refuse_stray(day, root)
+                yield day
+
+
 def load_published(state_dir: Path) -> dict[str, str]:
     """Address -> the digest date it ran on. Never windowed: published is forever.
 
+    Two shapes are read: the flat `state/published.csv` and the day tree under
+    `state/published/`. They coexist while the ledger moves to the day layout,
+    and reading both is what stops any step of that move losing an address - a
+    split that half-finishes, or a flat file a union merge brings back after it
+    was removed, still answers here.
+
     Streamed rather than materialised, because this is the one unwindowed read
     over the one ledger with no time bound - so its peak would otherwise be the
-    whole file, and the whole file is what grows.
+    whole file, and the whole file is what grows. Only the day paths are
+    listed, and a day is a file rather than a row.
     """
     published: dict[str, str] = {}
-    for row in _stream_rows(published_path(state_dir)):
-        url_key, on = row["url_key"], row["published_on"]
-        if url_key not in published or on < published[url_key]:
-            published[url_key] = on
+    for path in (published_path(state_dir), *_published_days(state_dir)):
+        for row in _stream_rows(path):
+            url_key, on = row["url_key"], row["published_on"]
+            if url_key not in published or on < published[url_key]:
+                published[url_key] = on
     return published
 
 
