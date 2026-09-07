@@ -10,7 +10,7 @@
       "role": "user"
     },
     {
-      "content": "{\"title\": \"Example Lab publishes smaller inference model under a permissive licence\", \"summary\": \"Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.\", \"key_points\": [\"Cost per million tokens falls 34 percent against the model it replaces.\", \"Throughput on commodity CPUs is 2.1x the previous release.\", \"Weights are published under a permissive licence.\"]}",
+      "content": "{\"title\": \"Example Lab publishes smaller inference model under a permissive licence\", \"key_points\": [\"Cost per million tokens falls 34 percent against the model it replaces.\", \"Throughput on commodity CPUs is 2.1x the previous release.\", \"Weights are published under a permissive licence.\"], \"summary\": \"Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.\"}",
       "role": "assistant"
     }
   ],
