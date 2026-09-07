@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-07
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -255,6 +255,36 @@ The title takes the other path. It is the one field with a working fallback -
 the source's own headline - so an address there drops the title and keeps the
 item, the same way a title outside the asked range does. The summary has no
 fallback, which is why the same leak there is fatal.
+
+**A restatement is dropped, not refused.** This is the one post-parse check that
+removes a part rather than the whole item. A key point that only restates the
+summary is a thin line, not a wrong one, so `to_summary` drops that key point and
+keeps the item - it degrades, it does not fail (`CLAUDE.md` section 1a).
+
+`restates_summary` is the `verbatim_run` idea pointed at our own summary instead
+of the article: the share of a key point's four-word phrases already in the
+summary. Above `summarize.key_point_restatement_ceiling` - `0.5` today, a
+starting point and not a calibrated threshold (Rule #10) - the key point carries
+more of the summary's phrasing than a fact of its own and is dropped. It is a
+floor on distinctness and never a word ban: only the overlap ratio counts, so a
+key point may reuse the summary's words and still add a fact. Measured 2026-09-07
+on the one well-formed reply fixture, its three distinct key points score 0.00,
+0.11 and 0.14 while a verbatim slice of the summary scores 1.00, so the ceiling
+sits in the wide gap between a new fact and a copy.
+
+The drop never removes the last key point. The published payload requires at
+least one, and each band carries its own `key_points_min`, so when every key
+point restates the least-restating up to that floor stay and the item still
+publishes with fewer key points. The knob lives in `summarize` rather than
+`evaluation` because the floor it must respect - the band's `key_points_min` -
+lives there too.
+
+The prompt still asks for this - "a key point that restates the summary is a
+wasted line" - but a prompt gives the model no definition of "restates" it can
+compute, and the restatement rate ran at seven in eight before the check
+existed. The deterministic drop is the control; the prompt sentence is the
+request it now backs, and tuning that sentence is a measured loop this change did
+not open.
 
 ## Model compatibility is mechanical
 
