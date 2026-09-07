@@ -33,7 +33,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 2 | A short article stops being asked for five key points | - | A | DONE | - | #476 | w2 |
 | 3 | A restating key point is dropped, not the item | 1, 2 | B | DONE | - | #478 | w3 |
 | 4 | How often a key point says something new | 3 | C | DONE | - | #479 | w4 |
-| 5 | The prompt stops being argued about and starts being measured | 4 | D | PENDING | - | - | - |
+| 5 | The prompt stops being argued about and starts being measured | 4 | D | DONE | - | #480 | w5 |
 
 ---
 
