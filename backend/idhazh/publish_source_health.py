@@ -249,6 +249,37 @@ def build(
     )
 
 
+def _recent_item_health(state_root: Path, *, today: str, keep: int) -> list[ItemHealthRow]:
+    """The rows of the newest `keep` complete recorded dates, and nothing older.
+
+    "Recorded" means a date the item-health ledger actually holds, not a date the
+    calendar names. The census wants the last `keep` dates that ran, and a `keep`
+    day calendar window is not the same set: a gap in the record leaves the window
+    short, and widening it until it is long enough reads back to the first run the
+    project ever made. That preload is `docs/reference/data-growth-audit.md`
+    finding 12, and calendar subtraction is not an equivalent query for it.
+
+    So the month shards are the index: their names say which months hold records,
+    the newest is opened first, and the walk stops the moment `keep` distinct
+    dates are in hand. The months behind them are never opened, so this costs the
+    same on a run whether the project has published for a fortnight or a decade
+    (CLAUDE.md Rule #12). Every date it returns is strictly before `today`,
+    because a run still working on today has opportunities nobody has attempted.
+    """
+    if keep <= 0:
+        return []
+    directory = state_root / ledger.ITEM_HEALTH_DIRNAME
+    by_date: dict[str, list[ItemHealthRow]] = defaultdict(list)
+    for shard in sorted(directory.glob("*.csv"), key=lambda entry: entry.name, reverse=True):
+        for row in ledger.load_item_health_shard(shard):
+            if row.date < today:
+                by_date[row.date].append(row)
+        if len(by_date) >= keep:
+            break
+    dates = sorted(by_date)[-keep:]
+    return [row for date in dates for row in by_date[date]]
+
+
 def publish(
     *,
     sources: Sources,
@@ -264,9 +295,10 @@ def publish(
 
     The health read is the one the quarantine reads - `HEALTH_WINDOW_DAYS`
     anchored on this run's date - because this file publishes the run's decision
-    rather than a second opinion about it. The item read is bounded by the same
-    number of days the census keeps, so nothing is opened that `_complete_dates`
-    would throw away.
+    rather than a second opinion about it. The item read selects the newest
+    `source_yield_min_complete_days` recorded dates first and opens only those, so
+    a gap in the record cannot shorten the census and the history behind the
+    window is never read (`_recent_item_health`).
 
     Returns the view rather than the path because `yield_alarm` reads it and the
     caller already holds the path it passed in.
@@ -276,8 +308,8 @@ def publish(
         feeds=active_feeds(sources, [vertical.id for vertical in taxonomy.verticals]),
         collect=collect,
         health=health,
-        items=ledger.load_item_health(
-            state_root, today=date, within_days=collect.source_yield_min_complete_days
+        items=_recent_item_health(
+            state_root, today=date, keep=collect.source_yield_min_complete_days
         ),
         retired_on={
             row.endpoint_key: row.retired_on for row in ledger.load_retirements(state_root)
