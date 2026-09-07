@@ -24,6 +24,7 @@ import hashlib
 import io
 import json
 import logging
+import os
 from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
@@ -66,6 +67,7 @@ from idhazh.retention import (
     measure,
     month_shards,
     oldest_month_kept,
+    oldest_visual,
     over_budget,
     over_cap,
     prune,
@@ -600,6 +602,208 @@ def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
     assert result.considered == 10
 
 
+# --- The scan opens the days the policy names, and no others ------------------
+
+#: The first published day of the trees the four tests below run against. They
+#: are built here rather than read off `frontend/public/digest/`, so what these
+#: tests cost never moves with what the pipeline has published (Rule #12,
+#: section 13).
+SCAN_START: Final = date(2019, 1, 1)
+#: Days in the big arm. 400 puts fourteen calendar months on the tree and leaves
+#: the cutoff a long way inside it, so a walk that stopped early shows up as a
+#: missing month rather than as a rounding difference.
+SCAN_DAYS: Final = 400
+#: Days in the small arm. Both arms hold the same expired days; every day they
+#: do not share is inside the window, which is the side the archive grows on.
+SCAN_SMALL_DAYS: Final = 260
+#: How far into both trees the cutoff falls, in days from `SCAN_START`.
+SCAN_EXPIRED_DAYS: Final = 250
+#: The cutoff itself, and the expired days it names: 2019-01-01 to 2019-09-07.
+SCAN_LIMIT: Final = SCAN_START + timedelta(days=SCAN_EXPIRED_DAYS)
+
+
+def day_folder(root: Path, day: date) -> Path:
+    """Where a published day sits, spelled out apart from the code under test."""
+    year, month, number = day.isoformat().split("-")
+    return root / year / month / number
+
+
+def dated_tree(root: Path, *, days: int, pictures: int) -> Path:
+    """`days` consecutive published days from `SCAN_START`, `pictures` on each."""
+    return site(
+        root,
+        {
+            (SCAN_START + timedelta(days=n)).isoformat(): [f"{i}.webp" for i in range(pictures)]
+            for n in range(days)
+        },
+    )
+
+
+def by_sorting_the_whole_tree(root: Path, limit: date) -> list[Path]:
+    """The reference answer: sort every path under the root, then filter.
+
+    This is the shape the scan used to have, written out here so the cheaper one
+    has something to be equal to. It may cost whatever it likes - it runs over a
+    fixture of fixed size, never over the archive.
+    """
+    pictures = {".png", ".webp", ".jpg", ".jpeg", ".svg"}
+    found: list[Path] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in pictures:
+            continue
+        parts = path.relative_to(root).parts
+        if len(parts) < 3:
+            continue
+        try:
+            published = date.fromisoformat("-".join(parts[:3]))
+        except ValueError:
+            continue
+        if published < limit:
+            found.append(path)
+    return found
+
+
+def directories_opened_during(work: Callable[[], object]) -> list[Path]:
+    """Every directory an operation opens, in the order it opened them.
+
+    Counted rather than timed, for the reason `reads_during` above is: a timing
+    assertion is flaky and says nothing about what the code read, and what this
+    section is about is what gets read. `os.scandir` is the call both
+    `Path.iterdir` and `Path.rglob` reach for on this interpreter - checked on
+    CPython 3.14.2, 2026-09-07 - and `os.listdir` is patched beside it so a
+    rewrite onto that call cannot make the count silently fall to zero.
+    """
+    opened: list[Path] = []
+    real_scandir, real_listdir = os.scandir, os.listdir
+
+    def scandir(path: Any = ".", *args: Any, **kwargs: Any) -> Any:
+        opened.append(Path(path))
+        return real_scandir(path, *args, **kwargs)
+
+    def listdir(path: Any = ".", *args: Any, **kwargs: Any) -> Any:
+        opened.append(Path(path))
+        return real_listdir(path, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(os, "scandir", scandir)
+        patch.setattr(os, "listdir", listdir)
+        work()
+    return opened
+
+
+def opened_by_depth(root: Path, work: Callable[[], object]) -> dict[int, set[str]]:
+    """What a scan opened, by how deep under its own root it was.
+
+    Keyed relative to the root so two trees can be compared: depth 3 is a day
+    directory, and depths 0 to 2 are the root, a year and a month.
+    """
+    by_depth: dict[int, set[str]] = {}
+    for path in directories_opened_during(work):
+        if path != root and root not in path.parents:
+            continue
+        relative = path.relative_to(root)
+        by_depth.setdefault(len(relative.parts), set()).add(relative.as_posix())
+    return by_depth
+
+
+def test_the_scan_finds_exactly_what_sorting_the_whole_tree_found(tmp_path: Path) -> None:
+    """The oracle. A cheaper walk that finds a different set is a different policy.
+
+    Order is asserted as well as membership, because `prune` hands the fuse
+    `candidates[:max_deletes_per_run]`. The order decides WHICH files a fused run
+    deletes, not only how many, so a reordering silently changes what a capped
+    run takes and what it leaves for the next one.
+    """
+    root = dated_tree(tmp_path, days=SCAN_DAYS, pictures=2)
+
+    found = visuals_older_than(root, SCAN_LIMIT)
+
+    assert found == by_sorting_the_whole_tree(root, SCAN_LIMIT)
+    assert len(found) == 500, "250 expired days, two pictures on each"
+    assert oldest_visual(root) == SCAN_START
+
+
+def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
+    tmp_path: Path,
+) -> None:
+    """Rule #12, counted. A day the policy keeps is a day the policy need not read.
+
+    The old shape sorted every path under the root, so it opened all 400 day
+    directories to select the 250 it wanted - and that count rose every day
+    nobody wrote any code.
+    """
+    root = dated_tree(tmp_path, days=SCAN_DAYS, pictures=1)
+    expired = {
+        day_folder(root, SCAN_START + timedelta(days=n)).relative_to(root).as_posix()
+        for n in range(SCAN_EXPIRED_DAYS)
+    }
+
+    opened = opened_by_depth(root, lambda: visuals_older_than(root, SCAN_LIMIT))
+
+    assert opened.get(3, set()) == expired, "the expired days, and only those"
+    assert opened.get(4) is None, "a published day holds files, so nothing below it opens"
+    assert opened[0] == {"."}
+    assert opened[1] == {"2019"}, "2020 begins after the cutoff and is skipped by name"
+    assert opened[2] == {f"2019/{month:02d}" for month in range(1, 10)}, (
+        "January to September 2019 - the months that can hold a day older than "
+        "2019-09-08. October onwards is refused by its name"
+    )
+
+
+def test_a_bigger_archive_does_not_make_the_scan_read_more(tmp_path: Path) -> None:
+    """Two trees, the same backlog, and the same reads.
+
+    The large arm carries 140 more published days and 3,080 more files, all of
+    them inside the window. Rule #12's question is whether a run that changed no
+    code costs more because an earlier run appended - so the two scans have to
+    open the same directories, not merely find the same files.
+    """
+    small = dated_tree(tmp_path / "small", days=SCAN_SMALL_DAYS, pictures=1)
+    large = dated_tree(tmp_path / "large", days=SCAN_DAYS, pictures=8)
+
+    read_small = opened_by_depth(small, lambda: visuals_older_than(small, SCAN_LIMIT))
+    read_large = opened_by_depth(large, lambda: visuals_older_than(large, SCAN_LIMIT))
+
+    assert read_small == read_large
+    assert sum(len(names) for names in read_large.values()) == 261, (
+        "the root, 2019, nine months and 250 expired days"
+    )
+    assert len(visuals_older_than(large, SCAN_LIMIT)) == 8 * SCAN_EXPIRED_DAYS
+    assert len(visuals_older_than(small, SCAN_LIMIT)) == SCAN_EXPIRED_DAYS
+
+
+def test_the_oldest_picture_is_found_without_opening_the_rest_of_the_archive(
+    tmp_path: Path,
+) -> None:
+    """The one that costs on every run today.
+
+    `image_months` is -1 in shipped config, so `visuals_older_than` is never
+    called - and `prune` still asks for the oldest picture on every path through
+    it, including the one that returns early. That question is answered by the
+    first day that still holds a picture, so it stops there.
+    """
+    root = dated_tree(tmp_path, days=SCAN_DAYS, pictures=1)
+
+    opened = opened_by_depth(root, lambda: oldest_visual(root))
+
+    assert oldest_visual(root) == SCAN_START
+    assert opened == {0: {"."}, 1: {"2019"}, 2: {"2019/01"}, 3: {"2019/01/01"}}
+
+
+def test_a_name_inside_the_dated_tree_that_is_not_a_date_is_a_fault(tmp_path: Path) -> None:
+    """Under a year directory the layout is ours, so an unreadable name is a bug.
+
+    A skip here would leave files the cleanup cannot account for, silently, for
+    as long as whatever wrote them keeps writing. The root above is the other
+    way round and stays that way - see the stray-directory test further down.
+    """
+    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    (root / "2020" / "notes.txt").write_bytes(b"x")
+
+    with pytest.raises(ValueError, match=r"2020/notes\.txt is not a month"):
+        visuals_older_than(root, date(2026, 8, 21))
+
+
 # --- What the run says it did not clear --------------------------------------
 
 
@@ -918,6 +1122,12 @@ def test_the_step_leaves_the_pictures_alone_when_no_tree_is_named(tmp_path: Path
 
 
 def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:
+    """The root is the boundary of the day tree, so the root is where it stops.
+
+    A root can hold things that are not published days - this one holds a brand
+    directory - and none of them is the prune's business. Inside a year the rule
+    inverts, because inside a year the layout is ours: see the fault test above.
+    """
     stray = tmp_path / "assets" / "brand"
     stray.mkdir(parents=True)
     (stray / "logo.svg").write_bytes(b"x" * 10)
