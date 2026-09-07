@@ -56,7 +56,7 @@ export const EVAL_PANELS: readonly EvalPanel[] = [
 	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' },
 	{
 		id: 'new-fact-rate',
-		title: 'How often a key point says something new',
+		title: 'How often a key point adds to the summary',
 		route: '/console/model/'
 	}
 ];
