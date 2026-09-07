@@ -96,11 +96,14 @@
 	let measured = $state<number | null>(null);
 
 	const box = $derived(frame(chartWidth(measured, width), height, MARGIN));
-	const yBars = $derived(
-		linearAxis(
-			times.bins.map((bin) => bin.n),
-			[box.bottom, box.top]
-		)
+	/** The count in each bin, data only. Split from the axis so a resize reuses
+	 * this pass rather than walking the bins again for a new plot height. */
+	const binCounts = $derived(times.bins.map((bin) => bin.n));
+	const yBars = $derived(linearAxis(binCounts, [box.bottom, box.top]));
+	/** The raw extent of the counts, bound to the data alone: a resize cannot
+	 * move it and a window change can. Published so a test can hold the split. */
+	const histExtent = $derived(
+		binCounts.length === 0 ? '' : `${Math.min(...binCounts)},${Math.max(...binCounts)}`
 	);
 
 	/** Where a value in seconds sits across the plot.
@@ -257,6 +260,7 @@
 	class="plot"
 	data-histogram={name}
 	data-histogram-n={times.n}
+	data-hist-domain={histExtent}
 	data-readout-columns={columns.length}
 	data-model-rule="no"
 	data-model-rule-name={name}
