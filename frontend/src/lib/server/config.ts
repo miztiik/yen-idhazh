@@ -138,9 +138,12 @@ export interface SummaryBand {
 	target_words_min: number;
 	target_words_max: number;
 	/** The fewest and most key points this band asks for. Graded by length: the
-	 * shortest band asks for one, the longest for five. */
-	key_points_min: number;
-	key_points_max: number;
+	 * shortest band asks for one, the longest for five. Optional here because the
+	 * console's chart reads only the word range; the committed config and the
+	 * fallback ladder below both carry the values, which the backend contract
+	 * test pins against `config/idhazh.json`. */
+	key_points_min?: number;
+	key_points_max?: number;
 }
 
 export interface SummarizeConfig {
