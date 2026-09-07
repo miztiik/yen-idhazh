@@ -1,0 +1,223 @@
+{
+  "addresses_considered": null,
+  "bands": {
+    "high": 10,
+    "low": 0,
+    "medium": 0
+  },
+  "date": "2026-08-22",
+  "determinism_violations": 0,
+  "extraction_suspect": 0,
+  "instruments": [
+    {
+      "column": "compression",
+      "stat": {
+        "count": 10,
+        "maximum": 0.4391691394658754,
+        "minimum": 0.059344091618948464,
+        "p25": 0.09165808444902163,
+        "p50": 0.2903225806451613,
+        "p75": 0.3042168674698795,
+        "total": 2.3225920867677137
+      }
+    },
+    {
+      "column": "coverage",
+      "stat": {
+        "count": 10,
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "p25": 0.4117647058823529,
+        "p50": 0.6666666666666666,
+        "p75": 0.75,
+        "total": 5.5075980392156865
+      }
+    },
+    {
+      "column": "extractiveness",
+      "stat": {
+        "count": 10,
+        "maximum": 0.5773195876288659,
+        "minimum": 0.08928571428571429,
+        "p25": 0.12244897959183673,
+        "p50": 0.23300970873786409,
+        "p75": 0.28,
+        "total": 2.3408268509397803
+      }
+    },
+    {
+      "column": "hhem",
+      "stat": {
+        "count": 10,
+        "maximum": 0.9784432649612427,
+        "minimum": 0.9225377440452576,
+        "p25": 0.9391248822212219,
+        "p50": 0.9553743600845337,
+        "p75": 0.9599491953849792,
+        "total": 9.525257050991058
+      }
+    },
+    {
+      "column": "hhem_delta",
+      "stat": {
+        "count": 10,
+        "maximum": 0.0,
+        "minimum": 0.0,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "total": 0.0
+      }
+    },
+    {
+      "column": "hhem_full",
+      "stat": {
+        "count": 10,
+        "maximum": 0.9784432649612427,
+        "minimum": 0.9225377440452576,
+        "p25": 0.9391248822212219,
+        "p50": 0.9553743600845337,
+        "p75": 0.9599491953849792,
+        "total": 9.525257050991058
+      }
+    },
+    {
+      "column": "score_ms",
+      "stat": {
+        "count": 10,
+        "maximum": 0.0,
+        "minimum": 0.0,
+        "p25": 0.0,
+        "p50": 0.0,
+        "p75": 0.0,
+        "total": 0.0
+      }
+    },
+    {
+      "column": "source_seen_word_count",
+      "stat": {
+        "count": 10,
+        "maximum": 1923.0,
+        "minimum": 311.0,
+        "p25": 332.0,
+        "p50": 398.0,
+        "p75": 982.0,
+        "total": 7011.0
+      }
+    },
+    {
+      "column": "source_word_count",
+      "stat": {
+        "count": 9,
+        "maximum": 1310.0,
+        "minimum": 311.0,
+        "p25": 332.0,
+        "p50": 338.0,
+        "p75": 770.0,
+        "total": 5088.0
+      }
+    },
+    {
+      "column": "summary_word_count",
+      "stat": {
+        "count": 10,
+        "maximum": 148.0,
+        "minimum": 89.0,
+        "p25": 100.0,
+        "p50": 106.0,
+        "p75": 114.0,
+        "total": 1080.0
+      }
+    },
+    {
+      "column": "verbatim_run",
+      "stat": {
+        "count": 10,
+        "maximum": 0.24,
+        "minimum": 0.06956521739130435,
+        "p25": 0.07865168539325842,
+        "p50": 0.0945945945945946,
+        "p75": 0.1111111111111111,
+        "total": 1.0499030316755056
+      }
+    }
+  ],
+  "items_failed": 7,
+  "items_planned": 17,
+  "items_published": 10,
+  "items_truncated": 1,
+  "model_id": "qwen3-8b-q4-k-m",
+  "pipeline_fingerprint": "3090231ddecd1ea99f053ebdd59456210f800c6d246fa6632f157afb58321513",
+  "reasons": {
+    "faithfulness": 0,
+    "hedge_dropped": 0,
+    "lead_missing": 0,
+    "not_scored": 0,
+    "unattributed": 0,
+    "unsupported_number": 0
+  },
+  "revision": 1,
+  "runs": 1,
+  "sources": [
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "apnews-world",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "cna-world",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "databricks-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "eia-today",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "fortune",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "google-research-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "nvidia-technical-blog",
+      "truncated": 1
+    },
+    {
+      "doubted": 0,
+      "published": 2,
+      "source_id": "the-hindu-national",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
+      "source_id": "toi-india",
+      "truncated": 0
+    }
+  ],
+  "sources_present": 9,
+  "stage_timing": [],
+  "summaries_scored": 10,
+  "throughput": null,
+  "version": "2026-09-07",
+  "visuals_rendered": 1
+}

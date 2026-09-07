@@ -1,0 +1,60 @@
+{
+  "addresses_considered": null,
+  "bands": {
+    "high": 0,
+    "low": 2,
+    "medium": 2
+  },
+  "date": "2026-08-21",
+  "determinism_violations": 0,
+  "extraction_suspect": 0,
+  "instruments": [],
+  "items_failed": 2,
+  "items_planned": 10,
+  "items_published": 4,
+  "items_truncated": 1,
+  "model_id": "qwen3-8b-q4-k-m",
+  "pipeline_fingerprint": "3090231ddecd1ea99f053ebdd59456210f800c6d246fa6632f157afb58321513",
+  "reasons": {
+    "faithfulness": 0,
+    "hedge_dropped": 0,
+    "lead_missing": 0,
+    "not_scored": 0,
+    "unattributed": 4,
+    "unsupported_number": 0
+  },
+  "revision": 2,
+  "runs": 2,
+  "sources": [
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "amazon-science",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "google-research-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "llama-cpp-releases",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "nvidia-technical-blog",
+      "truncated": 1
+    }
+  ],
+  "sources_present": 4,
+  "stage_timing": [],
+  "summaries_scored": 0,
+  "throughput": null,
+  "version": "2026-09-07",
+  "visuals_rendered": 0
+}
