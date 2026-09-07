@@ -1,7 +1,7 @@
-# The Published Ledger Gets Month Shards And A Window It Can Refuse
+# Every Read Over A Growing Collection Carries A Window
 
 **Last Updated**: 2026-09-07
-**Level**: 5 (a persisted contract, a partition layout, and a reader-facing guarantee that gains a switch)
+**Level**: 5 (a persisted contract, a partition layout, a repo-wide rule, and a reader-facing guarantee that gains a switch)
 
 Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): one worktree-isolated worker per row, personas consulted on ambiguity, AUTO-merge on green gates, parallel N = 2. Honour the ESCALATE triggers in section 0.
 
@@ -9,11 +9,11 @@ Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): o
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | `state/published.csv` is [growth-audit finding 1](../docs/reference/data-growth-audit.md) and the highest-priority row nobody owns. It is read whole on every plan, it never stops growing, and Rule #12 refuses a cost that rises when nobody wrote any code. |
-| Hard scope - in | Audit finding 1, and finding 2 where the per-desk union follows from it. The `state/published/` layout, the `collect.published_window_days` knob, the one-shot split, and the 13 docs that describe the old shape. |
-| Hard scope - out | Every other ledger. Content fingerprints and semantic dedup (see the deferred decision below). Retention or pruning of published shards - **there is none, ever**. The two draft consumers in [the visual-planner plan](20260902-visual-planner-pseudo-plan.md) and [the fewer-better-articles plan](20260905-06-fewer-better-articles-plan.md). Changing the article ID format. |
-| ESCALATE triggers | (a) Any row that would delete a committed published row. (b) Any row that would set `published_window_days` to a finite value - **this plan ships `-1` and nothing else**. (c) Row 6 running while a scheduled digest is in flight. (d) Any row that cannot hold its Oracle without weakening the repeat guard. (e) A window value less than or equal to `collect.seen_window_days`. |
-| Chosen strategy | Bound the read before bounding the memory, and ship the horizon switched off. The layout and the machinery land; turning the horizon on is a one-line config edit a person makes later, on evidence row 1 produces. |
+| Why this plan exists | Rule #12 refuses a cost that rises when nobody wrote any code, and names review as the only control. Review is a person remembering to ask. This plan makes the question mechanical: a read over a growing collection takes a window, and `-1` is how a person says out loud that they chose not to bound it. |
+| Hard scope - in | The window rule and its inventory. Every unwindowed read named in the inventory below that no other plan owns. `state/published.csv` is the first worked example and carries rows 2 to 8. |
+| Hard scope - out | The two surfaces [the constant-cost plan](20260906-constant-cost-reads-plan.md) already owns - telemetry publication (its row 19) and source health (its row 20). Content fingerprints and semantic dedup. Retention or pruning of any published row - **there is none, ever**. Changing the article ID format. Every frontend and browser read, which is that plan's ranks 1 and 10. |
+| ESCALATE triggers | (a) Any row that would delete a committed row from any ledger. (b) Any row that would ship a finite window - **every window in this plan ships at `-1`**. (c) Row 7 running while a scheduled digest is in flight. (d) Any row that cannot hold its Oracle without weakening a guarantee. (e) A finite window less than or equal to the sight window it must outlive. |
+| Chosen strategy | State the rule, take the inventory, then convert one surface end to end as the worked example before touching the rest. Ship every horizon switched off, so the machinery lands and turning it on is a config edit a person makes on evidence. |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2.` |
 
 ### The decision, and who ruled on it
@@ -31,6 +31,57 @@ Four personas were consulted on 2026-09-07. Three refused a bounded repeat guard
 
 **Deferred, and named so it is not lost.** The owner's actual intent - "republish when something underlying changed" - is a content fingerprint, not a clock. A clock cannot tell a developed story from a forgotten one. That is a separate feature over a title-carrying surface and it is out of scope here.
 
+## 0a - The rule, and the inventory it applies to
+
+**A read over a collection a run appends to takes a window. A window of `-1` means unbounded, and it is how a person says out loud that they chose not to bound this one.**
+
+This is not a second Rule #12. It is Rule #12's escape hatch made mechanical. Rule #12 already permits a growing read where a person agrees and says why; today that agreement is a paragraph in a docstring, so it is invisible to everything except a reviewer's memory. A `-1` in `config/` is the same agreement written where a diff can see it, a schema can bound it, and a test can name it.
+
+It composes with the shard rule in [docs/architecture/contracts/schemas.md](../docs/architecture/contracts/schemas.md) rather than replacing it. That rule says a ledger partitions **because** its read carries a window. This one says every read declares its window, including the ones that decline to have one - so partitioning still follows from windowing, and nothing partitions for its own sake.
+
+### Where it already holds
+
+Seven reads take a window today, and they are the pattern every row below copies.
+
+| Read | Window it carries |
+| --- | --- |
+| `ledger.load_seen` | `collect.seen_window_days`, 90 |
+| `ledger.load_health` | `ledger.HEALTH_WINDOW_DAYS` |
+| `ledger.load_item_health` | the caller's, from `config/` |
+| the reliability read in `cli.stage_plan` | `collect.reliability_window_days` |
+| the trace read in `cli.stage_assemble` | `observability.trace_window_days` |
+| `ledger.load_settled_failures` | one date |
+| `ledger.load_source_counts` | one date |
+
+### Where it does not, and who owns each
+
+Measured on this checkout, 2026-09-07.
+
+| Surface | What it reads now | Size today | Owner |
+| --- | --- | --- | --- |
+| `ledger.load_published` | every row ever published | 7,243 rows, 756 KB | **rows 2-8 here** |
+| `evals.writer.recorded_observations` and `ledger_shards` | every live score shard **and** every archived month, before appending one row | 5,870 KB over 2 shards | **row 9** |
+| `ledger.keyed_ledgers` | globs every feed-health and item-health shard on every settlement | 3,845 KB over 4 shards | **row 10** |
+| `ledger.load_runtime_counters` | the lifetime file, to answer about one run | 189 rows, 32 KB | **row 11** |
+| `fingerprint.append_new` | every fingerprint ever recorded | 3 rows, 2.4 KB | **row 12** |
+| `cli.stage_validate_days` | every published day, on every publication | 426 files, 23.0 MB | audit 16, deferred - names its bound in row 12 |
+| `assemble.site_size`, `retention.visuals_older_than`, `retention.month_shards` | the whole public tree, three separate walks | 23.0 MB | audit 17-19, deferred - same |
+| `publish_telemetry.publish` | every telemetry month | 1.05 MB | [constant-cost plan](20260906-constant-cost-reads-plan.md) row 19 |
+| `publish_source_health._load_items` | all item history | 2,761 KB | that plan's row 20 |
+
+### Where it must not hold, and why
+
+Naming these is what stops the rule becoming a list nobody can finish. Each is a bound stated rather than a cost hidden.
+
+| Surface | The bound |
+| --- | --- |
+| `ledger.load_retirements` | One row per permanently dead endpoint. It grows with the number of feeds a person configured, not with runs. 0 rows today. |
+| `ledger.load_visual_prunes` | One row a run, and the read is a report on the whole series. Windowing it would answer a different question. 4 rows today. |
+| `corpus.scored_from_items`, `render.write` | Bounded to one run's own artefacts. |
+| `assemble.days_in_month` | Bounded to one month, which is the unit it publishes. |
+| `evals.retrieval.load_corpus` | An explicit operator evaluation, never a pipeline read. |
+| `contracts.base.Contract.read` | Fresh arbitrary bytes. A validator cannot skip what it has not read. |
+
 ## 1 - Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR |
@@ -42,8 +93,15 @@ Four personas were consulted on 2026-09-07. Three refused a bounded repeat guard
 | 5 | The writer routes by month | 4 | C | PENDING | - | - |
 | 6 | The one-shot split | 5 | D | PENDING | - | - |
 | 7 | The window, the fallback deleted, and the docs | 3, 6 | E | PENDING | - | - |
+| 8 | The eval writer stops reading every shard | 3 | B | PENDING | - | - |
+| 9 | Settlement touches the shards the run wrote | 3 | B | PENDING | - | - |
+| 10 | Runtime counters answer about one run | 3 | B | PENDING | - | - |
+| 11 | Fingerprints, and the bounds the rest declare | 3 | B | PENDING | - | - |
+| 12 | The rule gets its concept doc | 7, 11 | F | PENDING | - | - |
 
-Rows 1, 2 and 3 touch disjoint files and run together. Rows 4 to 7 are strictly serial: each one is only safe because the one before it landed.
+Rows 1 to 3 touch disjoint files and run together. Rows 4 to 7 are strictly serial: each one is only safe because the one before it landed. Rows 8 to 11 are independent of the published cutover and of each other; they wait only on the knob shape in row 3. Row 12 is written last, because a rule with two worked examples behind it says something a rule with none cannot.
+
+**Rows 8 to 11 each ship at `-1`.** None of them changes what any read returns. What they change is that the read now has to say what it covers.
 
 ### Defects found during execution
 
@@ -201,13 +259,103 @@ Rows 1, 2 and 3 touch disjoint files and run together. Rows 4 to 7 are strictly 
 | 4 | `docs/reference/measurements.md` gains the 2026-09-07 numbers: 37.0 ms best, 69.0 ms worst, 32.0 ms spread, 500.9 B of peak a row, over 7,243 rows on an Intel Core i7-1265U | Rule #10 |
 | 5 | `docs/archive/measurements-2026-08.md` is history and is **not** edited | Fowler |
 
+## 9 - Row #8 - The eval writer stops reading every shard
+
+- **Scope:** `evals.writer.append` builds `recorded_observations` before it writes one row, and that set is the union of every live score shard and every archived month. Measured 2026-09-07: 5,870 KB over two shards, and the archive grows for ever by design because a digest is what survives a shard's deletion. The row that found this handed it back as "belongs to the Indexed State package"; this is that package's first slice.
+- **Files touched:**
+  - `backend/idhazh/evals/writer.py`
+  - `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`
+  - `backend/tests/test_evals.py`, `backend/tests/test_contracts.py`
+- **Acceptance gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
+- **Oracle:** with `-1`, an append refuses exactly the observations it refuses today, including one whose only record is an archived digest. With a finite window over a built six-month fixture, the shards outside it are not opened - counted by file reads, not by timing.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **The archived half can never be windowed away.** A month past the full-grain window has no rows left, so the digest is the only record that its measurements happened. Dropping it would call every measurement in that month new the day the shard was deleted, which is the one thing the ledger promises it is not. So the knob bounds the **live shard** read only, and the archive is always read whole | [writer.py](../backend/idhazh/evals/writer.py) |
+| 2 | That asymmetry is the reason this row exists rather than being folded into row 3. Two collections, one bounded and one not, behind one call - and the docstring is the only place that says so today | Fowler |
+
+## 10 - Row #9 - Settlement touches the shards the run wrote
+
+- **Scope:** `ledger.keyed_ledgers` globs every committed feed-health and item-health shard, and `drop_repeated_rows` rewrites each one, every time a push race triggers settlement. Measured 2026-09-07: 3,845 KB over four shards, and the shard count rises by two a month for ever.
+- **Files touched:**
+  - `backend/idhazh/ledger.py`
+  - `backend/idhazh/cli.py`
+  - `backend/tests/test_ledger.py`, `backend/tests/test_workflows.py`
+- **Acceptance gates:** local - `ruff`, `mypy --strict`, the shared test selector, plus `backend/tests/test_workflows.py` run directly. CI - full suite.
+- **Oracle:** the real-Git race tests still settle a duplicated row correctly, and a settlement after a run on `2026-09-07` opens no shard from an earlier month.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The window here is not a clock, it is **the months this run wrote to**. A run appends to its own date's shard and to nothing else, so a settlement that rewrites January is repairing damage no run in flight could have done | [month-partitions.md](../docs/concepts/month-partitions.md) freeze rule |
+| 2 | The glob keeps its stem validation and gains a refusal: a file in the directory that is not a month stem raises rather than being skipped, matching row 4's rule | Owner, 2026-09-07 |
+| 3 | This is the row most likely to be found wrong by the real-Git tests, so those run directly rather than through the selector | [agent-notes.md](../docs/reference/agent-notes.md) |
+
+## 11 - Row #10 - Runtime counters answer about one run
+
+- **Scope:** `ledger.load_runtime_counters(state_dir, *, run_id)` already asks about one run, then reads the whole lifetime file to find it. Measured 2026-09-07: 189 rows, 32 KB, growing by about 40 rows a day.
+- **Files touched:**
+  - `backend/idhazh/ledger.py`
+  - `backend/tests/test_ledger.py`
+- **Acceptance gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
+- **Oracle:** the rows returned for a run are identical before and after, and the read streams - peak follows the run's own rows rather than the file, proved the way row 2 proves it.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **Stream, do not shard.** A `run_id` already names its date, so this read is bounded by construction the moment it stops materialising. Partitioning 32 KB would add a layout for no answer it does not already have | Carmack |
+| 2 | This is the row that shows the rule is not "shard everything". The window a read declares can be one run, one day or one month, and the smallest honest one wins | Carmack |
+
+## 12 - Row #11 - Fingerprints, and the bounds the rest declare
+
+- **Scope:** `fingerprint.append_new` rebuilds every recorded identity before adding a few. It is 3 rows and 2.4 KB today, so this row is mostly the second half: write down, next to each read the inventory defers, what bounds it and why a window is not the answer yet.
+- **Files touched:**
+  - `backend/idhazh/fingerprint.py`
+  - `backend/idhazh/assemble.py`, `backend/idhazh/retention.py`, `backend/idhazh/cli.py` (comments only, at the four deferred walks)
+  - `backend/tests/test_fingerprint.py`
+- **Acceptance gates:** local - `ruff`, `mypy --strict`, the shared test selector. CI - full suite.
+- **Oracle:** a repeated identity is still refused, and each of the four deferred walks carries one line naming what it reads, how the cost grows, and which audit finding owns it.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The four walks over the published tree - `site_size`, the two retention walks, and `validate_days` - are **not** converted here. They are audit findings 16 to 19 and they belong with an artefact inventory, which is a different design. What this row owes them is the sentence Rule #12's escape hatch requires, so a reviewer can see the cost was chosen | Rule #12 |
+| 2 | Three rows in a lifetime file is not a growth problem, and saying so plainly is worth more than converting it. The change here is that the read declares its window; the value it declares is `-1` and the reason is written beside it | Carmack |
+
+## 13 - Row #12 - The rule gets its concept doc
+
+- **Scope:** `docs/concepts/growing-reads.md` - the rule, the inventory, the three tiers, and how `-1` relates to Rule #12's escape hatch. Every row above cites it; it is written last so it describes what shipped rather than what was hoped for.
+- **Files touched:**
+  - `docs/concepts/growing-reads.md` (new)
+  - `docs/architecture/contracts/schemas.md`
+  - `docs/concepts/month-partitions.md`
+  - `CLAUDE.md` (Rule #12's design rationale gains one paragraph)
+  - `docs/reference/documentation-structure.md`
+- **Acceptance gates:** local - none beyond the doc checks; this row changes no application code. CI - full suite.
+- **Oracle:** every read named in the inventory appears in the doc with its window or its stated bound, and the count in the doc matches the count in the code. A person reading only that page can answer "does this read need a window" for a collection invented tomorrow.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **A property, not a list.** The doc states the question - does this read cost more when a run appended more - and the inventory is an example table underneath it, explicitly marked as of a date. The archive-guard deleted on 2026-09-06 failed precisely because it was a list of paths pretending to be a rule | [CLAUDE.md](../CLAUDE.md) Rule #12 design rationale |
+| 2 | It goes in `docs/concepts/`, beside [month-partitions.md](../docs/concepts/month-partitions.md), because it is the same altitude: month-partitions says what a layout obliges a writer to do, this says what a growing collection obliges a reader to declare | [documentation-structure.md](../docs/reference/documentation-structure.md) |
+| 3 | CLAUDE.md gains a paragraph rather than a new rule. Rule #12 already forbids the growing cost nobody chose; this only says where the choosing is now written down | Owner, 2026-09-07 |
+
 ## What this plan does not fix
 
 Stated rather than left implied, because the next person to read the audit will look for these.
 
-- **Finding 1 is not closed.** The read is bounded and the peak is gone, but with `-1` committed the plan still opens every shard. What closes it is a person setting a finite window on row 1's evidence, and that is deliberately outside this plan.
-- **The lookup key is still not the partition key.** Fowler's objection stands and is not answered by anything here. A `url_key`-keyed index remains the answer if this ever becomes a measured cost - and after row 2, it very likely will not.
-- **Nothing is ever pruned.** Twelve files a year, kept for ever. That is the correct trade and it means the window buys read time, never bytes.
+- **No finding is closed by shipping `-1`.** Every read here still opens everything it opened before. What lands is the layout, the knob and the declaration. What closes a finding is a person setting a finite value on evidence, and that is deliberately outside this plan.
+- **Four walks over the published tree are deferred**, not solved: `site_size`, both retention walks, and `validate_days`. They need an artefact inventory, which is a different design. Row 11 gives each the sentence Rule #12 requires so the cost is visibly chosen.
+- **The lookup key is still not the partition key** for `published.csv`. Fowler's objection stands. A `url_key`-keyed index remains the answer if this ever becomes a measured cost - and after row 2, it very likely will not.
+- **Nothing is ever pruned.** Twelve files a year for the published ledger, kept for ever. That is the correct trade and it means a window buys read time, never bytes.
+- **The frontend and the browser are untouched.** Every read there is ranks 1 and 10 of the audit and belongs to [the constant-cost plan](20260906-constant-cost-reads-plan.md).
 
 ## See also
 
