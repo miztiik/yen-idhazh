@@ -695,11 +695,33 @@ class SummaryBand(Model):
     )
     target_words_min: int = Field(ge=1, description="The shortest summary the prompt asks for.")
     target_words_max: int = Field(ge=1, description="The longest summary the prompt asks for.")
+    key_points_min: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "The fewest key points this band asks for, and the decoder's floor for the "
+            "band. The prompt and the response schema read this same number. Never below "
+            "1: the published digest refuses an item with no key points."
+        ),
+    )
+    key_points_max: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "The most key points this band asks for, and the decoder's ceiling for the "
+            "band. A short band asks for fewer: a 40-word summary of a 60-word post "
+            "cannot carry five distinct facts on top of itself, so the extra key points "
+            "only restate it. On the band, not the whole config, so the shortest band "
+            "asks for one where the longest asks for five."
+        ),
+    )
 
     @model_validator(mode="after")
     def _the_range_is_ordered(self) -> Self:
         if self.target_words_min >= self.target_words_max:
             raise ValueError("target_words_min must sit below target_words_max")
+        if self.key_points_min > self.key_points_max:
+            raise ValueError("key_points_min must not exceed key_points_max")
         return self
 
 
@@ -716,13 +738,32 @@ def _default_bands() -> list[SummaryBand]:
     `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)`, so no rung
     asks for a summary of words the model was never handed
     (`docs/architecture/summarize/prompt.md`).
+
+    Each band also carries its own key-point ask, graded from one at the brief
+    band to five at the investigation band: a note holds one fact, and asking it
+    for five requests facts the article does not have.
     """
     return [
-        SummaryBand(min_source_words=0, target_words_min=30, target_words_max=45),
-        SummaryBand(min_source_words=60, target_words_min=50, target_words_max=90),
-        SummaryBand(min_source_words=700, target_words_min=70, target_words_max=150),
-        SummaryBand(min_source_words=2000, target_words_min=110, target_words_max=200),
-        SummaryBand(min_source_words=3000, target_words_min=150, target_words_max=230),
+        SummaryBand(
+            min_source_words=0, target_words_min=30, target_words_max=45,
+            key_points_min=1, key_points_max=1,
+        ),
+        SummaryBand(
+            min_source_words=60, target_words_min=50, target_words_max=90,
+            key_points_min=1, key_points_max=2,
+        ),
+        SummaryBand(
+            min_source_words=700, target_words_min=70, target_words_max=150,
+            key_points_min=2, key_points_max=3,
+        ),
+        SummaryBand(
+            min_source_words=2000, target_words_min=110, target_words_max=200,
+            key_points_min=2, key_points_max=4,
+        ),
+        SummaryBand(
+            min_source_words=3000, target_words_min=150, target_words_max=230,
+            key_points_min=2, key_points_max=5,
+        ),
     ]
 
 
@@ -749,15 +790,6 @@ class SummarizeConfig(Model):
             "the first and a thin one of the second."
         ),
     )
-    key_points_min: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "Also the decoder's floor. The prompt and the response schema read this same "
-            "number, or the decoder rejects a reply that did exactly what was asked."
-        ),
-    )
-    key_points_max: int = Field(default=5, ge=1, description="Also the decoder's ceiling.")
     title_words_min: int = Field(
         default=6,
         ge=1,
@@ -791,6 +823,36 @@ class SummarizeConfig(Model):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _key_point_counts_moved_onto_the_band(cls, data: Any) -> Any:
+        """Read a config that still names the old global key-point counts onto each band.
+
+        `key_points_min` and `key_points_max` used to sit here, one pair for every
+        band. They moved onto `SummaryBand` so the shortest band can ask for fewer
+        than the longest - a note carries one fact, and asking it for five requests
+        facts the article does not hold. `config/` is a persisted surface and every
+        model here forbids unknown keys, so a file written before the move would be
+        refused outright (section 11). This distributes an old global value onto any
+        band that does not carry its own, then drops the global key.
+        """
+        if not isinstance(data, dict):
+            return data
+        bands = data.get("bands")
+        if not isinstance(bands, list):
+            return data
+        migrated = dict(data)
+        migrated["bands"] = list(bands)
+        for name in ("key_points_min", "key_points_max"):
+            if name not in migrated:
+                continue
+            carried = migrated.pop(name)
+            migrated["bands"] = [
+                {**band, name: band.get(name, carried)} if isinstance(band, dict) else band
+                for band in migrated["bands"]
+            ]
+        return migrated
+
     @model_validator(mode="after")
     def _the_bands_cover_every_article(self) -> Self:
         if self.bands[0].min_source_words != 0:
@@ -798,8 +860,6 @@ class SummarizeConfig(Model):
         starts = [band.min_source_words for band in self.bands]
         if starts != sorted(set(starts)):
             raise ValueError("bands must climb, and no two may start at the same length")
-        if self.key_points_min > self.key_points_max:
-            raise ValueError("key_points_min must not exceed key_points_max")
         if self.title_words_min > self.title_words_max:
             raise ValueError("title_words_min must not exceed title_words_max")
         return self
@@ -2570,6 +2630,28 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-07",
+            change=(
+                "summarize.key_points_min and summarize.key_points_max moved off "
+                "SummarizeConfig and onto each SummaryBand, and the min-not-above-max "
+                "check moved with them onto the band. The committed ladder now grades "
+                "the ask from one key point at the shortest band to five at the longest, "
+                "where before every band was asked for two to five. A read-side migration "
+                "distributes an older config's global key_points_min/max onto any band "
+                "that lacks its own, then drops the global keys, so a config written "
+                "before the move still loads."
+            ),
+            why=(
+                "A 40-word summary of a 60-word post was asked for five key points on top "
+                "of it - a request for facts the article does not hold, so the extra key "
+                "points restated the summary. The count belongs on the band because a "
+                "note carries one fact and an investigation carries several, and one "
+                "global number cannot say both. Moving key_points_min too is forced: the "
+                "shortest band's ceiling drops to one, below the old global floor of two, "
+                "and the prompt reads both numbers off the same band."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-06T23:55",
             change=(
