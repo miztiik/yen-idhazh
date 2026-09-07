@@ -92,6 +92,7 @@ MEASUREMENT_COLUMNS: Final = (
     "evidential_density",
     "speculative_density",
     "self_repetition",
+    "new_fact_rate",
 )
 
 #: What a person reading a utility's refusal needs to know in one line.

@@ -14,7 +14,8 @@ import {
 	leadDays,
 	leadSeries,
 	matchDays,
-	matchSeries
+	matchSeries,
+	newFactDays
 } from '$lib/console/eval-instruments';
 import {
 	reasonColumnLabels,
@@ -362,6 +363,14 @@ export async function load() {
 		// copied onto this page: two machines and two workloads, so a gap between a
 		// bench number and a run reads as a regression nobody measured.
 		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/measurements.md`,
+		// One entry per committed day, each holding the item count and summed
+		// new-fact rate per length band. The browser filters this to the open window
+		// and divides once, so the strip is a mean over the window's items and never
+		// a mean of daily means. state/scores/ holds a fixed number of months, so
+		// this seed is bounded however long the pipeline runs.
+		newFactRate: newFactDays(rows, bands),
+		// The bands the strip buckets and labels on, so the page reads one ladder.
+		summarizeBands: bands,
 		console,
 		chart: chartConfig(),
 		today

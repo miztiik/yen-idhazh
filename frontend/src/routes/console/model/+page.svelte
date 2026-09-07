@@ -41,6 +41,8 @@
 		matchDays,
 		matchHeadline,
 		matchSeries,
+		newFactBands,
+		newFactWithin,
 		recordedReadings,
 		recordedText,
 		widerNote
@@ -444,6 +446,13 @@
 	const leadFloorText = $derived(leadFloorNote(evalWindow, windowDays, data.leadFloor));
 	const recorded = $derived(recordedReadings(evalWindow));
 	const flags = $derived(flagReadings(evalWindow));
+	/** The share of key points that add a fact, by length band, over the same days
+	 * the panels above name. The server summed per day, so narrowing the window
+	 * sums fewer days and divides once - the strip is a mean over the window's
+	 * items, never a mean of daily means. */
+	const newFact = $derived(
+		newFactBands(newFactWithin(data.newFactRate, modelSpan), data.summarizeBands)
+	);
 
 	/** Whole seconds off a millisecond clock, and `<1 s` where a real
 	 * measurement rounds away. */
@@ -940,6 +949,66 @@
 										>{reading.fired === 0
 											? `Never, on ${grouped(reading.of)} summaries`
 											: `${grouped(reading.fired)} of ${grouped(reading.of)} summaries`}</td
+									>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+		</div>
+
+		<!-- The share of a summary's key points that state a fact the prose does not
+		     already carry, by the length band the article fell in. Measured on every
+		     summary and read by nothing - no band, no card, no rule - because best-of-N
+		     against it would optimise key points for difference from the summary, which
+		     is the Goodhart form of this exact number. -->
+		<div
+			data-eval-panel="new-fact-rate"
+			data-model-new-fact-days={windowDays}
+			data-model-new-fact-from={modelSpan.start}
+			data-model-new-fact-to={modelSpan.end}
+		>
+			<h2 class="console-h2">How often a key point says something new</h2>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-new-fact-intro>
+				A key point earns its line by stating a fact the summary does not already carry. This is
+				the share that did, by article length - the shortest band asks for one key point and the
+				longest for five, so a low share is expected where the article is short and there is little
+				to add.
+				<strong class="font-semibold text-text-secondary" data-model-new-fact-rule
+					>Nothing acts on it</strong
+				>: it measures whether the prompt found facts, and is never an input to a band. This is the
+				word-overlap reading; a later one keys on the elements a key point cites.
+			</p>
+
+			{#if newFact.every((band) => band.rate === null)}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-new-fact="empty">
+					No summary in these {windowDays} days carries a new-fact reading, so there is nothing to report.
+				</p>
+			{:else}
+				<div class="console-scroll mt-3">
+					<table class="w-full border-collapse text-[0.8125rem]" data-model-new-fact-table>
+						<thead>
+							<tr class="border-b border-border-subtle text-left text-text-tertiary">
+								<th scope="col" class="py-1.5 pr-3 font-medium">Article length</th>
+								<th scope="col" class="py-1.5 pr-3 text-right font-medium">Share adding a fact</th>
+								<th scope="col" class="py-1.5 pr-3 text-right font-medium">Summaries</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each newFact as band (band.key)}
+								<tr class="border-b border-border-subtle/60" data-new-fact-row={band.key}>
+									<th scope="row" class="py-1.5 pr-3 text-left font-normal text-text-secondary">
+										{band.label}
+									</th>
+									<td
+										class="py-1.5 pr-3 text-right tabular-nums text-text-secondary"
+										data-new-fact-rate={band.rate ?? ''}
+										>{band.rate === null ? 'No summary' : `${band.rate}%`}</td
+									>
+									<td
+										class="py-1.5 pr-3 text-right tabular-nums text-text-tertiary"
+										data-new-fact-items={band.items}>{grouped(band.items)}</td
 									>
 								</tr>
 							{/each}
