@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ENCODER_DIMENSIONS } from '../src/lib/assist/encoder';
-import { indexOf, type MonthIndex } from '../src/lib/assist/month';
+import { indexOf, monthsInWindow, type MonthIndex, windowStart } from '../src/lib/assist/month';
 import { decodeVectorAt, rank, readScope, searchedDays } from '../src/lib/assist/search';
 import { plural } from '../src/lib/format';
 
@@ -135,4 +135,62 @@ test('a month that already covers the floor is read on its own', async () => {
 	expect(asked, 'a month that covers the floor must not fetch a second one').toEqual(['2026-08']);
 	expect(read.map((shard) => shard.month)).toEqual(['2026-08']);
 	expect(vectors.length).toBeGreaterThan(0);
+});
+
+/**
+ * How far back does the browse LIST reach - a separate question from the search
+ * above, and the one Finding 89 is about.
+ *
+ * The list opens on a window of days, not on the whole archive, and fetches
+ * only the month files that window can hold a story from. `monthsInWindow` is
+ * that rule, and it is pure for the same reason `readScope` is: the canary
+ * publishes one index month, so a rule about several months cannot show up in a
+ * page built on it. Here the months are given directly - the shape
+ * `indexMonths()` returns, newest first - because the rule is date arithmetic
+ * on month strings and needs no shard to exercise.
+ */
+
+test('the browse window fetches only the months it can hold a story from, newest first', () => {
+	// Four months on disk, newest first, the way `indexMonths()` hands them over.
+	const months = ['2026-09', '2026-08', '2026-07', '2026-06'];
+
+	// A seven-day window on the third of a month reaches back over the boundary
+	// into the previous month, and no further - two files fetched, not four. This
+	// is the bound: yesterday's loop walked to '2026-06' to fill a page.
+	expect(monthsInWindow(months, '2026-09-03', 7)).toEqual(['2026-09', '2026-08']);
+
+	// A one-day window is the anchor day alone, so it is the anchor's month alone.
+	expect(monthsInWindow(months, '2026-09-03', 1)).toEqual(['2026-09']);
+
+	// A ninety-day window from early September reaches back into June, so all four.
+	expect(monthsInWindow(months, '2026-09-03', 90)).toEqual([
+		'2026-09',
+		'2026-08',
+		'2026-07',
+		'2026-06'
+	]);
+});
+
+test('the browse window never returns a month the archive does not hold', () => {
+	// The window reaches back to April, but only these three months were published.
+	// A month absent from disk costs no request, because it is never in the result.
+	expect(monthsInWindow(['2026-08', '2026-07', '2026-06'], '2026-08-20', 120)).toEqual([
+		'2026-08',
+		'2026-07',
+		'2026-06'
+	]);
+
+	// And a month newer than the anchor is never in reach - the anchor is the
+	// newest published day, so nothing after it can hold a story yet.
+	expect(monthsInWindow(['2026-09', '2026-08'], '2026-08-20', 30)).toEqual(['2026-08']);
+});
+
+test('the browse window counts back inclusive of the anchor day', () => {
+	// A thirty-day window ending 2026-08-20 opens on 2026-07-22: thirty days
+	// counting the anchor itself, not thirty before it.
+	expect(windowStart('2026-08-20', 30)).toBe('2026-07-22');
+	expect(windowStart('2026-08-20', 1)).toBe('2026-08-20');
+
+	// The arithmetic is real dates across a year boundary, not string subtraction.
+	expect(windowStart('2026-01-05', 10)).toBe('2025-12-27');
 });
