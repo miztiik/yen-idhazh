@@ -221,33 +221,41 @@
   "summarize": {
     "bands": [
       {
+        "key_points_max": 1,
+        "key_points_min": 1,
         "min_source_words": 0,
         "target_words_max": 45,
         "target_words_min": 30
       },
       {
+        "key_points_max": 2,
+        "key_points_min": 1,
         "min_source_words": 60,
         "target_words_max": 90,
         "target_words_min": 50
       },
       {
+        "key_points_max": 3,
+        "key_points_min": 2,
         "min_source_words": 700,
         "target_words_max": 150,
         "target_words_min": 70
       },
       {
+        "key_points_max": 4,
+        "key_points_min": 2,
         "min_source_words": 2000,
         "target_words_max": 200,
         "target_words_min": 110
       },
       {
+        "key_points_max": 5,
+        "key_points_min": 2,
         "min_source_words": 3000,
         "target_words_max": 230,
         "target_words_min": 150
       }
     ],
-    "key_points_max": 5,
-    "key_points_min": 2,
     "max_verbatim_words": 20,
     "title_words_max": 14,
     "title_words_min": 6
