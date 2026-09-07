@@ -118,11 +118,11 @@ checks that what reads back still describes the file it is about to delete.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Final
+from typing import Final, NoReturn
 
 from idhazh import ledger, publish_telemetry, telemetry
 from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
@@ -367,27 +367,114 @@ def cutoff(today: date, months: int) -> date | None:
 def visuals_older_than(root: Path, limit: date) -> list[Path]:
     """Rendered visuals under dated directories older than the cutoff.
 
-    A day's `digest.json` and `run.json` are never candidates: they are the
-    record that the day happened, and they are text.
+    Ordered by path, the same order a sort over the whole tree would give,
+    because `prune` hands the fuse the first `max_deletes_per_run` of this list.
+    The order decides which files a capped run takes and which it leaves for the
+    next one, so a reordering here would quietly change what a backlog run does.
+
+    Only the expired days are opened. Measured on a built 400-day tree with
+    3,600 files, 2026-09-07, Intel Core i7-1265U: 261 directory listings against
+    417 for the sort-then-filter shape this replaced - and the 261 does not move
+    when 140 more days and 3,080 more files are published inside the window,
+    which is what the archive does every day nobody writes any code (Rule #12).
     """
     found: list[Path] = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in _VISUAL_SUFFIXES:
-            continue
-        published = _date_of(path, root)
-        if published is not None and published < limit:
-            found.append(path)
+    for _, folder in _dated_days(root, before=limit):
+        found.extend(_visuals_in(folder))
     return found
 
 
-def _date_of(path: Path, root: Path) -> date | None:
-    parts = path.relative_to(root).parts
-    if len(parts) < 3:
-        return None
-    try:
-        return datetime.strptime("-".join(parts[:3]), "%Y-%m-%d").replace(tzinfo=UTC).date()
-    except ValueError:
-        return None
+def _stamped(name: str, width: int) -> bool:
+    """Exactly `width` ASCII digits.
+
+    `str.isdigit` on its own accepts another script's numerals, and a date parse
+    would then read one as a day this tree never wrote.
+    """
+    return len(name) == width and name.isascii() and name.isdigit()
+
+
+def _refuse(entry: Path, root: Path, expected: str) -> NoReturn:
+    raise ValueError(
+        f"{entry.relative_to(root).as_posix()} is not a {expected} of the published day "
+        f"tree. Everything below a year directory here is written by assemble.day_dir, "
+        f"so a name this pass cannot read as a date means something else is writing "
+        f"there - and a cleanup that skipped it quietly would leave files nothing "
+        f"accounts for"
+    )
+
+
+def _dated_days(root: Path, *, before: date | None = None) -> Iterator[tuple[date, Path]]:
+    """Published day directories, oldest first, read out of their names.
+
+    The tree is `<YYYY>/<MM>/<DD>` (`assemble.day_dir`), so a day's date is in
+    its path and a caller who wants a span of days can have it without opening a
+    single one. That is the whole reason this exists. The scan above used to sort
+    every path under the root and then filter, so selecting the handful of
+    expired days cost a listing of all of them - a bill that arrived every run,
+    larger each time, for an answer no code change had touched (Rule #12).
+    `before` prunes by name at each level: a year whose January already sits at
+    or past the cutoff, and a month whose first does, cannot hold an expired day
+    and are never opened.
+
+    **What this still reads, and how that grows.** The root once, then one
+    listing per year and one per month that could hold a day older than `before`,
+    then one per day it yields. So it grows with the BACKLOG - the days the
+    policy has not caught up with - at one listing a month, and it shrinks as the
+    prune works. A bounded input cannot answer the question: "every day older
+    than the cutoff" has no lower bound but the archive's own first day, and the
+    per-run fuse deliberately caps what a pass DELETES rather than what it
+    counts, because the backlog left behind is what the committed row exists to
+    report.
+
+    **A name inside the dated tree that is not a date is a fault, not a skip.**
+    Below a year directory the layout is ours, so a name this cannot read means
+    something else is writing there, and a cleanup that passed over it quietly
+    would leave files it can never account for. At the root the rule stops and
+    nothing is refused: a root is allowed to hold things that are not the day
+    tree at all, and one that does is left alone rather than pruned or rejected.
+    """
+    if not root.is_dir():
+        return
+    for year_dir in sorted(root.iterdir()):
+        if not _stamped(year_dir.name, 4) or not year_dir.is_dir():
+            continue
+        year = int(year_dir.name)
+        try:
+            opens = date(year, 1, 1)
+        except ValueError:
+            continue
+        if before is not None and opens >= before:
+            continue
+        for month_dir in sorted(year_dir.iterdir()):
+            if not _stamped(month_dir.name, 2) or not month_dir.is_dir():
+                _refuse(month_dir, root, "month")
+            month = int(month_dir.name)
+            if not 1 <= month <= 12:
+                _refuse(month_dir, root, "month")
+            if before is not None and date(year, month, 1) >= before:
+                continue
+            for day_dir in sorted(month_dir.iterdir()):
+                if not _stamped(day_dir.name, 2) or not day_dir.is_dir():
+                    _refuse(day_dir, root, "day")
+                try:
+                    published = date(year, month, int(day_dir.name))
+                except ValueError:
+                    _refuse(day_dir, root, "day")
+                if before is None or published < before:
+                    yield published, day_dir
+
+
+def _visuals_in(folder: Path) -> list[Path]:
+    """The rendered pictures in one published day, by name.
+
+    A day's `digest.json` and `run.json` are never candidates: they are the
+    record that the day happened, and they are text.
+    """
+    return [
+        path
+        for path in sorted(folder.iterdir())
+        if path.suffix.lower() in _VISUAL_SUFFIXES and path.is_file()
+    ]
 
 
 def oldest_visual(root: Path) -> date | None:
@@ -397,15 +484,18 @@ def oldest_visual(root: Path) -> date | None:
     while it is older than the cutoff there is backlog left, whatever one run's
     `deleted` says. None means the tree carries no visual at all, which is a
     different fact from "the oldest one is recent" and is spelled differently.
+
+    This is the one that costs on every run that has ever shipped. `image_months`
+    is -1, so `cutoff` returns None and `visuals_older_than` is never called -
+    and `prune` still asks this on every path through it, including the early
+    return. The answer is the first day that still holds a picture, so it stops
+    at that day: 4 directory listings on a built 400-day tree against 417 for the
+    shape it replaced, 2026-09-07, Intel Core i7-1265U.
     """
-    oldest: date | None = None
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in _VISUAL_SUFFIXES:
-            continue
-        published = _date_of(path, root)
-        if published is not None and (oldest is None or published < oldest):
-            oldest = published
-    return oldest
+    for published, folder in _dated_days(root):
+        if _visuals_in(folder):
+            return published
+    return None
 
 
 @dataclass(frozen=True, slots=True)
