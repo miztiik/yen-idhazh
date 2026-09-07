@@ -771,6 +771,7 @@ def _desk_leads(items: Sequence[DigestItem]) -> dict[str, str]:
     It is what makes "The lead story on our Energy desk." a sentence a reader
     can check rather than a phrase every story on that desk could carry.
     """
+
     def strength(item: DigestItem) -> tuple[float, str]:
         return (-(item.rank_score or 0.0), item.item_id)
 
@@ -828,9 +829,7 @@ def _take_leads(
     return taken, refused
 
 
-def _log_leads(
-    date: str, chosen: Sequence[LeadCandidate], omitted: Mapping[str, str]
-) -> None:
+def _log_leads(date: str, chosen: Sequence[LeadCandidate], omitted: Mapping[str, str]) -> None:
     """The two counters this block ships with (section 1b).
 
     Line coverage is the share of leads carrying a real reason rather than the
@@ -1272,8 +1271,34 @@ def low_confidence(day: DigestDay) -> int:
 
 
 def site_size(root: Path) -> tuple[int, int]:
-    """Measured every run from the first one, long before any retention policy exists."""
+    """Bytes and files under the committed payload tree. Measured every assembly.
+
+    **This read grows with the archive and is not bounded (Rule #12).** It opens
+    every file the tree holds, so one more published day is one more day of files
+    to open, for ever. Measured 2026-09-07 on an Intel Core i7-1265U over
+    `frontend/public/digest/`: 443 files, 25,070,521 bytes, 300.4 ms best and
+    563.4 ms worst over five runs, in a job that runs for hours.
+
+    A total carried forward cannot replace it from inside this process, and that
+    is the reason rather than the excuse. **Three jobs write this tree** - the
+    visuals job renders the pictures, this job writes the day payload, and the
+    cleanup pass deletes - so a total this process accumulated would miss what the
+    other two did, and it would miss it silently, in the number that feeds the
+    site-size card. Carrying one between the three means writing it down
+    somewhere, which is a persisted shape and a decision for a person to take
+    rather than for this function to assume. `retention.SiteSize.minus` is the
+    carried total where one process both writes and deletes; there is no such
+    process here.
+
+    It streams rather than listing every path first, so the walk costs one file's
+    memory instead of the whole tree's.
+    """
     if not root.exists():
         return (0, 0)
-    files = [path for path in root.rglob("*") if path.is_file()]
-    return (sum(path.stat().st_size for path in files), len(files))
+    total = 0
+    files = 0
+    for path in root.rglob("*"):
+        if path.is_file():
+            total += path.stat().st_size
+            files += 1
+    return (total, files)
