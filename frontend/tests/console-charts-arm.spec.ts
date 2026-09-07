@@ -33,7 +33,7 @@ const CONFIG = JSON.parse(
 	};
 };
 
-const PRESETS = CONFIG.console?.window_presets ?? [7, 14, 30, 90];
+const PRESETS = CONFIG.console?.window_presets ?? [1, 7, 14, 30, 90];
 const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 30;
 const THRESHOLDS: ArmThresholds = {
 	ruleDays: CONFIG.console?.chart_arm_rule_days ?? 14,
