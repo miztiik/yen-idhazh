@@ -1634,7 +1634,13 @@ def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
         for band in re.findall(r"\{([^{}]*)\}", declared.group(1))
     ]
     assert fallback, "SUMMARIZE_DEFAULTS matched but held no bands"
-    keys = ("min_source_words", "target_words_min", "target_words_max")
+    keys = (
+        "min_source_words",
+        "target_words_min",
+        "target_words_max",
+        "key_points_min",
+        "key_points_max",
+    )
     expected = [{key: band[key] for key in keys} for band in committed]
     assert fallback == expected, (
         "config.ts and config/idhazh.json disagree about the summary bands: "

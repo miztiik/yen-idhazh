@@ -411,10 +411,40 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
 
 def test_the_prompt_and_the_decoder_count_key_points_the_same_way() -> None:
     """Disagree, and the decoder rejects a reply that did exactly what was asked."""
-    asked = SummarizeConfig(key_points_min=3, key_points_max=4)
-    schema = output_schema(asked)["properties"]["key_points"]
+    asked = SummarizeConfig(
+        bands=[
+            SummaryBand(
+                min_source_words=0,
+                target_words_min=50,
+                target_words_max=90,
+                key_points_min=3,
+                key_points_max=4,
+            )
+        ]
+    )
+    schema = output_schema(asked, source_words=0)["properties"]["key_points"]
     assert (schema["minItems"], schema["maxItems"]) == (3, 4)
-    assert "3 to 4 key points" in system_prompt(asked)
+    assert "3 to 4 key points" in system_prompt(asked, source_words=0)
+
+
+def test_the_decoder_holds_each_band_to_its_own_key_point_count() -> None:
+    """The band's ceiling is a control the decoder enforces, not a prompt request.
+
+    A note is held to one key point and a long read to five, so the shortest
+    band cannot emit the five key points that only restate a 40-word summary.
+    With no article named the rail is the union across the ladder, the permissive
+    envelope the fingerprint and the offline harnesses hold a reply to.
+    """
+    ask = SummarizeConfig()
+    brief = ask.bands[0]
+    top = ask.bands[-1]
+    at_brief = output_schema(ask, source_words=0)["properties"]["key_points"]
+    at_top = output_schema(ask, source_words=top.min_source_words)["properties"]["key_points"]
+    union = output_schema(ask)["properties"]["key_points"]
+    assert (at_brief["minItems"], at_brief["maxItems"]) == (brief.key_points_min, brief.key_points_max)
+    assert (at_top["minItems"], at_top["maxItems"]) == (top.key_points_min, top.key_points_max)
+    assert at_brief["maxItems"] < at_top["maxItems"], "the shortest band asks for fewer"
+    assert union["maxItems"] == max(band.key_points_max for band in ask.bands)
 
 
 def test_the_key_points_decode_before_the_summary() -> None:
@@ -467,7 +497,18 @@ def test_changing_what_we_ask_for_changes_the_fingerprints_inputs() -> None:
         bands=[SummaryBand(min_source_words=0, target_words_min=50, target_words_max=120)]
     )
     assert prompt_inputs() != prompt_inputs(tighter)
-    assert output_schema_text() != output_schema_text(SummarizeConfig(key_points_max=4))
+    fewer_points = SummarizeConfig(
+        bands=[
+            SummaryBand(
+                min_source_words=0,
+                target_words_min=50,
+                target_words_max=120,
+                key_points_min=1,
+                key_points_max=2,
+            )
+        ]
+    )
+    assert output_schema_text() != output_schema_text(fewer_points)
 
 
 def test_the_stamp_holds_still_while_the_rendered_prompt_moves() -> None:
@@ -533,6 +574,40 @@ def test_no_rung_floor_ever_sits_above_the_cut_point() -> None:
     assert highest_floor < cut_point_words, (
         f"the top rung starts at {highest_floor} words and the model is handed "
         f"{cut_point_words}, so that rung asks for a summary of text it never saw"
+    )
+
+
+#: Words one distinct fact needs, written as a single key-point sentence. A key
+#: point is one sentence (the summarize prompt asks for exactly that), and 20 is
+#: the sentence length this repo already commits to in
+#: `summarize.max_verbatim_words`, whose description calls 20 words "long enough
+#: to carry a real sentence somebody said". Held as a constant rather than read
+#: from that knob, because that knob caps a quotation's length and must not gate
+#: how many key points a band may ask for.
+_WORDS_PER_KEY_POINT = 20
+
+
+def test_no_band_asks_for_more_key_points_than_its_summary_can_carry() -> None:
+    """The redundancy fix, held per band so a sixth band cannot be added at five.
+
+    A key point states a fact the summary does not already hold. The summary's
+    own word budget bounds how many distinct facts the article carries at that
+    band, so asking for more key points than the budget can hold is asking for
+    facts that are not there - which is what made a 40-word note restate itself
+    five times. The bound is `target_words_max / _WORDS_PER_KEY_POINT`, read from
+    `config/` so it follows the ladder when the ladder moves (Rule #6). It is a
+    ceiling, not a target: a band may ask for fewer, and the shortest one does.
+    """
+    bands = config.load().app.summarize.bands
+    for band in bands:
+        capacity = band.target_words_max // _WORDS_PER_KEY_POINT
+        assert band.key_points_max <= capacity, (
+            f"the band at {band.min_source_words} words asks for {band.key_points_max} "
+            f"key points but its {band.target_words_max}-word summary can carry about "
+            f"{capacity} distinct facts"
+        )
+    assert bands[0].key_points_max < bands[-1].key_points_max, (
+        "the shortest band must ask for fewer key points than the longest"
     )
 
 
@@ -1035,8 +1110,12 @@ def test_the_reject_fires_above_the_ceiling_and_not_at_it() -> None:
     assert verbatim_run(copied_run(33), text) == pytest.approx(0.75)
     assert verbatim_run(copied_run(34), text) == pytest.approx(34 / 44)
 
-    assert replied(body(summary=copied_run(33)), source="brief").status is SummaryStatus.OK
-    over = replied(body(summary=copied_run(34)), source="brief")
+    one_point = ["the policy rate is unchanged"]
+    assert (
+        replied(body(summary=copied_run(33), key_points=one_point), source="brief").status
+        is SummaryStatus.OK
+    )
+    over = replied(body(summary=copied_run(34), key_points=one_point), source="brief")
     assert over.failure_code is FailureCode.COPIED_SOURCE
 
 
@@ -1050,7 +1129,11 @@ def test_the_copy_ceiling_is_read_from_config_and_not_written_in_the_code() -> N
     assert replied(reply, source="brief", evaluation=strict).failure_code is (
         FailureCode.COPIED_SOURCE
     )
-    assert replied(body(summary=copied_run(33)), source="brief", evaluation=strict).failure_code is (
+    assert replied(
+        body(summary=copied_run(33), key_points=["the policy rate is unchanged"]),
+        source="brief",
+        evaluation=strict,
+    ).failure_code is (
         FailureCode.COPIED_SOURCE
     )
 
