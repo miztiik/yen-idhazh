@@ -24,6 +24,7 @@
     "max_future_hours": 6.0,
     "max_per_source": 2,
     "max_source_share_per_day": 0.08,
+    "published_window_days": 365,
     "recency_half_life_hours": 18.0,
     "recency_weight": 0.6,
     "reliability_floor": 0.6,
