@@ -1,0 +1,542 @@
+{
+  "$defs": {
+    "DayBands": {
+      "additionalProperties": false,
+      "description": "How the day's published items split across the confidence bands.\n\nAdditive. Every published item carries exactly one band, so the three counts\npartition the published set and a window's band counts are the daily counts\nadded up.",
+      "properties": {
+        "high": {
+          "description": "Items the checker did not doubt.",
+          "minimum": 0,
+          "title": "High",
+          "type": "integer"
+        },
+        "low": {
+          "minimum": 0,
+          "title": "Low",
+          "type": "integer"
+        },
+        "medium": {
+          "minimum": 0,
+          "title": "Medium",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "DayBands",
+      "type": "object"
+    },
+    "DayDistribution": {
+      "additionalProperties": false,
+      "description": "One numeric instrument aggregated over the day, split by how it combines.\n\n`count` and `total` are additive: sum both over a window and divide once for\nthe window's mean, which is a mean over items and never a mean of daily\nmeans. The quartiles and the range are the day's own and are NOT additive - a\nreader shows a daily quartile or recomputes an exact one from a value\npopulation this record does not carry. A day that measured nothing carries the\ncount 0, the total 0.0 and no order statistic; empty is not zero.",
+      "properties": {
+        "count": {
+          "description": "Items that carried a value. Additive.",
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day's largest value. Not additive.",
+          "title": "Maximum"
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day's smallest value. Not additive.",
+          "title": "Minimum"
+        },
+        "p25": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day's lower quartile. Not additive.",
+          "title": "P25"
+        },
+        "p50": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day's median. Not additive.",
+          "title": "P50"
+        },
+        "p75": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day's upper quartile. Not additive.",
+          "title": "P75"
+        },
+        "total": {
+          "description": "The values added up. Additive.",
+          "title": "Total",
+          "type": "number"
+        }
+      },
+      "required": [
+        "count",
+        "total"
+      ],
+      "title": "DayDistribution",
+      "type": "object"
+    },
+    "DayInstrument": {
+      "additionalProperties": false,
+      "description": "One measured eval-row column, aggregated over the day.\n\n`column` names the eval-row column (an entry from `INSTRUMENT_COLUMNS`); the\nreducer joins on it. `stat` carries the aggregate, additive and non-additive\nparts kept apart by `DayDistribution`.",
+      "properties": {
+        "column": {
+          "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
+          "title": "Column",
+          "type": "string"
+        },
+        "stat": {
+          "$ref": "#/$defs/DayDistribution"
+        }
+      },
+      "required": [
+        "column",
+        "stat"
+      ],
+      "title": "DayInstrument",
+      "type": "object"
+    },
+    "DayReasons": {
+      "additionalProperties": false,
+      "description": "Why each doubted item did not reach the top band.\n\nAdditive. A `high` item has no reason; every `medium` or `low` item falls\ninto exactly one bucket here, so the six counts partition the doubted set.\n`unattributed` is a doubted item the checker recorded no reason for - a real\ncategory the Model page counts separately, not the same fact as `not_scored`\n(which is a recorded reason meaning no faithfulness score exists).",
+      "properties": {
+        "faithfulness": {
+          "minimum": 0,
+          "title": "Faithfulness",
+          "type": "integer"
+        },
+        "hedge_dropped": {
+          "minimum": 0,
+          "title": "Hedge Dropped",
+          "type": "integer"
+        },
+        "lead_missing": {
+          "minimum": 0,
+          "title": "Lead Missing",
+          "type": "integer"
+        },
+        "not_scored": {
+          "minimum": 0,
+          "title": "Not Scored",
+          "type": "integer"
+        },
+        "unattributed": {
+          "description": "Doubted, with no band_reason on the published item. Never source text.",
+          "minimum": 0,
+          "title": "Unattributed",
+          "type": "integer"
+        },
+        "unsupported_number": {
+          "minimum": 0,
+          "title": "Unsupported Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "unsupported_number",
+        "not_scored",
+        "lead_missing",
+        "hedge_dropped",
+        "faithfulness",
+        "unattributed"
+      ],
+      "title": "DayReasons",
+      "type": "object"
+    },
+    "DaySource": {
+      "additionalProperties": false,
+      "description": "One source's day, counted so the reader can rank and combine without a re-walk.\n\nEvery count is additive within a source: sum a source's `published` over a\nwindow for its window total. The reader combines days by keying on\n`source_id`, then re-ranks - the ranking itself is non-additive, which is why\nthe whole per-source list is stored rather than a daily top list.",
+      "properties": {
+        "doubted": {
+          "description": "Of those, the ones not in the top band.",
+          "minimum": 0,
+          "title": "Doubted",
+          "type": "integer"
+        },
+        "published": {
+          "description": "Items this source contributed to the day.",
+          "minimum": 0,
+          "title": "Published",
+          "type": "integer"
+        },
+        "source_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "truncated": {
+          "description": "Of those, the ones extract cut at the cap.",
+          "minimum": 0,
+          "title": "Truncated",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "published",
+        "doubted",
+        "truncated"
+      ],
+      "title": "DaySource",
+      "type": "object"
+    },
+    "DayStageTiming": {
+      "additionalProperties": false,
+      "description": "One pipeline stage's wall-clock over the day's items.\n\n`timed` and `sum_ms` are additive - a window's total stage time is the daily\ntotals added up, and a mean is `sum_ms` over `timed`. The three percentiles\nare the day's own and are NOT additive: a median of daily medians is not the\nwindow's median (the Model page's own caveat). A reader shows a daily\npercentile or recomputes an exact one from a value population this record\ndoes not carry. Empty percentiles are not zero: a stage that timed nothing\ncarries none of the four figures.",
+      "properties": {
+        "max_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day's slowest item. Not additive.",
+          "title": "Max Ms"
+        },
+        "p50_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day's median. Not additive.",
+          "title": "P50 Ms"
+        },
+        "p90_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The day's 90th percentile. Not additive.",
+          "title": "P90 Ms"
+        },
+        "stage": {
+          "$ref": "#/$defs/ItemStage"
+        },
+        "sum_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Every timed item added up. Additive.",
+          "title": "Sum Ms"
+        },
+        "timed": {
+          "description": "Items that recorded milliseconds at this stage. Additive.",
+          "minimum": 0,
+          "title": "Timed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stage",
+        "timed"
+      ],
+      "title": "DayStageTiming",
+      "type": "object"
+    },
+    "DayThroughput": {
+      "additionalProperties": false,
+      "description": "The model's token clock for the day, so a rate survives without a runtime log.\n\nEvery field is additive: sum the milliseconds and the token counts over a\nwindow and divide once for the window's prefill and decode rates. Reading the\nprompt and writing the summary run at different rates, so their milliseconds\nare kept apart. Null on the day facts when no item timed a token.",
+      "properties": {
+        "cached_tokens": {
+          "minimum": 0,
+          "title": "Cached Tokens",
+          "type": "integer"
+        },
+        "decode_ms": {
+          "description": "Milliseconds writing summaries, added over the day.",
+          "minimum": 0,
+          "title": "Decode Ms",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "items": {
+          "description": "Items that recorded any token count. The denominator.",
+          "minimum": 0,
+          "title": "Items",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "prefill_ms": {
+          "description": "Milliseconds reading prompts, added over the day.",
+          "minimum": 0,
+          "title": "Prefill Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "prefill_ms",
+        "decode_ms",
+        "input_tokens",
+        "output_tokens",
+        "cached_tokens"
+      ],
+      "title": "DayThroughput",
+      "type": "object"
+    },
+    "ItemStage": {
+      "description": "The terminal stage for an item.",
+      "enum": [
+        "plan",
+        "fetch",
+        "extract",
+        "summarize",
+        "publish"
+      ],
+      "title": "ItemStage",
+      "type": "string"
+    }
+  },
+  "$id": "day-metrics.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one record per published day, additive against non-additive.",
+      "version": "2026-09-07",
+      "why": "The console rebuilt every per-day figure by walking the whole committed history on every build (research findings 61-75), a cost that rose with each published day for an answer that never changed once the day was frozen (Rule #12). This record carries those figures, written once by the producer that already holds the data. It stores a total only where a reader may add it across days and never as a running counter, because a correction to a counter needs a decrement path and a missed decrement is silent (owner, 2026-09-06); a correction rewrites this whole record instead. A non-additive figure carries the day's own value plus what a reader needs to combine days in a defined way (Andre)."
+    }
+  ],
+  "description": "Everything a run settled about one published day, for a later reducer to read.",
+  "properties": {
+    "addresses_considered": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Distinct addresses the feeds offered the day, before what it had published or failed on (finding 62). Not additive - two days may repeat an address, so a reader treats a sum as an upper bound. Null on a day that recorded none.",
+      "title": "Addresses Considered"
+    },
+    "bands": {
+      "$ref": "#/$defs/DayBands"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "determinism_violations": {
+      "description": "Scored items whose identical inputs produced different words. Additive.",
+      "minimum": 0,
+      "title": "Determinism Violations",
+      "type": "integer"
+    },
+    "extraction_suspect": {
+      "description": "Scored items whose source read like page furniture. Additive.",
+      "minimum": 0,
+      "title": "Extraction Suspect",
+      "type": "integer"
+    },
+    "instruments": {
+      "description": "One entry per measured eval-row column (finding 74, note 38).",
+      "items": {
+        "$ref": "#/$defs/DayInstrument"
+      },
+      "title": "Instruments",
+      "type": "array"
+    },
+    "items_failed": {
+      "description": "Planned items that never reached the digest. Additive.",
+      "minimum": 0,
+      "title": "Items Failed",
+      "type": "integer"
+    },
+    "items_planned": {
+      "description": "Items the day's runs planned. Additive.",
+      "minimum": 0,
+      "title": "Items Planned",
+      "type": "integer"
+    },
+    "items_published": {
+      "description": "Items in the day's published set. Additive.",
+      "minimum": 0,
+      "title": "Items Published",
+      "type": "integer"
+    },
+    "items_truncated": {
+      "description": "Published items extract cut at the truncation cap (finding 68). Additive.",
+      "minimum": 0,
+      "title": "Items Truncated",
+      "type": "integer"
+    },
+    "model_id": {
+      "description": "The model that wrote the day's summaries. Not additive - a per-day attribute a reader compares against the next day to find a model change (finding 70).",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "pipeline_fingerprint": {
+      "description": "The digest of the declared settings the day ran under, as EvalRow carries it. Not additive - the boundary a model-change reading is drawn on (finding 70).",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "reasons": {
+      "$ref": "#/$defs/DayReasons"
+    },
+    "revision": {
+      "description": "The ordinal of the newest run that published this day - DigestDay.runs[-1].n, the same number introduced_by_run counts up. A record whose revision is behind the day's own newest run is stale and must be rewritten (Fowler).",
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "runs": {
+      "description": "Runs that published this day. Additive.",
+      "minimum": 1,
+      "title": "Runs",
+      "type": "integer"
+    },
+    "sources": {
+      "description": "One entry per source that published (findings 67, 68, 73).",
+      "items": {
+        "$ref": "#/$defs/DaySource"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "sources_present": {
+      "description": "Distinct sources that contributed a published item. Not additive - two days may share a source, so a reader combines the `sources` list rather than adding this across days. Equal to the length of `sources`.",
+      "minimum": 0,
+      "title": "Sources Present",
+      "type": "integer"
+    },
+    "stage_timing": {
+      "description": "One entry per pipeline stage the day timed (findings 75, note 33).",
+      "items": {
+        "$ref": "#/$defs/DayStageTiming"
+      },
+      "title": "Stage Timing",
+      "type": "array"
+    },
+    "summaries_scored": {
+      "description": "Published items the checker gave a faithfulness score. Additive.",
+      "minimum": 0,
+      "title": "Summaries Scored",
+      "type": "integer"
+    },
+    "throughput": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DayThroughput"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The day's token clock, or null when no item timed a token. Additive parts."
+    },
+    "version": {
+      "default": "2026-09-07",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "visuals_rendered": {
+      "description": "Visuals that rendered on the day. Additive.",
+      "minimum": 0,
+      "title": "Visuals Rendered",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "date",
+    "revision",
+    "runs",
+    "model_id",
+    "pipeline_fingerprint",
+    "items_published",
+    "items_planned",
+    "items_failed",
+    "visuals_rendered",
+    "items_truncated",
+    "summaries_scored",
+    "determinism_violations",
+    "extraction_suspect",
+    "sources_present",
+    "bands",
+    "reasons"
+  ],
+  "title": "DayMetrics",
+  "type": "object",
+  "version": "2026-09-07"
+}
