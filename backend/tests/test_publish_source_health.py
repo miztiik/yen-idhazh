@@ -9,7 +9,9 @@ which is the claim that would rot silently.
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -673,3 +675,172 @@ def test_a_healthy_source_raises_nothing_and_the_worst_is_named_first() -> None:
     assert alarm is not None
     assert "good" not in alarm
     assert alarm.index("bad 0/73") < alarm.index("mid 26/98")
+
+
+# The census reads the newest complete recorded dates, not a calendar window.
+#
+# `publish` must count over the dates the ledger actually holds, chosen before it
+# reads anything, so a gap in the record cannot shorten the census and the months
+# behind the window are never opened (audit finding 12; CLAUDE.md Rule #12). The
+# fixture below records three dates one month apart and three older ones, so a
+# `keep`-day calendar window reaches none of the older two and the history behind
+# the third must stay shut.
+_GAP_TODAY = "2026-09-05"
+_GAP_KEEP = 3
+_GAP_SELECTED = ("2026-07-10", "2026-08-15", "2026-09-01")
+_GAP_OLDER = ("2026-04-10", "2026-05-10", "2026-06-10")
+_GAP_SHORT = COLLECT.model_copy(update={"source_yield_min_complete_days": _GAP_KEEP})
+
+
+def _gap_items() -> list[ItemHealthRow]:
+    """One source over six recorded dates: the newest three, then older history.
+
+    Each selected date offers two addresses and reads one, so the census the
+    newest three drive is exactly six offered, three read and three lost. The
+    older three each read three addresses, a fate large enough that reading them
+    would move every number.
+    """
+    rows: list[ItemHealthRow] = []
+    for day in _GAP_SELECTED:
+        rows.append(item("wire", date=day, n=1, index=0, published=True))
+        rows.append(
+            item("wire", date=day, n=1, index=1, published=False, code=FailureCode.PAYWALLED)
+        )
+    for day in _GAP_OLDER:
+        rows.extend(item("wire", date=day, n=1, index=i, published=True) for i in range(3))
+    return rows
+
+
+def _write_item_health(state: Path, rows: Sequence[ItemHealthRow]) -> None:
+    """Append each row to the month shard its own date names."""
+    by_date: dict[str, list[ItemHealthRow]] = defaultdict(list)
+    for row in rows:
+        by_date[row.date].append(row)
+    for day, day_rows in by_date.items():
+        ledger.append_item_health(state, day, day_rows)
+
+
+def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(
+    tmp_path: Path,
+) -> None:
+    """The view a bounded read writes is the view a whole-history read would.
+
+    RED before this row: the item read was a `keep`-day calendar window, which
+    across the gap held one recorded date, so the census reported one complete
+    day. GREEN: the read selects the three dates the ledger holds and writes the
+    same bytes the complete read produces.
+    """
+    state = tmp_path / "state"
+    _write_item_health(state, _gap_items())
+    settings = config.load()
+    run_id = f"{_GAP_TODAY}-1"
+    generated_at = f"{_GAP_TODAY}T06:20:00Z"
+    reference = publish_source_health.build(
+        feeds=publish_source_health.active_feeds(
+            settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
+        ),
+        collect=_GAP_SHORT,
+        health=[],
+        items=_gap_items(),
+        retired_on={},
+        date=_GAP_TODAY,
+        run_id=run_id,
+        generated_at=generated_at,
+    )
+    path = tmp_path / "public" / publish_source_health.PUBLIC_FILENAME
+    view = publish_source_health.publish(
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        collect=_GAP_SHORT,
+        date=_GAP_TODAY,
+        run_id=run_id,
+        generated_at=generated_at,
+        state_root=state,
+        path=path,
+    )
+    assert view.complete_dates == _GAP_KEEP
+    assert (view.first_date, view.last_date) == ("2026-07-10", "2026-09-01")
+    assert view.yield_readable is True
+    assert view.to_json() == reference.to_json()
+    assert path.read_text(encoding="utf-8") == reference.to_json()
+
+
+def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The read stops at the newest `keep` dates and never opens the history behind them.
+
+    The bounded-read half of the row: the cost of publishing the view is the same
+    on a run whether the project has recorded for three months or for years, so
+    the months older than the selected dates must not be opened at all.
+    """
+    state = tmp_path / "state"
+    _write_item_health(state, _gap_items())
+    opened: list[str] = []
+    real = ledger.load_item_health_shard
+
+    def spy(shard: Path) -> list[ItemHealthRow]:
+        opened.append(shard.name)
+        return real(shard)
+
+    monkeypatch.setattr(ledger, "load_item_health_shard", spy)
+    settings = config.load()
+    publish_source_health.publish(
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        collect=_GAP_SHORT,
+        date=_GAP_TODAY,
+        run_id=f"{_GAP_TODAY}-1",
+        generated_at=f"{_GAP_TODAY}T06:20:00Z",
+        state_root=state,
+        path=tmp_path / "public" / publish_source_health.PUBLIC_FILENAME,
+    )
+    assert set(opened) == {"2026-09.csv", "2026-08.csv", "2026-07.csv"}
+    for older in ("2026-06.csv", "2026-05.csv", "2026-04.csv"):
+        assert older not in opened, f"{older} is behind the window and may not be opened"
+
+
+def test_a_calendar_window_undercounts_the_census_a_recorded_selection_restores(
+    tmp_path: Path,
+) -> None:
+    """The exact defect this row closes, beside the query that replaces it.
+
+    A gap leaves a `keep`-day calendar window holding fewer than `keep` recorded
+    dates, so the census it drove was short and its per-source counts with it.
+    Selecting the dates the ledger holds preserves both, and calendar subtraction
+    is not an equivalent query for them (Fowler, plan row 20).
+    """
+    state = tmp_path / "state"
+    _write_item_health(state, _gap_items())
+    run_id = f"{_GAP_TODAY}-1"
+    generated_at = f"{_GAP_TODAY}T06:20:00Z"
+
+    windowed = ledger.load_item_health(state, today=_GAP_TODAY, within_days=_GAP_KEEP)
+    short = publish_source_health.build(
+        feeds=[feed("wire")],
+        collect=_GAP_SHORT,
+        health=[],
+        items=windowed,
+        retired_on={},
+        date=_GAP_TODAY,
+        run_id=run_id,
+        generated_at=generated_at,
+    )
+    assert short.complete_dates < _GAP_KEEP, "the calendar window is short across the gap"
+    assert only(short).opportunities < 6, "and its per-source census is short with it"
+
+    selected = publish_source_health._recent_item_health(state, today=_GAP_TODAY, keep=_GAP_KEEP)
+    assert sorted({row.date for row in selected}) == list(_GAP_SELECTED)
+    full = publish_source_health.build(
+        feeds=[feed("wire")],
+        collect=_GAP_SHORT,
+        health=[],
+        items=selected,
+        retired_on={},
+        date=_GAP_TODAY,
+        run_id=run_id,
+        generated_at=generated_at,
+    )
+    assert full.complete_dates == _GAP_KEEP
+    row = only(full)
+    assert (row.opportunities, row.publications, row.source_failures) == (6, 3, 3)
