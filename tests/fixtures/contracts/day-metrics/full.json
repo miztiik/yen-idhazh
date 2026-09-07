@@ -1,0 +1,143 @@
+{
+  "addresses_considered": 40,
+  "bands": {
+    "high": 7,
+    "low": 2,
+    "medium": 3
+  },
+  "date": "2026-08-24",
+  "determinism_violations": 0,
+  "extraction_suspect": 1,
+  "instruments": [
+    {
+      "column": "hhem",
+      "stat": {
+        "count": 10,
+        "maximum": 0.99,
+        "minimum": 0.55,
+        "p25": 0.78,
+        "p50": 0.88,
+        "p75": 0.94,
+        "total": 8.6
+      }
+    },
+    {
+      "column": "score_ms",
+      "stat": {
+        "count": 10,
+        "maximum": 15000.0,
+        "minimum": 5200.0,
+        "p25": 6800.0,
+        "p50": 8200.0,
+        "p75": 11000.0,
+        "total": 90000.0
+      }
+    },
+    {
+      "column": "source_word_count",
+      "stat": {
+        "count": 12,
+        "maximum": 1400.0,
+        "minimum": 310.0,
+        "p25": 520.0,
+        "p50": 690.0,
+        "p75": 910.0,
+        "total": 8400.0
+      }
+    },
+    {
+      "column": "new_fact_rate",
+      "stat": {
+        "count": 0,
+        "maximum": null,
+        "minimum": null,
+        "p25": null,
+        "p50": null,
+        "p75": null,
+        "total": 0.0
+      }
+    }
+  ],
+  "items_failed": 5,
+  "items_planned": 17,
+  "items_published": 12,
+  "items_truncated": 2,
+  "model_id": "qwen35-9b",
+  "pipeline_fingerprint": "e74bcca07c77808e469ad574d01a823763a13fa34a397caf177c07fa236f348b",
+  "reasons": {
+    "faithfulness": 1,
+    "hedge_dropped": 0,
+    "lead_missing": 1,
+    "not_scored": 1,
+    "unattributed": 1,
+    "unsupported_number": 1
+  },
+  "revision": 5,
+  "runs": 5,
+  "sources": [
+    {
+      "doubted": 2,
+      "published": 6,
+      "source_id": "the-hindu",
+      "truncated": 1
+    },
+    {
+      "doubted": 2,
+      "published": 4,
+      "source_id": "reuters",
+      "truncated": 1
+    },
+    {
+      "doubted": 1,
+      "published": 2,
+      "source_id": "pti",
+      "truncated": 0
+    }
+  ],
+  "sources_present": 3,
+  "stage_timing": [
+    {
+      "max_ms": null,
+      "p50_ms": null,
+      "p90_ms": null,
+      "stage": "plan",
+      "sum_ms": null,
+      "timed": 0
+    },
+    {
+      "max_ms": 520,
+      "p50_ms": 180,
+      "p90_ms": 320,
+      "stage": "fetch",
+      "sum_ms": 2400,
+      "timed": 12
+    },
+    {
+      "max_ms": 1200,
+      "p50_ms": 450,
+      "p90_ms": 780,
+      "stage": "extract",
+      "sum_ms": 6000,
+      "timed": 12
+    },
+    {
+      "max_ms": 15000,
+      "p50_ms": 8200,
+      "p90_ms": 12000,
+      "stage": "summarize",
+      "sum_ms": 90000,
+      "timed": 10
+    }
+  ],
+  "summaries_scored": 10,
+  "throughput": {
+    "cached_tokens": 12000,
+    "decode_ms": 90000,
+    "input_tokens": 42000,
+    "items": 10,
+    "output_tokens": 3600,
+    "prefill_ms": 24000
+  },
+  "version": "2026-09-07",
+  "visuals_rendered": 3
+}
