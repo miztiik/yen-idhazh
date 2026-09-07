@@ -49,10 +49,19 @@
 		held = dates.map((date) => ({ label: longDate(date), href: `${base}/${date}/` }));
 	}
 
+	/** The watch in flight, so a date change or a retry can abort it. A stale
+	 * callback would otherwise deliver the previous date's stories onto this
+	 * page, because the served day arrives after the date has already moved. */
+	let watcher: AbortController | null = null;
+
 	function fetchRest(date: string, again: boolean) {
+		watcher?.abort();
+		const controller = new AbortController();
+		watcher = controller;
 		watchDay(date, {
 			slowMs: data.ui.payload_slow_ms,
 			again,
+			signal: controller.signal,
 			onStatus: (next, whole) => {
 				reported = next;
 				if (next === 'unreachable') void offerHeldDays(date);
@@ -71,13 +80,18 @@
 
 	// Keyed on the date rather than on mount: SvelteKit reuses this component
 	// when only the date moves, and a fetch that ran once would leave yesterday's
-	// stories on today's page.
+	// stories on today's page. The cleanup aborts the in-flight watch, so a
+	// change of date - or leaving the page - cannot deliver the old day.
 	$effect(() => {
 		const { date, awaiting } = data;
 		arrived = null;
 		reported = null;
 		held = [];
 		if (awaiting > 0) fetchRest(date, false);
+		return () => {
+			watcher?.abort();
+			watcher = null;
+		};
 	});
 </script>
 

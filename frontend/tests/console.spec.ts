@@ -75,7 +75,7 @@ const WINDOW_PRESETS = (
 	JSON.parse(
 		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 	) as { console?: { window_presets?: number[] } }
-).console?.window_presets ?? [7, 14, 30, 90];
+).console?.window_presets ?? [1, 7, 14, 30, 90];
 
 /** Which end of the window today sits on, from the knob the page reads. */
 const TODAY_ANCHOR = (
@@ -1441,7 +1441,7 @@ test('keyboard alone pans the viewport and steps its window through the presets'
 		JSON.parse(
 			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 		) as { console?: { window_presets?: number[] } }
-	).console?.window_presets ?? [7, 14, 30, 90];
+	).console?.window_presets ?? [1, 7, 14, 30, 90];
 	expect(presets).toContain(span(steppedStart, steppedEnd));
 	expect(presets).toContain(span(widerStart, widerEnd));
 });
