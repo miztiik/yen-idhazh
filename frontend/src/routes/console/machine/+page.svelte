@@ -230,6 +230,24 @@
 		return ticks;
 	}
 
+	/** The days a model-change rule falls on, as a set for O(1) membership.
+	 *
+	 * `modelRules` draws a rule where a drawn column's date is a boundary, and a
+	 * strip below asks the same question once a column. Asked as a scan of the
+	 * rule list it was O(runs x rules) rebuilt on every resize; asked as a set it
+	 * is built once a span. It mirrors `modelRules` exactly: the first drawn
+	 * column draws no rule, so index 0 is skipped, and `firstOfDay` has blanked a
+	 * repeated day, so a `changes` list that never holds `''` cannot admit one.
+	 */
+	function boundaryDates(changes: readonly string[], dates: readonly string[]): Set<string> {
+		const changed = new Set(changes);
+		const on = new Set<string>();
+		for (let index = 1; index < dates.length; index += 1) {
+			if (changed.has(dates[index])) on.add(dates[index]);
+		}
+		return on;
+	}
+
 	// --- Context headroom ------------------------------------------------
 
 	/** How much room the oldest and newest marks need inside the plot. */
@@ -239,6 +257,23 @@
 	let contextAt = $state<number | null>(null);
 
 	const contextRuns = $derived(inSpan(data.series.context));
+	// The four shapes below are a function of the RUNS alone, so a resize reuses
+	// them and only a new span rebuilds them. `firstOfDay`, the caption columns,
+	// the boundary set and the domain used to sit inside the width-dependent
+	// derives, so a drag re-derived every caption and re-scanned the rule list a
+	// column; split out, a drag moves pixels and nothing else.
+	const contextDates = $derived(firstOfDay(contextRuns));
+	const contextData = $derived(contextColumns(contextRuns, data.contextWindow));
+	const contextBoundaries = $derived(boundaryDates(data.modelChanges, contextDates));
+	/** The domain the plot is drawn against. It is a function of the sequences
+	 * and the window, never the width, so it is retained across a resize.
+	 * Zero-anchored, and the window is one of its bounds, so the limit is a line
+	 * on the plot rather than a number off the top. */
+	const contextExtent = $derived([
+		0,
+		data.contextWindow,
+		...contextRuns.flatMap((run) => [run.longest ?? 0, run.spare ?? 0])
+	]);
 	const contextBox = $derived(
 		frame(chartWidth(contextWidth, data.chart.width_px), data.chart.height_px, {
 			top: 14,
@@ -253,33 +288,23 @@
 		// the document for a tenth of a pixel nobody can see.
 		dayColumns(contextRuns.length, contextBox, MARK_PAD).map((x) => Math.round(x * 10) / 10)
 	);
-	/** The window is in the domain, so the limit is a line on the plot rather
-	 * than a number off the top of it. Zero-anchored: the height of a mark is
-	 * the size of the sequence. */
-	const contextY = $derived(
-		linearAxis(
-			[
-				0,
-				data.contextWindow,
-				...contextRuns.flatMap((run) => [run.longest ?? 0, run.spare ?? 0])
-			],
-			[contextBox.bottom, contextBox.top]
-		)
-	);
+	const contextY = $derived(linearAxis(contextExtent, [contextBox.bottom, contextBox.top]));
 	const contextAxis = $derived(
 		runTicks(
 			contextRuns.map((run) => run.date),
 			contextX
 		)
 	);
-	const contextRules = $derived(
-		modelRules(data.modelChanges, firstOfDay(contextRuns), contextX)
-	);
+	const contextRules = $derived(modelRules(data.modelChanges, contextDates, contextX));
 	const contextStrip = $derived(
-		contextColumns(contextRuns, data.contextWindow).map((column, index) => ({
+		contextData.map((column, index) => ({
 			...column,
 			x: contextX[index] ?? 0,
-			rows: contextRules.some((rule) => rule.date === contextRuns[index]?.date)
+			// One set membership a column, built once a span, in place of a scan of
+			// the rule list a column. The set holds a boundary DAY's date and every
+			// run of that day carries it, so all its columns take the rule - which is
+			// exactly what the scan did.
+			rows: contextBoundaries.has(contextRuns[index]?.date ?? '')
 				? [...column.rows, MODEL_RULE_ROW]
 				: column.rows
 		}))
@@ -301,6 +326,10 @@
 	function contextAtY(value: number): number {
 		return Math.round(contextY.scale(value) * 10) / 10;
 	}
+	/** The two series as polylines, built once a span-and-width rather than once
+	 * a render: inlined in the template, both were rebuilt on every hover. */
+	const contextSpareLine = $derived(line(contextRuns.map((run) => run.spare)));
+	const contextLongestLine = $derived(line(contextRuns.map((run) => run.longest)));
 
 	// --- Run latency, one plot per percentile ----------------------------
 
@@ -317,6 +346,13 @@
 	let tailAt = $state<number | null>(null);
 
 	const tailRuns = $derived(inSpan(data.series.latency));
+	// A function of the runs alone, so a resize reuses them (as the context chain
+	// above does): the caption columns, the boundary set and the shared domain no
+	// longer rebuild on a drag.
+	const tailDates = $derived(firstOfDay(tailRuns));
+	const tailData = $derived(latencyColumns(tailRuns));
+	const tailBoundaries = $derived(boundaryDates(data.modelChanges, tailDates));
+	const tailExtent = $derived(tailRuns.flatMap((run) => run.ms.map((ms) => ms / 1000)));
 	const tailW = $derived(chartWidth(tailWidth, data.chart.width_px));
 	const tailH = $derived(
 		PERCENTILES.length * TAIL_CELL_PX + (PERCENTILES.length - 1) * TAIL_GAP_PX + TAIL_AXIS_PX
@@ -332,10 +368,7 @@
 	 * them that the p99 is twenty times the p50. The scale is built in the first
 	 * cell's pixels and every other cell is the same box moved down. */
 	const tailY = $derived(
-		linearAxis(
-			tailRuns.flatMap((run) => run.ms.map((ms) => ms / 1000)),
-			[TAIL_CELL_PX - TAIL_MARGIN.bottom, TAIL_MARGIN.top]
-		)
+		linearAxis(tailExtent, [TAIL_CELL_PX - TAIL_MARGIN.bottom, TAIL_MARGIN.top])
 	);
 	function tailAtY(at: number, value: number): number {
 		return Math.round((tailY.scale(value) + at * (TAIL_CELL_PX + TAIL_GAP_PX)) * 10) / 10;
@@ -349,12 +382,12 @@
 			tailX
 		)
 	);
-	const tailRules = $derived(modelRules(data.modelChanges, firstOfDay(tailRuns), tailX));
+	const tailRules = $derived(modelRules(data.modelChanges, tailDates, tailX));
 	const tailStrip = $derived(
-		latencyColumns(tailRuns).map((column, index) => ({
+		tailData.map((column, index) => ({
 			...column,
 			x: tailX[index] ?? 0,
-			rows: tailRules.some((rule) => rule.date === tailRuns[index]?.date)
+			rows: tailBoundaries.has(tailRuns[index]?.date ?? '')
 				? [...column.rows, MODEL_RULE_ROW]
 				: column.rows
 		}))
@@ -367,6 +400,9 @@
 			.map((run, index) => `${tailX[index]},${tailAtY(at, (run.ms[at] ?? 0) / 1000)}`)
 			.join(' ');
 	}
+	/** One polyline a percentile, built once a span-and-width. Five were rebuilt
+	 * on every render before, once for each `{#each PERCENTILES}` pass. */
+	const tailLines = $derived(PERCENTILES.map((_, at) => tailLine(at)));
 	const tailSpan = $derived(
 		tailRuns.length === 0
 			? ''
@@ -654,6 +690,7 @@
 	<div
 		data-windowed="machine-context"
 		data-window-days={windowDays}
+		data-context-domain={JSON.stringify(contextY.domain)}
 		data-model-rule={contextRuns.length > 1 ? 'yes' : 'no'}
 		data-model-rule-name="machine-context"
 		data-model-rule-none={contextRuns.length > 1
@@ -769,7 +806,7 @@
 							     measurement - so it is drawn dotted to say it is not an
 							     independent reading of anything. -->
 							<polyline
-								points={line(contextRuns.map((run) => run.spare))}
+								points={contextSpareLine}
 								fill="none"
 								stroke="var(--chart-3)"
 								stroke-width="1.5"
@@ -778,7 +815,7 @@
 							/>
 							<g data-context-series="longest">
 								<polyline
-									points={line(contextRuns.map((run) => run.longest))}
+									points={contextLongestLine}
 									fill="none"
 									stroke="var(--chart-1)"
 									stroke-width="2"
@@ -1011,6 +1048,7 @@
 	<div
 		data-windowed="machine-latency"
 		data-window-days={windowDays}
+		data-tail-domain={JSON.stringify(tailY.domain)}
 		data-model-rule={tailRuns.length > 1 ? 'yes' : 'no'}
 		data-model-rule-name="machine-latency"
 		data-model-rule-none={tailRuns.length > 1
@@ -1088,7 +1126,7 @@
 								     is not in the data. -->
 								<g data-latency-series={`p${percentile}`}>
 									<polyline
-										points={tailLine(at)}
+										points={tailLines[at]}
 										fill="none"
 										stroke="var(--chart-1)"
 										stroke-width="2"
