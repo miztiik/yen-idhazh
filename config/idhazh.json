@@ -122,6 +122,7 @@
     "harvest_every_days": 7,
     "holdout_days": 2,
     "min_rows": 500,
+    "prompt_iterations": 3,
     "prune_every_days": 30,
     "prune_keep_days": 60,
     "reference_rows": 500,
