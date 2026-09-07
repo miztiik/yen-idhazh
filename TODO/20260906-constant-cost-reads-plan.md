@@ -67,6 +67,7 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
 | Row 14 | `frontend/src/lib/charts/viewport.ts` walks the window one day at a time to list its months (`monthsInWindow`) and re-sorts a fresh copy of the month list on every call (`coveredMonths`). The "advance months directly, index the dates" half of finding 104, outside row 14's `frame.ts`. | Row 17 |
 | Row 12 | The canary day carries one model, so the swap-dots panel never renders and its constant-cost parity is not exercised in the browser gate. Add a model swap to `backend/utilities/build_canary_day.py` so the panel appears. | Not this plan; needs a canary with a model swap |
 | Row 15 | The window control renders the one-day preset as "1 days" - the plural is not guarded for `n = 1`. Reader-facing, cosmetic, pre-existing, and in the shared window control no row here owns. | Not this plan; a label fix |
+| Row 17 | `frontend/tests/charts.spec.ts` filters console pages with `path.includes('console')` on absolute build paths, so every reading route is wrongly excluded when the worktree path itself contains "console". A false red on a local run in a `*console*` worktree only; CI uses a clean path and passes. Match a path segment, not a substring. | Not this plan; a test-filter fix |
 
 ## 2 - Row #1 - Config knobs and contract
 
