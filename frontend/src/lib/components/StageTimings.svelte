@@ -137,15 +137,23 @@
 			.sort((a, b) => a.date.localeCompare(b.date))
 	);
 	const byDate = $derived(new Map(ordered.map((day) => [day.date, day])));
+	/** Every stage timing in the window, data only. Split from the scale so a
+	 * resize reuses this pass instead of walking the window again for a new plot
+	 * height. */
+	const stageValues = $derived(
+		ordered
+			.flatMap((day) => STAGES.map((stage) => day[stage.key].ms))
+			.filter((ms): ms is number => ms !== null)
+	);
 	/** Whole decades, rounded outward to the decade that holds the data. That is
 	 * the log form of the rounding rule, not an exception to it. */
-	const scale = $derived(
-		logAxis(
-			ordered
-				.flatMap((day) => STAGES.map((stage) => day[stage.key].ms))
-				.filter((ms): ms is number => ms !== null),
-			[box.bottom, box.top]
-		)
+	const scale = $derived(logAxis(stageValues, [box.bottom, box.top]));
+	/** The raw extent of the timings, bound to the data alone: a resize cannot
+	 * move it and a window change can. Published so a test can hold the split. */
+	const timingExtent = $derived(
+		stageValues.length === 0
+			? ''
+			: `${Math.min(...stageValues)},${Math.max(...stageValues)}`
 	);
 	const minorTicks = $derived(
 		scale.ticks
@@ -205,9 +213,22 @@
 	 * four. Null where every day was timed in full: a sentence that only ever
 	 * says "all of it" is noise. */
 	const coverageNote = $derived(coverageSentence(covered, 'We timed', timedItems));
+	/** Every drawn stage's geometry, built once. The runs, the marks and the
+	 * zeros were three functions the template called per stage on every render,
+	 * so a pointer move walked the window three times a stage for a picture that
+	 * had not moved. Held here they rebuild only when the data or the plot box
+	 * does. */
+	const paths = $derived(
+		drawn.map((stage) => ({
+			stage,
+			runs: runs(stage.key),
+			marks: marksOf(stage.key),
+			zeros: zeros(stage.key)
+		}))
+	);
 	/** Whether any stage drew an open dot, so the sentence that explains one is
 	 * printed where there is one and nowhere else. */
-	const anyZero = $derived(drawn.some((stage) => zeros(stage.key).length > 0));
+	const anyZero = $derived(paths.some((path) => path.zeros.length > 0));
 
 	/** One column per day, whether or not the day timed anything. A column the
 	 * strip skipped would be a day an arrow key steps over without saying so.
@@ -404,6 +425,7 @@
 				data-timing="plot"
 				data-timing-days={calendar.length}
 				data-timing-series={drawn.length}
+				data-timing-domain={timingExtent}
 				data-timing-first={calendar[0] ?? ''}
 				data-timing-last={calendar[calendar.length - 1] ?? ''}
 				use:pointerReadout={{
@@ -502,37 +524,37 @@
 					/>
 				{/if}
 
-				{#each drawn as stage (stage.key)}
-					{#each runs(stage.key) as run, index (`${stage.key}-${index}`)}
+				{#each paths as path (path.stage.key)}
+					{#each path.runs as run, index (`${path.stage.key}-${index}`)}
 						{#if run.length > 1}
 							<polyline
 								points={points(run)}
 								fill="none"
-								stroke={stage.colour}
+								stroke={path.stage.colour}
 								stroke-width="1.5"
 								stroke-linejoin="round"
-								data-stage-mark={stage.label}
+								data-stage-mark={path.stage.label}
 							/>
 						{/if}
 					{/each}
-					{#each marksOf(stage.key) as mark, index (`${stage.key}-point-${index}`)}
+					{#each path.marks as mark, index (`${path.stage.key}-point-${index}`)}
 						<circle
 							cx={mark.x}
 							cy={mark.y}
 							r="2.5"
-							fill={stage.colour}
-							data-stage-mark={stage.label}
+							fill={path.stage.colour}
+							data-stage-mark={path.stage.label}
 						/>
 					{/each}
-					{#each zeros(stage.key) as mark, index (`${stage.key}-zero-${index}`)}
+					{#each path.zeros as mark, index (`${path.stage.key}-zero-${index}`)}
 						<circle
 							cx={mark.x}
 							cy={mark.y}
 							r="3.5"
 							fill="none"
-							stroke={stage.colour}
+							stroke={path.stage.colour}
 							stroke-width="1.5"
-							data-stage-zero={stage.label}
+							data-stage-zero={path.stage.label}
 						/>
 					{/each}
 				{/each}

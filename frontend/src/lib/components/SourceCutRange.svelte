@@ -118,14 +118,18 @@
 		} satisfies Margin)
 	);
 
-	const xAxis = $derived(
-		logAxis(
-			[
-				...rows.flatMap((source) => [source.lengths.min, source.lengths.max]),
-				...caps.map((cap) => cap.words)
-			],
-			[box.left, box.right]
-		)
+	/** Every length and cut the axis must hold, data only. Split from the axis so
+	 * a resize reuses this pass rather than walking the sources again for a new
+	 * plot width. */
+	const xValues = $derived([
+		...rows.flatMap((source) => [source.lengths.min, source.lengths.max]),
+		...caps.map((cap) => cap.words)
+	]);
+	const xAxis = $derived(logAxis(xValues, [box.left, box.right]));
+	/** The raw extent of the lengths, bound to the data alone: a resize cannot
+	 * move it and a window change can. Published so a test can hold the split. */
+	const sourceExtent = $derived(
+		xValues.length === 0 ? '' : `${Math.min(...xValues)},${Math.max(...xValues)}`
 	);
 
 	const minorTicks = $derived(
@@ -192,6 +196,7 @@
 			data-source-cuts-pitch={pitch}
 			data-source-cuts-plot={px(box.innerWidth)}
 			data-source-cuts-frame={box.width}
+			data-source-domain={sourceExtent}
 		>
 			<line
 				x1={box.left}
