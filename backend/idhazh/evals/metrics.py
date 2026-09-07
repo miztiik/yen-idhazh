@@ -296,6 +296,32 @@ def self_repetition(summary: str) -> float:
     return 1.0 - len(_ngrams(tokens)) / windows
 
 
+def restates_summary(key_point: str, summary: str) -> float:
+    """Share of the key point's 4-grams that already appear in the summary.
+
+    The `extractiveness` shape pointed at our own summary instead of the source:
+    a distinctness floor for one key point, not a copy check against the article.
+    A key point that lifts whole phrases from the summary scores near one; a key
+    point that states a new fact scores near zero even when it reuses words the
+    summary used, because a shared word is not a shared four-word run. That gap
+    is the point of it: "the weights carry a permissive licence" and "no
+    retirement date was given" both name the weights, and only one restates the
+    summary.
+
+    So it is the overlap ratio that decides and never a single shared word - a
+    key point may share vocabulary with the summary and still add a fact. Below
+    `_NGRAM` words there is no four-gram to measure, and the fragment reads as
+    distinct (0.0), the safe direction that keeps a short key point rather than
+    dropping it.
+    """
+    point_tokens = _normalise(words(key_point))
+    if len(point_tokens) < _NGRAM:
+        return 0.0
+    point_grams = _ngrams(point_tokens)
+    summary_grams = _ngrams(_normalise(words(summary)))
+    return len(point_grams & summary_grams) / len(point_grams)
+
+
 def _checkable_numbers(text: str) -> set[str]:
     """Normalised so 1,320 and 1320 and 1320.0 are the same number."""
     found: set[str] = set()
