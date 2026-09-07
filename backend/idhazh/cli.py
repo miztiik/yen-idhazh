@@ -3107,7 +3107,13 @@ def stage_assemble(
     stamps = append_new(FINGERPRINTS, _stamps(items_dir))
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
-    publish_telemetry.publish(state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry")
+    publish_telemetry.publish(
+        state_root=STATE_ROOT,
+        public_root=PUBLIC_ROOT.parent / "telemetry",
+        # The run appended to one month, so that is the only one that can have
+        # changed. Every other shard is rebuilt only if it is missing.
+        months={plan.date[:7]},
+    )
     # Written after the ledgers this run appended, and from those files rather
     # than from anything in memory here: the view is a projection of the
     # committed record, so a run that failed to append has to publish the record
