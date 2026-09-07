@@ -81,3 +81,39 @@ export function newestFirst(entries: SearchIndexEntry[]): SearchIndexEntry[] {
 		.reverse()
 		.flatMap((date) => byDate.get(date) ?? []);
 }
+
+/** The oldest day a window of `days` still reaches back to, as `YYYY-MM-DD`.
+ *
+ * Measured back from `anchor`, the newest published day, not from today. A
+ * corpus that stopped last month opens on its own last stories rather than on
+ * an empty page - the search scope anchors the same way, for the same reason.
+ * A one-day window is the anchor itself, so the span is `days - 1` before it.
+ */
+export function windowStart(anchor: string, days: number): string {
+	const start = new Date(`${anchor}T00:00:00Z`);
+	start.setUTCDate(start.getUTCDate() - (days - 1));
+	return start.toISOString().slice(0, 10);
+}
+
+/** The months a window reaches into, newest first - and no month it cannot.
+ *
+ * The archive browses a window, not the whole corpus, so the list fetches only
+ * the month files that window could hold a story from. A month is one of them
+ * when it lies between the window's start month and the anchor's, inclusive;
+ * every month older than that is out of reach and is never fetched, which is
+ * what keeps the walk bounded by the window rather than by the archive
+ * (`CLAUDE.md` Rule #12).
+ *
+ * `months` is the set that exists on disk (`indexMonths()`, newest first), so a
+ * month the window reaches but nobody published is simply absent from the
+ * result and costs no request. The return is a newest-first prefix of that
+ * set, which is what lets the browse loop fetch it one month at a time.
+ *
+ * Pure, so a test drives it in Node the way the search scope is - the canary
+ * publishes a single month and a rule about several cannot show up in it.
+ */
+export function monthsInWindow(months: string[], anchor: string, days: number): string[] {
+	const startMonth = windowStart(anchor, days).slice(0, 7);
+	const anchorMonth = anchor.slice(0, 7);
+	return months.filter((month) => month >= startMonth && month <= anchorMonth);
+}
