@@ -220,6 +220,133 @@ def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> Non
     )
 
 
+def _address(number: int) -> str:
+    return derive_url_key(f"https://example.org/items/{number}")
+
+
+def _day_file(state: Path, date: str) -> Path:
+    """`state/published/YYYY/MM/DD.csv`, spelled out rather than asked for.
+
+    The reader's own path helper would make this a restatement of the code it
+    checks. The layout is the thing under test, so the test writes it.
+    """
+    return state / "published" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def _published_file(path: Path, dates: dict[str, str]) -> None:
+    """One published-shaped file at `path`, holding `url_key -> published_on`.
+
+    Rows go through the contract, so a fixture cannot drift from what a run
+    would really append. Every fixture here is built and fixed, so these checks
+    cost the same on the day the archive holds ten times the rows (Rule #12).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
+        out.writeheader()
+        for number, (url_key, on) in enumerate(sorted(dates.items())):
+            row = PublishedRow(
+                version=PublishedRow.schema_version(),
+                url_key=url_key,
+                published_on=on,
+                item_id=f"ai-{number:010d}",
+            )
+            out.writerow(row.model_dump(mode="json"))
+
+
+def test_load_published_reads_no_history_from_a_fresh_clone(tmp_path: Path) -> None:
+    """A missing flat file and a missing day tree both mean nothing has published yet.
+
+    Neither is an error. A clone with no history is the state every fresh
+    checkout is in, and an empty mapping is what "nothing has run" looks like.
+    """
+    assert ledger.load_published(tmp_path / "state") == {}
+
+
+def test_load_published_reads_the_flat_file_the_day_tree_and_their_union(
+    tmp_path: Path,
+) -> None:
+    """Both shapes answer, and holding both answers with the union of the two.
+
+    `state/published.csv` is moving to `state/published/YYYY/MM/DD.csv`. The
+    reader learns both shapes before anything writes the new one, so a split
+    that half-finishes, or a flat file a union merge brings back after it was
+    removed, still returns every address rather than silently dropping the
+    shape nobody is reading.
+    """
+    flat_only = tmp_path / "flat-only"
+    _published_file(ledger.published_path(flat_only), {_address(1): "2026-08-20"})
+    assert ledger.load_published(flat_only) == {_address(1): "2026-08-20"}
+
+    days_only = tmp_path / "days-only"
+    _published_file(_day_file(days_only, "2026-08-21"), {_address(2): "2026-08-21"})
+    _published_file(_day_file(days_only, "2026-08-22"), {_address(3): "2026-08-22"})
+    _published_file(_day_file(days_only, "2026-09-03"), {_address(4): "2026-09-03"})
+    assert ledger.load_published(days_only) == {
+        _address(2): "2026-08-21",
+        _address(3): "2026-08-22",
+        _address(4): "2026-09-03",
+    }, "two days of one month and a day of the next"
+
+    both = tmp_path / "both"
+    _published_file(ledger.published_path(both), {_address(1): "2026-08-20"})
+    _published_file(_day_file(both, "2026-08-21"), {_address(2): "2026-08-21"})
+    _published_file(_day_file(both, "2026-09-03"), {_address(4): "2026-09-03"})
+    assert ledger.load_published(both) == {
+        _address(1): "2026-08-20",
+        _address(2): "2026-08-21",
+        _address(4): "2026-09-03",
+    }, "the union, so neither shape can hide an address from the guard"
+
+
+@pytest.mark.parametrize("earlier_in_the_day_tree", [False, True])
+def test_load_published_keeps_the_earliest_date_whichever_shape_holds_it(
+    tmp_path: Path, earlier_in_the_day_tree: bool
+) -> None:
+    """One address in both shapes on two dates. The answer cannot follow read order.
+
+    Asserted both ways round because a reader that simply overwrote would pass
+    one arm and fail the other, and which arm it passed would depend on which
+    shape it happened to open first.
+    """
+    state = tmp_path / "state"
+    key = _address(1)
+    early, late = "2026-08-21", "2026-09-03"
+    flat_on, day_on = (late, early) if earlier_in_the_day_tree else (early, late)
+
+    _published_file(ledger.published_path(state), {key: flat_on})
+    _published_file(_day_file(state, day_on), {key: day_on})
+
+    assert ledger.load_published(state) == {key: early}
+
+
+@pytest.mark.parametrize(
+    ("relative", "what"),
+    [
+        ("2026/08/notes.csv", "a day stem that is not two digits"),
+        ("2026/8/21.csv", "a month that is not two digits"),
+        ("archive/08/21.csv", "a year that is not four digits"),
+        ("README.csv", "a file where a year directory belongs"),
+    ],
+)
+def test_load_published_refuses_a_file_it_cannot_place_in_the_day_tree(
+    tmp_path: Path, relative: str, what: str
+) -> None:
+    """A file the reader cannot place is a fault, and it is never skipped.
+
+    A glob would answer "what matched" and say nothing about what did not, so a
+    stray file would sit in a state directory unread and unmentioned - which is
+    how a reader starts missing rows without anyone noticing. Every arm here
+    holds a real published row, so the refusal is about the name and not about
+    the contents.
+    """
+    state = tmp_path / "state"
+    _published_file(state / "published" / relative, {_address(1): "2026-08-21"})
+
+    with pytest.raises(ValueError, match="is not a YYYY/MM/DD published day"):
+        ledger.load_published(state)
+
+
 def carried_row(
     number: int,
     *,
