@@ -1,10 +1,10 @@
 {
   "complete_dates": 14,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-07T14:12:39Z",
+  "generated_at": "2026-09-07T17:13:47Z",
   "last_date": "2026-09-06",
   "min_complete_days": 30,
-  "run_id": "2026-09-07-34123084462",
+  "run_id": "2026-09-07-34140506972",
   "sources": [
     {
       "availability": "answering",
@@ -547,7 +547,7 @@
       "vertical": "world"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 17,
       "permission": "allowed",
       "publications": 10,
@@ -1063,7 +1063,7 @@
       "vertical": "business-economy"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "opportunities": 0,
       "permission": "allowed",
       "publications": 0,
