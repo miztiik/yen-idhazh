@@ -22,6 +22,7 @@ from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
 from utilities import migrate_score_ledger as migrate
+from utilities import split_published_ledger as split_ledger
 from utilities.migrate_feed_health import NARROW_COLUMNS, WIDENED_AT, widen
 from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
@@ -437,6 +438,156 @@ def test_what_the_writer_files_by_day_answers_beside_the_flat_file(tmp_path: Pat
     }
 
 
+def _flat_ledger(path: Path, rows: list[tuple[str, str]]) -> list[str]:
+    """One flat `state/published.csv` holding `rows` as (address, published_on).
+
+    Returns the data lines it wrote, in file order, so a test can assert the
+    split carried them across rather than re-serialising them. Rows go through
+    the contract, so a fixture cannot drift from what a run would append; the
+    order and the repeats are the test's, because both are what the split has
+    to preserve.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
+        out.writeheader()
+        for number, (url_key, on) in enumerate(rows):
+            out.writerow(
+                PublishedRow(
+                    version=PublishedRow.schema_version(),
+                    url_key=url_key,
+                    published_on=on,
+                    item_id=f"ai-{number:010d}",
+                ).model_dump(mode="json")
+            )
+    return path.read_text(encoding="utf-8", newline="").split("\n")[1:-1]
+
+
+def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Path) -> None:
+    """The Oracle: `load_published` answers the same before and after, from day files.
+
+    Four rows over three days and two months, one address published twice, so
+    the arms that matter are all here: a day file holds exactly its own rows,
+    two months are two directories, and the earliest date still wins for an
+    address the flat file held twice.
+
+    The day file is compared byte for byte rather than row by row. Rows are
+    copied, never rewritten - so a split that re-serialised them through the
+    contract would pass a cell comparison and fail here, which is what stops a
+    `version` cell being restamped with today's.
+    """
+    state = tmp_path / "state"
+    written = _flat_ledger(
+        _flat_file(state),
+        [
+            (_address(1), "2026-08-31"),
+            (_address(2), "2026-09-01"),
+            (_address(3), "2026-08-31"),
+            (_address(1), "2026-09-02"),
+        ],
+    )
+    before = ledger.load_published(state)
+    assert before == {
+        _address(1): "2026-08-31",
+        _address(2): "2026-09-01",
+        _address(3): "2026-08-31",
+    }, "the flat file has to hold a repeat or the earliest-wins arm proves nothing"
+
+    report = split_ledger.run(state)
+
+    assert (report.rows_in, report.rows_out, report.days) == (4, 4, 3)
+    assert report.digest == split_ledger.digest(before)
+    assert not _flat_file(state).exists(), "the flat file is retired, not left beside the tree"
+    assert sorted(_tree(state)) == [
+        "published/2026/08/31.csv",
+        "published/2026/09/01.csv",
+        "published/2026/09/02.csv",
+    ]
+    header = ",".join(PublishedRow.csv_columns())
+    assert _day_file(state, "2026-08-31").read_text(encoding="utf-8", newline="") == (
+        f"{header}\n{written[0]}\n{written[2]}\n"
+    ), "the two rows that name this day, verbatim and in the order the flat file held them"
+    assert ledger.load_published(state) == before
+
+
+@pytest.mark.parametrize("bad", ["2026-08", "20260831"])
+def test_the_split_refuses_a_row_it_cannot_place_and_leaves_the_flat_file(
+    tmp_path: Path, bad: str
+) -> None:
+    """A row that lands nowhere stops the whole split, and nothing is written.
+
+    A published address the split dropped is an address `rank.plan_vertical`
+    would plan again, so the answer to a row nobody can place is the reader's
+    answer to a file nobody can place: refuse the read rather than skip it.
+
+    Two shapes, because they fail in different places. `2026-08` names a month,
+    and the date parser refuses it. `20260831` is a real ISO date the parser
+    accepts, and it is the dangerous one: `published_path` cuts a date by
+    position, so it would file the row at `state/published/2026/83/.csv` and
+    `load_published` would never find it again.
+
+    The bad row is written past the contract on purpose. `PublishedRow` refuses
+    it, so the only way this ledger holds one is a hand edit or a mangled merge
+    - which is exactly when the flat file has to survive.
+    """
+    state = tmp_path / "state"
+    flat = _flat_file(state)
+    _flat_ledger(flat, [(_address(1), "2026-08-31")])
+    text = flat.read_text(encoding="utf-8", newline="")
+    good = text.split("\n")[1]
+    with flat.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(f"{text}{good.replace('2026-08-31', bad)}\n")
+    was = flat.read_bytes()
+
+    with pytest.raises(ValueError, match="names no day file"):
+        split_ledger.run(state)
+
+    assert flat.read_bytes() == was, "the flat file is the only copy until the split finishes"
+    assert not (state / "published").exists(), "no day file is written when a row cannot be placed"
+
+
+def test_the_split_retires_a_flat_file_that_holds_nothing(tmp_path: Path) -> None:
+    """A header and no rows is a finished cutover, so the file goes and nothing is made.
+
+    A fresh clone that has never published has no flat file at all. This is the
+    other end of the same state - the file a run created and never filled - and
+    leaving it behind would keep `load_published` opening a file with nothing in
+    it for ever.
+    """
+    state = tmp_path / "state"
+    _flat_ledger(_flat_file(state), [])
+
+    report = split_ledger.run(state)
+
+    assert (report.rows_in, report.rows_out, report.days) == (0, 0, 0)
+    assert not _flat_file(state).exists()
+    assert _tree(state) == {}, "an empty ledger names no day, so no day file is created"
+    assert ledger.load_published(state) == {}
+
+
+def test_the_split_keeps_what_a_day_file_already_holds(tmp_path: Path) -> None:
+    """A run that already filed today's rows is not overwritten by the split.
+
+    The writer moved to the day layout before this ran, so a day can hold rows
+    in both shapes at once - an early run in the flat file, a later one in the
+    day file. Overwriting would lose the later run, which is the one failure
+    this cutover is not allowed to have.
+    """
+    state = tmp_path / "state"
+    date = "2026-09-07"
+    ledger.append_published(state, date, [published_row(url_key=_address(9), on=date)])
+    already = _day_file(state, date).read_text(encoding="utf-8", newline="")
+    _flat_ledger(_flat_file(state), [(_address(1), date)])
+    before = ledger.load_published(state)
+    assert set(before) == {_address(1), _address(9)}, "one address in each shape"
+
+    report = split_ledger.run(state)
+
+    assert report.rows_in == 1
+    assert _day_file(state, date).read_text(encoding="utf-8", newline="").startswith(already)
+    assert ledger.load_published(state) == before
+
+
 def carried_row(
     number: int,
     *,
@@ -655,22 +806,6 @@ def test_a_row_the_fixed_pipeline_wrote_is_left_alone() -> None:
                 source_seen_word_count="4310",
             )
         )
-
-
-def test_the_committed_published_ledger_has_the_shape_the_contract_writes() -> None:
-    """The read-side migration for the narrowed row is the file itself.
-
-    `require_matching_header` stops an append when the two disagree, so a
-    contract narrowed without the ledger being rewritten would take down every
-    scheduled run at the last stage of the day (CLAUDE.md section 11). Nothing
-    appends to this file now - a row is filed under its own day - but
-    `load_published` still opens it, and the split that retires it copies these
-    cells across unchanged, so its header is still the shape the contract
-    writes.
-    """
-    header = ledger.read_header(_flat_file(REPO_ROOT / "state"))
-
-    assert header == PublishedRow.csv_columns()
 
 
 def narrowed(text: str) -> str:
