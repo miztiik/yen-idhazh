@@ -51,7 +51,11 @@ test('dayMetrics opens only the dates asked for, whatever else is in the tree', 
 			date: '2026-08-21',
 			summariesScored: 5,
 			determinismViolations: 1,
-			extractionSuspect: 2
+			extractionSuspect: 2,
+			// This fixture carries only the strict triple, so the band's two extra
+			// counts read null (they are proven present further down).
+			notSure: null,
+			itemsTruncated: null
 		});
 
 		// A date with no record is skipped, not walked to. The caller falls back
@@ -153,4 +157,47 @@ test('modelWork keeps null summaries for a day the scorer never ran', () => {
 	const [row] = modelWork([], health, zero);
 	expect(row.kind).toBe('day');
 	if (row.kind === 'day') expect(row.day.summaries).toBeNull();
+});
+
+// --- the band's two extra counts, read leniently from the same record --------
+
+test('dayMetrics reads the band counts from bands.low and items_truncated', () => {
+	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
+	try {
+		// A full record, as the producer writes it: the band's `notSure` is the low
+		// confidence band and its `readInPart` is the cut count, both distinct-
+		// published (row 24).
+		writeRecord(
+			root,
+			'2026-08-21',
+			JSON.stringify({
+				summaries_scored: 5,
+				determinism_violations: 1,
+				extraction_suspect: 2,
+				bands: { high: 3, medium: 1, low: 4 },
+				items_truncated: 6
+			})
+		);
+		const found = dayMetrics(['2026-08-21'], root).get('2026-08-21');
+		expect(found?.notSure).toBe(4);
+		expect(found?.itemsTruncated).toBe(6);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('dayMetrics leaves the band counts null on a record without them', () => {
+	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
+	try {
+		// A record carrying only the strict triple still reads, so the model route
+		// keeps its correction; the band's two extra counts fall to null for that day
+		// rather than dropping the whole record.
+		writeRecord(root, '2026-08-21', recordText(5, 1, 2));
+		const found = dayMetrics(['2026-08-21'], root).get('2026-08-21');
+		expect(found?.summariesScored).toBe(5);
+		expect(found?.notSure).toBeNull();
+		expect(found?.itemsTruncated).toBeNull();
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });

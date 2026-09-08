@@ -379,7 +379,31 @@ export function itemHealthRows(): CsvTable {
 	return readShards(join(STATE_ROOT, 'item-health'));
 }
 
-/** The three published-set counts a run settled about one day.
+/** One published day's item-health rows, from that month's shard alone.
+ *
+ * Opens only `state/item-health/<YYYY-MM>.csv` for the one date handed in -
+ * never a listing of the directory, never an older month - so the cost is one
+ * file whatever the archive holds behind it (`CLAUDE.md` Rule #12). The console
+ * band reads the newest published day this way instead of walking every month
+ * shard through `readShards` to keep only that one day. A month with no shard
+ * yet returns no rows, and the caller shows the day no health fact rather than
+ * reaching for the whole tree (section 1a).
+ *
+ * `root` is overridable for the same reason `dayMetrics`' is: the canary suite
+ * points it at a fixture state that must never reach the real ledger.
+ */
+export function itemHealthForDay(
+	date: string,
+	root: string = STATE_ROOT
+): Record<string, string>[] {
+	const month = date.slice(0, 7);
+	if (!/^\d{4}-\d{2}$/.test(month)) return [];
+	const path = join(root, 'item-health', `${month}.csv`);
+	if (!existsSync(path)) return [];
+	return readCsv(path).rows.filter((row) => (row.date ?? '') === date);
+}
+
+/** The published-set counts a run settled about one day.
  *
  * Read back from the committed day-metrics record so the console does not
  * re-count them by walking the whole score ledger. All three count the day's
@@ -399,6 +423,13 @@ export interface DayMetrics {
 	determinismViolations: number;
 	/** Of those, the ones whose source read like page furniture. */
 	extractionSuspect: number;
+	/** Published items the checker put in the lowest confidence band, from the
+	 * record's `bands.low`. Null only where a record predates the field; every
+	 * record the producer writes carries it, so real data never reads null. */
+	notSure: number | null;
+	/** Published items whose source extract the cap cut short, from the record's
+	 * `items_truncated`. Null on the same terms as `notSure`. */
+	itemsTruncated: number | null;
 }
 
 /** The day-metrics record for each named date, read one file at a time.
@@ -438,11 +469,20 @@ export function dayMetrics(
 			) {
 				throw new TypeError('a day-metrics count is missing or not a number');
 			}
+			// The band's two counts are read leniently: a record predating either
+			// field drops to null for that count rather than dropping the whole day,
+			// which would take the model route's strict triple down with it. Every
+			// record the producer writes carries both, so real data never reads null.
+			const bands = parsed.bands as Record<string, unknown> | undefined;
+			const low = bands?.low;
+			const truncated = parsed.items_truncated;
 			found.set(date, {
 				date,
 				summariesScored: scored,
 				determinismViolations: drift,
-				extractionSuspect: suspect
+				extractionSuspect: suspect,
+				notSure: typeof low === 'number' ? low : null,
+				itemsTruncated: typeof truncated === 'number' ? truncated : null
 			});
 		} catch (cause) {
 			// Degrade, do not fail (`CLAUDE.md` section 1a): one unreadable record

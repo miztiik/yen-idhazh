@@ -17,13 +17,13 @@
 
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '$lib/charts/glance';
 import { chronological, failing, reliability, resting, skipped } from '$lib/feed-health';
-import { modelWork, type ModelDay } from '$lib/server/model-work';
 import {
-	evalRows,
+	dayMetrics,
 	feedResults,
-	itemHealthRows,
+	itemHealthForDay,
 	loadManifests,
 	publishedItems,
+	type DayMetrics,
 	type FeedResult,
 	type RunRecord
 } from '$lib/server/payload';
@@ -331,7 +331,43 @@ function machineCandidates(counters: MachineCounters): Candidate[] {
 	return found;
 }
 
-function modelCandidates(day: ModelDay | null): Candidate[] {
+/** The one day's model facts the band draws, each from its authoritative home.
+ *
+ * `failed`, `refusedForLength` and `totalMs` are the newest day's own
+ * item-health rows - the same three counts `model-work.ts`' `day()` takes off
+ * the health ledger, here off the one bounded shard the band reads. `notSure`
+ * and `readInPart` are the run's settled published-set counts from the
+ * day-metrics record: the score ledger keeps a row per measurement, so a
+ * re-scored item counts twice and a scored-then-dropped item counts at all,
+ * where the record counts the published set once - the same authoritative
+ * correction row 23 took (owner, 2026-09-08). Null is preserved as "unmeasured":
+ * no health rows means no health fact, no record means no published-set count,
+ * and neither reads as a zero.
+ */
+interface BandModel {
+	failed: number | null;
+	refusedForLength: number | null;
+	notSure: number | null;
+	readInPart: number | null;
+	totalMs: number | null;
+}
+
+/** The band's model facts for one day, from its bounded health rows and record. */
+function bandModel(health: Record<string, string>[], record: DayMetrics | undefined): BandModel {
+	const times = health
+		.map((row) => Number(row.summarize_ms))
+		.filter((ms) => Number.isFinite(ms) && ms > 0);
+	return {
+		failed: health.length === 0 ? null : health.filter((row) => row.outcome === 'failed').length,
+		refusedForLength:
+			health.length === 0 ? null : health.filter((row) => row.code === 'context_exceeded').length,
+		totalMs: times.length === 0 ? null : times.reduce((total, ms) => total + ms, 0),
+		notSure: record?.notSure ?? null,
+		readInPart: record?.itemsTruncated ?? null
+	};
+}
+
+function modelCandidates(day: BandModel | null): Candidate[] {
 	if (day === null) return [];
 	const found: Candidate[] = [];
 	if (day.failed !== null && day.failed > 0) {
@@ -383,13 +419,24 @@ export function consoleShell(): ConsoleShell {
 	const budgetBytes = retentionConfig().site_budget_mb * 1024 * 1024;
 	const quarantineAfter = collectConfig().availability_strikes_before_rest;
 	const feeds = feedTrouble(feedResults(), quarantineAfter);
+	// One published count for the whole function: the size figure divides the tree
+	// by it and the machine carry names it, and two reads of the same ledger are
+	// one read too many (Carmack, plan row 24 decision 3).
+	const published = publishedItems();
 
-	const scored = evalRows().rows;
-	const itemRows = itemHealthRows().rows;
-	const modelDays = modelWork(scored, itemRows).flatMap((row) =>
-		row.kind === 'day' ? [row.day] : []
-	);
-	const newestModelDay = modelDays[0] ?? null;
+	// The band shows one day - the newest the manifests hold - and it shows it on
+	// all three routes, so it reads that one day's model facts from their
+	// authoritative homes at a fixed cost rather than walking every score and
+	// health shard to keep only the first day (CLAUDE.md Rule #12). The newest
+	// month's item-health shard carries the health facts; the day-metrics record
+	// the run wrote at publication carries the published-set counts. Keyed to the
+	// manifest's newest date - the same day the verdict, the size and the carries
+	// already stand on - so the band cannot name one day in its verdict and another
+	// in its worst fact.
+	const newestDate = newest?.date ?? null;
+	const dayHealth = newestDate === null ? [] : itemHealthForDay(newestDate);
+	const newestModelDay =
+		newestDate === null ? null : bandModel(dayHealth, dayMetrics([newestDate]).get(newestDate));
 
 	// --- The verdict -------------------------------------------------------
 	// Counts first, then what is wrong with them. An operator who reads only the
@@ -475,7 +522,7 @@ export function consoleShell(): ConsoleShell {
 	// Pipelines. The band stands on all three routes, so a figure that moved
 	// when a control on one route moved would read as three different sites.
 	const bytes = newest?.siteBytes ?? null;
-	const cost = siteCost(manifests, publishedItems(), null);
+	const cost = siteCost(manifests, published, null);
 	const runway = bytes === null ? null : siteRunway(bytes, cost.median, budgetBytes);
 	const capFraction = bytes === null ? null : bytes / PAGES_CAP_BYTES;
 	// One line. The rate this divides by, the days it was measured over and the
@@ -494,8 +541,8 @@ export function consoleShell(): ConsoleShell {
 	// that explains another, and every number in them is derived rather than
 	// stated: a carry quoting a figure nobody measured is worse than no carry.
 	const modelClock = clock(newestModelDay?.totalMs ?? null);
-	const runSpread = readSpreadOf(newest?.date ?? null, itemRows);
-	const articlesToday = newest === null ? null : (publishedItems().get(newest.date) ?? null);
+	const runSpread = readSpreadOf(newestDate, dayHealth);
+	const articlesToday = newest === null ? null : (published.get(newest.date) ?? null);
 
 	return {
 		band: {
