@@ -38,12 +38,12 @@ Growth claims cited per row come from [the research handover](20260906-data-grow
 | 14 | Chart geometry and coverage | 3 | C | DONE #464 | removed | #464 | worker |
 | 15 | Model route instruments | 2 | C | DONE #471 | removed | #471 | worker |
 | 16 | Hardware route context | 2 | C | DONE #472 | removed | #472 | worker |
-| 17 | Console route strips and row eviction | 2 | C | PENDING | - | - | - |
-| 18 | Throughput trend window | 2 | C | PENDING | - | - | - |
-| 19 | Telemetry publication by partition | 10 | D | PENDING | - | - | - |
-| 20 | Source health by recorded date | 10 | D | PENDING | - | - | - |
-| 21 | Day-facts contract | 10 | D | PENDING | - | - | - |
-| 22 | Producer writes day facts | 21 | E | PENDING | - | - | - |
+| 17 | Console route strips and row eviction | 2 | C | DONE #477 | removed | #477 | worker |
+| 18 | Throughput trend window | 2 | C | DONE #481 | removed | #481 | worker |
+| 19 | Telemetry publication by partition | 10 | D | DONE #484 | removed | #484 | worker |
+| 20 | Source health by recorded date | 10 | D | DONE #485 | removed | #485 | worker |
+| 21 | Day-facts contract | 10 | D | DONE #486 | removed | #486 | worker |
+| 22 | Producer writes day facts | 21 | E | DONE #489 | removed | #489 | worker |
 | 23 | Console reads day facts | 22 | F | PENDING | - | - | - |
 | 24 | Band facts | 22 | F | PENDING | - | - | - |
 | 25 | Archive window control | 1 | C | DONE #470 | removed | #470 | worker |
@@ -68,6 +68,15 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
 | Row 12 | The canary day carries one model, so the swap-dots panel never renders and its constant-cost parity is not exercised in the browser gate. Add a model swap to `backend/utilities/build_canary_day.py` so the panel appears. | Not this plan; needs a canary with a model swap |
 | Row 15 | The window control renders the one-day preset as "1 days" - the plural is not guarded for `n = 1`. Reader-facing, cosmetic, pre-existing, and in the shared window control no row here owns. | Not this plan; a label fix |
 | Row 17 | `frontend/tests/charts.spec.ts` filters console pages with `path.includes('console')` on absolute build paths, so every reading route is wrongly excluded when the worktree path itself contains "console". A false red on a local run in a `*console*` worktree only; CI uses a clean path and passes. Match a path segment, not a substring. | Not this plan; a test-filter fix |
+
+### Scope changes during execution
+
+Every entry is scope a worker or the orchestrator added mid-flight because it advanced the plan's intent - constant-cost reads or a correct number - not gold-plating. Each names the row it lands in and its authority, so distillation captures it as a decision and not as drift.
+
+| Row | Change | Why it serves the intent | Authority |
+| --- | --- | --- | --- |
+| 18 | Bound the server-side `throughputDays` build to the widest preset, not only the chart's drawing. | The chart drew a window but the server still built and shipped the whole-history array into every page, so the payload still grew with the archive. Windowing the draw alone left finding 100 half-closed. | Owner, 2026-09-08; delivered in #481 |
+| 23 | The record counts distinct published items, so the cutover corrects the summaries-scored count and the determinism and extraction-suspect flags on the four days where the console over-counted raw score-ledger rows. | The old numbers were wrong, not a baseline to preserve. The identical-figure oracle is a drift catcher, not a bug preserver; a discovered wrong number is surfaced and corrected, not frozen. | Owner, 2026-09-08 |
 
 ## 2 - Row #1 - Config knobs and contract
 
@@ -99,7 +108,7 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
   | 1 | Lower `max_window_days` to 90 or 180. | It is a retention floor, not a viewport clamp. Lowering it authorises shard deletion, and the audit shows no UI path past 90 days today. | Owner, 2026-09-06 |
-  | 2 | Add 180 to the presets. | A wider preset pulls more month files, which works against the goal of this plan. | Owner, 2026-09-06 |
+  | 2 | Add 180 to the presets. | A wider preset pulls more month files, which works against the goal of this plan. Reconsidered 2026-09-08 and deferred again: 180 is a fixed constant so it would not break Rule #12, but it raises the fixed read from three month files to six and shows the same as 90 until more than 90 days accumulate. | Owner, 2026-09-06; reaffirmed 2026-09-08 |
   | 3 | Let each row edit the contract it needs. | Six rows would contend for one file. | execute-a-plan.md |
 
 ## 3 - Row #2 - One-pass build reductions
@@ -372,18 +381,21 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
 
 ## 19 - Row #18 - Throughput trend window
 
-- **Scope:** Decide and implement the span the throughput view covers. Finding 100.
+- **Scope:** Decide and implement the span the throughput view covers, in both the chart's drawing and the server-side array the page ships. Finding 100.
 - **Files touched:**
   - `frontend/src/lib/components/ThroughputTrend.svelte`
+  - `frontend/src/routes/console/model/+page.server.ts`
   - the matching specs
 - **Acceptance gates:** local - the shared test selector plus the console specs against a canary day. CI - full suite.
-- **Oracle:** the rendered span equals the stated span, and a calendar gap draws as a gap rather than a bridge.
+- **Oracle:** the rendered span equals the stated span, a calendar gap draws as a gap rather than a bridge, and the count of `item-health` rows the server reads for the trend is bounded by the widest preset rather than by the archive.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | This row changes what the chart claims, so it is an ESCALATE stop. The worker proposes the span and pauses. | Owner |
   | 2 | If it stays all-history, it reads stored day facts rather than every published day. | Fowler |
+  | 3 | Resolved to windowed, not all-history: the chart binds to the same 1/7/14/30/90-day control as the panels below it. All-history stays open for after rows 21 and 23 exist. | Owner, 2026-09-08 |
+  | 4 | The server build of `throughputDays` is bounded to the widest preset as well, so the shipped payload is constant and not only the drawing. This is the scope change recorded above; delivered in #481. | Owner, 2026-09-08 |
 
 ## 20 - Row #19 - Telemetry publication by partition
 
@@ -466,14 +478,15 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
   - `frontend/src/routes/console/model/+page.server.ts`
   - the matching specs
 - **Acceptance gates:** local - the shared test selector plus the console specs against a canary day and a browser smoke on all three console routes. CI - full suite.
-- **Oracle:** every console figure identical to the pre-change build, and the count of day files opened bounded by the window rather than by the archive.
+- **Oracle:** every console figure identical to the pre-change build, except the summaries-scored count and the determinism and extraction-suspect flags on the four days named in decision 4, which show the corrected lower values; and the count of day files opened bounded by the window rather than by the archive.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | A raw-history reader is deleted only once its replacement produces the identical figure. | Fowler |
+  | 1 | A raw-history reader is deleted only once its replacement produces the identical figure, or the intended corrected figure named in decision 4. | Fowler |
   | 2 | Private state files are never served to a reader for drilldown. | CLAUDE.md Rule #1 |
   | 3 | Dropping vectors after parsing saves nothing; the read and the parse already happened. | Carmack |
+  | 4 | The record counts distinct published items, so the cutover corrects the summaries-scored count and the determinism and extraction-suspect flags on the four days where the console over-counted raw score-ledger rows - re-scores and scores for never-published articles: 2026-08-29 (399 to 366), 2026-09-02 (598 to 536), 2026-09-05 (456 to 374), 2026-09-07 (283 to 209). The identical-figure oracle catches drift; a discovered wrong number is corrected, not frozen. | Owner, 2026-09-08 |
 
 ## 25 - Row #24 - Band facts
 
