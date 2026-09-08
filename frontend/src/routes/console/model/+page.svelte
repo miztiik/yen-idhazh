@@ -702,23 +702,18 @@
 					days.
 				</p>
 			{:else}
-				<!-- Keyed on the window and the shape together. The engine takes its
-				     option once, at hydration, so a live chart never sees a changed
-				     one - the block is torn down and rebuilt instead. -->
-				{#key `${windowDays}-${reasonShape}`}
-					<Chart
-						svg={data.reasonsSvg ?? ''}
-						option={reasonPlot.option}
-						width={data.console.chart_width}
-						height={data.console.chart_height}
-						label="Why summaries were doubted, per day, over {windowDays} days. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown."
-						columns={reasonStrip}
-						readoutName="doubt-reasons"
-						readoutMaxShare={data.chart.readout_max_share}
-						restingNote=", the newest day"
-						hint="Point at a day to read every reason at once. Left and Right step through the days, Escape returns to the newest."
-					/>
-				{/key}
+				<Chart
+					svg={data.reasonsSvg ?? ''}
+					option={reasonPlot.option}
+					width={data.console.chart_width}
+					height={data.console.chart_height}
+					label="Why summaries were doubted, per day, over {windowDays} days. One column is one day, its height is the summaries the checker wrote a reason on, and the bands are the five reasons it can give. Drawn as lines instead, each reason is its own count a day and the total is not shown."
+					columns={reasonStrip}
+					readoutName="doubt-reasons"
+					readoutMaxShare={data.chart.readout_max_share}
+					restingNote=", the newest day"
+					hint="Point at a day to read every reason at once. Left and Right step through the days, Escape returns to the newest."
+				/>
 				<!-- Stacked says how much of a day the checker stopped on and what the
 				     mix was; lines say what one fault did on its own, which a stack
 				     hides when one band halves while its neighbour doubles. Same
@@ -792,20 +787,18 @@
 					No day in these {windowDays} days carries a checked summary, so there is nothing to draw.
 				</p>
 			{:else}
-				{#key windowDays}
-					<Chart
-						svg={data.matchSvg ?? ''}
-						option={matchPlot.option}
-						width={data.console.chart_width}
-						height={data.console.chart_height}
-						label="How closely summaries matched their articles, per day, over {windowDays} days. One line is the middle summary of each day and the other is the summary a quarter of the way up from the bottom, both as a percentage."
-						columns={matchStrip}
-						readoutName="faithfulness"
-						readoutMaxShare={data.chart.readout_max_share}
-						restingNote=", the newest day"
-						hint="Point at a day to read both figures at once. Left and Right step through the days, Escape returns to the newest."
-					/>
-				{/key}
+				<Chart
+					svg={data.matchSvg ?? ''}
+					option={matchPlot.option}
+					width={data.console.chart_width}
+					height={data.console.chart_height}
+					label="How closely summaries matched their articles, per day, over {windowDays} days. One line is the middle summary of each day and the other is the summary a quarter of the way up from the bottom, both as a percentage."
+					columns={matchStrip}
+					readoutName="faithfulness"
+					readoutMaxShare={data.chart.readout_max_share}
+					restingNote=", the newest day"
+					hint="Point at a day to read both figures at once. Left and Right step through the days, Escape returns to the newest."
+				/>
 				<!-- The numbers as text, for anybody who cannot see the plot and for
 				     the browser suite, which re-derives every one of them from the
 				     committed shards rather than from the module that drew them. -->
@@ -861,20 +854,18 @@
 					No day in these {windowDays} days carries a checked summary, so there is nothing to draw.
 				</p>
 			{:else}
-				{#key windowDays}
-					<Chart
-						svg={data.leadSvg ?? ''}
-						option={leadPlot.option}
-						width={data.console.chart_width}
-						height={data.console.chart_height}
-						label="How many summaries kept too little of their article's opening, per day, over {windowDays} days, as a percentage of the summaries checked that day."
-						columns={leadStrip}
-						readoutName="lead-coverage"
-						readoutMaxShare={data.chart.readout_max_share}
-						restingNote=", the newest day"
-						hint="Point at a day to read the count and the middle summary together. Left and Right step through the days, Escape returns to the newest."
-					/>
-				{/key}
+				<Chart
+					svg={data.leadSvg ?? ''}
+					option={leadPlot.option}
+					width={data.console.chart_width}
+					height={data.console.chart_height}
+					label="How many summaries kept too little of their article's opening, per day, over {windowDays} days, as a percentage of the summaries checked that day."
+					columns={leadStrip}
+					readoutName="lead-coverage"
+					readoutMaxShare={data.chart.readout_max_share}
+					restingNote=", the newest day"
+					hint="Point at a day to read the count and the middle summary together. Left and Right step through the days, Escape returns to the newest."
+				/>
 				<ul class="sr-only" data-lead-days>
 					{#each leadWindow as day (day.date)}
 						<li
