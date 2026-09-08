@@ -637,6 +637,31 @@ class ExtractConfig(Model):
     user_agent: str = Field(default="yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)")
 
 
+class ElementsConfig(Model):
+    """How many candidate elements one article's passes may keep.
+
+    A bound on work, never a judgement about which figures matter. The
+    candidate pass keeps every quantity the number pattern matched, in the
+    order the article wrote them, and this is the only thing that removes any
+    of them - so `ElementTable.candidates_found` ships beside the table and
+    says what the pass matched before this cap applied.
+    """
+
+    max_per_article: int = Field(
+        default=256,
+        ge=1,
+        description=(
+            "Candidate elements kept per article. Sized against the truncation cap "
+            "rather than guessed: at 5000 tokens an article body holds about 3,846 "
+            "words, and the densest committed page fixture carries 9.2 quantities per "
+            "1000 characters, which is about 211 over a body that long (measured "
+            "2026-09-08 on tests/fixtures/pages and tests/fixtures/canaries). It is 16 "
+            "times visuals.max_facts because that one is a menu a small model reads by "
+            "index and this one is a fact table nothing has to read at once."
+        ),
+    )
+
+
 class InferenceConfig(Model):
     """Decoding is pinned here so a change of output is a reviewable diff."""
 
@@ -2714,6 +2739,24 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-08",
+            change=(
+                "elements.max_per_article added, defaulting to 256 and at least 1. It "
+                "bounds how many candidate elements one article's passes keep. Additive "
+                "and optional with a default, so a config written before the section "
+                "existed loads and behaves the same."
+            ),
+            why=(
+                "The candidate pass keeps every quantity the number pattern matched, "
+                "where the visual planner's own reader stops at 16, dedupes and drops. "
+                "A pass with no bound at all is an unbounded table over fetched bytes "
+                "(Rule #11), and a bound written into code is a tunable with no home "
+                "(Rule #6). 256 is measured rather than guessed: it is above the "
+                "densest committed page fixture extrapolated to an article at the "
+                "truncation cap."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-07T03:00",
             change=(
                 "collect.published_window_days added, defaulting to -1 for unbounded. A "
@@ -4487,6 +4530,7 @@ class AppConfig(Contract):
     run: RunConfig = Field(default_factory=RunConfig)
     collect: CollectConfig = Field(default_factory=CollectConfig)
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
+    elements: ElementsConfig = Field(default_factory=ElementsConfig)
     models: ModelsConfig
     summarize: SummarizeConfig = Field(default_factory=SummarizeConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
