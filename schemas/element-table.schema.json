@@ -1,0 +1,320 @@
+{
+  "$defs": {
+    "Element": {
+      "additionalProperties": false,
+      "description": "One fact, and the characters it was cut from.",
+      "properties": {
+        "attribution": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2. Who the article said it, if anyone.",
+          "title": "Attribution"
+        },
+        "dimension": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2. What the element is broken down by.",
+          "title": "Dimension"
+        },
+        "element_id": {
+          "description": "<kind>-<span_start>-<span_end>, recomputed on read, never trusted.",
+          "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+          "title": "Element Id",
+          "type": "string"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2. The watchlist entity this element is about.",
+          "title": "Entity"
+        },
+        "extractor": {
+          "$ref": "#/$defs/Extractor"
+        },
+        "hedge": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2. Whether the article hedged the fact rather than asserting it.",
+          "title": "Hedge"
+        },
+        "kind": {
+          "$ref": "#/$defs/ElementKind"
+        },
+        "label_source": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2 provenance. Which model or person assigned the judgements.",
+          "title": "Label Source"
+        },
+        "ledger_version": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2 provenance. The date-stamp of the pass that assigned them.",
+          "title": "Ledger Version"
+        },
+        "measure": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2. What is measured, in the article's own words.",
+          "title": "Measure"
+        },
+        "measure_canonical": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2. The same measure under one controlled name, so two articles' words for it compare as a string. A free-text canonical name is not canonical, it is a second wording.",
+          "title": "Measure Canonical"
+        },
+        "salience": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2. How much of the story this fact is.",
+          "title": "Salience"
+        },
+        "sentence_index": {
+          "description": "Which sentence of Article.text the span starts in, from zero.",
+          "minimum": 0,
+          "title": "Sentence Index",
+          "type": "integer"
+        },
+        "span_end": {
+          "description": "Index into Article.text. Exclusive.",
+          "minimum": 1,
+          "title": "Span End",
+          "type": "integer"
+        },
+        "span_excerpt": {
+          "description": "The verbatim slice Article.text[span_start:span_end]. Untrusted text: data and never instruction (Rule #11), and never republished to a reader.",
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Span Excerpt",
+          "type": "string"
+        },
+        "span_start": {
+          "description": "Index into Article.text. Inclusive.",
+          "minimum": 0,
+          "title": "Span Start",
+          "type": "integer"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}(?:-\\d{2}-\\d{2})?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tier 2. When the element applies, if that is not now.",
+          "title": "Time"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A quantity's normalised unit, and null on every other kind.",
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What the span reads as - a decimal for a quantity, a date or a year for a date, and null for the four kinds that are words. Stated even when null.",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "element_id",
+        "kind",
+        "span_start",
+        "span_end",
+        "span_excerpt",
+        "value",
+        "unit",
+        "sentence_index",
+        "extractor"
+      ],
+      "title": "Element",
+      "type": "object"
+    },
+    "ElementKind": {
+      "description": "The six things an element can be.\n\nDeclared in the order the producers arrive: `quantity` and `date` are pure\npatterns over the bytes and ship with this contract's first two producers.\nThe other four need a model to point at them, and until that producer exists\nthey are legal and never written.",
+      "enum": [
+        "quantity",
+        "date",
+        "entity",
+        "place",
+        "quote",
+        "claim"
+      ],
+      "title": "ElementKind",
+      "type": "string"
+    },
+    "Extractor": {
+      "description": "Which path found the element.\n\nIt exists so a later run can measure the two apart. Without it a fall in the\nquantity count reads the same whether a pattern stopped matching or a model\nstopped pointing, and those have different fixes.\n\nNot to be confused with `Article.extractor_version`, which is the version of\nthe HTML-to-text extractor that produced the article body. That names the\nstage that made the string; this names the pass that found a fact inside it.",
+      "enum": [
+        "regex",
+        "model"
+      ],
+      "title": "Extractor",
+      "type": "string"
+    }
+  },
+  "$id": "element-table.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: six element kinds, a Tier 1 half only code writes and a Tier 2 half a later labeller may assign, over one article's text.",
+      "version": "2026-09-08",
+      "why": "Contracts before logic - the two pattern producers are written against a fixed payload (Rule #3). Six kinds land in one entry rather than four later widenings of a persisted shape. `span_excerpt` is the one name for the verbatim slice, because `raw` is whitespace-cleaned and `surface` is already this project's word for a place something is shown."
+    }
+  ],
+  "description": "Every element one article yielded, and the text they were cut from.",
+  "properties": {
+    "canonical_url": {
+      "description": "The address url_key derives from.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Canonical Url",
+      "type": "string"
+    },
+    "elements": {
+      "description": "In the order the article wrote them. Uncapped here: what a producer keeps is a tunable and lives in config, not in the shape.",
+      "items": {
+        "$ref": "#/$defs/Element"
+      },
+      "title": "Elements",
+      "type": "array"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "source_text_hash": {
+      "description": "sha256 of the Article.text every span indexes - one hash per article, not per element. A per-element hash would be redundant against this plus the re-slice, on every article for ever.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Text Hash",
+      "type": "string"
+    },
+    "source_text_length": {
+      "description": "Characters in that same string. It is what lets this shape refuse a span past the end of the text without holding the text.",
+      "minimum": 0,
+      "title": "Source Text Length",
+      "type": "integer"
+    },
+    "url_key": {
+      "description": "sha256 of canonical_url. The same identity Article carries, rebuilt on read.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-08",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "item_id",
+    "url_key",
+    "canonical_url",
+    "source_text_hash",
+    "source_text_length"
+  ],
+  "title": "ElementTable",
+  "type": "object",
+  "version": "2026-09-08"
+}
