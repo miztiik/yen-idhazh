@@ -29,10 +29,75 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Six numbers the job already has and throws away | - | A | PENDING | - | - | - |
-| 2 | A model swap can no longer inherit in silence | - | A | PENDING | - | - | - |
-| 3 | The window doubles and flash attention pays for it | 1, 2 | B | PENDING | - | - | - |
-| 4 | One run prices the runtime and nothing else | 3 | C | PENDING | - | - | - |
+| 1 | Six numbers the job already has and throws away | - | A | DONE #525 (three of six) | yi-h01-memory | #525 | worker |
+| 2 | A model swap can no longer inherit in silence | - | A | DONE #528 | yi-h02-inherit | #528 | worker |
+| 3 | The window doubles and flash attention pays for it | 1, 2 | B | HELD - ESCALATE 1 and 2 | - | - | - |
+| 4 | One run prices the runtime and nothing else | 3 | C | HELD - blocked by row 3 | - | - | - |
+
+### What rows 1 and 2 changed under the plan
+
+**Row 1 shipped three of its six fields and withheld three, with evidence.**
+`python_peak_rss_bytes`, `cgroup_peak_bytes` and a corrected `python_vmhwm_kb`
+sampler column landed. `kv_cache_bytes`, `compute_buffer_bytes` and
+`model_buffer_bytes` did not, because the lines section 13.3 sources them from
+do not exist. Eight captured logs were searched - the four committed fixtures
+under `tests/fixtures/runtime/` and four raw logs of run `32742672105`, 75 to
+98 KB each - for `KV self size`, `kv_cache`, `compute buffer`, `CPU_Mapped`,
+`model buffer` and `buf size`. Zero matches in any of them. At llama.cpp
+`b10598` the server prints twelve startup lines at its default verbosity of 3
+and the whole model-loader block is absent: no `llama_model_loader:`, no
+`print_info:`, no `load_tensors:`, no `system_info`. Three columns empty on
+every row for ever is speculative generality, so they were refused rather than
+minted (Fowler).
+
+**Row 2 chose the per-entry block over the qualification gate, and added a
+witness.** `models.inference` is gone; each `models.<role>` carries its own
+block, and the block carries `declared_for`, the SHA-256 of the entry it is set
+for. `ModelsConfig` refuses a config where the two disagree. The qualification
+gate was refused because `validate.yml` builds a scratch config whose
+`models.summarize` is the candidate and whose every other control is the
+committed one - that pairing IS the experiment, so a gate refusing an unmeasured
+pairing would refuse the measurement and leave the daily path silent. Moving the
+block alone was also not enough: the confirmed red state edits five strings in
+place, which a per-entry block still accepts. `pipeline_fingerprint` was proved
+unmoved - the same 14 digested knobs stamp `2b9be483...` on both trees.
+
+---
+
+## 1a. Why rows 3 and 4 are held - two ESCALATE triggers, both measured
+
+**Trigger 1 - memory - is already breached at today's window, before the row
+runs.** Section 11.2 sized the raise against 13.29 GiB peak and 1.61 GiB free.
+That figure is llama-server's high-water mark ALONE, which is the whole point of
+row 1 decision 1. Adding llama-server and python at the same instant, sample by
+sample, over the four committed captures of run `2026-08-29-3` (291 to 383
+samples a shard, 15 s apart, GitHub-hosted `ubuntu-latest`, 4 vCPU, 16 GB,
+captured 2026-08-29, recomputed 2026-09-08):
+
+| Shard | llama-server alone | Both at one instant | Free of 14.90 GiB |
+| --- | --- | --- | --- |
+| 3 | 13.16 GiB | **14.31 GiB** | **0.59 GiB** |
+| 2 | 12.94 GiB | 14.15 GiB | 0.75 GiB |
+| 0 | 12.57 GiB | 13.93 GiB | 0.97 GiB |
+| 1 | 12.65 GiB | 13.86 GiB | 1.04 GiB |
+
+Spread 0.45 GiB. Three of four shards are already under the 1.0 GiB the trigger
+asks for, at `n_ctx` 8,192. The independent second instrument agrees: the widened
+`state/runtime-counters.csv` now holds 225 rows over 56 runs, worst
+`peak_rss_bytes` 13.82 GiB - 0.64 GiB above the 13.18 GiB
+`docs/reference/measurements.md` recorded on 2026-09-01, with no model or window
+change in between.
+
+**Trigger 2 - the instrument - does not exist.** The row's oracle asserts flash
+attention active from the server's own startup line, and refuses the flag having
+been passed as evidence. At `b10598` there is no such line to read. `-fa` is
+already wired in `server_argv` (`backend/idhazh/llm/server.py` line 136) and no
+`-lv` is passed, so the server runs at its default verbosity of 3 and prints
+nothing about attention, the KV cache or either buffer.
+
+**Row 4 inherits both.** Its decision 2 closes the 7.7 GiB gap between
+arithmetic and measurement by reading the KV-buffer and compute-buffer lines out
+of `llama-server.log`. Those are the same absent lines.
 
 ---
 
