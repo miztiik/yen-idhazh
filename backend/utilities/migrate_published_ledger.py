@@ -24,7 +24,11 @@ from typing import Final
 
 from idhazh.assemble import write_atomic
 from idhazh.contracts.seen import PublishedRow
-from idhazh.ledger import published_path
+
+#: The file this migration rewrites. Spelled here rather than asked of
+#: `idhazh.ledger` for the reason `WIDE_COLUMNS` is: it is history. The ledger
+#: files a row under its own day now, so no path helper there names this file.
+FLAT_FILENAME: Final = "published.csv"
 
 #: The shape this migration reads. It is history rather than a knob, so it is
 #: spelled here: the contract no longer describes the file being migrated.
@@ -121,7 +125,7 @@ def main() -> None:
     parser.add_argument("--state", default="state", help="the state directory to migrate")
     args = parser.parse_args()
 
-    path = published_path(Path(args.state))
+    path = Path(args.state) / FLAT_FILENAME
     relpath = _relpath(path)
     if not path.is_file():
         raise SystemExit(f"{relpath} does not exist")
