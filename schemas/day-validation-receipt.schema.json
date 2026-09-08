@@ -1,0 +1,54 @@
+{
+  "$id": "day-validation-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the day, the length and digest of the payload that passed, and the identity of the validator that passed it.",
+      "version": "2026-09-08",
+      "why": "`validate-days` re-read every committed day on every publication and every CI run - 18 days and 19,867,266 bytes on 2026-09-08, 0.45 s median, and one day more every day nobody writes any code (Rule #12). A published day is frozen, so re-reading it can only find a fault the day it was written already refused. What can change is the contract it is read through, so the receipt keys on the validator's identity as well as on the payload, and a validator that moves invalidates every row at once."
+    }
+  ],
+  "description": "One row of `state/day-validations.csv`: one frozen day, one validator.",
+  "properties": {
+    "date": {
+      "description": "The published day this row is about.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "payload_bytes": {
+      "description": "The length of the day payload that passed. Compared against `os.stat` on a later run, which is what lets an unchanged day be skipped without opening it. A length of zero is not a day.",
+      "minimum": 1,
+      "title": "Payload Bytes",
+      "type": "integer"
+    },
+    "payload_digest": {
+      "description": "sha256 over the payload bytes that passed. Taken from the bytes, never derived from anything else. It is what makes two rows about one day detectable as disagreeing after a union merge.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Payload Digest",
+      "type": "string"
+    },
+    "validator_version": {
+      "description": "The identity of what the day was checked against: both generated schemas plus the source of the functions that do the checking. It moves when any of them moves, so it cannot be left behind by hand.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Validator Version",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-08",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "payload_bytes",
+    "payload_digest",
+    "validator_version"
+  ],
+  "title": "DayValidationReceipt",
+  "type": "object",
+  "version": "2026-09-08"
+}

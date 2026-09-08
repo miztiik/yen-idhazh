@@ -17,6 +17,7 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.day_metrics import DayMetrics
+from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.eval_row import EvalRow
@@ -54,6 +55,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     CorpusMeta,
     CorpusRow,
     DayMetrics,
+    DayValidationReceipt,
     DigestDay,
     DigestView,
     EvalRow,
