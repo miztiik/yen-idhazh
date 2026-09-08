@@ -3,13 +3,14 @@
 **Last Updated**: 2026-09-08
 
 The extraction subsystem's fact table. This page owns the element shape - the
-six kinds, the two tiers, and the span that makes a drawn figure checkable - and
-the candidate pass that fills it with quantities.
+six kinds, the two tiers, and the span that makes a drawn figure checkable - the
+candidate pass that fills it, and the rule that settles two passes claiming one
+stretch of characters.
 
-One pass writes into this table today. It finds quantities, and it is pure code
-over the article's own bytes: `backend/idhazh/elements.py`. The four kinds a
-model has to point at have no producer, and a kind with no producer is legal and
-simply never appears.
+Two passes write into this table today, both pure code over the article's own
+bytes: [`backend/idhazh/elements.py`](../../../backend/idhazh/elements.py) finds
+quantities and it finds absolute dates. The four kinds a model has to point at
+have no producer, and a kind with no producer is legal and simply never appears.
 
 ## What an element is
 
@@ -35,9 +36,22 @@ producer keeps is a tunable (`elements.max_per_article`, 256), so the length of
 `elements` saturates. Read a density signal off it and a 600-word note carrying
 16 figures looks the same as a 3,000-word data story carrying 60 - and the
 second is the chartable one. It fails silently, because a capped counter still
-returns a plausible integer. The count is taken before any dedupe and before the
-cap, and the shape refuses a table that kept more of a kind than it says it
-found.
+returns a plausible integer. The count is taken before any dedupe, before the
+overlap rule and before the cap, and the shape refuses a table that kept more of
+a kind than it says it found.
+
+**`candidates_found` is one count per pass and never a total.** Two passes may
+both count one stretch of characters, because both matched it and only one kept
+it. So `candidates_found[quantity]` is what the number pattern matched and
+`candidates_found[date]` is what the date pattern matched, and summing them
+double-counts every span they competed for. Measured 2026-09-08 on the eight
+bounded fixtures: 17 quantities and 8 dates matched, 9 quantities and 8 dates
+kept.
+
+**The knob bounds each pass and then the settled table.** Each pass stops at
+`elements.max_per_article`, and the merged, settled list is cut to the same
+number, so neither a runaway pattern nor two passes together can put more
+elements in an article than the knob names.
 
 **A span here is a character range, not a trace span.**
 [`backend/idhazh/contracts/span_rollup.py`](../../../backend/idhazh/contracts/span_rollup.py)
@@ -105,18 +119,20 @@ producer can write one by accident.
 The value is pinned as **text** for the reason a timestamp is: one spelling, and
 no float formatting that can drift underneath a committed file.
 
-Six kinds ship in one changelog entry and one of them has a producer today. A
+Six kinds ship in one changelog entry and two of them have a producer today. A
 kind with no producer is legal and simply never appears, which is cheaper than
 widening a persisted shape four more times.
 
 ## The candidate pass
 
 `quantity_elements(text, limit=...)` reads `Article.text` with the number
-pattern and emits one element per quantity, in the order the article wrote them.
-`element_table(article, config=...)` wraps that in the table, with the article's
-identity and the hash of the text every span indexes. Both are pure functions
-over one payload: nothing is committed, and the pass is proved by re-slicing its
-own output.
+pattern and `date_elements(text, limit=...)` reads the same string with the date
+pattern. Each emits one element per match, in the order the article wrote them.
+`settle(...)` decides which of the two keeps a stretch of characters both
+matched, and `element_table(article, config=...)` wraps the result in the table,
+with the article's identity and the hash of the text every span indexes. All
+four are pure functions over one payload: nothing is committed, and the passes
+are proved by re-slicing their own output.
 
 **The offsets are not new work.** `visual_planner.numeric_facts` has always
 computed `match.start()` and `match.end()`, and has always thrown them away.
@@ -129,22 +145,74 @@ Every one of those is correct for choosing bars and wrong for a candidate set -
 the collapsed repeat is exactly the series a trend chart exists to show. Nothing
 in the candidate pass dedupes and nothing drops on size. Measured 2026-09-08 on
 the eight bounded fixtures (`tests/fixtures/canaries` and
-`tests/fixtures/pages`), the pass emits 17 quantities where `numeric_facts`
-keeps 11; on `tests/fixtures/pages/article.html` alone it is 7 against 3.
+`tests/fixtures/pages`), the two passes keep 17 elements - 9 quantities and 8
+dates - where `numeric_facts` keeps 11 facts; on
+`tests/fixtures/pages/article.html` alone it is 3 quantities and 4 dates
+against 3 facts.
 
 `numeric_facts` is untouched and still behaves that way for the planner that
-calls it. This row added a producer beside it rather than repairing it in place.
+calls it. Row 2 added a producer beside it rather than repairing it in place.
 
-**The span ends where the reading ends.** A trailing word is inside the span
-only when it was read as the unit, so `1,200 MW` and `$4.5 billion` are
-excerpts and `40 percent of` never is. That is what keeps the excerpt something
-a reader can find on the page rather than a phrase the pattern happened to
-touch.
+**The span ends where the reading ends.** A trailing word is inside a quantity's
+span only when it was read as the unit, so `1,200 MW` and `$4.5 billion` are
+excerpts and `40 percent of` never is. A date's span is the whole match with
+nothing trimmed off either end, so `15 March 2026` keeps the month word that
+makes it readable on the page. Either way the excerpt is something a reader can
+find, rather than a phrase the pattern happened to touch.
 
-**A bare year is a quantity here, for now.** The date extractor and the rule
-that settles two extractors competing for one span land in the next row, which
-is where the overlap rule has a home. Until then the pass emits every quantity
-the number pattern matched, which is what "candidate" means.
+### What the date pass will read, and what it refuses
+
+Four shapes, tried longest-first so a full date is never read as the bare year
+inside it:
+
+| Written | `value` |
+| --- | --- |
+| `2026-03-15` | `2026-03-15` |
+| `15 March 2026`, `15th Jan. 2026` | `2026-03-15`, `2026-01-15` |
+| `March 15, 2026` | `2026-03-15` |
+| `2026`, alone and inside 1900-2100 | `2026` |
+
+Everything else is refused, and each refusal is the same rule: a date the
+article did not write is not a date it stated.
+
+- **A relative date.** "Three years ago" resolves against a publication date the
+  article never wrote (decision 4). The contract's value grammar refuses it too,
+  so no producer can write one by accident.
+- **A slash date.** `03/04/2026` is 3 April in one country and 4 March in
+  another. Neither reading is stated, so neither is taken - the year is
+  unambiguous and it is still claimed.
+- **A day the calendar does not have.** `February 31, 2026` is refused outright
+  rather than rounded to a day that exists, and the digits stay available to the
+  number pattern.
+- **A four-digit run that is not a year.** A price (`$2026`), a decimal
+  (`2026.5`), a thousands separator (`1,200`) and a year either side of
+  1900-2100 are all numbers.
+
+`YEAR_MIN` and `YEAR_MAX` are the bounds, and they are one definition rather
+than two: they moved off `visual_planner` in this row so the pass that claims a
+bare year and the pass that refuses to plot one read the same pair.
+
+### Two passes, one stretch of characters
+
+Both patterns match `2026`. `settle` is the rule that decides which keeps it,
+and `KIND_PRECEDENCE` is the order: **the date wins on any shared character**,
+whether the two spans are equal, nested either way round, or merely crossing.
+The quantity is dropped whole. The ruling and what it costs are in the design
+rationale below.
+
+The check is every pair of candidates against every other, which is quadratic in
+one article and bounded by `elements.max_per_article` - it cannot grow with the
+archive (Rule #12). Measured 2026-09-08 on a 12th Gen Intel Core i7-1265U with
+Python 3.14.2: on the densest bounded fixture, 11 candidates settle to 7 in a
+median 0.0116 ms, spread 0.0111-0.0167 ms over 9 runs of 200. At the ceiling -
+256 from each pass - 512 candidates settle to 384 in a median 12.37 ms, spread
+11.92-13.13 ms over 9 runs of 20. The whole table for that fixture, both passes
+and the rule together, is a median 0.384 ms, spread 0.366-0.401 ms.
+
+**The rule is between the two regex passes and is not a property of the table.**
+The contract does not refuse an element whose span sits inside another's,
+because a `quote` carrying a `quantity` inside it is the shape the
+model-anchored kinds need and a blanket validator would refuse that too.
 
 ### What a pattern over fetched bytes can hand you
 
@@ -180,6 +248,63 @@ second copy of the reader's sentence. `NumericFact.context` is untouched by this
 contract and retires when its own producer does.
 
 ## Design rationale
+
+### A date takes the characters from any quantity it touches
+
+Two patterns read one string and both match `2026`. One of them has to lose, and
+the rule has no other home than the row that put the second pass in the table.
+
+**The ruling: on any shared character the date element survives and the quantity
+element is dropped whole.** It covers all four ways two spans can meet - equal,
+the date containing the quantity, the quantity containing the date, and the two
+merely crossing - because a rule that only settled the exact tie would leave
+`15 March` and `2026 hit` both standing beside the date they sit in.
+
+The principle behind it is **the pass with the closed vocabulary wins**. The date
+pattern accepts a fixed list of calendar shapes and a four-digit run inside
+1900-2100; the number pattern accepts any run of digits. Specificity is the one
+property of two patterns that can be compared mechanically - which pass ran
+first, which span is longer and which was written first are all accidents of how
+the code is arranged. A third pass has to say where it sits in `KIND_PRECEDENCE`
+or it does not ship.
+
+**What the wrong answer costs, measured on the three captured pages.** A year
+kept as a quantity is a bar 2,027 units high standing next to a bar 12 units
+high, and a reader cannot see that it is wrong - which is exactly why
+`numeric_facts` drops a bare year before picking bars. On 2026-09-08 the rule
+dropped eight quantities across the eight bounded fixtures and every one of them
+was a year: `2029`, `2031`, `1994` and `2035` in `article.html`, `2027` three
+times in `hostile.html` and the canaries. Two of the eight were worse than a
+plain year - `2027 after` and `2027 only`, where the word following the year had
+been read as its unit.
+
+**The exception that was considered and refused: keep the quantity when it
+carries a unit.** It is the obvious narrowing, and those same two elements are
+why it fails. `after` and `only` are not in the 61-word stop list, so the
+quantity pass gave them a unit and a unit-conditioned rule would have kept both
+as measurements of 2,027. The unit reading is itself a guess; conditioning the
+precedence rule on it stacks two guesses.
+
+**What the rule costs, stated rather than implied.** A real four-digit count
+written without a thousands separator loses to the year reading: "the survey
+drew 1994 responses" yields a date and no quantity. Write it `1,994` and the
+quantity survives, because the thousands separator takes it out of the
+bare-year shape. The trade is deliberate and it is the same one `CLAUDE.md`
+section 1a asks for everywhere else - a missing candidate degrades one chart,
+and a wrong bar publishes a figure the article never stated. None of the eight
+bounded fixtures hits this case; a test carries it so the cost is visible rather
+than folklore.
+
+**The rule lives in the producer, not in the shape.** `ElementTable` does not
+refuse overlapping spans, and that is deliberate: a `quote` element carrying a
+`quantity` inside it is the shape plan 11's model-anchored kinds need, and a
+blanket no-overlap validator would refuse it and have to be reversed. What is
+settled here is the narrower thing - two patterns over the same bytes never both
+keep one span.
+
+Authority: **Andre** (the trust boundary, and which reading of untrusted bytes
+is the defensible one) on the precedence and on refusing the unit exception;
+**Fowler** (persisted contracts) on keeping the rule out of the shape.
 
 ### One name for the verbatim slice, and it is `span_excerpt`
 
@@ -273,9 +398,10 @@ in `backend/idhazh/elements.py` and the planner imports them back. Nothing about
 its behaviour changed: a duplicated regex would have been a second definition of
 one concept, guaranteed to drift the first time the pattern is fixed.
 
-`_TRIVIAL_MAX`, the year range and the context window stayed with the planner.
-They are its judgements about what makes a bar, and the candidate pass does not
-share them.
+`_TRIVIAL_MAX` and the context window stayed with the planner. They are its
+judgements about what makes a bar, and the candidate pass does not share them.
+The year range followed the pattern down in row 3, when a second pass needed the
+same fact.
 
 Authority: **Fowler** (module structure).
 
@@ -294,6 +420,13 @@ Authority: **Fowler** (module structure).
 | Repair `numeric_facts` in place instead of adding a pass | Its caller wants the drops. Two callers want opposite things, so they are two functions | Fowler |
 | Count the candidates after the cap | A capped counter returns a plausible integer, so the failure is silent. The count is taken before the cap or it is not a count | Andre |
 | One total instead of a count per kind | It stops answering the density question as soon as the date extractor writes into the same table, and a total cannot be split back apart | Fowler |
+| The quantity wins an overlap, or the longer span wins, or the first pass wins | Length and pass order are accidents of how the code is arranged. On the captured pages the quantity reading was the wrong one every time: eight dropped quantities, eight of them years, two of them years with the next word read as a unit | Andre |
+| Keep the quantity when it carries a unit | `2027 after` and `2027 only` both carry one, because `after` and `only` are not in the 61-word stop list. The unit reading is a guess, so conditioning precedence on it stacks two guesses | Andre |
+| Refuse every overlapping span in `ElementTable` | A `quote` carrying a `quantity` inside it is the shape plan 11 needs, so a blanket validator would have to be reversed. The rule is between the two regex passes and lives with them | Fowler |
+| Count `candidates_found` after the overlap rule | A date pattern that swallowed every figure would then report an article with no figures in it - the same silent failure the counter exists to prevent, one level along | Andre |
+| Read `Month YYYY` as a date | The value grammar holds `YYYY` or `YYYY-MM-DD`, so it would need a day nobody wrote. The bare-year branch claims the year anyway, and dropping the branch also stops `may` and `march` being read as month names when no digits are near | Andre |
+| Read a slash date | `03/04/2026` is two different days depending on the country. Choosing one states a date the article did not | Andre, decision 4 |
+| Resolve a relative date | "Three years ago" resolves against a publication date the article never wrote, on the very plan that establishes the trust boundary | Andre, O45 |
 | Duplicate the number pattern in the new pass | Two definitions of one concept, and the first fix to either would land in one of them | Fowler |
 | Raise on a 200-digit run or a 600-character unit word | Degrade, do not fail (`CLAUDE.md` section 1a). A pattern over fetched bytes will meet both, and one hostile page must not take an article's whole table down | Andre |
 
@@ -305,6 +438,23 @@ per-article container, so the contract is `ElementTable` and its stem mirrors
 its class the way every other stem in this repository does. The plan's own prose
 calls the thing "the element table" throughout, so the word was already chosen;
 only the file list predates the shape.
+
+### The year range moved to the pass that is lower
+
+`YEAR_MIN` and `YEAR_MAX` were `visual_planner` privates. Two passes now need
+the same fact about the same bytes - one to claim a bare four-digit run as a
+year, the other to refuse it as a bar height - so the constants live in
+`backend/idhazh/elements.py` and the planner imports them back. It is the same
+move row 2 made for the number pattern, and for the same reason: two definitions
+of one concept drift the first time either is fixed.
+
+The planner keeps the judgement it makes with them, which is the half that is
+not shared - a year is a label rather than a bar height, so it drops one. That
+sentence moved from the constant to the line that acts on it. `_TRIVIAL_MAX` and
+the context window stayed where they were; the candidate pass does not share
+them.
+
+Authority: **Fowler** (module structure).
 
 ## See also
 

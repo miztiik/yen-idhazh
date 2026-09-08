@@ -1,4 +1,4 @@
-"""The candidate pass: every quantity, and the characters that prove each one.
+"""The candidate pass: every quantity and date, and the characters that prove each.
 
 The oracle is one comparison and it is asserted over every element the pass
 emits: `article.text[span_start:span_end] == span_excerpt`. It runs over the
@@ -10,11 +10,18 @@ The second half of the oracle is that the candidate table is not the
 deduplicated fact list. An article stating one figure in two periods keeps both
 here and collapses to one in `visual_planner.numeric_facts`, and that
 difference is the whole reason this pass exists.
+
+Row 3 adds the third half. Two passes read the same bytes and both match
+`2026`, so a bare year is claimed as a date and never as a quantity, and no two
+elements of one table hold the same character. That is checked pair by pair on
+the same eight fixtures, with a counter-oracle that they carry both kinds -
+without it, a pass emitting nothing makes every pair disjoint.
 """
 
 from __future__ import annotations
 
 import html
+from collections import Counter
 from pathlib import Path
 from typing import Final
 
@@ -31,7 +38,7 @@ from idhazh.contracts.element import Element, ElementKind, ElementTable, Extract
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.elements import Candidates, element_table, quantity_elements
+from idhazh.elements import Candidates, date_elements, element_table, quantity_elements
 from idhazh.fetch import FetchResult
 from idhazh.visual_planner import numeric_facts
 
@@ -83,6 +90,21 @@ def page_article(path: Path) -> Article:
     return article_of(path.read_bytes(), f"https://probe.example/{path.name}")
 
 
+def prose_article(body: str) -> Article:
+    """One paragraph through the real extractor, so a built case yields a real table."""
+    page = (
+        "<!DOCTYPE html><html><head><title>probe</title></head>"
+        f"<body><article><p>{html.escape(body)}</p></article></body></html>"
+    )
+    return article_of(page.encode("utf-8"), "https://probe.example/prose")
+
+
+def reading_of(body: str) -> list[tuple[str, str, str | None]]:
+    """What the table says one sentence holds: each kind, its slice and its value."""
+    table = element_table(prose_article(body), config=ELEMENTS)
+    return [(e.kind.value, e.span_excerpt, e.value) for e in table.elements]
+
+
 def kept(text: str) -> list[Element]:
     return quantity_elements(text, limit=ELEMENTS.max_per_article).elements
 
@@ -121,7 +143,54 @@ def test_the_corpus_the_oracle_runs_over_actually_carries_quantities() -> None:
         emitted += len(element_table(canary_article(canary), config=ELEMENTS).elements)
     for path in PAGES:
         emitted += len(element_table(page_article(path), config=ELEMENTS).elements)
-    assert emitted == 17, "the eight bounded fixtures carried 17 quantities on 2026-09-08"
+    assert emitted == 17, "the eight bounded fixtures carried 17 elements on 2026-09-08"
+
+
+# --- The Oracle: two passes never hold the same character ------------------
+
+
+def overlaps(left: Element, right: Element) -> bool:
+    """Half-open ranges share a character when each starts before the other ends."""
+    return left.span_start < right.span_end and right.span_start < left.span_end
+
+
+def bounded_tables() -> list[tuple[str, ElementTable]]:
+    """The eight fixtures no run appends to: five canaries and three captured pages."""
+    tables = [(c.name, element_table(canary_article(c), config=ELEMENTS)) for c in canaries.ALL]
+    return tables + [(p.name, element_table(page_article(p), config=ELEMENTS)) for p in PAGES]
+
+
+def test_a_bare_year_is_claimed_as_a_date_and_never_as_a_quantity() -> None:
+    """Row 3's oracle. Both patterns match `2026`, and only one reading is true.
+
+    The number pattern still matches it - `quantity_elements` is unchanged - and
+    the table is where the two claims are settled.
+    """
+    assert reading_of("The rule takes effect in 2026.") == [("date", "2026", "2026")]
+
+
+def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
+    """Every pair of spans on the eight bounded fixtures, checked for overlap.
+
+    Pairwise is quadratic in one article's elements and bounded by
+    `elements.max_per_article`, so it cannot grow with the archive (Rule #12).
+    The densest of these fixtures carries seven elements, which is 21 pairs.
+    """
+    for name, table in bounded_tables():
+        for index, left in enumerate(table.elements):
+            for right in table.elements[index + 1 :]:
+                assert not overlaps(left, right), (
+                    f"{name}: {left.element_id} and {right.element_id} both hold "
+                    f"characters {max(left.span_start, right.span_start)} onwards"
+                )
+
+
+def test_the_bounded_fixtures_carry_both_kinds_so_the_pair_check_can_fail() -> None:
+    """The counter-oracle. One pass emitting nothing makes every pair disjoint."""
+    kinds = Counter(element.kind for _, table in bounded_tables() for element in table.elements)
+    assert kinds == {ElementKind.QUANTITY: 9, ElementKind.DATE: 8}, (
+        "the eight bounded fixtures carried 9 quantities and 8 years on 2026-09-08"
+    )
 
 
 # --- The Oracle: this is a candidate set, not the fact list -----------------
@@ -149,7 +218,11 @@ def test_the_two_repeats_are_told_apart_by_where_they_sit() -> None:
     ],
 )
 def test_the_pass_keeps_what_the_planner_is_right_to_drop(text: str, excerpts: list[str]) -> None:
-    """A magnitude at or below two, and a bare year. Both are candidates here."""
+    """A magnitude at or below two, and a bare year. Both are candidates here.
+
+    The number pattern is unchanged by row 3 and still matches a bare year. The
+    table is where that claim loses to the date pass, not this function.
+    """
     assert [element.span_excerpt for element in kept(text)] == excerpts
     assert numeric_facts(text) == [], "the planner's own reader still drops them"
 
@@ -217,7 +290,6 @@ def test_a_pass_that_found_more_than_it_kept_loads() -> None:
         ("Costs fell 12 percent.", "12 percent", "12", "%"),
         ("Revenue reached 4.2 billion dollars.", "4.2 billion dollars", "4200000000", "dollar"),
         ("Temperatures fell -3 degrees.", "-3 degrees", "-3", "degree"),
-        ("The rule takes effect in 2027.", "2027", "2027", None),
     ],
 )
 def test_a_quantity_reads_the_way_the_article_wrote_it(
@@ -246,6 +318,147 @@ def test_a_percent_span_ends_at_the_magnitude_word() -> None:
 def test_a_stop_listed_word_reads_as_no_unit_and_drops_nothing() -> None:
     element = one("The count reached 12 and held.")
     assert (element.span_excerpt, element.unit) == ("12", None)
+
+
+# --- What one date says ----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "excerpt", "value"),
+    [
+        ("Filed 2026-03-15 by the agency.", "2026-03-15", "2026-03-15"),
+        ("On 15 March 2026 the plant opened.", "15 March 2026", "2026-03-15"),
+        ("Published on March 15, 2026 at the earliest.", "March 15, 2026", "2026-03-15"),
+        ("Filed 15th Jan. 2026 in Delhi.", "15th Jan. 2026", "2026-01-15"),
+        ("The rule takes effect in 2026.", "2026", "2026"),
+    ],
+)
+def test_a_date_reads_the_way_the_article_wrote_it(text: str, excerpt: str, value: str) -> None:
+    """Four written shapes and a bare year. The span keeps the article's spelling."""
+    found = date_elements(text, limit=ELEMENTS.max_per_article).elements
+    assert len(found) == 1, f"expected one date, got {[e.span_excerpt for e in found]}"
+    element = found[0]
+    assert element.span_excerpt == excerpt
+    assert text[element.span_start : element.span_end] == excerpt
+    assert (element.value, element.unit) == (value, None)
+    assert element.kind is ElementKind.DATE
+    assert element.extractor is Extractor.REGEX
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "It cost $2026 to fix.",
+        "The reading was 2026.5 units.",
+        "The plant produced 1,200 MW last year.",
+        "It happened in 1899, before records.",
+        "The serial was 2101 on the plate.",
+    ],
+)
+def test_a_shape_the_allow_list_does_not_hold_is_not_a_date(text: str) -> None:
+    """A price, a decimal, a thousands separator, and a year either side of the range."""
+    assert date_elements(text, limit=ELEMENTS.max_per_article) == Candidates([], 0)
+
+
+def test_a_slash_date_gives_up_its_day_and_month_and_keeps_its_year() -> None:
+    """`03/04/2026` is 3 April in one country and 4 March in another.
+
+    Choosing between them states a date the article did not (decision 4), so
+    neither is read. The year is unambiguous and it is still claimed.
+    """
+    found = date_elements("Filed 03/04/2026 in Delhi.", limit=256)
+    assert [(e.span_excerpt, e.value) for e in found.elements] == [("2026", "2026")]
+
+
+def test_a_day_the_calendar_does_not_have_is_not_a_date() -> None:
+    """Degrade, do not fail. The match is refused and the digits stay quantities."""
+    assert date_elements("February 31, 2026 is not a day.", limit=256) == Candidates([], 0)
+    assert [excerpt for _, excerpt, _ in reading_of("February 31, 2026 is not a day.")] == [
+        "31",
+        "2026",
+    ]
+
+
+def test_a_relative_date_is_never_resolved() -> None:
+    """Decision 4. It resolves against a publication date the article never wrote."""
+    assert date_elements("It closed three years ago, last month.", limit=256).found == 0
+
+
+def test_the_date_counter_holds_when_the_cap_bites() -> None:
+    """The same argument as the quantity counter: a capped count returns a plausible integer."""
+    text = "It ran from 2024 to 2025 and on to 2026."
+    uncapped = date_elements(text, limit=ELEMENTS.max_per_article)
+    capped = date_elements(text, limit=2)
+    assert uncapped.found == capped.found == 3
+    assert [element.span_excerpt for element in capped.elements] == ["2024", "2025"]
+
+
+# --- Two passes, one stretch of characters ---------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "kept_readings"),
+    [
+        # The spans are equal.
+        ("The rule takes effect in 2026.", [("date", "2026")]),
+        # The quantity's span contains the date's: `2026 hit` reads `hit` as a unit.
+        ("Revenue in 2026 hit $4.5 billion.", [("date", "2026"), ("quantity", "$4.5 billion")]),
+        # The date's span contains the quantity's: `15 March` reads a month as a unit.
+        ("On 15 March 2026 the plant opened.", [("date", "15 March 2026")]),
+        # Neither contains the other: the date runs 4-18 and the quantity 14-27.
+        ("The March 15, 2026 deadline slipped.", [("date", "March 15, 2026")]),
+        # No shared character at all, so both survive.
+        (
+            "March 2026 revenue of $4.5 billion beat it.",
+            [("date", "2026"), ("quantity", "$4.5 billion")],
+        ),
+    ],
+)
+def test_a_date_takes_the_characters_from_a_quantity_it_touches(
+    text: str, kept_readings: list[tuple[str, str]]
+) -> None:
+    """The overlap rule, on all four ways two spans can meet plus the case they do not."""
+    assert [(kind, excerpt) for kind, excerpt, _ in reading_of(text)] == kept_readings
+
+
+def test_the_quantity_pass_still_matched_what_the_rule_then_dropped() -> None:
+    """`candidates_found` counts what each pass matched, so the drop stays visible.
+
+    Count it after the rule instead and a date pattern that swallowed every
+    figure would report an article with no figures in it.
+    """
+    table = element_table(prose_article("Revenue in 2026 hit $4.5 billion."), config=ELEMENTS)
+    assert table.candidates_found == {ElementKind.QUANTITY: 2, ElementKind.DATE: 1}
+    assert Counter(element.kind for element in table.elements) == {
+        ElementKind.QUANTITY: 1,
+        ElementKind.DATE: 1,
+    }
+
+
+def test_a_four_digit_count_in_the_year_range_is_read_as_a_year() -> None:
+    """What the rule costs, stated rather than implied.
+
+    A real count written without a thousands separator loses to the year
+    reading. The trade is deliberate: a year kept as a quantity is a bar 1,994
+    units high, and a reader cannot see that it is wrong.
+    """
+    assert reading_of("The survey drew 1994 responses.") == [("date", "1994", "1994")]
+    assert reading_of("The survey drew 1,994 responses.") == [
+        ("quantity", "1,994 responses", "1994")
+    ]
+
+
+def test_two_dates_side_by_side_keep_their_own_characters() -> None:
+    """One pattern over one string cannot return overlapping matches, and it does not."""
+    readings = reading_of("Filed 2026-03-15 and again 2026-04-01 that spring.")
+    assert [excerpt for _, excerpt, _ in readings] == ["2026-03-15", "2026-04-01"]
+
+
+def test_the_settled_table_stays_in_the_article_s_own_order() -> None:
+    """The contract requires it, and the rule sorts by precedence before it re-sorts."""
+    table = element_table(page_article(PAGES[0]), config=ELEMENTS)
+    starts = [element.span_start for element in table.elements]
+    assert starts == sorted(starts)
 
 
 @pytest.mark.parametrize(
@@ -282,7 +495,7 @@ def test_an_article_with_no_text_yields_an_empty_table() -> None:
     article = article_of(b"<html><body></body></html>", "https://empty.example/")
     table = element_table(article, config=ELEMENTS)
     assert table.elements == []
-    assert table.candidates_found == {ElementKind.QUANTITY: 0}
+    assert table.candidates_found == {ElementKind.QUANTITY: 0, ElementKind.DATE: 0}
     assert table.source_text_length == 0
 
 
