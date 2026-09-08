@@ -310,12 +310,18 @@ jobs:
       # together. It settles the retirement ledger too, where two stale checkouts
       # reading the same five 410 results would otherwise retire one address
       # twice.
+      #
+      # `--date` is what it settles. This run appended to one feed-health shard,
+      # so that shard is the only one a repeat can be in, and naming it is what
+      # keeps the pass costing the same on a five-year archive as on a fresh
+      # clone (Rule #12).
       - name: Commit what the plan saw
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing new to record"
           PUSH_FAILED_MESSAGE: "could not push what the plan saw after three attempts"
-          DROP_REPEATED_ROWS_COMMAND: "python -m idhazh dedupe-ledgers"
+          DROP_REPEATED_ROWS_COMMAND: >-
+            python -m idhazh dedupe-ledgers --date ${{ steps.decide.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/seen state/feed-health state/feed-retirements.csv
@@ -692,6 +698,11 @@ jobs:
       # then keeps both. `DROP_REPEATED_ROWS_COMMAND` is the half that runs after
       # the merge, on the merged file - the only place the two attempts have ever
       # been together.
+      #
+      # `--date` is what it settles. This run appended to one item-health shard
+      # and one score shard, so those are the only files a repeat can be in, and
+      # naming them is what keeps the pass costing the same however many months
+      # the archive holds (Rule #12).
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -699,7 +710,8 @@ jobs:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
           NOTHING_STAGED_MESSAGE: "nothing measured to record"
           PUSH_FAILED_MESSAGE: "could not push what this shard measured after three attempts"
-          DROP_REPEATED_ROWS_COMMAND: "python -m idhazh dedupe-ledgers"
+          DROP_REPEATED_ROWS_COMMAND: >-
+            python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/item-health state/scores state/score-index state/runtime-counters.csv
