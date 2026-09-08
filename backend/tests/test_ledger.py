@@ -438,6 +438,17 @@ def test_what_the_writer_files_by_day_answers_beside_the_flat_file(tmp_path: Pat
     }
 
 
+def _raw(path: Path) -> str:
+    """The file's text with the line endings it really holds.
+
+    The split copies rows verbatim, so an assertion about them has to read the
+    bytes rather than a translation of them - on Windows the default would turn
+    every `\r\n` into `\n` and hide the one difference worth catching.
+    """
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return handle.read()
+
+
 def _flat_ledger(path: Path, rows: list[tuple[str, str]]) -> list[str]:
     """One flat `state/published.csv` holding `rows` as (address, published_on).
 
@@ -460,7 +471,7 @@ def _flat_ledger(path: Path, rows: list[tuple[str, str]]) -> list[str]:
                     item_id=f"ai-{number:010d}",
                 ).model_dump(mode="json")
             )
-    return path.read_text(encoding="utf-8", newline="").split("\n")[1:-1]
+    return _raw(path).split("\n")[1:-1]
 
 
 def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Path) -> None:
@@ -504,7 +515,7 @@ def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Pa
         "published/2026/09/02.csv",
     ]
     header = ",".join(PublishedRow.csv_columns())
-    assert _day_file(state, "2026-08-31").read_text(encoding="utf-8", newline="") == (
+    assert _raw(_day_file(state, "2026-08-31")) == (
         f"{header}\n{written[0]}\n{written[2]}\n"
     ), "the two rows that name this day, verbatim and in the order the flat file held them"
     assert ledger.load_published(state) == before
@@ -533,7 +544,7 @@ def test_the_split_refuses_a_row_it_cannot_place_and_leaves_the_flat_file(
     state = tmp_path / "state"
     flat = _flat_file(state)
     _flat_ledger(flat, [(_address(1), "2026-08-31")])
-    text = flat.read_text(encoding="utf-8", newline="")
+    text = _raw(flat)
     good = text.split("\n")[1]
     with flat.open("w", encoding="utf-8", newline="") as handle:
         handle.write(f"{text}{good.replace('2026-08-31', bad)}\n")
@@ -576,7 +587,7 @@ def test_the_split_keeps_what_a_day_file_already_holds(tmp_path: Path) -> None:
     state = tmp_path / "state"
     date = "2026-09-07"
     ledger.append_published(state, date, [published_row(url_key=_address(9), on=date)])
-    already = _day_file(state, date).read_text(encoding="utf-8", newline="")
+    already = _raw(_day_file(state, date))
     _flat_ledger(_flat_file(state), [(_address(1), date)])
     before = ledger.load_published(state)
     assert set(before) == {_address(1), _address(9)}, "one address in each shape"
@@ -584,7 +595,7 @@ def test_the_split_keeps_what_a_day_file_already_holds(tmp_path: Path) -> None:
     report = split_ledger.run(state)
 
     assert report.rows_in == 1
-    assert _day_file(state, date).read_text(encoding="utf-8", newline="").startswith(already)
+    assert _raw(_day_file(state, date)).startswith(already)
     assert ledger.load_published(state) == before
 
 
