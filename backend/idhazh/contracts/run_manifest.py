@@ -257,6 +257,27 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-09",
+            change=(
+                "The embedded ModelRef gained an inference block, because config moved "
+                "the runtime settings onto the model entry. Additive and optional: a "
+                "manifest written before today carries no block and reads on the "
+                "contract defaults, which is what tests/fixtures/contracts/run-manifest/"
+                "two-runs.json proves."
+            ),
+            why=(
+                "One settings block served both roles, so a swap inherited numbers "
+                "measured against other weights in silence. The block now belongs to "
+                "the entry, and the record of a run says which runtime each model was "
+                "served on rather than leaving it to be looked up. Measured 2026-09-09 "
+                "on the committed tree: 433 compact bytes per model use, so 1,732 B on "
+                "the 13,010 B manifest of 2026-09-08 - 13.3 percent bigger. No reader "
+                "pays it. run.json is read at build time and never staged into the "
+                "bundle (frontend/scripts/copy-visuals.mjs), so the 1 GB site cap is "
+                "untouched and the cost is about 1.7 KB of repository weight a day."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-05T16:00",
             change=(
                 "Three Python names moved and not one wire key did. ModelRole.ROUTE is "

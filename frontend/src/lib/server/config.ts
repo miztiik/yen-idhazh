@@ -73,9 +73,11 @@ export interface RunConfig {
 
 /** What the console needs to say how much room a prompt had left.
  *
- * One knob of the pipeline's `models.inference` block, not the whole of it: the
- * machine page reads `n_tokens_max` against the window, and a counter without
- * its ceiling is not a measurement.
+ * One knob of the summarizer entry's `inference` block, not the whole of it:
+ * the machine page reads `n_tokens_max` against the window, and a counter
+ * without its ceiling is not a measurement. It is the summarizer's window
+ * because the summarizer is what those shards ran; the visual planner carries
+ * its own block and nothing here draws it.
  */
 export interface InferenceConfig {
 	n_ctx: number;
@@ -428,7 +430,7 @@ interface RawConfig {
 	assist?: Partial<AssistConfig>;
 	observability?: Partial<ObservabilityConfig>;
 	visuals?: Partial<VisualsConfig>;
-	models?: { inference?: Partial<InferenceConfig> };
+  models?: { summarize?: { inference?: Partial<InferenceConfig> } };
 }
 
 /** Keys the `digest` block carries that no page reads.
@@ -646,7 +648,7 @@ export function visualsConfig(): VisualsConfig {
 }
 
 export function inferenceConfig(): InferenceConfig {
-	return { ...INFERENCE_DEFAULTS, ...(raw().models?.inference ?? {}) };
+	return { ...INFERENCE_DEFAULTS, ...(raw().models?.summarize?.inference ?? {}) };
 }
 
 export function retentionConfig(): RetentionConfig {
