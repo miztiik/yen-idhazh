@@ -19,23 +19,31 @@ import os
 import re
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
 import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from pydantic import ValidationError
 
-from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.app_config import AppConfig, DriftConfig
 from idhazh.drift import (
     Alert,
     Observation,
+    Windows,
+    assess,
     compare,
     domain_of,
     extraction_is_rotting,
     failure_rate,
+    issue_body,
+    read_windows,
+    report,
     shortfall,
 )
+from idhazh.evals.writer import ledger_path
 
 # `workflow`, because the program `.github/workflows/drift.yml` ships is asserted here.
 pytestmark = pytest.mark.workflow
@@ -45,13 +53,39 @@ COMPARE_STEP: Final = "Compare the windows"
 #: The five cells the review reads out of the eval ledger. A row carries about
 #: forty; `csv.DictReader` hands the program a mapping, so a fixture that names
 #: these five exercises every line of it.
-LEDGER_COLUMNS: Final = ("date", "source_url", "hhem", "extractiveness", "source_word_count")
+LEDGER_COLUMNS: Final = (
+    "date",
+    "source_url",
+    "hhem",
+    "extractiveness",
+    "source_word_count",
+    "model_id",
+    "scorer_version",
+    "pipeline_fingerprint",
+)
 
 
 def rows(
-    url: str, *, words: int | None, hhem: float, extractiveness: float, n: int = 4
+    url: str,
+    *,
+    words: int | None,
+    hhem: float | None,
+    extractiveness: float | None,
+    n: int | None = None,
 ) -> list[Observation]:
-    return [Observation(url, hhem, extractiveness, words) for _ in range(n)]
+    count = DriftConfig().min_domain_rows if n is None else n
+    return [
+        Observation(
+            f"{url}/{index}",
+            hhem,
+            extractiveness,
+            words,
+            model_id="fixture-model",
+            scorer_version="fixture-scorer",
+            pipeline_fingerprint="fixture-pipeline",
+        )
+        for index in range(count)
+    ]
 
 
 def lengths(observations: list[Observation]) -> list[int]:
@@ -70,6 +104,132 @@ def test_a_domain_is_the_host_without_www() -> None:
 def test_a_healthy_domain_raises_nothing() -> None:
     steady = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
     assert compare(steady, steady) == []
+
+
+def test_a_busy_domain_cannot_lend_evidence_to_a_sparse_domain() -> None:
+    steady = [Observation(f"{OTHER}/{index}", 0.85, 0.2, 1200) for index in range(5)]
+    before = [*steady, Observation(HEALTHY, 0.85, 0.2, 1200)]
+    after = [*steady, Observation(HEALTHY, 0.9, 0.2, 150)]
+
+    assert compare(after, before, minimum_rows=5) == []
+
+
+@pytest.mark.parametrize("minimum", [0, 1])
+def test_the_domain_floor_cannot_allow_a_single_article(minimum: int) -> None:
+    with pytest.raises(ValidationError, match="min_domain_rows"):
+        DriftConfig(min_domain_rows=minimum)
+
+
+def test_repeated_observations_cannot_manufacture_a_domain_sample() -> None:
+    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2, n=1) * 20
+    after = rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.8, n=1) * 20
+    result = assess(after, before, config=DriftConfig())
+
+    assert result.findings == []
+    assert result.compared == 0
+    assert any("1 recent and 1 baseline" in reason for reason in result.skipped)
+
+
+def test_the_latest_measured_row_wins_by_article_identity() -> None:
+    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    latest = [
+        replace(row, url_key=f"article-{index}", scored_at="2026-09-05T12:00:00Z")
+        for index, row in enumerate(before)
+    ]
+    older = [
+        replace(
+            row,
+            source_url=f"{row.source_url}?earlier=1",
+            source_word_count=150,
+            extractiveness=0.8,
+            scored_at="2026-09-05T10:00:00Z",
+        )
+        for row in latest
+    ]
+
+    assert compare([*latest, *older], before) == []
+    assert compare([*older, *latest], before) == []
+
+
+def test_a_later_unmeasured_row_does_not_erase_a_measured_metric() -> None:
+    before = rows(HEALTHY, words=1200, hhem=None, extractiveness=0.2)
+    measured = rows(HEALTHY, words=150, hhem=None, extractiveness=0.8)
+    unmeasured = [
+        replace(
+            row,
+            source_word_count=None,
+            extractiveness=None,
+            scored_at="2026-09-05T12:00:00Z",
+        )
+        for row in measured
+    ]
+
+    findings = compare([*measured, *unmeasured], before)
+
+    assert {finding.alert for finding in findings} == {
+        Alert.SHORTER_SOURCES,
+        Alert.MORE_COPYING,
+    }
+
+
+def test_a_partial_review_does_not_claim_every_article_was_compared() -> None:
+    steady = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    sparse = rows(OTHER, words=150, hhem=0.9, extractiveness=0.8, n=1)
+    windows = Windows(
+        datetime.date(2026, 8, 2),
+        datetime.date(2026, 8, 30),
+        datetime.date(2026, 9, 6),
+        [*steady, *sparse],
+        steady,
+        ("2026-08", "2026-09"),
+    )
+
+    text, status = report(windows, config=DriftConfig())
+
+    assert status == 0
+    assert "no drift in 3 comparable domain/metric series" in text
+    assert "no drift across" not in text
+    assert "blog.example.org: source length not compared" in text
+
+
+@pytest.mark.parametrize("field", ["model_id", "scorer_version", "pipeline_fingerprint"])
+def test_model_metrics_do_not_compare_different_versions(field: str) -> None:
+    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    after = [
+        replace(
+            row,
+            model_id="changed" if field == "model_id" else row.model_id,
+            scorer_version="changed" if field == "scorer_version" else row.scorer_version,
+            pipeline_fingerprint=(
+                "changed" if field == "pipeline_fingerprint" else row.pipeline_fingerprint
+            ),
+        )
+        for row in rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.8)
+    ]
+    findings = compare(after, before)
+
+    assert {finding.alert for finding in findings} == {Alert.SHORTER_SOURCES}
+
+
+def test_source_lengths_do_not_depend_on_a_faithfulness_score() -> None:
+    before = rows(HEALTHY, words=1200, hhem=None, extractiveness=None)
+    after = rows(HEALTHY, words=150, hhem=None, extractiveness=None)
+
+    assert {finding.alert for finding in compare(after, before)} == {Alert.SHORTER_SOURCES}
+
+
+def test_a_missing_version_does_not_invent_a_comparable_model() -> None:
+    before = [
+        replace(row, model_id="") for row in rows(HEALTHY, words=None, hhem=0.8, extractiveness=0.2)
+    ]
+    after = [
+        replace(row, model_id="") for row in rows(HEALTHY, words=None, hhem=0.8, extractiveness=0.8)
+    ]
+    result = assess(after, before, config=DriftConfig())
+
+    assert result.findings == []
+    assert result.compared == 0
+    assert any("identity is missing" in reason for reason in result.skipped)
 
 
 # --- A row that does not know how long its article was ------------------------
@@ -99,15 +259,14 @@ def test_a_window_that_knows_no_length_does_not_read_as_a_collapse() -> None:
     assert compare(after, before) == []
 
 
-def test_the_rows_that_do_know_their_length_still_decide_the_alert() -> None:
-    """A mixed window is measured on the half that was measured."""
+def test_the_length_floor_counts_only_articles_with_a_measured_length() -> None:
     before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
     after = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.2, n=3) + rows(
         HEALTHY, words=180, hhem=0.85, extractiveness=0.2, n=1
     )
     alerts = {finding.alert for finding in compare(after, before)}
 
-    assert Alert.SHORTER_SOURCES in alerts
+    assert Alert.SHORTER_SOURCES not in alerts
 
 
 # --- The failure this row exists to catch -----------------------------------
@@ -120,14 +279,15 @@ def test_a_site_redesign_that_shortens_extraction_fires() -> None:
     assert Alert.SHORTER_SOURCES in alerts
 
 
-def test_the_conjunction_names_the_failure_rather_than_a_proxy() -> None:
-    """Faithfulness holding WHILE sources collapse is a summary of chrome."""
+def test_the_conjunction_requests_inspection_rather_than_claiming_a_cause() -> None:
     before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
     after = rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.2)
     findings = compare(after, before)
     chrome = [f for f in findings if f.alert is Alert.SCORING_CHROME]
     assert chrome
     assert "faithfulness held" in chrome[0].detail
+    assert "possible non-article text" in chrome[0].detail
+    assert "inspect extraction" in chrome[0].detail
 
 
 def test_a_global_mean_would_have_missed_it() -> None:
@@ -144,7 +304,7 @@ def test_a_global_mean_would_have_missed_it() -> None:
     global_move = 1 - global_after / global_before
     assert global_move < 0.15, "a global threshold would not fire on this"
 
-    domains = {finding.domain for finding in compare(after, before)}
+    domains = {finding.domain for finding in compare(after, before, minimum_rows=2)}
     assert "news.example.com" in domains
     assert "blog.example.org" not in domains
 
@@ -230,6 +390,67 @@ def test_a_thin_window_counts_as_nothing_compared() -> None:
 # --- The shipped review step -------------------------------------------------
 
 
+def test_the_issue_body_keeps_findings_when_skipped_details_exceed_githubs_limit() -> None:
+    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    after = rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.8)
+    sparse = [
+        row
+        for index in range(300)
+        for row in rows(f"https://sparse-{index}.example/story", words=150, hhem=0.9, extractiveness=0.2, n=1)
+    ]
+    windows = Windows(
+        datetime.date(2026, 8, 2),
+        datetime.date(2026, 8, 30),
+        datetime.date(2026, 9, 6),
+        [*after, *sparse],
+        before,
+        ("2026-08", "2026-09"),
+    )
+    run_url = "https://github.com/example/repository/actions/runs/123"
+
+    full, status = report(windows, config=DriftConfig())
+    body = issue_body(windows, config=DriftConfig(), run_url=run_url)
+
+    assert status == 0
+    assert len(full.encode("utf-8")) > 65536
+    assert len(body.encode("utf-8")) <= 65536
+    for alert in Alert:
+        assert f"{alert.value} news.example.com:" in body
+    assert "900 comparisons had insufficient evidence" in body
+    assert "sparse-299.example" in full
+    assert "sparse-299.example" not in body
+    assert run_url in body
+    assert "not evidence of healthy extraction" in body
+
+
+def test_the_issue_body_links_the_full_report_when_findings_alone_are_too_large() -> None:
+    before = [
+        row
+        for index in range(180)
+        for row in rows(f"https://changed-{index}.example/story", words=1200, hhem=0.85, extractiveness=0.2, n=2)
+    ]
+    after = [replace(row, source_word_count=150, hhem=0.9, extractiveness=0.8) for row in before]
+    windows = Windows(
+        datetime.date(2026, 8, 2),
+        datetime.date(2026, 8, 30),
+        datetime.date(2026, 9, 6),
+        after,
+        before,
+        ("2026-08", "2026-09"),
+    )
+    config = DriftConfig(min_domain_rows=2)
+    run_url = "https://github.com/example/repository/actions/runs/123"
+
+    summary, status = report(windows, config=config, include_skipped_details=False)
+    body = issue_body(windows, config=config, run_url=run_url)
+
+    assert status == 0
+    assert len(summary.encode("utf-8")) > 65536
+    assert len(body.encode("utf-8")) <= 65536
+    assert "findings exceed GitHub's issue-body limit" in body
+    assert run_url in body
+
+
 def compare_step() -> dict[str, object]:
     workflow = yaml.safe_load(read_text(DRIFT_WORKFLOW))
     for step in workflow["jobs"]["drift"]["steps"]:
@@ -274,32 +495,52 @@ def ledger(directory: Path, *, recent: int, baseline: int) -> None:
     that a real comparison finding nothing still exits 0, and a fixture with any
     movement in it could not tell a pass from a lucky threshold.
     """
-    today = datetime.date.today()
-    written = directory / "state"
-    written.mkdir(parents=True, exist_ok=True)
-    shard = written / "scores" / "2026-08.csv"
-    shard.parent.mkdir(parents=True, exist_ok=True)
-    with shard.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=LEDGER_COLUMNS)
-        out.writeheader()
-        for age, count in ((1, recent), (14, baseline)):
-            for _ in range(count):
-                out.writerow(
-                    {
-                        "date": (today - datetime.timedelta(days=age)).isoformat(),
-                        "source_url": HEALTHY,
-                        "hhem": "0.85",
-                        "extractiveness": "0.20",
-                        "source_word_count": "1200",
-                    }
-                )
+    today = datetime.datetime.now(datetime.UTC).date()
+    write_rows(
+        directory,
+        [
+            {
+                "date": (today - datetime.timedelta(days=age)).isoformat(),
+                "source_url": f"{HEALTHY}/{age}/{index}",
+                "hhem": "0.85",
+                "extractiveness": "0.20",
+                "source_word_count": "1200",
+                "model_id": "fixture-model",
+                "scorer_version": "fixture-scorer",
+                "pipeline_fingerprint": "fixture-pipeline",
+            }
+            for age, count in ((1, recent), (14, baseline))
+            for index in range(count)
+        ],
+    )
+
+
+def write_rows(directory: Path, records: list[dict[str, str]]) -> None:
+    grouped: dict[Path, list[dict[str, str]]] = {}
+    if not records:
+        yesterday = datetime.datetime.now(datetime.UTC).date() - datetime.timedelta(days=1)
+        grouped[ledger_path(directory / "state", yesterday.isoformat())] = []
+    for record in records:
+        grouped.setdefault(ledger_path(directory / "state", record["date"]), []).append(record)
+    for shard, values in grouped.items():
+        shard.parent.mkdir(parents=True, exist_ok=True)
+        with shard.open("w", encoding="utf-8", newline="") as handle:
+            out = csv.DictWriter(handle, fieldnames=LEDGER_COLUMNS)
+            out.writeheader()
+            out.writerows(values)
 
 
 def review(directory: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-c", review_program()],
         cwd=directory,
-        env={**os.environ, **scheduled_windows()},
+        env={
+            **os.environ,
+            **scheduled_windows(),
+            "GITHUB_SERVER_URL": "https://github.com",
+            "GITHUB_REPOSITORY": "example/repository",
+            "GITHUB_RUN_ID": "123",
+        },
         capture_output=True,
         text=True,
         check=False,
@@ -307,14 +548,15 @@ def review(directory: Path) -> subprocess.CompletedProcess[str]:
 
 
 def enough() -> int:
-    return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).drift.min_window_rows
+    config = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).drift
+    return max(config.min_window_rows, config.min_domain_rows)
 
 
 def test_the_review_reads_its_floor_from_config() -> None:
     """Rule #6. The shipped program asks config, and carries no number of its own."""
     program = review_program()
 
-    assert "drift.min_window_rows" in program
+    assert "config = load().app.drift" in program
     assert "from idhazh.config import load" in program
     assert enough() >= 1
 
@@ -357,7 +599,7 @@ def test_a_populated_pair_of_windows_with_no_drift_still_passes(tmp_path: Path) 
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "nothing was compared" not in result.stdout
-    assert f"no drift across {enough()} recent and {enough()} baseline rows" in result.stdout
+    assert "no drift in 3 comparable domain/metric series" in result.stdout
 
 
 def test_a_ledger_that_is_not_there_is_not_a_green_check(tmp_path: Path) -> None:
@@ -370,27 +612,108 @@ def test_a_ledger_that_is_not_there_is_not_a_green_check(tmp_path: Path) -> None
 
 def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
     """A populated pair that HAS moved still reaches the alert, past the new floor."""
-    today = datetime.date.today()
-    written = tmp_path / "state"
-    written.mkdir(parents=True)
-    shard = written / "scores" / "2026-08.csv"
-    shard.parent.mkdir(parents=True, exist_ok=True)
-    with shard.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=LEDGER_COLUMNS)
-        out.writeheader()
-        for age, words in ((1, 150), (14, 1200)):
-            for _ in range(enough()):
-                out.writerow(
-                    {
-                        "date": (today - datetime.timedelta(days=age)).isoformat(),
-                        "source_url": HEALTHY,
-                        "hhem": "0.85",
-                        "extractiveness": "0.20",
-                        "source_word_count": str(words),
-                    }
-                )
+    today = datetime.datetime.now(datetime.UTC).date()
+    write_rows(
+        tmp_path,
+        [
+            {
+                "date": (today - datetime.timedelta(days=age)).isoformat(),
+                "source_url": f"{HEALTHY}/{age}/{index}",
+                "hhem": "0.85",
+                "extractiveness": "0.20",
+                "source_word_count": str(words),
+                "model_id": "fixture-model",
+                "scorer_version": "fixture-scorer",
+                "pipeline_fingerprint": "fixture-pipeline",
+            }
+            for age, words in ((1, 150), (14, 1200))
+            for index in range(enough())
+        ],
+    )
 
     result = review(tmp_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert Alert.SCORING_CHROME.value in result.stdout
+    assert "scorer: fixture-scorer" in result.stdout
+    body = read_text(tmp_path / "drift-issue.txt")
+    assert Alert.SCORING_CHROME.value in body
+    assert "https://github.com/example/repository/actions/runs/123" in body
+    workflow = yaml.safe_load(read_text(DRIFT_WORKFLOW))
+    issue_step = next(
+        step for step in workflow["jobs"]["drift"]["steps"]
+        if step.get("name") == "Open an issue when something moved"
+    )
+    assert "--body-file drift-issue.txt" in issue_step["run"]
+
+
+def test_the_reader_uses_completed_utc_days_and_only_relevant_months(tmp_path: Path) -> None:
+    anchor = datetime.date(2026, 1, 5)
+    write_rows(
+        tmp_path,
+        [
+            {
+                "date": (anchor - datetime.timedelta(days=age)).isoformat(),
+                "source_url": f"{HEALTHY}/{age}",
+                "hhem": "",
+                "extractiveness": "0.2",
+                "source_word_count": "100",
+            }
+            for age in (-1, 0, 1, 7, 8, 35, 36)
+        ],
+    )
+    irrelevant = tmp_path / "state" / "scores" / "2024-01.csv"
+    irrelevant.write_bytes(b"not a ledger")
+
+    result = read_windows(tmp_path / "state", today=anchor, recent_days=7, baseline_days=28)
+
+    assert result.months_read == ("2025-12", "2026-01")
+    assert {row.date for row in result.recent} == {"2025-12-29", "2026-01-04"}
+    assert {row.date for row in result.baseline} == {"2025-12-01", "2025-12-28"}
+    assert all(row.hhem is None for row in result.recent + result.baseline)
+
+
+@pytest.mark.parametrize("metric", ["hhem", "extractiveness", "source_word_count"])
+def test_an_invalid_metric_is_reported_instead_of_silently_dropped(
+    tmp_path: Path, metric: str
+) -> None:
+    record = {
+        "date": "2026-09-05",
+        "source_url": HEALTHY,
+        "hhem": "0.9",
+        "extractiveness": "0.2",
+        "source_word_count": "100",
+    }
+    record[metric] = "nan"
+    write_rows(tmp_path, [record])
+
+    with pytest.raises(ValueError, match="row 2 is invalid for drift"):
+        read_windows(
+            tmp_path / "state", today=datetime.date(2026, 9, 6), recent_days=7, baseline_days=28
+        )
+
+
+def test_full_windows_with_only_sparse_domains_are_not_a_clean_review(tmp_path: Path) -> None:
+    write_rows(
+        tmp_path,
+        [
+            {
+                "date": when,
+                "source_url": f"https://domain-{index}.example/story",
+                "hhem": "0.9",
+                "extractiveness": "0.2",
+                "source_word_count": "100",
+            }
+            for when in ("2026-09-05", "2026-08-20")
+            for index in range(enough())
+        ],
+    )
+    windows = read_windows(
+        tmp_path / "state", today=datetime.date(2026, 9, 6), recent_days=7, baseline_days=28
+    )
+    text, status = report(windows, config=DriftConfig())
+
+    assert status == 1
+    assert "nothing was compared: no domain metric" in text
+    assert "no drift" not in text
+    assert "source length not compared" in text

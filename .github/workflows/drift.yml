@@ -1,10 +1,6 @@
 name: Drift review
 
-# The instrument that sees the system rather than the article. Per-item scores
-# measure variance within a day; drift is a movement across months, and the
-# failure it catches is the quiet one - extraction breaks on a site redesign,
-# summaries start describing navigation chrome, and every individual score stays
-# healthy because the summary is faithful to the garbage it was given.
+# Live article changes warrant inspection; the report does not diagnose their cause.
 
 on:
   schedule:
@@ -58,66 +54,27 @@ jobs:
             fi
           done
           python - <<'PY' | tee drift.txt
-          import csv, datetime, os, pathlib
+          import datetime, os, pathlib
           from idhazh.config import load
-          from idhazh.drift import Observation, compare, shortfall
+          from idhazh.drift import issue_body, read_windows, report
 
-          recent_days = int(os.environ["RECENT_DAYS"])
-          baseline_days = int(os.environ["BASELINE_DAYS"])
-          minimum = load().app.drift.min_window_rows
-          today = datetime.date.today()
-          shards = sorted(pathlib.Path("state/scores").glob("*.csv"))
-          if not shards:
-              # Not a green check. An absent ledger compared nothing, and a
-              # review that compared nothing has not cleared anything.
-              print("state/scores/ holds no month - nothing was compared")
-              raise SystemExit(1)
-
-          rows = []
-          for shard in shards:
-              with shard.open(encoding="utf-8", newline="") as handle:
-                  rows.extend(csv.DictReader(handle))
-
-          recent, baseline = [], []
-          unknown_length = 0
-          for row in rows:
-              try:
-                  when = datetime.date.fromisoformat(row["date"])
-                  # Empty means the article's length was never recorded, not that
-                  # it was zero. Those rows keep their two other signals.
-                  words = row["source_word_count"]
-                  observation = Observation(
-                      row["source_url"],
-                      float(row["hhem"]),
-                      float(row["extractiveness"]),
-                      int(words) if words else None,
-                  )
-              except (KeyError, ValueError):
-                  continue
-              if observation.source_word_count is None:
-                  unknown_length += 1
-              age = (today - when).days
-              if age <= recent_days:
-                  recent.append(observation)
-              elif age <= recent_days + baseline_days:
-                  baseline.append(observation)
-
-          if unknown_length:
-              print(f"{unknown_length} rows do not record the article's length")
-
-          # Before any finding is read. `compare` has nothing to say about an
-          # empty window, and nothing to say reads as "no drift" - so the two
-          # must not share an exit code (drift.min_window_rows).
-          if (thin := shortfall(recent, baseline, minimum)) is not None:
-              print(f"nothing was compared: {thin}")
-              raise SystemExit(1)
-
-          findings = compare(recent, baseline)
-          if not findings:
-              print(f"no drift across {len(recent)} recent and {len(baseline)} baseline rows")
-              raise SystemExit(0)
-          for finding in findings:
-              print(f"{finding.alert.value} {finding.domain}: {finding.detail}")
+          windows = read_windows(
+              pathlib.Path("state"),
+              today=datetime.datetime.now(datetime.UTC).date(),
+              recent_days=int(os.environ["RECENT_DAYS"]),
+              baseline_days=int(os.environ["BASELINE_DAYS"]),
+          )
+          config = load().app.drift
+          text, status = report(windows, config=config)
+          print(text)
+          if status == 0:
+              run_url = (
+                  f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+                  f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+              )
+              body = issue_body(windows, config=config, run_url=run_url)
+              pathlib.Path("drift-issue.txt").write_text(body, encoding="utf-8", newline="\n")
+          raise SystemExit(status)
           PY
 
       - name: Open an issue when something moved
@@ -127,7 +84,7 @@ jobs:
           if grep -qE '^(shorter_sources|more_copying|scoring_chrome) ' drift.txt; then
             gh issue create \
               --title "Drift detected $(date -u +%F)" \
-              --body "$(cat drift.txt)"
+              --body-file drift-issue.txt
           fi
         env:
           GH_TOKEN: ${{ github.token }}
