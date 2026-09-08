@@ -82,6 +82,7 @@ Authority: owner, 2026-09-06.
 | Item health | `state/item-health/<YYYY-MM>.csv` | `ledger.append_item_health` | It takes one date and appends to that month alone, filtering against `ITEM_HEALTH_KEY` in that one shard. Closed once the run's date leaves the month. |
 | Feed health | `state/feed-health/<YYYY-MM>.csv` | `ledger.append_health` | The same one-date append, then it settles that one shard against `FEED_HEALTH_KEY`. The current month is the only file it rewrites. |
 | Seen addresses | `state/seen/<YYYY-MM>.csv` | `ledger.append_seen` | The same one-date append. Closed once the run's date leaves the month. |
+| Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `publish_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/telemetry-aggregate/<YYYY-MM>.csv` | `retention.fold_month`, written by `ledger.write_telemetry_aggregate` | Written once, when the item-health month passes `observability.item_health_full_grain_months` (14). Closed the moment it is written - the shard it summarises is gone, so there is nothing left to append. No file is committed yet. |
 | Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by `retention.prune_scores` | Written once, when the scores month passes `observability.scores_full_grain_months` (14), and only after it reconciles against a second reading of the shard. Closed the moment it is written. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `cli.stage_assemble` rebuilds only `month_of(plan.date)`. |
@@ -90,17 +91,18 @@ The two collections with nothing committed are not aspirational. Both writers sh
 both are tested; neither has fired, because the oldest committed month is `2026-08` and
 both ages are fourteen months.
 
-## Partitioned in layout, not yet frozen
+## The last unfrozen partition is frozen now
 
-| Collection | Path pattern | Writer | Closed rule |
-| --- | --- | --- | --- |
-| Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `publish_telemetry.publish` | **None today.** It globs `state/item-health/` and rewrites every month it finds, on every run. |
-
-That is [audit finding 11](../reference/data-growth-audit.md), and it is the one place
-in the tree where the layout exists and the rule does not. The shape of what it should
-write is [in the telemetry doc](../architecture/publishing/telemetry-series.md#published-shards);
-what it costs is that an ordinary run pays for every month the project has ever
-published, for an answer it already had.
+The telemetry projection `frontend/public/telemetry/<YYYY-MM>.csv` was the one
+place in the tree where the layout existed and the rule did not:
+`publish_telemetry.publish` globbed `state/item-health/` and rewrote every month
+it found, on every run, for an answer it already had. That was
+[audit finding 11](../reference/data-growth-audit.md), and row 19 of the
+[constant-cost-reads plan](../../TODO/20260906-constant-cost-reads-plan.md)
+closed it in #484: the writer now takes the row above, writing only the months a
+caller names as changed and rewriting a named month only when its bytes differ.
+What it writes, and how the two freezes compose, is
+[in the telemetry doc](../architecture/publishing/telemetry-series.md#published-shards).
 
 ## The four cases an append-only pattern gets wrong
 
@@ -171,7 +173,7 @@ commitment to convert any of them.
 | Feed retirements | `state/feed-retirements.csv` | `ledger.append_retirements` | A retirement is permanent for one address. A run that forgot one would start asking a dead server again. |
 | Visual prunes | `state/visual-prunes.csv` | `ledger.append_visual_prunes` | One row a run, and the question has no time bound. |
 | Model validation | `state/validation-<YYYY-MM-DD>.csv` | `evals.writer.append_validation`, path from `evals.golden` | Dated, not partitioned: one file per validation, which is a one-off rather than a series. |
-| Source health view | `frontend/public/source-health.json` | `publish_source_health` | One document, rewritten whole each run. The growing read behind it is [audit finding 12](../reference/data-growth-audit.md). |
+| Source health view | `frontend/public/source-health.json` | `publish_source_health` | One document, rewritten whole each run. The read behind it was [audit finding 12](../reference/data-growth-audit.md); row 20 of the constant-cost-reads plan bounded it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
 | Training corpus | `corpus/corpus.jsonl`, `corpus/corpus.meta.json`, `corpus/holdout.txt` | `idhazh.corpus`, rolled by `backend/utilities/data_wrangler.py` | A rolling training window bounded by `finetune.corpus_rows` and by `prune.yml`, not by a calendar. Deliberately not `merge=union`, because the union of two rolls holds evicted rows again. |
 | Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `cli.stage_assemble` | Partitioned by **day**, not by month - the same rule one level finer, and a day is frozen the moment it is written. The month partitions above are keyed off this tree. |
 
