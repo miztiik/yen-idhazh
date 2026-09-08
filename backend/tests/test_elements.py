@@ -16,6 +16,12 @@ Row 3 adds the third half. Two passes read the same bytes and both match
 elements of one table hold the same character. That is checked pair by pair on
 the same nine fixtures, with a counter-oracle that they carry both kinds -
 without it, a pass emitting nothing makes every pair disjoint.
+
+Row 4 asks the oracle the other way round. The nine fixtures prove a span holds
+against the text it was cut from; the run at the end proves what happens when it
+does not - one item degrades with a recorded reason and its four siblings still
+publish. That run is built rather than read off a committed day, because a run
+whose size grows every four hours is not a fixture (Rule #12).
 """
 
 from __future__ import annotations
@@ -53,11 +59,21 @@ TWO_PERIODS: Final = (
     "It held at 40 percent growth in 2025, the company said."
 )
 
+#: One built run for row 4's oracle: five articles, one span each, so a span
+#: that stops pointing where it did degrades exactly one of them.
+RUN_BODIES: Final = (
+    "The plant produced 1,200 MW last year.",
+    "It cost $4.5 billion to build.",
+    "The rule takes effect on 15 March 2026.",
+    "Costs fell 12 percent over the period.",
+    "Output reached 4.2 billion units.",
+)
 
-def article_of(page: bytes, url: str) -> Article:
+
+def article_of(page: bytes, url: str, *, item_id: str = "probe-01") -> Article:
     """A real page through the real extractor and the real sanitizer (Rule #7)."""
     item = PlannedItem(
-        item_id="probe-01",
+        item_id=item_id,
         url_key=derive_url_key(url),
         source_url=url,
         canonical_url=url,
@@ -90,13 +106,25 @@ def page_article(path: Path) -> Article:
     return article_of(path.read_bytes(), f"https://probe.example/{path.name}")
 
 
-def prose_article(body: str) -> Article:
+def prose_article(body: str, *, at: str = "prose", item_id: str = "probe-01") -> Article:
     """One paragraph through the real extractor, so a built case yields a real table."""
     page = (
         "<!DOCTYPE html><html><head><title>probe</title></head>"
         f"<body><article><p>{html.escape(body)}</p></article></body></html>"
     )
-    return article_of(page.encode("utf-8"), "https://probe.example/prose")
+    return article_of(page.encode("utf-8"), f"https://probe.example/{at}", item_id=item_id)
+
+
+def prose_run(*bodies: str) -> list[Article]:
+    """One built run: several articles, each at its own address.
+
+    Built rather than read off a committed day, because the oracle needs a run
+    whose size does not change when a pipeline run appends one (Rule #12).
+    """
+    return [
+        prose_article(body, at=f"prose/{index:02d}", item_id=f"probe-{index:02d}")
+        for index, body in enumerate(bodies, start=1)
+    ]
 
 
 def reading_of(body: str) -> list[tuple[str, str, str | None]]:
@@ -154,10 +182,14 @@ def overlaps(left: Element, right: Element) -> bool:
     return left.span_start < right.span_end and right.span_start < left.span_end
 
 
-def bounded_tables() -> list[tuple[str, ElementTable]]:
+def bounded_articles() -> list[tuple[str, Article]]:
     """The nine fixtures no run appends to: five canaries and four captured pages."""
-    tables = [(c.name, element_table(canary_article(c), config=ELEMENTS)) for c in canaries.ALL]
-    return tables + [(p.name, element_table(page_article(p), config=ELEMENTS)) for p in PAGES]
+    articles = [(canary.name, canary_article(canary)) for canary in canaries.ALL]
+    return articles + [(path.name, page_article(path)) for path in PAGES]
+
+
+def bounded_tables() -> list[tuple[str, ElementTable]]:
+    return [(name, element_table(article, config=ELEMENTS)) for name, article in bounded_articles()]
 
 
 def test_a_bare_year_is_claimed_as_a_date_and_never_as_a_quantity() -> None:
@@ -513,3 +545,101 @@ def test_the_table_carries_the_hash_of_the_string_the_spans_index() -> None:
 def test_a_table_round_trips_through_its_own_contract() -> None:
     table = element_table(page_article(PAGES[0]), config=ELEMENTS)
     assert ElementTable.from_json(table.to_json()).to_json() == table.to_json()
+
+
+# --- The Oracle: a span that no longer points where it did -----------------
+#
+# Row 4. The shape checks that an excerpt is as wide as its span, which refuses
+# a cleaned string and cannot refuse a wrong one - the text is not in the
+# payload, so the shape has nothing to cut. `span_drift` cuts it, and the two
+# callers dispose of the answer differently: the producer raises, a consumer
+# degrades that one item.
+
+
+def test_every_bounded_fixture_re_slices_against_the_text_it_was_built_from() -> None:
+    """The invariant at rest, on the nine fixtures no run appends to (Rule #12)."""
+    for name, article in bounded_articles():
+        table = element_table(article, config=ELEMENTS)
+        assert table.span_drift(article.text or "") is None, name
+
+
+def test_one_item_whose_text_moved_degrades_and_the_rest_of_the_run_publishes() -> None:
+    """The oracle, in the shape the consumer loop has: check, record, continue.
+
+    One article's text has moved by a single character and four have not. The
+    reason names the first span that stopped pointing where it did, and it is
+    recorded against that item alone - a corpus-wide refusal over one drifted
+    span is the trade `CLAUDE.md` section 1a refuses.
+    """
+    run = prose_run(*RUN_BODIES)
+    tables = [element_table(article, config=ELEMENTS) for article in run]
+    held = [article.text or "" for article in run]
+    moved = 2
+    held[moved] = " " + held[moved]
+
+    published: list[str] = []
+    degraded: dict[str, str] = {}
+    for table, text in zip(tables, held, strict=True):
+        if (drift := table.span_drift(text)) is not None:
+            degraded[table.item_id] = drift
+            continue
+        published.append(table.item_id)
+
+    assert list(degraded) == [tables[moved].item_id]
+    assert published == [table.item_id for index, table in enumerate(tables) if index != moved]
+    assert degraded[tables[moved].item_id].startswith(tables[moved].elements[0].element_id)
+
+
+def test_the_run_the_oracle_uses_carries_a_span_in_every_item() -> None:
+    """The counter-oracle. An item with no span cannot drift, so it would publish
+    for the wrong reason and the oracle would still read green."""
+    tables = [element_table(article, config=ELEMENTS) for article in prose_run(*RUN_BODIES)]
+    assert [len(table.elements) for table in tables] == [1, 1, 1, 1, 1]
+
+
+def test_text_that_grew_after_every_span_is_not_drift() -> None:
+    """What tells a re-slice apart from a hash comparison, and why it is a re-slice.
+
+    The text moved, so the hash the table carries no longer matches it. Not one
+    span moved with it, so the table is still true of this text and degrading
+    the item would cost a reader a chart for nothing.
+    """
+    article = prose_article("The plant produced 1,200 MW in 2026.")
+    table = element_table(article, config=ELEMENTS)
+    grown = (article.text or "") + " The operator added a paragraph afterwards."
+    assert derive_text_digest(grown) != table.source_text_hash
+    assert table.span_drift(grown) is None
+
+
+def test_a_table_with_no_span_has_nothing_to_drift() -> None:
+    """A table of no facts is true of any text, so there is no item to degrade."""
+    article = prose_article("The operator said the plant opened on schedule.")
+    table = element_table(article, config=ELEMENTS)
+    assert table.elements == []
+    assert table.span_drift("a different article entirely") is None
+
+
+def test_elements_cut_from_one_text_and_a_table_hashed_over_another_is_caught() -> None:
+    """The write-time failure the shape cannot see, built the way it would happen.
+
+    Both passes are public and take any string, so a caller can hand the pre-cap
+    body to one and `Article.text` to the table. Every field validates - the
+    excerpts are the right width and no span runs past the length - and the
+    re-slice is the only thing that says the two describe different strings.
+    """
+    article = prose_article("The plant produced 1,200 MW in 2026.")
+    text = article.text or ""
+    pre_cap = "Reuters - " + text
+    found = quantity_elements(text, limit=ELEMENTS.max_per_article)
+    mismatched = ElementTable(
+        version=ElementTable.schema_version(),
+        item_id=article.item_id,
+        url_key=derive_url_key(article.canonical_url),
+        canonical_url=article.canonical_url,
+        source_text_hash=derive_text_digest(pre_cap),
+        source_text_length=len(pre_cap),
+        elements=found.elements,
+        candidates_found={ElementKind.QUANTITY: found.found},
+    )
+    assert mismatched.span_drift(pre_cap) is not None
+    assert mismatched.span_drift(text) is None, "the elements are true of the text they were cut from"

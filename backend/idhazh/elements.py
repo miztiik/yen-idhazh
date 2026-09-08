@@ -33,6 +33,12 @@ magnitude table, the percent set, the unit stop list, the year range and
 `normalise_unit`, because two passes read the same vocabulary and the fact pass
 is the lower of the two. The planner imports them back and reads them exactly
 as it did.
+
+**A table is re-sliced before it leaves this module.** `element_table` cuts the
+text at every span it is about to return and refuses a table it cannot cut, so
+the hash, the length and every excerpt provably describe one string. That is the
+write-time half of the span-drift invariant; the read-time half degrades one
+item and lives on `ElementTable.span_drift`.
 """
 
 from __future__ import annotations
@@ -378,11 +384,26 @@ def element_table(article: Article, *, config: ElementsConfig) -> ElementTable:
     `elements.max_per_article` bounds each pass and then the settled table, so
     neither a runaway pattern nor two passes together can put more elements in
     an article than the knob names.
+
+    **The table is re-sliced before it is returned, and that is the write-time
+    half of the span-drift invariant.** It is what makes decision 3 mechanical:
+    the hash, the length and every excerpt come out of one call against one
+    string, and the re-slice proves it rather than the call site promising it.
+    Neither pattern pass can fail it, because each cuts its excerpt at its own
+    offsets - so the failure it exists for is a caller that builds elements from
+    one string and a table over another, which is what happens the first time
+    somebody reaches for the pre-cap body, and what plan 11's producers risk on
+    every article once a model proposes the location and code cuts at it.
+
+    It raises rather than degrading because at this point the text is in hand
+    and it is the string the excerpts came from, so a mismatch is this process's
+    own arithmetic being wrong. Read time is the other half and it degrades one
+    item: see `ElementTable.span_drift`.
     """
     text = article.text or ""
     dates = date_elements(text, limit=config.max_per_article)
     quantities = quantity_elements(text, limit=config.max_per_article)
-    return ElementTable(
+    table = ElementTable(
         version=ElementTable.schema_version(),
         item_id=article.item_id,
         url_key=derive_url_key(article.canonical_url),
@@ -395,3 +416,6 @@ def element_table(article: Article, *, config: ElementsConfig) -> ElementTable:
             ElementKind.DATE: dates.found,
         },
     )
+    if (drift := table.span_drift(text)) is not None:
+        raise ValueError(f"the pass cannot re-slice its own output: {drift}")
+    return table
