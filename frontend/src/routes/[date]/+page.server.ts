@@ -4,8 +4,16 @@ import { dayShell, loadDay, publishedDates } from '$lib/server/payload';
 
 export const prerender = true;
 
+/** One page per published day, and `-1` says the read is uncovered on purpose
+ * (`docs/concepts/growing-reads.md`).
+ *
+ * This is the list of pages the build writes. A cover here would stop generating
+ * the page for every day past it, so the archive calendar would link to nothing
+ * and a reader following a dated link would meet a 404. What grows is the number
+ * of pages, not the work of listing them, and the pages are the product.
+ */
 export function entries() {
-	return publishedDates().map((date) => ({ date }));
+	return publishedDates(undefined, -1).map((date) => ({ date }));
 }
 
 /** The day's own stories, split at `ui.shell_seed_items`.
