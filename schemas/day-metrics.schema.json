@@ -117,6 +117,72 @@
       "title": "DayDistribution",
       "type": "object"
     },
+    "DayExtraction": {
+      "additionalProperties": false,
+      "description": "What the candidate pass found on the day, and what the page drew from it.\n\nEvery count is additive across days, so a window is a sum and never a re-walk.\nThe two rates a reader wants are not stored, because a rate is not additive:\n`idhazh.evals.metrics` derives both from these counts, and the console does\nthe same arithmetic on the same cells.\n\n**Three classes and not five.** `comparative` and `processual` are claims\nabout how an article is written rather than about its numbers, so they have\nno query yet and land with the diagram plan. `unclassified` is that gap\nstated plainly rather than folded into `narrative`, which would report an\narticle carrying two figures as one carrying none.",
+      "properties": {
+        "chartable": {
+          "description": "Items whose numbers could have made a chart.",
+          "minimum": 0,
+          "title": "Chartable",
+          "type": "integer"
+        },
+        "chartable_charted": {
+          "description": "Of those, the ones a reader can see a rendered chart on.",
+          "minimum": 0,
+          "title": "Chartable Charted",
+          "type": "integer"
+        },
+        "chartable_published": {
+          "description": "Chartable items that reached the day's published set. The denominator of the unused rate: an item that never published cannot carry a chart, and counting it would blame the planner for a fetch that failed.",
+          "minimum": 0,
+          "title": "Chartable Published",
+          "type": "integer"
+        },
+        "elements_found": {
+          "description": "Tier 1 elements the pass kept, added over the day. The extractor's own signal: it falls when the patterns stop matching, whatever the planner does.",
+          "minimum": 0,
+          "title": "Elements Found",
+          "type": "integer"
+        },
+        "items": {
+          "description": "Planned items whose article carried text, so the pass ran on them. The denominator of the integrity rate, and never the published set.",
+          "minimum": 0,
+          "title": "Items",
+          "type": "integer"
+        },
+        "narrative": {
+          "description": "Items stating no quantity at all.",
+          "minimum": 0,
+          "title": "Narrative",
+          "type": "integer"
+        },
+        "span_integrity_pass": {
+          "description": "Of those, the ones where every element span cut its own characters.",
+          "minimum": 0,
+          "title": "Span Integrity Pass",
+          "type": "integer"
+        },
+        "unclassified": {
+          "description": "Items with quantities but no unit shared widely enough.",
+          "minimum": 0,
+          "title": "Unclassified",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "span_integrity_pass",
+        "elements_found",
+        "chartable",
+        "narrative",
+        "unclassified",
+        "chartable_published",
+        "chartable_charted"
+      ],
+      "title": "DayExtraction",
+      "type": "object"
+    },
     "DayInstrument": {
       "additionalProperties": false,
       "description": "One measured eval-row column, aggregated over the day.\n\n`column` names the eval-row column (an entry from `INSTRUMENT_COLUMNS`); the\nreducer joins on it. `stat` carries the aggregate, additive and non-additive\nparts kept apart by `DayDistribution`.",
@@ -365,6 +431,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the nullable extraction block.",
+      "version": "2026-09-08T21:00",
+      "why": "Nothing said whether an article the planner drew nothing for had anything to draw, so a fall in published charts read the same whether the planner stopped choosing them or the extractor stopped finding numbers. The block is the day's join of the item-health census, which carries the class, against the published day, which carries the chart - both bounded by the day and neither by the archive (Rule #12). Nullable, because a record an earlier run wrote carries no such block and the console reads it leniently rather than dropping the whole day."
+    },
+    {
       "change": "Initial shape: one record per published day, additive against non-additive.",
       "version": "2026-09-07",
       "why": "The console rebuilt every per-day figure by walking the whole committed history on every build (research findings 61-75), a cost that rose with each published day for an answer that never changed once the day was frozen (Rule #12). This record carries those figures, written once by the producer that already holds the data. It stores a total only where a reader may add it across days and never as a running counter, because a correction to a counter needs a decrement path and a missed decrement is silent (owner, 2026-09-06); a correction rewrites this whole record instead. A non-additive figure carries the day's own value plus what a reader needs to combine days in a defined way (Andre)."
@@ -399,6 +470,18 @@
       "minimum": 0,
       "title": "Determinism Violations",
       "type": "integer"
+    },
+    "extraction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DayExtraction"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the candidate pass found and what the page drew from it, or null on a record written before 2026-09-08. Additive parts."
     },
     "extraction_suspect": {
       "description": "Scored items whose source read like page furniture. Additive.",
@@ -506,7 +589,7 @@
       "description": "The day's token clock, or null when no item timed a token. Additive parts."
     },
     "version": {
-      "default": "2026-09-07",
+      "default": "2026-09-08T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -538,5 +621,5 @@
   ],
   "title": "DayMetrics",
   "type": "object",
-  "version": "2026-09-07"
+  "version": "2026-09-08T21:00"
 }

@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import re
 from bisect import bisect_right
+from collections import Counter
 from collections.abc import Iterable
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -62,6 +63,7 @@ from idhazh.contracts.element import (
     Extractor,
     derive_element_id,
 )
+from idhazh.contracts.item_health import ElementClass
 from idhazh.evals.metrics import _SENTENCE_SPLIT
 
 # A number with optional thousands separators, an optional decimal part, an
@@ -180,6 +182,17 @@ def normalise_unit(unit: str) -> str:
     if len(lowered) > 3 and lowered.endswith("s") and not lowered.endswith("ss"):
         return lowered[:-1]
     return lowered
+
+
+class SpanDriftError(ValueError):
+    """The table cannot cut its own excerpts out of the text it was handed.
+
+    A `ValueError` so every caller written before this class still catches it,
+    and its own type so a caller can tell it from a shape refusal. The two want
+    opposite dispositions: a span that stopped pointing where it did degrades one
+    item, and a payload the contract refuses is our own arithmetic being wrong
+    everywhere it runs (`docs/architecture/extraction/elements.md`).
+    """
 
 
 class Candidates(NamedTuple):
@@ -417,5 +430,88 @@ def element_table(article: Article, *, config: ElementsConfig) -> ElementTable:
         },
     )
     if (drift := table.span_drift(text)) is not None:
-        raise ValueError(f"the pass cannot re-slice its own output: {drift}")
+        raise SpanDriftError(f"the pass cannot re-slice its own output: {drift}")
     return table
+
+
+class ExtractionHealth(NamedTuple):
+    """What the pass got out of one article, as three cells a census row holds.
+
+    `span_integrity` is stated first because it governs the other two: false
+    means the table would not re-slice and there is nothing trustworthy to
+    count, so both of the others are `None`. True means the pass ran and both are
+    filled. The triple is never half-filled any other way.
+    """
+
+    span_integrity: bool
+    elements_found: int | None
+    element_class: ElementClass | None
+
+
+def classify(table: ElementTable, *, min_chart_points: int) -> ElementClass:
+    """Which of the three classes one article's numbers put it in.
+
+    **Distinct quantities per unit, because a bar chart cannot draw the same
+    figure twice.** `visual_planner.same_unit_bars` groups the chosen bars by
+    unit and the bars are distinct by construction, so counting a repeated
+    figure here would call an article chartable that no planner could ever draw -
+    and `extractable_but_unused_rate` would carry that gap for ever while
+    claiming to measure the planner.
+
+    **The empty unit is a group like any other**, which is the reading
+    `chart_is_reachable` already takes: `numeric_facts` writes an empty unit when
+    nothing after the number reads as one, and excluding the group would call an
+    article narrative that publishes a chart today.
+
+    **This is not `chart_is_reachable` and is not meant to be.** That function
+    asks whether a chart could survive the planner's own drops - the sixteen-fact
+    cap and the floor under a magnitude of two. This asks what the article
+    states. The gap between the two answers is what row 5 exists to report, so
+    closing it here would delete the measurement.
+
+    `min_chart_points` is `visuals.min_chart_points` and not a second knob
+    (Rule #6). Mint one and the console can call an article chartable while the
+    planner refuses to draw it, and the rate then measures two knobs drifting
+    apart rather than the planner.
+    """
+    units = Counter(
+        (element.unit or "", element.value)
+        for element in table.elements
+        if element.kind is ElementKind.QUANTITY
+    )
+    if not units:
+        return ElementClass.NARRATIVE
+    widest = Counter(unit for unit, _ in units).most_common(1)[0][1]
+    return ElementClass.CHARTABLE if widest >= min_chart_points else ElementClass.UNCLASSIFIED
+
+
+def extraction_health(
+    article: Article, *, config: ElementsConfig, min_chart_points: int
+) -> ExtractionHealth | None:
+    """The three census cells for one article, or nothing when there was no text.
+
+    O(1) in the archive: it reads one article and builds one table (Rule #12).
+
+    **A drifted span degrades this item and nothing else.** That is row 4's
+    ruling, and this is where it is carried out: `element_table` raises because
+    it cut those characters out of that string moments earlier, and the caller
+    that has to file a row for every planned item records the failure instead of
+    taking the run down with it. `span_integrity_rate` is what makes the refusal
+    visible - a run whose own arithmetic broke reports zero percent rather than
+    silently reporting nothing.
+
+    A shape refusal is deliberately not caught. A payload the contract will not
+    hold is failing for every article that took the same path, and a rate that
+    swallowed it would report the run as healthy.
+    """
+    if not article.text:
+        return None
+    try:
+        table = element_table(article, config=config)
+    except SpanDriftError:
+        return ExtractionHealth(span_integrity=False, elements_found=None, element_class=None)
+    return ExtractionHealth(
+        span_integrity=True,
+        elements_found=len(table.elements),
+        element_class=classify(table, min_chart_points=min_chart_points),
+    )

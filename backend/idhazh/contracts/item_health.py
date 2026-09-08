@@ -45,6 +45,38 @@ class ItemOutcome(StrEnum):
     FAILED = "failed"
 
 
+class ElementClass(StrEnum):
+    """What one article's numbers say it could carry, and nothing else.
+
+    **Three classes, and the count is the point.** The visual programme names
+    five, and only two of them are a question about numbers. `comparative` and
+    `processual` are claims about how an article is written, so they have no
+    query yet and land with the diagram plan. Anything reporting per class before
+    then names three and says so, rather than letting a reader take three for the
+    whole taxonomy.
+
+    The query rests on the element table's Tier 1 fields alone - `kind`, `value`
+    and `unit` - so it is byte-exact and carries no model judgement.
+    `idhazh.elements.classify` is the query; this is its vocabulary, and
+    `docs/architecture/extraction/elements.md` is the page that owns it.
+
+    **It is declared here rather than beside the element contract**, with the
+    three other closed vocabularies this census row carries, because
+    `contracts/element.py` sits above `contracts/article.py`, which sits above
+    this module. A label a census row persists has to be declared at or below the
+    row's own level, and this is the level.
+    """
+
+    #: The article states at least `visuals.min_chart_points` distinct quantities
+    #: that share a unit, so bars could be drawn from what it says.
+    CHARTABLE = "chartable"
+    #: The article states no quantity at all. There is nothing to draw.
+    NARRATIVE = "narrative"
+    #: Quantities, but no unit shared widely enough to make a comparison. It may
+    #: turn out to be `comparative` or `processual`, and neither has a query yet.
+    UNCLASSIFIED = "unclassified"
+
+
 class FailureCode(StrEnum):
     """Stable failure vocabulary for item-health rows."""
 
@@ -125,6 +157,28 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-08T21:00",
+            change=(
+                "Added nullable span_integrity, elements_found and element_class at the "
+                "end of the row."
+            ),
+            why=(
+                "The visual planner draws nothing on most items and nothing said whether "
+                "the article had anything to draw, so a fall in published charts read the "
+                "same whether the planner stopped choosing them or the extractor stopped "
+                "finding numbers - and those have different fixes. The class is a query "
+                "over the element table's Tier 1 fields alone, so it is byte-exact and "
+                "carries no model judgement. It lands here rather than beside the visual "
+                "decision because two writers append this ledger and the earlier one runs "
+                "in the work job, hours before a plan exists: a cell only assemble could "
+                "fill would be dropped for every item a shard had already recorded. "
+                "Counts and a class label, never article text - span_excerpt stays inside "
+                "the process that cut it (CLAUDE.md section 0a). Appended at the end and "
+                "nullable, so a row an earlier run wrote still reads: those runs measured "
+                "nothing here and their cells stay empty."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30",
             change="Added nullable shard at the end of the row.",
@@ -279,6 +333,34 @@ class ItemHealthRow(Contract):
             "empty cell as shard 0."
         ),
     )
+    span_integrity: bool | None = Field(
+        default=None,
+        description=(
+            "Did every element span cut its own characters out of the article text? "
+            "Empty means the pass never ran, because the item carried no text. False "
+            "means it ran and the table would not re-slice, which degrades this item "
+            "alone. The two cells after this one are filled only when it is true."
+        ),
+    )
+    elements_found: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Tier 1 elements the candidate pass kept for this article, after the rule "
+            "that settles two passes claiming one span and after "
+            "elements.max_per_article. A count, never the elements. Null before "
+            "2026-09-08 and whenever span_integrity is not true."
+        ),
+    )
+    element_class: ElementClass | None = Field(
+        default=None,
+        description=(
+            "What the article's own numbers say it could carry: chartable, narrative, "
+            "or unclassified. Three classes and not five - the other two are claims "
+            "about language and have no query yet. Null on the same terms as "
+            "elements_found."
+        ),
+    )
 
     @property
     def counts_against_source(self) -> bool:
@@ -309,6 +391,20 @@ class ItemHealthRow(Contract):
                 raise ValueError("unknown item-health failure must carry detail")
         elif self.detail is not None:
             raise ValueError("detail belongs only to unknown item-health failures")
+        return self
+
+    @model_validator(mode="after")
+    def _a_counted_element_was_re_sliced_first(self) -> Self:
+        """The three extraction cells fill together, and only behind a passed re-slice.
+
+        A count taken from a table that would not cut its own characters is a
+        number about a string nobody holds, and it reads as a plausible integer.
+        """
+        counted = (self.elements_found, self.element_class)
+        if (self.elements_found is None) != (self.element_class is None):
+            raise ValueError("elements_found and element_class are recorded together")
+        if any(cell is not None for cell in counted) and self.span_integrity is not True:
+            raise ValueError("an element count is recorded only where every span re-sliced")
         return self
 
     @classmethod
@@ -342,6 +438,9 @@ class ItemHealthRow(Contract):
             "cached_tokens",
             "source_words_before_cap",
             "shard",
+            "span_integrity",
+            "elements_found",
+            "element_class",
         )
         for name in optional_fields:
             if payload[name] == "":

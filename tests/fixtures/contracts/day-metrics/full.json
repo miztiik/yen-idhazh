@@ -7,6 +7,7 @@
   },
   "date": "2026-08-24",
   "determinism_violations": 0,
+  "extraction": null,
   "extraction_suspect": 1,
   "instruments": [
     {
