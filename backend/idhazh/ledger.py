@@ -27,9 +27,11 @@ the 7,600 committed rows, header included: 106.9 B a row, so a year of that
 ceiling is 15.6 MB on disk. The 16 committed days average 475 rows a day, which
 is above the ceiling arithmetic because they were written under three different
 ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since - and the newest
-full day wrote 357. Reading the whole file took 22.6 ms at best and 25.9 ms at
-worst, a spread of 3.3 ms over five consecutive runs on an otherwise idle box.
-See `docs/reference/measurements.md`.
+full day wrote 357. Reading the whole file took a median 32.7 ms over fifteen
+consecutive runs, best 30.1 and worst 37.5, a spread of 7.4 ms - and as slow as
+68.6 ms while other jobs shared the box, which is the number to remember before
+reading any wall clock here as a property of the file. See
+`docs/reference/measurements.md`.
 
 `state/published.csv` is the one file it moved off. It is read and never
 written. `load_published` returns the union of both shapes, so no step of that
