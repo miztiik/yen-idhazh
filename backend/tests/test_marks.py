@@ -48,6 +48,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_day_metrics_producer",
         "test_discover",
         "test_embed",
+        "test_elements",
         "test_evals",
         "test_evidence",
         "test_extract",
