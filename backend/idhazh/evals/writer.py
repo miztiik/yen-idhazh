@@ -40,6 +40,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Final
 
+from idhazh import month_partition
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.validation_row import ValidationRow
@@ -81,21 +82,11 @@ def ledger_shards(state_dir: Path) -> list[Path]:
 
     Anything that is not a `<YYYY-MM>.csv` is left alone: `retention.prune_scores`
     archives and then deletes out of this directory, so it names what it
-    recognises rather than acting on what it does not.
+    recognises rather than acting on what it does not. What counts as a month is
+    `month_partition.is_month_stem` and nothing local - this directory is the
+    one where getting that wrong deletes a file.
     """
-    return _month_files(state_dir / LEDGER_DIRNAME)
-
-
-def _month_files(directory: Path) -> list[Path]:
-    """The `<YYYY-MM>.csv` files in one directory, oldest first, and nothing else."""
-    if not directory.is_dir():
-        return []
-    found = [
-        path
-        for path in directory.glob("*.csv")
-        if len(path.stem) == 7 and path.stem[4] == "-" and path.stem.replace("-", "").isdigit()
-    ]
-    return sorted(found, key=lambda path: path.stem)
+    return month_partition.month_files(state_dir / LEDGER_DIRNAME, ".csv")
 
 
 def records(state_dir: Path) -> Iterator[dict[str, str]]:
@@ -175,7 +166,7 @@ def index_path(state_dir: Path, month: str) -> Path:
 
 def index_shards(state_dir: Path) -> list[Path]:
     """Every month of the index, oldest first."""
-    return _month_files(state_dir / INDEX_DIRNAME)
+    return month_partition.month_files(state_dir / INDEX_DIRNAME, ".csv")
 
 
 def index_columns() -> tuple[str, ...]:

@@ -1,6 +1,6 @@
 # Month Partitions
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 A **month partition** is one file named `<YYYY-MM>` holding one calendar month of a
 collection that grows. The directory is the collection, the stem is the month. A
@@ -11,6 +11,52 @@ Why a collection partitions at all - and why several here deliberately do not - 
 [the shard rule](../architecture/contracts/schemas.md#a-ledger-shards-by-month-only-when-its-read-carries-a-window)
 in the contracts doc. This page is the other half: what the layout obliges a writer
 to do once it exists.
+
+## What counts as a month name
+
+**A real calendar month, spelled in ASCII, seven characters wide.** `2025-01` is a
+partition. `2025-1`, `2025-00`, `2025-13`, `0000-01` and `2025-01` written in
+Arabic-Indic digits are not. One function decides it for every collection on this
+page - `idhazh.month_partition.is_month_stem` - and every directory reader is
+`month_partition.month_files`.
+
+**A name it does not recognise is left alone.** It is not deleted and it is not a
+fault. These directories are the top of their own store, and a root is allowed to
+hold something that is not the partitioned collection at all. The stricter rule -
+below a dated level an unreadable name raises - belongs to the published day tree,
+where everything under a year directory is written by `assemble.day_dir` and nothing
+else (`retention._dated_days`).
+
+**It is one function because it used to be three, and they disagreed.** Measured on
+this checkout on 2026-09-08, before the fix:
+
+| Stem | `retention` | `evals.writer` | `evals.archive` |
+| --- | --- | --- | --- |
+| `2025-01` | a month | a month | a month |
+| `2025-00` | a stray | **a month** | **a month** |
+| `2025-13` | a stray | **a month** | **a month** |
+| `0000-01` | a stray | **a month** | **a month** |
+| `2025-01` in Arabic-Indic digits | a stray | **a month** | **a month** |
+
+So `2025-13.csv` was left alone in `state/feed-health/` and was summarised into
+`state/score-archive/2025-13.json` and then **deleted** in `state/scores/` - one name,
+two dispositions, and the destructive one landing on the store that holds the evidence
+behind every published quality claim. `prune.yml` force-pushes `main`
+([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file it removed would not come
+back. The committed guard covered `notes.csv`, which every reader already refused.
+
+**The ASCII clause is not decoration.** `str.isdigit` and `int` both accept another
+script's numerals, so a stem in Arabic-Indic digits reads as January 2025 to a naive
+check while `ledger.append_seen` names its own file `2025-01`. That is two files
+claiming one month, and a fold would summarise over one of them. CPython's date parser
+happens to refuse that stem today, but through how it compiles its digit class rather
+than through anything this rule asked for, and a detail is not a rule - so the check is
+written out, and `backend/tests/test_retention.py::test_the_month_readers_all_agree_on_what_a_month_is`
+holds all four readers to it.
+
+Authority: Rule #5 - a structural fix rather than a third copy of the rule. Found while
+[re-measuring the state prunes](../architecture/publishing/layout.md#the-state-prunes-were-already-constant-cost-and-the-premise-that-said-otherwise-was-wrong-2026-09-08),
+2026-09-08.
 
 ## The freeze rule
 
