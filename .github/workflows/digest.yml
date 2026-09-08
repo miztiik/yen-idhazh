@@ -994,13 +994,28 @@ jobs:
       # uploads an empty artifact on a green run. Move the suffix without this
       # line and the day publishes with no pictures and no error;
       # `test_workflows.py` holds the pair.
+      #
+      # The second line is this run's day and not the whole archive, because
+      # `idhazh.render.write.asset_relpath` files every chart under the day that
+      # names it - so no other day in the tree can hold anything this job made.
+      # Sending the archive cost 6.42 MB of the 6.67 MB parcel and the figure
+      # rose with every run that published a day: 6.36, 6.41, 6.47, 6.53, 6.59
+      # and 6.66 MB over six consecutive runs on 2026-09-07/08, with nobody
+      # writing any code (Rule #12). Measured 2026-09-08 on an Intel Core
+      # i7-1265U over 19 committed days: the archive zips to 6,989,142 bytes and
+      # one day to 255,447.
+      #
+      # Both lines stay. Drop the first and `assemble` receives no decisions,
+      # every item publishes with no picture, and the run stays green
+      # throughout. Keeping it also holds the artifact root at the repository
+      # root, which is what lets `assemble` unpack with `path: .`.
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: visuals
           path: |
             backend/var/run/${{ needs.plan.outputs.date }}/items/*.visual.json
-            frontend/public/digest/
+            ${{ needs.plan.outputs.day_dir }}/
           retention-days: 1
           if-no-files-found: ignore
 
