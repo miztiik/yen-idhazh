@@ -511,6 +511,42 @@ def test_the_article_survives_and_the_furniture_does_not() -> None:
         assert furniture not in text
 
 
+def test_embedded_player_messages_are_not_article_text() -> None:
+    text = extract_text(page("france24-player.html"))
+
+    assert text is not None
+    assert "Before Champions League" in text
+    assert "As the Champions League resumes, Real Madrid are hosting Inter Milan." in text
+    assert "advertisement tracking" not in text
+    assert "browser extensions" not in text
+    assert "Manage my choices" not in text
+    assert "Try again" not in text
+
+
+def test_player_cleanup_keeps_a_short_article_publishable() -> None:
+    article = to_article(
+        ITEM, ok("france24-player.html"), config=ExtractConfig(), fetched_at=FETCHED_AT
+    )
+
+    assert article.status is ArticleStatus.OK
+    assert article.brief
+    assert article.text is not None
+    assert "Real Madrid are hosting Inter Milan." in article.text
+    assert "advertisement tracking" not in article.text
+    assert article.source_word_count == article.word_count == len(article.text.split())
+    assert not article.truncated
+
+
+@pytest.mark.parametrize("class_name", ["o-em-consent", "o-em-adblock"])
+def test_player_cleanup_matches_whole_class_names(class_name: str) -> None:
+    html = page("article.html").replace("<article>", f'<article class="{class_name}-analysis">')
+    text = extract_text(html)
+
+    assert text is not None
+    assert "four small modular reactors" in text
+    assert "retiring its remaining fossil generation by 2035" in text
+
+
 def test_a_hostile_page_crosses_the_boundary_sanitized() -> None:
     text = extract_text(page("hostile.html"))
     assert text is not None

@@ -1140,6 +1140,27 @@ class DriftConfig(Model):
     month_over_month_pct: float = Field(default=10.0, gt=0.0)
     year_over_year_pct: float = Field(default=5.0, gt=0.0)
     quarterly_refresh_fraction: float = Field(default=0.5, gt=0.0, le=1.0)
+    min_domain_rows: int = Field(
+        default=20,
+        ge=2,
+        description=(
+            "Distinct articles with the required metric on each side of a domain "
+            "comparison. A smaller sample is reported as insufficient evidence, "
+            "not as drift or as healthy. This is a safety floor, not a confidence level."
+        ),
+    )
+    source_word_count_drop: float = Field(
+        default=0.40,
+        gt=0.0,
+        lt=1.0,
+        description="Fractional fall in median extracted article length that raises an alert.",
+    )
+    extractiveness_rise: float = Field(
+        default=0.15,
+        gt=0.0,
+        le=1.0,
+        description="Absolute rise in median copied four-word-phrase share that raises an alert.",
+    )
     min_window_rows: int = Field(
         default=20,
         ge=1,
@@ -2738,6 +2759,19 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-08T16:49",
+            change=(
+                "Added drift.min_domain_rows, source_word_count_drop and "
+                "extractiveness_rise with defaults. Existing configs remain readable."
+            ),
+            why=(
+                "Issue 438 compared singleton domain samples and mixed model and scorer "
+                "versions under a global row floor. Domain comparisons now need enough "
+                "distinct measured articles. The existing length and copying thresholds "
+                "move from code into config without changing their values."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-08",
             change=(
