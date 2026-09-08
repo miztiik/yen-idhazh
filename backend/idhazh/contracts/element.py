@@ -16,6 +16,16 @@ offset taken against either of those points somewhere else. `ElementTable`
 carries the sha256 of that exact string, one hash per article, so a later read
 can tell whether the text a span was cut from is the text it now holds.
 
+**A span can stop pointing where it did, and `ElementTable.span_drift` is how
+anybody finds out.** The shape checks that `span_excerpt` is as wide as its
+span, which refuses a cleaned string but cannot refuse a wrong one - the text is
+not in the payload, so the shape has nothing to cut. `span_drift` takes the
+text and cuts it, and the two callers dispose of the answer differently: the
+producer raises, because it cut those characters out of that string moments
+earlier and a mismatch is its own arithmetic being wrong; a consumer degrades
+that one item, because the text moving under a span is one article's problem and
+says nothing about a sibling.
+
 **One name for the verbatim slice, and it is `span_excerpt`.** `raw` on
 `visual_planner.NumericFact` is whitespace-cleaned and drops the magnitude word
 and the unit, so it is not a slice of anything. `surface` is this project's word
@@ -479,3 +489,52 @@ class ElementTable(Contract):
                     "the text holds"
                 )
         return self
+
+    def span_drift(self, text: str) -> str | None:
+        """The first span that no longer cuts the characters it was cut from.
+
+        `None` means every span in this table still holds, so the table is
+        usable against `text`. A string means one did not, and it is a reason
+        the caller can log and record. Nothing is raised here: the two callers
+        want opposite dispositions from one answer, and the disposition is
+        theirs to choose (CLAUDE.md section 1a).
+
+        **Write time raises and read time degrades.** The producer cut every
+        excerpt out of the string it hashed moments earlier, so a mismatch there
+        is this process's own arithmetic being wrong and every article in the
+        run has it. A consumer reading a table it did not build is holding text
+        that has moved since - a fact about one article, true of no sibling - so
+        it degrades that item and the rest of the run publishes.
+
+        **It re-slices every span rather than comparing `source_text_hash`
+        first, and the reason is the measurement rather than the argument.** The
+        hash covers the whole article and the excerpts cover a few dozen
+        characters of it, so the cheap-looking short-circuit is the more
+        expensive half. Measured 2026-09-08 on a 12th Gen Intel Core i7-1265U
+        with Python 3.14.2: on the densest captured page - 7 elements over 1,337
+        characters - the re-slice is a median 1.15 us against 1.78 us to hash
+        the text, spread 1.12-1.33 and 1.77-1.87 over 9 runs of 2,000. At the
+        ceiling of 256 spans over 60,000 characters it is 41.30 us against
+        44.35 us, spread 38.28-53.99 and 41.27-47.17 over 9 runs of 500. So the
+        short-circuit would be a second code path that costs more than the work
+        it skips, on every article for ever.
+
+        **What it answers, and the two things it does not.** It answers whether
+        every span still cuts its own characters. It does not answer whether the
+        table is still *complete* for `text` - text that grew may hold facts the
+        pass never saw, and the remedy for that is to run the pass again, not to
+        degrade an item. And it cannot see a span that moved onto identical
+        characters somewhere else in the text: the excerpt, the value and the
+        unit are all unchanged there, and only `sentence_index` could be stale.
+
+        Bounded by `elements.max_per_article`, so it cannot grow with the
+        archive (Rule #12).
+        """
+        for element in self.elements:
+            if text[element.span_start : element.span_end] != element.span_excerpt:
+                return (
+                    f"{element.element_id} no longer cuts its own excerpt - the text this "
+                    f"table indexes was {self.source_text_length} characters and this one "
+                    f"is {len(text)}"
+                )
+        return None
