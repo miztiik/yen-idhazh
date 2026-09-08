@@ -51,11 +51,12 @@ from idhazh import config
 from idhazh.llm.server import server_argv
 
 settings = config.load(Path("config"))
+role = getattr(settings.app.models, os.environ["LLAMA_ROLE"])
 argv = server_argv(
     binary=Path("backend/bin/llama-server"),
     weights=Path(os.environ["LLAMA_WEIGHTS"]),
-    model=getattr(settings.app.models, os.environ["LLAMA_ROLE"]),
-    inference=settings.app.models.inference,
+    model=role,
+    inference=role.inference,
     port=int(os.environ["LLAMA_PORT"]),
 )
 sys.stdout.write("\0".join(argv) + "\0")

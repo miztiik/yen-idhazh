@@ -408,7 +408,7 @@ def context_fit(observations: Sequence[ItemObservation], inference: InferenceCon
             f"{len(overflow)} overflowed, {len(under_reserved)} under-reserved"
         ),
         threshold=f"<= n_ctx {inference.n_ctx}; fits_context over-reserves",
-        source=f"{_CONFIG} models.inference.n_ctx",
+        source=f"{_CONFIG} models.summarize.inference.n_ctx",
         detail=(
             "a request that does not fit is not a shorter summary, it is a reply "
             "cut off before it closed its JSON"

@@ -666,7 +666,7 @@ jobs:
                 || echo "${series}: this build does not publish it"
             done
           else
-            echo "no metrics: llama-server was already gone, or models.inference.metrics is off"
+            echo "no metrics: llama-server was already gone, or the role's inference.metrics is off"
           fi
           # A row lands either way. A shard whose server was already gone and a
           # shard that never ran are different facts, and pooling a run has to be

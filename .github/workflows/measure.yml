@@ -570,7 +570,7 @@ jobs:
                   binary=Path("backend/bin/llama-server"),
                   weights=Path("backend/models") / MODEL_FILE,
                   model=settings.app.models.summarize,
-                  inference=settings.app.models.inference,
+                  inference=settings.app.models.summarize.inference,
                   port=SERVER_PORT,
               )
               env = os.environ.copy()
@@ -846,10 +846,10 @@ jobs:
         run: |
           set -euo pipefail
           for key in n_ctx n_batch n_ubatch n_threads; do
-            value=$(jq -er ".models.inference.${key}" config/idhazh.json)
+            value=$(jq -er ".models.summarize.inference.${key}" config/idhazh.json)
             case "$value" in
               ''|*[!0-9]*)
-                echo "config/idhazh.json models.inference.${key} must be a positive integer, got '${value}'" >&2
+                echo "config/idhazh.json models.summarize.inference.${key} must be a positive integer, got '${value}'" >&2
                 exit 2
                 ;;
             esac

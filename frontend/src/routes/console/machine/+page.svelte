@@ -1017,7 +1017,7 @@
 				</div>
 
 				<!-- One line of text, not a chart. It reads 1.0 on every row the ledger
-				     holds because `models.inference.n_parallel` is 1, and it earns a
+				     holds because `models.summarize.inference.n_parallel` is 1, and it earns a
 				     chart the day that knob moves. -->
 				<div data-host="batching" data-batching={view.batching.highest ?? ''}>
 					<dt>Batching</dt>

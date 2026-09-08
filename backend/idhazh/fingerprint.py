@@ -195,6 +195,12 @@ class Undigested(NamedTuple):
 #: contract test in `backend/tests/test_fingerprint.py`.
 NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
     {
+        "declared_for": Undigested(
+            False,
+            "Names the weights the block is set for. The stamp already carries those "
+            "bytes as model_sha256, so digesting it twice would move the fingerprint "
+            "on a swap the digest itself already moved.",
+        ),
         "load_mode": Undigested(
             False, "mmap and mlock move where the weights sit, not what they hold."
         ),
