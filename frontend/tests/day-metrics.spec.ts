@@ -55,7 +55,12 @@ test('dayMetrics opens only the dates asked for, whatever else is in the tree', 
 			// This fixture carries only the strict triple, so the band's two extra
 			// counts read null (they are proven present further down).
 			notSure: null,
-			itemsTruncated: null
+			itemsTruncated: null,
+			// And the extraction block, which a record written before 2026-09-08
+			// does not have. Null rather than a block of zeros: zero facts found is
+			// an extractor that stopped working, and this is a day that measured
+			// nothing.
+			extraction: null
 		});
 
 		// A date with no record is skipped, not walked to. The caller falls back
@@ -65,6 +70,53 @@ test('dayMetrics opens only the dates asked for, whatever else is in the tree', 
 
 		// No dates, no reads.
 		expect(dayMetrics([], root).size).toBe(0);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('the extraction block is read whole, or not at all', () => {
+	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
+	const block = {
+		items: 40,
+		span_integrity_pass: 39,
+		elements_found: 180,
+		chartable: 11,
+		narrative: 16,
+		unclassified: 12,
+		chartable_published: 9,
+		chartable_charted: 6
+	};
+	try {
+		writeRecord(
+			root,
+			'2026-09-08',
+			JSON.stringify({ ...JSON.parse(recordText(8)), extraction: block })
+		);
+		// A cell missing is a record this build cannot reduce. It reads null, the
+		// same as no block at all - a zero substituted for it would say the
+		// extractor found nothing on a day nobody can answer for.
+		const { chartable_charted: _dropped, ...short } = block;
+		writeRecord(
+			root,
+			'2026-09-07',
+			JSON.stringify({ ...JSON.parse(recordText(8)), extraction: short })
+		);
+
+		const found = dayMetrics(['2026-09-08', '2026-09-07'], root);
+		expect(found.get('2026-09-08')?.extraction).toEqual({
+			items: 40,
+			spanIntegrityPass: 39,
+			elementsFound: 180,
+			chartable: 11,
+			narrative: 16,
+			unclassified: 12,
+			chartablePublished: 9,
+			chartableCharted: 6
+		});
+		expect(found.get('2026-09-07')?.extraction).toBeNull();
+		// The day itself still loads: one unreadable block is not one lost day.
+		expect(found.get('2026-09-07')?.summariesScored).toBe(8);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

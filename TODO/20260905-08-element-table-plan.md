@@ -33,7 +33,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 2 | Every quantity, with the characters that prove it | 1 | B | DONE | yi-e02 | #518 | - |
 | 3 | Dates join the table | 2 | C | DONE | yi-e03 | #520 | - |
 | 4 | A span that no longer points where it did | 3 | D | DONE | yi-e04 | #521 | - |
-| 5 | What was found, what was used, and what could have been drawn | 4 | E | PENDING | - | - | - |
+| 5 | What was found, what was used, and what could have been drawn | 4 | E | DONE | yi-e05 | #522 | - |
 
 ---
 

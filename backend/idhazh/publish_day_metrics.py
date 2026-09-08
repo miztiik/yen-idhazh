@@ -27,7 +27,9 @@ throughput figure is interpolated as `series.ts` takes it.
 from __future__ import annotations
 
 import csv
+import logging
 import math
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
@@ -38,6 +40,7 @@ from idhazh.contracts.day_metrics import (
     INSTRUMENT_COLUMNS,
     DayBands,
     DayDistribution,
+    DayExtraction,
     DayInstrument,
     DayMetrics,
     DayReasons,
@@ -47,10 +50,13 @@ from idhazh.contracts.day_metrics import (
 )
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
-from idhazh.contracts.item_health import ItemStage
+from idhazh.contracts.item_health import ElementClass, ItemStage
 from idhazh.contracts.run_manifest import ModelRole, RunManifest
-from idhazh.contracts.visual_decision import VisualState
+from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import writer as eval_writer
+from idhazh.evals.metrics import extractable_but_unused_rate, span_integrity_rate
+
+LOG: Final = logging.getLogger("idhazh")
 
 DIRNAME: Final = "day-metrics"
 
@@ -215,6 +221,74 @@ def build(
         stage_timing=_stage_timing(health_rows),
         instruments=_instruments(score_rows),
         sources=_sources(day),
+        extraction=_extraction(day, health_rows),
+    )
+
+
+def _extraction(
+    day: DigestDay, health_rows: Sequence[dict[str, str]]
+) -> DayExtraction | None:
+    """The day's join of what the extractor found against what the page drew.
+
+    The class comes from the census, which carries every planned item across
+    every run of the day; whether a chart reached a reader comes from the day
+    payload, which is the whole published day. Joining them on `item_id` is what
+    separates a planner that stopped choosing charts from an extractor that
+    stopped finding numbers - without the denominator, one fall looks like the
+    other and only one of them is the planner's fault.
+
+    Both inputs are one day's worth, so the cost does not rise as the archive
+    does (Rule #12). Null when no row on the day recorded the pass at all, which
+    is what a day written before 2026-09-08 looks like: a block of zeros there
+    would report an extractor that found nothing rather than a day that measured
+    nothing.
+    """
+    charted = {
+        item.item_id
+        for item in day.items
+        if item.visual is not None
+        and item.visual.kind is VisualKind.CHART
+        and item.visual.state is VisualState.RENDERED
+    }
+    published = {item.item_id for item in day.items}
+
+    ran = 0
+    held = 0
+    found = 0
+    classes: Counter[str] = Counter()
+    chartable_published = 0
+    chartable_charted = 0
+    for row in health_rows:
+        integrity = (row.get("span_integrity") or "").strip()
+        if integrity == "":
+            continue
+        ran += 1
+        if not _flag(integrity):
+            continue
+        held += 1
+        found += int(_measured(row.get("elements_found")) or 0)
+        label = (row.get("element_class") or "").strip()
+        classes[label] += 1
+        if label != ElementClass.CHARTABLE.value:
+            continue
+        item_id = row.get("item_id") or ""
+        if item_id not in published:
+            continue
+        chartable_published += 1
+        if item_id in charted:
+            chartable_charted += 1
+
+    if ran == 0:
+        return None
+    return DayExtraction(
+        items=ran,
+        span_integrity_pass=held,
+        elements_found=found,
+        chartable=classes[ElementClass.CHARTABLE.value],
+        narrative=classes[ElementClass.NARRATIVE.value],
+        unclassified=classes[ElementClass.UNCLASSIFIED.value],
+        chartable_published=chartable_published,
+        chartable_charted=chartable_charted,
     )
 
 
@@ -508,7 +582,43 @@ def publish(
         score_rows=read_score_rows(state_root, date),
         health_rows=read_health_rows(state_root, date),
     )
-    return write(state_root, metrics)
+    written = write(state_root, metrics)
+    _log_extraction(date, metrics)
+    return written
+
+
+def _log_extraction(date: str, record: DayMetrics) -> None:
+    """Say what the pass found and what the page drew, in the run log.
+
+    Both rates are printed with the counts behind them, because a rate alone
+    cannot say whether it moved or whether its denominator did - and telling
+    those two apart is the whole reason the block exists.
+    """
+    extraction = record.extraction
+    if extraction is None:
+        LOG.info("extraction date=%s no item recorded the candidate pass", date)
+        return
+    unused = extractable_but_unused_rate(
+        chartable_published=extraction.chartable_published,
+        chartable_charted=extraction.chartable_charted,
+    )
+    integrity = span_integrity_rate(
+        items=extraction.items, passed=extraction.span_integrity_pass
+    )
+    LOG.info(
+        "extraction date=%s items=%s elements=%s chartable=%s narrative=%s unclassified=%s "
+        "chartable_published=%s charted=%s unused_rate=%s span_integrity_rate=%s",
+        date,
+        extraction.items,
+        extraction.elements_found,
+        extraction.chartable,
+        extraction.narrative,
+        extraction.unclassified,
+        extraction.chartable_published,
+        extraction.chartable_charted,
+        "-" if unused is None else f"{unused:.3f}",
+        "-" if integrity is None else f"{integrity:.3f}",
+    )
 
 
 def backfill(state_root: Path, days: Iterable[tuple[str, DigestDay, RunManifest]]) -> list[Path]:
