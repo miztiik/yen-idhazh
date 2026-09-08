@@ -77,8 +77,9 @@ a daily pipeline is the first run of the next month.
 
 The rule binds writes, not reads. A closed partition is still opened: `evals.writer.append`
 checks the header of every committed shard before it writes one, and
-`ledger.shards_in_window` opens every stem a reader's window names. What bounds reads
-is `CLAUDE.md` Rule #12, not this page.
+`ledger.shards_in_window` opens every stem a reader's window names. What bounds reads is
+[growing-reads.md](growing-reads.md) - the cover a read declares, and `CLAUDE.md` Rule #12
+behind it.
 
 Authority: owner, 2026-09-06.
 
@@ -187,6 +188,7 @@ commitment to convert any of them.
 
 ## See also
 
+- [growing-reads.md](growing-reads.md) - the other half of this page: what a growing collection obliges a reader to declare, and why `-1` is an answer.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md#published-shards) - the published projection of item health, one file a month.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-month-search-index) - the month search index, its ceilings, and what an unpublish owes each grain.
