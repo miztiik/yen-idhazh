@@ -47,6 +47,7 @@ The shapes, and where each one lives once written:
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
+| `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Rule #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
 | `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
 | `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
@@ -360,6 +361,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 ## See also
 
 - [determinism.md](determinism.md) - the pipeline fingerprint, its ledger, and the skip rule built on it.
+- [../extraction/elements.md](../extraction/elements.md) - the element shape: six kinds, two tiers, and why the verbatim slice is called `span_excerpt`.
 - [../sources/freshness.md](../sources/freshness.md) - why the published ledger files by day, and what its cover buys.
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
 - [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
