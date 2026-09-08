@@ -182,6 +182,13 @@ each partitioned collection above, and what the pattern does with a correction, 
 deletion, a late arrival and a row whose date changes are in
 [../../concepts/month-partitions.md](../../concepts/month-partitions.md).
 
+**What a growing collection obliges its reader to declare is a third rule, and it
+is also defined once.** A window is one of three shapes a cover can take, and the
+column above is only ever true of the reads whose question has a time bound in
+it. Which reads carry which shape, why `-1` is a declaration rather than an
+omission, and how to decide it for a collection this table does not list are in
+[../../concepts/growing-reads.md](../../concepts/growing-reads.md).
+
 Authority: Carmack (cache and shard economics), 2026-08-25.
 
 The eval ledger and source-state CSV ledgers compare the committed header to the row contract before writing. A mismatch stops the append and tells the operator to migrate the ledger. Padding is forbidden: readers map cells by header position, so a stale header would put correct-looking names over the wrong values.
@@ -356,6 +363,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../sources/freshness.md](../sources/freshness.md) - why the published ledger files by day, and what its cover buys.
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
 - [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
+- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection declares, and the three shapes a cover can take.
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
