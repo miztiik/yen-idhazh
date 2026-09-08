@@ -3,12 +3,13 @@
 **Last Updated**: 2026-09-08
 
 The extraction subsystem's fact table. This page owns the element shape - the
-six kinds, the two tiers, and the span that makes a drawn figure checkable.
+six kinds, the two tiers, and the span that makes a drawn figure checkable - and
+the candidate pass that fills it with quantities.
 
-Nothing writes this table yet. The contract lands ahead of its producers because
-a persisted shape is a Pydantic model before any logic reads or writes it
-(`CLAUDE.md` Rule #3), and because two producers, an invariant and a metric are
-all written against it in the rows that follow.
+One pass writes into this table today. It finds quantities, and it is pure code
+over the article's own bytes: `backend/idhazh/elements.py`. The four kinds a
+model has to point at have no producer, and a kind with no producer is legal and
+simply never appears.
 
 ## What an element is
 
@@ -25,8 +26,18 @@ One fact, plus the range of characters it was cut from:
 | `sentence_index` | which sentence of `Article.text` the span starts in |
 | `extractor` | `regex` or `model` - which path found it |
 
-`ElementTable` holds one article's elements, the article's identity, and the
-sha256 of the exact string the spans index.
+`ElementTable` holds one article's elements, the article's identity, the sha256
+of the exact string the spans index, and one count per kind of what the pass
+matched before the cap.
+
+**`elements` is capped and `candidates_found` is not.** How many candidates a
+producer keeps is a tunable (`elements.max_per_article`, 256), so the length of
+`elements` saturates. Read a density signal off it and a 600-word note carrying
+16 figures looks the same as a 3,000-word data story carrying 60 - and the
+second is the chartable one. It fails silently, because a capped counter still
+returns a plausible integer. The count is taken before any dedupe and before the
+cap, and the shape refuses a table that kept more of a kind than it says it
+found.
 
 **A span here is a character range, not a trace span.**
 [`backend/idhazh/contracts/span_rollup.py`](../../../backend/idhazh/contracts/span_rollup.py)
@@ -94,9 +105,68 @@ producer can write one by accident.
 The value is pinned as **text** for the reason a timestamp is: one spelling, and
 no float formatting that can drift underneath a committed file.
 
-Six kinds ship in one changelog entry and two of them have producers. A kind
-with no producer is legal and simply never appears, which is cheaper than
+Six kinds ship in one changelog entry and one of them has a producer today. A
+kind with no producer is legal and simply never appears, which is cheaper than
 widening a persisted shape four more times.
+
+## The candidate pass
+
+`quantity_elements(text, limit=...)` reads `Article.text` with the number
+pattern and emits one element per quantity, in the order the article wrote them.
+`element_table(article, config=...)` wraps that in the table, with the article's
+identity and the hash of the text every span indexes. Both are pure functions
+over one payload: nothing is committed, and the pass is proved by re-slicing its
+own output.
+
+**The offsets are not new work.** `visual_planner.numeric_facts` has always
+computed `match.start()` and `match.end()`, and has always thrown them away.
+This pass keeps them and cuts `span_excerpt` at them.
+
+**What the pass keeps that the planner drops.** `numeric_facts` picks a few bars
+for one chart, so it collapses a figure repeated across two periods into one
+fact, drops a magnitude at or below two, drops a bare year, and stops at 16.
+Every one of those is correct for choosing bars and wrong for a candidate set -
+the collapsed repeat is exactly the series a trend chart exists to show. Nothing
+in the candidate pass dedupes and nothing drops on size. Measured 2026-09-08 on
+the eight bounded fixtures (`tests/fixtures/canaries` and
+`tests/fixtures/pages`), the pass emits 17 quantities where `numeric_facts`
+keeps 11; on `tests/fixtures/pages/article.html` alone it is 7 against 3.
+
+`numeric_facts` is untouched and still behaves that way for the planner that
+calls it. This row added a producer beside it rather than repairing it in place.
+
+**The span ends where the reading ends.** A trailing word is inside the span
+only when it was read as the unit, so `1,200 MW` and `$4.5 billion` are
+excerpts and `40 percent of` never is. That is what keeps the excerpt something
+a reader can find on the page rather than a phrase the pattern happened to
+touch.
+
+**A bare year is a quantity here, for now.** The date extractor and the rule
+that settles two extractors competing for one span land in the next row, which
+is where the overlap rule has a home. Until then the pass emits every quantity
+the number pattern matched, which is what "candidate" means.
+
+### What a pattern over fetched bytes can hand you
+
+Fetched text is data (`CLAUDE.md` Rule #11), and a hostile or broken page can
+follow a number with a 600-character hyphenated word, or state a 200-digit
+serial number. Two bounds keep that from raising in the middle of an article:
+
+- A value too wide to write is not a quantity. It is not emitted and it is not
+  counted, because it never was one.
+- A word too wide to be a unit is read as no unit. The element still lands with
+  its span; only the unit reading is refused.
+
+The bounds are the contract's own, exported as `VALUE_MAX_LENGTH` and
+`UNIT_MAX_LENGTH`, so the producer refuses what the shape would refuse rather
+than carrying a second copy of the numbers.
+
+### The value is text, and it has one spelling
+
+`4.2 billion` and `4,200,000,000` are one quantity, so they have to compare
+equal as strings or pinning the value as text buys nothing. The pass writes the
+plain decimal form with no exponent and no trailing zeros: `4200000000` for
+both. `span_excerpt` still holds whichever of the two the article wrote.
 
 ## `context` is gone, and this is the sentence saying so
 
@@ -168,6 +238,47 @@ naming decision exists to stop.
 Authority: **Andre** (the trust boundary) on why the second field cannot be
 Tier 1.
 
+### The uncapped count is keyed by kind, and it is required
+
+`elements.max_per_article` bounds what a pass keeps, so `len(elements)`
+saturates and stops being a measure of the article. `candidates_found` is what
+the pass matched before that bound applied, and the two together say whether the
+cap bit and by how much.
+
+**Required rather than defaulted.** A default of zero is indistinguishable from
+a pass that genuinely found nothing, which is the same silent failure one level
+down. Nothing had been persisted under the previous shape - row 1 shipped the
+contract with no writer - so the only payloads that had to move were the two
+committed fixtures, and they moved in the same commit.
+
+**Keyed by kind rather than a single total.** The date extractor writes into
+this same table next, and a total that mixes dates into quantities stops
+answering the density question the moment it does. Summing a mapping is free;
+splitting a total is not.
+
+**Checked, not promised.** A cap only ever removes, so a table that kept more of
+a kind than it says it found does not load, and neither does one that kept a
+kind it counted nothing for. Without that, `candidates_found` would be a second
+number nobody reads against anything.
+
+Authority: **Andre** (2026-09-05) on the counter; **Fowler** (persisted
+contracts) on required and on the key.
+
+### The number pattern moved to the pass that is lower
+
+`NUMBER`, the magnitude table, the percent set, the unit stop list and
+`normalise_unit` were `visual_planner` privates. Two passes now read the same
+vocabulary, and the fact pass is the lower of the two, so the definitions live
+in `backend/idhazh/elements.py` and the planner imports them back. Nothing about
+its behaviour changed: a duplicated regex would have been a second definition of
+one concept, guaranteed to drift the first time the pattern is fixed.
+
+`_TRIVIAL_MAX`, the year range and the context window stayed with the planner.
+They are its judgements about what makes a bar, and the candidate pass does not
+share them.
+
+Authority: **Fowler** (module structure).
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -179,6 +290,12 @@ Tier 1.
 | One flat tier | Then nothing distinguishes a character range code cut from a word a model chose, which is the entire trust argument | Andre |
 | Ship only the two kinds that have producers | Six kinds in one contract with one changelog entry is cheaper than four later widenings of a persisted shape | Fowler |
 | Carry the element cap in the contract | A cap is a tunable and lives in `config/` (Rule #6). The shape says what an element is, never how many a producer keeps | Fowler |
+| Reuse `numeric_facts` as the candidate source | It collapses a figure repeated across two periods, drops a magnitude at or below two, drops a bare year, nulls a stop-listed unit and stops at 16. Every one of those is right for picking bars and wrong for a candidate set | Row 2 decision 2 |
+| Repair `numeric_facts` in place instead of adding a pass | Its caller wants the drops. Two callers want opposite things, so they are two functions | Fowler |
+| Count the candidates after the cap | A capped counter returns a plausible integer, so the failure is silent. The count is taken before the cap or it is not a count | Andre |
+| One total instead of a count per kind | It stops answering the density question as soon as the date extractor writes into the same table, and a total cannot be split back apart | Fowler |
+| Duplicate the number pattern in the new pass | Two definitions of one concept, and the first fix to either would land in one of them | Fowler |
+| Raise on a 200-digit run or a 600-character unit word | Degrade, do not fail (`CLAUDE.md` section 1a). A pattern over fetched bytes will meet both, and one hostile page must not take an article's whole table down | Andre |
 
 ### Why the schema stem is `element-table`
 
@@ -192,6 +309,7 @@ only the file list predates the shape.
 ## See also
 
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the generated schemas, and the drift gate over both.
+- [../publishing/visuals.md](../publishing/visuals.md) - the visual planner, which reads the same number pattern and keeps its own drops.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3 (contracts before logic), Rule #6 (no hardcoding), Rule #11 (fetched text is data), section 11 (schema versioning).
 - [../../../TODO/20260905-08-element-table-plan.md](../../../TODO/20260905-08-element-table-plan.md) - the plan this shape was written for, and the producers that follow it.

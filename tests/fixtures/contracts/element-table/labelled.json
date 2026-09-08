@@ -1,4 +1,8 @@
 {
+  "candidates_found": {
+    "entity": 1,
+    "quantity": 1
+  },
   "canonical_url": "https://example.org/grid/capacity-approved",
   "elements": [
     {
@@ -48,5 +52,5 @@
   "source_text_hash": "deb88888799e7f273b6660bc693e825af0521083f4769c2dfcf8797a73a827b1",
   "source_text_length": 143,
   "url_key": "c565a23ea741dae172267f42fb2cdc531b24f89ced9260f51013283dcd8200ac",
-  "version": "2026-09-08"
+  "version": "2026-09-08T12:00"
 }
