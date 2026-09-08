@@ -80,6 +80,9 @@
     "source_word_count_drop": 0.4,
     "year_over_year_pct": 5.0
   },
+  "elements": {
+    "max_per_article": 256
+  },
   "evaluation": {
     "band_high_min": 0.8,
     "band_medium_min": 0.5,
@@ -288,7 +291,7 @@
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark"
   },
-  "version": "2026-09-08",
+  "version": "2026-09-08T16:49",
   "visuals": {
     "asset_base_url": "",
     "canvas_width": 800,

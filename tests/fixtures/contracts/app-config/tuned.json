@@ -90,6 +90,9 @@
     "source_word_count_drop": 0.45,
     "year_over_year_pct": 4.0
   },
+  "elements": {
+    "max_per_article": 64
+  },
   "evaluation": {
     "band_high_min": 0.85,
     "band_medium_min": 0.55,
