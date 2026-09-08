@@ -124,8 +124,8 @@
     {
       "id": "aws-ml-blog",
       "kind": "announcement",
-      "retired_on": null,
-      "status": "active",
+      "retired_on": "2026-09-06",
+      "status": "retired",
       "tier": 1,
       "title": "AWS Machine Learning Blog",
       "url": "https://aws.amazon.com/blogs/machine-learning/feed/",
@@ -740,8 +740,8 @@
     {
       "id": "ht-business",
       "kind": "reporting",
-      "retired_on": null,
-      "status": "active",
+      "retired_on": "2026-09-06",
+      "status": "retired",
       "tier": 2,
       "title": "Hindustan Times - Business",
       "url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
@@ -916,8 +916,8 @@
     {
       "id": "livemint-companies",
       "kind": "reporting",
-      "retired_on": null,
-      "status": "active",
+      "retired_on": "2026-09-06",
+      "status": "retired",
       "tier": 2,
       "title": "Mint - Companies",
       "url": "https://www.livemint.com/rss/companies",
@@ -927,8 +927,8 @@
     {
       "id": "livemint-markets",
       "kind": "reporting",
-      "retired_on": null,
-      "status": "active",
+      "retired_on": "2026-09-06",
+      "status": "retired",
       "tier": 2,
       "title": "Mint - Markets",
       "url": "https://www.livemint.com/rss/markets",
@@ -1076,17 +1076,6 @@
       "tier": 2,
       "title": "The New Humanitarian",
       "url": "https://www.thenewhumanitarian.org/rss.xml",
-      "vertical": "world",
-      "weight": 1.0
-    },
-    {
-      "id": "news18-world",
-      "kind": "reporting",
-      "retired_on": null,
-      "status": "active",
-      "tier": 2,
-      "title": "News18 World",
-      "url": "https://www.news18.com/rss/world.xml",
       "vertical": "world",
       "weight": 1.0
     },
@@ -1253,6 +1242,83 @@
       "title": "PyTorch",
       "url": "https://pytorch.org/blog/feed.xml",
       "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "techpolicy-ai",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "TechPolicy",
+      "url": "https://www.techpolicy.press/rss/feed.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "straitstimes-opinion",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "The Straits Times",
+      "url": "https://www.straitstimes.com/news/opinion/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "straitstimes-business",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "The Straits Times",
+      "url": "https://www.straitstimes.com/news/business/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "cgtn-tech",
+      "kind": "reporting",
+            "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "China Global Television Network",
+      "url": "https://www.cgtn.com/subscribe/rss/section/tech-sci.xml",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "cgtn-opnion",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "China Global Television Network",
+      "url": "https://www.cgtn.com/subscribe/rss/section/opinion.xml",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "cgtn-business",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "China Global Television Network",
+      "url": "https://www.cgtn.com/subscribe/rss/section/business.xml",
+      "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "cgtn-china",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "China Global Television Network",
+      "url": "https://www.cgtn.com/subscribe/rss/section/china.xml",
+      "vertical": "world",
       "weight": 1.0
     },
     {
@@ -2125,6 +2191,17 @@
       "tier": 2,
       "title": "The Washington Post - World",
       "url": "https://feeds.washingtonpost.com/rss/world",
+      "vertical": "world",
+      "weight": 1.0
+    },
+        {
+      "id": "news18-world",
+      "kind": "reporting",
+      "retired_on": "2026-09-09",
+      "status": "retired",
+      "tier": 2,
+      "title": "News18 World",
+      "url": "https://www.news18.com/rss/world.xml",
       "vertical": "world",
       "weight": 1.0
     }
