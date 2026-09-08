@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | One contract, six kinds, two tiers | - | A | PENDING | - | - | - |
+| 1 | One contract, six kinds, two tiers | - | A | DONE | yi-e01 | #517 | - |
 | 2 | Every quantity, with the characters that prove it | 1 | B | PENDING | - | - | - |
 | 3 | Dates join the table | 2 | C | PENDING | - | - | - |
 | 4 | A span that no longer points where it did | 3 | D | PENDING | - | - | - |
