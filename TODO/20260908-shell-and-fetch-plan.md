@@ -1,560 +1,627 @@
 # Shell And Fetch - one document, every panel fetched, nothing that grows with the archive
 
 **Last Updated**: 2026-09-08
-**Level**: 5 (core design, a persisted contract, and the trust boundary). Design consultation is
-complete and its rulings are in section 3; no row re-opens one.
+**Level**: 5 (core design, persisted contracts, and the trust boundary). Design consultation is
+complete; section 0a records the eleven owner rulings and no row re-opens one.
 
-**Claims**: the `Build Reuse` package of the decision board in
-[`20260906-data-growth-research.md`](20260906-data-growth-research.md), plus the shell migration
-the owner directed on 2026-09-08. Supersedes the untracked `20260908-build-reuse-plan.md` draft,
-whose ten rows are folded in here as rows 12 to 17.
-
-Execute per [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md): orchestrator
-dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity;
-AUTO-merge on green gates; parallel N = 2 within a group; honour the ESCALATE triggers in
-section 1.
+Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 2; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
-## 0. The one sentence
-
-**The site becomes a shell. Every page is the same document, and everything a reader or an
-operator looks at arrives by fetch.** Nothing the build writes may grow when a run appends a day.
-
----
-
-## 1. Operating contract
+## 0. Operating contract
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Measured 2026-09-08: the built site is 110.65 MB across 751 files and grows 1.69 MB and 5.71 pages every published day. One operator page inlines 3,374 KB of ledger rows. A 43.23 MB model sits in git, in the build and in the Pages upload. Four functions walk the whole archive on every build. None of that is what the reader gets - it is what the build carries |
-| Hard scope - in | Deleting the 110 dated documents and serving every route from one; the console fetching its months instead of inlining its rows; the verdict band as its own first payload; three distinct states for quiet, missing and unreachable; bounding every read that grows with the archive; moving the encoder out of the repository; deleting the two global build stamps; the gate changes all of that forces; and the seven build-cost findings the superseded draft carried |
-| Hard scope - out | A prerendered document for any dated or topic route (owner, 2026-09-08). A deployment or build manifest of any kind (owner, 2026-09-08). Any count that is all-time (owner, 2026-09-08). Caching the built site between CI runs - measured and refused in section 20 |
-| ESCALATE triggers | 1. Any row would make a green certify a tree it did not test. 2. A row cannot bound a read without a product decision about what the panel means. 3. Row 11 finds that the search index reader does not already refuse a `model_id` mismatch and the fix is larger than one guard. 4. Susan refuses a console surface and the fix needs new design rather than the vocabulary already named in `docs/concepts/design-system.md` |
-| Chosen strategy | Contracts first, then bound what exists, then move the data, then delete the documents, then the encoder, then the gates. Every row ships green on its own - no row leaves `main` in a state where the site is half-migrated |
+| Why this plan exists | The build carries what no reader gets: 110.65 MB across 751 files growing 1.69 MB and 5.71 documents a published day, one operator page inlining 3,374 KB of ledger rows, 43.23 MiB of encoder in git, and four functions walking the whole archive on every build |
+| Hard scope - in | One document serving every URL; the console fetching windowed payloads instead of inlining rows; the verdict band as its own first payload; three distinct states for quiet, missing and unreachable; bounding every read whose cost rises when a run appends a day; the model weights leaving the repository behind a digest manifest; deleting the two global build stamps; the gate and CI changes all of that forces; and the five build-cost findings of the superseded `20260908-build-reuse-plan.md` draft |
+| Hard scope - out | A prerendered document for any dated or topic route. Any deployment, build or commit manifest. Any all-time count on any surface. The 20.64 MiB ONNX runtime under `frontend/static/assist/wasm/` - Hugging Face is a model hub and does not host it, so it stays same-origin. Caching the built site between CI runs (section 22 row 1). A reader-facing first-paint measurement (owner, 2026-09-08) |
+| ESCALATE triggers | 1. Row 8's inventory finds a console dataset whose browser-safe projection needs a product decision about what a panel means. 2. Row 15 cannot read a GitHub Release asset cross-origin from a real browser, which kills the failover leg. 3. Row 18 finds the `browser` CI job past 70 pct of its 25-minute timeout. 4. Any row would make a green certify a tree it did not test |
+| Chosen strategy | Measure first, bound what exists, mint every contract before any consumer, then migrate. Every row ships green alone. Fowler ruled the row split; Carmack ruled the cost model; Andre ruled the encoder sequence; Susan ruled the console surface |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2. |
+
+## 0a. Owner rulings this plan executes
+
+| # | Ruling | Date |
+| --- | --- | --- |
+| D1 | No prerendered document for any dated or topic route | 2026-09-08 |
+| D2 | Shell plus fetch is the golden principle and admits no special case, on the home page and the console alike. Overrides Susan's veto on the verdict band; row 11 carries the agreed mitigation | 2026-09-08 |
+| D3 | No spinner. Reserved boxes plus one late shimmer, in phase across every panel | 2026-09-08 |
+| D4 | An empty chart draws its frame and ticks and no numbers | 2026-09-08 |
+| D5 | Panels fill in document order, never arrival order | 2026-09-08 |
+| D6 | A window spanning present and absent data plots what exists and marks the rest. Quiet, missing and unreachable are three states | 2026-09-08 |
+| D7 | The console carries one line saying its panels need JavaScript, removed on mount | 2026-09-08 |
+| D8 | No commit stamp, no build date, no manifest to fetch one from | 2026-09-08 |
+| D9 | No all-time count of anything, anywhere | 2026-09-08 |
+| D10 | The model weights fetch from Hugging Face at a pinned revision with our own GitHub Release asset as failover | 2026-09-08 |
+| D11 | Losing the link preview card is accepted. A dated URL reached by in-app navigation never touches the server, so client-side routing is unaffected; only a cold direct load takes the fallback, and it renders. Search-engine indexing of dated URLs is accepted as lost - this project is built for readers, not crawlers | 2026-09-08 |
 
 ---
 
-## 2. Status Reckoner
+## 1. Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The contracts the rest of this plan reads | - | A | READY | - | - | - |
-| 2 | Bound the four archive walks | - | A | READY | - | - | - |
-| 3 | The page stops claiming "never" | - | A | READY | - | - | - |
-| 4 | The producer writes the console its months | 1 | B | READY | - | - | - |
-| 5 | The console fetches instead of inlining | 4 | C | READY | - | - | - |
-| 6 | The verdict band arrives first and alone | 5 | D | READY | - | - | - |
-| 7 | Quiet, missing and unreachable look different | 5 | D | READY | - | - | - |
-| 8 | The shell holds its shape before the data lands | 5 | D | READY | - | - | - |
-| 9 | The page carries nothing a later run can change | - | A | READY | - | - | - |
-| 10 | One document serves every date | 9 | E | READY | - | - | - |
-| 11 | The encoder leaves the repository | 1 | B | READY | - | - | - |
-| 12 | The gates measure a shell, not a document | 10 | F | READY | - | - | - |
-| 13 | Rebuild only when the push was rebased | - | A | READY | - | - | - |
-| 14 | The parcel carries the day, not the archive | - | A | READY | - | - | - |
-| 15 | Delete the duplicate verification call | - | A | READY | - | - | - |
-| 16 | The build fingerprint covers what the build reads | 15 | B | READY | - | - | - |
-| 17 | Stage only what changed | - | A | READY | - | - | - |
-| 18 | Measure the build again, and decide what is left | 10, 16 | G | READY | - | - | - |
-| 19 | Record what was decided and what it cost | 1-18 | H | READY | - | - | - |
+| 1 | Measure the migrated tree and the two wire costs | - | A | PENDING | - | - | - |
+| 2 | The parcel carries the day, not the archive | - | A | PENDING | - | - | - |
+| 3 | Rebuild only when the push was rebased | - | A | PENDING | - | - | - |
+| 4 | Delete the duplicate verification call | - | A | PENDING | - | - | - |
+| 5 | Stage only what changed | - | A | PENDING | - | - | - |
+| 6 | Bound the four archive walks | - | B | PENDING | - | - | - |
+| 13 | The page carries nothing a later run can change | - | B | PENDING | - | - | - |
+| 15 | Publish the Release asset and prove it cross-origin | 1 | B | PENDING | - | - | - |
+| 7 | The console stops claiming "never" | 6 | C | PENDING | - | - | - |
+| 8 | Inventory and mint every console payload contract | 6 | C | PENDING | - | - | - |
+| 9 | The producer writes the console its payloads | 8 | D | PENDING | - | - | - |
+| 10 | The console fetches instead of inlining | 9 | E | PENDING | - | - | - |
+| 16 | Two origins, a digest manifest, and one guard that still works | 8, 15 | E | PENDING | - | - | - |
+| 11 | The verdict band arrives first and alone | 10 | F | PENDING | - | - | - |
+| 12 | The console surface: reserved shape and three states | 10 | F | PENDING | - | - | - |
+| 14 | One document serves every date | 13 | G | PENDING | - | - | - |
+| 17 | Delete the committed weights | 16 | G | PENDING | - | - | - |
+| 18 | The gates measure a shell, not a document | 14, 17 | H | PENDING | - | - | - |
+| 19 | Record what was decided and what it cost | 1-18 | I | PENDING | - | - | - |
 
 ---
 
-## 3. The decisions this plan executes
+## 2. Measured baseline
 
-Every one is the owner's, taken 2026-09-08 under CLAUDE.md section 0. No row re-opens one; a row
-that believes a decision is wrong ESCALATEs rather than deviating.
-
-| # | Decision | Note |
-| --- | --- | --- |
-| D1 | No prerendered document for any dated or topic route. One document serves every URL | The 110 files, 9.54 MB, growing 5.71 a day |
-| D2 | The site is a shell for the home page and the console alike. Content loads dynamically. **This is the golden principle** and it admits no special case | Overrides Susan's ruling that the verdict band stay prerendered. Her objection and the mitigation are in row 6 |
-| D3 | No spinner. Reserved boxes plus one late shimmer, in phase across every panel | Susan, accepted |
-| D4 | An empty chart draws its frame and ticks and no numbers | Susan, accepted |
-| D5 | Panels fill in document order, never arrival order | Susan, accepted |
-| D6 | A window that spans data we have and data we do not plots what exists and marks the rest. Quiet, missing and unreachable are three states, not two | Susan found the defect; the owner specified the behaviour |
-| D7 | The console carries one line saying its panels need JavaScript, removed on mount | Susan, accepted |
-| D8 | No deployment manifest, no build manifest, no commit stamp anywhere on the site | Owner reversed an earlier position mid-session. The commit line is deleted and nothing replaces it |
-| D9 | No all-time count, of anything, anywhere. `published_days` and every "N of Y where Y is for ever" goes | Owner. This is Rule #12 applied to what a page says, not only to what it reads |
-| D10 | The encoder is fetched from Hugging Face at a pinned revision, with our own GitHub Release asset as failover. It is not committed | Owner, over the recommendation of a single origin. Cost in row 11 |
-| D11 | Losing the link preview card on a shared digest URL is accepted | Owner. Not raised again |
-
----
-
-## 4. What was measured
-
-All figures 2026-09-08 against `main` at `e89d6d8f`. Runner figures come from the GitHub Actions
-API on `ubuntu-latest`. Laptop figures are Intel Core i7-1265U / Windows 11 / node 24.12.0, warm
-cache, n = 1 unless a spread is given.
+Figures dated 2026-09-08 against `main` at `e89d6d8f`. Runner figures come from the GitHub Actions
+API on `ubuntu-latest`. Laptop figures are Intel Core i7-1265U / Windows 11 / node 24.12.0, warm,
+n = 1. Laptop overstates the runner by about 4.1x on a whole build (99.4 s against 24 s), and by
+more on a file walk; no row may reason across the two arms without naming which it measures.
 
 | Fact | Value |
 | --- | --- |
 | Built site | 110.65 MB / 751 files at 19 published days; 87 MB / 36 pages at 5 days |
-| Growth | 1.69 MB and 5.71 prerendered pages per published day. Six routes are fixed; the rest are dated |
-| Bundle split | encoder 43.23 MB (39.1 pct), `_app/` 22.54 MB (20.4 pct), `digest/` 17.85 MB (16.1 pct), prerendered HTML 14.12 MB (12.8 pct), `index/` 4.05 MB, `telemetry/` 1.12 MB |
-| Dated and topic documents | 110 files, 9.54 MB |
-| `console/index.html` | 3,726 KB. Inlined data payload 3,374 KB (90.6 pct), rendered markup 351 KB, the 32 server-rendered charts 139 KB (3.7 pct) |
-| What is in that payload | `source` 28,486 times, `stage` 9,490, `run_id` 9,383 - roughly 9,400 raw telemetry rows |
-| Other console pages | `console/model/` 367 KB, `console/machine/` 280 KB, `archive/` 22 KB |
-| Encoder in git | 8 tracked files under `frontend/static/assist/models/`, 43.23 MB, of 20 tracked files under `frontend/static` in total |
-| Site builds per publish | 3. digest.yml pre-commit 21 s, digest.yml post-commit 19 s, pages.yml 24 s. Only the third is published |
-| Pages build step over time | 8.5 s at 2 published days (2026-08-22), 13 s at 5, 21 s at 11, 24 s at 19. About 0.9 s per published day, though the console pages also landed in that window |
-| `assertBuild()` | 16.2 s per call - 3.23 s input hash plus 12.93 s output hash. Called 3 to 5 times per `test:changed`, plus once per build and once per preview start |
-| Output hash scope | 222.4 MB / 1,589 files across `frontend/build` and `frontend/.svelte-kit/output`, at 8.14 ms per file and 17.2 MB/s |
-| Input hash scope | 66.55 MB, of which corpus 13.44 MB, state 17.72 MB and `frontend/public` 29.75 MB. **91.5 pct of it is data a run appended, not source** |
-| Local build stages | copy-visuals 5.82 s, build-state begin 3.23 s, vite build 77.4 s warm, build-state complete 12.93 s |
-| Visuals parcel | 6.85 MB compressed, and its `path:` carries the whole 454-file digest tree when one day is new |
-| Live artifact storage | 594.4 MB across 332 artifacts, against the 500 MB figure in Rule #2 |
-| Actions cache | 9,892 MB of 10,240 MB - 96.6 pct full. A large restore measured 41, 44, 46 and 73 s, against a build of 21 to 24 s |
-| Day payload projection | The staged copy is 468.58 bytes an item against the committed 792.65, which is 40.9 pct less. Measured 2026-08-31, 11 days and 3,733 items, gzip -9 |
-
-**What the shell is worth, and it is an estimate until row 18 measures it.** Shipping `_app/`
-(22.54 MB), six small documents and the fonts and icons (0.10 MB), with the encoder, the day
-payloads, the index, the telemetry and the 110 dated documents all fetched, is about 23.8 MB
-against 110.65 MB - roughly 78 pct smaller, and it stops growing. Labelled an estimate per
-Rule #10; row 18 replaces it with a measurement.
+| Growth | 1.69 MB and 5.71 documents per published day |
+| Dated and topic documents | 110 files, 9.54 MB - 0.502 MB per published day of the slope |
+| `frontend/static/assist/` total | 45,328,441 B = 43.23 MiB, 8 files, all tracked |
+| - `assist/models/` | 23,687,938 B = 22.59 MiB, 6 files. Leaves, minus `PROVENANCE.md` at 2,766 B |
+| - `assist/wasm/` | 21,640,503 B = 20.64 MiB, 2 files. **Stays.** `loader.ts` points `wasmPaths` at `${base}/assist/wasm/`; Hugging Face does not host our ONNX runtime |
+| Post-migration site, estimate | 110.65 - 9.54 - 22.59 = **about 78.5 MB**. Row 1 replaces this with a measurement |
+| Post-migration slope, estimate | **1.19 MB/day**. Byte growth does not stop; document growth does |
+| Days to the 800 MB alarm | 408 today; about 606 after. **The win is roughly 200 days of runway**, not a percentage of the artifact |
+| `console/index.html` | 3,726 KB - inlined payload 3,374 KB (90.6 pct), markup 351 KB, 32 inline SVG 139 KB (3.7 pct) |
+| Inside that payload | `source` 28,486 times, `stage` 9,490, `run_id` 9,383 - about 9,400 telemetry rows |
+| First-search wire cost today | 21.6 MB gzipped from one origin - 16.22 model + 0.21 tokenizer + 5.18 runtime |
+| Site builds per publish | 3: 21 s, 19 s, 24 s. Only the third is published |
+| Pages build step over time | 8.5 s at 2 published days, 13 s at 5, 21 s at 11, 24 s at 19 |
+| `assertBuild()` | 16.2 s - 3.23 s input over 66.55 MB, 12.93 s output over 222.4 MB / 1,589 files |
+| Output hash composition | sha256 on this class of CPU runs at 1 to 2 GB/s, so hashing 222.4 MB is about 0.2 s. **The other 98 pct is per-file syscall cost**, and `hashFiles` opens each path twice |
+| Input hash scope | 66.55 MB, of which corpus 13.44, state 17.72, `frontend/public` 29.75. `inputFingerprint` **already** uses `git ls-files --cached --others --exclude-standard -z` at line 48 |
+| Live artifact storage | **594.4 MB across 332 artifacts, 19 pct over the 500 MB figure in Rule #2** |
+| Actions cache | 9,892 of 10,240 MB, 96.6 pct full. Restores measured 41, 44, 46 and 73 s against a 21 to 24 s build |
+| `browser` CI job | 460 to 554 s of a 1,500 s timeout - 37 pct used, before six rows add specs |
+| Telemetry month caps, already present | `monthCeiling(30)` = 2 files; `monthCap` holds a session to 15; `public_telemetry_keep_months` = 14 |
+| Unbounded retention knobs | `item_health_aggregate_keep_months` and `score_archive_keep_months` are both `null` |
+| Day payload projection | Staged copy is 468.58 bytes an item against the committed 792.65 - 40.9 pct less. 2026-08-31, 11 days, 3,733 items, gzip -9 |
 
 ---
 
-## 5. Row #1 - The contracts the rest of this plan reads
+## 3. Row #1 - Measure the migrated tree and the two wire costs
 
-- **Scope:** Every persisted shape this plan introduces, as a Pydantic model, before any logic
-  reads or writes it (Rule #3). Nothing else.
+- **Scope:** Replace the two estimates this plan rests on with measurements taken on the runner, before any contract is written.
 - **Files touched:**
-  - `backend/idhazh/contracts/` - a model for one month of console telemetry as a browser asks
-    for it, and a model for the verdict band row 6 fetches
-  - `config/idhazh.json` and its config model - `assist.model_base_url`, `assist.model_revision`,
-    `assist.model_fallback_url`; `console.shimmer_after_ms` default 400
-  - `schemas/` - generated, `version` stamped `2026-09-08`, `changelog` opened
-  - `frontend/src/contracts/` - regenerated
-- **Acceptance gates:** contract drift gate regenerates byte-identical; `npm run check`; the
-  shared test selector.
-- **Oracle:** `git diff --exit-code` after a regeneration run. A hand-edited generated file fails
-  this, which is the point.
+  - `.github/workflows/` - a `workflow_dispatch` job, deleted again in row 19
+  - `docs/reference/measurements.md` - the results
+- **Method, arm 1:** on `ubuntu-latest`, check out `main`, `rm -rf frontend/static/assist/models`, `npm --prefix frontend run build`, delete every `build/<YYYY-MM-DD>/` directory, then `python -m idhazh site-weight --site-tree build`, `find build -type f | wc -l`, and the same two over `frontend/.svelte-kit/output`.
+- **Method, arm 2:** `curl -sI -H 'Accept-Encoding: gzip' <the pinned Hugging Face resolve URL for model_quantized.onnx>` and record `Content-Encoding` and `Content-Length`.
+- **Acceptance gates:** local - none. CI - the dispatch job runs green.
+- **Oracle:** `docs/reference/measurements.md` carries a post-migration site size, file count and slope with hardware, date and n stated, plus a Hugging Face `Content-Encoding` value.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | `console.shimmer_after_ms` default 400 is an estimate, not a measurement. Row 8 measures the median shard read and settles it | Rule #10 |
-| 2 | The verdict band is a separate payload from the telemetry months, because it is fetched first and alone (row 6) and because it changes once a run where the months change once a month | Owner D2 mitigation |
-
----
-
-## 6. Row #2 - Bound the four archive walks
-
-- **Scope:** Four functions in one file walk the whole published tree on every build, and three of
-  them walk it through the fourth. Give each a bounded input. This is Rule #12 and it is worth
-  doing whether or not the rest of the plan lands.
-- **Files touched:**
-  - `frontend/src/lib/server/payload.ts` - `publishedDates()` is the root; `loadManifests()`,
-    `publishedItems()` and `publishedCharts()` each loop over it. `itemHealthRows()` and
-    `feedResults()` read every shard in their directory. `evalRows()` reads the whole eval ledger
-  - The console loaders that call them
-- **What "bounded" means here:** every one of these takes a window of days or months, defaulting to
-  the widest preset the surface offers, exactly as `telemetryRows(root, windowDays)` and
-  `dayMetrics(dates)` already do. Both of those already cite Rule #12 in their own comments and are
-  the pattern to copy.
-- **Already bounded, do not touch:** `telemetryRows`, `dayMetrics`,
-  `frontend/src/routes/console/model/+page.server.ts` and
-  `frontend/src/routes/console/machine/+page.server.ts`. All four carry explicit bounds and say so.
-- **Acceptance gates:** the shared test selector; `npm run check`; browser smoke on all four console
-  routes.
-- **Oracle:** build the site, note the wall clock of the console routes, add ten days to a fixture
-  digest root, build again. **The time must not move.** It does today.
-- **Second oracle:** grep `payload.ts` for a function that reads a directory without taking a
-  window. There must be none, or the one that remains carries a comment naming what it reads, how
-  the cost grows and why a bounded input cannot answer it, per
-  [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md).
+| 1 | The 23.8 MB figure of the superseded draft double-counted. The day payloads, month index and telemetry are fetched from our own Pages origin, so fetching them does not remove them from the artifact | Carmack, 2026-09-08 |
+| 2 | The plan's claim becomes runway in days, not a percentage of the artifact. A percentage of a number that keeps growing is not a result | Carmack, 2026-09-08 |
+| 3 | Arm 2 decides whether a searching reader pays 21.6 MB or 28.9 MB. If Hugging Face serves a 23 MB octet-stream identity, that is 6.75 MB a reader does not pay today and it belongs in D10's cost record | Carmack, 2026-09-08 |
+| 4 | Taken on the runner, not the laptop, because the dominant term is per-file syscall cost and that is the term differing most between the two machines | Carmack, 2026-09-08 |
 
 ### Rejected alternatives
 
-| # | Option | Why rejected |
-| --- | --- | --- |
-| 1 | Cache the walk between builds | Every CI job is a cold start, so a cache saves nothing on the authoritative arm. It also hides the growth rather than removing it |
-| 2 | Leave it until the shell lands, since the console will stop calling these anyway | The work does not vanish, it moves to the producer in row 4 and has to be bounded there. Bounding it here first means row 4 copies a correct function rather than a growing one |
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Take the measurement on the laptop | 4.1x off on a whole build and worse on a file walk | Carmack |
+| 2 | Defer both measurements to the end | Row 18 and row 19 would inherit a wrong premise and close the fingerprint work on it | Carmack |
 
 ---
 
-## 7. Row #3 - The page stops claiming "never"
+## 4. Row #2 - The parcel carries the day, not the archive
 
-- **Scope:** Four sentences on the console make an all-time claim. They are the reason the
-  unbounded reads exist, and they get less useful as they get more expensive.
-- **Files touched:** `frontend/src/routes/console/+page.svelte` and the loader fields behind it in
-  `frontend/src/routes/console/+page.server.ts`.
-- **The four:**
-  - `which read every feed the ledger has ever carried`
-  - `{clean} of {checked} feeds have never failed a read`
-  - `feeds have never been read at all`
-  - `feeds that never failed reported a source we have never read`
-- **What replaces them:** the same fact, over the window on screen. `No feed failed a read in these
-  30 days.` A feed that broke once in August and has been clean since is not "never failed", and
-  the operator's question is whether anything is broken now.
-- **Also verify, and do not assume:** whether `sourceHealthView` is windowed at source before
-  `sources.reduce(...)` sums `opportunities`, `publications` and `source_failures`; and whether
-  `view.runsRead` on the machine page counts the window or the ledger. The machine page's server
-  comment claims bounded. Check both; fix what is not.
-- **Acceptance gates:** the shared test selector; browser smoke on `/console/`.
-- **Oracle:** no reader-facing string on any console route contains `never`, `ever`, `all time` or
-  `in all` as a claim about the record rather than about the window.
+- **Scope:** The `visuals` artifact uploads the whole 454-file digest tree when one day is new; upload the run's day.
+- **Files touched:** `.github/workflows/digest.yml` - the `visuals` job `upload-artifact` `path:` and the `assemble` job `download-artifact` that consumes it.
+- **Acceptance gates:** local - none. CI - a full `digest.yml` dispatch produces a day identical in shape to the previous run's.
+- **Oracle:** the `visuals` artifact byte size falls and the assembled day's file list is unchanged.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | This is Rule #12 applied to what a page says. A sentence that can only be true by reading everything is a growing read wearing a different coat | Owner D9 |
+| 1 | Sequenced first in group A. Live artifact storage is 594.4 MB against the 500 MB figure in Rule #2 - the only budget in this plan already over | Carmack, 2026-09-08 |
 
 ---
 
-## 8. Row #4 - The producer writes the console its months
+## 5. Row #3 - Rebuild only when the push was rebased
 
-- **Scope:** The backend writes what the console will fetch: one payload per month of telemetry,
-  plus the verdict band. **One month per run. Never a walk over the archive** - the run knows which
-  month it just wrote.
+- **Scope:** `digest.yml` builds the site before the commit and again after it; skip the second when the push was not rebased.
+- **Files touched:** `.github/workflows/digest.yml` - the `Build the site` step, the `Rebuild the site against the tree that was pushed` step, and the `Bundle gate` step that follows.
+- **Acceptance gates:** local - none. CI - a dispatch with no rebase skips the rebuild; a dispatch that rebases runs it.
+- **Oracle:** the `assemble` job step list shows the rebuild absent on a clean push and present after a rebase.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | About 19 s per publish, five publishes a day. The pre-commit and Pages builds use different `BASE_PATH` values, so neither is ever reusable as the published artifact | Measured 2026-09-08 |
+| 2 | The bundle gate moves ahead of the commit so it still guards a tree that was actually built | This plan |
+
+---
+
+## 6. Row #4 - Delete the duplicate verification call
+
+- **Scope:** `run-checks.ts` calls `assertBuild` on two adjacent lines with nothing between them.
+- **Files touched:** `frontend/scripts/run-checks.ts` - the call at line 332, which duplicates line 327 on the happy path.
+- **Acceptance gates:** local - `npm --prefix frontend run test:changed -- --list`, then the selected checks. CI - none new.
+- **Oracle:** a warm `test:changed` run issues one fewer `assertBuild` and its total falls by about 16 s.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **This is a developer-loop saving and zero in CI.** `run-checks.ts` is `test:changed`; `ci.yml` calls `check`, `test:tooling`, `test:logic`, `build`, `bundle-gate` and `test:browser` directly and never reaches it | Carmack, 2026-09-08 |
+| 2 | Line 332 is only a duplicate on the happy path - in a fresh checkout line 327 throws, the build runs, and 332 is the single verification. Keep the throw; delete the second call | Carmack, 2026-09-08 |
+
+---
+
+## 7. Row #5 - Stage only what changed
+
+- **Scope:** `copy-visuals.mjs` deletes and re-copies every staged file on every build; copy what differs.
+- **Files touched:** `frontend/scripts/copy-visuals.mjs` - the `rmSync` calls on `static/digest`, `static/telemetry` and `static/index`, and the walk that follows.
+- **Acceptance gates:** local - the shared test selector. CI - none new.
+- **Oracle:** two consecutive builds with no new day stage zero files on the second, and the staged tree is byte-identical to a full re-stage.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | 5.82 s locally and **zero in CI** - every CI job starts with `static/digest` absent, so the first stage is always a full one | Measured 2026-09-08 |
+| 2 | The projection stays. The staged day is 468.58 bytes an item against the committed 792.65; serving the committed shape would send 40.9 pct more bytes to every reader | Measured 2026-08-31 |
+
+---
+
+## 8. Row #6 - Bound the four archive walks
+
+- **Scope:** Give every read in `payload.ts` whose cost rises with the archive a bounded input.
 - **Files touched:**
-  - `backend/idhazh/` - the producer, writing to `frontend/public/telemetry/`
-  - `frontend/scripts/copy-visuals.mjs` - stages them like the day payloads it already stages
-  - `backend/tests/` - the producer's tests, from a built fixture
-- **Nothing consumes these yet.** This row ships alone and changes no page.
-- **Acceptance gates:** backend tests; the payloads validate against their schema; `idhazh
-  validate-days` still passes.
-- **Oracle:** run the producer twice against a fixture with twenty months. The second run opens one
-  month, not twenty. Assert on the file handles, not on the wall clock.
+  - `frontend/src/lib/server/payload.ts` - `publishedDates()` is the root; `loadManifests()`, `publishedItems()` and `publishedCharts()` each loop over it; `itemHealthRows()` and `feedResults()` read every shard in a directory; `evalRows()` reads the whole eval ledger; `telemetryMonths()` and `indexMonths()` list directories
+  - `frontend/src/lib/server/console-shell.ts` and the three console `+page.server.ts` files - the call sites that must now pass a window
+- **The pattern to copy, already in this file:** `telemetryRows(root, windowDays)` and `dayMetrics(dates)` both take a bound and both cite Rule #12 in their own comments.
+- **Do not touch:** `frontend/src/routes/console/model/+page.server.ts` and `frontend/src/routes/console/machine/+page.server.ts`. Both carry explicit "bounded to the widest preset" comments and are already correct.
+- **Acceptance gates:** local - the shared test selector; `npm --prefix frontend run check`. CI - browser smoke on all four console routes.
+- **Oracle:** build against a fixture digest root, record the console routes' wall clock, add ten days to the fixture, build again. **The time must not move.**
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Monthly, not daily and not per-window. The state shards are already monthly, so the unit exists and the worst case for a 30-day window is two files | Read from `state/telemetry/` |
-| 2 | A frozen month is written once and never rewritten. Only the current month changes, which is what makes a browser cache of an older month correct for ever | Rule #12 |
+| 1 | Each read's default is the widest preset its surface offers, so no panel loses a day it draws today | This plan |
+| 2 | `publishedDates()` survives row 14 - `/` builds a seven-day `recent` list from it, and `latestDate()` and the archive call it - so this row is not made dead by the shell | Fowler, 2026-09-08 |
+| 3 | Row 8 depends on this one: the windows settled here decide what row 9's producer publishes | Fowler, 2026-09-08 |
+| 4 | Where a read cannot be bounded, it gets an entry in `docs/concepts/growing-reads.md` naming what it reads, how the cost grows and why a bounded input cannot answer it - never a silent exception | Rule #12 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Cache the walk between builds | Every CI job is a cold start, so a cache saves nothing on the authoritative arm, and it hides the growth rather than removing it | Carmack |
+| 2 | Defer until the shell lands, since the console stops calling these | The work moves to the producer in row 9 and must be bounded there. Bounding here first means row 9 copies a correct function | Fowler |
 
 ---
 
-## 9. Row #5 - The console fetches instead of inlining
+## 9. Row #7 - The console stops claiming "never"
 
-- **Scope:** The console stops serialising 9,400 telemetry rows into its document and fetches the
-  months its window needs.
+- **Scope:** Replace four all-time claims with the same fact over the window on screen.
 - **Files touched:**
-  - `frontend/src/routes/console/+page.server.ts` - drops the fifteen row readers
-  - `frontend/src/routes/console/model/+page.server.ts`,
-    `frontend/src/routes/console/machine/+page.server.ts` - same
-  - `frontend/src/routes/console/+page.svelte` - `loadVisibleMonths()`, its pending-month set and
-    its month cap already exist. **Promote them from "widen the window" to "load the page".** This
-    is a reuse, not an invention
-  - `frontend/src/lib/server/chart-render.ts` and `frontend/src/lib/charts/` - charts render in the
-    browser from fetched rows
-- **Acceptance gates:** the shared test selector; browser smoke on all four console routes,
-  including with the payload absent; `npm run check`.
-- **Oracle:** `console/index.html` is under 400 KB. It is 3,726 KB today, and 351 KB of that is the
-  markup, so the target is the markup plus the shell and nothing else.
+  - `frontend/src/routes/console/+page.svelte` - `which read every feed the ledger has ever carried`; `{clean} of {checked} feeds have never failed a read`; `feeds have never been read at all`; `feeds that never failed reported a source we have never read`
+  - `frontend/src/lib/server/console-shell.ts` - the band and the strip render on all three console routes, so the fields behind those strings live here, not only in `+page.server.ts`
+  - `frontend/src/routes/console/+page.server.ts` - the `sources.reduce(...)` totals over `opportunities`, `publications` and `source_failures`
+- **Verify, do not assume:** whether `sourceHealthView` is windowed at source; whether `view.runsRead` on the machine page counts the window or the ledger. Fix whichever is not.
+- **Replacement shape:** `No feed failed a read in these 30 days.` The window is named in the sentence and comes from the control, never hard-coded.
+- **Acceptance gates:** local - the shared test selector. CI - browser smoke on all three console routes.
+- **Oracle:** no reader-facing string on any console route contains `never`, `ever`, `all time` or `in all` as a claim about the record rather than the window.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Windowed and lazy together: the open window's months first, the rest of the panels behind it | Owner |
-| 2 | The 32 charts move to the browser. They are 139 KB of the 3,726 KB, so this is not where the bytes are - it moves because a chart drawn from fetched rows is the only way the window control can mean anything | Measured |
+| 1 | A sentence that can only be true by reading everything is a growing read in different clothes. Rule #12 binds what a page says, not only what it reads | Owner D9, 2026-09-08 |
+| 2 | The windowed sentence is more useful, not less: a feed that broke once in August and has been clean since is permanently disqualified by "never failed", and the operator's question is whether anything is broken now | This plan |
+| 3 | Separated from row 6 into group C. Both rows edit `console/+page.server.ts`, and at N = 2 that is two worktrees on one file | Fowler, 2026-09-08 |
 
 ---
 
-## 10. Row #6 - The verdict band arrives first and alone
+## 10. Row #8 - Inventory and mint every console payload contract
 
-- **Scope:** The band that answers "is the pipeline working" - yesterday's sentence, the run
-  squares, the worst thing with its link, the site-size bar - becomes its own small payload,
-  fetched before anything else on the page.
-- **Files touched:** `frontend/src/routes/console/+layout.server.ts` (it derives these today and
-  stops), the new band payload from row 4, and the console layout component.
-- **Why this row exists, stated once:** Susan ruled that the band stay prerendered and named a
-  fetched band as the one way this change is a net loss - the operator waits a round trip to learn
-  a run failed. The owner overruled her on consistency: one mental model, shell plus fetch, with no
-  special case, because a special case makes every future page ask which kind it is. This row is
-  the mitigation both sides accepted. **The band is the smallest payload on the site and the first
-  request the page makes**, so the answer arrives in one round trip rather than after the page
-  settles.
-- **Acceptance gates:** the shared test selector; browser smoke; the band renders its own failed
-  state per row 7.
-- **Oracle:** the band payload is under 5 KB, and in a recorded network trace it is the first
-  request the console issues after the document and the bundle.
+- **Scope:** Name every dataset the console must fetch, and mint the contract, schema and forbidden-cell list for each, before any producer or consumer is written.
+- **Why this row exists:** the console loader and `console-shell.ts` between them read **ten** datasets. `telemetryRows` is one panel's data; the other nine come from `state/`, which `payload.ts` says is never served, and `PublicTelemetryRow.FORBIDDEN_COLUMNS` exists because crossing that boundary needs a contract each time.
+- **The ten:**
 
-### Decisions
-
-| # | Decision | Authority |
-| --- | --- | --- |
-| 1 | Consistency beats the round trip. A prerendered band on one page is a second architecture nobody would remember was there | Owner D2, over Susan |
-| 2 | The band's payload is separate from the telemetry months so that it can be first and small. Merging them would put 9,400 rows in front of three sentences | Owner |
-
----
-
-## 11. Row #7 - Quiet, missing and unreachable look different
-
-- **Scope:** Three states, currently two, and the third is a defect that exists today: a month
-  shard that fails to load draws an unmarked gap, so **a quiet pipeline and a broken fetch are the
-  same picture** - which is the exact thing this page exists to tell apart.
-- **The three:**
-
-  | State | Means | Shows |
+  | Dataset | Source | Existing shape |
   | --- | --- | --- |
-  | Quiet | The window is genuinely empty | Neutral tint, a sentence saying what is true, and the one preset that would change it |
-  | Missing | We never had data for those dates | The span marked on the chart itself, the dates named in the caption. No alarm - normal for a young archive |
-  | Unreachable | The fetch did not arrive | Warn tint, names the month, says what it does have, and a `Try again` scoped to that panel |
+  | Telemetry rows | `state/telemetry/<YYYY-MM>.csv` | `schemas/public-telemetry.schema.json` **already exists** at version `2026-09-05T20:00` |
+  | Verdict band | derived in `console-shell.ts` | none |
+  | `evalRows` | `state/scores/` | none |
+  | `itemHealthRows` | `state/item-health/` | none |
+  | `feedResults` | `state/feed-health/` | none |
+  | `loadManifests` | per-day `run.json` | none |
+  | `publishedItems` | per-day `digest.json` | none |
+  | `publishedCharts` | per-day visuals | none |
+  | `sourceHealthView` | `frontend/public/source-health.json` | already published |
+  | `loadMachineCounters` | `state/runtime-counters.csv` | none |
 
-- **The owner's spec, verbatim in effect:** a 92-day window where June has data, part of July is
-  missing and August is fine plots June, marks the July span, and plots August. It does not fail,
-  does not draw a flat line through the gap, and does not refuse the window.
-- **Files touched:** `frontend/src/lib/charts/`, the console panels, and whatever writes the
-  browser-console warning `telemetry <month> unavailable; showing a gap` today.
-- **Acceptance gates:** the shared test selector; browser smoke; a spec per state.
-- **Oracle:** a built fixture with a hole in the middle of the window renders a marked span, and a
-  built fixture whose fetch is blocked renders a different thing. Two screenshots that do not match.
-
----
-
-## 12. Row #8 - The shell holds its shape before the data lands
-
-- **Scope:** The loading experience Susan specified, and the first use of two things the design
-  system already names but nobody has built.
-- **What ships:**
-  - Every panel titled and sized in the document. Charts reserve their exact box by aspect ratio
-    and never change height
-  - An empty chart draws its axis frame and tick marks and **no numbers**. An invented axis label
-    is a class of failure the shell doc already names
-  - `shimmer` and the `loading` state class implemented. Both are named in
-    `docs/concepts/design-system.md`; neither exists in CSS today
-  - The shimmer starts after `console.shimmer_after_ms`, so a fetch that lands first never animates
-  - **Every skeleton shares one timeline, in phase.** Out of phase, twelve sweeping boxes read as
-    twelve broken things
-  - Under `prefers-reduced-motion`, a flat tinted block with no gradient. The global rule in
-    `frontend/src/styles/app.css` zeroes durations, which would freeze a moving gradient mid-sweep
-    and leave a bright band nobody chose
-  - Panels fill in document order. A panel that finishes early waits its turn
-  - One status line for all background work, in words and in files - `Fetching 2 months.` It exists
-    in `frontend/src/lib/components/WindowControl.svelte` today, driven off a count
-  - Its no-script string becomes untrue the day this lands and is rewritten in the same commit
-  - One line above the panels saying they need JavaScript, removed on mount
-- **Never:** move anything above the scroll position; dim a panel that already has data; print
-  bytes or a percentage; block a control; scroll, steal focus, raise a toast or count a number up;
-  announce every arrival.
-- **Acceptance gates:** the shared test selector; browser smoke; a reduced-motion spec.
-- **Oracle:** the console's layout does not shift between first paint and settled. Measure the
-  bounding box of every panel at both moments and compare.
-- **Design gate:** Susan reviews before merge, per section 9 of CLAUDE.md.
-
----
-
-## 13. Row #9 - The page carries nothing a later run can change
-
-- **Scope:** Two global stamps make every page's bytes move on every build, and one of them puts
-  today's date inside the oldest day's page. Delete both and show nothing in their place.
 - **Files touched:**
-  - `frontend/src/lib/components/SiteFooter.svelte` - the build line, the verification sentence,
-    the retention sentence
-  - `frontend/src/routes/+layout.server.ts` - returns `{ ui }` only; `latestDate` and `loadDay` go
-    with it
-  - `frontend/vite.config.ts`, `frontend/src/app.d.ts` - `__BUILD_COMMIT__` and `__BUILD_DATE__`
-  - `frontend/src/lib/components/EmptyDay.svelte`, `DigestList.svelte` and the call sites - the
-    `latest` prop
+  - `backend/idhazh/contracts/` - one model per dataset with no published shape, each with an explicit forbidden-cell list
+  - `schemas/` - generated. **Amend `public-telemetry.schema.json`; do not fork it.** New schemas stamp `version` `2026-09-08` and open a `changelog`
+  - `schemas/search-index.schema.json` - a `changelog` entry, because row 16 changes what `model_id` means
+  - `config/idhazh.json` and its config model - `assist.model_base_url`, `assist.model_revision`, `assist.model_fallback_url`, `assist.model_digests`; a retention knob per new dataset; the payload ceilings row 18 enforces
+  - `frontend/src/contracts/` - regenerated
+- **Acceptance gates:** local - `npm --prefix frontend run check`; the shared test selector. CI - the contract drift gate regenerates byte-identical.
+- **Oracle:** `git diff --exit-code` after a regeneration run, and every dataset in the table above resolves to exactly one schema file.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The inventory is a row, not a paragraph inside the producer row. Without it, rows 9, 10, 11 and 18 each guess at the same missing list | Fowler, 2026-09-08 |
+| 2 | `assist.model_revision` is refused at the contract unless it is a full 40-hex commit SHA. A tag or a branch can be moved, so it pins nothing | Andre, 2026-09-08 |
+| 3 | `assist.model_digests` carries a SHA-256 per weight file. We hold the correct bytes today, so the pin becomes an assertion rather than a reference | Andre, 2026-09-08 |
+| 4 | Config owns the **origin** only. `ENCODER_ID` stays a contract constant in `encoder.ts`, which says in terms that a knob there is a way to turn the guard off by accident | Fowler and Andre, converging, 2026-09-08 |
+| 5 | `item_health_aggregate_keep_months` and `score_archive_keep_months` are `null` today. Any dataset given a month payload here gets a retention knob in the same commit, or the producer grows for ever | Carmack, 2026-09-08 |
+| 6 | `console.shimmer_after_ms` is minted in row 12, where it gets its measured value, not here where nothing reads it for four rows | Fowler, 2026-09-08 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Shrink row 10's scope to telemetry and leave the nine aggregates prerendered | That is a special case, and D2 says there are none | Fowler |
+| 2 | Fork a new telemetry schema rather than amend the existing one | Two schemas for one shape, and the committed shards validate against the old one | Fowler |
+| 3 | Move `model_id` from constant to config, as the superseded draft proposed | It makes the guard a constant compared against a constant, and it moves the writer's string off `EMBEDDER_ID`, which is the one string `test_embed.py` pins to the TypeScript constant | Andre |
+
+---
+
+## 11. Row #9 - The producer writes the console its payloads
+
+- **Scope:** The backend writes every payload row 8 minted, bounded, with nothing yet consuming them.
+- **Files touched:**
+  - `backend/idhazh/` - one producer per dataset, writing to `frontend/public/`
+  - `backend/idhazh/publish_telemetry.py` - the `migrate()` carve-out named in decision 2
+  - `frontend/scripts/copy-visuals.mjs` - stages the new payloads as it already stages the day payloads
+  - `.github/workflows/digest.yml` - **the explicit path allow-list on both the artifact upload and the `Commit the day` step.** A payload absent from that list builds locally and never reaches the site
+  - `backend/tests/` - producer tests from built fixtures
+- **Acceptance gates:** local - `python -m pytest backend/tests/<the new tests>`. CI - `idhazh validate-days` passes; every payload validates against its schema.
+- **Oracle:** run the producer twice against a fixture holding twenty months. The second run opens one month, not twenty. **Assert on file handles, not wall clock.**
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Monthly, not daily and not per-window. The state shards are already monthly, so the unit exists and a 30-day window is at worst two files | Read from `state/telemetry/` |
+| 2 | A frozen month is written once. **Carve-out: `publish_telemetry.migrate()` may still rewrite a committed shard**, because it is what repairs a short header today. Without the carve-out every pre-migration month renders as unreachable in row 12, with a `Try again` that can never work | Fowler, 2026-09-08 |
+| 3 | `parseTelemetryCsv` gains a short-header tolerance with a fixture shard, so a new bundle reads a frozen shard one column short instead of refusing the whole month | Fowler, 2026-09-08 |
+| 4 | One month per run, never a walk. The run knows which month it just wrote | Rule #12 |
+
+---
+
+## 12. Row #10 - The console fetches instead of inlining
+
+- **Scope:** The console stops serialising rows into its document and fetches the payloads row 9 writes.
+- **Files touched:**
+  - `frontend/src/routes/console/+page.server.ts`, `console/model/+page.server.ts`, `console/machine/+page.server.ts` - drop the ten dataset readers
+  - `frontend/src/lib/server/console-shell.ts` - the band's derivation moves to the producer
+  - `frontend/src/routes/console/+page.svelte` - `loadVisibleMonths()`, the pending-month set and the month cap already exist. **Promote them from "widen the window" to "load the page."** This is a reuse
+  - `frontend/src/lib/server/chart-render.ts`, `frontend/src/lib/charts/` - charts render in the browser from fetched rows
+- **Acceptance gates:** local - the shared test selector; `npm --prefix frontend run check`. CI - browser smoke on all four console routes, each with its payload present and absent.
+- **Oracle:** `console/index.html` is under 400 KB. It is 3,726 KB today and 351 KB of that is markup, so the target is markup plus shell and nothing else.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **The months list moves into the band payload.** `telemetryMonths` crosses in the document today; a shell cannot ask for a month until it knows which months exist, so leaving it out makes it a fifth serial hop | Carmack, 2026-09-08 |
+| 2 | The cold-load chain is at most four hops: document, entry JS, band including the months list, month payload. Row 18 enforces it | Carmack, 2026-09-08 |
+| 3 | The 32 charts move to the browser. They are 139 KB of 3,726 KB, so this is not where the bytes are - it moves because a chart drawn from fetched rows is the only way the window control can mean anything | Measured 2026-09-08 |
+| 4 | First load fetches two month files and never more, whatever the archive holds. `monthCeiling(30)` = 2 and `monthCap` = 15 already enforce it | Carmack, 2026-09-08 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A request-count ceiling | Satisfied by merging files and says nothing about the wait. Chain depth and transferred bytes are the two that bound the experience | Carmack |
+
+---
+
+## 13. Row #11 - The verdict band arrives first and alone
+
+- **Scope:** The band that answers "is the pipeline working" becomes its own small payload, fetched before anything else.
+- **Files touched:** `frontend/src/lib/server/console-shell.ts`, `frontend/src/routes/console/+layout.svelte`, and the band payload from row 9.
+- **Acceptance gates:** local - the shared test selector. CI - browser smoke; the band renders its own unreachable state per row 12.
+- **Oracle:** the band payload is at most 8 KB gzip -5, and in a Playwright network trace it is the first request the console issues after the document and the entry bundle.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Susan ruled the band should stay prerendered and named a fetched band as the one way this change is a net loss. The owner overruled on consistency - one mental model, no special case, because a special case makes every future page ask which kind it is | Owner D2, over Susan, 2026-09-08 |
+| 2 | This row is the mitigation both sides accepted: the band is the smallest payload on the site and the first request the page makes, so the operator's answer arrives in one round trip rather than after the page settles | Owner and Susan, 2026-09-08 |
+| 3 | 8 KB rather than the 5 KB first proposed, because the months list from row 10 decision 1 rides here | Carmack, 2026-09-08 |
+
+---
+
+## 14. Row #12 - The console surface: reserved shape and three states
+
+- **Scope:** The loading experience and the three data states, as one surface, reviewed once.
+- **Files touched:**
+  - `frontend/src/styles/app.css` and the token files - `shimmer` and the `loading` state class. Both are named in `docs/concepts/design-system.md`; neither exists in CSS today
+  - `frontend/src/lib/charts/` - reserved boxes, axis frame and ticks, the missing-span mark
+  - `frontend/src/lib/components/WindowControl.svelte` - the status line, and its no-script string, which becomes untrue the day this lands
+  - `frontend/src/routes/console/+layout.svelte` - the no-script line above the panels
+  - `config/idhazh.json` - `console.shimmer_after_ms`
+- **What ships:**
+  - Every panel titled and sized in the document. Charts reserve their box by aspect ratio and never change height
+  - An empty chart draws its axis frame and tick marks and **no numbers**
+  - The shimmer starts after `console.shimmer_after_ms`, so a fetch that lands first never animates
+  - **Every skeleton shares one timeline, in phase.** Out of phase, twelve sweeping boxes read as twelve broken things
+  - Under `prefers-reduced-motion`, a flat tinted block with **no gradient**. The global rule in `app.css` zeroes durations, which would freeze a moving gradient mid-sweep and leave a bright band nobody chose
+  - Panels fill in document order; a panel that finishes early waits its turn
+  - One status line for all background work, in words and files: `Fetching 2 months.`
+  - Three states:
+
+    | State | Means | Shows |
+    | --- | --- | --- |
+    | Quiet | The window is genuinely empty | Neutral tint, a sentence saying what is true, and the one preset that would change it |
+    | Missing | We never had data for those dates | The span marked on the chart, dates named in the caption. No alarm |
+    | Unreachable | The fetch did not arrive | Warn tint, names the month, says what it does have, `Try again` scoped to that panel |
+
+  - A 92-day window where June has data, part of July is missing and August is fine plots June, marks the July span, and plots August
+- **Never:** move anything above the scroll position; dim a panel that already has data; print bytes or a percentage; block a control; scroll, steal focus, raise a toast or count a number up; announce every arrival.
+- **Acceptance gates:** local - the shared test selector; a reduced-motion spec. CI - browser smoke; one spec per state.
+- **Oracle:** the console's panel bounding boxes are identical at first paint and at settled. A built fixture with a hole mid-window renders a marked span; a built fixture whose fetch is blocked renders a visibly different thing.
+- **Design gate:** Susan reviews before merge, per CLAUDE.md section 9.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Merged from two rows. A reserved box with no failure state lies, and a failure state with no reserved box shifts the layout - Susan reviews them together or she reviews half a thing | Fowler, 2026-09-08 |
+| 2 | No spinner. A spinner suits one wait, a blank page and a person who cannot act; the console has a dozen waits and an operator who can act from the first frame | Susan, accepted as D3 |
+| 3 | Today a failed month draws an unmarked gap, so **a quiet pipeline and a broken fetch are the same picture** - which is the exact thing this page exists to tell apart | Susan, 2026-09-08 |
+| 4 | `console.shimmer_after_ms` default 400 is an estimate. This row measures the median shard read and settles it | Rule #10 |
+
+---
+
+## 15. Row #13 - The page carries nothing a later run can change
+
+- **Scope:** Delete the two global stamps that make every page's bytes move on every build, and show nothing in their place.
+- **Files touched:**
+  - `frontend/src/lib/components/SiteFooter.svelte` - the build line, the verification sentence, the retention sentence
+  - `frontend/src/routes/+layout.server.ts` - returns `{ ui }` only; the `latestDate` and `loadDay` imports go
+  - `frontend/vite.config.ts`, `frontend/src/app.d.ts` - `__BUILD_COMMIT__`, `__BUILD_DATE__`
+  - `frontend/src/lib/components/EmptyDay.svelte`, `DigestList.svelte`, `MoreDays.svelte` and the call sites - the `latest` prop
   - `frontend/tests/footer-facts.spec.ts` - it pins the deleted sentences by regex
-  - `docs/architecture/publishing/frontend.md`, `docs/architecture/publishing/layout.md`,
-    `docs/concepts/design-system.md` - all three repeat the retention promise
-- **Acceptance gates:** `npm run check`; the shared test selector; browser smoke on a dated page,
-  an empty day, the archive and the console.
-- **Oracle:** record the sha256 of `build/2026-08-21/index.html`. Publish a new day into the digest
-  root. Build again. **The hash must be identical.** It is not today - `2026-09-08` appears twice
-  in that file, once in the footer and once as `latest` in the layout data.
+  - `docs/architecture/publishing/frontend.md`, `docs/architecture/publishing/layout.md`, `docs/concepts/design-system.md` - all three repeat the retention promise
+- **Acceptance gates:** local - `npm --prefix frontend run check`; the shared test selector. CI - browser smoke on a dated page, an empty day, the archive and the console.
+- **Oracle:** record the sha256 of `build/2026-08-21/index.html`. Publish a new day into the digest root. Build again. **The hash must be identical.** Today `2026-09-08` appears twice in that file - once in the footer, once as `latest` in the layout data.
+- **Oracle prerequisite:** both builds run with `BUILD_VERSION` set to one constant. `kit.version.name` defaults to `Date.now()` and lands in every prerendered document, so without the pin the oracle can never pass. `frontend/svelte.config.js` already documents the mechanism.
 - **Second oracle:** `+layout.server.ts` imports nothing from `$lib/server/payload`.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | No commit stamp, no build date, no manifest to fetch one from. The owner considered a fetched manifest and reversed: the commit is not worth a file, a schema, a request and a cleanup story | Owner D8 |
-| 2 | The site stops promising that nothing is deleted. Removing the sentence is the honest move; do not replace it with a promise to delete either | Owner |
-| 3 | `latest` is deleted end to end rather than moved. No route uses it; the home page computes the same value as `today` | Read from source |
+| 1 | No commit stamp, no build date, no manifest to fetch one from. The owner considered a fetched manifest and reversed: the commit is not worth a file, a schema, a request and a cleanup story | Owner D8, 2026-09-08 |
+| 2 | The verification sentence goes with the footer. Reader argued it should be kept and moved beside the day; the owner ruled against | Owner, 2026-09-08 |
+| 3 | The site stops promising that nothing is deleted, and does not replace it with a promise to delete either | Owner, 2026-09-08 |
+| 4 | Ordered before row 14 and not after. After the shell there is one document, so there is nothing left to measure this row's claim on | Fowler, 2026-09-08 |
 
 ---
 
-## 14. Row #10 - One document serves every date
+## 16. Row #14 - One document serves every date
 
-- **Scope:** The 110 dated and topic documents stop being written. One document serves every URL.
+- **Scope:** The 110 dated and topic documents stop being written; one document serves every URL.
 - **Files touched:**
-  - `frontend/src/routes/[date]/+page.server.ts`, `[date]/[vertical]/+page.server.ts` - `prerender`
-    goes, and the seed goes with it
-  - `frontend/src/routes/+page.server.ts`, `archive/+page.server.ts` - same
-  - `frontend/svelte.config.js` - the prerender block, `handleUnseenRoutes`, and the comment that
-    describes the seed-plus-fetch arrangement this row ends
+  - `frontend/src/routes/+layout.server.ts` - **`export const prerender = true` lives here and cascades to every route.** Flipping it is the actual mechanism; this is not a per-route flag change
+  - `frontend/src/routes/+page.server.ts`, `frontend/src/routes/archive/+page.server.ts`, `frontend/src/routes/evals/` - **keep `/`, `/archive/` and `/evals/` prerendered explicitly.** Without this the site root stops emitting `index.html` and GitHub Pages answers `/` with the fallback at HTTP 404
+  - `frontend/src/routes/[date]/+page.server.ts`, `[date]/[vertical]/+page.server.ts` - **deleted and rewritten as `+page.ts` with `ssr = false`.** A route that is not prerendered has no server, so `error(404, ...)` and the `awaiting` count move to the browser
+  - `frontend/svelte.config.js` - the prerender block, `handleUnseenRoutes`, and the comment describing the seed-plus-fetch arrangement this row ends
   - `frontend/prerender-guard.js` - its expectations change or it goes
   - `frontend/src/service-worker.ts` - the shell it caches is now the whole site
-- **The mechanism is already configured.** `adapter({ fallback: '404.html', strict: false })` is in
-  place, so GitHub Pages serves the fallback for any path it cannot find, and the browser reads the
-  address bar to decide what to fetch.
-- **Acceptance gates:** browser smoke on `/`, a dated page, a topic page, the archive and all four
-  console routes; each with its data file present and absent; `npm run check`; the shared test
-  selector.
-- **Oracle:** `build/` contains no `index.html` under a dated directory. Six documents, and the
-  count does not move when a day is added.
+- **The fallback is already configured:** `adapter({ fallback: '404.html', strict: false })`.
+- **Acceptance gates:** local - `npm --prefix frontend run check`; the shared test selector. CI - browser smoke on `/`, a dated page, a topic page, the archive, `/evals/` and all four console routes, each with its data file present and absent.
+- **Oracle:** `build/` contains no `index.html` under a dated directory, `build/index.html` exists and is served at HTTP 200, and the document count does not move when a day is added.
+- **Second oracle:** the built `404.html` and the kept documents each carry the `connect-src` meta tag. `frontend/tests/asset-base.spec.ts` asserts the config source today, not the output.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Delete the documents rather than shrink them to a head. A file per day is still a file per day | Owner D1 |
-| 2 | The link preview card on a shared digest URL is lost, because Pages serves the fallback with a 404 status and preview crawlers do not run JavaScript. Accepted | Owner D11 |
-| 3 | Date navigation gets faster, not slower: the shell is already in memory, so moving from one day to the next crosses only the day's JSON | Read from the existing `[date]` fetch path |
+| 1 | Delete the documents rather than shrink them to a head. A file per day is still a file per day | Owner D1, 2026-09-08 |
+| 2 | In-app navigation never requests a dated URL from the server, so client-side routing is unaffected. Only a cold direct load takes the fallback, and it renders | Owner D11, 2026-09-08 |
+| 3 | The link preview card and search-engine indexing of dated URLs are both accepted losses. This project is built for readers, not crawlers | Owner D11, 2026-09-08 |
+| 4 | `withDrawing()` runs `refusedDrawing()` in Node today for seeded drawings. The same module and rule move to the browser, so the guarantee holds - but the build stops refusing a bad SVG anywhere, and row 19 records that | Fowler, 2026-09-08 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Shrink each dated document to a head - title, date, first summary | Keeps the preview card and 98 pct of the bytes, but a file per day is still a file per day | Owner |
 
 ---
 
-## 15. Row #11 - The encoder leaves the repository
+## 17. Row #15 - Publish the Release asset and prove it cross-origin
 
-- **Scope:** 43.23 MB of ONNX weights come out of git, out of the build and out of the Pages
-  upload. The browser fetches them from Hugging Face at a pinned revision, and falls back to our
-  own GitHub Release asset when that fails.
+- **Scope:** Stand up the failover origin and prove a browser can read it, before anything leaves git.
+- **Files touched:** a GitHub Release carrying the five weight files; `docs/reference/measurements.md` for the result.
+- **What must be proved, from a real browser, not curl:**
+  - A `fetch()` from the Pages origin to the release asset URL succeeds cross-origin. **CORS is a second gate that `connect-src` does not cover**, and this is the failover leg - the one that only runs when the primary is already down
+  - The redirect chain is recorded. `github.com/<owner>/<repo>/releases/download/...` redirects to an object host, and **CSP matches every redirect hop against the source list**
+  - The same for the Hugging Face LFS path: a `resolve/` URL for a 23 MB file redirects to a CDN
+- **Acceptance gates:** local - none. CI - none. This row produces a published asset and a recorded result.
+- **Oracle:** a recorded browser trace showing a successful cross-origin `fetch()` of every weight file from the release asset, with the full redirect chain and every host that appears in it.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Split from rows 16 and 17. Standing up two origins and deleting 43 MiB in one row means recovery is reverting a commit that deleted the weights | Andre, 2026-09-08 |
+| 2 | **`connect-src` needs four to six origins, not two.** Listing only `huggingface.co` and `github.com` passes the small JSON files and blocks the 23 MB weights - the worst failure shape there is, because the pipeline half-loads and errors somewhere unrelated | Andre, 2026-09-08 |
+| 3 | At least two of those hostnames are vendor-owned and can change without telling us. Row 19 records that as a standing maintenance cost | Andre, 2026-09-08 |
+
+---
+
+## 18. Row #16 - Two origins, a digest manifest, and one guard that still works
+
+- **Scope:** The browser fetches the weights from Hugging Face, verifies them, falls back to our asset, and the `model_id` guard keeps meaning something.
 - **Files touched:**
-  - A GitHub Release asset carrying the weights, published once
-  - `frontend/src/lib/assist/loader.ts` - `allowRemoteModels` becomes conditional; the source comes
-    from config. Today it is hard-set false with the comment "Same origin, always"
-  - `frontend/svelte.config.js`, `frontend/asset-base.js` - `connect-src` gains both origins,
-    derived from the same config values that drive the fetch
-  - `frontend/src/lib/assist/search.ts` - **refuses** an index whose `model_id` is not the loaded
-    encoder. `schemas/search-index.schema.json` already makes `model_id` required; whether the
-    reader enforces it is the first thing this row checks
-  - The backend index writer - stamps `model_id` from config, so index and encoder cannot disagree
-  - `frontend/static/assist/models/all-minilm-l6-v2-quantized/2026-08-22/` - the eight tracked
-    files go; `PROVENANCE.md` stays
-  - `frontend/src/service-worker.ts` - decides explicitly whether to cache a remote model
-- **Acceptance gates:** browser smoke with the model reachable, with Hugging Face blocked, and with
-  both blocked; `npm run check`; the shared test selector.
-- **Oracle:** the built site contains no `.onnx`. Search still works. With both origins blocked,
-  search says so and **every digest assertion still renders** - section 0a requires the bundle to
-  render complete with the model absent.
+  - `frontend/src/lib/assist/loader.ts` - the fetch and the failover; `wasmPaths` unchanged and same-origin; **`cachedEncoder()` at line 108 keys on `${base}/assist/models/...` and will report `absent` for a reader who already holds the weights**, telling them to pay 43 MB again for ever
+  - `frontend/src/lib/assist/encoder.ts` - `ENCODER_ID` stays a contract constant; **`ENCODER_VERSION` needs a decision, because it is what makes different weights a different URL and it goes dead when the directory does**
+  - `frontend/src/lib/assist/search.ts` - the guard at line 107 already refuses a `model_id` mismatch; it must keep doing so against something that can actually differ
+  - `frontend/svelte.config.js`, `frontend/asset-base.js` - `connect-src` gains every host row 15 recorded, derived from config
+  - `backend/idhazh/embed.py`, `backend/idhazh/assemble.py` - `assemble.py` takes `model_id` from the newest day carrying vectors, not from a writer default; it is load-bearing and the superseded draft named neither file
+  - `backend/tests/test_embed.py` - `test_the_versioned_directory_is_the_one_on_disk` asserts the model directory exists and goes red in row 17
+  - `frontend/tests/filter-bar.spec.ts` - counts requests under the model directory; **it must not become a network test**
+  - `frontend/src/service-worker.ts` - the cache decision
+  - `frontend/src/lib/components/ArchiveSearch.svelte` - the download notice and the privacy sentence
+- **The failover rule, sharpened:** all-or-nothing, per source, with a deadline and a digest. Try Hugging Face for all five weight files against a wall clock; verify every SHA-256 against `assist.model_digests`; on any miss - a non-200, a truncation, a timeout, or a digest mismatch - discard the whole set and take all five from the release asset. **Never mix provenance across files.**
+- **Acceptance gates:** local - the shared test selector. CI - browser smoke with the model reachable, with Hugging Face blocked, and with both blocked; the drift gate; `python -m pytest backend/tests/test_embed.py`.
+- **Oracle:** a deliberately corrupted digest in a fixture causes the whole Hugging Face set to be discarded and all five files taken from the failover, and a mismatched `model_id` still collapses search scope to the days that match.
 
 ### Decisions
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Hugging Face primary, our Release asset as failover | Owner D10, over a recommendation of one origin |
-| 2 | The failover is a hard rule: try Hugging Face, on any failure use ours, never the reverse and never a third | This plan |
-| 3 | Swapping the encoder later is a re-encode of every published day. That is a growing read and it is legal - it is one-off, a person runs it, and it gets its entry in `docs/concepts/growing-reads.md`. It is never a per-run cost | Rule #12 escape hatch |
+| 1 | **A committed SHA-256 manifest for the weight files, verified in the browser before the bytes reach transformers.js.** We hold the exact bytes today. It costs five hex strings and one `crypto.subtle.digest` call, and it turns the revision pin from a reference into an assertion | Andre, 2026-09-08 - the one guard he would refuse to ship without |
+| 2 | `ENCODER_ID` stays a constant and config owns only the origin. Moving it to config makes the guard a constant compared against a constant - it passes always and detects nothing | Andre and Fowler, converging, 2026-09-08 |
+| 3 | A config-to-constant drift gate replaces the guard the directory used to provide: `assist.model_revision` cannot move without `ENCODER_VERSION` moving | Andre, 2026-09-08 |
+| 4 | transformers.js tries **local first, then remote** when both flags are set. There is no built-in remote-first order, so the failover is our own code and this plan says so | Andre, 2026-09-08 |
+| 5 | `filter-bar.spec.ts` runs against a locally-served model fixture origin. Rule #7 - no test touches the network - and the alternative is fetching 23.7 MB from Hugging Face inside CI | Andre and Carmack, converging, 2026-09-08 |
+| 6 | The service worker does **not** cache the remote model. It refuses anything not same-origin GET and `frontend/tests/manifest.spec.ts` enforces that from source | Andre, 2026-09-08 |
+| 7 | `ArchiveSearch.svelte` says what the first search will fetch and from where, before it starts. `DOWNLOAD_MB = 43` becomes a two-origin split derived from the digest manifest, because its own comment says a figure that drifts from the download is worse than no figure | Andre and Carmack, converging, 2026-09-08 |
+| 8 | The privacy sentence gains one clause: the first search sends the reader's IP, User-Agent and Origin to a third party. "Nothing you type leaves your browser" stays true and is no longer the whole truth | Andre, 2026-09-08 |
+| 9 | The `connect-src` widening is **not** exploitable by a planted instruction: nothing fetched from the web reaches the encoder, item vectors are computed on the runner, and no code path builds a fetch URL from a payload field. The risk inverts instead - a second party can now put bytes into a reader's tab, and decision 1 is what bounds that | Andre, 2026-09-08 |
 
-### The cost, stated once
+### Rejected alternatives
 
-`connect-src` is the directive `svelte.config.js` calls "a browser-level impossibility rather than
-a property of our own code being careful". It bounds every request a planted instruction inside a
-summary could cause (Rule #11). **Two origins is a wider hole than one.** Both are derived from
-config so the list is in one place and reviewable, and no third may be added without an owner
-decision recorded here.
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A single origin, ours only | Recommended and overruled by the owner for availability | Owner D10 |
+| 2 | Trust a pinned revision without a digest | A pin is a reference, not an integrity check; we never verify what arrived | Andre |
+| 3 | Per-file failover | Gives a tokenizer from one origin and weights from another | Andre |
 
 ---
 
-## 16. Row #12 - The gates measure a shell, not a document
+## 19. Row #17 - Delete the committed weights
 
-- **Scope:** The bundle gate guards per-page ceilings. When every page is the same small document,
-  those ceilings stop guarding anything, and the thing that can now grow without a ceiling is a
-  fetched payload.
-- **Files touched:** `frontend/scripts/` (the bundle gate), `.github/workflows/ci.yml`,
-  `.github/workflows/pages.yml` (the published-size report).
+- **Scope:** The five weight files leave git, once the fetch that replaces them is proven in production.
+- **Files touched:**
+  - `frontend/static/assist/models/all-minilm-l6-v2-quantized/2026-08-22/` - `config.json`, `special_tokens_map.json`, `tokenizer_config.json`, `tokenizer.json`, `onnx/model_quantized.onnx`. **`PROVENANCE.md` stays**
+  - `backend/tests/test_embed.py` - `test_the_versioned_directory_is_the_one_on_disk` goes, or changes to assert the manifest instead
+- **Does not touch:** `frontend/static/assist/wasm/` - 21,640,503 B that stays same-origin.
+- **Acceptance gates:** local - the shared test selector; `python -m pytest backend/tests/test_embed.py`. CI - browser smoke; the bundle gate.
+- **Oracle:** the built site contains no `.onnx` **and** `frontend/static/assist/wasm/ort-wasm-simd-threaded.jsep.wasm` is still present and still served. Search works. With both model origins blocked, search says so and **every digest assertion still renders** - CLAUDE.md section 0a.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **22.59 MiB leaves; 20.64 MiB stays.** The superseded draft claimed 43.23 MiB and its oracle - "the built site contains no `.onnx`" - passed with the whole ONNX runtime still in place | Carmack, 2026-09-08 |
+| 2 | Separated from row 16 so the deletion lands only after the replacement is proven in production, not alongside it | Andre, 2026-09-08 |
+| 3 | A later encoder swap re-encodes every published day. That is a growing read, it is legal under Rule #12's escape hatch because a person runs it once, and it gets an entry in `docs/concepts/growing-reads.md`. It is never a per-run cost | Rule #12 |
+| 4 | The re-encode degrades progressively, not atomically: `build_search_index` takes its header from the newest day carrying vectors and demotes every disagreeing day to browsable-not-searchable on one log warning. Row 19 records it | Andre, 2026-09-08 |
+
+---
+
+## 20. Row #18 - The gates measure a shell, not a document
+
+- **Scope:** Re-aim every ceiling at what the migrated site is, and add the two that bound a fetched page.
+- **Files touched:** `frontend/scripts/` (the bundle gate), `config/idhazh.json` (the ceiling values and the payload set), `.github/workflows/ci.yml`, `.github/workflows/pages.yml`.
 - **What changes:**
-  - Page ceilings come down to what a shell actually weighs
-  - **A payload ceiling is added.** A fetched window has no ceiling today, so nothing would catch a
-    month payload that quietly doubled
-  - The encoder ceiling changes meaning when the encoder is not in the bundle
-- **Acceptance gates:** the gate fails on a deliberately oversized fixture payload and passes on
-  the real one.
-- **Oracle:** raise a fixture payload past the ceiling; CI goes red. Lower it; CI goes green.
 
----
+  | Ceiling | Value | Basis |
+  | --- | --- | --- |
+  | One telemetry month payload | 1.1 MB gzip -5 | `telemetry/` is 1.12 MiB over about 2 months, so about 0.6 MB a month. Structural ceiling is `run.safety_ceiling_per_run` 80 x 5 cron slots x 31 days = 12,400 items against about 9,400 rows over 30 days, giving 0.8 MB. Plus 30 pct. Revisit when a sixth cron slot or a higher safety ceiling lands |
+  | Verdict band | 8 KB gzip -5 | Row 11's oracle, plus the months list |
+  | Cold console load, all payloads, default window | 3.0 MB gzip -5 | Two months plus the band plus headroom |
+  | Cold console chain depth | at most 4 hops | Row 10 decision 2 |
+  | Page ceilings | re-derived from the migrated tree | The current values guard a document that no longer exists |
+  | Encoder ceiling | **kept, re-aimed at the digest manifest** | Deleting it means nothing catches an upstream `.onnx` that grew |
 
-## 17. Rows #13 to #17 - The build-cost findings
+- **Acceptance gates:** local - `npm --prefix frontend run bundle-gate` against a deliberately oversized fixture payload. CI - the gate fails on that fixture and passes on the real tree.
+- **Oracle:** raise a fixture payload past its ceiling and CI goes red; lower it and CI goes green. Add a fifth serial hop to the console's cold load and CI goes red.
 
-Five independent rows, each shipping alone. These are the surviving rows of the superseded draft;
-its row 1 is delivered by row 9 above, and its rows 7 and 8 are folded into row 18.
+### Decisions
 
-| Row | What | Measured saving |
+| # | Decision | Authority |
 | --- | --- | --- |
-| 13 | **Rebuild only when the push was rebased.** The site is built three times per publish and only the third is published; the first two use a different `BASE_PATH` so they can never be reused anyway | About 19 s per publish, five times a day |
-| 14 | **The parcel carries the day, not the archive.** The `visuals` artifact's `path:` includes all of `frontend/public/digest/` when one day is new | Upload and download time, and it grows |
-| 15 | **Delete the duplicate verification call.** `run-checks.ts` calls `assertBuild` on two adjacent lines with nothing between them | 16.2 s per run |
-| 16 | **The build fingerprint covers what the build reads.** `inputFingerprint` hashes 66.55 MB of which 60.91 MB is corpus, state and published payloads - 91.5 pct is data a run appended. Use git's own index rather than hand-rolling a manifest: `git ls-files` already maintains one, handles the racily-clean case, and is not ours to version | Most of 3.23 s per call |
-| 17 | **Stage only what changed.** `copy-visuals.mjs` deletes and re-copies every file every build | 5.82 s locally, and **zero in CI** - every CI job starts with the target absent, so this is a local-loop fix only |
-
-Row 16 note: `state/` and `frontend/public/` stay in scope. The console does read them at build
-time, so they are genuine inputs and need a cheaper mechanism rather than a shorter list. `corpus/`
-is the one to drop - no test result depends on it.
+| 1 | Ceilings are set in **gzip -5 bytes**, because that is what the reader pays. The project currently uses three units for one page: gzip -9 in the gate, gzip -5 on the wire, identity in the size report | Carmack, 2026-09-08 |
+| 2 | The payload set is named in `config/`, not in the gate script. Rule #6 | Fowler, 2026-09-08 |
+| 3 | Every ceiling value above is an estimate built from two measured points. Row 19 re-derives them from the migrated tree | Rule #10 |
+| 4 | This row also re-measures the `browser` CI job. It sits at 37 pct of a 1,500 s timeout and six rows add specs to it; ESCALATE trigger 3 fires at 70 pct | Carmack, 2026-09-08 |
 
 ---
 
-## 18. Row #18 - Measure the build again, and decide what is left
+## 21. Row #19 - Record what was decided and what it cost
 
-- **Scope:** The draft's rows 7 and 8 proposed measuring the stat-versus-read split of the output
-  fingerprint and then having the producer hash while the verifiers only stat. **That may no longer
-  be worth doing.** The output hash covers 222.4 MB today; after rows 10 and 11 the built site is
-  an estimated 23.8 MB, so the same work costs roughly a fifth as much for free.
-- **What this row does:** re-measure `assertBuild()`, the whole build, the Pages build step and the
-  published size on the migrated tree. Then either close the fingerprint work as no longer worth
-  its complexity, or open it with a number that justifies it.
-- **Acceptance gates:** none - this row produces a measurement and a recommendation.
-- **Oracle:** the numbers in section 4 are replaced with post-migration ones, carrying hardware,
-  date and spread (Rule #10).
-
----
-
-## 19. Row #19 - Record what was decided and what it cost
-
-- **Scope:** The documentation this plan owes.
+- **Scope:** The documentation this plan owes, and the measurements that replace its estimates.
 - **Files touched:**
-  - `docs/concepts/ui-shell.md` - **the spinner ban survives on narrower ground.** Its stated reason
-    is that a reader already has a readable frame, so there is nothing for a spinner to fill. That
-    reason is false on a route that ships an empty shell on purpose. Write the narrower ground down
-    or the next agent reads the ban as absolute again
-  - `docs/architecture/publishing/` - the shell, the fetch shapes, the three states, the measured
-    bytes
-  - `docs/concepts/growing-reads.md` - the re-encode migration, and any read row 2 could not bound
-  - `CLAUDE.md` section 0a - "the bundle must render complete with the model directory deleted" now
-    describes a permanent state rather than a test
-  - `docs/reference/agent-notes.md` - anything a worker learned that would make a command lie
-- **Acceptance gates:** docs only. No local application suite (AGENTS.md item 5).
+  - `docs/concepts/ui-shell.md` - **the spinner ban survives on narrower ground.** Its stated reason is that a reader already has a readable frame, and that reason is false on a route shipping an empty shell on purpose. Write the narrower ground down or the next agent reads the ban as absolute again. State 4 also becomes untrue
+  - `docs/reference/measurements.md` - the post-migration `site-weight` output with hardware, date and n; the Hugging Face `Content-Encoding` result beside the existing compression table; the re-derived ceilings; the `browser` job duration
+  - `docs/archive/measurements-2026-08.md` - a Hugging Face row in the compression table so the two origins read against each other
+  - `docs/architecture/publishing/` - the shell, the fetch shapes, the three states, the measured bytes, and the fact that the build no longer refuses a bad SVG
+  - `docs/concepts/growing-reads.md` - `outputFingerprint` walks a tree that gains files every published day and **still does after this plan**; plus the re-encode migration, and any read row 6 could not bound
+  - `frontend/src/lib/assist/loader.ts` - the `DOWNLOAD_MB` docstring gains the two-origin split and the measured wire cost of each half
+  - `config/idhazh.json` - one line on `pages_hard_cap_mb` saying 1024 is MiB while the platform limit is 1 GB, a 7 pct optimistic gap
+  - `CLAUDE.md` section 0a - "the bundle must render complete with the model directory deleted" now describes a permanent state rather than a test
+  - `docs/reference/agent-notes.md` - any tool or environment quirk a worker hit
+  - `.github/workflows/` - row 1's dispatch job is deleted
+- **Acceptance gates:** documentation-only closure; no local application suite, per AGENTS.md item 5.
+- **Oracle:** every estimate in section 2 of this plan is replaced by a measurement carrying hardware, date and spread, or is deleted.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **`assertBuild` still grows with the archive after this plan.** `static/digest/` gains a payload and its rendered images every published day, and both hashed trees carry them. Row 14's oracle is true of `build/` HTML only. This is Rule #12 inside the plan and it is recorded rather than fixed | Carmack, 2026-09-08 |
+| 2 | The output-fingerprint rework of the superseded draft is closed, not deferred. Bytes fall about 32 pct and files about 14 pct, and the dominant term is the one that falls less | Carmack, 2026-09-08 |
+| 3 | `8.14 ms per file` is a derivation, not a measured constant - it is 12.93 s over 1,589 files, and the same run equally yields 17.2 MB/s. One data point cannot separate a per-file term from a per-byte term | Carmack, 2026-09-08 |
+| 4 | Row 1's dispatch job is deleted here rather than kept. A measurement harness nobody runs is a maintenance cost with no reader | This plan |
 
 ---
 
-## 20. Refused, with the measurement that refused it
+## 22. Refused, with the measurement that refused it
 
-| # | Option | Why refused | Measured |
+| # | Option | Why refused | Authority |
 | --- | --- | --- | --- |
-| 1 | Cache the built site between CI runs | A large cache restore costs 41 to 73 s against a build of 21 to 24 s. The cache is slower than the work | 2026-09-08, four shards |
-| 2 | Reuse prerendered pages between builds | Every CI job is a cold start. There is nothing to reuse from | 2026-09-08 |
-| 3 | Fetch day payloads from `raw.githubusercontent.com` | Pages serves the identical file from our own origin, on a real CDN, with no rate limit. There is no benefit unless the 1 GB cap binds, and it is about 540 days away at 1.69 MB a day | 2026-09-08 |
-| 4 | Point SvelteKit's assets folder at `frontend/public/` to stop the staging copy | The staged copy is a projection, not a duplicate: 468.58 bytes an item against 792.65. Serving the committed shape would send 40.9 pct more bytes to every reader | 2026-08-31 |
-| 5 | A deployment or build manifest carrying the commit and the newest day | Considered and reversed by the owner mid-session. The commit is not worth a file, a schema, a request and a cleanup story; `latest_day` and `published_days` are answers the fetched data already carries, and the second is an all-time count | Owner, 2026-09-08 |
-| 6 | Shrink the dated documents to a head instead of deleting them | Keeps the link preview and 98 pct of the bytes, but a file per day is still a file per day | Owner, 2026-09-08 |
-| 7 | A single origin for the encoder | Recommended and overruled. The owner accepts a wider `connect-src` for availability | Owner, 2026-09-08 |
-| 8 | A guard that lists the paths a test may not read | Tried and deleted on 2026-09-06. It enumerated the hazard rather than the safe set, its own upkeep grew with the collections, and a list of paths makes a judgement call look like a permission slip. Rule #12 is enforced by review | CLAUDE.md Rule #12 rationale |
-
----
-
-## 21. What could go wrong, and where it bites
-
-| # | Risk | Where it shows | Mitigation |
-| --- | --- | --- | --- |
-| 1 | A fetch fails and the page white-screens | Any route, any panel | Section 1a "degrade, do not fail" and section 12 gate 5. Every row's browser smoke runs with the data file absent |
-| 2 | The console's first frame answers nothing | `/console/` | Row 6: the band is the smallest payload and the first request |
-| 3 | `connect-src` widens and a planted instruction reaches a second origin | Rule #11 | Row 11: both origins from config, in one place, no third without an owner decision |
-| 4 | A row bounds a read by changing what a panel means without saying so | Rows 2 and 3 | ESCALATE trigger 2 |
-| 5 | The producer's monthly write quietly becomes a walk | Row 4 | That row's oracle counts file handles, not seconds |
-| 6 | Reduced motion freezes a gradient mid-sweep | Row 8 | A flat block, not a shortened animation, and a spec for it |
-| 7 | The search index and the loaded encoder disagree silently | Row 11 | The reader refuses a `model_id` mismatch. If it does not today, that is ESCALATE trigger 3 |
+| 1 | Cache the built site between CI runs | A large cache restore costs 41 to 73 s against a build of 21 to 24 s, and the repo cache is 96.6 pct full so it evicts on LRU | Measured 2026-09-08 |
+| 2 | Reuse prerendered pages between builds | Every CI job is a cold start | Measured 2026-09-08 |
+| 3 | Fetch day payloads from `raw.githubusercontent.com` | Pages serves the identical file from our own origin with no rate limit. No benefit until the 1 GB cap binds, and that is about 600 days away | Owner, 2026-09-08 |
+| 4 | Point SvelteKit's assets folder at `frontend/public/` to end the staging copy | The staged copy is a projection at 468.58 bytes an item against 792.65; serving the committed shape sends 40.9 pct more bytes to every reader | Measured 2026-08-31 |
+| 5 | A deployment or build manifest carrying the commit and the newest day | Considered and reversed by the owner. `latest_day` is answered by data the page already fetches, and `published_days` is an all-time count | Owner D8, 2026-09-08 |
+| 6 | Move the ONNX runtime off our origin with the weights | Hugging Face is a model hub and does not host it. 20.64 MiB stays same-origin | Carmack, 2026-09-08 |
+| 7 | A single origin for the weights | Recommended and overruled for availability | Owner D10, 2026-09-08 |
+| 8 | Keep the verification sentence and move it beside the day | Reader argued for it; the owner ruled against | Owner, 2026-09-08 |
+| 9 | Measure reader-facing first paint before and after | Reader asked for it; the owner ruled it out of scope | Owner, 2026-09-08 |
+| 10 | A guard listing the paths a test may not read | Tried and deleted 2026-09-06. It enumerated the hazard rather than the safe set, its upkeep grew with the collections, and a path list makes a judgement call look like a permission slip | CLAUDE.md Rule #12 |
+| 11 | `git ls-files` as a new mechanism for `inputFingerprint` | It already does this, at line 48. The 3.23 s is reading and hashing 66.55 MB, and dropping `corpus/` saves about 0.65 s, not most of it | Verified 2026-09-08 |
+| 12 | An ESCALATE trigger on the `model_id` guard | `search.ts` line 107 already refuses a mismatch. The trigger was answered before it was written | Verified 2026-09-08 |
 
 ---
 
 ## See also
 
-- [`CLAUDE.md`](../CLAUDE.md) - sections 0, 0a, 1a, 3, 9, 11, 12, 13; Rules 1, 2, 3, 6, 10, 11, 12.
-- [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row.
-- [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) - the commands behind every
-  acceptance gate here.
-- [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - Rule #12's escape hatch
-  and where a chosen growing read is recorded.
-- [`docs/concepts/design-system.md`](../docs/concepts/design-system.md) - the motion set and the
-  state classes rows 7 and 8 are the first users of.
-- [`docs/concepts/ui-shell.md`](../docs/concepts/ui-shell.md) - the five states and the spinner ban
-  row 19 narrows.
+- [`CLAUDE.md`](../CLAUDE.md) - sections 0, 0a, 6, 9, 11, 12, 13, 14; Rules 1, 2, 3, 6, 7, 10, 11, 12.
+- [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - the orchestrator contract this plan stamps.
+- [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) - the commands behind every acceptance gate here.
+- [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - where a chosen growing read is recorded.
+- [`docs/concepts/design-system.md`](../docs/concepts/design-system.md) - the motion set and state classes row 12 first uses.
+- [`docs/concepts/ui-shell.md`](../docs/concepts/ui-shell.md) - the five states and the spinner ban row 19 narrows.
