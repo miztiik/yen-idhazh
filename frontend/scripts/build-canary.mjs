@@ -432,7 +432,8 @@ function writeRuntimeCountersCanary() {
 		'prompt_tokens_total', 'prompt_tokens_cached_total', 'prompt_seconds_total',
 		'tokens_predicted_total', 'tokens_predicted_seconds_total', 'n_decode_total',
 		'n_tokens_max', 'n_busy_slots_per_decode', 'job_seconds', 'cpu_model',
-		'cpu_busy_pct', 'peak_rss_bytes', 'model_load_ms'
+		'cpu_busy_pct', 'peak_rss_bytes', 'model_load_ms', 'n_ctx_configured',
+		'python_peak_rss_bytes', 'cgroup_peak_bytes'
 	];
 	const row = (cells) => COUNTER_COLUMNS.map((name) => cells[name] ?? '').join(',');
 	const shard = (rowDate, run, index, cells) => ({
@@ -455,7 +456,10 @@ function writeRuntimeCountersCanary() {
 			tokens_predicted_total: 296, tokens_predicted_seconds_total: 60, n_decode_total: 299,
 			n_tokens_max: 4096, job_seconds: 900,
 			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
-			cpu_busy_pct: 94.5, peak_rss_bytes: 12990730240, model_load_ms: 2470.828
+			cpu_busy_pct: 94.5, peak_rss_bytes: 12990730240, model_load_ms: 2470.828,
+			// cgroup_peak_bytes stays empty on purpose: /sys/fs/cgroup/memory.peak has
+			// measured absent on every GitHub-hosted runner this project has read.
+			n_ctx_configured: 8192, python_peak_rss_bytes: 1739882496
 		})),
 		row(shard(date, 2, 1, {
 			prompt_tokens_total: 253, prompt_tokens_cached_total: 583, prompt_seconds_total: 52,
