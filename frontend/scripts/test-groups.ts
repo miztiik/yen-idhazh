@@ -10,7 +10,7 @@ export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
 const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	logic: [
 		'appearance-config', 'archive-scope', 'asset-base', 'day-list', 'day-metrics', 'frame',
-		'glance-and-rank', 'model-cards', 'one-pass-reductions', 'preview-port',
+		'glance-and-rank', 'item-health-day', 'model-cards', 'one-pass-reductions', 'preview-port',
 		'telemetry-hold', 'throughput-window', 'vocabulary'
 	],
 	reader: [
