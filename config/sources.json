@@ -122,17 +122,6 @@
       "weight": 1.0
     },
     {
-      "id": "aws-ml-blog",
-      "kind": "announcement",
-      "retired_on": "2026-09-06",
-      "status": "retired",
-      "tier": 1,
-      "title": "AWS Machine Learning Blog",
-      "url": "https://aws.amazon.com/blogs/machine-learning/feed/",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
       "id": "balkangreen",
       "kind": "reporting",
       "retired_on": null,
@@ -738,17 +727,6 @@
       "weight": 1.0
     },
     {
-      "id": "ht-business",
-      "kind": "reporting",
-      "retired_on": "2026-09-06",
-      "status": "retired",
-      "tier": 2,
-      "title": "Hindustan Times - Business",
-      "url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
-      "vertical": "india",
-      "weight": 1.0
-    },
-    {
       "id": "huggingface-blog",
       "kind": "announcement",
       "retired_on": null,
@@ -910,28 +888,6 @@
       "tier": 2,
       "title": "Mint",
       "url": "https://www.livemint.com/rss/news",
-      "vertical": "india",
-      "weight": 1.0
-    },
-    {
-      "id": "livemint-companies",
-      "kind": "reporting",
-      "retired_on": "2026-09-06",
-      "status": "retired",
-      "tier": 2,
-      "title": "Mint - Companies",
-      "url": "https://www.livemint.com/rss/companies",
-      "vertical": "india",
-      "weight": 1.0
-    },
-    {
-      "id": "livemint-markets",
-      "kind": "reporting",
-      "retired_on": "2026-09-06",
-      "status": "retired",
-      "tier": 2,
-      "title": "Mint - Markets",
-      "url": "https://www.livemint.com/rss/markets",
       "vertical": "india",
       "weight": 1.0
     },
@@ -1280,7 +1236,7 @@
     {
       "id": "cgtn-tech",
       "kind": "reporting",
-            "retired_on": null,
+      "retired_on": null,
       "status": "active",
       "tier": 1,
       "title": "China Global Television Network",
@@ -1678,6 +1634,39 @@
 
   "retired": [
     {
+      "id": "ht-business",
+      "kind": "reporting",
+      "retired_on": "2026-09-06",
+      "status": "retired",
+      "tier": 2,
+      "title": "Hindustan Times - Business",
+      "url": "https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml",
+      "vertical": "india",
+      "weight": 1.0
+    },
+    {
+      "id": "livemint-companies",
+      "kind": "reporting",
+      "retired_on": "2026-09-06",
+      "status": "retired",
+      "tier": 2,
+      "title": "Mint - Companies",
+      "url": "https://www.livemint.com/rss/companies",
+      "vertical": "india",
+      "weight": 1.0
+    },
+    {
+      "id": "livemint-markets",
+      "kind": "reporting",
+      "retired_on": "2026-09-06",
+      "status": "retired",
+      "tier": 2,
+      "title": "Mint - Markets",
+      "url": "https://www.livemint.com/rss/markets",
+      "vertical": "india",
+      "weight": 1.0
+    },
+    {
       "id": "axios-business",
       "kind": "reporting",
       "retired_on": "2026-08-29",
@@ -1696,6 +1685,17 @@
       "tier": 1,
       "title": "Berkeley AI Research",
       "url": "https://bair.berkeley.edu/blog/feed.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "aws-ml-blog",
+      "kind": "announcement",
+      "retired_on": "2026-09-06",
+      "status": "retired",
+      "tier": 1,
+      "title": "AWS Machine Learning Blog",
+      "url": "https://aws.amazon.com/blogs/machine-learning/feed/",
       "vertical": "ai",
       "weight": 1.0
     },
@@ -2194,7 +2194,7 @@
       "vertical": "world",
       "weight": 1.0
     },
-        {
+    {
       "id": "news18-world",
       "kind": "reporting",
       "retired_on": "2026-09-09",
