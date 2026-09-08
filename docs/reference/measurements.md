@@ -4722,6 +4722,90 @@ less has to be measured rather than assumed. No threshold has been agreed for
 "too near", so the console draws no tint - a colour would publish a limit nobody
 set.
 
+**Superseded 2026-09-08 by the two sections below.** That paragraph reads
+llama-server's mark as though it were the job's, and it is not. Both halves of it
+have since moved: the ledger's own worst row is now higher, and the python beside
+the server takes most of what is left.
+
+### The headroom is 0.59 GiB, not 2.8, because python is on the same 16 GB
+
+**Measured 2026-09-08** on this repository's four committed captures of run
+`2026-08-29-3` - `tests/fixtures/runtime/2026-08-29-3-shard-*.rss-samples.tsv`,
+291 to 383 samples a shard, taken every 15 seconds on a GitHub-hosted
+`ubuntu-latest`, 4 vCPU, 16 GB, on 2026-08-29. The runner's usable figure is
+14.90 GiB (CLAUDE.md Rule #2).
+
+`peak_rss_bytes` is llama-server's high-water mark and nothing else. The job also
+runs python - it reads the feeds, extracts the article text and scores the
+summaries - and that python sits on the same 16 GB. Adding the two at the same
+instant, sample by sample, is what the runner actually has to hold.
+
+| Shard | llama-server alone | Both at one instant | Free of 14.90 GiB |
+| --- | --- | --- | --- |
+| 3 | 13.16 GiB | **14.31 GiB (96.0%)** | **0.59 GiB** |
+| 2 | 12.94 GiB | 14.15 GiB (95.0%) | 0.75 GiB |
+| 0 | 12.57 GiB | 13.93 GiB (93.5%) | 0.97 GiB |
+| 1 | 12.65 GiB | 13.86 GiB (93.0%) | 1.04 GiB |
+
+**Read the last column, not the first.** Reading llama-server's mark as the job's
+overstates the free memory by 1.15 GiB on the worst shard - and it overstates it,
+which is the unsafe direction. Every headroom figure this project has published,
+including the 1.61 GiB in the pseudo-plan and the 2.8 GiB above, is llama-server
+alone.
+
+The spread across the four shards is 0.45 GiB, and the worst is the shard that
+also holds the largest llama-server mark, so the two do not cancel.
+
+**This is why `python_peak_rss_bytes` and `cgroup_peak_bytes` are on the row from
+2026-09-08.** Until then the second number reached a two-day artifact and the
+third reached nothing, so no committed file could be asked this question.
+`cgroup_peak_bytes` would answer it outright, because the kernel counts every
+process at once - but `/sys/fs/cgroup/memory.peak` has measured absent on every
+GitHub-hosted runner this project has read, so expect that cell empty and expect
+to add the two marks by hand.
+
+### The ledger's own worst row moved to 13.82 GiB
+
+**Measured 2026-09-08** from `state/runtime-counters.csv` on this machine:
+**225 rows over 56 runs, 193 of them carrying `peak_rss_bytes`.** The mark runs
+10.06 GiB at the low end to **13.82 GiB - 14,835,539,968 B, 92.7 percent of the
+14.90 GiB usable** - with a median of 12.40 GiB.
+
+The 13.18 GiB and 82.4 percent in the section above were taken on 2026-09-01 over
+76 rows, so this is 117 more rows rather than a correction. The figure moved 0.64
+GiB in a week without any change to the model or the window, which is itself the
+reason a headroom claim needs the whole distribution and not one run's worst.
+
+Held against the concurrent reading above, a worst row of 13.82 GiB for
+llama-server alone leaves about 1.08 GiB before python is counted at all.
+
+### llama-server prints no buffer line, so three planned fields were not added
+
+**Measured 2026-09-08** over eight llama-server logs: the four committed captures
+of run `2026-08-29-3` (`Qwen3.5-9B-Q4_K_M`) and four raw, unfiltered logs of run
+`32742672105` (`Qwen3-8B-Q4_K_M`, 75 to 98 KB each). Searched for `KV self size`,
+`kv_cache`, `compute buffer`, `CPU_Mapped`, `model buffer`, `buf size` and `MiB`.
+
+**Zero matches in eight logs.** The whole model-loader block is absent: there is
+no `llama_model_loader:` line, no `print_info:` line and no `load_tensors:` line
+anywhere. One library line does reach the log - a `W load:` warning about a
+control token - so the library's warnings arrive and its load-time information
+does not. The only line that survives between the two load markers is
+`srv load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'`,
+and that is where `n_ctx_configured` is read from.
+
+The consequence is a plan consequence rather than a defect. `kv_cache_bytes`,
+`compute_buffer_bytes` and `model_buffer_bytes` were specified against "the
+`llama-server.log` KV-buffer line at load". There is no such line on build
+`b10598` as this pipeline starts the server, so the three were left unwritten
+rather than minted as columns that would be empty on every row for ever.
+
+What that costs, stated rather than implied: the 5.6 GiB of arithmetic and the
+13.29 GiB measured cannot be reconciled from anything this pipeline records, and
+the flash-attention saving cannot be attributed to a term. Getting them needs the
+server to print them first - a llama-server flag or verbosity change measured on
+the runner, which is a settings change and not a contract one.
+
 ## What the gates cost on a developer box
 
 Every figure in this section: **Windows 11, 12 logical CPUs, 31.8 GiB RAM,

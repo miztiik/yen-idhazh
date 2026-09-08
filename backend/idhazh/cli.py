@@ -2565,6 +2565,7 @@ def stage_counters(
     cpu_stat_at_end: str | None = None,
     rss_samples_path: Path | None = None,
     server_log_path: Path | None = None,
+    memory_peak_path: Path | None = None,
 ) -> RuntimeCountersRow:
     """Commit what this shard's model server counted, so the ledger can be checked.
 
@@ -2578,12 +2579,13 @@ def stage_counters(
     server for its whole job, so this one read covers the shard entirely.
 
     The same row carries the job's own facts as well as the server's: the clock,
-    the host, how busy that host was, the memory high point and what the weights
-    cost to open. None of them is the server's to report, so each arrives as an
-    argument. A stage reads a file and writes a file, so it does not go looking
-    for `/proc` itself - that tree exists on the runner and on no developer
-    machine this project is written on. What it does do is the arithmetic, so
-    the derivation behind a cell is in the contract rather than in a shell.
+    the host, how busy that host was, the window one sequence got, three memory
+    high points and what the weights cost to open. None of them is the server's
+    to report, so each arrives as an argument. A stage reads a file and writes a
+    file, so it does not go looking for `/proc` or `/sys` itself - those trees
+    exist on the runner and on no developer machine this project is written on.
+    What it does do is the arithmetic, so the derivation behind a cell is in the
+    contract rather than in a shell.
 
     A missing or empty body still writes a row, with every counter null. A shard
     whose server was already gone and a shard that never ran are different facts,
@@ -2602,11 +2604,13 @@ def stage_counters(
         cpu_stat_at_end=cpu_stat_at_end,
         rss_samples=_text_if_readable(rss_samples_path),
         server_log=_text_if_readable(server_log_path),
+        memory_peak=_text_if_readable(memory_peak_path),
     )
     landed = ledger.append_runtime_counters(STATE_ROOT, [row])
     LOG.info(
         "counted shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s cpu=%s "
-        "cpu_busy_pct=%s peak_rss_bytes=%s model_load_ms=%s rows=%s",
+        "cpu_busy_pct=%s peak_rss_bytes=%s model_load_ms=%s n_ctx_configured=%s "
+        "python_peak_rss_bytes=%s cgroup_peak_bytes=%s rows=%s",
         shard,
         shards,
         plan.run_id,
@@ -2617,6 +2621,9 @@ def stage_counters(
         row.cpu_busy_pct,
         row.peak_rss_bytes,
         row.model_load_ms,
+        row.n_ctx_configured,
+        row.python_peak_rss_bytes,
+        row.cgroup_peak_bytes,
         landed,
     )
     return row
@@ -4141,7 +4148,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=Path("rss-samples.tsv"),
         help=(
             "The memory sampler's own file. Its `llama_vmhwm_kb` column is the high-water "
-            "mark that says whether a candidate model fits the runner's 16 GB."
+            "mark that says whether a candidate model fits the runner's 16 GB, and its "
+            "`python_vmhwm_kb` column is what the rest of the job held beside it."
+        ),
+    )
+    parser.add_argument(
+        "--memory-peak-file",
+        type=Path,
+        default=Path("memory-peak.txt"),
+        help=(
+            "The one line the shard job wrote out of /sys/fs/cgroup/memory.peak - the only "
+            "reading that covers every process at once. It carries the word `unavailable` "
+            "where the kernel file is absent, which is what a GitHub-hosted runner has "
+            "measured every time, and the cell is then left empty."
         ),
     )
     parser.add_argument(
@@ -4384,6 +4403,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             cpu_stat_at_end=args.cpu_stat_at_end,
             rss_samples_path=args.rss_samples_file,
             server_log_path=args.server_log,
+            memory_peak_path=args.memory_peak_file,
         )
         return 0
 

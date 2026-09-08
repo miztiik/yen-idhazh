@@ -2269,6 +2269,9 @@ def test_the_runtime_counters_columns_are_defined_once() -> None:
         "cpu_busy_pct",
         "peak_rss_bytes",
         "model_load_ms",
+        "n_ctx_configured",
+        "python_peak_rss_bytes",
+        "cgroup_peak_bytes",
     )
 
 
@@ -2525,6 +2528,191 @@ def test_the_model_load_time_is_the_gap_between_the_servers_own_two_lines(path: 
     assert 1000 < row.model_load_ms < 60_000
 
 
+@pytest.mark.parametrize("path", SERVER_LOG_CAPTURES, ids=lambda p: p.name)
+def test_the_window_that_produced_the_memory_figure_is_read_off_the_servers_own_line(
+    path: Path,
+) -> None:
+    """The Oracle for `n_ctx_configured`: what a sequence got, not what the argv asked for.
+
+    `--ctx-size` is the request. This is the window one sequence actually
+    received, and the two differ whenever `kv_unified` is off and the server runs
+    more than one slot - so only the server's own line settles it. The expected
+    value is cut out of the capture here rather than written down, which is what
+    stops this passing by agreeing with the contract about a mistake.
+    """
+    text = read_text(path)
+    printed = [line for line in text.splitlines() if "load_model: initializing" in line]
+    assert len(printed) == 1, f"{path.name} does not print the initializing line exactly once"
+    expected = int(printed[0].split("n_ctx_slot = ")[1].split(",")[0])
+
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-29",
+        run_id="2026-08-29-3",
+        shard=int(path.name.split("shard-")[1][0]),
+        shards=len(SERVER_LOG_CAPTURES),
+        scraped_at="2026-08-29T23:15:35Z",
+        server_log=text,
+    )
+
+    assert row.n_ctx_configured == expected
+    # The window run 2026-08-29-3 actually ran under. These captures are frozen,
+    # so this does not move when the configured window does - it is here to say
+    # which window the memory figures of that run belong to, because a later run
+    # on a different window is not comparable with them.
+    assert expected == 8192
+
+
+@pytest.mark.parametrize("path", RSS_CAPTURES, ids=lambda p: p.name)
+def test_the_python_high_water_mark_is_absent_from_a_capture_taken_before_it_existed(
+    path: Path,
+) -> None:
+    """A column the sampler never took reads as unknown, never as a job with no python in it.
+
+    These four captures are from 2026-08-29 and the sampler began writing
+    `python_vmhwm_kb` on 2026-09-08, so the assertion is about the DATA rather
+    than about the column list - which is the failure a widening usually hides.
+    """
+    text = read_text(path)
+    assert "python_vmhwm_kb" not in text.splitlines()[0].split("\t")
+
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-29",
+        run_id="2026-08-29-3",
+        shard=int(path.name.split("shard-")[1][0]),
+        shards=len(RSS_CAPTURES),
+        scraped_at="2026-08-29T23:15:35Z",
+        rss_samples=text,
+    )
+
+    assert row.python_peak_rss_bytes is None
+    # Its sibling in the same file still reads, so this is one missing column and
+    # not an unreadable capture.
+    assert row.peak_rss_bytes is not None
+
+
+def test_the_python_high_water_mark_is_the_highest_the_sampler_saw() -> None:
+    """The Oracle for `python_peak_rss_bytes`, over the shape the sampler writes from today.
+
+    Built rather than captured, for the reason `CLAUDE.md` section 13 allows one:
+    `/proc` exists on the runner and on no machine this project is written on,
+    and the column dates from this commit, so no capture carries it. What is
+    built is the awkward case a capture may never produce - the peak arriving in
+    the middle rather than last, one sample the sampler could not read at all,
+    and the new column written to the RIGHT of `python_procs`, which is where
+    appending puts it.
+    """
+    text = "\n".join(
+        (
+            "ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\tpython_vmhwm_kb",
+            "2026-09-08T00:00:00Z\t8000000\t8000000\t900000\t2\t900000",
+            "2026-09-08T00:00:15Z\t9000000\t9000000\t1700000\t4\t1800000",
+            "2026-09-08T00:00:30Z\t9000000\t9000000\t\t0\t",
+            "2026-09-08T00:00:45Z\t9500000\t9500000\t400000\t1\t1200000",
+        )
+    )
+
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-09-08",
+        run_id="2026-09-08-1",
+        shard=0,
+        shards=4,
+        scraped_at="2026-09-08T00:01:00Z",
+        rss_samples=text,
+    )
+
+    assert row.python_peak_rss_bytes == 1_800_000 * 1024
+    # Both peaks are found by name, so two high-water columns in one file cannot
+    # be swapped and the one that arrived last is still the one read.
+    assert row.peak_rss_bytes == 9_500_000 * 1024
+
+
+def test_the_cgroup_peak_reads_the_line_the_shard_job_writes_and_the_word_it_writes_instead() -> (
+    None
+):
+    """The Oracle for `cgroup_peak_bytes`: its producer is a step in this repository.
+
+    llama-server does not report this and no capture of it can, because the file
+    is the kernel's. What can be checked is that the reader and the one step that
+    writes the file agree about the line, and that the word that step writes when
+    the kernel file is missing leaves the cell empty rather than raising.
+    `/sys/fs/cgroup/memory.peak` has measured absent on a GitHub-hosted runner
+    every time this project has looked, so `unavailable` is the arm to expect.
+    """
+    workflow = read_text(REPO_ROOT / ".github" / "workflows" / "digest.yml")
+    assert "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" in workflow
+    assert "cgroup_memory_peak_bytes=unavailable" in workflow
+
+    def read(memory_peak: str) -> RuntimeCountersRow:
+        return RuntimeCountersRow.from_metrics_text(
+            "",
+            date="2026-09-08",
+            run_id="2026-09-08-1",
+            shard=0,
+            shards=4,
+            scraped_at="2026-09-08T00:01:00Z",
+            memory_peak=memory_peak,
+        )
+
+    assert read("cgroup_memory_peak_bytes=15032385536\n").cgroup_peak_bytes == 15032385536
+    assert read("cgroup_memory_peak_bytes=unavailable\n").cgroup_peak_bytes is None
+    assert read("").cgroup_peak_bytes is None
+
+
+def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_names() -> None:
+    """The Oracle for the widening: every old row re-reads, and the bytes account for themselves.
+
+    Three rows built here rather than the 225 in `state/runtime-counters.csv`,
+    which gains one per shard per run (Rule #12). What is under test is the
+    arithmetic of an appended column, and three rows prove it exactly as 225 do.
+
+    A widening that MOVED a cell instead of appending one still parses, and every
+    number would then be filed under the wrong name. The byte count is what
+    catches that: an appended column costs one comma on every line and its own
+    name once, and nothing else.
+    """
+    added = ("n_ctx_configured", "python_peak_rss_bytes", "cgroup_peak_bytes")
+    columns = RuntimeCountersRow.csv_columns()
+    assert columns[-len(added) :] == added, "a new column is appended, never inserted"
+    narrow_columns = columns[: -len(added)]
+
+    rows = [
+        RuntimeCountersRow.from_metrics_text(
+            read_text(path),
+            date="2026-08-26",
+            run_id="2026-08-26-5",
+            shard=index,
+            shards=len(METRICS_CAPTURES),
+            scraped_at="2026-08-26T21:32:30Z",
+        )
+        for index, path in enumerate(METRICS_CAPTURES[:3])
+    ]
+    cells = [row.csv_row() for row in rows]
+    # Splitting on a comma is only safe because no cell here holds one, which is
+    # the same reason `cpu_model` is refused a newline.
+    assert not any("," in value for row in cells for value in row.values())
+    narrow = "".join(
+        f"{','.join(line)}\n"
+        for line in [narrow_columns, *([row[name] for name in narrow_columns] for row in cells)]
+    )
+    wide = "".join(
+        f"{','.join(line)}\n"
+        for line in [columns, *([row[name] for name in columns] for row in cells)]
+    )
+
+    expected_delta = len(added) * len(narrow.splitlines()) + sum(len(name) for name in added)
+    assert len(wide.encode()) - len(narrow.encode()) == expected_delta
+
+    for row, line in zip(rows, wide.splitlines()[1:], strict=True):
+        widened = RuntimeCountersRow.from_csv_row(dict(zip(columns, line.split(","), strict=True)))
+        assert widened == row
+        assert widened.n_ctx_configured is None
+        assert widened.python_peak_rss_bytes is None
+        assert widened.cgroup_peak_bytes is None
+
+
 def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() -> None:
     """A machine nobody read and a machine that did nothing are not one fact.
 
@@ -2547,15 +2735,22 @@ def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() ->
         # that renames one leaves the cell empty rather than reporting a load
         # that took no time.
         server_log="0.00.011.682 I srv    load_model: opening weights\n",
+        memory_peak="cgroup_memory_peak_bytes=unavailable\n",
     )
     cells = row.csv_row()
 
     assert row.cpu_busy_pct is None
     assert row.peak_rss_bytes is None
     assert row.model_load_ms is None
+    assert row.n_ctx_configured is None
+    assert row.python_peak_rss_bytes is None
+    assert row.cgroup_peak_bytes is None
     assert cells["cpu_busy_pct"] == ""
     assert cells["peak_rss_bytes"] == ""
     assert cells["model_load_ms"] == ""
+    assert cells["n_ctx_configured"] == ""
+    assert cells["python_peak_rss_bytes"] == ""
+    assert cells["cgroup_peak_bytes"] == ""
     assert RuntimeCountersRow.from_csv_row(cells) == row
 
 
