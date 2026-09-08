@@ -43,6 +43,7 @@ EXPECTED_WORKFLOWS: Final = {
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
+    "measure-migrated-tree.yml": ("Measure the migrated tree", frozenset({"workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "pages.yml": (
         "Pages publication",
