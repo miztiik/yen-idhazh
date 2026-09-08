@@ -176,7 +176,7 @@
         },
         "published_window_days": {
           "default": -1,
-          "description": "How far back the published record is consulted before an address is treated as never published. -1 means never forget, and it is the only sentinel for unbounded - not 0, not null, and not a very large number, because a large number is a cover that silently becomes finite the day the archive outgrows it. A finite value must be strictly longer than seen_window_days: the two stores answer the same question from opposite ends, and a cover that expires first hands an address to a first-sight store that has already forgotten it. Nothing reads this yet - the knob lands switched off and a later change wires it up.",
+          "description": "How far back the published record is consulted before an address is treated as never published. -1 means never forget, and it is the only sentinel for unbounded - not 0, not null, and not a very large number, because a large number is a cover that silently becomes finite the day the archive outgrows it. A finite value must be strictly longer than seen_window_days: the two stores answer the same question from opposite ends, and a cover that expires first hands an address to a first-sight store that has already forgotten it. load_published reads it once a run, through stage_plan.",
           "title": "Published Window Days",
           "type": "integer"
         },
