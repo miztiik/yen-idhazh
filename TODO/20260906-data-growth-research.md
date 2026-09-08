@@ -54,6 +54,14 @@ half (#500). **Finding 112** is a `Keep` (necessary local presentation work); it
 sits inside the audited 93-113 range but was never in this plan's scope, and
 nothing here closes it.
 
+**Two plan rows close no finding, but the 43 above rest on them.** Row 1 set
+every tunable the plan needed in one contract and its schema - the 1/7/14/30/90-day
+window presets, the 14-day read-mark and archive windows, and the 20 MB offline
+byte ceiling (#443). Row 10 named the existing `<YYYY-MM>` month layout as the
+project's partition pattern and wrote its freeze rule and concept doc (#445),
+which the partition-bounded reads that closed findings 11 and 12 are built on.
+Row 27 carried the living-docs sweep and this record (#506).
+
 ## Decision Board
 
 Read this table to choose the next investment. It is ordered by **expected total

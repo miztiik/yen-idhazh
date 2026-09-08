@@ -2001,10 +2001,7 @@ within a screen of it, takes a changed option through `update()`, and is
 destroyed once - and a small `$effect` in
 [../../../frontend/src/lib/charts/Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte)
 hands the live chart each new option, so a control that moves the shape or the
-window is followed without a rebuild. Six of the twelve chart call sites still
-carry a `{#key windowDays}` remount from before that lifetime existed; the engine
-no longer needs it, and removing it is a code sweep this documentation change did
-not make.
+window is followed without a rebuild.
 
 **A reason with no items draws nothing, so the panel names it in a sentence.**
 `not_scored` has never fired: it needs a missing faithfulness score, and the

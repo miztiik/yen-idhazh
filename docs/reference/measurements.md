@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -1885,7 +1885,7 @@ and `/evals/` 3,103 to 3,107 across the five, with the control inside both.
 priced by removing a real one, never by cloning one: a clone reads about 18
 percent cheap because gzip sees a near-copy of a block it already holds. Both
 arms drop a mature day - neither the newest nor the oldest, so the 30-day window
-anchor never moves - from `state/published.csv`, `state/scores/`,
+anchor never moves - from the published ledger, `state/scores/`,
 `state/item-health/`, `state/feed-health/`, `state/runtime-counters.csv`,
 `frontend/public/telemetry/` and the day's own directory under
 `frontend/public/digest/`. `frontend/public/assist/` and `source-health.json` are
@@ -3141,7 +3141,7 @@ high is evidence and not an outlier.
 published day is priced by removing a real one, never by cloning one: a clone
 reads about 18 percent cheap because gzip sees a near-copy of a block it already
 holds. Both arms drop a mature day - neither the newest nor the oldest, so the
-30-day window anchor never moves - from `state/published.csv`,
+30-day window anchor never moves - from the published ledger,
 `state/scores/`, `state/runtime-counters.csv`, `state/item-health/`,
 `state/feed-health/`, `frontend/public/telemetry/` and the day's own directory
 under `frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT`
@@ -3490,7 +3490,8 @@ the spread that matters is on the rate and is given below.
 Arm Aug is arm T's code built against a copy of `frontend/public/` and `state/`
 with every September day taken out - the digest days, the month's search-index
 shard, the month's telemetry and ledger shards, and the 2,713 September rows of
-`state/published.csv`. September is cut whole because every ledger here is
+the flat published ledger this project then held. September is cut whole because
+every ledger here is
 sharded by month, so a month boundary is the only cut that leaves each shard
 either untouched or absent. **No day was cloned or synthesised**; both corpora
 are real published days.
@@ -3905,6 +3906,66 @@ the item inside `digest.json`, with no absent day and no absent item (measured
 2026-08-26 over the whole file). What the column bought was a grep by address,
 and that is what was given up - see
 [../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+
+### The day grain, and the two numbers that argued against it
+
+**Measured 2026-09-07** on an Intel Core i7-1265U, over this checkout. Every
+figure above this heading was taken over the flat `state/published.csv`, which
+`backend/utilities/split_published_ledger.py` moved into
+`state/published/YYYY/MM/DD.csv` on 2026-09-08.
+
+The ledger that day: **7,243 rows, 756 KB, 106.9 B a row**, 7,162 distinct
+addresses over 15 published days - **483 rows a day**. `load_published` took
+**37.0 ms at best and 69.0 ms at worst over five runs, a spread of 32.0 ms**,
+which is most of the reading: the same code is nearly twice as slow when another
+job shares the box, so a wall clock here measures the machine as much as the
+file. It peaked at **500.9 B a row while reading, 3.63 MB**. At the measured rate
+that is 18.8 MB on disk and 88 MB of peak after a year, 56.5 MB and 265 MB after
+three.
+
+**81 addresses carry more than one row, and every one of those gaps is zero
+days.** No address in the committed ledger was published and then published
+again on a later date. Read that as evidence the guard works rather than that it
+is idle - the ledger cannot show a repeat the guard blocked.
+
+**A synthetic year, 176,295 rows, three layouts.** The window column is a
+120-day cover, the shape `collect.published_window_days` now expresses.
+
+| Layout | Whole history | 120-day window | Opens in window | Bytes read in window |
+| --- | --- | --- | --- | --- |
+| One file | 2,654 ms | not possible | 1 | 17.1 MB |
+| 12 month files | 1,741 ms | 293 ms | 4 | 5,715,970 |
+| **365 day files** | 2,514 ms | 587 ms | 121 | 5,673,448 |
+
+**Day files went the wrong way on speed, and it is recorded rather than
+dropped.** For the same 120-day window they read 42 KB fewer than month files
+and take **587 ms against 293 ms - twice as long**. The extra 294 ms is 117 more
+file opens at about 2.5 ms each on Windows. Parse cost follows bytes; the rest
+follows opens. The unbounded read is where the grain hurts most, 2,514 ms with a
+1,684 to 18,592 ms spread, and that is the mode shipping today. Accepted,
+because it is seconds inside a job that runs for hours.
+
+**And repository size went the wrong way too.** 60 days, 5 runs a day, 300
+commits:
+
+| Layout | Working tree | `.git` before gc | after gc |
+| --- | --- | --- | --- |
+| One file | 2,757 KB | 3,772 KB | **275 KB** |
+| Month files | 2,757 KB | 329 KB | **280 KB** |
+| Day files | 2,759 KB | 338 KB | **296 KB** |
+
+Git has no append: every commit writes a whole new object, which is why one file
+is **eleven times worse before packing**. Packing recovers essentially all of it,
+and day files finish **21 KB larger than one file and 16 KB larger than month
+files - the largest of the three**. So **repository size is not a reason for day
+files**, and it is written down here because the opposite is the intuitive
+answer and the intuitive answer is wrong.
+
+What did earn the grain is in
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md):
+one partition rule shared with the digest tree, a day removal that is one `rm`
+rather than an edit `merge=union` cannot express, and a merge surface of one day
+rather than about 150 runs.
 
 ## The safety ceiling fires on every run
 

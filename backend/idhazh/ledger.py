@@ -6,37 +6,35 @@ no memory of its own: every run starts on a fresh machine with a fresh
 checkout, so anything one run needs to tell the next has to be committed
 (Rule #1).
 
-A ledger shards by month only when the read that consumes it carries a time
-window. A window lets `shards_in_window` skip whole files; without one, every
-shard is opened anyway and splitting the file buys nothing. The rule is in
-`docs/architecture/contracts/schemas.md`.
+A ledger partitions only when the read that consumes it carries a time window.
+A window lets the reader name the files it wants and skip the rest; without one,
+every file is opened anyway and splitting the ledger buys nothing. The rule is
+in `docs/architecture/contracts/schemas.md`.
 
 `state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
 carried no date. Read through `collect.seen_window_days`, so it shards.
 
 `state/published/YYYY/MM/DD.csv` answers "have we already run this?" It is the
 grain the published tree itself uses, and a run appends to the day its own rows
-name and to nothing else. The read is still whole, because published is forever
-and the question has no time bound - so every day file is opened anyway, and the
-grain buys a small merge surface and a removal that is one `rm`, never a faster
-read. Size it from the ceiling, not from today: a run plans at most
-`run.safety_ceiling_per_run` items, which the committed config sets to 80, and
-the schedule fires five times a day - so a day writes at most 400 rows and a
-year at most about 146,000. Measured 2026-09-08 on an Intel Core i7-1265U over
-the 7,600 committed rows, header included: 106.9 B a row, so a year of that
-ceiling is 15.6 MB on disk. The 16 committed days average 475 rows a day, which
-is above the ceiling arithmetic because they were written under three different
-ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since - and the newest
-full day wrote 357. Reading the whole file took a median 32.7 ms over fifteen
-consecutive runs, best 30.1 and worst 37.5, a spread of 7.4 ms - and as slow as
-68.6 ms while other jobs shared the box, which is the number to remember before
-reading any wall clock here as a property of the file. See
+name and to nothing else. Its read carries `collect.published_window_days`, and
+the committed config sets that to `-1` - so today every day file is opened and
+the answer is every address ever published. The day grain is what makes a finite
+cover possible at all: it names the days in range and opens those files and no
+others. Until one is set the grain buys a small merge surface and a removal that
+is one `rm`, and not a faster read. Size it from the ceiling, not from today: a
+run plans at most `run.safety_ceiling_per_run` items, which the committed config
+sets to 80, and the schedule fires five times a day - so a day writes at most 400
+rows and a year at most about 146,000. Measured 2026-09-08 on an Intel Core
+i7-1265U over the 7,600 committed rows, header included: 106.9 B a row, so a
+year of that ceiling is 15.6 MB on disk. The 16 committed days average 475 rows
+a day, which is above the ceiling arithmetic because they were written under
+three different ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since
+- and the newest full day wrote 357. Reading the whole file took a median
+32.7 ms over fifteen consecutive runs, best 30.1 and worst 37.5, a spread of
+7.4 ms - and as slow as 68.6 ms while other jobs shared the box, which is the
+number to remember before reading any wall clock here as a property of the file.
+See
 `docs/reference/measurements.md`.
-
-`state/published.csv` is the one file it moved off. It is read and never
-written. `load_published` returns the union of both shapes, so no step of that
-move can lose an address - a split that half-finishes, or a flat file a union
-merge brings back after it was removed, still answers.
 
 `state/feed-health/<YYYY-MM>.csv` answers "is this source still working?" One
 row per feed per run, read through `HEALTH_WINDOW_DAYS`, so it shards.
@@ -87,6 +85,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final, NoReturn
 
+from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
@@ -103,7 +102,6 @@ ITEM_HEALTH_DIRNAME: Final = "item-health"
 TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_DIRNAME: Final = "published"
-PUBLISHED_FILENAME: Final = "published.csv"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 VISUAL_PRUNES_FILENAME: Final = "visual-prunes.csv"
@@ -393,9 +391,10 @@ def _stream_rows(path: Path) -> Iterator[dict[str, str]]:
 
     `_read_rows` materialises the whole file first, which costs the caller its
     entire size in peak memory before the first row is looked at. Measured
-    2026-09-07 on an Intel Core i7-1265U over `state/published.csv`: 500.9 B of
-    peak per row against a stored row of 106.9 B. A reduction never needs the
-    list, so it should not pay for one.
+    2026-09-07 on an Intel Core i7-1265U over the flat `state/published.csv`
+    this ledger has since moved off: 500.9 B of peak per row against a stored
+    row of 106.9 B. A reduction never needs the list, so it should not pay for
+    one.
     """
     if not path.exists():
         return
@@ -455,17 +454,6 @@ def _refuse_stray(entry: Path, root: Path) -> NoReturn:
     )
 
 
-def _flat_published_path(state_dir: Path) -> Path:
-    """`state/published.csv`, the one file this ledger moved off.
-
-    Private because no caller may write it: a row is filed under its own day
-    now, and `published_path` is the only path a writer asks for. It is still
-    opened by `load_published`, and it stops being opened when the split has
-    run and the file is gone.
-    """
-    return state_dir / PUBLISHED_FILENAME
-
-
 def _published_days(state_dir: Path) -> Iterator[Path]:
     """Every `state/published/YYYY/MM/DD.csv`, oldest first.
 
@@ -498,22 +486,56 @@ def _published_days(state_dir: Path) -> Iterator[Path]:
                 yield day
 
 
-def load_published(state_dir: Path) -> dict[str, str]:
-    """Address -> the digest date it ran on. Never windowed: published is forever.
+def _days_in_window(today: str, within_days: int) -> list[str]:
+    """The dates a cover of `within_days` names, newest first.
 
-    Two shapes are read: the flat `state/published.csv` and the day tree under
-    `state/published/`. They coexist while the ledger moves to the day layout,
-    and reading both is what stops any step of that move losing an address - a
-    split that half-finishes, or a flat file a union merge brings back after it
-    was removed, still answers here.
-
-    Streamed rather than materialised, because this is the one unwindowed read
-    over the one ledger with no time bound - so its peak would otherwise be the
-    whole file, and the whole file is what grows. Only the day paths are
-    listed, and a day is a file rather than a row.
+    Days rather than months, because this ledger files by day. The same walk as
+    `shards_in_window` and for the same reason: subtracting days keeps the
+    arithmetic honest across a month and a year boundary with no calendar table.
     """
+    end = date_type.fromisoformat(today)
+    return [(end - timedelta(days=offset)).isoformat() for offset in range(within_days + 1)]
+
+
+def load_published(state_dir: Path, *, today: str | None, within_days: int) -> dict[str, str]:
+    """Address -> the digest date it ran on, over the cover the config sets.
+
+    `within_days` is `collect.published_window_days`. The committed config sets
+    it to `UNBOUNDED_WINDOW`, so the shipping answer is every address ever
+    published - the guarantee the guard has always given. Two paths, because the
+    two questions are not the same question:
+
+    - **Unbounded.** Walk `state/published/`, naming every entry it meets and
+      refusing one it cannot place. `today` is not read on this path, and a
+      caller with no cover passes `None` to say so.
+    - **Finite.** Ask for the dates in range and open those files and no others.
+      A day outside the cover is never opened, so an address only that day holds
+      is forgotten and can be planned again. That is the point of a cover, and
+      it is why `CollectConfig` refuses a value that is not wider than
+      `collect.seen_window_days`.
+
+    Neither path globs. The unbounded one has to account for every file it
+    finds, and the bounded one only opens files it named itself. A named day
+    with nothing published has no file, which is not a fault - a run that
+    published nothing that day wrote nothing that day.
+
+    Streamed rather than materialised, because this is the read over the ledger
+    with no natural bound - so its peak would otherwise be the whole tree, and
+    the tree is what grows. Only the day paths are listed, and a day is a file
+    rather than a row.
+    """
+    if within_days == UNBOUNDED_WINDOW:
+        paths: Iterable[Path] = _published_days(state_dir)
+    elif today is None:
+        raise ValueError(
+            f"a published cover of {within_days} days needs the day it is anchored on. "
+            f"Pass today, or {UNBOUNDED_WINDOW} to read every day file."
+        )
+    else:
+        paths = (published_path(state_dir, on) for on in _days_in_window(today, within_days))
+
     published: dict[str, str] = {}
-    for path in (_flat_published_path(state_dir), *_published_days(state_dir)):
+    for path in paths:
         for row in _stream_rows(path):
             url_key, on = row["url_key"], row["published_on"]
             if url_key not in published or on < published[url_key]:

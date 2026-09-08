@@ -8,12 +8,13 @@ import io
 import tracemalloc
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
-from conftest import FIXTURES_DIR
+from conftest import CONFIG_DIR, FIXTURES_DIR
 
-from idhazh import cli, ledger
+from idhazh import cli, config, ledger
+from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
@@ -114,29 +115,33 @@ def test_feed_health_ledger_rejects_stale_committed_header(tmp_path: Path) -> No
 def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> None:
     """The reader maps cells by name, so a column nothing reads could leave without it.
 
-    Both fixtures hold the same eleven rows copied out of `state/published.csv`
-    before it was narrowed; the second has no `canonical_url`. The header check
-    guards the writer only - `require_matching_header` is called from `_append`
-    and from nothing on the read path - and that is what made narrowing the row
-    one commit rather than an expand-migrate-contract sequence (CLAUDE.md
-    section 11). It still runs because a fork or a stale branch can hold a wide
-    ledger, and this says what happens when one does.
+    Both fixtures hold the same eleven rows copied out of the published ledger
+    before it was narrowed; the second has no `canonical_url`. They are written
+    into a day file here because that is the only shape the reader opens now -
+    the bytes are the ones the flat file held, and the path is the one a run
+    would write them to. The header check guards the writer only -
+    `require_matching_header` is called from `_append` and from nothing on the
+    read path - and that is what made narrowing the row one commit rather than
+    an expand-migrate-contract sequence (CLAUDE.md section 11). It still runs
+    because a fork or a stale branch can hold a wide ledger, and this says what
+    happens when one does.
     """
     wide, narrow_state = tmp_path / "wide", tmp_path / "narrow"
     for state, fixture in ((wide, "published-v1.csv"), (narrow_state, "published-v2.csv")):
-        state.mkdir()
-        _flat_file(state).write_bytes((STATE_FIXTURES / fixture).read_bytes())
+        day = _day_file(state, DATE)
+        day.parent.mkdir(parents=True)
+        day.write_bytes((STATE_FIXTURES / fixture).read_bytes())
 
-    wide_header = ledger.read_header(_flat_file(wide))
-    narrow_header = ledger.read_header(_flat_file(narrow_state))
+    wide_header = ledger.read_header(_day_file(wide, DATE))
+    narrow_header = ledger.read_header(_day_file(narrow_state, DATE))
     assert set(wide_header) - set(narrow_header) == {"canonical_url"}
     assert {"url_key", "published_on"} <= set(narrow_header)
 
-    published = ledger.load_published(wide)
+    published = _whole_ledger(wide)
     assert len(published) == 11, (
         "an empty or trimmed ledger would pass the comparison while proving nothing"
     )
-    assert published == ledger.load_published(narrow_state)
+    assert published == _whole_ledger(narrow_state)
 
 
 def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: Path) -> None:
@@ -156,53 +161,59 @@ def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: 
         rows = list(csv.DictReader(handle))
 
     assert len(rows) == 2, "the append path does not deduplicate"
-    assert ledger.load_published(state) == {URL_KEY: DATE}, "the read keeps the earliest date"
+    assert _whole_ledger(state) == {URL_KEY: DATE}, "the read keeps the earliest date"
 
 
 def _published_fixture(state: Path, *, rows: int, keys: int) -> dict[str, str]:
-    """`rows` records over `keys` distinct addresses. Returns what the read owes."""
-    state.mkdir(parents=True, exist_ok=True)
+    """`rows` records over `keys` distinct addresses, filed by day. Returns what the
+    read owes.
+    """
+    by_day: dict[str, list[dict[str, str]]] = {}
     expected: dict[str, str] = {}
-    with _flat_file(state).open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
-        out.writeheader()
-        for number in range(rows):
-            key = derive_url_key(f"https://example.org/items/{number % keys}")
-            on = f"2026-{8 + number % 4:02d}-0{1 + number % 9}"
-            out.writerow(
-                {
-                    "version": PublishedRow.schema_version(),
-                    "url_key": key,
-                    "published_on": on,
-                    "item_id": f"ai-{number:06d}",
-                }
-            )
-            if key not in expected or on < expected[key]:
-                expected[key] = on
+    for number in range(rows):
+        key = derive_url_key(f"https://example.org/items/{number % keys}")
+        on = f"2026-{8 + number % 4:02d}-0{1 + number % 9}"
+        by_day.setdefault(on, []).append(
+            {
+                "version": PublishedRow.schema_version(),
+                "url_key": key,
+                "published_on": on,
+                "item_id": f"ai-{number:06d}",
+            }
+        )
+        if key not in expected or on < expected[key]:
+            expected[key] = on
+    for on, payloads in by_day.items():
+        path = _day_file(state, on)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
+            out.writeheader()
+            out.writerows(payloads)
     return expected
 
 
 def _peak_of_load_published(state: Path) -> tuple[dict[str, str], int]:
     tracemalloc.start()
     try:
-        published = ledger.load_published(state)
+        published = _whole_ledger(state)
         return published, tracemalloc.get_traced_memory()[1]
     finally:
         tracemalloc.stop()
 
 
 def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> None:
-    """The one unwindowed read over the one ledger with no time bound streams.
+    """The one read over the one ledger with no natural bound streams.
 
-    `state/published.csv` is the only ledger here whose read carries no window,
-    so it was the only one whose peak was the whole file. Measured 2026-09-07 on
-    an Intel Core i7-1265U over the committed 7,243 rows, the materialising read
+    The published ledger is the only one here whose committed cover is open, so
+    it was the only one whose peak was the whole tree. Measured 2026-09-07 on an
+    Intel Core i7-1265U over the committed 7,243 rows, the materialising read
     peaked at 500.9 B a row against a stored row of 106.9 B - 3.63 MB then, and
     265 MB at the third year of the measured 483 rows a day.
 
     A threshold in bytes a row would pass for the wrong reason, because what a
     reduction legitimately keeps is its mapping. So the property is asserted
-    directly: hold the answer still, double the file, and the peak must not
+    directly: hold the answer still, double the rows, and the peak must not
     follow. Both populations are built and fixed, so this costs the same on the
     day the archive holds ten times either (Rule #12, section 13).
     """
@@ -241,10 +252,21 @@ def _day_file(state: Path, date: str) -> Path:
 def _flat_file(state: Path) -> Path:
     """`state/published.csv`, spelled out for the reason `_day_file` gives.
 
-    Read and never written. It has no path helper left to ask, because the
-    shape a caller names is the day tree.
+    Neither written nor read any more. It has no path helper left to ask,
+    because the shape a caller names is the day tree. Only the cutover utility
+    still opens it, and only in a checkout that still has one.
     """
     return state / "published.csv"
+
+
+def _whole_ledger(state: Path) -> dict[str, str]:
+    """The read under the cover the committed config ships: every day file.
+
+    Spelled once here because most of these tests are about the reduction and
+    not about the cover, and repeating the sentinel at thirty call sites would
+    bury the two tests that are about it.
+    """
+    return ledger.load_published(state, today=None, within_days=UNBOUNDED_WINDOW)
 
 
 def _tree(root: Path) -> dict[str, bytes]:
@@ -278,69 +300,54 @@ def _published_file(path: Path, dates: dict[str, str]) -> None:
 
 
 def test_load_published_reads_no_history_from_a_fresh_clone(tmp_path: Path) -> None:
-    """A missing flat file and a missing day tree both mean nothing has published yet.
+    """A missing day tree means nothing has published yet, and it is not an error.
 
-    Neither is an error. A clone with no history is the state every fresh
-    checkout is in, and an empty mapping is what "nothing has run" looks like.
+    A clone with no history is the state every fresh checkout is in, and an
+    empty mapping is what "nothing has run" looks like. Asserted under both
+    covers, because a finite one names days that do not exist and must answer
+    the same way rather than fail on the first missing file.
     """
-    assert ledger.load_published(tmp_path / "state") == {}
+    assert _whole_ledger(tmp_path / "state") == {}
+    assert ledger.load_published(tmp_path / "state", today=DATE, within_days=91) == {}
 
 
-def test_load_published_reads_the_flat_file_the_day_tree_and_their_union(
-    tmp_path: Path,
-) -> None:
-    """Both shapes answer, and holding both answers with the union of the two.
+def test_load_published_reads_every_day_file_the_tree_holds(tmp_path: Path) -> None:
+    """One day is one file, and the answer is every file the tree holds.
 
-    `state/published.csv` is moving to `state/published/YYYY/MM/DD.csv`. The
-    reader learns both shapes before anything writes the new one, so a split
-    that half-finishes, or a flat file a union merge brings back after it was
-    removed, still returns every address rather than silently dropping the
-    shape nobody is reading.
+    Two days of one month and a day of the next, so the walk has to cross a
+    month directory rather than stopping at the first one it finished.
     """
-    flat_only = tmp_path / "flat-only"
-    _published_file(_flat_file(flat_only), {_address(1): "2026-08-20"})
-    assert ledger.load_published(flat_only) == {_address(1): "2026-08-20"}
+    state = tmp_path / "state"
+    _published_file(_day_file(state, "2026-08-21"), {_address(2): "2026-08-21"})
+    _published_file(_day_file(state, "2026-08-22"), {_address(3): "2026-08-22"})
+    _published_file(_day_file(state, "2026-09-03"), {_address(4): "2026-09-03"})
 
-    days_only = tmp_path / "days-only"
-    _published_file(_day_file(days_only, "2026-08-21"), {_address(2): "2026-08-21"})
-    _published_file(_day_file(days_only, "2026-08-22"), {_address(3): "2026-08-22"})
-    _published_file(_day_file(days_only, "2026-09-03"), {_address(4): "2026-09-03"})
-    assert ledger.load_published(days_only) == {
+    assert _whole_ledger(state) == {
         _address(2): "2026-08-21",
         _address(3): "2026-08-22",
         _address(4): "2026-09-03",
-    }, "two days of one month and a day of the next"
-
-    both = tmp_path / "both"
-    _published_file(_flat_file(both), {_address(1): "2026-08-20"})
-    _published_file(_day_file(both, "2026-08-21"), {_address(2): "2026-08-21"})
-    _published_file(_day_file(both, "2026-09-03"), {_address(4): "2026-09-03"})
-    assert ledger.load_published(both) == {
-        _address(1): "2026-08-20",
-        _address(2): "2026-08-21",
-        _address(4): "2026-09-03",
-    }, "the union, so neither shape can hide an address from the guard"
+    }
 
 
-@pytest.mark.parametrize("earlier_in_the_day_tree", [False, True])
-def test_load_published_keeps_the_earliest_date_whichever_shape_holds_it(
-    tmp_path: Path, earlier_in_the_day_tree: bool
+@pytest.mark.parametrize("earlier_first", [False, True])
+def test_load_published_keeps_the_earliest_date_two_days_hold(
+    tmp_path: Path, earlier_first: bool
 ) -> None:
-    """One address in both shapes on two dates. The answer cannot follow read order.
+    """One address in two day files on two dates. The answer cannot follow read order.
 
     Asserted both ways round because a reader that simply overwrote would pass
     one arm and fail the other, and which arm it passed would depend on which
-    shape it happened to open first.
+    day file it happened to open first.
     """
     state = tmp_path / "state"
     key = _address(1)
     early, late = "2026-08-21", "2026-09-03"
-    flat_on, day_on = (late, early) if earlier_in_the_day_tree else (early, late)
+    first, second = (early, late) if earlier_first else (late, early)
 
-    _published_file(_flat_file(state), {key: flat_on})
-    _published_file(_day_file(state, day_on), {key: day_on})
+    _published_file(_day_file(state, first), {key: first})
+    _published_file(_day_file(state, second), {key: second})
 
-    assert ledger.load_published(state) == {key: early}
+    assert _whole_ledger(state) == {key: early}
 
 
 @pytest.mark.parametrize(
@@ -367,7 +374,161 @@ def test_load_published_refuses_a_file_it_cannot_place_in_the_day_tree(
     _published_file(state / "published" / relative, {_address(1): "2026-08-21"})
 
     with pytest.raises(ValueError, match="is not a YYYY/MM/DD published day"):
-        ledger.load_published(state)
+        _whole_ledger(state)
+
+
+#: Six day files over six months, and two addresses that appear twice. Built
+#: rather than read off `state/published/`, which spans 16 days and could never
+#: carry the case these arms are about (Rule #12, section 13).
+#:
+#: `_address(6)` is the one that matters: it was published in April and again in
+#: July, so the unwindowed read answers April and a 120-day cover answers July.
+#: A cover does not only forget addresses - it moves dates.
+_SIX_MONTHS: Final = {
+    "2026-04-05": (1, 6),
+    "2026-05-02": (2,),
+    "2026-06-30": (3,),
+    "2026-07-04": (4, 6),
+    "2026-08-21": (5,),
+    "2026-09-03": (5,),
+}
+#: The day both arms are anchored on. Fixed, so nothing here expires when the
+#: calendar moves past it. 120 days back from it is 2026-05-11.
+_ANCHOR: Final = "2026-09-08"
+
+
+def _six_months(state: Path) -> None:
+    """Write the fixture. What it owes is spelled out in each arm, not returned here."""
+    for on, numbers in _SIX_MONTHS.items():
+        _published_file(_day_file(state, on), {_address(number): on for number in numbers})
+
+
+def test_the_committed_cover_answers_exactly_what_the_unwindowed_read_answered(
+    tmp_path: Path,
+) -> None:
+    """Oracle, first arm: shipping `-1` leaves the guarantee where it was.
+
+    The cover is machinery and this row ships it open, so the assertion that
+    matters is the one saying nothing moved: every address the tree holds, at
+    the earliest date any day file gives it - which is what an unwindowed read
+    of this ledger has always returned.
+
+    The width is read from the committed config rather than spelled here, so
+    narrowing it in `config/idhazh.json` reds this test instead of quietly
+    changing what a reader is shown.
+    """
+    state = tmp_path / "state"
+    _six_months(state)
+    expected = {
+        _address(1): "2026-04-05",
+        _address(2): "2026-05-02",
+        _address(3): "2026-06-30",
+        _address(4): "2026-07-04",
+        _address(5): "2026-08-21",
+        _address(6): "2026-04-05",
+    }
+    committed = config.load(CONFIG_DIR).app.collect.published_window_days
+
+    assert committed == UNBOUNDED_WINDOW, (
+        "the committed cover is open, and the equality below is what that buys"
+    )
+    assert ledger.load_published(state, today=_ANCHOR, within_days=committed) == expected
+    assert _whole_ledger(state) == expected, "and the anchor is not read on that path"
+
+
+def _opened(monkeypatch: pytest.MonkeyPatch, state: Path) -> list[str]:
+    """Every path the reader hands to `_stream_rows`, in the order it asked for them.
+
+    A recorder rather than a substitute: it calls the real reader and hands back
+    what the real reader returns, so the mapping under test is the mapping a run
+    gets (Rule #7). Counting the opens is the only way to tell the two paths
+    apart - both answer the same over a fixture the cover covers, and a wall
+    clock would measure the box rather than the read.
+    """
+    real = ledger._stream_rows
+    asked: list[str] = []
+
+    def record(path: Path) -> Iterator[dict[str, str]]:
+        asked.append(path.relative_to(state.parent).as_posix())
+        return real(path)
+
+    monkeypatch.setattr(ledger, "_stream_rows", record)
+    return asked
+
+
+def test_a_finite_cover_opens_the_days_in_range_and_no_others(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Oracle, second arm: a cover of 120 days never opens an April or a May file.
+
+    Proved by what the reader asked for rather than by how long it took. The
+    fixture spans six months, so 120 days back from the anchor cuts it in the
+    middle. April and May are out of reach, their two addresses are gone from
+    the answer, and the address they shared with July comes back dated July.
+    None of that is a bug being caught - it is what a cover is for, and it is
+    why `CollectConfig` refuses one no wider than `collect.seen_window_days`.
+
+    The bounded path names its days, so it asks for all 121 of them and most do
+    not exist. `_stream_rows` yields nothing for a path that is not there, which
+    is why a day nobody published on is not a fault.
+    """
+    state = tmp_path / "state"
+    _six_months(state)
+    asked = _opened(monkeypatch, state)
+
+    published = ledger.load_published(state, today=_ANCHOR, within_days=120)
+
+    assert published == {
+        _address(3): "2026-06-30",
+        _address(4): "2026-07-04",
+        _address(5): "2026-08-21",
+        _address(6): "2026-07-04",
+    }, "two addresses forgotten, and a third answering with a later date"
+    assert len(asked) == 121, "one path per day in the cover, and the anchor is one of them"
+    assert asked[0] == "state/published/2026/09/08.csv", "newest first"
+    assert asked[-1] == "state/published/2026/05/11.csv", "120 days back from the anchor"
+    assert "state/published/2026/04/05.csv" not in asked, "April is never opened"
+    assert "state/published/2026/05/02.csv" not in asked, "nor is the May day file"
+
+    existing = sorted(path for path in asked if (state.parent / path).is_file())
+    assert existing == [
+        "state/published/2026/06/30.csv",
+        "state/published/2026/07/04.csv",
+        "state/published/2026/08/21.csv",
+        "state/published/2026/09/03.csv",
+    ], "four of the six day files are inside the cover, and those are the four it read"
+
+
+def test_the_unbounded_cover_opens_every_day_file_and_only_those(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half of the count: `-1` walks the tree and opens what it finds.
+
+    Six files exist and six are opened - no path is named for a day that was
+    never published, because this path lists rather than names. That is the
+    difference the two arms measure: 121 paths to read four files against six
+    paths to read six.
+    """
+    state = tmp_path / "state"
+    _six_months(state)
+    asked = _opened(monkeypatch, state)
+
+    published = ledger.load_published(state, today=None, within_days=UNBOUNDED_WINDOW)
+
+    assert len(published) == 6
+    assert len(asked) == 6, "one open per day file that exists, and none for a day that has none"
+    assert all((state.parent / path).is_file() for path in asked)
+
+
+def test_a_finite_cover_without_the_day_it_is_anchored_on_refuses() -> None:
+    """A cover with no anchor is a caller error, and it fails rather than reading nothing.
+
+    Reading nothing would return an empty mapping, which is what a fresh clone
+    returns - so the guard would silently stop firing and every address would be
+    planned again. The unbounded path takes `None` because it never reads it.
+    """
+    with pytest.raises(ValueError, match="needs the day it is anchored on"):
+        ledger.load_published(Path("state"), today=None, within_days=120)
 
 
 def test_append_published_writes_the_day_its_rows_name_and_no_other_file(
@@ -392,7 +553,6 @@ def test_append_published_writes_the_day_its_rows_name_and_no_other_file(
 
     assert landed == 1
     assert list(_tree(state)) == ["published/2026/09/07.csv"]
-    assert not _flat_file(state).exists(), "the flat file is read and never written"
     assert ledger.published_relpath(date) == "state/published/2026/09/07.csv"
     assert ledger.published_path(state, date) == _day_file(state, date)
 
@@ -420,22 +580,23 @@ def test_a_run_in_a_later_month_leaves_the_earlier_one_byte_identical(
     assert {name: october[name] for name in september} == september
 
 
-def test_what_the_writer_files_by_day_answers_beside_the_flat_file(tmp_path: Path) -> None:
-    """The reader's union still holds once the writer produces the new shape.
+def test_what_the_writer_files_by_day_is_what_the_reader_answers(tmp_path: Path) -> None:
+    """The writer's own output is read back, rather than a second spelling of it.
 
-    The move only works while both halves agree, so the two are checked
-    together here rather than each against a fixture of the other's output: a
-    row this writer really appended, and a flat file the split has not taken
-    yet, and both addresses back from one read.
+    Both halves are checked together here rather than each against a fixture of
+    the other's output: rows this writer really appended, across two days and
+    two months, and every address back from one read.
     """
     state = tmp_path / "state"
-    _published_file(_flat_file(state), {_address(1): "2026-08-20"})
+    ledger.append_published(
+        state, "2026-08-20", [published_row(url_key=_address(1), on="2026-08-20")]
+    )
 
     ledger.append_published(
         state, "2026-09-07", [published_row(url_key=_address(2), on="2026-09-07")]
     )
 
-    assert ledger.load_published(state) == {
+    assert _whole_ledger(state) == {
         _address(1): "2026-08-20",
         _address(2): "2026-09-07",
     }
@@ -478,12 +639,17 @@ def _flat_ledger(path: Path, rows: list[tuple[str, str]]) -> list[str]:
 
 
 def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Path) -> None:
-    """The Oracle: `load_published` answers the same before and after, from day files.
+    """The Oracle: the day files answer what the flat file held, before and after.
 
     Four rows over three days and two months, one address published twice, so
     the arms that matter are all here: a day file holds exactly its own rows,
     two months are two directories, and the earliest date still wins for an
     address the flat file held twice.
+
+    `load_published` no longer opens the flat file, so `before` is the utility's
+    own reduction of it. That is the whole reason this utility keeps a reader:
+    a one-shot cutover whose verification borrows the live reader stops working
+    the day the live reader changes.
 
     The day file is compared byte for byte rather than row by row. Rows are
     copied, never rewritten - so a split that re-serialised them through the
@@ -500,17 +666,19 @@ def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Pa
             (_address(1), "2026-09-02"),
         ],
     )
-    before = ledger.load_published(state)
-    assert before == {
-        _address(1): "2026-08-31",
-        _address(2): "2026-09-01",
-        _address(3): "2026-08-31",
-    }, "the flat file has to hold a repeat or the earliest-wins arm proves nothing"
+    assert _whole_ledger(state) == {}, "nothing is in the day tree before the split runs"
 
     report = split_ledger.run(state)
 
+    before = {
+        _address(1): "2026-08-31",
+        _address(2): "2026-09-01",
+        _address(3): "2026-08-31",
+    }
     assert (report.rows_in, report.rows_out, report.days) == (4, 4, 3)
-    assert report.digest == split_ledger.digest(before)
+    assert report.digest == split_ledger.digest(before), (
+        "the flat file has to hold a repeat or the earliest-wins arm proves nothing"
+    )
     assert not _flat_file(state).exists(), "the flat file is retired, not left beside the tree"
     assert sorted(_tree(state)) == [
         "published/2026/08/31.csv",
@@ -521,7 +689,7 @@ def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Pa
     assert _raw(_day_file(state, "2026-08-31")) == (
         f"{header}\n{written[0]}\n{written[2]}\n"
     ), "the two rows that name this day, verbatim and in the order the flat file held them"
-    assert ledger.load_published(state) == before
+    assert _whole_ledger(state) == before
 
 
 @pytest.mark.parametrize("bad", ["2026-08", "20260831"])
@@ -576,7 +744,7 @@ def test_the_split_retires_a_flat_file_that_holds_nothing(tmp_path: Path) -> Non
     assert (report.rows_in, report.rows_out, report.days) == (0, 0, 0)
     assert not _flat_file(state).exists()
     assert _tree(state) == {}, "an empty ledger names no day, so no day file is created"
-    assert ledger.load_published(state) == {}
+    assert _whole_ledger(state) == {}
 
 
 def test_the_split_keeps_what_a_day_file_already_holds(tmp_path: Path) -> None:
@@ -592,14 +760,14 @@ def test_the_split_keeps_what_a_day_file_already_holds(tmp_path: Path) -> None:
     ledger.append_published(state, date, [published_row(url_key=_address(9), on=date)])
     already = _raw(_day_file(state, date))
     _flat_ledger(_flat_file(state), [(_address(1), date)])
-    before = ledger.load_published(state)
-    assert set(before) == {_address(1), _address(9)}, "one address in each shape"
 
     report = split_ledger.run(state)
 
     assert report.rows_in == 1
     assert _raw(_day_file(state, date)).startswith(already)
-    assert ledger.load_published(state) == before
+    assert _whole_ledger(state) == {_address(1): date, _address(9): date}, (
+        "one address came from each shape, and the split kept both"
+    )
 
 
 def carried_row(
