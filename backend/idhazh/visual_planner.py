@@ -26,7 +26,15 @@ from idhazh.contracts.app_config import InferenceConfig, VisualsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
-from idhazh.elements import MAGNITUDE, NOT_A_UNIT, NUMBER, PERCENT, normalise_unit
+from idhazh.elements import (
+    MAGNITUDE,
+    NOT_A_UNIT,
+    NUMBER,
+    PERCENT,
+    YEAR_MAX,
+    YEAR_MIN,
+    normalise_unit,
+)
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import sanitize, untrusted_block
 
@@ -40,12 +48,6 @@ _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 # A number small enough to be a date, a count of paragraphs, or a list marker
 # carries no information as a bar. Charting them is how a chart becomes noise.
 _TRIVIAL_MAX: Final = Decimal(2)
-
-# A bare four-digit integer in this range, carrying no unit, is a year. A year
-# is a label, not a bar height. Dropping it costs nothing, because a label is a
-# free string the model can still write.
-_YEAR_MIN: Final = 1900
-_YEAR_MAX: Final = 2100
 
 
 class NumericFact(BaseModel):
@@ -112,7 +114,9 @@ def numeric_facts(text: str, *, limit: int = 16) -> list[NumericFact]:
 
         if not unit and "," not in digits and "." not in digits:
             plain = int(magnitude)
-            if _YEAR_MIN <= plain <= _YEAR_MAX and len(digits) == 4:
+            # A year is a label, not a bar height. Dropping it costs nothing,
+            # because a label is a free string the model can still write.
+            if YEAR_MIN <= plain <= YEAR_MAX and len(digits) == 4:
                 continue
 
         if match.group("sign"):

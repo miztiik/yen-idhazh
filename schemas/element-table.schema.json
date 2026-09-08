@@ -255,6 +255,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "A second regex pass writes into this table, so `date` now appears in `candidates_found` and in `elements`. No field was added, removed or retyped; `candidates_found` is restated as one count per pass, taken before the rule that settles two passes claiming one span.",
+      "version": "2026-09-08T18:00",
+      "why": "Both patterns match `2026` and only one of them can keep the characters, so `elements` can now hold fewer of a kind than the pass matched for a reason that is not the cap. Counting each pass before the rule keeps that visible: count after it instead and a date pattern that swallowed every figure would report an article with no figures in it, which is the silent failure this counter exists to prevent. No payload had to move - a table written under the previous stamp still validates, which is what the two committed fixtures show."
+    },
+    {
       "change": "candidates_found added and required, one count per kind, holding what each pass matched before the cap. VALUE_MAX_LENGTH and UNIT_MAX_LENGTH are exported so a producer can refuse what the shape will not hold.",
       "version": "2026-09-08T12:00",
       "why": "`elements` is capped by a tunable, so its length saturates and a density signal read off it cannot tell a 600-word note carrying 16 figures from a 3,000-word data story carrying 60 - and the second is the chartable one. It fails silently, because a capped counter returns a plausible integer. Required rather than defaulted, because a default of zero is indistinguishable from a pass that genuinely found nothing, which is the same silent failure one level down; nothing had been persisted under the previous shape, so the only payloads to move were the two committed fixtures. Keyed by kind because a single total stops answering the density question the moment a second pass writes into the same table."
@@ -271,7 +276,7 @@
       "additionalProperties": {
         "type": "integer"
       },
-      "description": "How many candidates each pass matched, before any dedupe and before the cap. `elements` saturates at the cap and this does not, so the two together say whether the cap bit and by how much.",
+      "description": "How many candidates each pass matched, before any dedupe, before the rule that settles two passes claiming one span, and before the cap. It is one count per pass and never a total: two passes may both count one stretch of characters, because both matched it and only one kept it. `elements` saturates at the cap and this does not, so the two together say whether the cap bit and by how much.",
       "propertyNames": {
         "$ref": "#/$defs/ElementKind"
       },
@@ -317,7 +322,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-08T12:00",
+      "default": "2026-09-08T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -333,5 +338,5 @@
   ],
   "title": "ElementTable",
   "type": "object",
-  "version": "2026-09-08T12:00"
+  "version": "2026-09-08T18:00"
 }
