@@ -1,7 +1,8 @@
 # Constant-Cost Reads: Ranks 1 And 10
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 **Level**: 5 (a new persisted contract, a published-payload change, and reader-facing removals)
+**Status**: Complete. All 27 rows delivered (see the Status Reckoner); this doc is now the record of how the work was done, not a queue.
 
 Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 4; honor the ESCALATE triggers in section 0.
 
@@ -38,17 +39,17 @@ Growth claims cited per row come from [the research handover](20260906-data-grow
 | 14 | Chart geometry and coverage | 3 | C | DONE #464 | removed | #464 | worker |
 | 15 | Model route instruments | 2 | C | DONE #471 | removed | #471 | worker |
 | 16 | Hardware route context | 2 | C | DONE #472 | removed | #472 | worker |
-| 17 | Console route strips and row eviction | 2 | C | PENDING | - | - | - |
-| 18 | Throughput trend window | 2 | C | PENDING | - | - | - |
-| 19 | Telemetry publication by partition | 10 | D | PENDING | - | - | - |
-| 20 | Source health by recorded date | 10 | D | PENDING | - | - | - |
-| 21 | Day-facts contract | 10 | D | PENDING | - | - | - |
-| 22 | Producer writes day facts | 21 | E | PENDING | - | - | - |
-| 23 | Console reads day facts | 22 | F | PENDING | - | - | - |
-| 24 | Band facts | 22 | F | PENDING | - | - | - |
+| 17 | Console route strips and row eviction | 2 | C | DONE #477 | removed | #477 | worker |
+| 18 | Throughput trend window | 2 | C | DONE #481 | removed | #481 | worker |
+| 19 | Telemetry publication by partition | 10 | D | DONE #484 | removed | #484 | worker |
+| 20 | Source health by recorded date | 10 | D | DONE #485 | removed | #485 | worker |
+| 21 | Day-facts contract | 10 | D | DONE #486 | removed | #486 | worker |
+| 22 | Producer writes day facts | 21 | E | DONE #489 | removed | #489 | worker |
+| 23 | Console reads day facts | 22 | F | DONE #500 | removed | #500 | worker |
+| 24 | Band facts | 22 | F | DONE #501 | removed | #501 | worker |
 | 25 | Archive window control | 1 | C | DONE #470 | removed | #470 | worker |
-| 26 | Day payload contract - author only | 21 | F | PENDING | - | - | - |
-| 27 | Living docs sweep | 23, 24 | G | PENDING | - | - | - |
+| 26 | Day payload contract - author only | 21 | F | DONE | - | authored 2026-09-08 | orchestrator |
+| 27 | Living docs sweep | 23, 24 | G | DONE #506 | removed | #506 | worker |
 
 Coverage: rows 2-26 carry all 43 findings exactly once. Rows 1, 10 and 27 carry no finding; they carry the knobs, the pattern and the docs the others need.
 
@@ -61,13 +62,23 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
 | Rows 1, 2 | Nine specs still carry a `?? [7, 14, 30, 90]` preset fallback. The committed list is now `[1, 7, 14, 30, 90]`, so each is a wrong answer waiting for the day the config file is missing. | Rows 11-18, whichever touches each spec |
 | Row 6 | The reading route's effect does not abort an in-flight day watch when the date changes, so a stale callback can deliver the wrong day. Part of finding 93. | Row 17 |
 | Row 6 | Finding 87's title map in `day-shape.ts` is still rebuilt per view; the `(date, item_id)` half is done. | Row 23 |
-| Row 9 | `docs/architecture/publishing/frontend.md` still describes the old chart lifetime, and six call sites keep a remount key they no longer need. | Row 27 |
+| Row 9 | `docs/architecture/publishing/frontend.md` still describes the old chart lifetime, and six call sites keep a remount key they no longer need. | Docs half done in row 27 (#506); code half closed in #509. The six `{#key windowDays}` remount blocks in the three console routes and the now-false `model/+page.svelte` comment were removed once #459's engine `update()` made them redundant. |
 | Row 4 | The same doc still says a read mark lasts seven days and that the console will not draw narrower than a week. Both numbers changed in row 1. | Row 27 |
-| Row 10 | `evals.writer.append` reads the header of every committed shard before appending one row - a growing read inside a writer that otherwise honours the freeze rule. Outside ranks 1 and 10. | Not this plan; belongs to the Indexed State package |
+| Row 10 | `evals.writer.append` reads the header of every committed shard before appending one row - a growing read inside a writer that otherwise honours the freeze rule. Outside ranks 1 and 10. | Closed in #496 by the Indexed State package: the writer now reads a committed digest index (`state/score-index/`) instead of every shard header. |
 | Row 14 | `frontend/src/lib/charts/viewport.ts` walks the window one day at a time to list its months (`monthsInWindow`) and re-sorts a fresh copy of the month list on every call (`coveredMonths`). The "advance months directly, index the dates" half of finding 104, outside row 14's `frame.ts`. | Row 17 |
 | Row 12 | The canary day carries one model, so the swap-dots panel never renders and its constant-cost parity is not exercised in the browser gate. Add a model swap to `backend/utilities/build_canary_day.py` so the panel appears. | Not this plan; needs a canary with a model swap |
 | Row 15 | The window control renders the one-day preset as "1 days" - the plural is not guarded for `n = 1`. Reader-facing, cosmetic, pre-existing, and in the shared window control no row here owns. | Not this plan; a label fix |
 | Row 17 | `frontend/tests/charts.spec.ts` filters console pages with `path.includes('console')` on absolute build paths, so every reading route is wrongly excluded when the worktree path itself contains "console". A false red on a local run in a `*console*` worktree only; CI uses a clean path and passes. Match a path segment, not a substring. | Not this plan; a test-filter fix |
+
+### Scope changes during execution
+
+Every entry is scope a worker or the orchestrator added mid-flight because it advanced the plan's intent - constant-cost reads or a correct number - not gold-plating. Each names the row it lands in and its authority, so distillation captures it as a decision and not as drift.
+
+| Row | Change | Why it serves the intent | Authority |
+| --- | --- | --- | --- |
+| 18 | Bound the server-side `throughputDays` build to the widest preset, not only the chart's drawing. | The chart drew a window but the server still built and shipped the whole-history array into every page, so the payload still grew with the archive. Windowing the draw alone left finding 100 half-closed. | Owner, 2026-09-08; delivered in #481 |
+| 23 | The record counts distinct published items, so the cutover shows the record's authoritative count for summaries-scored and the determinism and extraction-suspect flags wherever the console had over-counted raw score-ledger rows (re-scores and never-published articles). | The old numbers were wrong, not a baseline to preserve. The identical-figure oracle is a drift catcher, not a bug preserver; a discovered wrong number is surfaced and corrected, not frozen. On current data this corrects three days (2026-08-29, 09-02, 09-05); 2026-09-07 was in the 2026-09-08 snapshot but was republished before row 23 landed and no longer over-counts. | Owner, 2026-09-08; delivered in #500 |
+| 24 | Add a bounded newest-day item-health reader to `payload.ts` so the standing band sources its item-health facts (refused-for-length, per-run read spread, total time) from the newest month shard, not a whole-archive scan. | Two band facts are not carried by the day-metrics record; without a bounded reader the band would keep a whole-archive `readShards` read and miss the constant-cost goal. Keeps every band fact, none dropped. | Owner, 2026-09-08; delivered in #501 |
 
 ## 2 - Row #1 - Config knobs and contract
 
@@ -99,7 +110,7 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
   | 1 | Lower `max_window_days` to 90 or 180. | It is a retention floor, not a viewport clamp. Lowering it authorises shard deletion, and the audit shows no UI path past 90 days today. | Owner, 2026-09-06 |
-  | 2 | Add 180 to the presets. | A wider preset pulls more month files, which works against the goal of this plan. | Owner, 2026-09-06 |
+  | 2 | Add 180 to the presets. | A wider preset pulls more month files, which works against the goal of this plan. Reconsidered 2026-09-08 and deferred again: 180 is a fixed constant so it would not break Rule #12, but it raises the fixed read from three month files to six and shows the same as 90 until more than 90 days accumulate. | Owner, 2026-09-06; reaffirmed 2026-09-08 |
   | 3 | Let each row edit the contract it needs. | Six rows would contend for one file. | execute-a-plan.md |
 
 ## 3 - Row #2 - One-pass build reductions
@@ -372,18 +383,21 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
 
 ## 19 - Row #18 - Throughput trend window
 
-- **Scope:** Decide and implement the span the throughput view covers. Finding 100.
+- **Scope:** Decide and implement the span the throughput view covers, in both the chart's drawing and the server-side array the page ships. Finding 100.
 - **Files touched:**
   - `frontend/src/lib/components/ThroughputTrend.svelte`
+  - `frontend/src/routes/console/model/+page.server.ts`
   - the matching specs
 - **Acceptance gates:** local - the shared test selector plus the console specs against a canary day. CI - full suite.
-- **Oracle:** the rendered span equals the stated span, and a calendar gap draws as a gap rather than a bridge.
+- **Oracle:** the rendered span equals the stated span, a calendar gap draws as a gap rather than a bridge, and the count of `item-health` rows the server reads for the trend is bounded by the widest preset rather than by the archive.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | This row changes what the chart claims, so it is an ESCALATE stop. The worker proposes the span and pauses. | Owner |
   | 2 | If it stays all-history, it reads stored day facts rather than every published day. | Fowler |
+  | 3 | Resolved to windowed, not all-history: the chart binds to the same 1/7/14/30/90-day control as the panels below it. All-history stays open for after rows 21 and 23 exist. | Owner, 2026-09-08 |
+  | 4 | The server build of `throughputDays` is bounded to the widest preset as well, so the shipped payload is constant and not only the drawing. This is the scope change recorded above; delivered in #481. | Owner, 2026-09-08 |
 
 ## 20 - Row #19 - Telemetry publication by partition
 
@@ -466,14 +480,15 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
   - `frontend/src/routes/console/model/+page.server.ts`
   - the matching specs
 - **Acceptance gates:** local - the shared test selector plus the console specs against a canary day and a browser smoke on all three console routes. CI - full suite.
-- **Oracle:** every console figure identical to the pre-change build, and the count of day files opened bounded by the window rather than by the archive.
+- **Oracle:** every console figure identical to the pre-change build, except the summaries-scored count and the determinism and extraction-suspect flags on the four days named in decision 4, which show the corrected lower values; and the count of day files opened bounded by the window rather than by the archive.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | A raw-history reader is deleted only once its replacement produces the identical figure. | Fowler |
+  | 1 | A raw-history reader is deleted only once its replacement produces the identical figure, or the intended corrected figure named in decision 4. | Fowler |
   | 2 | Private state files are never served to a reader for drilldown. | CLAUDE.md Rule #1 |
   | 3 | Dropping vectors after parsing saves nothing; the read and the parse already happened. | Carmack |
+  | 4 | The record counts distinct published items, so the cutover shows the record's authoritative count for the summaries-scored count and the determinism and extraction-suspect flags wherever the console over-counted raw score-ledger rows - re-scores and scores for never-published articles. In the 2026-09-08 snapshot four days over-counted: 2026-08-29 (399 to 366), 2026-09-02 (598 to 536), 2026-09-05 (456 to 374), 2026-09-07 (283 to 209). By the time row 23 landed, 2026-09-07 had been republished and no longer over-counts (record and raw both read 357), so the visible correction on the committed data is three days. The record is authoritative for whatever the day currently is; the number is not frozen. | Owner, 2026-09-08 |
 
 ## 25 - Row #24 - Band facts
 
@@ -481,9 +496,10 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
 - **Files touched:**
   - `frontend/src/lib/server/console-shell.ts`
   - `frontend/src/routes/console/+layout.server.ts`
+  - `frontend/src/lib/server/payload.ts`
   - the matching specs
 - **Acceptance gates:** local - the shared test selector plus the console specs against a canary day and a browser smoke on all three console routes. CI - full suite.
-- **Oracle:** the band renders identically on all three routes and does not change when any route's window control moves.
+- **Oracle:** the band renders on all three routes, does not change when any route's window control moves, and no longer triggers a whole-archive `readShards` scan - its reads are bounded to the newest manifest, the newest month item-health shard and the newest day-metrics record. Values are identical to the pre-change build except where the record's distinct-published count corrects a raw over-count, the same authoritative correction as row 23.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -491,6 +507,7 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
   | 1 | The band stays all-time. It stops computing all-time. No guardrail exception is needed. | Owner, 2026-09-06 |
   | 2 | The stated reason for it being unwindowed is preserved verbatim in the code: a figure that moved when one route's control moved would read as three different sites. | existing design |
   | 3 | The duplicated publication-count call in that function is removed. | Carmack |
+  | 4 | Each band fact reads from its authoritative source at fixed cost: the published-set counts from the newest day-metrics record, and the item-health facts (refused-for-length, per-run read spread, total time) from a new bounded newest-day item-health reader in `payload.ts` that opens only the newest month shard. The addition to the file list is the scope change recorded above; delivered in #501. | Owner, 2026-09-08 |
 
 ## 26 - Row #25 - Archive window control
 
@@ -531,6 +548,14 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
   | --- | --- | --- |
   | 1 | Today's contract is whole-day. Bounding the download is a new static page contract and a reader-facing change, so it is authored and stopped, never implemented inside this plan. | Owner |
   | 2 | Instant substring filtering over a whole day cannot survive a byte-bounded fetch without a separate local index. That cost is named before anything is built. | Andre |
+
+- **Authored ruling (2026-09-08).** What a reading page downloads, for a future plan to implement. Authored here and NOT built (decision 1).
+
+  - **Today's contract.** A reading page (`/[date]` and topic views) fetches the seed, then `readDay` in `frontend/src/lib/assist/day.ts` downloads, parses and validates the WHOLE day (finding 84). The seed and the pager bound what is drawn, not what is retained; the whole day's bytes and items are held so instant whole-day substring filtering and deep-link reveal work without a second fetch.
+  - **Page size bound.** A bounded reading page ships one page of stories at a time, reusing the existing `archive_page_size` knob (25 stories today) rather than declaring a reading-specific one. "Show more" fetches the next page; a deep link fetches the target story's page directly without pulling the pages before it.
+  - **Byte bound.** The bytes kept for one reading session are bounded by the ceiling the offline cache already declares, `offline_bytes_kept` (20 MB today), with a single story body bounded by `max_body_bytes` (2 MB). A page fetch that would cross the ceiling evicts the oldest page, so a long session is constant in memory, not linear in the day.
+  - **Navigation behaviour.** Deep links, paging and hide-read resolve against IDs and page indexes, not a fully materialised day: a deep link to a story far into a day fetches that story's page and the outlying leads, never every preceding story (findings 86, 87). Back and forward return to an already-fetched page without re-validating the whole day.
+  - **What instant whole-day filtering costs.** Once the whole day is no longer present, instant substring filtering over every title, summary and key point (finding 85) cannot run in the browser without a separate, small, revision-owned local index shipped alongside the pages. The future plan either ships that per-day token index and keeps instant filter, accepting the extra download, or drops instant whole-day filter to a per-page filter plus a server-shaped query. The trade is named now so it is a decision, not a surprise, when the contract is built.
 
 ## 28 - Row #27 - Living docs sweep
 

@@ -310,12 +310,18 @@ jobs:
       # together. It settles the retirement ledger too, where two stale checkouts
       # reading the same five 410 results would otherwise retire one address
       # twice.
+      #
+      # `--date` is what it settles. This run appended to one feed-health shard,
+      # so that shard is the only one a repeat can be in, and naming it is what
+      # keeps the pass costing the same on a five-year archive as on a fresh
+      # clone (Rule #12).
       - name: Commit what the plan saw
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing new to record"
           PUSH_FAILED_MESSAGE: "could not push what the plan saw after three attempts"
-          DROP_REPEATED_ROWS_COMMAND: "python -m idhazh dedupe-ledgers"
+          DROP_REPEATED_ROWS_COMMAND: >-
+            python -m idhazh dedupe-ledgers --date ${{ steps.decide.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/seen state/feed-health state/feed-retirements.csv
@@ -692,6 +698,11 @@ jobs:
       # then keeps both. `DROP_REPEATED_ROWS_COMMAND` is the half that runs after
       # the merge, on the merged file - the only place the two attempts have ever
       # been together.
+      #
+      # `--date` is what it settles. This run appended to one item-health shard
+      # and one score shard, so those are the only files a repeat can be in, and
+      # naming them is what keeps the pass costing the same however many months
+      # the archive holds (Rule #12).
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -699,10 +710,11 @@ jobs:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
           NOTHING_STAGED_MESSAGE: "nothing measured to record"
           PUSH_FAILED_MESSAGE: "could not push what this shard measured after three attempts"
-          DROP_REPEATED_ROWS_COMMAND: "python -m idhazh dedupe-ledgers"
+          DROP_REPEATED_ROWS_COMMAND: >-
+            python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/item-health state/scores state/runtime-counters.csv
+          state/item-health state/scores state/score-index state/runtime-counters.csv
 
       - name: Prompt cache log summary
         if: always()
@@ -1139,6 +1151,7 @@ jobs:
             frontend/public/source-health.json
             state/published
             state/scores
+            state/score-index
             state/item-health
             state/runtime-counters.csv
           REGENERATE_COMMAND: >-
@@ -1183,10 +1196,10 @@ jobs:
       # and is the one thing here that would cost a reader something it can see.
       # `retention.image_months` is -1, so nothing is ever a candidate and the
       # pass is a measurement of the backlog: it appends one row to
-      # `state/visual-prunes.csv` every run, carrying what it found and what the
-      # fuse would have held back. Switching that deletion on is plan 13's job
-      # and needs `frontend/public/digest` added to the commit call below, since
-      # `git add` records a removal only for a path it is handed.
+      # `state/visual-prunes/YYYY/MM/DD.csv` every run, carrying what it found
+      # and what the fuse would have held back. Switching that deletion on is
+      # plan 13's job and needs `frontend/public/digest` added to the commit call
+      # below, since `git add` records a removal only for a path it is handed.
       #
       # It also covers the trace prune, which joined this step on 2026-09-06 and
       # is a lookup like the seen prune above: a raw span trace an operator opens
@@ -1210,9 +1223,10 @@ jobs:
       # nor `state/score-archive/` exists until the first fold or the first
       # archive writes it, nor `state/traces/` until tracing is switched on.
       # `state` always does, and the day's own commit above
-      # has already taken everything else in it. `state/visual-prunes.csv` ships
-      # with its header committed so it is covered by the same call from the
-      # first run.
+      # has already taken everything else in it. `state/visual-prunes/` moved to
+      # a day tree on 2026-09-08, so a run writes a file that was not in the
+      # checkout it started from - staging `state` whole is what already reaches
+      # it, and is why that move needed nothing here.
       #
       # `frontend/public/telemetry` is named beside it because the fold deletes
       # the browser's copy of a month in the same step it folds the ledger, and

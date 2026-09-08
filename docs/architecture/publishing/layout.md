@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -22,6 +22,7 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg           optional visual
 frontend/public/assist/index/<YYYY-MM>.json             one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin              that month's vectors, raw int8
 state/scores/<YYYY-MM>.csv                              the ledger - one row per measurement, never published twice
+state/score-index/<YYYY-MM>.csv                         the identity of every measurement that shard holds, 76 bytes each
 state/score-archive/<YYYY-MM>.json                      a score month past its full-grain window, as totals plus a dedupe index
 ```
 
@@ -59,7 +60,7 @@ never depend on who has read what.
 - **Membership only grows.** The runs of a day append to one day payload rather than replacing it, so the day grows through the day. That is only safe because an item's id comes from its address: run 2 recognises what run 1 already published instead of renumbering it. There is no daily item cap - what a day carries is what supply and the ranking produced ([../sources/freshness.md](../sources/freshness.md)).
 - **A run can come back as itself, and that is one run.** Assemble writes `digest.json`, then builds the manifest, then writes `run.json`. A run that dies between those two writes leaves a day holding its items and a manifest that never heard of it, so the next run reads the same number off the manifest. The day therefore replaces the reference for a number it already has rather than adding a second one, and the count on that reference is every item the number introduced. The manifest appends instead, and does not need the same replace: its contract refuses a `runs` list that is not numbered from 1 without gaps, so the next number cannot already be taken. A guard there would be a branch nothing can reach.
 - **The day's vectors grow with it.** A run encodes only the items it summarized, so it merges its block into the one the day already carried instead of replacing it. Replacing left a day searchable over its last run alone: the committed 2026-08-24 day held 145 vectors for 731 items, which is 19.8 percent of them. A newer vector wins a collision, because it was encoded from the newer text. A block that names another model, width or dtype replaces the old one whole rather than joining it.
-- **An item's words are written once, by the run that introduced it.** No run revises. Three gates hold that, and all three are load-bearing for something else: `rank.plan_vertical` drops a candidate whose address is already in `state/published.csv`, `cli` supplies that set, and `assemble.build_day` drops an item the day already holds. The published item carries `updated_at` and `updated_by_run` for a revision that cannot happen yet, and both are null in every committed payload. **If a revision is ever built, it must be visible.** Silently improving wording under someone who already read it makes them doubt their own memory, and their trust in the summaries is the entire product.
+- **An item's words are written once, by the run that introduced it.** No run revises. Three gates hold that, and all three are load-bearing for something else: `rank.plan_vertical` drops a candidate whose address is already in `state/published/`, `cli` supplies that set, and `assemble.build_day` drops an item the day already holds. The published item carries `updated_at` and `updated_by_run` for a revision that cannot happen yet, and both are null in every committed payload. **If a revision is ever built, it must be visible.** Silently improving wording under someone who already read it makes them doubt their own memory, and their trust in the summaries is the entire product.
 - **No run identifier appears in any data path or any reader URL.** It lives in the run manifest and in the day notice, on the pages that render a day.
 
 The returning reader is protected by the read mark and by the run-scoped "new" grouping - both of which work identically for everyone - rather than by freezing an order, which cannot be done in a shared artifact without rendering a different page per person.
@@ -484,7 +485,7 @@ set is what an unpublish has to answer for:
 | `frontend/public/assist/index/<Y>-<M>.json` and `.bin` | month | **rebuild**, never edit |
 | `frontend/public/telemetry/<Y>-<M>.csv` | month | rewrite without the day's rows |
 | `frontend/public/source-health.json` | whole site | rebuild |
-| `state/published.csv` | append-only | rewrite without the day |
+| `state/published/<Y>/<M>/<D>.csv` | day | remove |
 | `state/scores/<Y>-<M>.csv` | month | rewrite without the day |
 | `state/item-health/<Y>-<M>.csv` | month | rewrite without the day |
 | `state/runtime-counters.csv` | append-only | rewrite without the day |
@@ -575,7 +576,7 @@ Every run appends one row to `state/visual-prunes.csv` describing the cleanup pa
 
 **The row lands on every run, including the runs where the policy is off and nothing is a candidate.** A ledger written only when something was deleted has no baseline: its first row would arrive on the day the deletion started working, with nothing to compare it against.
 
-One file rather than month shards, because the question it answers - is the backlog shrinking - carries no time bound, so every shard would be opened anyway ([../contracts/schemas.md](../contracts/schemas.md#a-ledger-shards-by-month-only-when-its-read-carries-a-window)). It ships with its header committed for the reason `state/feed-retirements.csv` does: `commit-and-push.sh` runs `git add "$@"` under `set -euo pipefail`, so a path that appears only on the first interesting run would abort the whole commit step before then. The step that writes it commits through a call that stages `state` whole, which already covers it.
+One file rather than month shards, because the question it answers - is the backlog shrinking - carries no time bound, so every shard would be opened anyway ([../contracts/schemas.md](../contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window)). It ships with its header committed for the reason `state/feed-retirements.csv` does: `commit-and-push.sh` runs `git add "$@"` under `set -euo pipefail`, so a path that appears only on the first interesting run would abort the whole commit step before then. The step that writes it commits through a call that stages `state` whole, which already covers it.
 
 **Two things have to move with the deletion when plan 13 switches it on**, and neither is done here. The commit call after the cleanup step stages `state` and `frontend/public/telemetry`, so a deleted picture under `frontend/public/digest/` would be removed from the runner and never from the repository - `git add` records a removal only for a path it is handed. And the paragraph above about a scheduled workflow of its own has to be met or re-decided: the cleanup currently rides in the assemble job's `prune-state` step, which is safe only while it deletes nothing.
 
@@ -598,7 +599,7 @@ The three levers this page already names - encode efficiently, honour the visual
 | `state/seen/<YYYY-MM>.csv` | 2,904,221 | 37.2 percent | `collect.seen_window_days` |
 | `state/scores/<YYYY-MM>.csv` | 2,700,019 | 34.6 percent | `observability.scores_full_grain_months` - **archived and deleted from 2026-09-03, and the deletion is in dry run** |
 | `state/item-health/<YYYY-MM>.csv` | 1,409,945 | 18.0 percent | `observability.item_health_full_grain_months` - folded, and the fold is in dry run |
-| `state/published.csv` | 384,448 | 4.9 percent | nothing, and deliberately - published is forever |
+| `state/published/<YYYY>/<MM>/<DD>.csv` | 384,448 | 4.9 percent | `collect.published_window_days`, committed at `-1` - so nothing bounds it today, and the day files are what a finite cover would skip |
 | everything else | 416,995 | 5.3 percent | small enough not to ask |
 
 Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists to watch moved inside a day**, and the shares moved further than the bytes did, so the shares are the ones to re-take rather than to quote. Against 2026-08-30: `state/` as a whole fell 17.6 percent, because `state/seen/` shed its address column and fell 43.8 percent from 5,166,315. `state/scores.csv` grew 14.4 percent from 2,359,230 in the same day - so its share went from 24.9 to 34.6 percent while it was the only file nobody had touched, and it is now 204,202 bytes short of being the largest file in the tree.
@@ -613,7 +614,11 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 
 **Measured on this checkout on 2026-09-03, that list is empty and stays empty for a year.** Every committed shard is inside its own window, so a live run today would remove nothing at all. The first file any store loses is `state/seen/2026-08.csv` on **2026-11-30**, through the 90-day sight window; the first files the fourteen-month rules take are on **2027-10-01**, when `2026-08` falls below fourteen months and four files go together - `state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv`, `state/feed-health/2026-08.csv` and `state/scores/2026-08.csv`. Reading committed files against a fixed calendar is deterministic, so the spread is zero.
 
-**A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and `evals.writer` refuses a repeat measurement by reading the rows themselves - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past `observability.scores_full_grain_months` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the shard's SHA-256 and row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of the shard; only then is the shard unlinked.
+**A score month is summarised before it is deleted, and that is the one deletion here with a summary in front of it.** `state/scores/` is the evidence behind every published quality claim, and until 2026-09-07 `evals.writer` refused a repeat measurement by reading those rows - so deleting a month outright would erase the evidence AND make every measurement in that month scoreable again as if it were new. A month past `observability.scores_full_grain_months` therefore becomes `state/score-archive/<YYYY-MM>.json` first: the shard's SHA-256 and row count, one digest per distinct measurement it held, and one cohort per (date, run, row version, model, pipeline, scorer) carrying counts, ten faithfulness deciles, three bands, the boolean signal counts, the cut counts, the premise-digest counts and `{n, sum, sum_squares, min, max}` for every numeric column. The file is written temp-then-rename, read back through its contract, and reconciled field by field against a second reading of the shard; only then is the shard unlinked.
+
+**The writer reads the identities rather than the rows, and that costs 76 bytes a measurement.** A repeat is refused against `state/score-index/<YYYY-MM>.csv` - a ten-character stamp, a comma, the observation digest and a newline - and the rows are not opened at all. Measured on this checkout on 2026-09-07 over 7,710 measurements in two shards: 572.3 KB of index against 6,174.4 KB of rows, 10.8 times smaller, and 820.0 bytes a row against a fixed 76. Both figures are file sizes, so the spread is zero. Nothing is forgotten and no clock is involved: `OBSERVATION_KEY` carries no date, so a January measurement re-taken in February is still the same measurement. A live index is dropped only once the archive that supersedes it is on disk, so the two records of one month never both exist and neither is ever the last one removed.
+
+**An index that fell behind its shard is repaired by deleting it, and nothing detects that state on its own.** Detecting it means reading the rows, which is the cost this file exists to remove, so the pair is kept in step by the two writers instead: `append` writes the rows and their identities in one call, and a month with no index is filled from its rows once. The only way to fall behind is therefore rows appended by something that never maintained the index - which is what a long-lived branch meets when it merges a `main` older than this file, and what happened here: the scheduled pipeline added 74 rows to the September shard while this work was open. Delete that month's index and the next run rebuilds it. Leaving it costs what this writer already declares: it under-reports, so those measurements are taken a second time and `idhazh dedupe-ledgers` settles the repeats against `OBSERVATION_KEY`.
 
 **Measured 2026-09-03** on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM, Windows 11 (build 26200), CPython 3.14.2, over both committed shards, three reads each:
 
@@ -806,7 +811,7 @@ So (b) is a persisted-contract change that buys a cleaner diagram and zero bytes
 
 `idhazh.ledger._append` writes every row it is handed. `idhazh.evals.writer.append` refuses a row whose address, inputs, words and scorer version it already holds. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
 
-So the blind path stays blind, and each caller that owns a repeat is now named next to it. Two of the four ledgers absorb a repeat at read time: `load_seen` and `load_published` keep the earliest of two rows, so a duplicate costs bytes and never moves a date. The health pair does not, and that is stated rather than guarded: `discover.resting` counts failures to decide a quarantine, so a duplicated failure counts twice. Measured on this checkout 2026-08-27, `state/published.csv` holds 2,097 rows and 2,097 distinct addresses.
+So the blind path stays blind, and each caller that owns a repeat is now named next to it. Two of the four ledgers absorb a repeat at read time: `load_seen` and `load_published` keep the earliest of two rows, so a duplicate costs bytes and never moves a date. The health pair does not, and that is stated rather than guarded: `discover.resting` counts failures to decide a quarantine, so a duplicated failure counts twice. Measured on this checkout 2026-08-27, the published ledger held 2,097 rows and 2,097 distinct addresses in the flat file it has since moved off.
 
 **Where the code was already safe, the fix was a sentence and not a guard.** A guard that can never fire is untested branch weight, and it hides which file the guarantee actually lives in. `cli._published_rows` reads as "everything the day holds" and behaves as "what this run added", and it does that because the plan a later run built has already dropped every published address. Its comment used to claim the filter itself; it now names the upstream facts it depends on, so the next person to widen the plan sees what they would break.
 
@@ -874,6 +879,28 @@ Three things were added and none of them fails a build.
 **A runway from nothing raises rather than returning a comfortable number.** Zero published items divides into an infinite runway, and an infinite runway reads exactly like a healthy site - the same failure as the green light on the wrong tree, one function along. So the per-item property raises on an empty tree, the CLI checks before it asks, and a tree carrying no day payloads prints `runway: unknown` instead. The zero-file tree still fails outright, as it already did.
 
 **What it printed the first time, 2026-08-30 at `76cdc72`:** 141.1 MB in 311 files, 883 MB of headroom, 48,457 B a published item, 7.39 MB a published day, and **119 published days to the cap**. The rate is an average over the whole tree, so it charges the on-device encoder and the JavaScript bundle - 46.5 percent of the site, and neither of them grows with a day - to every future item. **That makes the printed runway a floor: at least 119 days, and about 223 once the fixed directories are taken out.** It prints the conservative one on purpose, and `by_directory` is on the same output so a reader can do that subtraction rather than take the floor as the answer. Full working in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling).
+
+### The state prunes were already constant-cost, and the premise that said otherwise was wrong (2026-09-08)
+
+A plan row asked for the dated-directory walk [row 14 gave the visual tree](#what-bounds-the-committed-state-tree) to be given to the state prunes as well, on the premise that `retention.month_shards` and the prune inventories "list and sort every partition directory across every store, on every maintenance pass, including passes where nothing is due". Re-measured before anything was changed, that premise does not hold, so the performance work was not done. Rule #10: when a measurement contradicts the design, the design changes.
+
+Counted rather than timed, because a timing is flaky and says nothing about what was read. `os.scandir`, `os.listdir`, `os.stat` and `os.lstat` were counted around one pass of `prune_seen`, `prune_feed_health`, `prune_telemetry` and `prune_scores` over a built state tree - every store filled through its own real appender - on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM, Windows 11, CPython 3.14.2, 2026-09-08:
+
+| Tree | Ages in force | Directory opens | Shard stats |
+| --- | --- | --- | --- |
+| 3 months in every store | raised, nothing due | 5 | 0 |
+| 140 months in every store | raised, nothing due | 5 | 0 |
+| 3 months in every store | shipped | 5 | 0 |
+| 14 months in every store | shipped | 5 | 11 |
+| 140 months in every store | shipped | 5 | 389 |
+
+Counting a syscall is deterministic, so the spread is zero.
+
+**Five opens, and the five do not move when the tree holds forty-six times more.** They are one listing each of `state/seen/`, `state/feed-health/`, `state/item-health/`, `state/scores/` and `frontend/public/telemetry/` - one per store, never one per month. **A month partition is a file, not a directory**, so there is no partition directory to open and nothing for a dated walk to skip. The sort the premise objected to is a sort of names already in hand from that one listing: 140 strings, in memory, no I/O. The visual tree really is `<YYYY>/<MM>/<DD>/`, which is why row 14's walk was worth building there and buys nothing here.
+
+**What does move is the backlog, and that is already the shape row 14 landed.** Nothing due costs nothing, at 3 months and at 140 alike. The 11 stats at fourteen months are `state/seen/` on its own, whose window is 90 days rather than fourteen months, so 11 of its 14 shards are past it. The 389 at 140 months are exactly the due shards - 137 seen, 126 feed-health, 126 scores - each read once for the `bytes_freed` figure the committed result carries. A pass that has caught up reads nothing. So the cost already answers Rule #12 the right way: it rises with the work outstanding, never with what an earlier run appended, and it falls as the policy works.
+
+**The row was not empty, because the same measurement found a real defect underneath it.** Three month-name recognisers disagreed, so `2025-13.csv` was left alone in one store and deleted from another. That is [what counts as a month name](../../concepts/month-partitions.md#what-counts-as-a-month-name) in the concept doc, and the fix is one shared rule in `idhazh.month_partition`.
 
 ## Rejected alternatives
 

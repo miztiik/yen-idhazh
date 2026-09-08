@@ -62,6 +62,15 @@ from idhazh.contracts.day_metrics import (
 )
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestVerticalRef, DigestVisual
 from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
+from idhazh.contracts.element import (
+    JUDGED_FIELDS,
+    TIER_ONE_FIELDS,
+    TIER_TWO_FIELDS,
+    Element,
+    ElementKind,
+    ElementTable,
+    Extractor,
+)
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.export import CONTRACTS, expected_filenames, export
 from idhazh.contracts.feed_health import FeedHealthRow
@@ -75,7 +84,13 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.run_manifest import ModelRole, RunManifest, VerticalCount
-from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
+from idhazh.contracts.run_plan import (
+    PUBLISHED_AGE_BANDS,
+    PublishedAgeBand,
+    RunPlan,
+    TimeSource,
+    VerticalPlan,
+)
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.sources import Sources
@@ -346,6 +361,173 @@ def test_the_disjointness_check_catches_a_collision_outside_item_health() -> Non
         if pretend_value_columns & _column_names(row_model)
     }
     assert caught == {"state/visuals": ["decision_ms"]}
+
+
+# --- The Oracle: two tiers, and only one of them is required ----------------
+#
+# The element shape splits what code cut out of the bytes from what a labeller
+# said about it. Both halves have to be tested. "An element with only its Tier 1
+# fields validates" on its own proves nothing, because a shape whose Tier 1
+# fields carried defaults would pass it while letting a judgement travel with no
+# anchor. The pair is the split.
+
+
+def _element_payload(path: Path, index: int = 0) -> dict[str, Any]:
+    """One element out of a committed table, as a plain dict to mutate."""
+    payload: dict[str, Any] = json.loads(read_text(CONTRACT_FIXTURES_DIR / "element-table" / path))
+    element: dict[str, Any] = payload["elements"][index]
+    return element
+
+
+def test_an_element_carrying_only_its_tier_one_fields_validates() -> None:
+    """The first half of the oracle. Nine keys, no judgement, and it loads."""
+    element = {
+        name: value
+        for name, value in _element_payload(Path("regex-only.json")).items()
+        if name in TIER_ONE_FIELDS
+    }
+    assert set(element) == set(TIER_ONE_FIELDS)
+    assert Element.model_validate(element).extractor is Extractor.REGEX
+
+
+@pytest.mark.parametrize("missing", TIER_ONE_FIELDS)
+def test_a_tier_two_field_with_no_tier_one_anchor_is_refused(missing: str) -> None:
+    """The second half, and the one that bites. Every Tier 1 field is required,
+    so a judged element that has lost any one of its anchors does not load - it
+    is not silently accepted with a default standing in for the missing one."""
+    element = _element_payload(Path("labelled.json"), index=1)
+    assert element["salience"] is not None or element["measure"] is not None
+    element.pop(missing)
+    with pytest.raises(ValidationError, match=missing):
+        Element.model_validate(element)
+
+
+def test_the_generated_schema_requires_tier_one_and_nothing_else() -> None:
+    """The split is machine-checked rather than promised in a docstring."""
+    required = ElementTable.json_schema()["$defs"]["Element"]["required"]
+    assert sorted(required) == sorted(TIER_ONE_FIELDS)
+    assert not set(required) & set(TIER_TWO_FIELDS)
+
+
+def test_every_element_field_belongs_to_exactly_one_tier() -> None:
+    """A field added without a tier is a field with no trust story. The module
+    refuses to import in that state; this is the readable half of that guard."""
+    assert tuple(Element.model_fields) == TIER_ONE_FIELDS + TIER_TWO_FIELDS
+    assert not set(TIER_ONE_FIELDS) & set(TIER_TWO_FIELDS)
+
+
+def test_the_contract_covers_six_kinds_though_two_have_producers() -> None:
+    assert {kind.value for kind in ElementKind} == {
+        "quantity",
+        "date",
+        "entity",
+        "place",
+        "quote",
+        "claim",
+    }
+
+
+# --- The Oracle: span_excerpt is the slice, which is why `raw` cannot be it --
+
+
+def test_span_excerpt_is_the_verbatim_slice_and_a_cleaned_string_is_refused() -> None:
+    """`visual_planner.NumericFact.raw` is `currency + sign + digits`, whitespace
+    cleaned, so it drops the magnitude word and the unit. Substituting it for the
+    excerpt shortens the string without moving the offsets, and the shape refuses
+    that outright - the width of the span and the length of the excerpt are one
+    number. This is why one name survives and the third field does not exist."""
+    element = _element_payload(Path("regex-only.json"), index=2)
+    assert element["span_excerpt"] == "$4.5 billion"
+    raw_shaped = dict(element, span_excerpt="$4.5")
+    with pytest.raises(ValidationError, match="verbatim slice"):
+        Element.model_validate(raw_shaped)
+
+
+def test_element_id_is_rebuilt_not_trusted() -> None:
+    element = _element_payload(Path("regex-only.json"))
+    relabelled = dict(element, element_id=f"quantity-0-{element['span_end']}")
+    with pytest.raises(ValidationError, match="element_id"):
+        Element.model_validate(relabelled)
+
+
+# --- Invariants the element shape exists to carry ---------------------------
+
+
+def test_only_a_measured_kind_reads_as_a_value() -> None:
+    """A quote has no number, and a shape that let one be written is the shape
+    the span exists to make unnecessary."""
+    quote = dict(
+        _element_payload(Path("labelled.json")),
+        kind="quote",
+        entity=None,
+        salience=None,
+        label_source=None,
+        ledger_version=None,
+        value="7",
+    )
+    quote["element_id"] = f"quote-{quote['span_start']}-{quote['span_end']}"
+    with pytest.raises(ValidationError, match="value"):
+        Element.model_validate(quote)
+
+
+def test_a_date_may_not_carry_a_resolved_relative_reference() -> None:
+    """"Three years ago" resolves against a publication date the article never
+    wrote. The grammar refuses it at the shape, so no producer can write one by
+    accident."""
+    date_element = _element_payload(Path("regex-only.json"), index=1)
+    assert date_element["kind"] == "date"
+    with pytest.raises(ValidationError, match="value"):
+        Element.model_validate(dict(date_element, value="three years ago"))
+
+
+def test_a_judged_field_names_who_judged_it() -> None:
+    """Tier 2 is a claim somebody made. A claim with no author cannot be measured
+    later, and an author with no claim is a record of nothing."""
+    judged = _element_payload(Path("labelled.json"), index=1)
+    with pytest.raises(ValidationError, match="label_source"):
+        Element.model_validate(dict(judged, label_source=None, ledger_version=None))
+    unjudged = {
+        name: value for name, value in judged.items() if name not in set(JUDGED_FIELDS)
+    }
+    with pytest.raises(ValidationError, match="label_source"):
+        Element.model_validate(unjudged | {"label_source": "qwen35-9b"})
+
+
+def test_a_span_past_the_end_of_the_text_is_refused() -> None:
+    """The table carries the length of the string its spans index, so the shape
+    can refuse an offset that points nowhere without holding the text."""
+    payload: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "element-table" / "regex-only.json")
+    )
+    payload["source_text_length"] = payload["elements"][0]["span_end"] - 1
+    with pytest.raises(ValidationError, match="ends past"):
+        ElementTable.model_validate(payload)
+
+
+def test_one_kind_and_one_span_is_one_fact() -> None:
+    payload: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "element-table" / "regex-only.json")
+    )
+    payload["elements"] = [payload["elements"][0], dict(payload["elements"][0])]
+    with pytest.raises(ValidationError, match="one address"):
+        ElementTable.model_validate(payload)
+
+
+def test_the_table_reads_in_the_order_the_article_was_written() -> None:
+    payload: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "element-table" / "regex-only.json")
+    )
+    payload["elements"] = list(reversed(payload["elements"]))
+    with pytest.raises(ValidationError, match="span_start"):
+        ElementTable.model_validate(payload)
+
+
+def test_the_element_table_holds_one_hash_for_the_whole_article() -> None:
+    """Decision 6, made mechanical: the hash is a field of the table and no
+    element carries one. A per-element hash would be redundant against this plus
+    the re-slice, on every article for ever."""
+    assert "source_text_hash" in ElementTable.model_fields
+    assert not [name for name in Element.model_fields if "hash" in name]
 
 
 # --- The drift gate --------------------------------------------------------
@@ -1455,6 +1637,59 @@ def test_a_plan_may_not_spell_the_count_twice() -> None:
     """
     with pytest.raises(ValidationError):
         VerticalPlan.model_validate(desk(eligible_feeds=9))
+
+
+def bare_plan(**extra: Any) -> dict[str, Any]:
+    """The smallest plan payload that validates, for the fields under test."""
+    return {
+        "date": "2026-08-21",
+        "run_id": "2026-08-21-1",
+        "generated_at": "2026-08-21T06:00:04Z",
+        **extra,
+    }
+
+
+def test_a_plan_written_before_the_guard_was_counted_reads_as_unknown() -> None:
+    """Null is unknown, never a run where the guard refused nothing.
+
+    A zero would say this run was offered addresses the ledger held and refused
+    none of them, which is a measurement. A payload written before anything
+    counted cannot make it, and inventing one is how an unread number turns into
+    an argument about how wide the cover should be.
+    """
+    built = RunPlan.model_validate(bare_plan())
+    assert built.dropped_published is None
+    assert built.dropped_published_ages is None
+
+
+def test_the_guard_count_and_its_bands_are_recorded_together() -> None:
+    """Either half alone reads as a measurement while being unable to support one."""
+    bands = [band.model_dump(mode="json") for band in PublishedAgeBand.histogram([1, 200])]
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(dropped_published=2))
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(dropped_published_ages=bands))
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(dropped_published=3, dropped_published_ages=bands))
+
+
+def test_every_declared_band_is_written_and_a_short_histogram_is_refused() -> None:
+    """An absent band and a band holding nothing are different answers.
+
+    Dropping the empty ones would shorten the payload and lose the finding.
+    Measured 2026-09-08 on an Intel Core i7-1265U, over the ledger as it stood at
+    the end of 2026-09-07: its 7,600 rows span 16 published days, 2026-08-23 to
+    2026-09-07, so every band from 30 days on is a measured zero on every run
+    today - and that zero is why nobody can yet say what a finite cover would
+    cost.
+    """
+    bands = PublishedAgeBand.histogram([0, 1, 200])
+    assert [(band.from_days, band.to_days) for band in bands] == list(PUBLISHED_AGE_BANDS)
+    assert [band.addresses for band in bands] == [1, 1, 0, 0, 0, 1, 0]
+
+    short = [band.model_dump(mode="json") for band in bands if band.addresses]
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(dropped_published=3, dropped_published_ages=short))
 
 
 def test_a_manifest_written_before_the_floor_was_recorded_reads_as_unknown() -> None:
@@ -2819,14 +3054,22 @@ def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -
     assert stage_validate_days(empty) == 1
 
 
-def test_the_gate_defaults_to_the_one_committed_tree() -> None:
+def test_the_gate_defaults_to_the_one_committed_tree(tmp_path: Path) -> None:
     """Unlike `--site-tree`, which has no default because there are two trees.
 
     There is exactly one committed digest tree, so a default cannot point at the
     wrong one - and a step nobody has to give a path to is a step nobody gets
     wrong in a workflow.
+
+    One day is named, so this costs one day rather than every day the archive
+    has piled up (Rule #12). The receipts go to a directory this test owns: the
+    state root defaults to the committed one, and a test that appended to it
+    would leave the repository dirty for whoever ran it.
     """
-    assert main(["validate-days"]) == 0
+    newest = committed_days()[-1]
+    day = "-".join(newest.parts[-4:-1])
+
+    assert main(["validate-days", "--day", day, "--state-root", str(tmp_path)]) == 0
 
 
 def a_day_missing(names: tuple[str, ...], where: str = "items") -> tuple[str, int]:

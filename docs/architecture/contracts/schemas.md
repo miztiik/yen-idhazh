@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -47,16 +47,19 @@ The shapes, and where each one lives once written:
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
+| `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Rule #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
+| `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
 | `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
-| `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
+| `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
 | `ScoreArchive` | `score-archive` | `state/score-archive/<YYYY-MM>.json`, one whole document per archived score month |
+| `DayMetrics` | `day-metrics` | `state/day-metrics/<YYYY>/<MM>/<DD>.json`, one whole document per published day, rewritten when that day is corrected |
 | `RuntimeCountersRow` | `runtime-counters-row` | one appended row of `state/runtime-counters.csv` |
 | `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
@@ -70,6 +73,8 @@ Everything under `state/` is a row contract rather than a file contract, because
 `TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored, and `merge=union` could not tell the copy from the original. What decides when a month is folded is `observability.item_health_full_grain_months`, and what it costs is in [../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
 
 `ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of `state/scores/` past `observability.scores_full_grain_months` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the shard's SHA-256 and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of the shard before the shard is unlinked; `.github/workflows/prune.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a shard deleted on the strength of an unchecked summary does not come back. What it weighs is in [../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
+
+`DayMetrics` is the third, and a document for the same reason `ScoreArchive` is: it is a whole-day fact, not a per-row one. A run writes one `state/day-metrics/<YYYY>/<MM>/<DD>.json` per published day - the day's counts and sums stored directly, and each median, distinct count or ranked list stored as the day's own value plus whatever lets a reader combine days in a defined way, because a percentile cannot be re-added into a window's percentile. It nests by year and month to mirror the published digest-day layout, and it is never a running total: a correction rewrites the whole record for that day. The console reads it back instead of walking every score, item-health, feed-health and published-day row for a figure that never changes once the day is frozen (Rule #12). It was authored as a contract in row 21 of the constant-cost-reads plan (#486), written by the producer in row 22 (#489), and read by the console reducers in rows 23 and 24 (#500, #501).
 
 ### A new row ledger ships with its header, not with its first run
 
@@ -123,11 +128,13 @@ edit does not start (Rule #11).
 
 What would overturn it: a published surface that needs the counters, which would make them a published payload; or a run that stops being sharded, which would make shard grain and run grain the same thing and the manifest the cheaper home.
 
-### A ledger shards by month only when its read carries a window
+### A ledger partitions only when its read carries a window
 
-Some `state/` ledgers are one file and some are a directory of `<YYYY-MM>.csv`
-shards. The rule is one question: **does the read that consumes this ledger
-carry a time window?**
+Some `state/` ledgers are one file and some are a directory of shards. The rule
+is one question: **does the read that consumes this ledger carry a time
+window?** The grain follows what the reader asks for - a month for the ledgers
+whose windows are measured in months, a day for `state/published/`, which
+mirrors the digest tree its rows are derived from.
 
 | Ledger | Layout | The question it answers | Windowed on read |
 | --- | --- | --- | --- |
@@ -135,9 +142,10 @@ carry a time window?**
 | `state/feed-health/` | monthly shards | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
 | `state/item-health/` | monthly shards | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and fetches month shards |
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
-| `state/published.csv` | one file | have we already published this? | no - published is forever |
+| `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
 | `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/layout.md#what-bounds-the-committed-state-tree) |
+| `state/score-index/` | monthly shards | which measurements does the shard beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, pipeline, output and scorer is one measurement whenever it is re-taken |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
@@ -174,6 +182,13 @@ other run touches the current partition alone. That rule, the closed rule for
 each partitioned collection above, and what the pattern does with a correction, a
 deletion, a late arrival and a row whose date changes are in
 [../../concepts/month-partitions.md](../../concepts/month-partitions.md).
+
+**What a growing collection obliges its reader to declare is a third rule, and it
+is also defined once.** A window is one of three shapes a cover can take, and the
+column above is only ever true of the reads whose question has a time bound in
+it. Which reads carry which shape, why `-1` is a declaration rather than an
+omission, and how to decide it for a collection this table does not list are in
+[../../concepts/growing-reads.md](../../concepts/growing-reads.md).
 
 Authority: Carmack (cache and shard economics), 2026-08-25.
 
@@ -346,9 +361,11 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 ## See also
 
 - [determinism.md](determinism.md) - the pipeline fingerprint, its ledger, and the skip rule built on it.
-- [../sources/freshness.md](../sources/freshness.md) - why the published ledger is one file and its dedupe read has no window.
+- [../extraction/elements.md](../extraction/elements.md) - the element shape: six kinds, two tiers, and why the verbatim slice is called `span_excerpt`.
+- [../sources/freshness.md](../sources/freshness.md) - why the published ledger files by day, and what its cover buys.
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
 - [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
+- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection declares, and the three shapes a cover can take.
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.

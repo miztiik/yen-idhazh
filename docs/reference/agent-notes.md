@@ -1757,12 +1757,13 @@ naming the worker API for a test to assert on.
   produces a failure whose expected value is the old assertion and whose source
   lines are your fix, side by side. It reads as a contradiction and is one only
   in the report. Re-run rather than re-reading.
-- **An option a chart component takes once, at hydration, does not follow a
-  reactive change.** `frontend/src/lib/charts/Chart.svelte` builds its engine
-  option on mount, so a spec that flips the window preset and asserts the plot
-  moved measures the first option forever. The component is remounted with
-  `{#key windowDays}`; a spec that needs the new option has to wait for that
-  remount rather than for a tick.
+- **A chart follows a reactive option change in place; a spec proves it by the
+  option count, not a remount.** `frontend/src/lib/charts/Chart.svelte` hands the
+  live chart each new option through `update()` via a small `$effect`, so a spec
+  that flips the window preset should assert the live chart's option count rose
+  while the engine held the same instance count - an in-place update, which
+  `console-chart-lifetime.spec.ts` checks. The old `{#key windowDays}` remounts
+  were removed, so waiting for a remount now waits forever.
 - **Two fixtures that both fit inside the narrowest preset make a window oracle
   pass on a route that ignores the window entirely.** Every preset then selects
   every row, so the assertion is true for the wrong reason. The fix is a fixture

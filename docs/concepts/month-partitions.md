@@ -1,16 +1,70 @@
 # Month Partitions
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 A **month partition** is one file named `<YYYY-MM>` holding one calendar month of a
 collection that grows. The directory is the collection, the stem is the month. A
 reader opens the months its window names and skips the rest. A writer appends to the
 month its own date names and leaves the rest alone.
 
+**A month is the usual unit here and it is not the only one.** Two collections
+partition by **day** instead - `frontend/public/digest/<YYYY>/<MM>/<DD>/` and
+`state/published/<YYYY>/<MM>/<DD>.csv`, the second derived from the first. Every
+rule on this page reads the same with "day" in place of "month": a writer appends
+to the day its own date names, a reader opens the days its window names, and a
+closed day is rewritten only by a correction that targets it. The grain follows
+what the reader asks for and what a removal has to take away, not the calendar.
+
 Why a collection partitions at all - and why several here deliberately do not - is
-[the shard rule](../architecture/contracts/schemas.md#a-ledger-shards-by-month-only-when-its-read-carries-a-window)
+[the shard rule](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window)
 in the contracts doc. This page is the other half: what the layout obliges a writer
 to do once it exists.
+
+## What counts as a month name
+
+**A real calendar month, spelled in ASCII, seven characters wide.** `2025-01` is a
+partition. `2025-1`, `2025-00`, `2025-13`, `0000-01` and `2025-01` written in
+Arabic-Indic digits are not. One function decides it for every collection on this
+page - `idhazh.month_partition.is_month_stem` - and every directory reader is
+`month_partition.month_files`.
+
+**A name it does not recognise is left alone.** It is not deleted and it is not a
+fault. These directories are the top of their own store, and a root is allowed to
+hold something that is not the partitioned collection at all. The stricter rule -
+below a dated level an unreadable name raises - belongs to the published day tree,
+where everything under a year directory is written by `assemble.day_dir` and nothing
+else (`retention._dated_days`).
+
+**It is one function because it used to be three, and they disagreed.** Measured on
+this checkout on 2026-09-08, before the fix:
+
+| Stem | `retention` | `evals.writer` | `evals.archive` |
+| --- | --- | --- | --- |
+| `2025-01` | a month | a month | a month |
+| `2025-00` | a stray | **a month** | **a month** |
+| `2025-13` | a stray | **a month** | **a month** |
+| `0000-01` | a stray | **a month** | **a month** |
+| `2025-01` in Arabic-Indic digits | a stray | **a month** | **a month** |
+
+So `2025-13.csv` was left alone in `state/feed-health/` and was summarised into
+`state/score-archive/2025-13.json` and then **deleted** in `state/scores/` - one name,
+two dispositions, and the destructive one landing on the store that holds the evidence
+behind every published quality claim. `prune.yml` force-pushes `main`
+([../../CLAUDE.md](../../CLAUDE.md) section 8), so a file it removed would not come
+back. The committed guard covered `notes.csv`, which every reader already refused.
+
+**The ASCII clause is not decoration.** `str.isdigit` and `int` both accept another
+script's numerals, so a stem in Arabic-Indic digits reads as January 2025 to a naive
+check while `ledger.append_seen` names its own file `2025-01`. That is two files
+claiming one month, and a fold would summarise over one of them. CPython's date parser
+happens to refuse that stem today, but through how it compiles its digit class rather
+than through anything this rule asked for, and a detail is not a rule - so the check is
+written out, and `backend/tests/test_retention.py::test_the_month_readers_all_agree_on_what_a_month_is`
+holds all four readers to it.
+
+Authority: Rule #5 - a structural fix rather than a third copy of the rule. Found while
+[re-measuring the state prunes](../architecture/publishing/layout.md#the-state-prunes-were-already-constant-cost-and-the-premise-that-said-otherwise-was-wrong-2026-09-08),
+2026-09-08.
 
 ## The freeze rule
 
@@ -23,8 +77,9 @@ a daily pipeline is the first run of the next month.
 
 The rule binds writes, not reads. A closed partition is still opened: `evals.writer.append`
 checks the header of every committed shard before it writes one, and
-`ledger.shards_in_window` opens every stem a reader's window names. What bounds reads
-is `CLAUDE.md` Rule #12, not this page.
+`ledger.shards_in_window` opens every stem a reader's window names. What bounds reads is
+[growing-reads.md](growing-reads.md) - the cover a read declares, and `CLAUDE.md` Rule #12
+behind it.
 
 Authority: owner, 2026-09-06.
 
@@ -36,25 +91,28 @@ Authority: owner, 2026-09-06.
 | Item health | `state/item-health/<YYYY-MM>.csv` | `ledger.append_item_health` | It takes one date and appends to that month alone, filtering against `ITEM_HEALTH_KEY` in that one shard. Closed once the run's date leaves the month. |
 | Feed health | `state/feed-health/<YYYY-MM>.csv` | `ledger.append_health` | The same one-date append, then it settles that one shard against `FEED_HEALTH_KEY`. The current month is the only file it rewrites. |
 | Seen addresses | `state/seen/<YYYY-MM>.csv` | `ledger.append_seen` | The same one-date append. Closed once the run's date leaves the month. |
+| Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `publish_telemetry.publish` | It writes only the months a caller names as changed, and rewrites a named month only when its projected bytes differ from the committed shard - so a closed month is neither read nor rewritten once nothing targets it. Frozen since row 19 of the constant-cost-reads plan (#484). |
 | Folded item health | `state/telemetry-aggregate/<YYYY-MM>.csv` | `retention.fold_month`, written by `ledger.write_telemetry_aggregate` | Written once, when the item-health month passes `observability.item_health_full_grain_months` (14). Closed the moment it is written - the shard it summarises is gone, so there is nothing left to append. No file is committed yet. |
 | Score archive | `state/score-archive/<YYYY-MM>.json` | `evals.archive`, driven by `retention.prune_scores` | Written once, when the scores month passes `observability.scores_full_grain_months` (14), and only after it reconciles against a second reading of the shard. Closed the moment it is written. No file is committed yet. |
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `cli.stage_assemble` rebuilds only `month_of(plan.date)`. |
+| Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
 
 The two collections with nothing committed are not aspirational. Both writers ship and
 both are tested; neither has fired, because the oldest committed month is `2026-08` and
 both ages are fourteen months.
 
-## Partitioned in layout, not yet frozen
+## The last unfrozen partition is frozen now
 
-| Collection | Path pattern | Writer | Closed rule |
-| --- | --- | --- | --- |
-| Telemetry projection | `frontend/public/telemetry/<YYYY-MM>.csv` | `publish_telemetry.publish` | **None today.** It globs `state/item-health/` and rewrites every month it finds, on every run. |
-
-That is [audit finding 11](../reference/data-growth-audit.md), and it is the one place
-in the tree where the layout exists and the rule does not. The shape of what it should
-write is [in the telemetry doc](../architecture/publishing/telemetry-series.md#published-shards);
-what it costs is that an ordinary run pays for every month the project has ever
-published, for an answer it already had.
+The telemetry projection `frontend/public/telemetry/<YYYY-MM>.csv` was the one
+place in the tree where the layout existed and the rule did not:
+`publish_telemetry.publish` globbed `state/item-health/` and rewrote every month
+it found, on every run, for an answer it already had. That was
+[audit finding 11](../reference/data-growth-audit.md), and row 19 of the
+[constant-cost-reads plan](../../TODO/20260906-constant-cost-reads-plan.md)
+closed it in #484: the writer now takes the row above, writing only the months a
+caller names as changed and rewriting a named month only when its bytes differ.
+What it writes, and how the two freezes compose, is
+[in the telemetry doc](../architecture/publishing/telemetry-series.md#published-shards).
 
 ## The four cases an append-only pattern gets wrong
 
@@ -119,19 +177,19 @@ commitment to convert any of them.
 
 | Collection | Path | Writer | Why not |
 | --- | --- | --- | --- |
-| Published addresses | `state/published.csv` | `ledger.append_published` | Published is forever, so the read carries no window and every shard would be opened anyway. |
 | Pipeline fingerprints | `state/fingerprints.csv` | `fingerprint.append_new`, from `cli.stage_assemble` | "Has this exact input run before" carries no window. Never pruned. |
 | Runtime counters | `state/runtime-counters.csv` | `ledger.append_runtime_counters` | Read one run at a time by an audit with no time bound, and the slowest-growing ledger here. |
 | Feed retirements | `state/feed-retirements.csv` | `ledger.append_retirements` | A retirement is permanent for one address. A run that forgot one would start asking a dead server again. |
 | Visual prunes | `state/visual-prunes.csv` | `ledger.append_visual_prunes` | One row a run, and the question has no time bound. |
 | Model validation | `state/validation-<YYYY-MM-DD>.csv` | `evals.writer.append_validation`, path from `evals.golden` | Dated, not partitioned: one file per validation, which is a one-off rather than a series. |
-| Source health view | `frontend/public/source-health.json` | `publish_source_health` | One document, rewritten whole each run. The growing read behind it is [audit finding 12](../reference/data-growth-audit.md). |
+| Source health view | `frontend/public/source-health.json` | `publish_source_health` | One document, rewritten whole each run. The read behind it was [audit finding 12](../reference/data-growth-audit.md); row 20 of the constant-cost-reads plan bounded it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
 | Training corpus | `corpus/corpus.jsonl`, `corpus/corpus.meta.json`, `corpus/holdout.txt` | `idhazh.corpus`, rolled by `backend/utilities/data_wrangler.py` | A rolling training window bounded by `finetune.corpus_rows` and by `prune.yml`, not by a calendar. Deliberately not `merge=union`, because the union of two rolls holds evicted rows again. |
-| Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `cli.stage_assemble` | Partitioned by **day**, not by month - the same rule one level finer, and a day is frozen the moment it is written. The month partitions above are keyed off this tree. |
+| Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `cli.stage_assemble` | Partitioned by **day**, and listed here because it is the tree the day grain came from rather than because it is unpartitioned. A day is frozen the moment it is written. The month partitions above are keyed off this tree, and so is `state/published/`. |
 
 ## See also
 
-- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-shards-by-month-only-when-its-read-carries-a-window) - why a ledger shards by month at all, and which reads carry a window.
+- [growing-reads.md](growing-reads.md) - the other half of this page: what a growing collection obliges a reader to declare, and why `-1` is an answer.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md#published-shards) - the published projection of item health, one file a month.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-month-search-index) - the month search index, its ceilings, and what an unpublish owes each grain.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the fastest-growing collection, and what would move it to a shorter period.

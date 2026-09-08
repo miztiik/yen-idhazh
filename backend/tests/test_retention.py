@@ -1077,7 +1077,7 @@ def test_the_step_commits_one_row_a_run_and_names_what_it_left(
             == 0
         )
 
-    written = ledger.visual_prunes_path(state)
+    written = ledger.visual_prunes_path(state, "2026-08-21")
     assert ledger.read_header(written) == VisualPruneRow.csv_columns()
     rows = ledger.load_visual_prunes(state)
     assert len(rows) == 1
@@ -1118,7 +1118,7 @@ def test_the_step_leaves_the_pictures_alone_when_no_tree_is_named(tmp_path: Path
         )
         == 0
     )
-    assert not ledger.visual_prunes_path(state).exists()
+    assert not ledger.visual_prunes_path(state, "2026-08-21").exists()
 
 
 def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:
@@ -1431,12 +1431,70 @@ def test_the_window_is_counted_in_months_and_not_in_thirty_day_steps() -> None:
         oldest_month_kept(date(2026, 8, 30), 0)
 
 
+#: Names of the right width and shape that are not a month. Every one was
+#: accepted by at least one month reader and refused by another before
+#: 2026-09-08, which is what made the same file survive in one store and get
+#: deleted in the next.
+NOT_MONTHS: Final = (
+    "2025-00",
+    "2025-13",
+    "0000-01",
+    #: `2025-01` in Arabic-Indic digits. `str.isdigit` and `int` both read this
+    #: as January 2025, so a naive check finds two files claiming one month.
+    "\u0662\u0660\u0662\u0665-\u0660\u0661",
+)
+
+#: The rest of what turns up beside a shard: the wrong width, no date at all,
+#: and a file whose real suffix is not the one being read.
+OTHER_STRAYS: Final = ("notes", "2025-1", "README", "2025-01.csv")
+
+
+def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
+    """One rule for four directories. They used to carry three.
+
+    This is the defect the row is about, stated as one assertion. A directory a
+    prune deletes from names what it recognises, so two directories that
+    recognise different things dispose of the same file two different ways.
+    """
+    state = tmp_path / "state"
+    readers: dict[str, tuple[Path, str, Callable[[], list[Path]]]] = {
+        "retention.month_shards": (
+            state / ledger.ITEM_HEALTH_DIRNAME,
+            ".csv",
+            lambda: month_shards(state / ledger.ITEM_HEALTH_DIRNAME),
+        ),
+        "evals.writer.ledger_shards": (
+            state / score_writer.LEDGER_DIRNAME,
+            ".csv",
+            lambda: score_writer.ledger_shards(state),
+        ),
+        "evals.writer.index_shards": (
+            state / score_writer.INDEX_DIRNAME,
+            ".csv",
+            lambda: score_writer.index_shards(state),
+        ),
+        "evals.archive.archive_files": (
+            state / score_archive.ARCHIVE_DIRNAME,
+            ".json",
+            lambda: score_archive.archive_files(state),
+        ),
+    }
+    for directory, suffix, _ in readers.values():
+        directory.mkdir(parents=True)
+        for stem in ("2025-01", "2025-12", *NOT_MONTHS, *OTHER_STRAYS):
+            (directory / f"{stem}{suffix}").write_text("header\n", encoding="utf-8")
+
+    found = {name: [path.stem for path in read()] for name, (_, _, read) in readers.items()}
+
+    assert found == {name: ["2025-01", "2025-12"] for name in readers}
+
+
 def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
     """A directory this deletes from names what it recognises, never the rest."""
     directory = tmp_path / "state" / ledger.ITEM_HEALTH_DIRNAME
     directory.mkdir(parents=True)
-    for name in ("2025-01.csv", "notes.csv", "2025-1.csv", "2025-13.csv", "README.md"):
-        (directory / name).write_text("header\n", encoding="utf-8")
+    for stem in ("2025-01", *NOT_MONTHS, *OTHER_STRAYS):
+        (directory / f"{stem}.csv").write_text("header\n", encoding="utf-8")
 
     assert [path.name for path in month_shards(directory)] == ["2025-01.csv"]
 
@@ -1654,7 +1712,7 @@ def test_a_feed_health_file_that_is_not_a_month_shard_is_left_alone(tmp_path: Pa
     """A directory this deletes from names what it recognises, never the rest."""
     directory = tmp_path / "state" / ledger.HEALTH_DIRNAME
     directory.mkdir(parents=True)
-    strays = ("notes.csv", "2025-1.csv", "2025-13.csv", "README.md", "2025-01.csv.bak")
+    strays = tuple(f"{stem}.csv" for stem in (*NOT_MONTHS, *OTHER_STRAYS))
     for name in (*strays, "2024-01.csv"):
         (directory / name).write_text("header\n", encoding="utf-8")
 
@@ -2417,6 +2475,42 @@ def test_a_score_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: P
     prune_scores(state, ObservabilityConfig(), TODAY)
 
     assert stray.exists(), "a directory this deletes from names what it recognises"
+
+
+def test_a_score_stem_that_is_not_a_month_is_left_rather_than_archived_and_deleted(
+    tmp_path: Path,
+) -> None:
+    """The defect this row exists for, on the one store where it deleted a file.
+
+    `prune_scores` summarises a month past the window and then unlinks the
+    shard. Its reader used to accept any seven characters of the right shape, so
+    `2025-13.csv` was archived into `state/score-archive/` and then deleted here,
+    while `prune_feed_health` - reading the strict rule - left the same name
+    alone. Nothing in this repository writes `2025-13.csv`, so nothing could have
+    said afterwards what was in it, and `prune.yml` force-pushes `main`.
+
+    The archive directory is listed with `iterdir` rather than through
+    `archived_months`, because that helper now shares the rule under test and
+    would agree with the bug.
+    """
+    state = tmp_path / "state"
+    score_history(state, months_back(TODAY, HISTORY_MONTHS))
+    boundary = oldest_month_kept(TODAY, ObservabilityConfig().scores_full_grain_months)
+    real = [month for month in months_back(TODAY, HISTORY_MONTHS) if month < boundary]
+    assert real, "the fixture has to reach past the window or this proves nothing"
+    strays = {
+        state / score_writer.LEDGER_DIRNAME / f"{stem}.csv": f"{stem} was never written\n"
+        for stem in NOT_MONTHS
+    }
+    for path, text in strays.items():
+        path.write_text(text, encoding="utf-8")
+
+    prune_scores(state, ObservabilityConfig(), TODAY)
+
+    assert {path: path.read_text(encoding="utf-8") for path in strays} == strays
+    assert sorted(
+        path.stem for path in (state / score_archive.ARCHIVE_DIRNAME).iterdir()
+    ) == sorted(real), "only a real month is ever summarised"
 
 
 def test_an_archive_that_does_not_reconcile_leaves_its_shard(

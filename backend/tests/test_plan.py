@@ -18,6 +18,8 @@ import dataclasses
 import json
 import shutil
 import tempfile
+from datetime import date as date_type
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -771,6 +773,50 @@ def test_a_published_address_is_never_planned_again() -> None:
     assert ran.url_key not in {item.url_key for item in again.items}
     assert again.verticals[0].considered == first.verticals[0].considered - 1, (
         "and it is not counted as considered either - it was settled, not weighed"
+    )
+
+
+def _published_days_ago(state: Path, item: PlannedItem, *, days: int) -> str:
+    """File one published row into the day file its own date names."""
+    on = (date_type.fromisoformat(DATE) - timedelta(days=days)).isoformat()
+    ledger.append_published(
+        state,
+        on,
+        [
+            PublishedRow(
+                version=PublishedRow.schema_version(),
+                url_key=item.url_key,
+                published_on=on,
+                item_id=item.item_id,
+            )
+        ],
+    )
+    return on
+
+
+def test_a_plan_records_what_the_published_guard_refused_and_how_old_it_was() -> None:
+    """The count says the guard fired. The bands say whether a cover would have helped.
+
+    Both addresses are built here rather than read off the committed ledger. That
+    ledger spans 16 days, so it can never carry the case the question is actually
+    about - an address old enough that a finite cover would have forgotten it
+    (Rule #12, section 13).
+    """
+    state = Path(tempfile.mkdtemp())
+    first = plan([LAB, TRADE, COMMUNITY], state=state)
+    _published_days_ago(state, first.items[0], days=200)
+    _published_days_ago(state, first.items[1], days=1)
+
+    again = plan([LAB, TRADE, COMMUNITY], state=state)
+    assert again.dropped_published == 2, "both were offered again, and both were refused"
+    assert again.dropped_published_ages is not None
+    held = {(band.from_days, band.to_days): band.addresses for band in again.dropped_published_ages}
+    assert held[(1, 7)] == 1, "the one published yesterday"
+    assert held[(180, 365)] == 1, "the one published 200 days ago"
+    assert sum(held.values()) == 2, "and the bands account for both, the rest measured empty"
+    assert sum(n for (low, _), n in held.items() if low >= 90) == 1, (
+        "one of the two is older than the narrowest cover the config would accept, "
+        "which is exactly the number the width of that cover turns on"
     )
 
 

@@ -31,6 +31,7 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
     VisualState,
 )
+from idhazh.evals import writer as score_writer
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
@@ -356,7 +357,16 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health", "state/feed-retirements.csv"],
-    "work": ["state/item-health", "state/scores", "state/runtime-counters.csv"],
+    # `state/score-index` is beside `state/scores` because it is the record of
+    # what those rows are, and the writer reads it instead of them. A shard
+    # committed without its index is a month the next run cannot recognise, so
+    # it would append every measurement in it a second time.
+    "work": [
+        "state/item-health",
+        "state/scores",
+        "state/score-index",
+        "state/runtime-counters.csv",
+    ],
     "assemble": [
         "frontend/public/digest",
         "frontend/public/telemetry",
@@ -388,6 +398,12 @@ FOLD_DRY_RUN_FLAG: Final = "--dry-run"
 # that decide which items are this shard's.
 RECORD_STEP: Final = "Record what this shard measured"
 RECORD_COMMAND: Final = "python -m idhazh record"
+# The pass that runs after the merge, and the flag that says what it covers. A
+# run appends only to the shard its own date routes to, so the date is the whole
+# cover - without it the pass reads every feed-health, item-health and score
+# shard the archive holds and costs more every month (Rule #12).
+SETTLE_COMMAND: Final = ("python", "-m", "idhazh", "dedupe-ledgers")
+SETTLE_COVER_FLAG: Final = "--date"
 # The step that adds this run's accepted pairs to the training window. It runs
 # in assemble because that is where the article text still exists: `items/` is
 # gitignored and travels as a one-day artifact, so a workflow of its own would
@@ -456,6 +472,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "frontend/public/source-health.json",
         "state/published",
         "state/scores",
+        "state/score-index",
         "state/item-health",
         "state/runtime-counters.csv",
     ],
@@ -2218,6 +2235,33 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     assert _commit_call("fold")[1]["COMMIT_MESSAGE"] != assemble["COMMIT_MESSAGE"]
 
 
+def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
+    """The bound, mirrored where a workflow that drops it reds (Rule #12).
+
+    A run appends only to the shard its own date routes to, so a repeat the union
+    merge left can only be in a file that run wrote, and the date names it. Drop
+    the flag and `cli.stage_dedupe_ledgers` walks every feed-health shard, every
+    item-health shard and every score shard the archive holds - a bill that rises
+    every month for an answer already given, because a finished month was settled
+    when it was written and cannot change again.
+
+    The command refuses to run with no cover at all, so a workflow that lost the
+    flag fails its commit step rather than quietly reading the archive. This
+    names the step instead of waiting for the run.
+    """
+    settling = [
+        label for label, names in COMMIT_SCRIPT_ENV.items() if "DROP_REPEATED_ROWS_COMMAND" in names
+    ]
+    assert settling == ["plan", "work"]
+
+    for label in settling:
+        settle = _commit_call(label)[1]["DROP_REPEATED_ROWS_COMMAND"].split()
+        assert tuple(settle[: len(SETTLE_COMMAND)]) == SETTLE_COMMAND
+        assert settle[len(SETTLE_COMMAND) :] == [SETTLE_COVER_FLAG, SUBSTITUTED_DATE], (
+            f"{label} must name the run it settles, or the pass reads the whole archive"
+        )
+
+
 def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -> None:
     """The producer named in the loop is the producer the job already ran.
 
@@ -2277,6 +2321,12 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
     its own even though the catch-all above it already matched: a collection
     that inherits a merge rule in silence has had that rule decided for it, and
     a new pattern arriving here without its own reason should fail.
+
+    `state/visual-prunes/**/*.csv` joined on 2026-09-08 when the cleanup record
+    became a day tree, and it is here because this test refused it first. Its
+    reason is its own rather than the neighbour's: a row is one pass by one run,
+    so two runs of a day that both append are not in disagreement, and a repeat
+    the union brings is dropped by `VISUAL_PRUNE_KEY`.
     """
     attributes = read_text(REPO_ROOT / ".gitattributes")
     unioned = {
@@ -2285,7 +2335,12 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
         if line and not line.startswith("#") and "merge=union" in line
     }
 
-    assert unioned == {"state/*.csv", "state/**/*.csv", "state/published/**/*.csv"}
+    assert unioned == {
+        "state/*.csv",
+        "state/**/*.csv",
+        "state/published/**/*.csv",
+        "state/visual-prunes/**/*.csv",
+    }
     assert not any(
         "telemetry" in pattern or pattern.startswith("frontend") for pattern in unioned
     )
@@ -2388,13 +2443,16 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
     committing a header-only file; there is no header-only form of a directory,
     so the answer here is to stage `state`, which is always there.
 
-    `state/visual-prunes.csv` is the third store this call covers and it needs no
-    change here, because staging `state` whole already reaches it.
+    `state/visual-prunes/` is the third store this call covers and it needs no
+    change here either. It moved from a flat file to a day tree on 2026-09-08,
+    so a run now writes a path its own checkout did not carry - and staging
+    `state` whole already reaches it, which is why that move needed nothing in
+    this step.
     """
     staged = COMMIT_STAGED_PATHS["fold"]
 
     assert "state" in staged
-    assert ledger.visual_prunes_relpath().split("/")[0] in staged
+    assert ledger.visual_prunes_relpath(SUBSTITUTED_DATE).split("/")[0] in staged
     for late in ("telemetry-aggregate", "score-archive"):
         assert f"state/{late}" not in staged, f"state/{late} is not in a fresh checkout"
         assert not (REPO_ROOT / "state" / late).exists(), (
@@ -2681,6 +2739,7 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     written = {
         "state/item-health": f"state/item-health/{SUBSTITUTED_DATE[:7]}.csv",
         "state/scores": f"state/scores/{SUBSTITUTED_DATE[:7]}.csv",
+        "state/score-index": f"state/score-index/{SUBSTITUTED_DATE[:7]}.csv",
         "state/runtime-counters.csv": "state/runtime-counters.csv",
     }
     assert set(written) == set(COMMIT_STAGED_PATHS["work"])
@@ -2694,6 +2753,35 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     ).stdout.splitlines()
 
     assert answered == [f"{path}: merge: union" for path in written.values()]
+
+
+def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
+    """The index is what the writer reads instead of the rows, so it has to be committed.
+
+    A shard pushed without its index is a month the next run cannot recognise.
+    The dedupe would read an index that stops short of the rows beside it, call
+    every measurement past that point new, and append each one a second time -
+    the one promise the eval ledger makes about itself.
+
+    The assemble job refreshes it for the mirror-image reason. A retry hands the
+    rows back to origin's tip and runs the producer again; an index left holding
+    the first attempt's digests would make the producer refuse the day it just
+    rebuilt, and the day's measurements would be lost rather than doubled.
+
+    The directory is named rather than derived, and `git add` on a path that is
+    not there aborts the whole step, so a fresh checkout has to carry it.
+    """
+    assert score_writer.INDEX_RELDIR in COMMIT_STAGED_PATHS["work"]
+    assert score_writer.INDEX_RELDIR in COMMIT_REFRESH_PATHS["assemble"]
+    assert (REPO_ROOT / score_writer.INDEX_RELDIR).is_dir()
+    tracked = subprocess.run(
+        ["git", "ls-files", score_writer.INDEX_RELDIR],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert tracked, f"{score_writer.INDEX_RELDIR} must be in a fresh checkout"
 
 
 def test_the_retirement_ledger_needs_no_gitattributes_edit() -> None:
@@ -2855,9 +2943,6 @@ def test_assemble_hands_back_the_published_ledger_it_appends_to() -> None:
     assert any(day == path or day.startswith(f"{path}/") for path in refreshed), (
         f"{day} is written by this job and no entry of {refreshed} hands it back"
     )
-    # The flat file is read and never written now, so handing it back would
-    # claim this job rebuilds something it does not touch.
-    assert f"{ledger.STATE_DIRNAME}/{ledger.PUBLISHED_FILENAME}" not in refreshed
 
 
 def test_every_committing_job_configures_the_same_identity() -> None:

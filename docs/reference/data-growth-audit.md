@@ -1,6 +1,6 @@
 # Data Growth Audit
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Status: review and redesign proposal, not an implemented architecture. No application
 code, contracts, configuration, tests or stored publication data changed in this
@@ -27,6 +27,29 @@ vector ranking is not guaranteed constant time either.
 The useful requirement is: **an ordinary lookup, append or page interaction must
 not revisit unrelated history**. Count cold loading, index maintenance, correction,
 deletion, transfer and output work as well as the lookup itself.
+
+## Closed since this audit
+
+The [Constant-Cost Reads plan](../../TODO/20260906-constant-cost-reads-plan.md)
+closed 43 of these findings between 2026-09-06 and 2026-09-08: **11, 12, 61-75,
+84-89, 93-111 and 113**. The finding-to-PR map is the research handover's
+[closure table](../../TODO/20260906-data-growth-research.md#closed-by-the-constant-cost-reads-plan);
+it is recorded there and named here, rather than as a status column on the
+inventory below, which [Reading The Tables](#reading-the-tables) reserves for the
+handover. The inventory is otherwise unchanged - it still describes the audited
+revision `76c2d27c`, and the PRs are what changed `main` since. Finding 84 was
+ruled on and deferred rather than implemented; finding 87 was closed across two
+rows; finding 112, a `Keep`, sits inside the 93-113 range but is not closed.
+
+The [Growing Reads Window plan](../../TODO/20260907-growing-reads-window-plan.md)
+moved **finding 1** on 2026-09-08. `ledger.load_published` no longer reads one
+lifetime CSV: the ledger files by day under `state/published/YYYY/MM/DD.csv`,
+and the read carries `collect.published_window_days` - a cover the committed
+config sets to `-1`, so the shipping answer is still every address and the
+machinery for a finite one is in place. That is a partition and a cover rather
+than the indexed lookup the row below proposes, so the finding is moved rather
+than closed. The current shape is in
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
 
 ## Reading The Tables
 

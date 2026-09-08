@@ -17,8 +17,10 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.day_metrics import DayMetrics
+from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
+from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
@@ -27,6 +29,7 @@ from idhazh.contracts.fingerprint import FingerprintRow
 from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.label_row import LabelRow
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.qualification import QualificationReport, QualificationShard
 from idhazh.contracts.run_manifest import RunManifest
@@ -53,8 +56,10 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     CorpusMeta,
     CorpusRow,
     DayMetrics,
+    DayValidationReceipt,
     DigestDay,
     DigestView,
+    ElementTable,
     EvalRow,
     EvidenceItem,
     FeedHealthRow,
@@ -63,6 +68,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     IconManifest,
     ItemHealthRow,
     LabelRow,
+    ObservationIndexRow,
     PublicTelemetryRow,
     QualificationReport,
     QualificationShard,

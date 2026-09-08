@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -417,6 +417,8 @@ What it renders now, top to bottom:
 - **`Show 25 more`** - the same explicit control the day list and the console's failure list already use, sized by `ui.archive_page_size`.
 
 **The stories are fetched, not inlined**, from `index/<YYYY-MM>.json` staged into `static/`. [layout.md](layout.md) owns why, and the short version is that inlining them would leave the page growing per story, which is the defect the index exists to end. Paging back into an older month fetches that month; a month already in hand is not fetched twice.
+
+**A window bounds which months the browse list fetches.** A segmented control - the same pattern as the console's, over the same 1, 7, 14, 30, 90-day presets - sits above the stories under `data-archive-window` and opens on a 30-day window. `monthsInWindow` in [../../../frontend/src/lib/assist/month.ts](../../../frontend/src/lib/assist/month.ts) turns the window into a newest-first prefix of the months, and the loop reads only those, so a story older than the window is out of the browse list until the window widens or a search reaches past it (Rule #12). A narrower window only hides months already in hand; a wider one fetches the months it now reaches. A topic with no story inside the window says so and offers a `Look back` button to the widest preset, rather than walking back through the whole archive to fill a page - that sparse-topic walk was audit finding 89, and the window is what ends it. The window governs the browse list only: search reads its own day floor, not this window.
 
 **Nothing the list needs sits under `assist/`.** That path is the on-device encoder, which the bundle must render complete without ([../../../CLAUDE.md](../../../CLAUDE.md) section 0a). Browsing is not a model feature, so the index is served from its own `index/` path and the list works with the whole model directory deleted. `frontend/tests/archive.spec.ts` holds it by failing every request under `/assist/` and asking for the stories anyway.
 
@@ -1993,10 +1995,13 @@ counted twice - which is what makes the stack legal and what the oracle checks.
 **Stacked, with a switch to lines.** The same array draws both with only `type`
 and `stack` moving, which is the condition
 [../../concepts/design-system.md](../../concepts/design-system.md) sets for that
-control. Unlike the two panels that had the switch before it, the chart is keyed
-on the shape as well as the window, so picking `Lines` reaches the live chart
-rather than only the prerendered one - the engine takes its option once, at
-hydration, so the block has to be rebuilt.
+control. Picking `Lines` reaches the live chart, not only the prerendered one. A
+chart carries an explicit lifetime now - it hydrates, draws when a reader comes
+within a screen of it, takes a changed option through `update()`, and is
+destroyed once - and a small `$effect` in
+[../../../frontend/src/lib/charts/Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte)
+hands the live chart each new option, so a control that moves the shape or the
+window is followed without a rebuild.
 
 **A reason with no items draws nothing, so the panel names it in a sentence.**
 `not_scored` has never fired: it needs a missing faithfulness score, and the
@@ -3329,10 +3334,12 @@ browses: 518 KB gzipped a month at the observed rate, measured 2026-08-26,
 against an archive page that is 2,912 bytes. A seven-day floor buys the same
 reach on the days that were broken, fires on 6 days of 30, and fires only when
 the shard already being read is small - so the bytes a search moves are levelled
-across the month instead of doubled. Seven, because a week is already this
-site's unit for what a reader still has in mind: `ui.read_mark_days` keeps a
-read mark for seven days and `console.min_window_days` will not draw a narrower
-window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
+across the month instead of doubled. Seven is the search's own floor and no
+longer a week the rest of the site keeps: since 2026-09-06 `ui.read_mark_days`
+keeps a read mark for **14 calendar days back from today** and
+`console.min_window_days` lets the console draw a single day, so the reach here
+rests on the fetch cost above and nothing else. Authority: Carmack on the fetch
+cost, Jony on the sentence, 2026-08-27.
 
 ## Rejected alternatives
 

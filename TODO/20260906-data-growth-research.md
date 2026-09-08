@@ -1,12 +1,66 @@
 # Data Growth Research And Planning Handover
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Status: research only. No implementation is authorized by this document. The
 155 findings describe source revision `76c2d27cbfb7ba9d868e0747dea366b2223e408f`.
 Priorities and effort are engineering judgment requested by the owner, not measured
 savings or a delivery estimate. Read this document to prepare the next plans.
 Do not execute the numbered findings as a queue.
+
+## Closed by the Constant-Cost Reads plan
+
+The [Constant-Cost Reads plan](20260906-constant-cost-reads-plan.md) closed 43 of
+these findings between 2026-09-06 and 2026-09-08. Each row names the finding, the
+plan row that took it, and the merged PR that closed it. This is recorded
+alongside the research and does not overwrite it (`CLAUDE.md` section 5): the
+inventory below still describes the audited revision `76c2d27c`, and these PRs
+are what changed `main` since. The findings map to the Frontend Reductions,
+Published Projections and Browser Ownership packages; no package is fully closed
+by this plan, so the ownership register below is unchanged.
+
+| Finding | Plan row | Closed by |
+| --- | --- | --- |
+| 11 | 19 | #484 |
+| 12 | 20 | #485 |
+| 61, 62, 63, 67, 68, 70, 73, 74, 75 | 22 | #489 |
+| 64, 65, 66, 69, 71, 95 | 2 | #447 |
+| 72 | 24 | #501 |
+| 84 | 26 | #502 (decision authored; implementation deferred) |
+| 85, 86 | 5 | #451 |
+| 87 | 6, 23 | #454, #500 |
+| 88 | 4 | #448 |
+| 89 | 25 | #470 |
+| 93 | 6 | #454 |
+| 94, 109 | 17 | #477 |
+| 96, 97 | 11 | #465 |
+| 98, 99, 101 | 12 | #473 |
+| 100 | 18 | #481 |
+| 102, 105 | 13 | #466 |
+| 103, 113 | 3 | #446 |
+| 104 | 14 | #464 |
+| 106 | 9 | #459 |
+| 107 | 15 | #471 |
+| 108 | 16 | #472 |
+| 110 | 7 | #455 |
+| 111 | 8 | #453 |
+
+Three edges of that set are worth stating plainly. **Finding 84** (a byte-bounded
+day download) was not implemented: row 26 authored the decision to keep the
+whole-day contract and defer the bound to a later static-page change (#502), so
+the growth is ruled on and documented, not removed. **Finding 87** was split -
+row 6 did the `(date, item_id)` lookup half (#454) and row 23 did the title-map
+half (#500). **Finding 112** is a `Keep` (necessary local presentation work); it
+sits inside the audited 93-113 range but was never in this plan's scope, and
+nothing here closes it.
+
+**Two plan rows close no finding, but the 43 above rest on them.** Row 1 set
+every tunable the plan needed in one contract and its schema - the 1/7/14/30/90-day
+window presets, the 14-day read-mark and archive windows, and the 20 MB offline
+byte ceiling (#443). Row 10 named the existing `<YYYY-MM>` month layout as the
+project's partition pattern and wrote its freeze rule and concept doc (#445),
+which the partition-bounded reads that closed findings 11 and 12 are built on.
+Row 27 carried the living-docs sweep and this record (#506).
 
 ## Decision Board
 
@@ -45,6 +99,11 @@ This is the single claim register for all 15 primary packages. The 155-row routi
 index below maps each finding to one of these names. `Unclaimed` is not permission
 to implement a Level-5 change. `Overlap` means another effort touches the area but
 has not claimed or closed this whole package. No agent is assigned by this doc PR.
+
+The Constant-Cost Reads plan has since closed 43 findings across three of these
+packages - Frontend Reductions, Published Projections and Browser Ownership - but
+no whole package. The rows below therefore keep their pre-plan claim state; the
+finding-by-finding record is [above](#closed-by-the-constant-cost-reads-plan).
 
 | Package | Status | Execution Plan / Related Work | Owner / Branch |
 | --- | --- | --- | --- |
