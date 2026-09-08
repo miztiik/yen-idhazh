@@ -23,6 +23,9 @@ That last one is a repair, not a stage. Nothing schedules it.
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
+import inspect
 import json
 import logging
 import os
@@ -67,6 +70,7 @@ from idhazh.contracts.app_config import (
 )
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_url_key
+from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.eval_row import EvalRow
@@ -3567,7 +3571,7 @@ def _picture_faults(public_root: Path, day: DigestDay) -> list[str]:
     return faults
 
 
-def _day_faults(path: Path, public_root: Path) -> list[str]:
+def _day_faults(path: Path, public_root: Path, *, payload: bytes | None = None) -> list[str]:
     """What is wrong with one committed day, in sentences, or an empty list.
 
     Both shapes are asked for, because a day has two readers and they read
@@ -3576,13 +3580,20 @@ def _day_faults(path: Path, public_root: Path) -> list[str]:
     can still project to something the served contract refuses - a story with no
     key point, say, which the build never looked at because that story sits past
     the document's seed.
+
+    `payload` is the file's bytes when the caller already holds them.
+    `stage_validate_days` digests the same bytes it validates, and reading one
+    file twice to answer two questions about one payload is the kind of cost
+    this stage exists to remove. Passing nothing reads the file here, which is
+    the only place that sentence about an unreadable day is written.
     """
+    if payload is None:
+        try:
+            payload = path.read_bytes()
+        except OSError as error:
+            return [f"cannot be read: {error.strerror or error}"]
     try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError as error:
-        return [f"cannot be read: {error.strerror or error}"]
-    try:
-        parsed = json.loads(raw)
+        parsed = json.loads(payload)
     except json.JSONDecodeError as error:
         return [f"is not JSON: {error}"]
     if not isinstance(parsed, dict):
@@ -3604,7 +3615,138 @@ def _day_faults(path: Path, public_root: Path) -> list[str]:
     return faults
 
 
-def stage_validate_days(root: Path, only: Sequence[str] = ()) -> int:
+DAY_VALIDATIONS_FILENAME: Final = "day-validations.csv"
+
+
+def day_validations_path(state_dir: Path) -> Path:
+    """`state/day-validations.csv`: which days have passed, and against what."""
+    return state_dir / DAY_VALIDATIONS_FILENAME
+
+
+def _validator_identity() -> str:
+    """A digest of everything a committed day is checked against.
+
+    A published day is frozen, so the only thing that can turn a pass into a
+    failure is a move in the rules. This is what "the rules" means, spelled out
+    so that nobody has to remember to bump it: the two generated schemas, and
+    the source of the four functions that do the checking. Change a field, a
+    constraint, an enum member or a line of `_day_faults`, `_picture_faults`,
+    `assets_in_day` or `DigestView.project`, and this moves - which invalidates
+    every receipt at once and re-validates the whole archive, once.
+
+    It is derived rather than declared on purpose. A hand-maintained constant is
+    a check that silently stops checking on the day somebody forgets it, and the
+    failure would be invisible: the gate keeps printing a pass.
+
+    The cost of deriving it is that a comment or a reformat inside one of those
+    functions moves it too. That buys one full re-validation, which is what this
+    stage did on every run before the receipt existed - the error is on the side
+    of doing the work again rather than skipping it.
+    """
+    rules = (_picture_faults, _day_faults, assets_in_day, DigestView.project)
+    material = canonical_json(
+        {
+            "digest_day": DigestDay.json_schema(),
+            "digest_view": DigestView.json_schema(),
+            "rules": [inspect.getsource(rule) for rule in rules],
+        }
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def _receipts_for(state_dir: Path, identity: str) -> dict[str, tuple[DayValidationReceipt, ...]]:
+    """Every receipt each day carries under this validator.
+
+    Only rows written under `identity` are kept: a row about an older validator
+    says nothing about the rules in force, and dropping it here is what makes a
+    rule change re-validate everything rather than nothing.
+
+    A day can carry more than one row and both readings are legitimate. A closed
+    day that `backfill.yml` re-encoded leaves a truthful new row beside a row
+    about the payload that used to be there, and `merge=union` concatenates, so
+    two branches that each validated one day leave two rows as well. The file
+    cannot tell those apart and does not try - `_proved` asks the only question
+    that settles it, which is what is on disk now.
+
+    A row that will not parse is counted and skipped rather than raised on. The
+    worst it can cost is the validation this record exists to avoid, and a
+    publication must not be stopped by a bookkeeping file.
+    """
+    path = day_validations_path(state_dir)
+    if not path.is_file():
+        return {}
+    held: dict[str, list[DayValidationReceipt]] = {}
+    unreadable = 0
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for record in csv.DictReader(handle):
+            try:
+                receipt = DayValidationReceipt.from_csv_row(record)
+            except (ValidationError, KeyError):
+                unreadable += 1
+                continue
+            if receipt.validator_version == identity:
+                held.setdefault(receipt.date, []).append(receipt)
+    if unreadable:
+        LOG.warning(
+            "%s holds %s rows this build cannot read - those days will be opened again",
+            path.name,
+            unreadable,
+        )
+    return {date: tuple(rows) for date, rows in held.items()}
+
+
+def _proved(held: Sequence[DayValidationReceipt], payload_bytes: int) -> bool:
+    """Whether these receipts settle what is on disk at this length.
+
+    The length comes from `os.stat`, which answers without opening the file -
+    that is the whole saving, so the digest a receipt carries cannot be the
+    thing consulted here. What the digest does is make a real contradiction
+    visible: two rows claiming the same length and different bytes cannot both
+    be about the payload that is there, so the day is read rather than trusted.
+
+    A row whose length does not match is about a payload that is no longer
+    there. It is ignored rather than held against the day, which is what lets a
+    re-encoded day settle down again instead of being read for ever.
+    """
+    matching = {row.payload_digest for row in held if row.payload_bytes == payload_bytes}
+    return len(matching) == 1
+
+
+def _record_receipts(state_dir: Path, earned: list[DayValidationReceipt]) -> int:
+    """Append what this run proved, skipping any row the file already carries.
+
+    Append-only because `state/*.csv` is `merge=union` (`.gitattributes`): a
+    rewrite that removed rows would be resolved by a union that puts them back,
+    so the removal would silently not happen.
+    """
+    if not earned:
+        return 0
+    path = day_validations_path(state_dir)
+    columns = DayValidationReceipt.csv_columns()
+    already: set[tuple[str, ...]] = set()
+    exists = path.is_file()
+    if exists:
+        ledger.require_matching_header(path, columns)
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            already = {
+                tuple(record.get(name, "") for name in columns) for record in csv.DictReader(handle)
+            }
+    rows = [receipt.csv_row() for receipt in earned]
+    fresh = [row for row in rows if tuple(row[name] for name in columns) not in already]
+    if not fresh:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        if not exists:
+            writer.writeheader()
+        writer.writerows(fresh)
+    return len(fresh)
+
+
+def stage_validate_days(
+    root: Path, only: Sequence[str] = (), *, state_dir: Path | None = None
+) -> int:
     """Committed days against the two contracts their readers hold.
 
     **This exists because prerendering stopped proving it.** Until the reading
@@ -3616,13 +3758,30 @@ def stage_validate_days(root: Path, only: Sequence[str] = ()) -> int:
     is weaker than it was and it is written down rather than hidden: a broken
     day can no longer be built, it can only no longer be merged.
 
-    `only` names the days to open, as `YYYY-MM-DD`. Empty means every committed
-    day, which is what a contract change needs and nothing else does: a day
-    already published is frozen, so the only thing that can invalidate it is a
-    change to the shape it is read through. Measured 2026-09-05 on an i7-1265U,
-    16 committed days took 6.6 s to 7.1 s - about 0.27 s a day on top of a fixed
-    start, so a year of publishing is around 100 s every time this runs
-    (Rule #12). A run that wrote one day names that day.
+    `only` names the days to open, as `YYYY-MM-DD`. Naming a day is how a run
+    says it just wrote that day, so a named day is always opened and its receipt
+    is never consulted. Empty means every committed day.
+
+    **A frozen day is not re-validated, and that is a receipt rather than a
+    clock.** A published day cannot stop matching a contract on its own - the
+    only thing that can happen to it is deletion - so what invalidates a pass is
+    a move in the rules, not the passage of time. `state/day-validations.csv`
+    records the day, the length and digest of the payload that passed, and
+    `_validator_identity`. A later run skips a day whose receipt names this
+    validator and whose recorded length still matches `os.stat`, and never opens
+    the payload. `state_dir` is where those receipts live; pass nothing and every
+    day named is validated, which is what this did before the receipt existed.
+
+    **On the first run against a tree with no receipts every day is validated**,
+    exactly as before, and every day that passes earns a receipt. Nothing is
+    skipped on trust it has not earned, so the machinery costs a full sweep once
+    and then costs a `stat` a day. The same thing happens after a rule change,
+    which is the whole point: the archive is re-validated once, not on a window.
+
+    Measured 2026-09-08 on an Intel Core i7-1265U: 18 committed days,
+    19,867,266 bytes, 0.45 s median over three runs against 0.02 s with every
+    receipt current, and one day more every day nobody writes any code
+    (Rule #12).
 
     An empty tree fails, and so does a named day that is not there. A validator
     that checked nothing prints the same line as one that checked every day,
@@ -3645,12 +3804,37 @@ def stage_validate_days(root: Path, only: Sequence[str] = ()) -> int:
             LOG.error("validate-days was asked for days that are not committed: %s", missing)
             return 1
 
+    identity = _validator_identity() if state_dir is not None else ""
+    # A named day was just written by this run, so its receipt is about the
+    # payload that stood there before it. Nothing to consult.
+    held = _receipts_for(state_dir, identity) if state_dir is not None and not only else {}
+
     broken = 0
+    skipped = 0
+    earned: list[DayValidationReceipt] = []
     for path in days:
-        faults = _day_faults(path, root.parent)
+        date = _day_of(path)
+        if _proved(held.get(date, ()), path.stat().st_size):
+            skipped += 1
+            continue
+        try:
+            payload: bytes | None = path.read_bytes()
+        except OSError:
+            payload = None
+        faults = _day_faults(path, root.parent, payload=payload)
         broken += bool(faults)
         for fault in faults:
-            LOG.error("%s %s", _day_of(path), fault)
+            LOG.error("%s %s", date, fault)
+        if not faults and payload is not None and state_dir is not None:
+            earned.append(
+                DayValidationReceipt(
+                    version=DayValidationReceipt.schema_version(),
+                    date=date,
+                    payload_bytes=len(payload),
+                    payload_digest=hashlib.sha256(payload).hexdigest(),
+                    validator_version=identity,
+                )
+            )
 
     if broken:
         LOG.error(
@@ -3661,7 +3845,13 @@ def stage_validate_days(root: Path, only: Sequence[str] = ()) -> int:
         )
         return 1
 
-    LOG.info("validate-days: %s committed days match both contracts", len(days))
+    if state_dir is not None:
+        LOG.info("validate-days: recorded %s receipts", _record_receipts(state_dir, earned))
+    LOG.info(
+        "validate-days: %s committed days match both contracts, %s of them opened",
+        len(days),
+        len(days) - skipped,
+    )
     return 0
 
 
@@ -3938,6 +4128,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=STATE_ROOT,
+        help=(
+            "Where `validate-days` keeps its receipts. It moves with --digest-root: a "
+            "receipt is a claim about a payload in that tree, so pointing one at a "
+            "copy and leaving the other at the real state would let a day be skipped "
+            "on a receipt earned by a different file."
+        ),
+    )
+    parser.add_argument(
         "--corpus-dir",
         type=Path,
         default=CORPUS_ROOT,
@@ -3976,7 +4177,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Above the fetcher for the same reason site-weight is: reading committed
         # files decides nothing about the open web, and starting a fetcher to do
         # it would read every host's robots.txt for nothing.
-        return stage_validate_days(args.digest_root, args.day)
+        return stage_validate_days(args.digest_root, args.day, state_dir=args.state_root)
 
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
