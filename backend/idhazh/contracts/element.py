@@ -58,6 +58,13 @@ note carrying a few figures from a data story carrying many, and it fails
 silently because a capped counter still returns a plausible integer. The count
 is taken before any dedupe and before the cap, one per kind, and the shape
 refuses a table that kept more of a kind than it says it found.
+
+**Two elements may hold the same characters, and the shape allows it.** The two
+regex passes settle between themselves and never both keep one span - that rule
+is `idhazh.elements.settle` and it belongs to the producer. It is not a rule
+about the table, because a `quote` that carries a `quantity` inside it is the
+shape the model-anchored kinds need, and a validator refusing every overlap
+would refuse that too.
 """
 
 from __future__ import annotations
@@ -337,6 +344,25 @@ class ElementTable(Contract):
     __schema_stem__: ClassVar[str] = "element-table"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-08T18:00",
+            change=(
+                "A second regex pass writes into this table, so `date` now appears in "
+                "`candidates_found` and in `elements`. No field was added, removed or "
+                "retyped; `candidates_found` is restated as one count per pass, taken "
+                "before the rule that settles two passes claiming one span."
+            ),
+            why=(
+                "Both patterns match `2026` and only one of them can keep the "
+                "characters, so `elements` can now hold fewer of a kind than the pass "
+                "matched for a reason that is not the cap. Counting each pass before the "
+                "rule keeps that visible: count after it instead and a date pattern that "
+                "swallowed every figure would report an article with no figures in it, "
+                "which is the silent failure this counter exists to prevent. No payload "
+                "had to move - a table written under the previous stamp still validates, "
+                "which is what the two committed fixtures show."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-08T12:00",
             change=(
                 "candidates_found added and required, one count per kind, holding what "
@@ -400,9 +426,12 @@ class ElementTable(Contract):
     )
     candidates_found: dict[ElementKind, int] = Field(
         description=(
-            "How many candidates each pass matched, before any dedupe and before the "
-            "cap. `elements` saturates at the cap and this does not, so the two "
-            "together say whether the cap bit and by how much."
+            "How many candidates each pass matched, before any dedupe, before the rule "
+            "that settles two passes claiming one span, and before the cap. It is one "
+            "count per pass and never a total: two passes may both count one stretch of "
+            "characters, because both matched it and only one kept it. `elements` "
+            "saturates at the cap and this does not, so the two together say whether the "
+            "cap bit and by how much."
         )
     )
 
