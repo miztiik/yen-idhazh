@@ -440,21 +440,25 @@ def stage_plan(
         state, date, _first_sights(candidates, first_seen, generated_at, run_id)
     )
     ledger.append_health(state, date, health)
-    published_on = ledger.load_published(state)
+    published_on = ledger.load_published(
+        state, today=date, within_days=collect.published_window_days
+    )
     already_published = frozenset(published_on)
     settled_today = frozenset(
         ledger.load_settled_failures(state, date, codes=collect.settled_failure_codes)
     )
     # What the guard refused this run, and how old it was. The ledger's own size
-    # says nothing about either: it counts every address ever published, and all
+    # says nothing about either: it counts every address the cover holds, and all
     # but a handful of those were never offered again. Only the overlap with what
     # the feeds offered today is the guard firing.
     #
     # The ages travel with the count because the count alone cannot answer the
-    # question the unwindowed read is defended on - whether a cover of a given
-    # width would have let any of these through. Both land on the plan payload,
-    # so a later run can read what this one refused; this log line is stderr and
-    # nothing commits stderr.
+    # question the width of the cover turns on - whether a narrower one would
+    # have let any of these through. `collect.published_window_days` ships at -1,
+    # so the read is still whole and these ages are the evidence a narrower cover
+    # would have to be argued from. Both land on the plan payload, so a later run
+    # can read what this one refused; this log line is stderr and nothing commits
+    # stderr.
     planned_desks = {vertical.id for vertical in settings.taxonomy.verticals}
     offered = {item.url_key for item in candidates if item.vertical in planned_desks}
     run_day = date_type.fromisoformat(date)

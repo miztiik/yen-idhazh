@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-09-08
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -31,10 +31,10 @@ question, and the four answers do not mix.
 | --- | --- | --- | --- |
 | `config/` | The tunable knobs: `idhazh.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
 | `corpus/` | The rolling training window: source text as training samples, its census and its holdout | a run, in CI | **never** |
-| `schemas/` | One generated JSON Schema per contract, twenty-four files | `python -m idhazh.contracts.export` | no |
+| `schemas/` | One generated JSON Schema per contract, thirty-eight files | `python -m idhazh.contracts.export` | no |
 | `backend/` | The build-time producer. Not a service, ever | a person | no |
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next | a run, in CI | **never** |
+| `state/` | The append-only ledgers one run leaves for the next. Four of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/` and `state/scores/` by month, `state/published/` by day | a run, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
 | `docs/` | The canonical knowledge. Agent memory | a person | no |

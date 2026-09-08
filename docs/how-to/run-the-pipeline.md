@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -66,7 +66,7 @@ same variable. There is no hosted inference anywhere in this project
 | `state/scores/<YYYY-MM>.csv` | One row per scored item | **yes** |
 | `state/fingerprints.csv` | One row per pipeline stamp | **yes** |
 | `state/seen/<YYYY-MM>.csv` | First sight of every address, so an undated article still has an age | **yes** |
-| `state/published.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
+| `state/published/<YYYY>/<MM>/<DD>.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
 | `state/feed-health/<YYYY-MM>.csv` | What every feed did on every run | **yes** |
 | `state/feed-retirements.csv` | Every endpoint the run stopped asking, and the evidence | **yes** |
 | `state/item-health/<YYYY-MM>.csv` | What every planned item did on every run | **yes** |
