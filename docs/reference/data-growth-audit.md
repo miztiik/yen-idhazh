@@ -41,6 +41,16 @@ revision `76c2d27c`, and the PRs are what changed `main` since. Finding 84 was
 ruled on and deferred rather than implemented; finding 87 was closed across two
 rows; finding 112, a `Keep`, sits inside the 93-113 range but is not closed.
 
+The [Growing Reads Window plan](../../TODO/20260907-growing-reads-window-plan.md)
+moved **finding 1** on 2026-09-08. `ledger.load_published` no longer reads one
+lifetime CSV: the ledger files by day under `state/published/YYYY/MM/DD.csv`,
+and the read carries `collect.published_window_days` - a cover the committed
+config sets to `-1`, so the shipping answer is still every address and the
+machinery for a finite one is in place. That is a partition and a cover rather
+than the indexed lookup the row below proposes, so the finding is moved rather
+than closed. The current shape is in
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+
 ## Reading The Tables
 
 **The finding numbers are stable IDs, not an execution sequence.** The sections

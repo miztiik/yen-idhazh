@@ -79,7 +79,8 @@ class SeenRow(Contract):
 
 
 class PublishedRow(Contract):
-    """One row of `state/published.csv`, appended when an item reaches a committed digest.
+    """One row of `state/published/YYYY/MM/DD.csv`, appended when an item reaches a
+    committed digest.
 
     It carries no address. `item_id` and `published_on` join to that day's
     committed payload, where the address is already published as `source_url` -
@@ -88,6 +89,17 @@ class PublishedRow(Contract):
 
     __schema_stem__: ClassVar[str] = "published-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-08",
+            change="Named the day file instead of the flat state/published.csv.",
+            why=(
+                "The flat file was split into state/published/YYYY/MM/DD.csv and "
+                "removed, so the description named a file that no longer exists. No "
+                "field moved and no cell changed, so nothing migrates - but the "
+                "generated schema does change, and a schema that changes with no "
+                "changelog entry is a diff nobody can explain."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26",
             change="Removed canonical_url. The row is url_key, published_on and item_id.",

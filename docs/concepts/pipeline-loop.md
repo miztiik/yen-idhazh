@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-08
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -101,7 +101,7 @@ ledger contract sit under `state/`:
 | File | Written by | Answers |
 | --- | --- | --- |
 | `state/seen/<YYYY-MM>.csv` | Collect | How old is this article, when its feed gave no date? |
-| `state/published.csv` | Assemble | Have we already published this address? |
+| `state/published/<YYYY>/<MM>/<DD>.csv` | Assemble | Have we already published this address? |
 | `state/feed-health/<YYYY-MM>.csv` | Collect | What did every feed do, on every run? |
 | `state/feed-retirements.csv` | Collect | Is this address gone for good? |
 | `state/fingerprints.csv` | not wired; intended single writer is Assemble | Which observed pipeline identities have run? The committed file currently has only its header. |

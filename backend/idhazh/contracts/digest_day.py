@@ -276,10 +276,10 @@ class DigestItem(Model):
         default=None,
         description=(
             "Reserved. Null in every payload ever written, because no run can revise "
-            "an item: `rank.plan_vertical` drops a candidate already in "
-            "`state/published.csv`, `cli` supplies that set, and `assemble.build_day` "
-            "drops an item the day already holds. If a run ever does revise, the rule "
-            "it must keep is that the item says so."
+            "an item: `rank.plan_vertical` drops a candidate already in the published "
+            "ledger under `state/published/`, `cli` supplies that set, and "
+            "`assemble.build_day` drops an item the day already holds. If a run ever "
+            "does revise, the rule it must keep is that the item says so."
         ),
     )
     updated_by_run: int | None = Field(
@@ -353,6 +353,17 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-08",
+            change="updated_at names the published ledger's day tree, not the flat file.",
+            why=(
+                "The flat state/published.csv was split into "
+                "state/published/YYYY/MM/DD.csv and removed, so the description named a "
+                "file that no longer exists. No field moved and no payload changes, so "
+                "nothing migrates - but the generated schema does change, and a schema "
+                "that changes with no changelog entry is a diff nobody can explain."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-05T18:00",
             change=(

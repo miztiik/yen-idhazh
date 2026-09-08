@@ -51,7 +51,7 @@ The shapes, and where each one lives once written:
 | `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
 | `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
-| `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
+| `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
@@ -127,11 +127,13 @@ edit does not start (Rule #11).
 
 What would overturn it: a published surface that needs the counters, which would make them a published payload; or a run that stops being sharded, which would make shard grain and run grain the same thing and the manifest the cheaper home.
 
-### A ledger shards by month only when its read carries a window
+### A ledger partitions only when its read carries a window
 
-Some `state/` ledgers are one file and some are a directory of `<YYYY-MM>.csv`
-shards. The rule is one question: **does the read that consumes this ledger
-carry a time window?**
+Some `state/` ledgers are one file and some are a directory of shards. The rule
+is one question: **does the read that consumes this ledger carry a time
+window?** The grain follows what the reader asks for - a month for the ledgers
+whose windows are measured in months, a day for `state/published/`, which
+mirrors the digest tree its rows are derived from.
 
 | Ledger | Layout | The question it answers | Windowed on read |
 | --- | --- | --- | --- |
@@ -139,7 +141,7 @@ carry a time window?**
 | `state/feed-health/` | monthly shards | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
 | `state/item-health/` | monthly shards | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and fetches month shards |
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
-| `state/published.csv` | one file | have we already published this? | no - published is forever |
+| `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
 | `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/layout.md#what-bounds-the-committed-state-tree) |
 | `state/score-index/` | monthly shards | which measurements does the shard beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, pipeline, output and scorer is one measurement whenever it is re-taken |
@@ -351,7 +353,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 ## See also
 
 - [determinism.md](determinism.md) - the pipeline fingerprint, its ledger, and the skip rule built on it.
-- [../sources/freshness.md](../sources/freshness.md) - why the published ledger is one file and its dedupe read has no window.
+- [../sources/freshness.md](../sources/freshness.md) - why the published ledger files by day, and what its cover buys.
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
 - [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.

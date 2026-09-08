@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-07
+**Last Updated**: 2026-09-08
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -1001,7 +1001,7 @@ somebody forgets to apply, and a rate quietly multiplied back up reads exactly
 like a rate that was measured.
 
 **Never sampled, each for its own reason:** the item-health census, because it is
-the denominator; `state/seen/` and `state/published.csv`, because they are what
+the denominator; `state/seen/` and `state/published/`, because they are what
 stops a repeat; `state/feed-health/`, because quarantine fires at
 `collect.availability_strikes_before_rest` consecutive failures and a missing row
 moves that count; and the canary suite, because a canary that runs sometimes is
@@ -1450,7 +1450,7 @@ Authority: row 4 of
 
 Any of the four differing makes it a new measurement and it lands: different words under identical inputs is the determinism violation the ledger exists to catch, and the same words read by a different scorer is a reading worth keeping.
 
-Four rows written before this rule are still committed - four items on 2026-08-23 that a second day re-summarized because `state/published.csv` had no record of the day before. They are honest history and stay. Anything counting the whole ledger de-duplicates on those four columns first.
+Four rows written before this rule are still committed - four items on 2026-08-23 that a second day re-summarized because the published ledger had no record of the day before. They are honest history and stay. Anything counting the whole ledger de-duplicates on those four columns first.
 
 The 2026-08-23 repair kept positions stable. It measured `state/scores.csv` with Python's `csv` module: 33 header names and 19 data rows, all with 33 cells. Ten historical rows predated `score_ms`, so they now carry the contract default `0`. All 19 rows predated `evidential_density` and `speculative_density`, so those cells stay empty as CSV nulls.
 
