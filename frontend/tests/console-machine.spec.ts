@@ -45,7 +45,7 @@ const CONFIG = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
 ) as {
 	run: { shard_timeout_minutes: number };
-	models: { inference: { n_ctx: number } };
+	models: { summarize: { inference: { n_ctx: number } } };
 	observability: {
 		cost_currency: string;
 		cost_input_per_million: number;

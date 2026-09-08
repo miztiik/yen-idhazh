@@ -78,6 +78,8 @@ export interface RunConfig {
  * without its ceiling is not a measurement. It is the summarizer's window
  * because the summarizer is what those shards ran; the visual planner carries
  * its own block and nothing here draws it.
+ */
+export interface InferenceConfig {
 	n_ctx: number;
 }
 
@@ -646,7 +648,8 @@ export function visualsConfig(): VisualsConfig {
 }
 
 export function inferenceConfig(): InferenceConfig {
-  return { ...INFERENCE_DEFAULTS, ...(raw().models?.summarize?.inference ?? {}) };
+	return { ...INFERENCE_DEFAULTS, ...(raw().models?.summarize?.inference ?? {}) };
+}
 
 export function retentionConfig(): RetentionConfig {
 	return { ...RETENTION_DEFAULTS, ...(raw().retention ?? {}) };
