@@ -78,6 +78,12 @@ MAGNITUDE: Final[dict[str, Decimal]] = {
 
 PERCENT: Final[frozenset[str]] = frozenset({"percent", "per cent", "%"})
 
+# A bare four-digit integer in this range reads as a calendar year rather than
+# as a measurement. It lives with the number pattern because it is a fact about
+# the same bytes, and `visual_planner` reads it back.
+YEAR_MIN: Final = 1900
+YEAR_MAX: Final = 2100
+
 # The word after a number is a unit only sometimes. These are the ones that
 # never are, so a quantity does not end up measured in "of".
 NOT_A_UNIT: Final[frozenset[str]] = frozenset(
