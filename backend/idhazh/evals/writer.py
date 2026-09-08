@@ -199,9 +199,9 @@ def indexed_observations(state_dir: Path) -> set[str]:
 
 
 def refresh_index(state_dir: Path) -> int:
-    """Bring the index in step with the shards. Returns how many digests it wrote.
+    """Fill a month with no index, drop one the archive replaced. Returns digests written.
 
-    Two jobs, and both are about a month whose index and shard disagree.
+    Two jobs, and both are about a month the index does not describe at all.
 
     **A shard with no index is filled from its rows, once.** That is the
     read-side migration: the first run after this landed meets a ledger written
@@ -215,6 +215,18 @@ def refresh_index(state_dir: Path) -> int:
     can remove the last record of a measurement. A shard that went without an
     archive - deleted by hand, or by a prune whose archive would not reconcile -
     leaves the index standing as the only thing that remembers the month.
+
+    **A month whose index exists is never compared against its shard, and that
+    is the trade rather than an omission.** Asking whether an index is behind
+    the rows beside it means reading those rows, which is the bill this index
+    exists to remove. So the two files are kept in step by the writer instead:
+    `append` writes the rows and the digests it minted in one call, and every
+    writer of `state/scores/` in this repository goes through it. A shard that
+    grew behind the index's back - rows appended by something that never knew
+    the index existed, which is what a long-lived branch meets when it merges a
+    `main` older than this file - is repaired by deleting that month's index.
+    That puts the month back into the first case above and the next run refills
+    it from the rows.
 
     A partial fill is safe in the direction that matters. It under-reports, so a
     measurement lands twice and `idhazh dedupe-ledgers` settles it against

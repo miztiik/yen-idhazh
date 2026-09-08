@@ -22,6 +22,7 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
+from idhazh import ledger
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
@@ -1091,6 +1092,22 @@ def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
     _write_shard(shard, [row for row in rows for _ in range(copies)])
 
 
+def _indexed(state: Path, month: str) -> set[str]:
+    """The digests one month's index holds, read from that file rather than the union."""
+    with writer.index_path(state, month).open("r", encoding="utf-8", newline="") as handle:
+        return {record["observation_digest"] for record in csv.DictReader(handle)}
+
+
+def _shard_digests(state: Path, month: str) -> set[str]:
+    """The distinct observations one month's rows hold, derived from the rows.
+
+    The one read of the score rows in this section, and it is here so a test can
+    say what the index is supposed to mirror without asking the index.
+    """
+    with writer.ledger_path(state, month).open("r", encoding="utf-8", newline="") as handle:
+        return {writer.observation_digest(record) for record in csv.DictReader(handle)}
+
+
 def test_a_repeat_is_still_refused_when_the_index_is_the_only_thing_read(tmp_path: Path) -> None:
     """The invariant. Nothing about how the answer is stored may move it.
 
@@ -1182,6 +1199,87 @@ def test_a_tree_with_shards_and_no_index_answers_the_same_as_one_with_an_index(
     assert writer.index_path(fresh, rows[0].date[:7]).read_bytes() == (
         writer.index_path(carried, rows[0].date[:7]).read_bytes()
     )
+
+
+def test_an_append_leaves_the_index_holding_every_observation_its_shard_holds(
+    tmp_path: Path,
+) -> None:
+    """The invariant the pair rests on, asserted over the files rather than a return value.
+
+    `refresh_index` fills a month with no index and never looks at one that
+    exists, so keeping the two in step is `append`'s job: it writes the rows and
+    the digests it minted in one call, and every writer of `state/scores/` in
+    this repository goes through it.
+
+    Held over the shards after several calls and two months, because the two
+    ways to break it are silent. A row filed under one month whose digest lands
+    under another, or a row written with no digest at all, both leave a green
+    return value and surface weeks later as a measurement counted twice.
+    """
+    state = tmp_path / "state"
+    january = [_measurement(number) for number in range(4)]
+    february = [
+        row.model_copy(update={"date": "2026-02-03", "run_id": "2026-02-03-1"})
+        for row in (_measurement(80), _measurement(81))
+    ]
+
+    assert writer.append(state, january) == 4
+    assert writer.append(state, [*january, *february]) == 2, "a held measurement came back as new"
+
+    months = [shard.stem for shard in writer.ledger_shards(state)]
+    assert months == ["2026-01", "2026-02"], f"both months were not written: {months}"
+    for month in months:
+        assert _indexed(state, month) == _shard_digests(state, month), (
+            f"{writer.index_relpath(month)} does not hold what the rows beside it hold"
+        )
+
+
+def test_an_index_left_behind_its_shard_is_put_right_by_dropping_it(tmp_path: Path) -> None:
+    """The one gap the pair cannot close by itself, its cost, and what closes it.
+
+    A shard can grow behind the index's back - rows appended by something that
+    never knew the index existed, which is what a long-lived branch meets when
+    it merges a `main` older than the index. Nothing detects it, because
+    detecting it means reading the rows every run, which is the bill the index
+    removes.
+
+    So the writer under-reports, and this pins both halves of that. The repeat
+    lands, `ledger.drop_repeated_rows` settles it against `OBSERVATION_KEY`, and
+    the ledger is left counting the measurement once - which is the promise the
+    file makes. Under-reporting is the safe direction precisely because it has a
+    repair; over-reporting would leave a digest whose row nothing ever wrote.
+
+    The repair for the index itself is one deletion: dropping the month puts it
+    back into the case `refresh_index` does cover, and the refill reads the rows
+    once. The second tree is the same defect with that repair applied.
+    """
+    held = [_measurement(number) for number in range(4)]
+    behind = [_measurement(70), _measurement(71)]
+    month = held[0].date[:7]
+
+    stale = tmp_path / "stale" / "state"
+    assert writer.append(stale, held) == 4
+    _write_shard(writer.ledger_path(stale, month), [*held, *behind])
+
+    assert writer.append(stale, behind) == 2, (
+        "an index behind its shard refused a measurement it has never seen, "
+        "so this tree was not the stale one"
+    )
+    dropped = ledger.drop_repeated_rows(writer.ledger_path(stale, month), writer.OBSERVATION_KEY)
+    rows = list(writer.records(stale))
+    assert dropped == 2, f"the settle dropped {dropped} of the 2 repeated rows"
+    assert len(rows) == len(_shard_digests(stale, month)) == 6, (
+        f"the settled ledger holds {len(rows)} rows for "
+        f"{len(_shard_digests(stale, month))} measurements"
+    )
+
+    repaired = tmp_path / "repaired" / "state"
+    assert writer.append(repaired, held) == 4
+    _write_shard(writer.ledger_path(repaired, month), [*held, *behind])
+    writer.index_path(repaired, month).unlink()
+
+    assert writer.append(repaired, behind) == 0, "the refilled index let a held measurement back in"
+    assert _indexed(repaired, month) == _shard_digests(repaired, month)
 
 
 def test_a_month_that_became_an_archive_drops_its_live_index(tmp_path: Path) -> None:
