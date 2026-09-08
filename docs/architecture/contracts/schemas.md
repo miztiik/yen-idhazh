@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-07
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -48,6 +48,7 @@ The shapes, and where each one lives once written:
 | `Summary` | `summary` | one file per item under the run directory |
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
+| `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
 | `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
@@ -138,6 +139,7 @@ carry a time window?**
 | `state/published.csv` | one file | have we already published this? | no - published is forever |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
 | `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/layout.md#what-bounds-the-committed-state-tree) |
+| `state/score-index/` | monthly shards | which measurements does the shard beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, pipeline, output and scorer is one measurement whenever it is re-taken |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
