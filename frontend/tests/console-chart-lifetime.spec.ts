@@ -47,6 +47,17 @@ const ROUTE = '/console/machine/';
 /** The engine is a lazy chunk over the network, so first paint is not instant. */
 const DRAWN = 20_000;
 
+/** The window presets the console offers, read from config rather than typed
+ * here (Rule #6). The file is found off this module's own URL, so the read does
+ * not depend on whether the suite started in `frontend/` or the repository root. */
+const APPEARANCE = JSON.parse(
+	readFileSync(fileURLToPath(new URL('../../config/appearance.json', import.meta.url)), 'utf8')
+) as { console?: { window_presets?: number[]; default_window_days?: number } };
+const PRESETS = APPEARANCE.console?.window_presets ?? [1, 7, 14, 30, 90];
+const DEFAULT_DAYS = APPEARANCE.console?.default_window_days ?? 30;
+const WIDEST = Math.max(...PRESETS);
+const NARROWEST = Math.min(...PRESETS);
+
 interface HostState {
 	state: string;
 	/** Null where the engine never touched the host, which is a failure in every
@@ -153,6 +164,35 @@ async function comeTo(page: Page, index: number): Promise<number> {
 
 async function theme(page: Page): Promise<string | null> {
 	return page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+}
+
+/** How many instances the engine holds right now, read off the document. A
+ * remount would dip this and bring it back; an in-place update never touches
+ * it. */
+async function heldCount(page: Page): Promise<number> {
+	return page.evaluate(() =>
+		Number(document.documentElement.getAttribute('data-charts-live') ?? -1)
+	);
+}
+
+/** Where the prompt-tokens input chart sits among the engine hosts, or -1 where
+ * the panel drew none. Recomputed after a window change, because the set of
+ * drawn charts can change with the data a span holds. */
+async function inputTokenHost(page: Page): Promise<number> {
+	return page.evaluate(() => {
+		const host = document.querySelector('[data-token-chart="input"] [data-chart]');
+		return host === null ? -1 : [...document.querySelectorAll('[data-chart]')].indexOf(host);
+	});
+}
+
+/** Pick a window preset and wait for the control to report it, which is the
+ * point the span has actually changed. */
+async function setWindow(page: Page, days: number): Promise<void> {
+	await page.locator(`[data-window-preset="${days}"]`).click();
+	await expect(page.locator('[data-window-control]')).toHaveAttribute(
+		'data-window-days',
+		String(days)
+	);
 }
 
 /** The built chunk holding a given marker. A chunk's name is a content hash, so
@@ -391,4 +431,79 @@ test('THE ORACLE: the page is complete with the engine gone, and nothing is thro
 		page.off('pageerror', caught);
 		await page.unroute(arm.chunk);
 	}
+});
+
+test('THE ORACLE: a window change redraws the chart in place, it does not remount it', async ({
+	page
+}) => {
+	// The other control on this route is the shape switch above, and the test
+	// before this one proves it updates the drawn chart. This is the same claim
+	// for the window control: since #459 a chart follows a changed option in
+	// place, so the `{#key windowDays}` remounts the console charts once carried
+	// are gone. If that reactive push breaks, the page and the drawn chart part
+	// ways on every window change and nothing here would have caught it.
+	await page.setViewportSize(DESKTOP);
+	await page.goto(ROUTE);
+	// Hydrated is the control able to change its own span: disabled in the
+	// prerendered document, enabled on mount.
+	await expect(
+		page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`),
+		'the window control never came alive'
+	).toBeEnabled({ timeout: DRAWN });
+
+	// Start at the widest span, where the prompt-tokens chart has the most runs to
+	// draw, and come to it so the engine has drawn it.
+	await setWindow(page, WIDEST);
+	let index = await inputTokenHost(page);
+	expect(
+		index,
+		'the prompt-tokens panel drew no engine chart at the widest span'
+	).toBeGreaterThanOrEqual(0);
+	await comeTo(page, index);
+	const wide = await settledMarks(page, index);
+	expect(wide.length, 'the prompt-tokens chart drew nothing to compare').toBeGreaterThan(4);
+	const wideState = (await hostStates(page))[index];
+	const heldBefore = await heldCount(page);
+
+	// Move to the narrowest span. The chart is never torn down: it stays the same
+	// live instance and is handed the new span's option in place.
+	await setWindow(page, NARROWEST);
+	index = await inputTokenHost(page);
+	expect(
+		index,
+		'the prompt-tokens panel drew no engine chart at the narrowest span'
+	).toBeGreaterThanOrEqual(0);
+	await expect(
+		page.locator('[data-chart]').nth(index),
+		'the chart returned to waiting, so the window change tore it down and built a new one'
+	).toHaveAttribute('data-chart', 'live');
+	const narrow = await settledMarks(page, index);
+	const narrowState = (await hostStates(page))[index];
+	const heldAfter = await heldCount(page);
+
+	// No remount: the engine holds exactly the instances it held before. A `{#key}`
+	// that rebuilt the chart would destroy one and make one, netting the same
+	// count, so this alone is necessary and not sufficient - the option count is
+	// what tells an update apart from a rebuild.
+	expect(heldAfter, 'the window change changed how many charts the engine holds').toBe(heldBefore);
+
+	// The reactive push ran: an in-place update raises the option count each time
+	// the span moves, where a fresh chart from a remount would read 1. This is the
+	// assertion the bite turns red - neutralise `live.update` in Chart.svelte and
+	// the count never moves off its hydration value.
+	expect(wideState.options, 'the engine never handed the widest chart an option').not.toBeNull();
+	expect(
+		narrowState.options,
+		'the engine never handed the narrowest chart an option'
+	).not.toBeNull();
+	expect(
+		narrowState.options as number,
+		'the window moved and the live chart was never handed the new span'
+	).toBeGreaterThan(wideState.options as number);
+
+	// And the drawn chart followed the span: the widest reaches a run the narrowest
+	// cannot, so a reader is not left looking at the old bars.
+	expect(narrow, 'the window moved and the live chart went on drawing the old span').not.toEqual(
+		wide
+	);
 });
