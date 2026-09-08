@@ -35,11 +35,13 @@ from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
     SUPERSEDED_COLLECT_NAMES,
+    SUPERSEDED_MODELS_NAMES,
     SUPERSEDED_RETENTION_NAMES,
     AppConfig,
     CollectConfig,
     ConsoleConfig,
     EvaluationConfig,
+    ModelsConfig,
     ObservabilityConfig,
     PageWeightConfig,
     RetentionConfig,
@@ -753,14 +755,20 @@ def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
     `n_ctx` is 8192 and llama-server publishes the high watermark only under
     `--metrics`. Off by default would mean the number exists on the runs nobody
     thought to switch it on for, which is every ordinary day.
+
+    The fresh-clone arm drops the settings block and the weights digest
+    together. Those two move as a pair now: an entry that names measured bytes
+    under a block declared for nothing is refused.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     models = committed.models.model_dump()
-    del models["inference"]
+    for entry in models.values():
+        del entry["inference"]
+        entry["sha256"] = None
     fresh = AppConfig.model_validate({"models": models})
 
-    assert fresh.models.inference.metrics is True, "a fresh clone must count"
-    assert committed.models.inference.metrics is True, "the committed config must count"
+    assert fresh.models.summarize.inference.metrics is True, "a fresh clone must count"
+    assert committed.models.summarize.inference.metrics is True, "the committed config must count"
 
 
 def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:
@@ -1319,6 +1327,99 @@ def test_an_unrelated_knob_in_a_block_with_no_removed_name_is_untouched() -> Non
     """The refusal fires on the removed name and on nothing else."""
     assert ObservabilityConfig.model_validate({"sample_rate": 0.5}).sample_rate == 0.5
     assert CollectConfig.model_validate({"max_per_source": 3}).max_per_source == 3
+
+
+def swapped_summarizer() -> dict[str, Any]:
+    """The committed config with `models.summarize` pointed at other weights.
+
+    Every field an operator edits to swap a model, and nothing else - which is
+    the shape the swap actually takes. It is not a new entry appearing from
+    nowhere; it is five strings changed in place under a settings block nobody
+    touched.
+    """
+    raw: dict[str, Any] = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw["models"]["summarize"] |= {
+        "id": "some-other-model-q4-k-m",
+        "repo": "someone/Other-GGUF",
+        "file": "Other-Q4_K_M.gguf",
+        "revision": "f" * 40,
+        "sha256": "1" * 64,
+        "hf_base_repo": None,
+    }
+    return raw
+
+
+def test_a_model_swap_can_no_longer_inherit_settings_nothing_declared_for_it() -> None:
+    """The Oracle: new weights under an untouched settings block are refused.
+
+    Every number in an `inference` block is a measurement about one model on one
+    runner. Until this gate, `models.summarize` could name a different
+    repository, file, revision and digest with the block left exactly where it
+    was and `AppConfig.model_validate` raised nothing - so the run stood a server
+    up on numbers derived for weights it never opened and published a whole
+    plausible day.
+    """
+    committed = AppConfig.model_validate(json.loads(read_text(CONFIG_DIR / "idhazh.json")))
+    assert committed.models.summarize.inference.declared_for == committed.models.summarize.sha256
+
+    with pytest.raises(ValidationError) as raised:
+        AppConfig.model_validate(swapped_summarizer())
+    message = str(raised.value)
+    assert "models.summarize.inference" in message, "the message names the block"
+    assert "1" * 64 in message, "and the weights the entry now names"
+
+
+def test_an_entry_that_declares_no_settings_of_its_own_is_refused_by_name() -> None:
+    """A new entry written with no block of its own does not fall back to one."""
+    raw = swapped_summarizer()
+    del raw["models"]["summarize"]["inference"]
+    with pytest.raises(ValidationError, match=re.escape("models.summarize.inference")):
+        AppConfig.model_validate(raw)
+
+
+def test_the_one_shared_settings_block_is_refused_by_name() -> None:
+    """`models.inference` was one block applied to two models. It is gone.
+
+    Refused rather than lifted onto both entries. A lift is the silent
+    inheritance this row exists to end: it would hand a swapped entry the
+    numbers the previous weights were measured on and raise nothing.
+    """
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    raw["models"]["inference"] = {"n_ctx": 8192}
+    with pytest.raises(ValidationError) as raised:
+        AppConfig.model_validate(raw)
+    assert "models.inference is now models.<role>.inference" in str(raised.value)
+    assert dict(SUPERSEDED_MODELS_NAMES) == {"inference": "<role>.inference"}
+
+
+def test_every_committed_model_entry_declares_the_weights_its_settings_are_for() -> None:
+    """The committed file states the pairing rather than implying it."""
+    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    assert "inference" not in raw["models"]
+    for role in sorted(ModelsConfig.model_fields):
+        entry = raw["models"][role]
+        assert entry["inference"]["declared_for"] == entry["sha256"], role
+
+
+def test_a_run_manifest_written_before_the_settings_moved_still_reads() -> None:
+    """The read side: a `model_ref` with no settings block opens on the defaults.
+
+    Nineteen manifests sit under `frontend/public/digest/` with the shape
+    `model_ref` had yesterday, and `frontend/src/lib/server/payload.ts` opens
+    them at every build. A block that could not default would make each of them
+    a payload today's build cannot read (`CLAUDE.md` section 11). Proved by
+    removing the key rather than by reading a committed day, so it cannot age
+    out of retention.
+    """
+    current = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    for run in current["runs"]:
+        for use in run["models"]:
+            del use["model_ref"]["inference"]
+
+    older = RunManifest.model_validate(current)
+    entry = older.runs[0].models[0].model_ref
+    assert entry.inference.declared_for is None
+    assert entry.inference.n_ctx == 8192, "the contract default, not a guess"
 
 
 def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:

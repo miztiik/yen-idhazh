@@ -289,7 +289,7 @@ not open.
 ## Model compatibility is mechanical
 
 The request sends `chat_template_kwargs.enable_thinking` from
-`models.inference.thinking`. The configured value is false. The pipeline does
+`models.summarize.inference.thinking`. The configured value is false. The pipeline does
 not rely on `/nothink` or another instruction in the untrusted user turn.
 
 The control rejects reasoning in either channel:
