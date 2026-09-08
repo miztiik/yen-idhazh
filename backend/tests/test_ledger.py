@@ -27,6 +27,7 @@ from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
 from utilities import migrate_score_ledger as migrate
 from utilities import split_published_ledger as split_ledger
+from utilities import split_visual_prunes as split_prunes
 from utilities.migrate_feed_health import NARROW_COLUMNS, WIDENED_AT, widen
 from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
@@ -63,6 +64,30 @@ def published_row(*, url_key: str = URL_KEY, on: str = DATE) -> PublishedRow:
         url_key=url_key,
         published_on=on,
         item_id="ai-01",
+    )
+
+
+def prune_row(*, on: str = DATE, run: str = "1", before: int = 1000) -> VisualPruneRow:
+    """One reporting pass, which is the shape every row the pipeline has written has.
+
+    `policy_months` is -1 and `dry_run` is true because that is what ships: the
+    cleanup measures the backlog and deletes nothing.
+    """
+    return VisualPruneRow(
+        version=VisualPruneRow.schema_version(),
+        date=on,
+        run_id=f"{on}-{run}",
+        policy_months=-1,
+        max_deletes_per_run=200,
+        dry_run=True,
+        candidates_found=0,
+        deleted=0,
+        skipped_by_fuse=0,
+        fuse_tripped=False,
+        bytes_reclaimed=0,
+        oldest_kept=None,
+        payload_bytes_before=before,
+        payload_bytes_after=before,
     )
 
 
@@ -373,7 +398,7 @@ def test_load_published_refuses_a_file_it_cannot_place_in_the_day_tree(
     state = tmp_path / "state"
     _published_file(state / "published" / relative, {_address(1): "2026-08-21"})
 
-    with pytest.raises(ValueError, match="is not a YYYY/MM/DD published day"):
+    with pytest.raises(ValueError, match="is not a YYYY/MM/DD day file"):
         _whole_ledger(state)
 
 
@@ -1125,20 +1150,234 @@ def test_the_retirement_ledger_exists_in_a_fresh_checkout() -> None:
     assert ledger.feed_retirements_relpath() == "state/feed-retirements.csv"
 
 
-def test_the_cleanup_ledger_exists_in_a_fresh_checkout() -> None:
-    """The same rule, for the ledger the cleanup gained on 2026-09-06.
+def test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header() -> None:
+    """The header-only file is gone, and the reason it existed went with it.
 
-    The step that writes it is committed by a call that stages `state` whole, so
-    a file appearing only on the first run that cleans something would be staged
-    fine - and would still be missing on every run before it, which is the run
-    somebody reads to find out that nothing has ever been cleaned. The header
-    ships with the contract instead.
+    It was seeded so that a run before the first cleanup still had a path to
+    stage: `git add` under `set -euo pipefail` aborts on a path that is not
+    there, and that would have cost the whole commit step. A day tree cannot
+    carry a header of its own and does not need to - the step that writes it
+    stages `state` whole, so a day file a run creates is staged without ever
+    being named.
+
+    Three facts, and each one is a fixed cost: the tree is in the checkout, the
+    flat file it replaced is not, and the path helper still names the layout the
+    writer uses. What is deliberately not asserted here is anything about the
+    rows, which grow with every run (Rule #12).
     """
-    path = ledger.visual_prunes_path(REPO_ROOT / "state")
+    assert (REPO_ROOT / "state" / ledger.VISUAL_PRUNES_DIRNAME).is_dir()
+    assert not (REPO_ROOT / "state" / "visual-prunes.csv").exists()
+    assert ledger.visual_prunes_relpath("2026-09-06") == "state/visual-prunes/2026/09/06.csv"
 
-    assert path.exists(), "the cleanup ledger must exist before the first cleanup"
-    assert ledger.read_header(path) == VisualPruneRow.csv_columns()
-    assert ledger.visual_prunes_relpath() == "state/visual-prunes.csv"
+
+# --- The cleanup record, one day at a time ----------------------------------
+
+
+def _prunes_root(state: Path) -> Path:
+    return state / ledger.VISUAL_PRUNES_DIRNAME
+
+
+def test_load_visual_prunes_reads_no_history_from_a_fresh_clone(tmp_path: Path) -> None:
+    """A missing day tree means nothing has ever been cleaned, and it is not a fault.
+
+    Every other reader here answers a fresh clone with an empty result, and this
+    one has to as well: the first run of a new checkout reports its own pass
+    before any day file exists to read.
+    """
+    assert ledger.load_visual_prunes(tmp_path / "state") == []
+
+
+def test_a_cleanup_pass_writes_only_its_own_day_file(tmp_path: Path) -> None:
+    """The layout oracle: a pass touches one file, and it is the one its date names.
+
+    The second pass crosses a month boundary on purpose. A writer that filed by
+    month would pass a same-month arm and still put October's row in with
+    September's, and a writer that kept one file would fail the byte comparison
+    that follows.
+    """
+    state = tmp_path / "state"
+    assert ledger.append_visual_prunes(state, "2026-09-07", [prune_row(on="2026-09-07")]) == 1
+    september = ledger.visual_prunes_path(state, "2026-09-07")
+    frozen = september.read_bytes()
+
+    assert ledger.append_visual_prunes(state, "2026-10-01", [prune_row(on="2026-10-01")]) == 1
+
+    assert september.read_bytes() == frozen
+    written = sorted(
+        path.relative_to(_prunes_root(state)).as_posix()
+        for path in _prunes_root(state).rglob("*.csv")
+    )
+    assert written == ["2026/09/07.csv", "2026/10/01.csv"]
+
+
+def test_load_visual_prunes_reports_every_day_the_tree_holds_oldest_first(
+    tmp_path: Path,
+) -> None:
+    """The question is the whole series, so the read is every file and the order is time.
+
+    Written out of order and across two months, because "oldest first" is what a
+    reader of this ledger uses to answer whether the backlog is shrinking. A walk
+    that returned whatever order the filesystem handed back would pass a
+    one-month arm and mislead on a two-month one.
+    """
+    state = tmp_path / "state"
+    for on in ("2026-10-01", "2026-09-07", "2026-09-06"):
+        ledger.append_visual_prunes(state, on, [prune_row(on=on)])
+
+    assert [row.date for row in ledger.load_visual_prunes(state)] == [
+        "2026-09-06",
+        "2026-09-07",
+        "2026-10-01",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("relative", "what"),
+    [
+        ("2026/09/notes.csv", "a day stem that is not two digits"),
+        ("2026/09/20260907.csv", "a whole date where a day belongs"),
+        ("2026/9/07.csv", "a month that is not two digits"),
+        ("archive/09/07.csv", "a year that is not four digits"),
+        ("README.csv", "a file where a year directory belongs"),
+    ],
+)
+def test_load_visual_prunes_refuses_a_file_it_cannot_place_in_the_day_tree(
+    tmp_path: Path, relative: str, what: str
+) -> None:
+    """A report that quietly skips a day is a report of a different series.
+
+    The reader tolerates a row it cannot parse - an old report that no longer
+    reads is not a reason to stop. A file it cannot place is the other fault
+    entirely: the rows are fine and the reader simply never opened them. Only a
+    walk can tell the two apart, which is why there is no glob here.
+
+    `20260907.csv` is the arm worth having. Every character in it is a digit and
+    it is a real date, so a digits-only check would take it and file eleven
+    months of passes under one day. `\\d{2}` is what refuses it.
+    """
+    state = tmp_path / "state"
+    path = _prunes_root(state) / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(",".join(VisualPruneRow.csv_columns()) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="is not a YYYY/MM/DD day file"):
+        ledger.load_visual_prunes(state)
+
+
+def test_a_repeated_cleanup_row_is_settled_inside_the_day_that_holds_it(
+    tmp_path: Path,
+) -> None:
+    """`VISUAL_PRUNE_KEY` opens with `date`, so a repeat can only be in one day's file.
+
+    That is what lets a run's own settlement cover name one file rather than the
+    tree. The union merge is what puts the second row there: two attempts at one
+    execution both append, both walked the same tree, and the first row wins.
+    """
+    state = tmp_path / "state"
+    ledger.append_visual_prunes(state, "2026-09-07", [prune_row(on="2026-09-07")])
+    path = ledger.visual_prunes_path(state, "2026-09-07")
+    clean = path.read_text(encoding="utf-8")
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(clean.splitlines()[1] + "\n")
+
+    assert dict(ledger.keyed_paths(state, date="2026-09-07"))[path] == ledger.VISUAL_PRUNE_KEY
+    assert ledger.drop_repeated_rows(path, ledger.VISUAL_PRUNE_KEY) == 1
+    assert path.read_text(encoding="utf-8") == clean
+
+
+def _flat_prune_file(state: Path, rows: list[VisualPruneRow]) -> Path:
+    """The flat ledger as the pipeline wrote it, up to 2026-09-08."""
+    path = state / split_prunes.FLAT_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = ",".join(VisualPruneRow.csv_columns()) + "\n"
+    body += "".join(",".join(row.csv_row().values()) + "\n" for row in rows)
+    path.write_text(body, encoding="utf-8", newline="")
+    return path
+
+
+def test_the_split_moves_every_row_into_its_own_day_and_reports_the_same_series(
+    tmp_path: Path,
+) -> None:
+    """The cutover oracle: the report is identical before and after, and rows are copied.
+
+    Built rather than run over the committed `state/` (section 13), and the
+    built file carries the case the committed one cannot: two passes on one day,
+    so a split that filed by run id rather than by date would lose one.
+    """
+    state = tmp_path / "state"
+    rows = [
+        prune_row(on="2026-09-06", run="1", before=100),
+        prune_row(on="2026-09-06", run="2", before=200),
+        prune_row(on="2026-09-07", run="1", before=300),
+    ]
+    flat = _flat_prune_file(state, rows)
+    before = split_prunes.digest(rows)
+
+    report = split_prunes.run(state)
+
+    assert (report.rows_in, report.rows_out, report.days, report.passes) == (3, 3, 2, 3)
+    assert not flat.exists()
+    assert report.paths == [
+        "state/visual-prunes/2026/09/06.csv",
+        "state/visual-prunes/2026/09/07.csv",
+    ]
+    assert ledger.load_visual_prunes(state) == rows
+    assert report.digest == before
+
+
+def test_the_split_keeps_the_day_a_run_had_already_started(tmp_path: Path) -> None:
+    """The writer moves first, so a day file can exist before the split ever runs.
+
+    Overwriting it would lose the pass that run reported. The rows it moves are
+    appended after the ones already there, which is the order the flat file and
+    the day file were written in.
+    """
+    state = tmp_path / "state"
+    already = prune_row(on="2026-09-06", run="9", before=50)
+    ledger.append_visual_prunes(state, already.date, [already])
+    moved = [prune_row(on="2026-09-06", run="1", before=100)]
+    _flat_prune_file(state, moved)
+
+    report = split_prunes.run(state)
+
+    assert report.rows_in == 1
+    assert [row.run_id for row in ledger.load_visual_prunes(state)] == [
+        already.run_id,
+        moved[0].run_id,
+    ]
+
+
+def test_the_split_keeps_the_flat_file_when_a_row_names_no_day(tmp_path: Path) -> None:
+    """A row that lands nowhere stops the whole split. It is never skipped.
+
+    A skipped row is a cleanup pass that stops having happened, and saying a pass
+    happened is the only thing this ledger is for.
+    """
+    state = tmp_path / "state"
+    cells = list(prune_row(on="2026-09-06").csv_row().values())
+    good = ",".join(cells)
+    cells[VisualPruneRow.csv_columns().index("date")] = "not-a-day"
+    path = state / split_prunes.FLAT_FILENAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = ",".join(VisualPruneRow.csv_columns())
+    path.write_text(f"{header}\n{good}\n{','.join(cells)}\n", encoding="utf-8", newline="")
+
+    with pytest.raises(ValueError, match="names no day file"):
+        split_prunes.run(state)
+
+    assert path.exists()
+    assert ledger.load_visual_prunes(state) == []
+
+
+def test_the_split_says_so_when_there_is_nothing_left_to_move(tmp_path: Path) -> None:
+    """It stays committed after it has run, so a second run has to be told plainly.
+
+    A checkout that never had the flat file is in the same state as one that has
+    already been split, and neither is a fault.
+    """
+    with pytest.raises(ValueError, match="nothing to split"):
+        split_prunes.run(tmp_path / "state")
+
 
 
 def test_committed_state_csv_rows_match_their_headers() -> None:
@@ -1240,20 +1479,21 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same five ledgers on a tree with one month in it. What
-    separates them is what a second month would add: to the operator's pass, a
-    file; to a run's pass, nothing.
+    Both covers name the same five ledgers on a tree with one month and one
+    cleanup day in it. What separates them is what a second month or a second day
+    would add: to the operator's pass, a file; to a run's pass, nothing.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
     ledger.append_runtime_counters(tmp_path, [counters_row(0)])
+    ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
     named = [
         ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
-        ("visual-prunes.csv", ledger.VISUAL_PRUNE_KEY),
+        (f"visual-prunes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.VISUAL_PRUNE_KEY),
         (f"feed-health/{DATE[:7]}.csv", ledger.FEED_HEALTH_KEY),
         (f"item-health/{DATE[:7]}.csv", ledger.ITEM_HEALTH_KEY),
     ]

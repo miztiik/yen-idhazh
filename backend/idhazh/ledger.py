@@ -9,7 +9,8 @@ checkout, so anything one run needs to tell the next has to be committed
 A ledger partitions only when the read that consumes it carries a time window.
 A window lets the reader name the files it wants and skip the rest; without one,
 every file is opened anyway and splitting the ledger buys nothing. The rule is
-in `docs/architecture/contracts/schemas.md`.
+in `docs/architecture/contracts/schemas.md`. `state/visual-prunes/` is the one
+exception here, and the paragraph that describes it says what it bought instead.
 
 `state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
 carried no date. Read through `collect.seen_window_days`, so it shards.
@@ -61,11 +62,18 @@ per retired feed endpoint, read whole because a retirement has no time bound -
 so it is one file. It is also the smallest: a row is written only when a server
 has reported one address permanently gone on five distinct runs.
 
-`state/visual-prunes.csv` answers "is the picture backlog shrinking?" One row
-per cleanup run, read whole because the question carries no time bound - so it
-is one file. It is written on every run, including the runs where the policy is
-switched off and there is nothing to clean, because a report of "nothing to do"
-is what makes the day the policy starts working visible.
+`state/visual-prunes/YYYY/MM/DD.csv` answers "is the picture backlog
+shrinking?" One row per cleanup run, read whole because the question carries no
+time bound - and it files by day even so. That is the exception named above: the
+read will never carry a window, so the layout buys this ledger no read time at
+all. What it buys is the two things it buys for `state/published/` - two runs
+collide on a file only when they are the same day, and taking a day back off the
+record is one `rm` rather than an edit inside a shared file, which `merge=union`
+cannot express. Five rows a day for ever is a collection that grows, and a
+collection that grows here takes the layout every other growing one has. A row
+is written on every run, including the runs where the policy is switched off and
+there is nothing to clean, because a report of "nothing to do" is what makes the
+day the policy starts working visible.
 
 No reader fails on a missing file. A fresh clone has no history, and a run with
 no history is a run where nothing was seen, nothing was published and no feed
@@ -102,9 +110,9 @@ ITEM_HEALTH_DIRNAME: Final = "item-health"
 TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_DIRNAME: Final = "published"
+VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
-VISUAL_PRUNES_FILENAME: Final = "visual-prunes.csv"
 
 #: What makes two feed-health rows the same record. One feed, read once, in one
 #: run. The ledger always meant that - `docs/architecture/sources/health.md`
@@ -281,13 +289,21 @@ def feed_retirements_path(state_dir: Path) -> Path:
     return state_dir / FEED_RETIREMENTS_FILENAME
 
 
-def visual_prunes_relpath() -> str:
-    """`state/visual-prunes.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{VISUAL_PRUNES_FILENAME}"
+def visual_prunes_relpath(date: str) -> str:
+    """`state/visual-prunes/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{VISUAL_PRUNES_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
 
 
-def visual_prunes_path(state_dir: Path) -> Path:
-    return state_dir / VISUAL_PRUNES_FILENAME
+def visual_prunes_path(state_dir: Path, date: str) -> Path:
+    """The day file a cleanup pass on this date appends its row to.
+
+    A day rather than a month, and not because the read asked for it - the read
+    is the whole series and always will be. The grain is here because two runs
+    then collide on a file only when they are the same day, and because a day
+    taken back off the record is one `rm`. The module docstring states the
+    exception this makes to the partition rule.
+    """
+    return state_dir / VISUAL_PRUNES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
@@ -437,25 +453,25 @@ def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str
     return first_seen
 
 
-#: What a directory under `state/published/` must be named to be a year, and a
-#: month or a day. The names are matched rather than globbed, so that a file
-#: none of them describes is refused instead of quietly passed over.
+#: What a directory inside a day tree under `state/` must be named to be a year,
+#: and a month or a day. The names are matched rather than globbed, so that a
+#: file none of them describes is refused instead of quietly passed over.
 _YEAR: Final = re.compile(r"\d{4}")
 _TWO_DIGITS: Final = re.compile(r"\d{2}")
 
 
 def _refuse_stray(entry: Path, root: Path) -> NoReturn:
-    """Nothing under `state/published/` may be ignored, so an odd name stops the read."""
+    """Nothing inside a day tree may be ignored, so an odd name stops the read."""
     raise ValueError(
-        f"{STATE_DIRNAME}/{PUBLISHED_DIRNAME} holds "
-        f"{entry.relative_to(root).as_posix()}, which is not a YYYY/MM/DD published "
-        "day. A file the reader cannot place is how it starts missing rows, so it "
+        f"{STATE_DIRNAME}/{root.name} holds "
+        f"{entry.relative_to(root).as_posix()}, which is not a YYYY/MM/DD day file. "
+        "A file the reader cannot place is how it starts missing rows, so it "
         "refuses the read rather than skipping the file."
     )
 
 
-def _published_days(state_dir: Path) -> Iterator[Path]:
-    """Every `state/published/YYYY/MM/DD.csv`, oldest first.
+def _day_files(root: Path) -> Iterator[Path]:
+    """Every `<root>/YYYY/MM/DD.csv`, oldest first.
 
     Walked rather than globbed. A glob answers "what matched" and says nothing
     about what did not, so an unexplained file would sit in a state directory
@@ -464,8 +480,12 @@ def _published_days(state_dir: Path) -> Iterator[Path]:
 
     A missing directory yields nothing, because a clone with no history is what
     a fresh checkout has and not a fault.
+
+    Shared by `state/published/` and `state/visual-prunes/`. The two ledgers
+    hold different rows and answer different questions, but a day tree is one
+    shape and a second copy of this walk is a second place for the refusal to
+    stop being exact.
     """
-    root = state_dir / PUBLISHED_DIRNAME
     if not root.is_dir():
         return
     for year in sorted(root.iterdir()):
@@ -525,7 +545,7 @@ def load_published(state_dir: Path, *, today: str | None, within_days: int) -> d
     rather than a row.
     """
     if within_days == UNBOUNDED_WINDOW:
-        paths: Iterable[Path] = _published_days(state_dir)
+        paths: Iterable[Path] = _day_files(state_dir / PUBLISHED_DIRNAME)
     elif today is None:
         raise ValueError(
             f"a published cover of {within_days} days needs the day it is anchored on. "
@@ -742,36 +762,48 @@ def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
     return {tuple(row[name] for name in SPAN_ROLLUP_KEY) for row in _read_rows(path)}
 
 
-def append_visual_prunes(state_dir: Path, rows: Iterable[VisualPruneRow]) -> int:
-    """Append what each cleanup pass found and took. Never windowed.
+def append_visual_prunes(state_dir: Path, date: str, rows: Iterable[VisualPruneRow]) -> int:
+    """Append what each cleanup pass found and took, into that day's own file.
+
+    The caller hands the date, the way `append_published` takes one and for the
+    same reason: the caller decides which day a pass belongs to, and a pass run
+    against a date that has already closed writes its row there.
 
     Settled against `VISUAL_PRUNE_KEY` straight after the write, the way
     `append_retirements` is, because the two writers that can produce one key are
     two attempts at one execution rather than two cleanups. Each walks the same
     tree and reports the same counts, so the first row wins and there is nothing
-    to choose between them.
+    to choose between them. Settling the day file is enough: the key opens with
+    `date`, so a repeat can only ever be inside the one day's file.
 
     Returns how many rows the file gained, so a caller can log the count.
     """
     payloads = [row.csv_row() for row in rows]
-    path = visual_prunes_path(state_dir)
+    path = visual_prunes_path(state_dir, date)
     landed = _append(path, VisualPruneRow.csv_columns(), payloads)
     return landed - drop_repeated_rows(path, VISUAL_PRUNE_KEY)
 
 
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
-    """Every cleanup pass on record, in file order. Never windowed.
+    """Every cleanup pass on record, oldest day first. Never windowed.
+
+    The question is whether the backlog is shrinking, which is about the whole
+    series - so this opens every day file the tree holds and the layout saves it
+    nothing. That is the trade `visual_prunes_path` states.
 
     A row that no longer parses is skipped rather than fatal, for the reason
     `load_retirements` gives: this ledger is a report, and refusing to start
-    because an old report cannot be read would cost a reader the day.
+    because an old report cannot be read would cost a reader the day. A file the
+    walk cannot place is a different thing and still stops the read - a report
+    that quietly drops a day is a report of the wrong series.
     """
     rows: list[VisualPruneRow] = []
-    for raw in _read_rows(visual_prunes_path(state_dir)):
-        try:
-            rows.append(VisualPruneRow.from_csv_row(raw))
-        except (KeyError, ValueError):
-            continue
+    for path in _day_files(state_dir / VISUAL_PRUNES_DIRNAME):
+        for raw in _read_rows(path):
+            try:
+                rows.append(VisualPruneRow.from_csv_row(raw))
+            except (KeyError, ValueError):
+                continue
     return rows
 
 
@@ -789,7 +821,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
     write it, not because it is old, so the bound does not weaken as a run gets
     slower or crosses midnight.
 
-    The three flat ledgers are named on both covers. They are one file each, so
+    The two flat ledgers are named on both covers. They are one file each, so
     settling them costs the same on a fresh clone and on a five-year archive.
 
     `state/seen/` is the one that is deliberately absent. It has no key at all:
@@ -806,23 +838,29 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
     Registering it with the shape rather than with its first writer is what stops
     two stale checkouts leaving one address retired twice.
 
-    `state/visual-prunes.csv` is listed for the same reason and needs it more:
-    the step that writes it commits through a call that names no settlement
-    command, so the pass that settles it is the next run's, over the merged file.
+    `state/visual-prunes/` is listed for the same reason and needs it more: the
+    step that writes it commits through a call that names no settlement command,
+    so the pass that settles it is a later run's, over the merged file. It moved
+    to a day tree on 2026-09-08 and moved with it from the flat set to the dated
+    one, which is the cover this whole docstring already describes - a run wrote
+    only its own day, so only its own day can hold the repeat. What that costs is
+    stated rather than implied: a repeat the last run of a day leaves behind is
+    now settled by the operator's full pass rather than by tomorrow's first run.
     """
     flat: list[tuple[Path, tuple[str, ...]]] = [
         (runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY),
         (feed_retirements_path(state_dir), FEED_RETIREMENT_KEY),
-        (visual_prunes_path(state_dir), VISUAL_PRUNE_KEY),
     ]
     if date is not None:
         return [
             *flat,
+            (visual_prunes_path(state_dir, date), VISUAL_PRUNE_KEY),
             (health_path(state_dir, date), FEED_HEALTH_KEY),
             (item_health_path(state_dir, date), ITEM_HEALTH_KEY),
         ]
     return [
         *flat,
+        *((path, VISUAL_PRUNE_KEY) for path in _day_files(state_dir / VISUAL_PRUNES_DIRNAME)),
         *((path, FEED_HEALTH_KEY) for path in sorted((state_dir / HEALTH_DIRNAME).glob("*.csv"))),
         *(
             (path, ITEM_HEALTH_KEY)
