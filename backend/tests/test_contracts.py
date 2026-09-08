@@ -2878,14 +2878,22 @@ def test_a_tree_with_no_committed_day_fails_rather_than_passes(tmp_path: Path) -
     assert stage_validate_days(empty) == 1
 
 
-def test_the_gate_defaults_to_the_one_committed_tree() -> None:
+def test_the_gate_defaults_to_the_one_committed_tree(tmp_path: Path) -> None:
     """Unlike `--site-tree`, which has no default because there are two trees.
 
     There is exactly one committed digest tree, so a default cannot point at the
     wrong one - and a step nobody has to give a path to is a step nobody gets
     wrong in a workflow.
+
+    One day is named, so this costs one day rather than every day the archive
+    has piled up (Rule #12). The receipts go to a directory this test owns: the
+    state root defaults to the committed one, and a test that appended to it
+    would leave the repository dirty for whoever ran it.
     """
-    assert main(["validate-days"]) == 0
+    newest = committed_days()[-1]
+    day = "-".join(newest.parts[-4:-1])
+
+    assert main(["validate-days", "--day", day, "--state-root", str(tmp_path)]) == 0
 
 
 def a_day_missing(names: tuple[str, ...], where: str = "items") -> tuple[str, int]:
