@@ -488,8 +488,8 @@ class CollectConfig(Model):
             "the archive outgrows it. A finite value must be strictly longer than "
             "seen_window_days: the two stores answer the same question from opposite "
             "ends, and a cover that expires first hands an address to a first-sight "
-            "store that has already forgotten it. Nothing reads this yet - the knob "
-            "lands switched off and a later change wires it up."
+            "store that has already forgotten it. load_published reads it once a run, "
+            "through stage_plan."
         ),
     )
     blocked_url_markers: list[str] = Field(
