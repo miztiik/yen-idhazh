@@ -702,7 +702,7 @@ jobs:
           DROP_REPEATED_ROWS_COMMAND: "python -m idhazh dedupe-ledgers"
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/item-health state/scores state/runtime-counters.csv
+          state/item-health state/scores state/score-index state/runtime-counters.csv
 
       - name: Prompt cache log summary
         if: always()
@@ -1139,6 +1139,7 @@ jobs:
             frontend/public/source-health.json
             state/published
             state/scores
+            state/score-index
             state/item-health
             state/runtime-counters.csv
           REGENERATE_COMMAND: >-
