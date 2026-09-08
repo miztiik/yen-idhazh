@@ -6,8 +6,9 @@ to leave here afterwards: a checkout with no flat file has nothing to split and
 is told so.
 
 The flat file is history. `ledger.append_published` files a row under
-`state/published/YYYY/MM/DD.csv` now, and `ledger.load_published` reads both
-shapes - so this utility only has to move the rows and take the old file away.
+`state/published/YYYY/MM/DD.csv` now, and `ledger.load_published` reads the day
+tree alone - so this utility moves the rows, takes the old file away, and
+reduces the flat file itself to say what the move owed.
 
 **Rows are copied, never rewritten.** The raw line goes across unchanged, cells,
 order and bytes, so the `version` cell travels with the row it was written for
@@ -15,14 +16,16 @@ and a reader cannot tell which file a row came from.
 
 **Run it when no scheduled digest is in flight.** `merge=union` is a content
 driver and cannot resolve a delete against a modify, so a split racing a running
-job conflicts and costs that job its push. The failure mode is redundancy rather
-than loss - `load_published` reads both shapes, so a flat file a merge brings
-back still answers and the next split removes it again.
+job conflicts and costs that job its push. This ran once, on 2026-09-08, and the
+reader dropped its flat-file fallback the same week - so a flat file a merge
+brings back is no longer read by the pipeline, and running this again is what
+puts its rows back in reach.
 
 This reads the whole ledger, which is the growing cost Rule #12 is about. It is
 allowed here for two reasons and they are both narrow: this is an operator
 command a person runs once, not a step of any run; and the read it performs is
-the read `load_published` already performs on every run.
+the read `load_published` already performs on every run under the committed
+cover of -1.
 
 Usage: `python backend/utilities/split_published_ledger.py [--state state]`,
 from the root of a checkout.
@@ -41,6 +44,7 @@ from typing import Final
 
 from idhazh import ledger
 from idhazh.assemble import write_atomic
+from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.seen import PublishedRow
 
 #: The file this cutover empties and removes. Spelled here rather than asked of
@@ -131,6 +135,41 @@ def digest(mapping: Mapping[str, str]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _earliest_of(mapping: Mapping[str, str], other: Mapping[str, str]) -> dict[str, str]:
+    """The two mappings merged under the ledger's own rule: the earliest date wins."""
+    merged = dict(mapping)
+    for key, on in other.items():
+        if key not in merged or on < merged[key]:
+            merged[key] = on
+    return merged
+
+
+def _flat_mapping(report: Split) -> dict[str, str]:
+    """Address -> the earliest date the flat file holds for it.
+
+    `ledger.load_published` reads the day tree alone now, so the flat file's own
+    answer is reduced here. The rule is the ledger's and is restated rather than
+    invented: a repeat costs bytes and never moves a publication date.
+    """
+    key = PublishedRow.csv_columns().index("url_key")
+    mapping: dict[str, str] = {}
+    for on, lines in report.lines.items():
+        for number, line in enumerate(lines, start=2):
+            url_key = _cells(line, number)[key]
+            if url_key not in mapping or on < mapping[url_key]:
+                mapping[url_key] = on
+    return mapping
+
+
+def _tree_mapping(state_dir: Path) -> dict[str, str]:
+    """What the pipeline's own reader answers over every day file that exists.
+
+    Unbounded, because a cutover is about every row rather than a window over
+    them, and `today` anchors a cover this call does not carry.
+    """
+    return ledger.load_published(state_dir, today=None, within_days=UNBOUNDED_WINDOW)
+
+
 def _write_day(path: Path, lines: list[str]) -> None:
     """Append this day's rows to its file, keeping whatever the file already holds.
 
@@ -163,33 +202,38 @@ class Report:
 def run(state_dir: Path) -> Report:
     """Move the rows, verify, and only then remove the flat file.
 
-    The verification is the guarantee itself rather than a proxy for it: the
-    mapping `load_published` returns is taken before anything moves, and the
-    flat file is removed only once the same call returns it with the day tree
-    alone answering.
+    The verification is the guarantee itself rather than a proxy for it: what
+    the two shapes answered together is taken before anything moves, and the
+    flat file is removed only once `ledger.load_published` returns the same
+    mapping with the day tree alone answering.
+
+    The flat side is reduced here because the reader no longer opens that file.
+    The day side is the reader's own call, so what this checks is what a run
+    will really see.
     """
     flat = state_dir / FLAT_FILENAME
     if not flat.is_file():
         raise ValueError(f"{FLAT_FILENAME} does not exist, so there is nothing to split")
 
     text = _text(flat)
-    before = ledger.load_published(state_dir)
     report = split(text)
     if report.rows_out != report.rows_in:
         raise ValueError(f"{report.rows_in} rows in and {report.rows_out} out, so a row was lost")
 
+    before = _earliest_of(_tree_mapping(state_dir), _flat_mapping(report))
+
     for date in sorted(report.lines):
         _write_day(ledger.published_path(state_dir, date), report.lines[date])
 
-    both = ledger.load_published(state_dir)
+    both = _tree_mapping(state_dir)
     if both != before:
         raise ValueError(
-            f"the day files answer for {len(both)} addresses where the flat file "
+            f"the day files answer for {len(both)} addresses where both shapes "
             f"answered for {len(before)}, so the flat file was left alone"
         )
 
     flat.unlink()
-    after = ledger.load_published(state_dir)
+    after = _tree_mapping(state_dir)
     if after != before:
         write_atomic(flat, text)
         raise ValueError(
