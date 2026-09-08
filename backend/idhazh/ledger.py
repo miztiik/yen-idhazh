@@ -20,9 +20,17 @@ name and to nothing else. The read is still whole, because published is forever
 and the question has no time bound - so every day file is opened anyway, and the
 grain buys a small merge surface and a removal that is one `rm`, never a faster
 read. Size it from the ceiling, not from today: a run plans at most
-`run.safety_ceiling_per_run` items and the schedule fires five times a day, so
-a day writes at most 1000 rows and a year at most about 365,000. At the
-measured 214.9 B a row that is 78.4 MB on disk. See
+`run.safety_ceiling_per_run` items, which the committed config sets to 80, and
+the schedule fires five times a day - so a day writes at most 400 rows and a
+year at most about 146,000. Measured 2026-09-08 on an Intel Core i7-1265U over
+the 7,600 committed rows, header included: 106.9 B a row, so a year of that
+ceiling is 15.6 MB on disk. The 16 committed days average 475 rows a day, which
+is above the ceiling arithmetic because they were written under three different
+ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since - and the newest
+full day wrote 357. Reading the whole file took a median 32.7 ms over fifteen
+consecutive runs, best 30.1 and worst 37.5, a spread of 7.4 ms - and as slow as
+68.6 ms while other jobs shared the box, which is the number to remember before
+reading any wall clock here as a property of the file. See
 `docs/reference/measurements.md`.
 
 `state/published.csv` is the one file it moved off. It is read and never

@@ -1,5 +1,7 @@
 {
   "date": "2026-08-21",
+  "dropped_published": null,
+  "dropped_published_ages": null,
   "feeds_failed": 1,
   "feeds_read": 4,
   "feeds_skipped": 0,
