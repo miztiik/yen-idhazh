@@ -55,13 +55,13 @@ discover. All are folded in. The five that would have cost the most:
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Measure the migrated tree and the two wire costs | - | A | IN-FLIGHT | yi-s01-measure | #527 | worker |
+| 1 | Measure the migrated tree and the two wire costs | - | A | LANDED | - | #527 | worker |
 | 2 | The parcel carries the day, not the archive | - | A | LANDED | - | #523 | worker |
-| 4 | One verification call, and it is the one that assigns | - | A | IN-FLIGHT | yi-s04-verify | #524 | worker |
-| 5 | Stage only what changed | - | A | IN-FLIGHT | yi-s05-stage | #526 | worker |
+| 4 | One verification call, and it is the one that assigns | - | A | LANDED | - | #524 | worker |
+| 5 | Stage only what changed | - | A | LANDED | - | #526 | worker |
 | 3 | Rebuild only when the push was rebased | 2 | B | PENDING | - | - | - |
 | 6 | Bound the eleven archive reads | - | B | IN-FLIGHT | yi-s06-bound | #529 | worker |
-| 13 | The page carries nothing a later run can change | - | B | PENDING | - | - | - |
+| 13 | The page carries nothing a later run can change | - | B | IN-FLIGHT | yi-s13-stamps | - | worker |
 | 15 | Publish the Release asset, pin the revision, prove it cross-origin | 1 | B | PENDING | - | - | - |
 | 7 | The console stops claiming "never" | 6 | C | PENDING | - | - | - |
 | 8 | Inventory and mint every console payload contract | 6 | C | PENDING | - | - | - |
