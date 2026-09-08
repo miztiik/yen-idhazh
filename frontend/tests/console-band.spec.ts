@@ -357,3 +357,45 @@ test('the newest day draws one square a run, on the same ramp as the run strip',
 			: Number((await overflow.getAttribute('data-band-runs-more')) ?? 0);
 	expect(squares.length + more, 'the row and the sentence count different runs').toBe(runs);
 });
+
+test('THE ORACLE: the band is the same three facts on every route, and no window moves it', async ({
+	page
+}) => {
+	const bandText = async (path: string) => {
+		await page.goto(path);
+		await hydrated(page);
+		return (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
+	};
+
+	// One band, derived once in the shared layout and drawn above all three route
+	// panels. Three routes deriving their own would eventually disagree about which
+	// one of them is worst, which is the whole reason it is derived once (row 24).
+	const pipelines = await bandText('/console/');
+	expect(pipelines.length, 'the band drew nothing on /console/').toBeGreaterThan(0);
+	expect(await bandText('/console/model/'), 'the band differs on the model route').toBe(pipelines);
+	expect(await bandText('/console/machine/'), 'the band differs on the machine route').toBe(
+		pipelines
+	);
+
+	// The band is deliberately not windowed: a route's control governs the panels
+	// below it, never the standing band above it. Moving the control to another
+	// preset may not move the three facts (row 24 decision 2). This is also the
+	// guardrail on the read change - a band sourced from the newest day cannot have
+	// quietly become a windowed read.
+	await page.goto('/console/model/');
+	await hydrated(page);
+	const before = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
+	const current = await page.locator('[data-window-control]').getAttribute('data-window-days');
+	const presets = await page
+		.locator('[data-window-preset]')
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-window-preset') ?? ''));
+	const other = presets.find((preset) => preset !== '' && preset !== current);
+	expect(other, 'the control offers only one preset, so nothing here can move').toBeTruthy();
+	await page.locator(`[data-window-preset="${other}"]`).click();
+	await expect(page.locator('[data-window-control]')).toHaveAttribute(
+		'data-window-days',
+		other as string
+	);
+	const after = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
+	expect(after, 'moving a route window control moved the standing band').toBe(before);
+});
