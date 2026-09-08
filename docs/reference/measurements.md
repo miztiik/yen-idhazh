@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -15,6 +15,89 @@ Two rules govern this page:
   an order-of-magnitude check, not a runner figure. The runner has a different
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
+
+## Drift review and source extraction, 2026-09-08
+
+**One length warning remains from issue 438; the other flagged domains lack
+enough comparable evidence.** This is a correction to the comparison, not
+proof that every source is healthy. Rules and limits live in
+[evaluation.md](../concepts/evaluation.md#comparable-domain-samples).
+
+**Hardware and method.** Intel Core i7-1265U, 12 logical CPUs, Windows 11 build
+26200, CPython 3.14.2. Read the August and September score shards from commit
+`2dd5f7bfb8acd7b17a03b2a8517762a4ce5bc0c4`, the input to
+[run 34031948924](https://github.com/miztiik/yen-idhazh/actions/runs/34031948924).
+No model ran and no score was recomputed. Two deterministic reassessments of
+the completed-day windows produced identical results: zero replay spread.
+This does not measure a false-positive rate or calibrate the sample floor.
+
+The original review included September 6's partial day. It compared 3,078
+baseline rows with 4,010 recent rows. The baseline mixed two models, five scorer
+versions and seven pipeline identities. The recent side used one of each.
+Eight of the ten flagged domains had four or fewer scored rows on at least
+one side. All 141 unknown article lengths belong to August 22-27; those lost
+pre-cap measurements remain unknown.
+
+The corrected windows are August 30 through September 5 and August 2 through
+August 29. Recorded baseline rows begin on August 22. The corrected recent
+window has 3,888 rows. The review completes 35 domain/metric comparisons and
+reports 300 comparisons as lacking sufficient evidence or identity.
+
+Length samples for the domains named by
+[issue 438](https://github.com/miztiik/yen-idhazh/issues/438): repeated articles
+count once and unknown lengths do not count toward the length floor.
+
+| Domain | Baseline articles with length | Recent articles with length | Length result |
+| --- | --- | --- | --- |
+| econbrowser.com | 1 | 15 | Insufficient evidence |
+| france24.com | 43 | 64 | Median 391 -> 161 words; inspect extraction |
+| microsoft.com | 7 | 1 | Insufficient evidence |
+| newslaundry.com | 13 | 21 | Insufficient evidence |
+| qz.com | 2 | 44 | Insufficient evidence |
+| research.ibm.com | 18 | 1 | Insufficient evidence |
+| scmp.com | 3 | 1 | Insufficient evidence |
+| scroll.in | 2 | 68 | Insufficient evidence |
+| semafor.com | 2 | 53 | Insufficient evidence |
+| the-decoder.com | 2 | 21 | Insufficient evidence |
+
+Keeping the original date membership while applying only the evidence rules
+also leaves France24 as the sole warning, at 391 -> 154 words over 43 baseline
+and 68 recent articles. Thus excluding the partial day does not explain the
+other warnings disappearing. Microsoft's copying warning compared one 9B
+summary with ten 8B summaries and is not a like-for-like model comparison.
+
+### Saved source-page replay
+
+The production fetcher sampled both feeds on September 8 at 07:10 UTC from this
+developer machine. Both robots checks allowed access. These captures do not
+establish what a GitHub runner would receive. Replaying each saved response
+twice gave identical extracted text: zero replay spread. No source list or
+publication threshold changed.
+
+| Captured page | Original words | Cleaned words | Result |
+| --- | --- | --- | --- |
+| France24, Nepal hydropower report | 511 | 470 | Two player notices removed |
+| France24, live-update page | 1,382 | 1,382 | Unchanged |
+| France24, sports-video introduction | 81 | 40 | Two player notices removed; short article kept |
+| Newslaundry, March 2019 article | 1,002 | 1,002 | Unchanged |
+
+The reduced player fixture comes from
+[the sports-video page](https://france24.com/en/tv-shows/sports/20260908-before-champions-league-kylian-mbapp%C3%A9-campaigns-for-ballon-d-or).
+It retains the relevant DOM wrappers and a short text excerpt, with non-ASCII
+characters encoded as HTML entities. Running the original extraction call on
+that fixture includes both notices; the corrected call excludes both and keeps
+the article. This is a bounded offline code regression, not a scan of published
+content. The other France24 captures were
+[the Nepal report](https://france24.com/en/asia-pacific/20260908-nepal-rescuers-race-to-free-dozens-trapped-in-hydropower-tunnels)
+and [the live-update page](https://france24.com/en/europe/20260908-live-russia-resumes-strikes-on-kyiv-after-three-day-halt).
+
+The Newslaundry feed returned only
+[one article from 2019](https://newslaundry.com/2019/03/01/welcome-back-abhinandan-varthaman).
+Its text extracted, but that does not make the feed fresh. This is a separate
+source finding, not an extraction fix. A historical 465-word score row exists
+for September 2, but the downloaded evidence shard inspected for this work did
+not contain that article. No claim about that historical article's completeness
+is made. The source needs a fresh-feed check before any replacement or retirement.
 
 ## How much of a day is the same story twice, 2026-09-06
 

@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-07
+**Last Updated**: 2026-09-08
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -858,34 +858,56 @@ A drift detector that has never fired has not been shown to work; it is tested b
 
 ### A review that compared nothing is not a clean review
 
-`compare()` walks the domains a window holds. An empty window holds none, so it
-returns no findings - and no findings is what a healthy corpus returns too. The
-review step read those two opposite facts through one `if`, printed "no drift
-across 0 recent and 0 baseline rows", and exited 0.
+An empty finding list can mean either no detected change or no comparison.
+The workflow calls `drift.report`, which reports the coverage as well as the
+findings. An absent ledger, a window below `drift.min_window_rows`, or no
+eligible domain metric returns a failing exit code. A partial review names
+every skipped comparison and never counts it as healthy.
 
-The consequence is the reason this is written down rather than fixed quietly.
-Drift detection is the only automated instrument watching for slow extraction
-failure. Turn the scorer off for a week, and the watchman reported all clear
-every day, under a green check nobody opens.
+The scheduled review uses seven completed UTC days and the preceding 28 days.
+Today and future dates are excluded. `read_windows` derives the month paths
+from those dates instead of walking the whole ledger directory. Malformed
+in-window rows fail with their shard and row number; they are not silently
+dropped. Missing metric cells stay unknown and are counted within each window.
 
-So the two facts now have two exit codes. Before any finding is read, the step
-checks both windows against `drift.min_window_rows` and fails when either side
-is thin, naming the side and its count - "nothing was compared" is a different
-repair from "no drift", and the operator has to know which one arrived. An
-absent `state/scores.csv` fails the same way, for the same reason.
+### Comparable domain samples
 
-The floor is 20 rows. It is sized against the ledger rather than picked round:
-measured 2026-08-30 over the 3,113 rows committed to `state/scores.csv`, the
-lightest full day holds 117 and the heaviest 731. A seven-day recent window
-holding under 20 rows is a stopped instrument, not a quiet week.
+Each domain and each metric must have `drift.min_domain_rows` distinct
+measured articles on both sides. The default is 20, with a schema minimum of
+two. This is a provisional sample floor, not a measured confidence level.
+One busy domain cannot supply another domain's missing evidence. Repeated
+observations of an article count once, by `url_key`, or by its URL when the key
+is absent. The latest row that measured the required metric wins; timestamp
+ties keep the first row.
+
+Source length uses every known pre-cap length, including rows without a
+faithfulness score. Copying and the combined length/faithfulness warning need
+matching `model_id`, `scorer_version` and `pipeline_fingerprint` values. A
+missing identity is not a match. After a model, prompt or setting change, a
+series with too few earlier articles reports insufficient evidence.
+
+The length threshold is `drift.source_word_count_drop`. The copying threshold
+is `drift.extractiveness_rise`, an absolute increase in the share of copied
+four-word phrases. Their existing values were moved into config without
+loosening them. The combined warning uses articles with both a length and a
+faithfulness score, rather than comparing two different measured subsets.
+
+`scoring_chrome` remains the alert identifier, but its text says **possible
+non-article text**. Shorter sources with steady faithfulness warrant inspection;
+they do not prove that extraction failed. Short news and video introductions
+can be valid. Removing player notices also makes an extraction shorter while
+improving it. See the [issue 438 replay](../reference/measurements.md#drift-review-and-source-extraction-2026-09-08)
+for the sample counts and the confirmed extraction defect.
 
 ### Current drift implementation gap
 
-`drift.yml` currently compares windows in the live eval ledger. It does not
-replay a fixed set, persist a drift row, or segment model-dependent metrics by
-`model_id`. The version-stamped fixed-set rules above are the intended
-instrument, not current workflow behaviour. A model swap must start a new
-model-dependent series rather than appearing as ordinary drift in the old one.
+`drift.yml` compares windows in the live eval ledger and segments model-dependent
+metrics by the recorded identities. Its text report names `DRIFT_VERSION`, date
+windows, thresholds, sample counts, findings and skipped comparisons. It does
+not persist a new drift-row contract or replay a fixed model benchmark.
+The fixed-set rules above remain the intended instrument. Offline captured-page
+regressions protect extraction code; they do not replace a scheduled model
+benchmark or prove that every live source still has the captured layout.
 
 ## Design rationale
 

@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -487,6 +487,13 @@ looks like every schema changed, and nothing did.** The exporter prints the path
 of every file it wrote, so the two commands' output runs together and reads as
 twenty-nine modified files. `git diff --stat -- schemas/` is the question you
 meant to ask, and empty is the pass. Observed 2026-09-02.
+
+**The schema export CLI needs an absolute `--out` path.** A relative output
+path lets the export write its files, then fails when the CLI prints each path
+relative to the repository root. Use `--out (Join-Path $PWD 'backend/var/schemas')`
+for an isolated export, or run `test_committed_schemas_match_the_models`, which
+already exports into a temporary directory. Do not treat that printing error as
+schema drift. Observed 2026-09-08.
 
 **`Sources` refuses two feeds at one URL, so a test fixture built by copying a
 feed fails at config load rather than at its assertion.** `settings_for` in
@@ -1013,6 +1020,13 @@ rendering of it. Convert before encoding:
 ```powershell
 [System.IO.File]::WriteAllText($path, ($text -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
 ```
+
+**Python text-mode stdin changes LF to CRLF on Windows.** Passing a parsed
+workflow's shell body to ShellCheck with `subprocess.run(..., text=True)` can
+report `SC1017` and an unterminated heredoc even when the file uses LF. Pass
+`input=script.encode("utf-8")` and leave text mode unset. This preserves the
+input bytes; it does not hide a defect by changing the workflow. Observed
+2026-09-08.
 
 **`gh pr merge --squash --delete-branch` prints
 `fatal: 'main' is already used by worktree` and exits non-zero when any worktree

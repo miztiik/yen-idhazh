@@ -434,6 +434,21 @@
     "DriftConfig": {
       "additionalProperties": false,
       "properties": {
+        "extractiveness_rise": {
+          "default": 0.15,
+          "description": "Absolute rise in median copied four-word-phrase share that raises an alert.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Extractiveness Rise",
+          "type": "number"
+        },
+        "min_domain_rows": {
+          "default": 20,
+          "description": "Distinct articles with the required metric on each side of a domain comparison. A smaller sample is reported as insufficient evidence, not as drift or as healthy. This is a safety floor, not a confidence level.",
+          "minimum": 2,
+          "title": "Min Domain Rows",
+          "type": "integer"
+        },
         "min_window_rows": {
           "default": 20,
           "description": "Rows a window must hold on each side before a comparison of the two means anything. Below it the review fails instead of reporting no drift, because an empty window and a healthy one produce the same empty finding list. Sized against the ledger rather than picked round: measured 2026-08-30 over the 3,113 rows committed to state/scores.csv, the lightest full day holds 117 and the heaviest 731, so a seven-day recent window holding under 20 is a stopped instrument and not a quiet week - 20 is a sixth of one of those days.",
@@ -452,6 +467,14 @@
           "exclusiveMinimum": 0.0,
           "maximum": 1.0,
           "title": "Quarterly Refresh Fraction",
+          "type": "number"
+        },
+        "source_word_count_drop": {
+          "default": 0.4,
+          "description": "Fractional fall in median extracted article length that raises an alert.",
+          "exclusiveMaximum": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Source Word Count Drop",
           "type": "number"
         },
         "year_over_year_pct": {
@@ -1861,6 +1884,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added drift.min_domain_rows, source_word_count_drop and extractiveness_rise with defaults. Existing configs remain readable.",
+      "version": "2026-09-08",
+      "why": "Issue 438 compared singleton domain samples and mixed model and scorer versions under a global row floor. Domain comparisons now need enough distinct measured articles. The existing length and copying thresholds move from code into config without changing their values."
+    },
+    {
       "change": "collect.published_window_days added, defaulting to -1 for unbounded. A finite value must be strictly greater than collect.seen_window_days; -1 or anything above 90 is accepted today and everything else, including 90 itself, is refused by name. The check sits on CollectConfig after validation, so raising seen_window_days past a finite cover fails the config too. Nothing reads the knob yet. Additive and optional with a default, so no read-side migration is needed - a config written before the field existed takes -1 and behaves exactly as it did.",
       "version": "2026-09-07T03:00",
       "why": "The published record is about to gain a lookback window, and the one mistake that window can make is a republication: an address the record has forgotten, whose first-sighting row expires in the same week, reads as first-seen-today and goes out as new. Equal is a hole rather than a bound, because at 90 and 90 both stores forget the same address on the same day and neither is left holding the evidence. The knob ships unbounded so the machinery lands switched off, and the schema is what makes the unsafe pairing unspellable rather than a comment asking an operator to be careful."
@@ -2382,7 +2410,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-07T03:00",
+      "default": "2026-09-08",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2396,5 +2424,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-07T03:00"
+  "version": "2026-09-08"
 }

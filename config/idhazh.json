@@ -72,9 +72,12 @@
     "zoom_factor": 1.5
   },
   "drift": {
+    "extractiveness_rise": 0.15,
+    "min_domain_rows": 20,
     "min_window_rows": 20,
     "month_over_month_pct": 10.0,
     "quarterly_refresh_fraction": 0.5,
+    "source_word_count_drop": 0.4,
     "year_over_year_pct": 5.0
   },
   "evaluation": {
@@ -285,7 +288,7 @@
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark"
   },
-  "version": "2026-08-29T18:00",
+  "version": "2026-09-08",
   "visuals": {
     "asset_base_url": "",
     "canvas_width": 800,
