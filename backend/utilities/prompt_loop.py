@@ -356,7 +356,7 @@ class LiveSummarizer:
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
         evaluation = self._settings.app.evaluation
-        inference = self._settings.app.models.inference
+        inference = self._settings.app.models.summarize.inference
         model_id = self._settings.app.models.summarize.id
         produced: list[ItemSummary] = []
         for item in items:
@@ -450,7 +450,7 @@ class ModelJudge:
         return bool(reply.get("prefers_candidate", False))
 
     def _call(self, user: str, schema: dict[str, object], schema_name: str) -> dict[str, object]:
-        inference = self._settings.app.models.inference
+        inference = self._settings.app.models.summarize.inference
         payload = request_payload(
             model_id=self._settings.app.models.summarize.id,
             system=_JUDGE_SYSTEM,

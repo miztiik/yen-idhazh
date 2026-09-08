@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -332,9 +332,10 @@ raising.
 See [../how-to/fine-tune-a-model.md](../how-to/fine-tune-a-model.md).
 
 ## Runtime sweep surface
-`models.inference` holds both the ordinary deterministic decode knobs and the
-flag-sweep knobs. The sweep surface is explicit so a measurement changes one
-thing at a time through config, not through workflow literals:
+`models.<role>.inference` holds both the ordinary deterministic decode knobs and
+the flag-sweep knobs, and there is one block per model entry rather than one for
+the pipeline. The sweep surface is explicit so a measurement changes one thing at
+a time through config, not through workflow literals:
 
 - `n_ctx`, `n_threads`, `n_batch`, `n_ubatch`
 - `n_parallel`, `n_threads_batch`
@@ -346,6 +347,11 @@ thing at a time through config, not through workflow literals:
 - `priority`, `poll`
 - `temperature`, `top_p`, `seed`, `thinking`, `max_output_tokens`
 - `request_timeout_minutes`
+- `declared_for`
+
+`declared_for` is not a sweep knob. It is the sha256 of the entry the block sits
+in, and `ModelsConfig` refuses a config where the two disagree - so the settings
+travel with the weights or the config does not open.
 
 `metrics` is on by default and emits `--metrics`, which makes llama-server
 publish its counters on `/metrics`. Two of them are what a run is read by:
@@ -389,6 +395,107 @@ runtime, not a repeat
 No sweep flag is adopted merely because the knob exists. A candidate becomes the
 runtime only after a runner measurement records hardware, date and spread in
 [../reference/measurements.md](../reference/measurements.md).
+
+### Where the committed numbers came from, and which entry they are declared for
+
+A runtime setting is a measurement about one model on one runner. Quoting one
+without saying which model, which runner and which date makes it an unmeasured
+number justifying a design (Rule #10). So both committed blocks state their
+provenance here, and it is not the same for the two:
+
+| Entry | `declared_for` | Where the numbers came from |
+| --- | --- | --- |
+| `models.summarize` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | Derived against the retired `qwen3-8b-q4-k-m` on a GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74, 4 vCPU, 15 GB) through 2026-08-25 and 2026-08-26, then carried onto the 9B when the summarizer was swapped on **2026-08-27** (#146). Nothing has re-derived them since. |
+| `models.visual_planner` (`qwen3-4b-q4-k-m`) | `7485fe6f...fdf5` | The same numbers again. They were never measured against a 4B; the entry ran on them because one block served both roles. |
+
+Both rows say the same uncomfortable thing, which is the point of writing them
+down: the file now states a pairing where before it implied one. `declared_for`
+is named for what a person can honestly assert - that these numbers are set for
+these bytes - rather than `derived_against`, which for the visual planner would
+be a measurement claim nobody made.
+
+The two window figures already on record still read against the summarizer's
+block: the widest qualification request was 3,775 prompt tokens plus a 900-token
+output budget against an `n_ctx` of 8,192, and the configured summarizer peaks at
+82 percent of the runner's memory at that window
+([../reference/measurements.md](../reference/measurements.md)).
+
+### A model swap can no longer inherit settings nothing declared for it
+
+Until 2026-09-09 there was one `models.inference` block and both roles were
+served on it. Editing `models.summarize` to name a different repository, file,
+revision and digest raised nothing at all: `AppConfig.model_validate` accepted
+it, `llama-server` started on the old numbers, and the run published a whole
+plausible day. **It is not hypothetical.** The summarizer moved from the 8B to
+the 9B on 2026-08-27 and the block did not move with it, and the 4B visual
+planner has run on the summarizer's window and the summarizer's 22.1-minute
+request bound since the role existed.
+
+The block therefore sits on the entry, and carries `declared_for`. Two rules,
+and between them they cover both shapes the swap takes:
+
+- An entry with no block of its own does not fall back to one. Its default block
+  declares nothing, the entry names measured weights, and the mismatch is
+  refused by name.
+- An entry edited in place keeps its block, and the block still names the old
+  digest. That is the shape a real swap takes, and it is the one a per-entry
+  block alone would not have caught.
+
+Both digests absent is legal and means an entry nobody has measured yet. Nothing
+runs on one: `idhazh.fingerprint.build_inputs` already refuses to stamp a run
+whose weights have no recorded digest.
+
+**The stamp did not move.** `declared_for` is classified in
+`idhazh.fingerprint.NOT_DIGESTED`, so `pipeline_fingerprint` is byte-identical
+across this change and every committed row stays comparable
+([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
+Digesting it would have moved the stamp on a swap that `model_sha256` already
+moves.
+
+**The qualification path declares the pairing out loud instead of inheriting
+it.** `validate.yml` builds a scratch config whose `models.summarize` is the
+candidate and whose every other control is the committed one, which is what makes
+it an experiment rather than a second pipeline. It now copies the incumbent's
+block onto the candidate entry and sets `declared_for` to the candidate's digest:
+that run is what puts those numbers in front of those weights, and `context_fit`
+is the gate that says whether they held.
+
+#### Rejected alternatives
+
+**Keep one shared block and refuse an unmeasured pairing at qualification.** It
+refuses the wrong run. Qualification is the one place that deliberately pairs the
+incumbent's settings with candidate weights - that pairing is the control the
+gates hold fixed - so a gate against it would refuse the measurement and leave
+the daily pipeline, where the swap actually reaches readers, exactly as silent.
+A shared block can also bind to at most one entry, so with two roles it closes
+half the hazard at best.
+
+**Move the block onto the entry and stop there.** It catches a new entry written
+with no settings and misses the swap that actually happens, which is five strings
+edited in place under a block nobody touched. That was the confirmed failure, so
+a fix that does not catch it is not a fix.
+
+**Lift `models.inference` onto both entries as a read-side migration.** Refused,
+because the lift *is* the inheritance: it would hand a swapped entry the previous
+weights' numbers and raise nothing, which is the defect. `models.inference` is
+refused by name instead, the way `quarantine_after_failures` was - and for a
+config contract the migration is the file edit in the same commit, because no run
+writes these files.
+
+**A comment saying the settings are model-specific.** A comment is not a gate,
+and the failure it would warn about is silent and produces a plausible run.
+Authority: Fowler.
+
+**Put the runner and the date in the contract too.** A validator cannot check
+either, and a field nothing checks is a comment with a schema entry. They live in
+the table above, where a reader looks for provenance.
+
+Authority: Fowler on the shape (the shared block is one canonical model applied
+to two things that are not the same thing, and the read-side answer to a removed
+config key is refusal rather than a lift); Carmack on what the binding has to be
+(the weights file is a contract, not a blob - pin the exact bytes and record the
+hash, because a run that cannot say which bytes produced its output has not been
+measured).
 
 ### The run shape, and who reads each number
 
@@ -890,8 +997,8 @@ The distinction matters because a value in `config/` reads as an invitation to c
 Some numbers in `config/` are not there to be tuned. They are there to stop a bug running for six hours, or to say out loud that something has changed. A guard, an alarm and a limit look identical in JSON, so the name and the comment carry the whole difference:
 
 - `run.safety_ceiling_per_run` (80) **was** a crash guard and is now an editorial cap, and the name is the last thing that has not caught up. `items_planned` has been exactly the ceiling on every run since 2026-08-25, so supply overtook the guard and what it bounds today is the size of a run. Owner decision, 2026-09-05: it comes down to 80 from 160, and a day publishes half as many stories on purpose - the gain is that those 80 slots go to articles worth reading rather than to a second copy of one already chosen or a feed that has been publishing badly - see [../architecture/sources/discovery.md](../architecture/sources/discovery.md). Which half is dropped is an editorial call and not an arbitrary cut: a duplicate goes before a desk's only story. Lowering it also shrinks the worst case every downstream bound is checked against - a smaller run is a smaller worst shard - see [Design rationale](#design-rationale).
-- `models.inference.max_output_tokens` (900) is a **crash guard**. It stops a runaway decode from burning a shard's whole timeout. It is not a length target: the length a summary should be is set by the word bands in `summarize.bands`, which is the knob a person actually wants ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). It was 250, and at 250 the reply ran out of budget mid-object and failed as a *shape* error - which named the wrong cause and sent the reader of that failure looking at the decoder. It now sits well above any summary we would want.
-- `models.inference.request_timeout_minutes` (22.1) is a **per-request guard**. It limits one summarizer POST, not the shard. It protects the day from one local model request that accepts a connection and never replies: that item records `model_unreachable`, and the worker continues. The default is sized from the authoritative runner measurements in [../reference/measurements.md](../reference/measurements.md): the worst 8B long article plus one cold prompt prefix, doubled. `run.shard_timeout_minutes` stays the outer bound for the whole shard.
+- `models.summarize.inference.max_output_tokens` (900) is a **crash guard**. It stops a runaway decode from burning a shard's whole timeout. It is not a length target: the length a summary should be is set by the word bands in `summarize.bands`, which is the knob a person actually wants ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). It was 250, and at 250 the reply ran out of budget mid-object and failed as a *shape* error - which named the wrong cause and sent the reader of that failure looking at the decoder. It now sits well above any summary we would want.
+- `models.summarize.inference.request_timeout_minutes` (22.1) is a **per-request guard**. It limits one summarizer POST, not the shard. It protects the day from one local model request that accepts a connection and never replies: that item records `model_unreachable`, and the worker continues. The default is sized from the authoritative runner measurements in [../reference/measurements.md](../reference/measurements.md): the worst 8B long article plus one cold prompt prefix, doubled. `run.shard_timeout_minutes` stays the outer bound for the whole shard.
 - `run.shard_timeout_minutes` (200) is a **job backstop**, and it is the outer bound the previous line hands off to. The `work` job reads it, so this is the only place the number is written. It is not a budget: the stage has no clock of its own, and a worker killed here uploads nothing, so the run loses every item that worker held rather than the tail it could not reach. It rose to 200 from 150 as headroom for the coming two-call summariser change, not because a worker got slower: at the 80-item ceiling a worker draws 20 items, half of the 40 it drew before, so the base work roughly halves and 150 alone would now be slack. The room is banked before that change lands, because a second model call an item takes the worst shard past 150 and a killed worker uploads nothing. It is sized from the worst measured shard, not the median - 135.4 minutes of the old 150 over 80 shard rows on 2026-09-02, against a 78.5-minute median ([../reference/measurements.md](../reference/measurements.md#what-a-work-shard-costs)) - and 200 is 56 percent of the six-hour platform ceiling. A worker that runs long is still answered by lowering `run.safety_ceiling_per_run`, never by raising this (Rule #2).
 - `collect.settled_failure_codes` is a **memory**, not a guard. It names the failure codes that will not change before tomorrow, and an address that failed today with one of them is not planned again today. Absent from it - and therefore retried - are the codes that can change within a day: a rate limit, a network error, a server error, an unreachable model. Measured over 2026-08-24 to 2026-08-29, 403 same-day repeats of a settled failure bought 2 items ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). An empty list restores the old behaviour exactly.
 - `run.visual_planner_budget_minutes` (40) is a **stage budget**, and it is the one number here that a person is meant to move. It says how long the visual planner may spend before it stops asking the model and leaves the rest of the day undecided. It is sized *below* the `visuals` job's 50-minute timeout on purpose: a job killed at its timeout skips its upload step, so the run loses every decision it had already made rather than the tail it could not reach. The 10 minutes between the two are the fixed cost the stage clock never sees. Measured 2026-08-24/25, the per-item cost is 20.7 s on a fast runner host and 40.3 s on a slow one, so what fits inside the budget changes run to run - which is exactly why the bound is a clock rather than an item count ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).

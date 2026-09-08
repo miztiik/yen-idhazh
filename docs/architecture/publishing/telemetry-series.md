@@ -450,7 +450,7 @@ ledger had been committed for four days with no page reading a cell of it.
 | Read and write speed | those seconds against `prompt_tokens_total` and `tokens_predicted_total` | sum over sum, never a mean of per-shard rates |
 | Read spread | the fastest shard's read rate over the slowest | one run only; a run of one shard reports nothing |
 | Prompt cache | `prompt_tokens_total` against `prompt_tokens_cached_total` | share of every token the prompt needed, read or reused |
-| Context headroom | `n_tokens_max` against `models.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
+| Context headroom | `n_tokens_max` against `models.summarize.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
 | Job clock | `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
 | The processor | `cpu_model` | text, per shard, and never averaged |
 | Busy and load | `cpu_busy_pct`, `model_load_ms` | lowest, slowest |

@@ -927,6 +927,20 @@
           "description": "llama-server -ctv. None omits the flag and keeps full-precision KV.",
           "title": "Cache Type V"
         },
+        "declared_for": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The weights this block is set for - the sha256 of the entry that carries it. Every number here is a measurement about one model on one runner, never a property of the pipeline, so the entry states which bytes the numbers were put in front of. Swap the weights and this is left behind, which is the one event the field exists to make loud. It says a person paired these numbers with these bytes; where the numbers came from is docs/concepts/config.md, because a runner and a date cannot be checked by a validator and a field nothing checks is a comment.",
+          "title": "Declared For"
+        },
         "flash_attention": {
           "anyOf": [
             {
@@ -1143,6 +1157,10 @@
           "title": "Id",
           "type": "string"
         },
+        "inference": {
+          "$ref": "#/$defs/InferenceConfig",
+          "description": "The runtime this entry's weights are served on. It sits on the entry for the same reason `hf_base_repo` does: held apart, a model swap moves the weights and leaves the numbers, and llama-server starts on them without raising. `ModelsConfig` refuses a block whose declared_for is not this entry's sha256, so a default block under measured weights is refused rather than inherited."
+        },
         "quantisation": {
           "minLength": 1,
           "title": "Quantisation",
@@ -1194,10 +1212,8 @@
     },
     "ModelsConfig": {
       "additionalProperties": false,
+      "description": "One entry per role, and each entry carries the settings it runs on.\n\nThere is no block shared between the entries. Two roles are two model\nfamilies served by two llama-server processes, and one block over both is a\nmeasurement about one of them quietly applied to the other.",
       "properties": {
-        "inference": {
-          "$ref": "#/$defs/InferenceConfig"
-        },
         "summarize": {
           "$ref": "#/$defs/ModelRef"
         },
@@ -1899,6 +1915,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed models.inference. Every models.<role> entry now carries its own inference block, and that block carries declared_for - the sha256 of the entry it is set for. A block whose declared_for is not the entry's sha256 is refused, and a config still spelling models.inference is refused by name.",
+      "version": "2026-09-09",
+      "why": "One settings block served two model families, so a swap of either entry inherited numbers measured against the other and nothing raised. It had already happened: the summarizer moved from the 8B to the 9B on 2026-08-27 and the block did not move with it. Breaking, and the read-side answer is refusal rather than a lift onto the entries, because the lift is the inheritance - it would hand a swapped entry the previous weights' numbers in silence. config/ is human-edited, so the refusal names the block and the operator writes it once."
+    },
+    {
       "change": "Added drift.min_domain_rows, source_word_count_drop and extractiveness_rise with defaults. Existing configs remain readable.",
       "version": "2026-09-08T16:49",
       "why": "Issue 438 compared singleton domain samples and mixed model and scorer versions under a global row floor. Domain comparisons now need enough distinct measured articles. The existing length and copying thresholds move from code into config without changing their values."
@@ -2433,7 +2454,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-08T16:49",
+      "default": "2026-09-09",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2447,5 +2468,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-08T16:49"
+  "version": "2026-09-09"
 }

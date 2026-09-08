@@ -174,7 +174,7 @@ For every rendered summary band, including the brief path:
    complete chat-templated request tokens + output budget
    ```
 
-8. Confirm the result fits `models.inference.n_ctx`.
+8. Confirm the result fits `models.summarize.inference.n_ctx`.
 9. Confirm `fits_context` still over-reserves rather than under-reserves.
 
 The extraction cap is applied through a words-to-tokens estimate before the

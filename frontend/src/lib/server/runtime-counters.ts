@@ -71,7 +71,7 @@ export interface Reading<T> {
  * a derivation, so a test drives them and Rule #6 keeps them out of the code.
  */
 export interface MachineLimits {
-	/** `models.inference.n_ctx` - what `n_tokens_max` is a share of. */
+	/** `models.summarize.inference.n_ctx` - what `n_tokens_max` is a share of. */
 	contextWindow: number | null;
 	/** `run.shard_timeout_minutes` as seconds - what `job_seconds` is a share of. */
 	jobTimeoutSeconds: number | null;
@@ -633,7 +633,7 @@ export function runtimeCounterRows(): CsvTable {
 
 /** The two ceilings, read from `config/idhazh.json` through the one config reader.
  *
- * `models.inference.n_ctx` and `run.shard_timeout_minutes` (Rule #6). Both have
+ * `models.summarize.inference.n_ctx` and `run.shard_timeout_minutes` (Rule #6). Both have
  * a default there, so a fresh clone with no config file still draws a ceiling
  * rather than none.
  */
