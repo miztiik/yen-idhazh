@@ -56,7 +56,6 @@
  */
 
 import {
-	cpSync,
 	existsSync,
 	mkdirSync,
 	readdirSync,
@@ -65,7 +64,7 @@ import {
 	statSync,
 	writeFileSync
 } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { assetBaseUrl } from '../asset-base.js';
 // The allow-list and the projector itself, shared with the build-time reader in
 // `src/lib/server/payload.ts`. The `.ts` extension and the full relative path
@@ -101,17 +100,79 @@ const indexSource = resolve(source, '..', 'assist', 'index');
 // survive that parking, and a staged tree inside the parked one cannot.
 const indexTarget = join('static', 'index');
 
-// Generated, so it is rebuilt rather than accumulated. A stale visual from a
-// previous build would be served beside a payload that no longer names it.
-rmSync(target, { recursive: true, force: true });
-rmSync(telemetryTarget, { recursive: true, force: true });
-rmSync(indexTarget, { recursive: true, force: true });
+// Generated, so a stale visual from a previous build would be served beside a
+// payload that no longer names it. This used to be guaranteed by deleting all
+// three trees and copying every file back, which rewrote every staged file on
+// every build to replace it with the same bytes. The guarantee is now reached
+// from both ends instead: `stage` writes a file only when its bytes differ, and
+// `reconcile` removes a staged file the source no longer has.
+//
+// Measured 2026-09-08 on an Intel Core i7-1265U / Windows 11 / node 24.12.0
+// over 453 staged files, five runs each: a build with no new day fell from
+// 2.88 s to 1.38 s, spreads 2.77-3.32 and 1.32-1.94 - a little over half the
+// step, on every build after the first. A fresh checkout got cheaper as well,
+// three runs each, 2.65 s to 1.14 s, because `cpSync` on one file costs more
+// than a read and a write. That second figure is the one CI sees: every job
+// starts with `static/digest` absent, so its first stage is always a full one.
+//
+// Content, never a timestamp. A rebuilt projection can carry identical bytes
+// and a new mtime, and a fresh checkout can carry a new mtime and identical
+// bytes, so a timestamp answers wrongly in both directions.
+const stage = (bytes, destination) => {
+	if (existsSync(destination) && statSync(destination).size === bytes.length) {
+		if (readFileSync(destination).equals(bytes)) return false;
+	}
+	mkdirSync(dirname(destination), { recursive: true });
+	writeFileSync(destination, bytes);
+	return true;
+};
+
+// The other half. A day, a telemetry shard or an index month that the source no
+// longer has must leave the staged tree, or the site serves a file the producer
+// deleted. `wanted` holds every relative path this run staged or found already
+// current; everything else here goes, empty directories included, so the tree
+// this leaves is the tree a full re-stage would have written.
+//
+// Rule #12, and it is the escape hatch taken in writing: this sweep opens a tree
+// that gains a directory every published day, and it is unbounded on purpose.
+// No bounded input answers "what is staged that the source no longer has" - a
+// receipt tells you a file is current, never that a file is orphaned, and the
+// only cheaper cover would be a manifest of the last run's output, which is a
+// persisted contract that can silently disagree with the tree it describes. It
+// also adds no order of cost: the source walk beside it is unbounded too and
+// cannot be otherwise, because this step has to look at every day to know what
+// to stage. Measured on the same machine and day over the same tree, five runs:
+// the sweep is 27.3 ms median, 21.0 to 32.6 - two percent of the step it halved.
+const reconcile = (root, wanted) => {
+	if (!existsSync(root)) return 0;
+	let removed = 0;
+	const sweep = (relative) => {
+		let kept = 0;
+		for (const name of readdirSync(join(root, relative))) {
+			const next = join(relative, name);
+			if (statSync(join(root, next)).isDirectory()) {
+				if (sweep(next) > 0) kept += 1;
+				else rmSync(join(root, next), { recursive: true, force: true });
+			} else if (wanted.has(next)) {
+				kept += 1;
+			} else {
+				rmSync(join(root, next), { force: true });
+				removed += 1;
+			}
+		}
+		return kept;
+	};
+	if (sweep('') === 0) rmSync(root, { recursive: true, force: true });
+	return removed;
+};
 
 function stageIndexes() {
 	if (!existsSync(indexSource)) {
 		console.log(`month index: no index tree at ${indexSource}, nothing to stage.`);
+		rmSync(indexTarget, { recursive: true, force: true });
 		return;
 	}
+	const wanted = new Set();
 	let staged = 0;
 	for (const name of readdirSync(indexSource)) {
 		// Both halves. The browse list reads the JSON; a search reads the sibling
@@ -119,24 +180,37 @@ function stageIndexes() {
 		// fetched a vector, because it is megabytes a reader would download for
 		// nothing.
 		if (!/^\d{4}-\d{2}\.(json|bin)$/.test(name)) continue;
-		mkdirSync(indexTarget, { recursive: true });
-		cpSync(join(indexSource, name), join(indexTarget, name));
-		staged += 1;
+		wanted.add(name);
+		if (stage(readFileSync(join(indexSource, name)), join(indexTarget, name))) staged += 1;
 	}
-	console.log(`month index: staged ${staged} file(s) into static/index.`);
+	const stale = reconcile(indexTarget, wanted);
+	console.log(
+		`month index: staged ${staged} file(s) into static/index, ${wanted.size - staged} already ` +
+			`current, ${stale} stale removed.`
+	);
 }
 
 stageIndexes();
 
 if (!existsSync(source)) {
 	console.log(`rendered visuals: no payload tree at ${source}, nothing to stage.`);
+	// Both trees, because this exit skips the telemetry pass at the foot of the
+	// file and a staged tree with no source behind it is exactly what `reconcile`
+	// exists to prevent.
+	rmSync(target, { recursive: true, force: true });
+	rmSync(telemetryTarget, { recursive: true, force: true });
 	process.exit(0);
 }
 
 let copied = 0;
 let payloads = 0;
+let current = 0;
 let skipped = 0;
 let elsewhere = 0;
+// Neither an unreadable day nor an image left out by `visuals.asset_base_url`
+// joins this set, so `reconcile` clears a copy an earlier build staged - which
+// is what deleting the tree first used to do for them.
+const wanted = new Set();
 const walk = (relative) => {
 	for (const name of readdirSync(join(source, relative))) {
 		const next = join(relative, name);
@@ -160,25 +234,26 @@ const walk = (relative) => {
 				skipped += 1;
 				continue;
 			}
-			mkdirSync(join(target, relative), { recursive: true });
-			writeFileSync(join(target, next), projected);
-			payloads += 1;
+			wanted.add(next);
+			if (stage(Buffer.from(projected), join(target, next))) payloads += 1;
+			else current += 1;
 		} else if (IMAGE_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix))) {
 			if (servedElsewhere) {
 				elsewhere += 1;
 				continue;
 			}
-			mkdirSync(join(target, relative), { recursive: true });
-			cpSync(join(source, next), join(target, next));
-			copied += 1;
+			wanted.add(next);
+			if (stage(readFileSync(join(source, next)), join(target, next))) copied += 1;
+			else current += 1;
 		}
 	}
 };
 walk('');
+const stale = reconcile(target, wanted);
 console.log(
 	`rendered visuals: staged ${copied} image(s) and projected ${payloads} day payload(s) ` +
 		`into static/digest at digest-view ${VIEW_VERSION}, ${ITEM_FIELDS.length} field(s) an item, ` +
-		`${skipped} unreadable.`
+		`${current} already current, ${stale} stale removed, ${skipped} unreadable.`
 );
 if (servedElsewhere) {
 	console.log(
@@ -189,14 +264,21 @@ if (servedElsewhere) {
 
 if (!existsSync(telemetrySource)) {
 	console.log(`telemetry: no projection tree at ${telemetrySource}, nothing to stage.`);
+	rmSync(telemetryTarget, { recursive: true, force: true });
 	process.exit(0);
 }
 
 let telemetryCopied = 0;
+const telemetryWanted = new Set();
 for (const name of readdirSync(telemetrySource)) {
 	if (!name.endsWith('.csv')) continue;
-	mkdirSync(telemetryTarget, { recursive: true });
-	cpSync(join(telemetrySource, name), join(telemetryTarget, name));
-	telemetryCopied += 1;
+	telemetryWanted.add(name);
+	if (stage(readFileSync(join(telemetrySource, name)), join(telemetryTarget, name))) {
+		telemetryCopied += 1;
+	}
 }
-console.log(`telemetry: staged ${telemetryCopied} shard(s) into static/telemetry.`);
+const telemetryStale = reconcile(telemetryTarget, telemetryWanted);
+console.log(
+	`telemetry: staged ${telemetryCopied} shard(s) into static/telemetry, ` +
+		`${telemetryWanted.size - telemetryCopied} already current, ${telemetryStale} stale removed.`
+);
