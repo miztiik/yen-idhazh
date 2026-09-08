@@ -152,7 +152,7 @@ export async function load() {
 		);
 		const tokens = tokensByRun(healthRows);
 		// Batching is one line of text and not a chart. It reads 1.0 on every row
-		// the ledger holds, because `models.inference.n_parallel` is 1, and it
+		// the ledger holds, because `models.summarize.inference.n_parallel` is 1, and it
 		// earns a chart the day that knob moves.
 		const slots = runs.map((run) => run.slotsPerDecode).filter((reading) => reading.value !== null);
 

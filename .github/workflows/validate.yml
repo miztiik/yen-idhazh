@@ -215,6 +215,11 @@ jobs:
       # not edit it. The scratch copy differs in `models.summarize` and nothing
       # else, so every control the gates hold fixed - prompt, schema, sampler,
       # context, threads, truncation cap - is the committed one by construction.
+      # The incumbent's settings block travels onto the candidate entry, and
+      # `declared_for` becomes the candidate's digest: this run is what puts
+      # those numbers in front of these weights, and `context_fit` is what then
+      # says whether they held. Written out rather than inherited, because an
+      # inherited block is the thing this repository stopped allowing.
       - name: Build the candidate config
         run: |
           set -euo pipefail
@@ -225,9 +230,12 @@ jobs:
           import json, os, pathlib
           path = pathlib.Path("backend/var/candidate-config/idhazh.json")
           config = json.loads(path.read_text(encoding="utf-8"))
+          inference = dict(config["models"]["summarize"]["inference"])
+          inference["declared_for"] = os.environ["CANDIDATE_SHA256"]
           config["models"]["summarize"] = {
               "file": os.environ["CANDIDATE_FILE"],
               "id": os.environ["CANDIDATE_ID"],
+              "inference": inference,
               "quantisation": os.environ["CANDIDATE_QUANT"],
               "repo": os.environ["CANDIDATE_REPO"],
               "revision": os.environ["CANDIDATE_REVISION"],
@@ -331,7 +339,7 @@ jobs:
               binary=Path("backend/bin/llama-server"),
               weights=Path(os.environ["LLAMA_WEIGHTS"]),
               model=settings.app.models.summarize,
-              inference=settings.app.models.inference,
+              inference=settings.app.models.summarize.inference,
               port=int(os.environ["LLAMA_PORT"]),
           )
           sys.stdout.write("\0".join(argv) + "\0")

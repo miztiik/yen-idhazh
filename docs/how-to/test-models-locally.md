@@ -142,7 +142,7 @@ print(" ".join(server_argv(
     binary=Path("backend/bin/llama-server"),
     weights=Path("backend/models") / model.file,
     model=model,
-    inference=settings.app.models.inference,
+    inference=settings.app.models.summarize.inference,
 )))
 PY
 ```
@@ -452,7 +452,7 @@ puts `static/assist/` back and `build/assist` reappears.
 | `error while loading shared libraries: libllama-common.so.0` | You copied `llama-server` alone. Copy the whole `bin` directory - some of those files are symlinks. |
 | Every item logs `model unreachable` | The server is not up. `curl` the health endpoint before blaming the pipeline. |
 | `'HHEMv2ForSequenceClassification' has no attribute 'all_tied_weights_keys'` | transformers is too new. The pin is `<5`; check what actually resolved. |
-| The reply "did not hold its shape" | Usually the output budget, not the model. `models.inference.max_output_tokens` is 900 - a crash guard, not a length control. At 250 it ran out mid-object and failed as a shape error, which named the wrong cause. |
+| The reply "did not hold its shape" | Usually the output budget, not the model. `models.summarize.inference.max_output_tokens` is 900 - a crash guard, not a length control. At 250 it ran out mid-object and failed as a shape error, which named the wrong cause. |
 | An item degrades with "page furniture is short" | Extraction found under `extract.min_source_words` (60). That floor is derived, not chosen: `brief_target_words_min / brief_compression_ceiling`, or 30 / 0.5. A short release note no longer trips it - it publishes as a brief and the census row carries `not_prose`. |
 | A summary is dropped for word count | `evaluation.summary_words_min/max`, currently 25 and 250. |
 

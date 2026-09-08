@@ -420,8 +420,11 @@ test.describe('the ledger this reads is the committed one', () => {
 	test('the ceilings come from config and not from a literal', () => {
 		const config = JSON.parse(
 			readFileSync(join(HERE, '..', '..', 'config', 'idhazh.json'), 'utf8')
-		) as { models: { inference: { n_ctx: number } }; run: { shard_timeout_minutes: number } };
-		expect(limits.contextWindow).toBe(config.models.inference.n_ctx);
+		) as {
+			models: { summarize: { inference: { n_ctx: number } } };
+			run: { shard_timeout_minutes: number };
+		};
+		expect(limits.contextWindow).toBe(config.models.summarize.inference.n_ctx);
 		expect(limits.jobTimeoutSeconds).toBe(config.run.shard_timeout_minutes * 60);
 	});
 
@@ -723,7 +726,7 @@ const CONSOLE = JSON.parse(
 ).console as { window_presets: number[]; min_attempts_for_rate: number };
 const INFERENCE = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-).models.inference as { n_ctx: number };
+).models.summarize.inference as { n_ctx: number };
 
 const WIDEST = Math.max(...CONSOLE.window_presets);
 
