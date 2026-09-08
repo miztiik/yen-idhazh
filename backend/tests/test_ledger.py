@@ -1105,6 +1105,95 @@ def test_a_shard_whose_server_was_gone_still_counts_as_a_shard(tmp_path: Path) -
     assert pooled.rate == 10.0
 
 
+def _counters_fixture(path: Path, *, runs: int, shards: int) -> list[RuntimeCountersRow]:
+    """One row per shard for `runs` runs. Returns what run `RUN_ID` owes, in shard order.
+
+    Only the run id changes from run to run, so both arms of the peak check hold
+    the same answer and the file is the only thing that differs. The shard rows
+    are built through the contract once and rewritten under each run id, so a
+    fixture line is the shape a real work job appends.
+    """
+    wanted = [
+        RuntimeCountersRow.model_validate(
+            {
+                "date": DATE,
+                "run_id": RUN_ID,
+                "shard": shard,
+                "shards": shards,
+                "scraped_at": STAMP,
+                "prompt_tokens_total": 100_000 + shard,
+                "prompt_seconds_total": 10.5 + shard,
+                "cpu_model": "Intel(R) Core(TM) i7-1265U",
+            }
+        )
+        for shard in range(shards)
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(
+            handle, fieldnames=RuntimeCountersRow.csv_columns(), lineterminator="\n"
+        )
+        out.writeheader()
+        for number in range(runs):
+            run_id = RUN_ID if number == 0 else f"{DATE}-{number + 100}"
+            for row in wanted:
+                out.writerow({**row.csv_row(), "run_id": run_id})
+    return wanted
+
+
+def _peak_of_load_runtime_counters(state: Path) -> tuple[list[RuntimeCountersRow], int]:
+    tracemalloc.start()
+    try:
+        counted = ledger.load_runtime_counters(state, run_id=RUN_ID)
+        return counted, tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
+def test_loading_one_runs_counters_costs_the_run_and_not_the_file(tmp_path: Path) -> None:
+    """The read already asks about one run, so it must cost one run.
+
+    `state/runtime-counters.csv` is never windowed and never partitioned - one
+    lifetime file that gains 20 rows on a full day. The question put to it is
+    always about a single run, and a run id already names its date, so the
+    answer is a handful of shard rows however long the file gets. Materialising
+    every row to find eight of them made the cost the file's instead.
+
+    Measured 2026-09-08 on an Intel Core i7-1265U, Windows 11, over 2,400 and
+    4,800 lines carrying the same eight shard rows. Before, three runs each:
+    2,197,419 B of peak against 4,237,123 B - the file doubled and the cost went
+    with it, 1.93x. After: 193,513 B against 193,481 B, a ratio of 1.000. So the
+    4,800-line arm peaks 21.9 times lower and stops moving when the file grows.
+    Spread over the three runs was 32 B or less on every arm. On the committed
+    ledger as it stands - 209 rows, 35,950 B - the newest run's read went from
+    429,441 B to 173,831 B, 2.47 times lower.
+
+    A threshold in bytes a row would pass for the wrong reason, because what the
+    read legitimately keeps is the run's own rows. So the property is asserted
+    directly: hold the answer still, double the file, and the peak must not
+    follow. Both populations are built and fixed, so this costs the same on the
+    day the committed ledger holds ten times either (Rule #12, section 13).
+    """
+    shards = 8
+    small = tmp_path / "small"
+    large = tmp_path / "large"
+    owed_small = _counters_fixture(ledger.runtime_counters_path(small), runs=300, shards=shards)
+    owed_large = _counters_fixture(ledger.runtime_counters_path(large), runs=600, shards=shards)
+
+    assert owed_small == owed_large, "both arms must owe one answer or this proves nothing"
+    assert len(owed_large) == shards, "the answer is a run's shards, and one row would prove less"
+
+    counted_small, peak_small = _peak_of_load_runtime_counters(small)
+    counted_large, peak_large = _peak_of_load_runtime_counters(large)
+
+    assert counted_small == owed_small, "the rows one run owes must not move"
+    assert counted_large == owed_large
+    assert peak_large < peak_small * 1.1, (
+        f"twice the runs over the same {shards} shard rows moved peak from {peak_small} B "
+        f"to {peak_large} B, so the read is still holding the file rather than the run"
+    )
+
+
 def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None:
     """The Oracle for row 9, on one real committed run.
 

@@ -123,6 +123,44 @@
       "title": "PlannedItem",
       "type": "object"
     },
+    "PublishedAgeBand": {
+      "additionalProperties": false,
+      "description": "How many refused addresses fall in one band of days since publication.\n\nA count on its own says the guard fired. It cannot say whether a cover of a\ngiven width would have let any of those addresses through, and that is what\nthe width of the cover turns on - so the bands are recorded beside the count.\n\nEvery declared band is written, including the empty ones. A band that is\nabsent and a band holding nothing are different answers, and only one of\nthem is a measurement.",
+      "properties": {
+        "addresses": {
+          "description": "Distinct addresses the guard refused in this band.",
+          "minimum": 0,
+          "title": "Addresses",
+          "type": "integer"
+        },
+        "from_days": {
+          "description": "Days since publication, inclusive.",
+          "minimum": 0,
+          "title": "From Days",
+          "type": "integer"
+        },
+        "to_days": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exclusive upper edge, in days. Null on the open-ended oldest band.",
+          "title": "To Days"
+        }
+      },
+      "required": [
+        "from_days",
+        "addresses"
+      ],
+      "title": "PublishedAgeBand",
+      "type": "object"
+    },
     "SourceForm": {
       "enum": [
         "article",
@@ -220,6 +258,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "A run records what the already-published guard refused on dropped_published, and how old those addresses were on dropped_published_ages.",
+      "version": "2026-09-07",
+      "why": "The guard is the whole reason the published ledger is read entire and never windowed, and nothing committed said what it bought. The count went to stderr and stopped there, so no payload could say how often the guard fired or how old the addresses it refused were - and the age is the number a finite cover turns on, because a cover only ever forgets the old ones. Measured on this checkout 2026-09-08 on an Intel Core i7-1265U, over the ledger as it stood at the end of 2026-09-07: 7,600 rows, 7,519 distinct addresses, and 16 published days from 2026-08-23 to 2026-09-07 - so the whole record is 16 days wide. Every cover anybody has proposed is wider than that, and today the question cannot be answered from what is committed at all. Recording the bands is what makes it answerable, one run at a time. Additive with a default, so a plan an earlier run wrote still validates and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "live_feeds on a vertical is renamed eligible_feeds and feed_floor is added beside it. A plan spelling the old name still reads, and no floor is invented for a payload that never carried one. feeds_skipped now also covers a feed held back by a retired address.",
       "version": "2026-09-02T23:00",
       "why": "The count decided whether a desk publishes at all, and it counted feeds a curator had not retired - so a source robots.txt refuses, an address a server reports permanently gone, and a source we may actually ask all counted the same. The floor exists to stop a thin desk reaching a reader, and padding it with sources we are not allowed to ask is how it stops doing that. The new name says what is counted; feed_floor beside it means the payload can be read without the config that produced it. Measured on this checkout 2026-09-02 over the committed ledger: the two counts are identical on every desk today - ai 43 against a floor of 35, energy 27 against 21, business-economy 25 against 21, world 25 against 21, india 24 against 21 - because no committed row records permission or a retirement yet. Breaking, and the read migration is in this commit (section 11)."
@@ -261,6 +304,36 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "title": "Date",
       "type": "string"
+    },
+    "dropped_published": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Distinct addresses this run collected on a desk it plans and then refused, because the published ledger already holds them. Null on a plan written before the field existed - unknown, and never a run where the guard refused nothing.",
+      "title": "Dropped Published"
+    },
+    "dropped_published_ages": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/PublishedAgeBand"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How old those addresses were, cut on PUBLISHED_AGE_BANDS. Every band is written, so a zero here is a measured zero. Null exactly when dropped_published is.",
+      "title": "Dropped Published Ages"
     },
     "feeds_failed": {
       "default": 0,
@@ -305,7 +378,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2026-09-02T23:00",
+      "default": "2026-09-07",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -325,5 +398,5 @@
   ],
   "title": "RunPlan",
   "type": "object",
-  "version": "2026-09-02T23:00"
+  "version": "2026-09-07"
 }
