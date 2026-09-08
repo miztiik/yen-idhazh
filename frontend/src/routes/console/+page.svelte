@@ -705,21 +705,19 @@
 					</p>
 				{/if}
 				{#if data.glance.perArticleSvg}
-					{#key windowDays}
-						<Chart
-							svg={data.glance.perArticleSvg}
-							option={perArticle.option}
-							width={data.console.chart_width}
-							height={220}
-							label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
-							columns={costColumns}
-							readoutName="cost-per-article"
-							readoutMaxShare={data.chart.readout_max_share}
-							grid={COST_GRID}
-							restingNote=", the newest published day"
-							hint="Point at a day to read what its articles cost. Left and Right step through them, Escape returns to the newest."
-						/>
-					{/key}
+					<Chart
+						svg={data.glance.perArticleSvg}
+						option={perArticle.option}
+						width={data.console.chart_width}
+						height={220}
+						label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
+						columns={costColumns}
+						readoutName="cost-per-article"
+						readoutMaxShare={data.chart.readout_max_share}
+						grid={COST_GRID}
+						restingNote=", the newest published day"
+						hint="Point at a day to read what its articles cost. Left and Right step through them, Escape returns to the newest."
+					/>
 				{/if}
 				<!-- The values, as text. It is what a chart owes anybody who cannot
 				     see it, and it is also the only honest way to check the flags:
