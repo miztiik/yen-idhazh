@@ -112,10 +112,12 @@ def rebuild(root: Path, date: str) -> None:
     _write_json(day_dir / "run.json", {"date": date, "runs": runs})
 
     # Two of the three ledgers append blind, as `ledger._append` does: a row is
-    # a fact about a run, and a run that runs twice records twice.
-    published = _read_rows(root / "state" / "published.csv")
+    # a fact about a run, and a run that runs twice records twice. The published
+    # one is filed under the day it names, as `ledger.append_published` does.
+    published_path = root / "state" / "published" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    published = _read_rows(published_path)
     published += [{"item_id": item, "published_on": date} for item in mine]
-    _write_rows(root / "state" / "published.csv", PUBLISHED_COLUMNS, published)
+    _write_rows(published_path, PUBLISHED_COLUMNS, published)
 
     health_path = root / "state" / "item-health" / f"{month}.csv"
     health = _read_rows(health_path)

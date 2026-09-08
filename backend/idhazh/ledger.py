@@ -14,19 +14,21 @@ shard is opened anyway and splitting the file buys nothing. The rule is in
 `state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
 carried no date. Read through `collect.seen_window_days`, so it shards.
 
-`state/published.csv` answers "have we already run this?" Read whole, because
-published is forever and the question has no time bound - so it is one file.
-Size it from the ceiling, not from today: a run plans at most
+`state/published/YYYY/MM/DD.csv` answers "have we already run this?" It is the
+grain the published tree itself uses, and a run appends to the day its own rows
+name and to nothing else. The read is still whole, because published is forever
+and the question has no time bound - so every day file is opened anyway, and the
+grain buys a small merge surface and a removal that is one `rm`, never a faster
+read. Size it from the ceiling, not from today: a run plans at most
 `run.safety_ceiling_per_run` items and the schedule fires five times a day, so
 a day writes at most 1000 rows and a year at most about 365,000. At the
-measured 214.9 B a row that is 78.4 MB on disk, and `load_published` peaks
-around 261 MB reading it - in the one job that loads no model, on a 16 GB
-runner. See `docs/reference/measurements.md`.
+measured 214.9 B a row that is 78.4 MB on disk. See
+`docs/reference/measurements.md`.
 
-It is moving to `state/published/YYYY/MM/DD.csv`, the grain the published tree
-itself already uses. `load_published` reads both shapes, so no step of that
-move can lose an address - which is why the reader learned the day tree before
-anything wrote one.
+`state/published.csv` is the one file it moved off. It is read and never
+written. `load_published` returns the union of both shapes, so no step of that
+move can lose an address - a split that half-finishes, or a flat file a union
+merge brings back after it was removed, still answers.
 
 `state/feed-health/<YYYY-MM>.csv` answers "is this source still working?" One
 row per feed per run, read through `HEALTH_WINDOW_DAYS`, so it shards.
@@ -238,8 +240,21 @@ def span_rollup_path(state_dir: Path, month: str) -> Path:
     return state_dir / SPAN_ROLLUP_DIRNAME / f"{month}.csv"
 
 
-def published_path(state_dir: Path) -> Path:
-    return state_dir / PUBLISHED_FILENAME
+def published_relpath(date: str) -> str:
+    """`state/published/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{PUBLISHED_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+
+
+def published_path(state_dir: Path, date: str) -> Path:
+    """The day file a run on this date appends to.
+
+    A day rather than a month, because this ledger mirrors
+    `frontend/public/digest/YYYY/MM/DD/` and every row in it is derived from one
+    of those days. Two runs collide on a file only when they are the same day,
+    and taking a day back off the site is one `rm` rather than an edit inside a
+    shared shard - which `merge=union` cannot express.
+    """
+    return state_dir / PUBLISHED_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def runtime_counters_relpath() -> str:
@@ -386,10 +401,16 @@ def append_seen(state_dir: Path, date: str, rows: Iterable[SeenRow]) -> int:
     return _append(seen_path(state_dir, date), SeenRow.csv_columns(), payloads)
 
 
-def append_published(state_dir: Path, rows: Iterable[PublishedRow]) -> int:
-    """Append what a committed digest actually carried."""
+def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -> int:
+    """Append what a committed digest actually carried, into that day's own file.
+
+    The caller hands the date, so the caller decides: a date inside a day that
+    has already closed performs a correction to that day, which is the one
+    rewrite the freeze rule permits and the same choice `append_seen` gives its
+    caller. See `docs/concepts/month-partitions.md`.
+    """
     payloads = [row.model_dump(mode="json") for row in rows]
-    return _append(published_path(state_dir), PublishedRow.csv_columns(), payloads)
+    return _append(published_path(state_dir, date), PublishedRow.csv_columns(), payloads)
 
 
 def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str]:
@@ -424,6 +445,17 @@ def _refuse_stray(entry: Path, root: Path) -> NoReturn:
         "day. A file the reader cannot place is how it starts missing rows, so it "
         "refuses the read rather than skipping the file."
     )
+
+
+def _flat_published_path(state_dir: Path) -> Path:
+    """`state/published.csv`, the one file this ledger moved off.
+
+    Private because no caller may write it: a row is filed under its own day
+    now, and `published_path` is the only path a writer asks for. It is still
+    opened by `load_published`, and it stops being opened when the split has
+    run and the file is gone.
+    """
+    return state_dir / PUBLISHED_FILENAME
 
 
 def _published_days(state_dir: Path) -> Iterator[Path]:
@@ -473,7 +505,7 @@ def load_published(state_dir: Path) -> dict[str, str]:
     listed, and a day is a file rather than a row.
     """
     published: dict[str, str] = {}
-    for path in (published_path(state_dir), *_published_days(state_dir)):
+    for path in (_flat_published_path(state_dir), *_published_days(state_dir)):
         for row in _stream_rows(path):
             url_key, on = row["url_key"], row["published_on"]
             if url_key not in published or on < published[url_key]:

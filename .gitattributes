@@ -33,6 +33,19 @@ config/*.json text eol=lf
 state/*.csv text eol=lf merge=union
 state/**/*.csv text eol=lf merge=union
 
+# The published day tree, named rather than left to the line above it. The
+# catch-all would already cover it, and that is the problem: a merge rule a new
+# collection inherits without anyone choosing it is nobody's decision, and this
+# one decides whether two runs of a day can both publish.
+#
+# `merge=union` is right here for the same reason it is right above, restated so
+# it is not read off the neighbour. A published row is independent of every
+# other row - one item, one day, one address - so two runs of the same day that
+# both append are not in disagreement, and the union of both sides is the
+# answer. `ledger.load_published` keeps the earliest date per address, so a row
+# the union brings twice costs bytes and never moves a publication date.
+state/published/**/*.csv text eol=lf merge=union
+
 # The training window. Deliberately NOT `merge=union`: it is a rolling window
 # rather than an append-only ledger, so the union of two rolls is a file that
 # holds evicted rows again and exceeds `finetune.corpus_rows`. The harvest
