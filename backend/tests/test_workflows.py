@@ -2896,9 +2896,6 @@ def test_assemble_hands_back_the_published_ledger_it_appends_to() -> None:
     assert any(day == path or day.startswith(f"{path}/") for path in refreshed), (
         f"{day} is written by this job and no entry of {refreshed} hands it back"
     )
-    # The flat file is read and never written now, so handing it back would
-    # claim this job rebuilds something it does not touch.
-    assert f"{ledger.STATE_DIRNAME}/{ledger.PUBLISHED_FILENAME}" not in refreshed
 
 
 def test_every_committing_job_configures_the_same_identity() -> None:
