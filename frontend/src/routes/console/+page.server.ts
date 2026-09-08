@@ -5,6 +5,7 @@ import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 import { targetMarks, type TargetMarks } from '$lib/charts/targetbar';
 import { failureMix, runHealth, siteCost } from '$lib/charts/glance';
 import { itemCost, type ItemCost } from '$lib/console/item-cost';
+import { extraction, type Extraction } from '$lib/console/extraction';
 import { renderToSvg } from '$lib/server/chart-render';
 import { pipelineChanges, sourceCuts, wasCut, SOURCE_CUT_ROWS } from '$lib/server/model-work';
 import {
@@ -20,8 +21,9 @@ import {
 	type FeedDayOutcome,
 	type Reliability
 } from '$lib/feed-health';
-import { chartConfig, collectConfig, consoleConfig, retentionConfig, runConfig, summarizeConfig } from '$lib/server/config';
+import { chartConfig, collectConfig, consoleConfig, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
 import {
+	dayMetrics,
 	evalRows,
 	feedResults,
 	itemHealthRows,
@@ -45,6 +47,7 @@ export const prerender = true;
 type TimingStats = StageTimingDay;
 
 export type { ItemCost } from '$lib/console/item-cost';
+export type { Extraction } from '$lib/console/extraction';
 
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
@@ -645,6 +648,23 @@ export async function load() {
 		console.default_window_days,
 		console.today_anchor
 	);
+	// One day record per date the window holds, read once at the widest preset and
+	// sliced per preset from that map. `charts` already names every published day,
+	// so this adds no listing of the tree - only `widest` file opens, whatever the
+	// archive holds behind it (`CLAUDE.md` Rule #12).
+	const chartDates = charts.map((day) => day.date).sort();
+	const widestSpan = windowOfDays(chartDates, today, widest, console.today_anchor);
+	const recordsByDate = dayMetrics(
+		chartDates.filter((date) => date >= widestSpan.start && date <= widestSpan.end)
+	);
+	const extractionByWindow: Extraction[] = console.window_presets.map((days) => {
+		const span = windowOfDays(chartDates, today, days, console.today_anchor);
+		const inside = chartDates.filter((date) => date >= span.start && date <= span.end);
+		return extraction(
+			inside.map((date) => recordsByDate.get(date)?.extraction ?? null),
+			days
+		);
+	});
 	// Six questions, six shapes. Each is drawn here so the console is complete
 	// before any script runs; the client rebuilds the same option to hydrate.
 	const runsDonut = runHealth(manifests);
@@ -743,9 +763,22 @@ export async function load() {
 				limit: SOURCE_CUT_ROWS
 			})
 		),
+		// What the extractor found and what the page drew from it, one reduction per
+		// span the control offers - the same trade the cost section above takes.
+		//
+		// Read from the committed day records rather than re-reduced off the
+		// item-health ledger: the record exists so the console stops re-counting what
+		// a run already settled, and a second reducer here is the defect it removed.
+		// `dayMetrics` opens one file per date it is handed and never lists the tree,
+		// so the cost is the widest preset - 90 files - however many days the archive
+		// holds behind it (`CLAUDE.md` Rule #12).
+		extractionByWindow,
 		telemetryRows: publicRows,
 		telemetryMonths: telemetryMonths(),
 		console,
+		// How many separate figures of one unit make an article chartable. The
+		// extraction panel prints it, and the pass it reports on reads the same knob.
+		visuals: visualsConfig(),
 		// How a chart labels its axis and how wide its readout may be. Two knobs an
 		// operator moves without editing a component.
 		chart: chartConfig(),

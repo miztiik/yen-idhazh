@@ -32,6 +32,62 @@ One fact, plus the range of characters it was cut from:
 of the exact string the spans index, and one count per kind of what the pass
 matched before the cap.
 
+## What the numbers say the article could carry
+
+`elements.classify(table, min_chart_points=...)` reads the settled table and
+answers with one of three classes. It rests on Tier 1 fields alone - `kind`,
+`value` and `unit` - so it is byte-exact and carries no model judgement.
+
+| Class | The article states |
+| --- | --- |
+| `chartable` | at least `visuals.min_chart_points` distinct quantities sharing a unit |
+| `narrative` | no quantity at all |
+| `unclassified` | quantities, but no unit shared widely enough |
+
+**Distinct quantities per unit, because a bar chart cannot draw the same figure
+twice.** `visual_planner.same_unit_bars` groups the chosen bars by unit and the
+bars are distinct by construction, so counting a repeated figure here would call
+an article chartable that no planner could ever draw - and the rate built on it
+would carry that gap for ever while claiming to measure the planner. The empty
+unit is a group like any other, which is the reading `chart_is_reachable`
+already takes.
+
+**This is not `chart_is_reachable` and is not meant to be.** That function asks
+whether a chart could survive the planner's own drops - the sixteen-fact cap and
+the floor under a magnitude of two. This asks what the article states. The gap
+between the two answers is what `extractable_but_unused_rate` reports
+([evaluation.md](../../concepts/evaluation.md)), so closing it here would delete
+the measurement.
+
+**Three classes, and it will say three until the diagram plan lands.**
+`comparative` and `processual` are claims about how an article is written rather
+than about its numbers, so no query here can reach them. Anything reporting per
+class names three and says so.
+
+**The threshold is `visuals.min_chart_points` and not a second knob** (Rule #6).
+Mint one and the console can call an article chartable while the planner refuses
+to draw it, and the rate then measures two knobs drifting apart rather than
+measuring the planner.
+
+**Where the three cells go.** `elements.extraction_health(article, ...)` is the
+one caller in the run: it is called from `telemetry.classify_item`, which builds
+the item-health census row, and it writes `span_integrity`, `elements_found` and
+`element_class` on that row. It lands there rather than beside the visual
+decision because two writers append that ledger and the earlier one runs in the
+`work` job, hours before a plan exists - `append_item_health` keeps the first row
+for a key, so a cell only `assemble` could fill would be empty for every item a
+shard had already recorded. `ElementClass` is declared in
+[`backend/idhazh/contracts/item_health.py`](../../../backend/idhazh/contracts/item_health.py)
+with the census row's other three closed vocabularies, because
+`contracts/element.py` sits above `contracts/article.py`, which sits above that
+module, and a label a census row persists has to be declared at or below the
+row's own level.
+
+**Counts and a label cross, never article text.** `span_excerpt` stays inside
+the process that cut it (`CLAUDE.md` section 0a), and the browser-safe telemetry
+projection is untouched: the console reads the day's totals from the day record,
+one file per date, rather than three more cells on every published row for ever.
+
 **`elements` is capped and `candidates_found` is not.** How many candidates a
 producer keeps is a tunable (`elements.max_per_article`, 256), so the length of
 `elements` saturates. Read a density signal off it and a 600-word note carrying
@@ -254,8 +310,9 @@ callers want opposite dispositions out of one answer.
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| Write time | `element_table()` | Raises. The pass cut every excerpt out of the string it hashed moments earlier, so a mismatch is its own arithmetic being wrong and every article in the run has it |
+| Write time | `element_table()` | Raises `SpanDriftError`. The pass cut every excerpt out of the string it hashed moments earlier, so a mismatch is its own arithmetic being wrong and every article in the run has it |
 | Read time | a consumer holding a table it did not build | Records the reason against that item and moves to the next. No sibling changes |
+| Census | `elements.extraction_health()`, through `telemetry.classify_item` | Catches `SpanDriftError` and writes `span_integrity=false` on that item's row. The item degrades, the run continues, and `span_integrity_rate` is what makes the refusal visible |
 | CI | `backend/tests/test_elements.py`, `backend/tests/test_contracts.py` | The nine bounded fixtures re-slice against their own text; a built run of five items with one text moved by a character degrades exactly one |
 
 The write-time half is what makes the one-hash-per-article decision mechanical:
@@ -268,16 +325,20 @@ any text, so the pre-cap body is one wrong argument away - and plan 11's
 producers risk it on every article, because there a model proposes the location
 and code cuts at it.
 
-**"Read time" is the moment a consumer reads a table it did not build, and there
-is no such consumer today.** Nothing writes an element table to disk and no
-stage builds one: rows 1 to 3 kept the pass a pure function over one payload on
-purpose, and `span_excerpt` is article body text, which no published payload may
-carry (`CLAUDE.md` section 0a). So the check is a function the consumer calls
-against the text it already holds - a later stage in the same run, or a payload
-from an earlier run if one ever lands - and it is correct for both, because it
-takes the text as an argument and reads nothing else. It is deliberately not
-wired into `backend/idhazh/cli.py`: wiring it in would mean inventing the stage
-it protects.
+**"Read time" is the moment a consumer reads a table it did not build, and
+there is still no such consumer.** Nothing writes an element table to disk:
+`span_excerpt` is article body text, which no published payload may carry
+(`CLAUDE.md` section 0a), so the pass stays a pure function over one payload and
+the check is a function a later stage calls against the text it already holds.
+It is correct for that and for a payload from an earlier run if one ever lands,
+because it takes the text as an argument and reads nothing else.
+
+**What the run does call is `extraction_health`, and it is a third disposition
+rather than a fourth invariant.** It builds the table for one article, catches
+`SpanDriftError`, and turns the answer into three cells on that article's
+item-health row. A shape refusal is deliberately not caught: a payload the
+contract will not hold is failing for every article that took the same path, and
+a rate that swallowed it would report the run as healthy.
 
 **It re-slices every span rather than comparing `source_text_hash` first, and
 the measurement is the reason.** The hash covers the whole article and the
@@ -290,7 +351,7 @@ the text, spread 1.12-1.33 and 1.77-1.87 over 9 runs of 2,000. At the ceiling of
 38.28-53.99 and 41.27-47.17 over 9 runs of 500. So a hash short-circuit would be
 a second code path that costs more than the work it skips, on every article for
 ever. `source_text_hash` keeps its own job: it says which string this table is
-about, which is what row 5's `span_integrity_rate` reports against.
+about, which is what `span_integrity_rate` reports against.
 
 **What it answers, and the two things it does not.** It answers whether every
 span still cuts its own characters. It does not answer whether the table is

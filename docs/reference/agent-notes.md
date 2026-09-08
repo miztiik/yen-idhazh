@@ -2599,6 +2599,22 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   ran last is what is on disk: rebuild the real site before any byte reading, and
   rebuild the canary before any suite run.
 
+- **The canary's day-metrics record is written before the ledgers it reduces, so
+  every panel fed from those ledgers shows its empty state on the canary and
+  nowhere else.** `build_canary_day.py` calls `publish_day_metrics.publish` at
+  the end of its own run, and `build-canary.mjs` writes
+  `state/item-health/*.csv` afterwards - so the record is reduced from a ledger
+  that does not exist yet. `build_canary_day.py` says so in its own comment for
+  `throughput` and `stage_timing`, and the same is true of the `extraction`
+  block added 2026-09-08. It reads exactly like a panel that fails to render its
+  data, and it is a build order. To see the loaded state, patch the block into
+  `backend/var/canary/state/day-metrics/<Y>/<M>/<D>.json` by hand, re-run
+  `npm run build:canary`, and put the file back afterwards - the tree is
+  gitignored, so nothing of it can be committed by accident. **Two traps sit on
+  top of that check**: the served page comes from the service worker until you
+  unregister it, and a preview server dies when its build directory is rewritten
+  underneath it, so restart the preview on a new port after every rebuild.
+
 - **`build_canary_day.py` used to append to the canary ledgers instead of
   replacing them.** Running it a second time doubled every feed-health row, and
   by the fifth run `canary-gone` had five failures, crossed

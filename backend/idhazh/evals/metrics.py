@@ -473,6 +473,53 @@ def speculative_density(source: str) -> float:
     return _density(_SPECULATIVE, source)
 
 
+# --- the two that score the run rather than a summary ------------------------
+#
+# Everything above reads one summary or one article. These two read a day's own
+# counts, and they belong here for the reason the two densities do: model-free
+# arithmetic that says whether the pipeline is still doing its job. They are not
+# scorers, no eval-ledger column carries them, and `METRICS_VERSION` does not
+# move for them - the same reason it did not move for `self_repetition`,
+# `compression` or `new_fact_rate`.
+#
+# Both return `None` on an empty denominator. A rate over nothing is not zero:
+# zero is a day where every chartable article went undrawn, and a day with no
+# chartable article on it is a different fact.
+
+
+def extractable_but_unused_rate(
+    *, chartable_published: int, chartable_charted: int
+) -> float | None:
+    """Of the published articles whose numbers could have made a chart, how many got none.
+
+    The one number that separates a planner regression from an extractor that
+    started missing numbers. Without it the two are the same fall in published
+    charts, and they have different fixes: this rising means the planner is
+    passing over material it was given, and `DayExtraction.chartable` falling
+    instead means the pass stopped finding the material at all.
+
+    Keyword-only because both arguments are counts of the same kind, and a
+    positional call that swapped them would return a plausible rate.
+    """
+    if chartable_published <= 0:
+        return None
+    return (chartable_published - chartable_charted) / chartable_published
+
+
+def span_integrity_rate(*, items: int, passed: int) -> float | None:
+    """Of the articles the candidate pass ran on, how many re-sliced every span.
+
+    The reporting half of the span-drift invariant
+    (`docs/architecture/extraction/elements.md`). A span that stopped pointing
+    where it did degrades that one item and never the build, so this is what
+    makes the refusal visible: nothing else would show a run whose own
+    arithmetic had broken on every article.
+    """
+    if items <= 0:
+        return None
+    return passed / items
+
+
 def scorer_version(
     *, scorer_id: str, scorer_revision: str, weights_sha256: str, evaluation: EvaluationConfig
 ) -> str:

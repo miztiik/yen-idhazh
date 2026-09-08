@@ -150,6 +150,17 @@ export interface SummarizeConfig {
 	bands: SummaryBand[];
 }
 
+/** The one visuals knob a console panel prints.
+ *
+ * How many separate figures of one unit an article has to state before a chart
+ * could be drawn from it. The extraction panel names it, and the same value
+ * decides the `chartable` class in `backend/idhazh/elements.py`, so a reader of
+ * the panel and the pass being reported cannot disagree about the floor.
+ */
+export interface VisualsConfig {
+	min_chart_points: number;
+}
+
 export interface ConsoleConfig {
 	default_window_days: number;
 	/** The spans the window control offers, ascending. `default_window_days` is
@@ -309,6 +320,7 @@ const RUN_DEFAULTS: RunConfig = {
 	safety_ceiling_per_run: 80,
 	shard_timeout_minutes: 200
 };
+const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
 const INFERENCE_DEFAULTS: InferenceConfig = { n_ctx: 8192 };
 const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
 // The same three values `ObservabilityConfig` declares in the contract, so a
@@ -415,6 +427,7 @@ interface RawConfig {
 	console?: Partial<ConsoleConfig>;
 	assist?: Partial<AssistConfig>;
 	observability?: Partial<ObservabilityConfig>;
+	visuals?: Partial<VisualsConfig>;
 	models?: { inference?: Partial<InferenceConfig> };
 }
 
@@ -619,6 +632,17 @@ export function archiveWindowDays(): number {
 
 export function runConfig(): RunConfig {
 	return { ...RUN_DEFAULTS, ...(raw().run ?? {}) };
+}
+
+/** The visual planner's floor, and only that.
+ *
+ * One knob rather than the whole `visuals` block, because whatever this returns
+ * is inlined into the prerendered console: `min_chart_points` is the only
+ * visuals value a panel prints, and it prints it because a threshold stated in
+ * prose and set in config drifts apart the first time the config moves.
+ */
+export function visualsConfig(): VisualsConfig {
+	return { min_chart_points: raw().visuals?.min_chart_points ?? VISUALS_DEFAULTS.min_chart_points };
 }
 
 export function inferenceConfig(): InferenceConfig {
