@@ -57,7 +57,7 @@ discover. All are folded in. The five that would have cost the most:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Measure the migrated tree and the two wire costs | - | A | PENDING | - | - | - |
 | 2 | The parcel carries the day, not the archive | - | A | LANDED | - | #523 | worker |
-| 4 | One verification call, and it is the one that assigns | - | A | IN-FLIGHT | yi-s04-verify | - | worker |
+| 4 | One verification call, and it is the one that assigns | - | A | IN-FLIGHT | yi-s04-verify | #524 | worker |
 | 5 | Stage only what changed | - | A | IN-FLIGHT | yi-s05-stage | - | worker |
 | 3 | Rebuild only when the push was rebased | 2 | B | PENDING | - | - | - |
 | 6 | Bound the eleven archive reads | - | B | PENDING | - | - | - |
