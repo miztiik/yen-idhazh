@@ -91,7 +91,7 @@ from idhazh.contracts.qualification import (
     corpus_digest,
 )
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
-from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
+from idhazh.contracts.run_plan import PlannedItem, PublishedAgeBand, RunPlan, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import FeedDef
@@ -436,12 +436,34 @@ def stage_plan(
         state, date, _first_sights(candidates, first_seen, generated_at, run_id)
     )
     ledger.append_health(state, date, health)
-    already_published = frozenset(ledger.load_published(state))
+    published_on = ledger.load_published(state)
+    already_published = frozenset(published_on)
     settled_today = frozenset(
         ledger.load_settled_failures(state, date, codes=collect.settled_failure_codes)
     )
+    # What the guard refused this run, and how old it was. The ledger's own size
+    # says nothing about either: it counts every address ever published, and all
+    # but a handful of those were never offered again. Only the overlap with what
+    # the feeds offered today is the guard firing.
+    #
+    # The ages travel with the count because the count alone cannot answer the
+    # question the unwindowed read is defended on - whether a cover of a given
+    # width would have let any of these through. Both land on the plan payload,
+    # so a later run can read what this one refused; this log line is stderr and
+    # nothing commits stderr.
+    planned_desks = {vertical.id for vertical in settings.taxonomy.verticals}
+    offered = {item.url_key for item in candidates if item.vertical in planned_desks}
+    run_day = date_type.fromisoformat(date)
+    refused_ages = sorted(
+        max(0, (run_day - date_type.fromisoformat(published_on[url_key])).days)
+        for url_key in offered & already_published
+    )
     LOG.info(
-        "addresses this run will not plan published=%s settled_today=%s",
+        "already-published guard refused=%s of offered=%s oldest_days=%s ledger=%s "
+        "settled_today=%s",
+        len(refused_ages),
+        len(offered),
+        refused_ages[-1] if refused_ages else "none",
         len(already_published),
         len(settled_today),
     )
@@ -591,6 +613,8 @@ def stage_plan(
         feeds_read=read,
         feeds_failed=failed,
         feeds_skipped=skipped,
+        dropped_published=len(refused_ages),
+        dropped_published_ages=PublishedAgeBand.histogram(refused_ages),
         verticals=verticals,
         items=items,
     )

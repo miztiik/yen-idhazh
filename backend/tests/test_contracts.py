@@ -75,7 +75,13 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.run_manifest import ModelRole, RunManifest, VerticalCount
-from idhazh.contracts.run_plan import RunPlan, TimeSource, VerticalPlan
+from idhazh.contracts.run_plan import (
+    PUBLISHED_AGE_BANDS,
+    PublishedAgeBand,
+    RunPlan,
+    TimeSource,
+    VerticalPlan,
+)
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.sources import Sources
@@ -1455,6 +1461,59 @@ def test_a_plan_may_not_spell_the_count_twice() -> None:
     """
     with pytest.raises(ValidationError):
         VerticalPlan.model_validate(desk(eligible_feeds=9))
+
+
+def bare_plan(**extra: Any) -> dict[str, Any]:
+    """The smallest plan payload that validates, for the fields under test."""
+    return {
+        "date": "2026-08-21",
+        "run_id": "2026-08-21-1",
+        "generated_at": "2026-08-21T06:00:04Z",
+        **extra,
+    }
+
+
+def test_a_plan_written_before_the_guard_was_counted_reads_as_unknown() -> None:
+    """Null is unknown, never a run where the guard refused nothing.
+
+    A zero would say this run was offered addresses the ledger held and refused
+    none of them, which is a measurement. A payload written before anything
+    counted cannot make it, and inventing one is how an unread number turns into
+    an argument about how wide the cover should be.
+    """
+    built = RunPlan.model_validate(bare_plan())
+    assert built.dropped_published is None
+    assert built.dropped_published_ages is None
+
+
+def test_the_guard_count_and_its_bands_are_recorded_together() -> None:
+    """Either half alone reads as a measurement while being unable to support one."""
+    bands = [band.model_dump(mode="json") for band in PublishedAgeBand.histogram([1, 200])]
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(dropped_published=2))
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(dropped_published_ages=bands))
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(dropped_published=3, dropped_published_ages=bands))
+
+
+def test_every_declared_band_is_written_and_a_short_histogram_is_refused() -> None:
+    """An absent band and a band holding nothing are different answers.
+
+    Dropping the empty ones would shorten the payload and lose the finding.
+    Measured 2026-09-08 on an Intel Core i7-1265U, over the ledger as it stood at
+    the end of 2026-09-07: its 7,600 rows span 16 published days, 2026-08-23 to
+    2026-09-07, so every band from 30 days on is a measured zero on every run
+    today - and that zero is why nobody can yet say what a finite cover would
+    cost.
+    """
+    bands = PublishedAgeBand.histogram([0, 1, 200])
+    assert [(band.from_days, band.to_days) for band in bands] == list(PUBLISHED_AGE_BANDS)
+    assert [band.addresses for band in bands] == [1, 1, 0, 0, 0, 1, 0]
+
+    short = [band.model_dump(mode="json") for band in bands if band.addresses]
+    with pytest.raises(ValidationError):
+        RunPlan.model_validate(bare_plan(dropped_published=3, dropped_published_ages=short))
 
 
 def test_a_manifest_written_before_the_floor_was_recorded_reads_as_unknown() -> None:
