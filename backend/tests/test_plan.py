@@ -757,6 +757,7 @@ def test_a_published_address_is_never_planned_again() -> None:
     ran = first.items[0]
     ledger.append_published(
         state,
+        DATE,
         [
             PublishedRow(
                 version=PublishedRow.schema_version(),

@@ -3106,7 +3106,7 @@ def stage_assemble(
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(STATE_ROOT, rows)
     stamps = append_new(FINGERPRINTS, _stamps(items_dir))
-    published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
+    published = ledger.append_published(STATE_ROOT, day.date, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
     publish_telemetry.publish(
         state_root=STATE_ROOT,
