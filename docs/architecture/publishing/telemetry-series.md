@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -12,16 +12,22 @@ never read `state/item-health/` directly.
 `frontend/public/telemetry/<YYYY-MM>.csv`. The browser fetches these monthly
 shards on demand as the operator pans the viewport.
 
-**This is a month partition, and it is the one in the tree that is not yet
-frozen.** The pattern - what closes a partition, and what a correction, a
-deletion or a late arrival does to a closed one - is
-[../../concepts/month-partitions.md](../../concepts/month-partitions.md). This
-writer does not honour it yet: `publish` globs `state/item-health/` and rewrites
-every month it finds, on every run, so an ordinary run pays for every month the
-project has ever published. That is finding 11 of
-[../../reference/data-growth-audit.md](../../reference/data-growth-audit.md).
-The shard is also deliberately not `merge=union` - it is a full rewrite of the
-source month, so a union of two rewrites is a file with every row twice.
+**This is a month partition, and it now honours the freeze rule.** The pattern -
+what closes a partition, and what a correction, a deletion or a late arrival does
+to a closed one - is
+[../../concepts/month-partitions.md](../../concepts/month-partitions.md). Two
+freezes compose. `publish` writes only the months a caller names as changed - a
+month outside that set is skipped without being read, unless its shard is missing
+on a fresh checkout - and `_write_if_changed` then writes a named month only when
+its projected bytes differ from the committed shard. So a re-run with no new data
+writes no shard, and a run that adds one day rewrites that day's month and no
+other. That closed finding 11 of
+[../../reference/data-growth-audit.md](../../reference/data-growth-audit.md) (row
+19 of the constant-cost-reads plan, #484); before it, `publish` globbed
+`state/item-health/` and rewrote every month it found on every run, so an
+ordinary run paid for every month the project had ever published. The shard is
+still a full rewrite of the source month, never `merge=union` - a union of two
+rewrites is a file with every row twice.
 
 The published columns are exactly:
 
