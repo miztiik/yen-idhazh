@@ -46,6 +46,20 @@ state/**/*.csv text eol=lf merge=union
 # the union brings twice costs bytes and never moves a publication date.
 state/published/**/*.csv text eol=lf merge=union
 
+# The cleanup record's day tree, named for the same reason the line above it is
+# named. The catch-all would already cover it; inheriting a merge rule nobody
+# chose is the thing being refused, not the rule itself.
+#
+# `merge=union` is right here too, and the reason is this ledger's own rather
+# than the neighbour's. A row is one cleanup pass by one run - what it found,
+# what it took, what the fuse held back - and no pass says anything about
+# another, so two runs of the same day that both append are not in disagreement.
+# A repeat the union brings costs bytes and moves no count:
+# `ledger.append_visual_prunes` settles the day file against `VISUAL_PRUNE_KEY`,
+# which is `(date, run_id)`, so a second row for one run is dropped and the
+# first is kept.
+state/visual-prunes/**/*.csv text eol=lf merge=union
+
 # The training window. Deliberately NOT `merge=union`: it is a rolling window
 # rather than an append-only ledger, so the union of two rolls is a file that
 # holds evicted rows again and exceeds `finetune.corpus_rows`. The harvest

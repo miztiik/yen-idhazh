@@ -2863,7 +2863,7 @@ def _clean_the_visuals(
     """
     result = retention.prune(digest_root, config, today, dry_run=dry_run)
     row = retention.prune_row(result, config, date_stamp=today.isoformat(), run_id=run_id)
-    landed = ledger.append_visual_prunes(state_dir, [row])
+    landed = ledger.append_visual_prunes(state_dir, row.date, [row])
     LOG.info(
         "visual cleanup%s: %s candidates older than %s, %s deleted, %s held back by the "
         "%s-file fuse, %s bytes reclaimed, oldest picture still kept %s (%s row)",
