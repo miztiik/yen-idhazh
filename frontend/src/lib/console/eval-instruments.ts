@@ -223,6 +223,23 @@ export interface EvalDay {
 	fired: Readonly<Record<string, number>>;
 }
 
+/** The distinct-published counts a run settled for one day.
+ *
+ * The three figures a re-score or a scored-then-dropped item would inflate if
+ * counted off the ledger rows, so they are counted over the day's published set
+ * once, at publication, and read back here. Keyed by date in the map `evalDays`
+ * and `modelWork` take. Defined in the console layer both reducers already reach,
+ * so neither has to import a server type to name the shape it is handed.
+ */
+export interface DayScoredCounts {
+	/** Distinct published items the checker scored - replaces the row count. */
+	scored: number;
+	/** Of those, the ones whose identical inputs produced different words. */
+	determinismViolations: number;
+	/** Of those, the ones whose source read like page furniture. */
+	extractionSuspect: number;
+}
+
 /** A cell that is present and reads as a number, or null.
  *
  * An absent cell and a cell holding a blank are the same fact - the checker did
@@ -274,10 +291,24 @@ function perThousand(value: number): number {
  * module variable is how two of those three end up counting against a different
  * number without anything failing.
  *
+ * `counts` carries the distinct-published counts a run settled for a day, keyed
+ * by date. Where a day is present, the three published-set figures - the scored
+ * count and the two flag counts - are taken from it instead of counted off the
+ * ledger rows: the ledger dedupes by measurement, so a re-scored item keeps two
+ * rows and a scored-then-dropped item keeps one, and either runs the row count
+ * high. Every measurement distribution beside them still reads every row, so a
+ * re-score still counts twice in a median where it belongs. Omitted, the counts
+ * come off the rows exactly as before, which is what the browser oracle and the
+ * shared console layout pass.
+ *
  * Rows carrying no date are dropped rather than pooled into an empty day: a
  * ledger row with no day is a broken row, and giving it a column would draw it.
  */
-export function evalDays(rows: readonly EvalInput[], leadFloor: number): EvalDay[] {
+export function evalDays(
+	rows: readonly EvalInput[],
+	leadFloor: number,
+	counts?: ReadonlyMap<string, DayScoredCounts>
+): EvalDay[] {
 	const byDate = new Map<string, EvalInput[]>();
 	for (const row of rows) {
 		const date = (row.date ?? '').trim();
@@ -324,6 +355,15 @@ export function evalDays(rows: readonly EvalInput[], leadFloor: number): EvalDay
 
 		match.sort((a, b) => a - b);
 		lead.sort((a, b) => a - b);
+		// The published-set counts, where a run settled them. A flag fires on a
+		// distinct published item, not on a ledger row, so a re-scored day counts
+		// it once here even though its two rows still both enter the distributions
+		// above. Absent, the row counts stand exactly as they did.
+		const settled = counts?.get(date);
+		if (settled !== undefined) {
+			fired.determinism_violation = settled.determinismViolations;
+			fired.extraction_suspect = settled.extractionSuspect;
+		}
 		const recorded: Record<string, number | null> = {};
 		for (const instrument of RECORDED) {
 			const values = (recordedValues.get(instrument.id) ?? []).sort((a, b) => a - b);
@@ -337,7 +377,11 @@ export function evalDays(rows: readonly EvalInput[], leadFloor: number): EvalDay
 
 		days.push({
 			date,
-			scored: group.length,
+			// The distinct-published count where the run settled one, the ledger-row
+			// count otherwise. A re-scored item keeps two rows and a scored-then-
+			// dropped item keeps one, so the row count is not the count of summaries
+			// the day published (backend/idhazh/publish_day_metrics.py).
+			scored: settled?.scored ?? group.length,
 			matched: match.length,
 			matchLow: match.length === 0 ? null : pct(at(match, 0.25)),
 			matchMid: match.length === 0 ? null : pct(at(match, 0.5)),

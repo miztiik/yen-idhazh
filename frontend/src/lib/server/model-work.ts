@@ -32,6 +32,11 @@ import {
 	type WriteBin
 } from '../charts/series';
 import type { MovementPolarity } from '../charts/theme';
+// Type-only, so it is erased and the browser suite still loads this module in
+// plain Node with no alias to resolve. `DayScoredCounts` lives in the console
+// layer both reducers reach, so the server one borrows it rather than the
+// console importing a server type back the other way.
+import type { DayScoredCounts } from '../console/eval-instruments';
 import type { SummaryBand } from './config';
 
 /** The ledger stamp from which `truncation_flagged` means extract cut the body.
@@ -210,7 +215,8 @@ export function doubted(row: Record<string, string>): boolean {
 function day(
 	date: string,
 	scores: Record<string, string>[],
-	health: Record<string, string>[]
+	health: Record<string, string>[],
+	counts?: ReadonlyMap<string, DayScoredCounts>
 ): ModelDay {
 	const scored = scores.length > 0;
 	const times = summarizeMs(health);
@@ -222,9 +228,16 @@ function day(
 	const cutKnown = scores.filter((row) => (row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM);
 	const readInPart =
 		cutKnown.length === 0 ? null : cutKnown.filter((row) => flag(row.truncation_flagged)).length;
+	const settled = counts?.get(date);
 	return {
 		date,
-		summaries: scored ? scores.length : null,
+		// The distinct-published count where the run settled one, the ledger-row
+		// count otherwise. A re-scored item keeps two rows and a scored-then-
+		// dropped item keeps one, so the row count runs high on a day either
+		// happened; the record counts the published set once
+		// (backend/idhazh/publish_day_metrics.py). Null still means the scorer
+		// never ran, which a count of zero cannot say.
+		summaries: scored ? (settled?.scored ?? scores.length) : null,
 		notSure: count((row) => row.band === 'low'),
 		unsupportedNumbers: count((row) => (measured(row.unsupported_numbers) ?? 0) > 0),
 		hedgeDropped: count((row) => flag(row.hedge_dropped)),
@@ -266,25 +279,48 @@ function withSwaps(days: ModelDay[]): ModelRow[] {
 	return rows;
 }
 
+/** Every date `modelWork` gives a row, newest first.
+ *
+ * The day list on its own, without the per-day reduction behind it, so a caller
+ * can size the window it will read day records for before it builds the rows
+ * that now read them. It shares its rule with `modelWork` - a day earns a place
+ * by holding a score row or a summarize timing - so the two can never name a
+ * different set of days.
+ */
+export function workDates(
+	scores: Record<string, string>[],
+	health: Record<string, string>[]
+): string[] {
+	const ran = [...byDate(health).entries()]
+		.filter(([, rows]) => summarizeMs(rows).length > 0)
+		.map(([date]) => date);
+	return [...new Set([...byDate(scores).keys(), ...ran])].sort().reverse();
+}
+
 /** One row per day the model worked, newest first.
  *
  * A day earns a row by having summaries: score rows, or a runtime that timed
  * the summarize stage. A day the pipeline found no article on gets no row at
  * all, because a row of zeroes reads as a day that went badly rather than a day
  * with nothing in it.
+ *
+ * `counts` carries the distinct-published count a run settled for each day,
+ * keyed by date. Where a day is present its summaries count is read from it
+ * rather than off the ledger rows; omitted, the row count stands as it did. The
+ * page hands in the counts for the days its window reaches; the shared layout
+ * and the tests omit them.
  */
 export function modelWork(
 	scores: Record<string, string>[],
-	health: Record<string, string>[]
+	health: Record<string, string>[],
+	counts?: ReadonlyMap<string, DayScoredCounts>
 ): ModelRow[] {
 	const scored = byDate(scores);
 	const worked = byDate(health);
-	const ran = [...worked.entries()]
-		.filter(([, rows]) => summarizeMs(rows).length > 0)
-		.map(([date]) => date);
-	const dates = [...new Set([...scored.keys(), ...ran])].sort().reverse();
 	return withSwaps(
-		dates.map((date) => day(date, scored.get(date) ?? [], worked.get(date) ?? []))
+		workDates(scores, health).map((date) =>
+			day(date, scored.get(date) ?? [], worked.get(date) ?? [], counts)
+		)
 	);
 }
 

@@ -33,7 +33,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import config, publish_source_health
+from idhazh import config, publish_day_metrics, publish_source_health
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
@@ -1036,6 +1036,19 @@ def main() -> int:
     checks = health(args.state)
     census = source_health(args.out.parent)
     scored = scores(args.state, day.items, evaluation)
+    # The day record the console now reads its per-day counts back from, written
+    # by the same producer the pipeline's publication step calls - one writer, so
+    # the fixture record is built exactly as a real one is (Fowler). The attack
+    # day's score rows are on disk from `scores(...)` above; this date's
+    # item-health is owned by `build-canary.mjs` and is not written yet, so the
+    # record carries no throughput and no stage timing - neither of which the
+    # console reads from it. The distinct-published counts it does read are
+    # settled from the day payload and those score rows, and on this fixture every
+    # scored item was published exactly once, so they equal the ledger counts and
+    # the console draws the same numbers the record and the rows both hold.
+    metrics_path = publish_day_metrics.publish(
+        state_root=args.state, date=DATE, day=day, manifest=runs
+    )
     # Every writer of a committed day payload owes its month a rebuild
     # (docs/architecture/publishing/layout.md). The archive browses this tree in
     # the browser suite, so without the rebuild it would show days and no
@@ -1058,6 +1071,7 @@ def main() -> int:
         f"{census} sources"
     )
     print(f"wrote {writer.ledger_path(args.state, DATE).as_posix()}: {scored} scored items")
+    print(f"wrote {metrics_path.as_posix()}: 1 day-metrics record")
     print(
         f"wrote {index_root.as_posix()}: {len(indexed)} month(s), "
         f"{sum(len(index.entries) for index in indexed)} entries"
