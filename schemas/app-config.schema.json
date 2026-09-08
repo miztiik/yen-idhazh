@@ -464,6 +464,21 @@
       "title": "DriftConfig",
       "type": "object"
     },
+    "ElementsConfig": {
+      "additionalProperties": false,
+      "description": "How many candidate elements one article's passes may keep.\n\nA bound on work, never a judgement about which figures matter. The\ncandidate pass keeps every quantity the number pattern matched, in the\norder the article wrote them, and this is the only thing that removes any\nof them - so `ElementTable.candidates_found` ships beside the table and\nsays what the pass matched before this cap applied.",
+      "properties": {
+        "max_per_article": {
+          "default": 256,
+          "description": "Candidate elements kept per article. Sized against the truncation cap rather than guessed: at 5000 tokens an article body holds about 3,846 words, and the densest committed page fixture carries 9.2 quantities per 1000 characters, which is about 211 over a body that long (measured 2026-09-08 on tests/fixtures/pages and tests/fixtures/canaries). It is 16 times visuals.max_facts because that one is a menu a small model reads by index and this one is a fact table nothing has to read at once.",
+          "minimum": 1,
+          "title": "Max Per Article",
+          "type": "integer"
+        }
+      },
+      "title": "ElementsConfig",
+      "type": "object"
+    },
     "EvaluationConfig": {
       "additionalProperties": false,
       "properties": {
@@ -1861,6 +1876,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "elements.max_per_article added, defaulting to 256 and at least 1. It bounds how many candidate elements one article's passes keep. Additive and optional with a default, so a config written before the section existed loads and behaves the same.",
+      "version": "2026-09-08",
+      "why": "The candidate pass keeps every quantity the number pattern matched, where the visual planner's own reader stops at 16, dedupes and drops. A pass with no bound at all is an unbounded table over fetched bytes (Rule #11), and a bound written into code is a tunable with no home (Rule #6). 256 is measured rather than guessed: it is above the densest committed page fixture extrapolated to an article at the truncation cap."
+    },
+    {
       "change": "collect.published_window_days added, defaulting to -1 for unbounded. A finite value must be strictly greater than collect.seen_window_days; -1 or anything above 90 is accepted today and everything else, including 90 itself, is refused by name. The check sits on CollectConfig after validation, so raising seen_window_days past a finite cover fails the config too. Nothing reads the knob yet. Additive and optional with a default, so no read-side migration is needed - a config written before the field existed takes -1 and behaves exactly as it did.",
       "version": "2026-09-07T03:00",
       "why": "The published record is about to gain a lookback window, and the one mistake that window can make is a republication: an address the record has forgotten, whose first-sighting row expires in the same week, reads as first-seen-today and goes out as new. Equal is a hole rather than a bound, because at 90 and 90 both stores forget the same address on the same day and neither is left holding the evidence. The knob ships unbounded so the machinery lands switched off, and the schema is what makes the unsafe pairing unspellable rather than a comment asking an operator to be careful."
@@ -2348,6 +2368,9 @@
     "drift": {
       "$ref": "#/$defs/DriftConfig"
     },
+    "elements": {
+      "$ref": "#/$defs/ElementsConfig"
+    },
     "evaluation": {
       "$ref": "#/$defs/EvaluationConfig"
     },
@@ -2382,7 +2405,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-07T03:00",
+      "default": "2026-09-08",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2396,5 +2419,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-07T03:00"
+  "version": "2026-09-08"
 }

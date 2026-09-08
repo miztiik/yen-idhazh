@@ -50,11 +50,20 @@ still holds them, so nothing stores a second copy of the reader's sentence.
 Six kinds land here and two of them have a producer. A kind with no producer is
 legal and simply never appears, which is cheaper than widening a persisted shape
 four more times.
+
+**`elements` is capped and `candidates_found` is not, and that is the point.**
+How many candidates a producer keeps is a tunable, so the length of `elements`
+saturates. A density signal read off a saturating counter cannot tell a short
+note carrying a few figures from a data story carrying many, and it fails
+silently because a capped counter still returns a plausible integer. The count
+is taken before any dedupe and before the cap, one per kind, and the shape
+refuses a table that kept more of a kind than it says it found.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
 from enum import StrEnum
 from typing import Annotated, ClassVar, Final, Self
 
@@ -88,13 +97,19 @@ DATE_OR_YEAR_PATTERN: Final = r"^\d{4}(?:-\d{2}-\d{2})?$"
 
 ElementId = Annotated[str, StringConstraints(pattern=ELEMENT_ID_PATTERN)]
 DateOrYear = Annotated[str, StringConstraints(pattern=DATE_OR_YEAR_PATTERN)]
+#: The two bounds a producer needs as numbers rather than as annotations. A
+#: pattern over fetched bytes can match a 200-digit serial number or a
+#: 600-character hyphenated word, and a producer that cannot read the bound has
+#: no way to refuse one except by letting the shape raise mid-article (Rule #11).
+VALUE_MAX_LENGTH: Final = 40
+UNIT_MAX_LENGTH: Final = 32
 #: The machine-readable reading of what the span says. Bounded because an
 #: unbounded string on a payload is a defect waiting for a malformed page.
-ElementValue = Annotated[str, StringConstraints(min_length=1, max_length=40)]
+ElementValue = Annotated[str, StringConstraints(min_length=1, max_length=VALUE_MAX_LENGTH)]
 #: Normalised: lowercase and de-pluralised, or a currency symbol, or `%`. What
 #: makes "these measure the same thing" a string comparison instead of a
 #: judgement.
-Unit = Annotated[str, StringConstraints(min_length=1, max_length=32)]
+Unit = Annotated[str, StringConstraints(min_length=1, max_length=UNIT_MAX_LENGTH)]
 #: Which model or person assigned the Tier 2 fields. A model id from the run
 #: manifest, or a labeller's name - never a free sentence.
 LabelSource = Annotated[str, StringConstraints(min_length=1, max_length=64)]
@@ -322,6 +337,26 @@ class ElementTable(Contract):
     __schema_stem__: ClassVar[str] = "element-table"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-08T12:00",
+            change=(
+                "candidates_found added and required, one count per kind, holding what "
+                "each pass matched before the cap. VALUE_MAX_LENGTH and UNIT_MAX_LENGTH "
+                "are exported so a producer can refuse what the shape will not hold."
+            ),
+            why=(
+                "`elements` is capped by a tunable, so its length saturates and a density "
+                "signal read off it cannot tell a 600-word note carrying 16 figures from "
+                "a 3,000-word data story carrying 60 - and the second is the chartable "
+                "one. It fails silently, because a capped counter returns a plausible "
+                "integer. Required rather than defaulted, because a default of zero is "
+                "indistinguishable from a pass that genuinely found nothing, which is the "
+                "same silent failure one level down; nothing had been persisted under the "
+                "previous shape, so the only payloads to move were the two committed "
+                "fixtures. Keyed by kind because a single total stops answering the "
+                "density question the moment a second pass writes into the same table."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-08",
             change=(
                 "Initial shape: six element kinds, a Tier 1 half only code writes and a "
@@ -363,11 +398,41 @@ class ElementTable(Contract):
             "is a tunable and lives in config, not in the shape."
         ),
     )
+    candidates_found: dict[ElementKind, int] = Field(
+        description=(
+            "How many candidates each pass matched, before any dedupe and before the "
+            "cap. `elements` saturates at the cap and this does not, so the two "
+            "together say whether the cap bit and by how much."
+        )
+    )
 
     @model_validator(mode="after")
     def _identity_is_rebuilt_not_trusted(self) -> Self:
         if self.url_key != derive_url_key(self.canonical_url):
             raise ValueError("url_key must be the sha256 of canonical_url, recomputed on read")
+        return self
+
+    @model_validator(mode="after")
+    def _a_kept_element_was_found_first(self) -> Self:
+        """The cap only ever removes, so a count below what survived it is impossible.
+
+        This is what stops `candidates_found` from becoming a second number
+        nobody checks. A pass that forgot to count before capping, or counted
+        the capped list, fails here rather than reporting a plausible integer.
+        """
+        kept = Counter(element.kind for element in self.elements)
+        for kind, count in kept.items():
+            found = self.candidates_found.get(kind)
+            if found is None:
+                raise ValueError(f"{self.item_id} kept {count} {kind.value} elements and counted 0")
+            if found < count:
+                raise ValueError(
+                    f"{self.item_id} kept {count} {kind.value} elements out of {found} found - "
+                    "a cap removes, so it cannot keep more than the pass matched"
+                )
+        for kind, found in self.candidates_found.items():
+            if found < 0:
+                raise ValueError(f"a pass cannot find {found} {kind.value} elements")
         return self
 
     @model_validator(mode="after")

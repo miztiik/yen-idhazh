@@ -26,6 +26,7 @@ from idhazh.contracts.app_config import InferenceConfig, VisualsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
+from idhazh.elements import MAGNITUDE, NOT_A_UNIT, NUMBER, PERCENT, normalise_unit
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import sanitize, untrusted_block
 
@@ -35,45 +36,6 @@ LOG: Final = logging.getLogger("idhazh")
 
 _THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
-
-# A number with optional thousands separators, an optional decimal part, an
-# optional magnitude word, and the one word that follows it. The leading
-# lookbehind excludes a hyphen so `COVID-19`, `GPT-4` and `Qwen3-4B` do not read
-# as quantities.
-_NUMBER = re.compile(
-    r"(?<![\w.-])"
-    r"(?P<currency>[$\u00a3\u20ac\u20b9]\s?)?"
-    r"(?P<sign>-)?"
-    r"(?P<value>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
-    r"\s*"
-    r"(?P<magnitude>percent|per cent|%|billion|bn|million|mn|thousand|trillion|tn)?"
-    r"\s*"
-    r"(?P<unit>[a-zA-Z][a-zA-Z-]*)?",
-    re.IGNORECASE,
-)
-
-# `m` and `k` are deliberately absent. The model never writes a number, but the
-# extractor does, and reading `15 m` as fifteen million is a one-million-fold
-# error on a published bar decided by a guess about metres.
-_MAGNITUDE: Final[dict[str, Decimal]] = {
-    "thousand": Decimal(1_000),
-    "million": Decimal(1_000_000),
-    "mn": Decimal(1_000_000),
-    "billion": Decimal(1_000_000_000),
-    "bn": Decimal(1_000_000_000),
-    "trillion": Decimal(1_000_000_000_000),
-    "tn": Decimal(1_000_000_000_000),
-}
-
-_PERCENT: Final[frozenset[str]] = frozenset({"percent", "per cent", "%"})
-
-# The word after a number is a unit only sometimes. These are the ones that
-# never are, so a quantity does not end up measured in "of".
-_NOT_A_UNIT: Final[frozenset[str]] = frozenset(
-    """a an and are as at be been before but by during for from had has have he her his in is it
-    its more most of on or over per said says she should such than that the their then there these
-    they this to under until up was we were what when which while who will with would you""".split()
-)
 
 # A number small enough to be a date, a count of paragraphs, or a list marker
 # carries no information as a bar. Charting them is how a chart becomes noise.
@@ -106,14 +68,6 @@ def _clean(chunk: str) -> str:
     return re.sub(r"\s+", " ", chunk).strip()
 
 
-def normalise_unit(unit: str) -> str:
-    """Lowercase and de-pluralised, so `Megawatts` and `megawatt` are one unit."""
-    lowered = unit.strip().lower()
-    if len(lowered) > 3 and lowered.endswith("s") and not lowered.endswith("ss"):
-        return lowered[:-1]
-    return lowered
-
-
 def _snap(text: str, start: int, end: int) -> str:
     """Widen a slice to whole words, so context never begins mid-word."""
     while start > 0 and not text[start - 1].isspace():
@@ -129,10 +83,13 @@ def numeric_facts(text: str, *, limit: int = 16) -> list[NumericFact]:
     Deduplicated on the value AND its unit, because twelve percent and twelve
     people are two facts, while the same figure repeated in a lead and a body
     paragraph is one.
+
+    The candidate table in `idhazh.elements` is the opposite trade and keeps
+    both. This one is picking a few bars, and that is what these drops are for.
     """
     facts: list[NumericFact] = []
     seen: set[tuple[Decimal, str]] = set()
-    for match in _NUMBER.finditer(text):
+    for match in NUMBER.finditer(text):
         digits = match.group("value")
         try:
             magnitude = Decimal(digits.replace(",", ""))
@@ -141,15 +98,15 @@ def numeric_facts(text: str, *, limit: int = 16) -> list[NumericFact]:
 
         suffix = (match.group("magnitude") or "").strip().lower()
         word = normalise_unit(match.group("unit") or "")
-        if word in _NOT_A_UNIT:
+        if word in NOT_A_UNIT:
             word = ""
 
         unit = ""
-        if suffix in _PERCENT:
+        if suffix in PERCENT:
             unit = "%"
         else:
-            if suffix in _MAGNITUDE:
-                magnitude *= _MAGNITUDE[suffix]
+            if suffix in MAGNITUDE:
+                magnitude *= MAGNITUDE[suffix]
             currency = (match.group("currency") or "").strip()
             unit = currency or word
 
