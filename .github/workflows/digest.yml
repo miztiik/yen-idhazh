@@ -1196,10 +1196,10 @@ jobs:
       # and is the one thing here that would cost a reader something it can see.
       # `retention.image_months` is -1, so nothing is ever a candidate and the
       # pass is a measurement of the backlog: it appends one row to
-      # `state/visual-prunes.csv` every run, carrying what it found and what the
-      # fuse would have held back. Switching that deletion on is plan 13's job
-      # and needs `frontend/public/digest` added to the commit call below, since
-      # `git add` records a removal only for a path it is handed.
+      # `state/visual-prunes/YYYY/MM/DD.csv` every run, carrying what it found
+      # and what the fuse would have held back. Switching that deletion on is
+      # plan 13's job and needs `frontend/public/digest` added to the commit call
+      # below, since `git add` records a removal only for a path it is handed.
       #
       # It also covers the trace prune, which joined this step on 2026-09-06 and
       # is a lookup like the seen prune above: a raw span trace an operator opens
@@ -1223,9 +1223,10 @@ jobs:
       # nor `state/score-archive/` exists until the first fold or the first
       # archive writes it, nor `state/traces/` until tracing is switched on.
       # `state` always does, and the day's own commit above
-      # has already taken everything else in it. `state/visual-prunes.csv` ships
-      # with its header committed so it is covered by the same call from the
-      # first run.
+      # has already taken everything else in it. `state/visual-prunes/` moved to
+      # a day tree on 2026-09-08, so a run writes a file that was not in the
+      # checkout it started from - staging `state` whole is what already reaches
+      # it, and is why that move needed nothing here.
       #
       # `frontend/public/telemetry` is named beside it because the fold deletes
       # the browser's copy of a month in the same step it folds the ledger, and

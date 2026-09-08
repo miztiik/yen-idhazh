@@ -2321,6 +2321,12 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
     its own even though the catch-all above it already matched: a collection
     that inherits a merge rule in silence has had that rule decided for it, and
     a new pattern arriving here without its own reason should fail.
+
+    `state/visual-prunes/**/*.csv` joined on 2026-09-08 when the cleanup record
+    became a day tree, and it is here because this test refused it first. Its
+    reason is its own rather than the neighbour's: a row is one pass by one run,
+    so two runs of a day that both append are not in disagreement, and a repeat
+    the union brings is dropped by `VISUAL_PRUNE_KEY`.
     """
     attributes = read_text(REPO_ROOT / ".gitattributes")
     unioned = {
@@ -2329,7 +2335,12 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
         if line and not line.startswith("#") and "merge=union" in line
     }
 
-    assert unioned == {"state/*.csv", "state/**/*.csv", "state/published/**/*.csv"}
+    assert unioned == {
+        "state/*.csv",
+        "state/**/*.csv",
+        "state/published/**/*.csv",
+        "state/visual-prunes/**/*.csv",
+    }
     assert not any(
         "telemetry" in pattern or pattern.startswith("frontend") for pattern in unioned
     )
@@ -2432,13 +2443,16 @@ def test_the_fold_stages_state_whole_because_two_of_its_stores_appear_late() -> 
     committing a header-only file; there is no header-only form of a directory,
     so the answer here is to stage `state`, which is always there.
 
-    `state/visual-prunes.csv` is the third store this call covers and it needs no
-    change here, because staging `state` whole already reaches it.
+    `state/visual-prunes/` is the third store this call covers and it needs no
+    change here either. It moved from a flat file to a day tree on 2026-09-08,
+    so a run now writes a path its own checkout did not carry - and staging
+    `state` whole already reaches it, which is why that move needed nothing in
+    this step.
     """
     staged = COMMIT_STAGED_PATHS["fold"]
 
     assert "state" in staged
-    assert ledger.visual_prunes_relpath().split("/")[0] in staged
+    assert ledger.visual_prunes_relpath(SUBSTITUTED_DATE).split("/")[0] in staged
     for late in ("telemetry-aggregate", "score-archive"):
         assert f"state/{late}" not in staged, f"state/{late} is not in a fresh checkout"
         assert not (REPO_ROOT / "state" / late).exists(), (

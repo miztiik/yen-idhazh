@@ -1,8 +1,10 @@
 """What one cleanup pass over the rendered visuals found, took, and left behind.
 
-`state/visual-prunes.csv`. One row per run of `idhazh prune-state`, appended
-after the day is committed. Read whole - "is the backlog shrinking" has no time
-bound - so it is one file rather than a directory of month shards
+`state/visual-prunes/YYYY/MM/DD.csv`. One row per run of `idhazh prune-state`,
+appended after the day is committed. Read whole - "is the backlog shrinking" has
+no time bound - so the day layout buys the read nothing, and it is there for what
+it buys a writer instead: two runs collide on a file only when they are the same
+day. `idhazh.ledger` owns that trade and states it
 (`docs/architecture/contracts/schemas.md`).
 
 **`skipped_by_fuse` is the field this row exists for.** `deleted` is capped by
