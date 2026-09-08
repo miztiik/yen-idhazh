@@ -1644,7 +1644,7 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
         fetcher=captured_article_fetch,
         model_endpoint=closed_loopback_endpoint(),
     )
-    recorded, _ = cli.stage_record(run_plan)
+    recorded, _ = cli.stage_record(run_plan, settings=settings)
 
     rows = health_rows(state, run_plan.date)
     assert recorded == len(rows) == len(run_plan.items)
@@ -1676,7 +1676,7 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
         fetcher=captured_article_fetch,
         model_endpoint=closed_loopback_endpoint(),
     )
-    cli.stage_record(run_plan)
+    cli.stage_record(run_plan, settings=settings)
     after_the_worker = health_rows(state, run_plan.date)
 
     cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
@@ -1709,10 +1709,10 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
         fetcher=captured_article_fetch,
         model_endpoint=closed_loopback_endpoint(),
     )
-    cli.stage_record(run_plan)
+    cli.stage_record(run_plan, settings=settings)
     after_one_run = committed.read_bytes()
 
-    replayed, _ = cli.stage_record(run_plan)
+    replayed, _ = cli.stage_record(run_plan, settings=settings)
 
     assert replayed == 0
     assert committed.read_bytes() == after_one_run
@@ -1802,7 +1802,7 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
         model_endpoint=closed_loopback_endpoint(),
     )
 
-    cli.stage_record(run_plan, shard=0, shards=2)
+    cli.stage_record(run_plan, settings=settings, shard=0, shards=2)
 
     mine = [item.item_id for item in cli.shard_of(run_plan, shard=0, shards=2)]
     assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == mine
@@ -1825,7 +1825,7 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     interrupted = run_plan.items[1]
     (items_dir / f"{interrupted.item_id}.summary.json").unlink()
 
-    recorded, _ = cli.stage_record(run_plan)
+    recorded, _ = cli.stage_record(run_plan, settings=config.load(CONFIG_DIR))
 
     settled = [item.item_id for item in run_plan.items if item.item_id != interrupted.item_id]
     assert recorded == len(settled)
@@ -1906,7 +1906,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             shards=2,
             model_endpoint=closed_loopback_endpoint(),
         )
-        cli.stage_record(run_plan, shard=shard, shards=2)
+        cli.stage_record(run_plan, settings=settings, shard=shard, shards=2)
         cli.stage_counters(run_plan, metrics_path=capture, shard=shard, shards=2)
 
     rows = health_rows(state, run_plan.date)
@@ -1944,7 +1944,7 @@ def test_the_census_assemble_adds_names_no_machine(
         shards=2,
         model_endpoint=closed_loopback_endpoint(),
     )
-    cli.stage_record(run_plan, shard=0, shards=2)
+    cli.stage_record(run_plan, settings=settings, shard=0, shards=2)
 
     cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 

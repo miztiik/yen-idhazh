@@ -45,6 +45,7 @@ from idhazh import (
     config,
     corpus,
     discover,
+    elements,
     extract,
     fetch,
     ledger,
@@ -2470,7 +2471,32 @@ def _item_payloads(
         )
 
 
-def stage_record(plan: RunPlan, *, shard: int = 0, shards: int = 1) -> tuple[int, int]:
+def _extraction_health(
+    article: Article | None, settings: config.Settings
+) -> elements.ExtractionHealth | None:
+    """What the candidate pass got out of one article, for its census row.
+
+    Both writers of the item-health ledger call it, and they have to: the `work`
+    job records a row the moment an item settles, hours before the `visuals` job
+    runs, and `append_item_health` keeps the first row for a key. A cell only
+    assemble could fill would be empty for every item a shard had already
+    recorded.
+
+    One article in, three cells out, so the cost is the item and not the archive
+    (Rule #12).
+    """
+    if article is None:
+        return None
+    return elements.extraction_health(
+        article,
+        config=settings.app.elements,
+        min_chart_points=settings.app.visuals.min_chart_points,
+    )
+
+
+def stage_record(
+    plan: RunPlan, *, settings: config.Settings, shard: int = 0, shards: int = 1
+) -> tuple[int, int]:
     """Commit what one shard measured, before anything can throw it away.
 
     `stage_assemble` writes the whole day's census, and it runs in another job on
@@ -2508,6 +2534,7 @@ def stage_record(plan: RunPlan, *, shard: int = 0, shards: int = 1) -> tuple[int
                 date=plan.date,
                 run_id=plan.run_id,
                 shard=shard,
+                extraction=_extraction_health(payload.article, settings),
             )
         )
         if payload.eval_path.exists():
@@ -3044,6 +3071,7 @@ def stage_assemble(
             summary=payload.summary,
             date=plan.date,
             run_id=run_id,
+            extraction=_extraction_health(payload.article, settings),
         )
         for payload in _item_payloads(plan, items_dir)
     ]
@@ -4341,7 +4369,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     if args.stage == "record":
-        stage_record(_load_plan(date), shard=args.shard, shards=args.shards)
+        stage_record(_load_plan(date), settings=settings, shard=args.shard, shards=args.shards)
         return 0
 
     if args.stage == "counters":

@@ -256,6 +256,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 	).toEqual([
 		'band-distance',
 		'chart-arm',
+		'extraction',
 		'failure-rate',
 		'feed-outcomes',
 		'item-cost',

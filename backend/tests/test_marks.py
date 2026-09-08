@@ -52,6 +52,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_evals",
         "test_evidence",
         "test_extract",
+        "test_extraction_health",
         "test_grader_length_bias",
         "test_labels",
         "test_leading_stories",
