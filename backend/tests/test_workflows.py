@@ -398,6 +398,12 @@ FOLD_DRY_RUN_FLAG: Final = "--dry-run"
 # that decide which items are this shard's.
 RECORD_STEP: Final = "Record what this shard measured"
 RECORD_COMMAND: Final = "python -m idhazh record"
+# The pass that runs after the merge, and the flag that says what it covers. A
+# run appends only to the shard its own date routes to, so the date is the whole
+# cover - without it the pass reads every feed-health, item-health and score
+# shard the archive holds and costs more every month (Rule #12).
+SETTLE_COMMAND: Final = ("python", "-m", "idhazh", "dedupe-ledgers")
+SETTLE_COVER_FLAG: Final = "--date"
 # The step that adds this run's accepted pairs to the training window. It runs
 # in assemble because that is where the article text still exists: `items/` is
 # gitignored and travels as a one-day artifact, so a workflow of its own would
@@ -2227,6 +2233,33 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     assert assemble["COMMIT_MESSAGE"] == f"digest: {SUBSTITUTED_DATE}"
     # And the fold says a third thing, in the same job as the day's own commit.
     assert _commit_call("fold")[1]["COMMIT_MESSAGE"] != assemble["COMMIT_MESSAGE"]
+
+
+def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
+    """The bound, mirrored where a workflow that drops it reds (Rule #12).
+
+    A run appends only to the shard its own date routes to, so a repeat the union
+    merge left can only be in a file that run wrote, and the date names it. Drop
+    the flag and `cli.stage_dedupe_ledgers` walks every feed-health shard, every
+    item-health shard and every score shard the archive holds - a bill that rises
+    every month for an answer already given, because a finished month was settled
+    when it was written and cannot change again.
+
+    The command refuses to run with no cover at all, so a workflow that lost the
+    flag fails its commit step rather than quietly reading the archive. This
+    names the step instead of waiting for the run.
+    """
+    settling = [
+        label for label, names in COMMIT_SCRIPT_ENV.items() if "DROP_REPEATED_ROWS_COMMAND" in names
+    ]
+    assert settling == ["plan", "work"]
+
+    for label in settling:
+        settle = _commit_call(label)[1]["DROP_REPEATED_ROWS_COMMAND"].split()
+        assert tuple(settle[: len(SETTLE_COMMAND)]) == SETTLE_COMMAND
+        assert settle[len(SETTLE_COMMAND) :] == [SETTLE_COVER_FLAG, SUBSTITUTED_DATE], (
+            f"{label} must name the run it settles, or the pass reads the whole archive"
+        )
 
 
 def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -> None:

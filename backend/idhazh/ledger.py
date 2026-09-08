@@ -775,8 +775,22 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     return rows
 
 
-def keyed_paths(state_dir: Path) -> list[tuple[Path, tuple[str, ...]]]:
+def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[str, ...]]]:
     """Every ledger here that says what makes two of its rows the same record.
+
+    `date` says which files. A run appends only to the shard its own date routes
+    to, so a repeat the union merge left behind can only be in a file that run
+    wrote - and the two month-partitioned ledgers here contribute one shard each
+    whatever the archive holds. `date=None` is the operator's full pass and names
+    every shard; it is the only cover that costs more every month, and Rule #12
+    is why a person has to ask for it by name.
+
+    Nothing here is a clock. An older month is skipped because this run did not
+    write it, not because it is old, so the bound does not weaken as a run gets
+    slower or crosses midnight.
+
+    The three flat ledgers are named on both covers. They are one file each, so
+    settling them costs the same on a fresh clone and on a five-year archive.
 
     `state/seen/` is the one that is deliberately absent. It has no key at all:
     `load_seen` folds a second sight by keeping the earliest, so a repeat costs
@@ -796,10 +810,19 @@ def keyed_paths(state_dir: Path) -> list[tuple[Path, tuple[str, ...]]]:
     the step that writes it commits through a call that names no settlement
     command, so the pass that settles it is the next run's, over the merged file.
     """
-    return [
+    flat: list[tuple[Path, tuple[str, ...]]] = [
         (runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY),
         (feed_retirements_path(state_dir), FEED_RETIREMENT_KEY),
         (visual_prunes_path(state_dir), VISUAL_PRUNE_KEY),
+    ]
+    if date is not None:
+        return [
+            *flat,
+            (health_path(state_dir, date), FEED_HEALTH_KEY),
+            (item_health_path(state_dir, date), ITEM_HEALTH_KEY),
+        ]
+    return [
+        *flat,
         *((path, FEED_HEALTH_KEY) for path in sorted((state_dir / HEALTH_DIRNAME).glob("*.csv"))),
         *(
             (path, ITEM_HEALTH_KEY)
