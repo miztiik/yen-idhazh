@@ -133,23 +133,29 @@ Two more - telemetry publication and source health - belong to [the constant-cos
 
 | # | Row title | Depends-on | Group | Status | PR |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Stale numbers, and record what the guard drops | - | A | PENDING | - |
-| 2 | The read stops materialising the file | - | A | **DONE** | this branch |
-| 3 | The cover setting, and the value it refuses | - | A | PENDING | - |
-| 4 | The reader tolerates both shapes | 2 | B | PENDING | - |
-| 5 | The writer routes by day | 4 | C | PENDING | - |
-| 6 | The one-shot split | 5 | D | PENDING | - |
+| 1 | Stale numbers, and record what the guard drops | - | A | **DONE** | #499 |
+| 2 | The read stops materialising the file | - | A | **DONE** | #488 |
+| 3 | The cover setting, and the value it refuses | - | A | **DONE** | #490 |
+| 4 | The reader tolerates both shapes | 2 | B | **DONE** | #492 |
+| 5 | The writer routes by day | 4 | C | **DONE** | #495 |
+| 6 | The one-shot split | 5 | D | **DONE** | #503 |
 | 7 | The cover, the fallback deleted, and the docs | 3, 6 | E | PENDING | - |
-| 8 | The eval writer reads a digest index | 3 | B | PENDING | - |
+| 8 | The eval writer reads a digest index | 3 | B | **DONE** | #496 |
 | 9 | Settlement touches the files the run staged | 3 | B | PENDING | - |
-| 10 | Runtime counters answer about one run | - | A | PENDING | - |
-| 11 | Fingerprints, and the four bounds declared | - | A | PENDING | - |
-| 12 | A frozen day is never re-validated | 3 | B | PENDING | - |
-| 13 | Site size is a maintained total | - | B | PENDING | - |
-| 14 | Visual cleanup walks dated directories | 3 | B | PENDING | - |
-| 15 | State cleanup asks the catalogue what is due | 3 | B | PENDING | - |
+| 10 | Runtime counters answer about one run | - | A | **DONE** | #498 |
+| 11 | Fingerprints, and the four bounds declared | - | A | **DONE** | #493 |
+| 12 | A frozen day is never re-validated | 3 | B | IN-FLIGHT | #505 |
+| 13 | Site size is a maintained total | - | B | **DONE** | #491 |
+| 14 | Visual cleanup walks dated directories | 3 | B | **DONE** | #494 |
+| 15 | State cleanup asks the catalogue what is due | 3 | B | IN-FLIGHT | #504 |
 | 16 | Visual prunes get the day layout | 5 | D | PENDING | - |
 | 17 | The rule gets its concept doc | 7, 16 | F | PENDING | - |
+
+Two rows did not land what this plan asked for, and the reason is recorded rather than smoothed over.
+
+**Row 13 shipped the retraction half only.** Three separate jobs write `frontend/public/digest/`, so a running total one of them kept would silently miss the other two, and carrying one between them needs a new persisted contract. The three remaining walks now state in the code what they read, how the cost grows, and why a bounded input cannot answer it - Rule #12's escape hatch taken in the open rather than by omission.
+
+**Row 15's premise was false.** Measured 2026-09-07 on an Intel Core i7-1265U, a not-due maintenance pass opens 5 directories and 0 shard files, and that count does not move when the tree holds forty-six times more - a month partition is a file, not a directory, so there was no partition directory for a dated walk to skip. Rule #10 says the design changes, so no optimisation was written. The row shipped the deletion bug the measurement uncovered instead: three month-name recognisers disagreed, and `prune_scores` was deleting files the other two protected.
 
 Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly serial - each is only safe because the one before it landed. Rows 8, 9, 12, 13, 14, 15 are independent of the published cutover and of each other. Row 17 is written last, because a rule with worked examples behind it says something a rule with none cannot.
 
