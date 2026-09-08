@@ -44,10 +44,10 @@ Growth claims cited per row come from [the research handover](20260906-data-grow
 | 20 | Source health by recorded date | 10 | D | DONE #485 | removed | #485 | worker |
 | 21 | Day-facts contract | 10 | D | DONE #486 | removed | #486 | worker |
 | 22 | Producer writes day facts | 21 | E | DONE #489 | removed | #489 | worker |
-| 23 | Console reads day facts | 22 | F | PENDING | - | - | - |
-| 24 | Band facts | 22 | F | PENDING | - | - | - |
+| 23 | Console reads day facts | 22 | F | DONE #500 | removed | #500 | worker |
+| 24 | Band facts | 22 | F | DONE #501 | removed | #501 | worker |
 | 25 | Archive window control | 1 | C | DONE #470 | removed | #470 | worker |
-| 26 | Day payload contract - author only | 21 | F | PENDING | - | - | - |
+| 26 | Day payload contract - author only | 21 | F | DONE | - | authored 2026-09-08 | orchestrator |
 | 27 | Living docs sweep | 23, 24 | G | PENDING | - | - | - |
 
 Coverage: rows 2-26 carry all 43 findings exactly once. Rows 1, 10 and 27 carry no finding; they carry the knobs, the pattern and the docs the others need.
@@ -76,7 +76,8 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
 | Row | Change | Why it serves the intent | Authority |
 | --- | --- | --- | --- |
 | 18 | Bound the server-side `throughputDays` build to the widest preset, not only the chart's drawing. | The chart drew a window but the server still built and shipped the whole-history array into every page, so the payload still grew with the archive. Windowing the draw alone left finding 100 half-closed. | Owner, 2026-09-08; delivered in #481 |
-| 23 | The record counts distinct published items, so the cutover corrects the summaries-scored count and the determinism and extraction-suspect flags on the four days where the console over-counted raw score-ledger rows. | The old numbers were wrong, not a baseline to preserve. The identical-figure oracle is a drift catcher, not a bug preserver; a discovered wrong number is surfaced and corrected, not frozen. | Owner, 2026-09-08 |
+| 23 | The record counts distinct published items, so the cutover shows the record's authoritative count for summaries-scored and the determinism and extraction-suspect flags wherever the console had over-counted raw score-ledger rows (re-scores and never-published articles). | The old numbers were wrong, not a baseline to preserve. The identical-figure oracle is a drift catcher, not a bug preserver; a discovered wrong number is surfaced and corrected, not frozen. On current data this corrects three days (2026-08-29, 09-02, 09-05); 2026-09-07 was in the 2026-09-08 snapshot but was republished before row 23 landed and no longer over-counts. | Owner, 2026-09-08; delivered in #500 |
+| 24 | Add a bounded newest-day item-health reader to `payload.ts` so the standing band sources its item-health facts (refused-for-length, per-run read spread, total time) from the newest month shard, not a whole-archive scan. | Two band facts are not carried by the day-metrics record; without a bounded reader the band would keep a whole-archive `readShards` read and miss the constant-cost goal. Keeps every band fact, none dropped. | Owner, 2026-09-08; delivered in #501 |
 
 ## 2 - Row #1 - Config knobs and contract
 
@@ -486,7 +487,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
   | 1 | A raw-history reader is deleted only once its replacement produces the identical figure, or the intended corrected figure named in decision 4. | Fowler |
   | 2 | Private state files are never served to a reader for drilldown. | CLAUDE.md Rule #1 |
   | 3 | Dropping vectors after parsing saves nothing; the read and the parse already happened. | Carmack |
-  | 4 | The record counts distinct published items, so the cutover corrects the summaries-scored count and the determinism and extraction-suspect flags on the four days where the console over-counted raw score-ledger rows - re-scores and scores for never-published articles: 2026-08-29 (399 to 366), 2026-09-02 (598 to 536), 2026-09-05 (456 to 374), 2026-09-07 (283 to 209). The identical-figure oracle catches drift; a discovered wrong number is corrected, not frozen. | Owner, 2026-09-08 |
+  | 4 | The record counts distinct published items, so the cutover shows the record's authoritative count for the summaries-scored count and the determinism and extraction-suspect flags wherever the console over-counted raw score-ledger rows - re-scores and scores for never-published articles. In the 2026-09-08 snapshot four days over-counted: 2026-08-29 (399 to 366), 2026-09-02 (598 to 536), 2026-09-05 (456 to 374), 2026-09-07 (283 to 209). By the time row 23 landed, 2026-09-07 had been republished and no longer over-counts (record and raw both read 357), so the visible correction on the committed data is three days. The record is authoritative for whatever the day currently is; the number is not frozen. | Owner, 2026-09-08 |
 
 ## 25 - Row #24 - Band facts
 
@@ -494,9 +495,10 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
 - **Files touched:**
   - `frontend/src/lib/server/console-shell.ts`
   - `frontend/src/routes/console/+layout.server.ts`
+  - `frontend/src/lib/server/payload.ts`
   - the matching specs
 - **Acceptance gates:** local - the shared test selector plus the console specs against a canary day and a browser smoke on all three console routes. CI - full suite.
-- **Oracle:** the band renders identically on all three routes and does not change when any route's window control moves.
+- **Oracle:** the band renders on all three routes, does not change when any route's window control moves, and no longer triggers a whole-archive `readShards` scan - its reads are bounded to the newest manifest, the newest month item-health shard and the newest day-metrics record. Values are identical to the pre-change build except where the record's distinct-published count corrects a raw over-count, the same authoritative correction as row 23.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -504,6 +506,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
   | 1 | The band stays all-time. It stops computing all-time. No guardrail exception is needed. | Owner, 2026-09-06 |
   | 2 | The stated reason for it being unwindowed is preserved verbatim in the code: a figure that moved when one route's control moved would read as three different sites. | existing design |
   | 3 | The duplicated publication-count call in that function is removed. | Carmack |
+  | 4 | Each band fact reads from its authoritative source at fixed cost: the published-set counts from the newest day-metrics record, and the item-health facts (refused-for-length, per-run read spread, total time) from a new bounded newest-day item-health reader in `payload.ts` that opens only the newest month shard. The addition to the file list is the scope change recorded above; delivered in #501. | Owner, 2026-09-08 |
 
 ## 26 - Row #25 - Archive window control
 
@@ -544,6 +547,14 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
   | --- | --- | --- |
   | 1 | Today's contract is whole-day. Bounding the download is a new static page contract and a reader-facing change, so it is authored and stopped, never implemented inside this plan. | Owner |
   | 2 | Instant substring filtering over a whole day cannot survive a byte-bounded fetch without a separate local index. That cost is named before anything is built. | Andre |
+
+- **Authored ruling (2026-09-08).** What a reading page downloads, for a future plan to implement. Authored here and NOT built (decision 1).
+
+  - **Today's contract.** A reading page (`/[date]` and topic views) fetches the seed, then `readDay` in `frontend/src/lib/assist/day.ts` downloads, parses and validates the WHOLE day (finding 84). The seed and the pager bound what is drawn, not what is retained; the whole day's bytes and items are held so instant whole-day substring filtering and deep-link reveal work without a second fetch.
+  - **Page size bound.** A bounded reading page ships one page of stories at a time, reusing the existing `archive_page_size` knob (25 stories today) rather than declaring a reading-specific one. "Show more" fetches the next page; a deep link fetches the target story's page directly without pulling the pages before it.
+  - **Byte bound.** The bytes kept for one reading session are bounded by the ceiling the offline cache already declares, `offline_bytes_kept` (20 MB today), with a single story body bounded by `max_body_bytes` (2 MB). A page fetch that would cross the ceiling evicts the oldest page, so a long session is constant in memory, not linear in the day.
+  - **Navigation behaviour.** Deep links, paging and hide-read resolve against IDs and page indexes, not a fully materialised day: a deep link to a story far into a day fetches that story's page and the outlying leads, never every preceding story (findings 86, 87). Back and forward return to an already-fetched page without re-validating the whole day.
+  - **What instant whole-day filtering costs.** Once the whole day is no longer present, instant substring filtering over every title, summary and key point (finding 85) cannot run in the browser without a separate, small, revision-owned local index shipped alongside the pages. The future plan either ships that per-day token index and keeps instant filter, accepting the extra download, or drops instant whole-day filter to a per-page filter plus a server-shaped query. The trade is named now so it is a decision, not a surprise, when the contract is built.
 
 ## 28 - Row #27 - Living docs sweep
 
