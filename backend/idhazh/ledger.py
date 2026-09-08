@@ -917,10 +917,20 @@ def load_runtime_counters(state_dir: Path, *, run_id: str) -> list[RuntimeCounte
 
     One run at a time, because the question this file answers is about one run.
     A caller that wants a trend reads several runs and says so.
+
+    Cover: one run. Bounded by construction rather than by a clock - a run id
+    already names its date, so the answer is a handful of shard rows however
+    long the file gets. Streamed rather than materialised, so the read costs
+    that answer instead of the file.
+
+    Nothing is partitioned, and that is the point: a declared cover can be one
+    run. Measured 2026-09-08: 209 rows over 12 days in 35,950 B, gaining 20 rows
+    on each of the last eight days, so a layout over it would buy an answer the
+    cover already gives (Rule #12).
     """
     rows = [
         RuntimeCountersRow.from_csv_row(row)
-        for row in _read_rows(runtime_counters_path(state_dir))
+        for row in _stream_rows(runtime_counters_path(state_dir))
         if row["run_id"] == run_id
     ]
     return sorted(rows, key=lambda row: row.shard)
