@@ -324,12 +324,12 @@ async function main(args: string[]): Promise<number> {
 			}
 			const browserGroups = selected.groups.filter((group) => group !== 'backend' && group !== 'logic');
 			if (browserGroups.length) {
-				try { assertBuild(root, opts.mode, env); }
+				try { testedBuild = assertBuild(root, opts.mode, env); }
 				catch {
 					if (opts.mode === 'canary') await run('canary fixtures', python, ['backend/utilities/build_canary_day.py']);
 					await run(`${opts.mode} build`, process.execPath, [npm, 'run', opts.mode === 'canary' ? 'build:canary' : 'build'], frontend);
+					testedBuild = assertBuild(root, opts.mode, env);
 				}
-				testedBuild = assertBuild(root, opts.mode, env);
 				const report = join(directory, `${id}-browser.json`);
 				rmSync(report, { force: true });
 				const wholeDay = opts.specs.includes('whole-day.spec.ts');
