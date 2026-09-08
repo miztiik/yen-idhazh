@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-09
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -15,10 +15,19 @@ times are UTC.
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
+| `measure-migrated-tree.yml` | `Measure the migrated tree` | none | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
 
 An ordinary pull request starts CI only. A merge or direct push to `main`
 starts CI, and starts Pages publication only when its path filter matches.
+
+`measure-migrated-tree.yml` is temporary and row #19 of
+[the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md) deletes
+it. It answers one question once - what the site weighs once the prerendered
+dated documents and the committed encoder weights leave it - and it is a
+separate file rather than a job in `digest.yml` so that a measurement cannot
+break the daily pipeline. It takes no inputs, holds `contents: read`, and writes
+nothing.
 
 ## The schedule asks for five runs a day and gets fewer
 

@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -15,6 +15,84 @@ Two rules govern this page:
   an order-of-magnitude check, not a runner figure. The runner has a different
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
+
+## What the encoder costs on the wire from Hugging Face, 2026-09-09
+
+**A reader who searches will pay 6.75 MB more than today, and every byte of that
+is one file.** Hugging Face serves `onnx/model_quantized.onnx` with no
+`Content-Encoding` header at all - 22,972,370 bytes of
+`application/octet-stream` - where our own origin serves the same file gzipped
+at 16.22 MB. A first search goes from 21.6 MB to **28.4 MB, a 31 percent rise**.
+Nothing else in the move costs anything: the tokenizer arrives gzipped from the
+hub at 212,991 bytes against 0.21 MB from our origin, which is the same number.
+
+This settles the fork Carmack left open on 2026-09-08 for
+[row #1 of the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md):
+it is the expensive arm. The 6.75 MB is what gzip was taking off the quantised
+ONNX weights, 29.4 percent of them, and a hub that serves them as an opaque
+octet-stream gives that back to the reader.
+
+**Hardware and method.** Intel Core i7-1265U, 12 logical CPUs, Windows 11 build
+26200, curl 8.21.0 with zlib 1.3.2, over a residential connection reaching the
+CloudFront edge `AMS58-P3`. Taken 2026-09-08 at 22:25 to 22:27 UTC, which is
+2026-09-09 local. `curl -sIL -H 'Origin: https://miztiik.github.io' -H
+'Accept-Encoding: gzip' <url>` for the headers, and `curl -s -L -o /dev/null -w
+'%{size_download}'` with the same two headers for the bytes actually
+transferred. Five files, three repetitions each: **every one of the fifteen
+returned the same byte count, so the spread is zero.** `revision=main`, which
+is acceptable for this measurement only - row #15 pins the revision that ships.
+
+| File | Wire bytes, gzip offered | `Content-Encoding` | Bytes on disk |
+| --- | --- | --- | --- |
+| `onnx/model_quantized.onnx` | 22,972,370 | **absent** | 22,972,370 |
+| `tokenizer.json` | 212,991 | `gzip` | 711,661 |
+| `tokenizer_config.json` | 366 | absent | 366 |
+| `special_tokens_map.json` | 125 | absent | 125 |
+| `config.json` | 650 | absent | 650 |
+| **Five files** | **23,186,502 = 23.19 MB** | | 23,685,172 |
+
+The two columns disagree by 498,670 bytes and all of it is the tokenizer, which
+is the only file the hub compresses. The 20.64 MiB ONNX runtime under
+`frontend/static/assist/wasm/` is not in this table and is not moving: Hugging
+Face is a model hub and does not host it, so a reader still fetches those
+5.18 MB gzipped from our own origin, before and after.
+
+**What this does not measure.** One network and one CDN edge. A byte count here
+is a `Content-Length` the origin declares rather than a throughput, so a second
+network would change the seconds and not the bytes - no seconds are quoted
+above. What a second network genuinely could change is whether a different edge
+negotiates gzip differently for the same object, and that is untested.
+
+### Two facts the same five responses carried
+
+Both are recorded here because they came off the responses measured above, and
+both bear on rows #15 and #16.
+
+**The upstream revision is `751bff37182d3f1213fa05d7196b954e230abad9`.** Every
+one of the five responses returned it as `X-Repo-Commit`. `PROVENANCE.md`
+records no commit SHA, which is why the plan carries an escalation trigger for
+being unable to resolve one.
+
+**The bytes we serve today are the bytes at that revision, on all five files.**
+The hub's `ETag` is a git blob SHA-1 for the four small files and a SHA-256 for
+the model, so each was checked against the matching thing we hold: `git rev-parse
+HEAD:<path>` for the four, and SHA-256 of the working file for the model.
+
+| File | Ours | Hub at `751bff37` | |
+| --- | --- | --- | --- |
+| `config.json` | `72147e4f...` | `72147e4f...` | git blob SHA-1, match |
+| `special_tokens_map.json` | `a8b3208c...` | `a8b3208c...` | git blob SHA-1, match |
+| `tokenizer_config.json` | `37fca747...` | `37fca747...` | git blob SHA-1, match |
+| `tokenizer.json` | `c17ed520...` | `c17ed520...` | git blob SHA-1, match |
+| `onnx/model_quantized.onnx` | `afdb6f1a...` | `afdb6f1a...` | SHA-256, match |
+
+**A cross-origin read is allowed, and the check that says otherwise is wrong.**
+With `Origin: https://miztiik.github.io` all five responses echoed that origin
+back in `Access-Control-Allow-Origin`, and the model's CDN response answered
+`*`. Sending no `Origin` header is the trap: the hub then answers
+`Access-Control-Allow-Origin: https://huggingface.co` under a `Vary: Origin`,
+which reads exactly like a refusal and is not one. Any later check of this has
+to send an origin.
 
 ## Drift review and source extraction, 2026-09-08
 
@@ -5086,6 +5164,7 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
+| **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **arithmetic, not a measurement: 110.65 - 9.54 - 22.59 = about 78.5 MB, and a 1.19 MB slope a published day** | dispatch `.github/workflows/measure-migrated-tree.yml` from `main`. It builds the site as it ships, measures it, then rebuilds with `frontend/static/assist/models` deleted, removes the prerendered dated directories from the tree, and measures again - both arms on one commit, because the archive grows 1.69 MB a published day underneath a before-and-after taken on two days. It runs the migrated arm twice, so the figures come with a spread instead of an assertion. **The dispatch is owed**: `workflow_dispatch` only fires from the default branch, so this could not run while the workflow was on a branch. Read `site-weight <tree>: N MB in N files` and `site-weight runway: N published days to the 800 MB alarm point` off the job log for each arm. The claim the plan needs is the difference between the two runway lines, in days - a percentage of a number that keeps growing is not a result (Carmack, 2026-09-08). Taken on the runner and not a laptop because the dominant term is per-file syscall cost, which is the term differing most between the two machines. |
 | **Whether a subject the registry does not name goes quiet for long enough to matter** | **bounded, not measured: 75.2 percent of published items carry no registry name** | the 30 registry names are all covered near-daily, so nothing in the record supports a fade rate ([How long we go quiet about a registry name](#how-long-we-go-quiet-about-a-registry-name-2026-08-31)). Whether a quiet subject exists in the other three items in four cannot be read from a closed vocabulary, and this repository has no entity recogniser. Two things settle it, in order: put one real subject in `config/watchlist.json` and re-run `python backend/utilities/entity_gap.py` for that entry alone; or, if the question is ever worth a model, score the model on the gap as well as the coverage, because a recogniser that splits one subject across three names raises coverage and shortens every gap. |
 | **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Unaccounted job wall-clock per SHARD** | **the instrument landed 2026-08-30 and has no population: 0 of 4,167 committed item rows carry a `shard`** | `shard` is now a column on `ItemHealthRow`, and a column is null on every row written before it existed, so the finest grain the committed data supports is still the whole run ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). The read rate spreads 2.30x between shards inside one run, so a per-run figure averages away exactly what an operator needs to see. Re-run `python backend/utilities/measure_ledgers.py` after the next scheduled run - it splits per shard on its own once a run's rows carry the cell. |
