@@ -2,7 +2,7 @@
 
 The oracle is one comparison and it is asserted over every element the pass
 emits: `article.text[span_start:span_end] == span_excerpt`. It runs over the
-five committed injection canaries and the three captured pages - eight bounded
+five committed injection canaries and the four captured pages - nine bounded
 fixtures, none of which a run appends to (Rule #12) - because a span that only
 holds on a hand-written string proves the string, not the pass.
 
@@ -14,7 +14,7 @@ difference is the whole reason this pass exists.
 Row 3 adds the third half. Two passes read the same bytes and both match
 `2026`, so a bare year is claimed as a date and never as a quantity, and no two
 elements of one table hold the same character. That is checked pair by pair on
-the same eight fixtures, with a counter-oracle that they carry both kinds -
+the same nine fixtures, with a counter-oracle that they carry both kinds -
 without it, a pass emitting nothing makes every pair disjoint.
 """
 
@@ -143,7 +143,7 @@ def test_the_corpus_the_oracle_runs_over_actually_carries_quantities() -> None:
         emitted += len(element_table(canary_article(canary), config=ELEMENTS).elements)
     for path in PAGES:
         emitted += len(element_table(page_article(path), config=ELEMENTS).elements)
-    assert emitted == 17, "the eight bounded fixtures carried 17 elements on 2026-09-08"
+    assert emitted == 17, "the nine bounded fixtures carried 17 elements on 2026-09-08"
 
 
 # --- The Oracle: two passes never hold the same character ------------------
@@ -155,7 +155,7 @@ def overlaps(left: Element, right: Element) -> bool:
 
 
 def bounded_tables() -> list[tuple[str, ElementTable]]:
-    """The eight fixtures no run appends to: five canaries and three captured pages."""
+    """The nine fixtures no run appends to: five canaries and four captured pages."""
     tables = [(c.name, element_table(canary_article(c), config=ELEMENTS)) for c in canaries.ALL]
     return tables + [(p.name, element_table(page_article(p), config=ELEMENTS)) for p in PAGES]
 
@@ -170,7 +170,7 @@ def test_a_bare_year_is_claimed_as_a_date_and_never_as_a_quantity() -> None:
 
 
 def test_no_two_elements_of_one_table_hold_the_same_character() -> None:
-    """Every pair of spans on the eight bounded fixtures, checked for overlap.
+    """Every pair of spans on the nine bounded fixtures, checked for overlap.
 
     Pairwise is quadratic in one article's elements and bounded by
     `elements.max_per_article`, so it cannot grow with the archive (Rule #12).
@@ -189,7 +189,7 @@ def test_the_bounded_fixtures_carry_both_kinds_so_the_pair_check_can_fail() -> N
     """The counter-oracle. One pass emitting nothing makes every pair disjoint."""
     kinds = Counter(element.kind for _, table in bounded_tables() for element in table.elements)
     assert kinds == {ElementKind.QUANTITY: 9, ElementKind.DATE: 8}, (
-        "the eight bounded fixtures carried 9 quantities and 8 years on 2026-09-08"
+        "the nine bounded fixtures carried 9 quantities and 8 years on 2026-09-08"
     )
 
 

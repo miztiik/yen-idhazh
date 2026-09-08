@@ -44,7 +44,7 @@ a kind than it says it found.
 both count one stretch of characters, because both matched it and only one kept
 it. So `candidates_found[quantity]` is what the number pattern matched and
 `candidates_found[date]` is what the date pattern matched, and summing them
-double-counts every span they competed for. Measured 2026-09-08 on the eight
+double-counts every span they competed for. Measured 2026-09-08 on the nine
 bounded fixtures: 17 quantities and 8 dates matched, 9 quantities and 8 dates
 kept.
 
@@ -144,7 +144,7 @@ fact, drops a magnitude at or below two, drops a bare year, and stops at 16.
 Every one of those is correct for choosing bars and wrong for a candidate set -
 the collapsed repeat is exactly the series a trend chart exists to show. Nothing
 in the candidate pass dedupes and nothing drops on size. Measured 2026-09-08 on
-the eight bounded fixtures (`tests/fixtures/canaries` and
+the nine bounded fixtures (`tests/fixtures/canaries` and
 `tests/fixtures/pages`), the two passes keep 17 elements - 9 quantities and 8
 dates - where `numeric_facts` keeps 11 facts; on
 `tests/fixtures/pages/article.html` alone it is 3 quantities and 4 dates
@@ -268,11 +268,11 @@ first, which span is longer and which was written first are all accidents of how
 the code is arranged. A third pass has to say where it sits in `KIND_PRECEDENCE`
 or it does not ship.
 
-**What the wrong answer costs, measured on the three captured pages.** A year
+**What the wrong answer costs, measured on the captured pages.** A year
 kept as a quantity is a bar 2,027 units high standing next to a bar 12 units
 high, and a reader cannot see that it is wrong - which is exactly why
 `numeric_facts` drops a bare year before picking bars. On 2026-09-08 the rule
-dropped eight quantities across the eight bounded fixtures and every one of them
+dropped eight quantities across the nine bounded fixtures and every one of them
 was a year: `2029`, `2031`, `1994` and `2035` in `article.html`, `2027` three
 times in `hostile.html` and the canaries. Two of the eight were worse than a
 plain year - `2027 after` and `2027 only`, where the word following the year had
@@ -291,7 +291,7 @@ drew 1994 responses" yields a date and no quantity. Write it `1,994` and the
 quantity survives, because the thousands separator takes it out of the
 bare-year shape. The trade is deliberate and it is the same one `CLAUDE.md`
 section 1a asks for everywhere else - a missing candidate degrades one chart,
-and a wrong bar publishes a figure the article never stated. None of the eight
+and a wrong bar publishes a figure the article never stated. None of the nine
 bounded fixtures hits this case; a test carries it so the cost is visible rather
 than folklore.
 
