@@ -11,8 +11,9 @@ whole day can see that.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import StrEnum
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -54,6 +55,63 @@ class TimeSource(StrEnum):
     def names_a_clock(self) -> bool:
         """`unknown` is the one member that goes with no time at all."""
         return self is not TimeSource.UNKNOWN
+
+
+#: The day edges the already-published histogram is cut on, counted from the
+#: date an address was first published to the date of the run that refused it.
+#:
+#: 0 to 1 is the guard's most frequent fire and the one no cover could ever
+#: change: an earlier run of the same day published it. 90 is
+#: `collect.seen_window_days`, and the config refuses any finite published cover
+#: at or below that - so every band from 90 on is exactly what a finite cover
+#: could forget, and the three of them say how much.
+PUBLISHED_AGE_EDGES: Final[tuple[int, ...]] = (0, 1, 7, 30, 90, 180, 365)
+
+#: The same edges as `[from, to)` pairs, oldest band open-ended.
+PUBLISHED_AGE_BANDS: Final[tuple[tuple[int, int | None], ...]] = tuple(
+    zip(PUBLISHED_AGE_EDGES, (*PUBLISHED_AGE_EDGES[1:], None), strict=True)
+)
+
+
+class PublishedAgeBand(Model):
+    """How many refused addresses fall in one band of days since publication.
+
+    A count on its own says the guard fired. It cannot say whether a cover of a
+    given width would have let any of those addresses through, and that is what
+    the width of the cover turns on - so the bands are recorded beside the count.
+
+    Every declared band is written, including the empty ones. A band that is
+    absent and a band holding nothing are different answers, and only one of
+    them is a measurement.
+    """
+
+    from_days: int = Field(ge=0, description="Days since publication, inclusive.")
+    to_days: int | None = Field(
+        default=None,
+        ge=1,
+        description="Exclusive upper edge, in days. Null on the open-ended oldest band.",
+    )
+    addresses: int = Field(ge=0, description="Distinct addresses the guard refused in this band.")
+
+    @model_validator(mode="after")
+    def _a_band_has_width(self) -> Self:
+        if self.to_days is not None and self.to_days <= self.from_days:
+            raise ValueError("a band's upper edge must sit above its lower one")
+        return self
+
+    @classmethod
+    def histogram(cls, ages: Iterable[int]) -> list[PublishedAgeBand]:
+        """Cut ages in days into the declared bands, empty bands included."""
+        counts = [0] * len(PUBLISHED_AGE_BANDS)
+        for age in ages:
+            for index, (low, high) in enumerate(PUBLISHED_AGE_BANDS):
+                if low <= age and (high is None or age < high):
+                    counts[index] += 1
+                    break
+        return [
+            cls(from_days=low, to_days=high, addresses=count)
+            for (low, high), count in zip(PUBLISHED_AGE_BANDS, counts, strict=True)
+        ]
 
 
 class PlannedItem(Model):
@@ -191,6 +249,30 @@ class RunPlan(Contract):
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-07",
+            change=(
+                "A run records what the already-published guard refused on "
+                "dropped_published, and how old those addresses were on "
+                "dropped_published_ages."
+            ),
+            why=(
+                "The guard is the whole reason the published ledger is read entire and "
+                "never windowed, and nothing committed said what it bought. The count "
+                "went to stderr and stopped there, so no payload could say how often "
+                "the guard fired or how old the addresses it refused were - and the "
+                "age is the number a finite cover turns on, because a cover only ever "
+                "forgets the old ones. Measured on this checkout 2026-09-08 on an "
+                "Intel Core i7-1265U, over the ledger as it stood at the end of "
+                "2026-09-07: 7,600 rows, 7,519 distinct addresses, and 16 published "
+                "days from 2026-08-23 to 2026-09-07 - so the whole record is 16 days "
+                "wide. Every cover anybody has proposed is wider than that, and today "
+                "the question cannot be answered from what is committed at all. "
+                "Recording the bands is what makes it answerable, one run at a time. "
+                "Additive with a default, so a plan an earlier run wrote still "
+                "validates and no read-side migration is needed (section 11)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-02T23:00",
             change=(
                 "live_feeds on a vertical is renamed eligible_feeds and feed_floor is "
@@ -301,8 +383,45 @@ class RunPlan(Contract):
             "address the retirement ledger holds. Neither read nor failed."
         ),
     )
+    dropped_published: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Distinct addresses this run collected on a desk it plans and then "
+            "refused, because the published ledger already holds them. Null on a "
+            "plan written before the field existed - unknown, and never a run where "
+            "the guard refused nothing."
+        ),
+    )
+    dropped_published_ages: list[PublishedAgeBand] | None = Field(
+        default=None,
+        description=(
+            "How old those addresses were, cut on PUBLISHED_AGE_BANDS. Every band is "
+            "written, so a zero here is a measured zero. Null exactly when "
+            "dropped_published is."
+        ),
+    )
     verticals: list[VerticalPlan] = Field(default_factory=list)
     items: list[PlannedItem] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _the_guard_count_and_its_bands_agree(self) -> Self:
+        """One number and its breakdown are recorded together, or neither is.
+
+        A count with no bands cannot answer the question the bands exist for, and
+        bands with no count are a breakdown of nothing. Either half on its own
+        would read as a measurement while being unable to support one.
+        """
+        if (self.dropped_published is None) != (self.dropped_published_ages is None):
+            raise ValueError("dropped_published and its age bands are recorded together")
+        if self.dropped_published_ages is None:
+            return self
+        edges = [(band.from_days, band.to_days) for band in self.dropped_published_ages]
+        if edges != list(PUBLISHED_AGE_BANDS):
+            raise ValueError("the age bands must be every declared band, in order")
+        if sum(band.addresses for band in self.dropped_published_ages) != self.dropped_published:
+            raise ValueError("the age bands must account for every refused address")
+        return self
 
     @model_validator(mode="after")
     def _the_list_is_ordered_and_distinct(self) -> Self:
