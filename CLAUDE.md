@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -78,6 +78,8 @@ Everywhere else restates this section rather than inventing its own style rule (
 **The default-and-exception wording was added 2026-09-06, because the rule as first written could be read as advice.** It said what not to do and named no bar for doing it anyway, so every growing step was arguable on its own merits and the arguments were always locally reasonable - the archive was right there, and walking it was the shortest code. Naming constant cost as the default inverts who carries the burden: an O(1) design needs no defence and a growing one needs a person's name against it.
 
 **The same day, a mechanical guard was written for it and then deleted.** `backend/tests/test_archive_readers.py` scanned every test file for two hand-written path patterns and held the matches against a list of twelve approved names. It failed for three reasons and each one is worth remembering, because the next person to reach for a guard here will reach for the same one. **It enumerated the hazard rather than the safe set**, so it covered two collections out of nineteen and looked finished - `corpus/`, `assist/`, `source-health.json` and three ledgers that grow for ever were never in it. **Its own maintenance cost grew with the number of collections**, which is the defect it existed to catch. And **it was a list of paths with no escape hatch**: the only way past it was to edit the list, so it made a judgement call look like a permission slip. A rule stated as a property survives a collection nobody has invented yet; a rule stated as a list is wrong the day after it is written. This one is enforced by review, and the reviewer's question is the one sentence in the rule: does a run that changed no code make it slower. Cost, stated rather than hidden: nothing fails automatically now, so a growing step can merge if nobody asks. Authority: owner, 2026-09-06.
+
+**Where the escape hatch is written down, from 2026-09-08.** The rule permits a growing read where a person agrees and says why, and until now that agreement lived in whatever docstring the author happened to write. [`docs/concepts/growing-reads.md`](docs/concepts/growing-reads.md) is its address: the question to ask of any read, the three shapes a cover can take, and `-1` as the value that says a person chose not to bound this one. It adds no rule and changes nothing here - it is where the choosing is recorded, and it is a page of dated examples under one property rather than a list of paths, for the reason the paragraph above gives.
 
 **Rule #1 draws the line at "a service", not at "an origin" (amended 2026-08-23).** Banning any third-party origin forbade a webfont, which costs a reader nothing a self-hosted copy does not, while the real hazard - logic executing off the reader's device, and anything reporting a reader's behaviour - was only implied. Practical consequence: an interactive chart may fetch our own committed CSV and may use a third-party charting library. A third-party script that phones home still cannot.
 
@@ -349,3 +351,4 @@ Giving Jony the demand mandate too was rejected: one head holding both "remove b
 - [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) - environment and tool quirks that make a command lie.
 - [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md) - where each kind of doc lives.
 - [`docs/concepts/vision.md`](docs/concepts/vision.md) - what this project is and is not.
+- [`docs/concepts/growing-reads.md`](docs/concepts/growing-reads.md) - Rule #12's escape hatch: what a read over a growing collection declares, and the inventory as it stands.

@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -73,7 +73,7 @@ Monthly shards, because a read looks back 31 days - just enough that a quarantin
 So the shard is settled twice, and the second pass is the one that matters:
 
 - **Before the push.** `ledger.append_health` settles the shard it just wrote. That catches a repeat inside one checkout and nothing else.
-- **After the merge.** `python -m idhazh dedupe-ledgers`, run by both recording commit steps through `DROP_REPEATED_ROWS_COMMAND`, on the merged file - the only artefact that has ever held both attempts at once.
+- **After the merge.** `python -m idhazh dedupe-ledgers --date <run date>`, run by both recording commit steps through `DROP_REPEATED_ROWS_COMMAND`, on the merged file - the only artefact that has ever held both attempts at once. The date is the cover: a run appends only to its own date's shard, so a repeat can only be in a file that run wrote. The flag is required and the command exits 2 without it, because a step that named no cover would walk every shard by accident ([../../concepts/growing-reads.md](../../concepts/growing-reads.md)). `--every-shard` is the operator's full pass.
 
 **Where two accounts conflict, the read that carried entries wins**, whichever row is newer: the attempt that got articles is the attempt that happened, and an empty retry against an address that had just delivered describes the retry rather than the feed. Between two rows that agree on that, the later `checked_at` wins. A tie leaves the row already on record. The rule is `contracts.feed_health.supersedes`, and it is the one key here settled by a rule instead of by arrival order - everywhere else a repeat is one attempt written down twice, so the two rows agree.
 
@@ -581,4 +581,5 @@ The self-lifting rest is there because the alternative was tested by imagination
 - [trust-boundary.md](trust-boundary.md) - what happens to the bytes a healthy feed returns.
 - [../publishing/frontend.md](../publishing/frontend.md) - the console that renders this record.
 - [../../concepts/config.md](../../concepts/config.md) - where `availability_strikes_before_rest` and the five knobs beside it live.
+- [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - why the settle takes a cover, and what `--every-shard` costs.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - degrade rather than fail, which is why a dead feed never fails a run.
