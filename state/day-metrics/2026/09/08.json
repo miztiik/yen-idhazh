@@ -1,9 +1,9 @@
 {
   "addresses_considered": 5891,
   "bands": {
-    "high": 142,
-    "low": 22,
-    "medium": 45
+    "high": 194,
+    "low": 28,
+    "medium": 60
   },
   "date": "2026-09-08",
   "determinism_violations": 0,
@@ -12,67 +12,67 @@
     {
       "column": "compression",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 1.8076923076923077,
         "minimum": 0.052361396303901436,
-        "p25": 0.12302284710017575,
-        "p50": 0.16483516483516483,
-        "p75": 0.26277372262773724,
-        "total": 49.40978645458568
+        "p25": 0.12632821723730814,
+        "p50": 0.17222222222222222,
+        "p75": 0.2698412698412698,
+        "total": 67.41932581772053
       }
     },
     {
       "column": "coverage",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 1.0,
         "minimum": 0.0,
         "p25": 0.5,
         "p50": 0.6666666666666666,
         "p75": 0.8,
-        "total": 132.5703999205951
+        "total": 182.54626417501973
       }
     },
     {
       "column": "evidential_density",
       "stat": {
-        "count": 209,
-        "maximum": 0.032454361054766734,
+        "count": 282,
+        "maximum": 0.03917525773195876,
         "minimum": 0.0,
         "p25": 0.0,
-        "p50": 0.0,
-        "p75": 0.00333889816360601,
-        "total": 0.49233199337926586
+        "p50": 0.0003736920777279522,
+        "p75": 0.003484320557491289,
+        "total": 0.7282980476459586
       }
     },
     {
       "column": "extractiveness",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 0.8484848484848485,
         "minimum": 0.0,
         "p25": 0.09523809523809523,
-        "p50": 0.16806722689075632,
-        "p75": 0.28169014084507044,
-        "total": 43.04923364489344
+        "p50": 0.175,
+        "p75": 0.26865671641791045,
+        "total": 57.712886616487964
       }
     },
     {
       "column": "hhem",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 0.9854497909545898,
-        "minimum": 0.007640531752258539,
-        "p25": 0.8687232732772827,
-        "p50": 0.9336042404174805,
-        "p75": 0.9566168785095215,
-        "total": 176.29954998241737
+        "minimum": 0.005002989899367094,
+        "p25": 0.8746472597122192,
+        "p50": 0.9345941543579102,
+        "p75": 0.9567518830299377,
+        "total": 238.36334134452045
       }
     },
     {
       "column": "hhem_delta",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 0.0,
         "minimum": 0.0,
         "p25": 0.0,
@@ -84,132 +84,132 @@
     {
       "column": "hhem_full",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 0.9854497909545898,
-        "minimum": 0.007640531752258539,
-        "p25": 0.8687232732772827,
-        "p50": 0.9336042404174805,
-        "p75": 0.9566168785095215,
-        "total": 176.29954998241737
+        "minimum": 0.005002989899367094,
+        "p25": 0.8746472597122192,
+        "p50": 0.9345941543579102,
+        "p75": 0.9567518830299377,
+        "total": 238.36334134452045
       }
     },
     {
       "column": "new_fact_rate",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 1.0,
         "minimum": 0.0,
-        "p25": 0.0,
+        "p25": 1.0,
         "p50": 1.0,
         "p75": 1.0,
-        "total": 154.5
+        "total": 213.5
       }
     },
     {
       "column": "score_ms",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 16877.0,
-        "minimum": 82.0,
+        "minimum": 77.0,
         "p25": 722.0,
-        "p50": 1246.0,
-        "p75": 2051.0,
-        "total": 463998.0
+        "p50": 1230.0,
+        "p75": 1987.0,
+        "total": 599686.0
       }
     },
     {
       "column": "self_repetition",
       "stat": {
-        "count": 209,
-        "maximum": 0.02777777777777779,
+        "count": 282,
+        "maximum": 0.03076923076923077,
         "minimum": 0.0,
         "p25": 0.0,
         "p50": 0.0,
         "p75": 0.0,
-        "total": 0.05732472827667823
+        "total": 0.0973532183051683
       }
     },
     {
       "column": "source_seen_word_count",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 2666.0,
         "minimum": 35.0,
-        "p25": 327.0,
-        "p50": 483.0,
-        "p75": 775.0,
-        "total": 130279.0
+        "p25": 338.0,
+        "p50": 477.0,
+        "p75": 721.0,
+        "total": 174751.0
       }
     },
     {
       "column": "source_word_count",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 2666.0,
         "minimum": 35.0,
-        "p25": 327.0,
-        "p50": 483.0,
-        "p75": 775.0,
-        "total": 130279.0
+        "p25": 338.0,
+        "p50": 477.0,
+        "p75": 721.0,
+        "total": 174751.0
       }
     },
     {
       "column": "speculative_density",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 0.038461538461538464,
         "minimum": 0.0,
-        "p25": 0.0007072135785007072,
-        "p50": 0.0035419126328217238,
-        "p75": 0.007029876977152899,
-        "total": 1.0562990779058972
+        "p25": 0.0,
+        "p50": 0.0031512605042016808,
+        "p75": 0.006772009029345372,
+        "total": 1.3231129358509108
       }
     },
     {
       "column": "summary_word_count",
       "stat": {
-        "count": 209,
-        "maximum": 189.0,
+        "count": 282,
+        "maximum": 219.0,
         "minimum": 25.0,
-        "p25": 70.0,
-        "p50": 88.0,
-        "p75": 115.0,
-        "total": 19232.0
+        "p25": 69.0,
+        "p50": 86.0,
+        "p75": 116.0,
+        "total": 25912.0
       }
     },
     {
       "column": "verbatim_run",
       "stat": {
-        "count": 209,
+        "count": 282,
         "maximum": 0.6944444444444444,
         "minimum": 0.02,
         "p25": 0.06818181818181818,
-        "p50": 0.09375,
-        "p75": 0.13846153846153847,
-        "total": 25.4619447919187
+        "p50": 0.096,
+        "p75": 0.13793103448275862,
+        "total": 33.62212612120136
       }
     }
   ],
-  "items_failed": 31,
-  "items_planned": 240,
-  "items_published": 209,
+  "items_failed": 38,
+  "items_planned": 320,
+  "items_published": 282,
   "items_truncated": 0,
   "model_id": "qwen3-5-9b-q4-k-m",
-  "pipeline_fingerprint": "0288ea558ff2ebc38d6631e8114017a6bf363cd6c307ef61cd7e997afba899b8",
+  "pipeline_fingerprint": "30d968624f74f1918df392bf8861f09f4b2c4d095b3eaec6aff431b4ad3d6675",
   "reasons": {
-    "faithfulness": 36,
-    "hedge_dropped": 22,
-    "lead_missing": 8,
+    "faithfulness": 47,
+    "hedge_dropped": 28,
+    "lead_missing": 11,
     "not_scored": 0,
     "unattributed": 0,
-    "unsupported_number": 1
+    "unsupported_number": 2
   },
-  "revision": 3,
-  "runs": 3,
+  "revision": 4,
+  "runs": 4,
   "sources": [
     {
       "doubted": 1,
-      "published": 3,
+      "published": 4,
       "source_id": "abc-au-world",
       "truncated": 0
     },
@@ -221,7 +221,7 @@
     },
     {
       "doubted": 0,
-      "published": 2,
+      "published": 4,
       "source_id": "anadolu-world",
       "truncated": 0
     },
@@ -234,42 +234,48 @@
     {
       "doubted": 0,
       "published": 2,
+      "source_id": "aws-ml-blog",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 2,
       "source_id": "balkangreen",
       "truncated": 0
     },
     {
       "doubted": 0,
-      "published": 2,
+      "published": 3,
       "source_id": "bbc-business",
       "truncated": 0
     },
     {
       "doubted": 1,
-      "published": 1,
+      "published": 2,
       "source_id": "bbc-tech",
       "truncated": 0
     },
     {
-      "doubted": 1,
-      "published": 4,
+      "doubted": 2,
+      "published": 6,
       "source_id": "bbc-world",
       "truncated": 0
     },
     {
-      "doubted": 3,
-      "published": 6,
+      "doubted": 4,
+      "published": 8,
       "source_id": "business-today-in",
       "truncated": 0
     },
     {
-      "doubted": 3,
-      "published": 6,
+      "doubted": 5,
+      "published": 8,
       "source_id": "cna-business",
       "truncated": 0
     },
     {
-      "doubted": 0,
-      "published": 2,
+      "doubted": 1,
+      "published": 3,
       "source_id": "cna-world",
       "truncated": 0
     },
@@ -280,8 +286,14 @@
       "truncated": 0
     },
     {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "databricks-blog",
+      "truncated": 0
+    },
+    {
       "doubted": 2,
-      "published": 5,
+      "published": 7,
       "source_id": "deccan-chronicle",
       "truncated": 0
     },
@@ -292,8 +304,8 @@
       "truncated": 0
     },
     {
-      "doubted": 1,
-      "published": 4,
+      "doubted": 2,
+      "published": 6,
       "source_id": "dna-india",
       "truncated": 0
     },
@@ -304,20 +316,20 @@
       "truncated": 0
     },
     {
-      "doubted": 3,
-      "published": 6,
+      "doubted": 4,
+      "published": 8,
       "source_id": "economic-times",
       "truncated": 0
     },
     {
-      "doubted": 1,
-      "published": 4,
+      "doubted": 2,
+      "published": 6,
       "source_id": "electrek",
       "truncated": 0
     },
     {
-      "doubted": 1,
-      "published": 1,
+      "doubted": 2,
+      "published": 2,
       "source_id": "elpais-en",
       "truncated": 0
     },
@@ -329,7 +341,7 @@
     },
     {
       "doubted": 0,
-      "published": 4,
+      "published": 6,
       "source_id": "euronews",
       "truncated": 0
     },
@@ -341,20 +353,26 @@
     },
     {
       "doubted": 3,
-      "published": 6,
+      "published": 7,
       "source_id": "france24",
       "truncated": 0
     },
     {
       "doubted": 0,
-      "published": 5,
+      "published": 7,
       "source_id": "free-press-journal",
       "truncated": 0
     },
     {
-      "doubted": 2,
-      "published": 2,
+      "doubted": 4,
+      "published": 4,
       "source_id": "frontline",
+      "truncated": 0
+    },
+    {
+      "doubted": 1,
+      "published": 1,
+      "source_id": "google-cloud-ai",
       "truncated": 0
     },
     {
@@ -365,7 +383,7 @@
     },
     {
       "doubted": 1,
-      "published": 1,
+      "published": 2,
       "source_id": "guardian-ai",
       "truncated": 0
     },
@@ -377,13 +395,13 @@
     },
     {
       "doubted": 2,
-      "published": 5,
+      "published": 7,
       "source_id": "guardian-world",
       "truncated": 0
     },
     {
       "doubted": 1,
-      "published": 6,
+      "published": 8,
       "source_id": "hindustan-times",
       "truncated": 0
     },
@@ -406,14 +424,14 @@
       "truncated": 0
     },
     {
-      "doubted": 2,
-      "published": 6,
+      "doubted": 3,
+      "published": 8,
       "source_id": "independent-world",
       "truncated": 0
     },
     {
       "doubted": 2,
-      "published": 5,
+      "published": 7,
       "source_id": "india-today",
       "truncated": 0
     },
@@ -424,14 +442,14 @@
       "truncated": 0
     },
     {
-      "doubted": 2,
-      "published": 2,
+      "doubted": 3,
+      "published": 3,
       "source_id": "lemonde-en",
       "truncated": 0
     },
     {
-      "doubted": 2,
-      "published": 4,
+      "doubted": 3,
+      "published": 6,
       "source_id": "livemint",
       "truncated": 0
     },
@@ -443,7 +461,7 @@
     },
     {
       "doubted": 1,
-      "published": 3,
+      "published": 5,
       "source_id": "livemint-markets",
       "truncated": 0
     },
@@ -467,7 +485,7 @@
     },
     {
       "doubted": 1,
-      "published": 2,
+      "published": 4,
       "source_id": "mongabay",
       "truncated": 0
     },
@@ -484,8 +502,8 @@
       "truncated": 0
     },
     {
-      "doubted": 1,
-      "published": 2,
+      "doubted": 2,
+      "published": 3,
       "source_id": "npr-business",
       "truncated": 0
     },
@@ -503,7 +521,7 @@
     },
     {
       "doubted": 1,
-      "published": 4,
+      "published": 5,
       "source_id": "oilprice",
       "truncated": 0
     },
@@ -527,19 +545,19 @@
     },
     {
       "doubted": 2,
-      "published": 3,
+      "published": 5,
       "source_id": "quartz",
       "truncated": 0
     },
     {
       "doubted": 0,
-      "published": 4,
+      "published": 5,
       "source_id": "scroll-in",
       "truncated": 0
     },
     {
       "doubted": 0,
-      "published": 1,
+      "published": 2,
       "source_id": "seekingalpha",
       "truncated": 0
     },
@@ -556,8 +574,8 @@
       "truncated": 0
     },
     {
-      "doubted": 0,
-      "published": 1,
+      "doubted": 1,
+      "published": 3,
       "source_id": "techcrunch-ai",
       "truncated": 0
     },
@@ -569,43 +587,43 @@
     },
     {
       "doubted": 1,
-      "published": 6,
+      "published": 8,
       "source_id": "the-hindu-national",
       "truncated": 0
     },
     {
       "doubted": 2,
-      "published": 6,
+      "published": 8,
       "source_id": "thehindu-all",
       "truncated": 0
     },
     {
-      "doubted": 2,
-      "published": 3,
+      "doubted": 3,
+      "published": 5,
       "source_id": "thehindu-biz",
       "truncated": 0
     },
     {
       "doubted": 0,
-      "published": 6,
+      "published": 8,
       "source_id": "thehindu-business",
       "truncated": 0
     },
     {
       "doubted": 1,
-      "published": 6,
+      "published": 8,
       "source_id": "thehindu-intl",
       "truncated": 0
     },
     {
       "doubted": 2,
-      "published": 5,
+      "published": 7,
       "source_id": "toi-india",
       "truncated": 0
     },
     {
-      "doubted": 2,
-      "published": 6,
+      "doubted": 4,
+      "published": 8,
       "source_id": "toi-top",
       "truncated": 0
     },
@@ -618,52 +636,58 @@
     {
       "doubted": 0,
       "published": 1,
+      "source_id": "wired-ai",
+      "truncated": 0
+    },
+    {
+      "doubted": 0,
+      "published": 1,
       "source_id": "world-nuclear-news",
       "truncated": 0
     },
     {
       "doubted": 0,
-      "published": 3,
+      "published": 5,
       "source_id": "yahoo-finance",
       "truncated": 0
     }
   ],
-  "sources_present": 70,
+  "sources_present": 74,
   "stage_timing": [
     {
       "max_ms": 14769,
-      "p50_ms": 578,
-      "p90_ms": 2108,
+      "p50_ms": 557,
+      "p90_ms": 2053,
       "stage": "fetch",
-      "sum_ms": 235139,
-      "timed": 216
+      "sum_ms": 300240,
+      "timed": 291
     },
     {
       "max_ms": 289,
-      "p50_ms": 49,
-      "p90_ms": 104,
+      "p50_ms": 50,
+      "p90_ms": 109,
       "stage": "extract",
-      "sum_ms": 13524,
-      "timed": 216
+      "sum_ms": 18467,
+      "timed": 291
     },
     {
       "max_ms": 531723,
-      "p50_ms": 111352,
-      "p90_ms": 235660,
+      "p50_ms": 108133,
+      "p90_ms": 241721,
       "stage": "summarize",
-      "sum_ms": 27559685,
-      "timed": 216
+      "sum_ms": 37736846,
+      "timed": 291
     }
   ],
-  "summaries_scored": 209,
+  "summaries_scored": 282,
   "throughput": {
-    "cached_tokens": 161414,
-    "decode_ms": 9796338,
-    "input_tokens": 380301,
-    "items": 209,
-    "output_tokens": 49738,
-    "prefill_ms": 16745377
+    "cached_tokens": 215824,
+    "decode_ms": 13141573,
+    "input_tokens": 510691,
+    "items": 282,
+    "output_tokens": 66680,
+    "prefill_ms": 23273350
   },
   "version": "2026-09-07",
-  "visuals_rendered": 11
+  "visuals_rendered": 19
 }
