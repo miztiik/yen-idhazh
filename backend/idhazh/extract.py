@@ -31,7 +31,7 @@ from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 #: Bumped when extraction changes shape. It is a fingerprint input, because a
 #: different extractor over the same page is a different input to the model.
-EXTRACTOR_VERSION: Final = f"trafilatura-{trafilatura.__version__}-idhazh-1"
+EXTRACTOR_VERSION: Final = f"trafilatura-{trafilatura.__version__}-idhazh-2"
 
 # English averages a little over one token per word. Exact enough to place a
 # truncation point deterministically, and it is only a placement: the decoder
@@ -44,6 +44,10 @@ _JSON_LD = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9'.,-]*")
+_PLAYER_INTERFACE_XPATH: Final = (
+    "//*[contains(concat(' ', normalize-space(@class), ' '), ' o-em-consent ') "
+    "or contains(concat(' ', normalize-space(@class), ' '), ' o-em-adblock ')]"
+)
 
 
 def approx_tokens(word_total: int) -> int:
@@ -107,9 +111,14 @@ def extract_text(html: str) -> str | None:
 
     Comments and tables are excluded: a comment thread is other people's text
     on someone else's page, and it is the part most likely to be hostile.
+    Embedded-player consent and error containers are interface text, not prose.
     """
     body = trafilatura.extract(
-        html, include_comments=False, include_tables=False, favor_precision=True
+        html,
+        include_comments=False,
+        include_tables=False,
+        favor_precision=True,
+        prune_xpath=_PLAYER_INTERFACE_XPATH,
     )
     if not body:
         return None

@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-09-08
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the five planted attacks that assert it on every change. This is the operational home of Rule #11.
 
@@ -98,6 +98,24 @@ The extractor classifies page shape after sanitization. It records `too_short`,
 verdicts. By default the item still publishes, often through the brief tier. A
 curator can turn on `extract.reject_not_prose` or `extract.reject_boilerplate`,
 but length and shape do not decide newsworthiness by themselves.
+
+`extract_text` removes embedded-player interface containers through
+Trafilatura's `prune_xpath` hook before its existing sanitization pass. The
+matched class tokens are `o-em-consent` and `o-em-adblock`: consent prompts and
+blocked-player messages, not article paragraphs. Whole-token matching leaves
+similarly named prose containers intact. No video is loaded or consent bypassed.
+The extractor version is now `trafilatura-<version>-idhazh-2`, so the pipeline
+identity records the change. Historical article payloads are not rewritten.
+
+The bounded replay fixture
+[`france24-player.html`](../../../tests/fixtures/pages/france24-player.html)
+keeps the affected player wrappers, headline and short introduction from a
+2026-09-08 France24 capture. It omits unrelated layout and assets. The tests in
+[`test_extract.py`](../../../backend/tests/test_extract.py) require the notices
+to disappear, the article to survive and a short article to remain publishable.
+The [capture provenance and replay results](../../reference/measurements.md#drift-review-and-source-extraction-2026-09-08)
+record why these containers are removed. The test opens a fixed fixture, never
+the growing archive, and makes no network request.
 
 The paywall discriminator is different. Publisher JSON-LD with
 `isAccessibleForFree = false`, or a configured marker such as "subscribe to
