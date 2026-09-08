@@ -1,3 +1,4 @@
 version,date,run_id,policy_months,max_deletes_per_run,dry_run,cutoff_date,candidates_found,deleted,skipped_by_fuse,fuse_tripped,bytes_reclaimed,oldest_kept,payload_bytes_before,payload_bytes_after
 2026-09-06T13:00,2026-09-08,2026-09-08-34198561963,-1,200,True,,0,0,0,False,0,2026-08-22,25491684,25491684
 2026-09-06T13:00,2026-09-08,2026-09-08-34220472258,-1,200,True,,0,0,0,False,0,2026-08-22,25722510,25722510
+2026-09-06T13:00,2026-09-08,2026-09-08-34239040377,-1,200,True,,0,0,0,False,0,2026-08-22,25964001,25964001
