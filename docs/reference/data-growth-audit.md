@@ -12,15 +12,6 @@ snapshot. Source links below point to the audited revision, not the older editor
 checkout. Carmack, Fowler and Andre reviewed the relevant code. Their findings
 were reconciled against source and focused execution checks.
 
-**Finding 1 has since moved, and the row below is left as the audit found it.**
-`ledger.load_published` no longer reads one lifetime CSV. The ledger files by day
-under `state/published/YYYY/MM/DD.csv`, and the read carries
-`collect.published_window_days` - a cover the committed config sets to `-1`, so
-the shipping answer is still every address and the machinery for a finite cover
-is in place. The tables here are a snapshot pinned to the audited revision and
-are not rewritten when a finding is addressed; the current shape is in
-[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
-
 ## Ruling
 
 Replace repeated history reconstruction with indexed state, immutable run outputs,
@@ -49,6 +40,16 @@ handover. The inventory is otherwise unchanged - it still describes the audited
 revision `76c2d27c`, and the PRs are what changed `main` since. Finding 84 was
 ruled on and deferred rather than implemented; finding 87 was closed across two
 rows; finding 112, a `Keep`, sits inside the 93-113 range but is not closed.
+
+The [Growing Reads Window plan](../../TODO/20260907-growing-reads-window-plan.md)
+moved **finding 1** on 2026-09-08. `ledger.load_published` no longer reads one
+lifetime CSV: the ledger files by day under `state/published/YYYY/MM/DD.csv`,
+and the read carries `collect.published_window_days` - a cover the committed
+config sets to `-1`, so the shipping answer is still every address and the
+machinery for a finite one is in place. That is a partition and a cover rather
+than the indexed lookup the row below proposes, so the finding is moved rather
+than closed. The current shape is in
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
 
 ## Reading The Tables
 
