@@ -1,0 +1,209 @@
+name: Measure the migrated tree
+
+# Row #1 of TODO/20260908-shell-and-fetch-plan.md. That plan rested on two
+# estimates - what the site weighs once the prerendered dated documents and the
+# committed encoder weights leave it, and what a searching reader pays on the
+# wire once the weights come from Hugging Face. An unmeasured number may not
+# justify a design (Rule #10), so this measures both before any contract in that
+# plan is written.
+#
+# It runs here and not on a developer machine because the dominant term in a
+# tree walk is per-file syscall cost, and that is the term that differs most
+# between the two machines: a laptop overstates a whole build by about 4.1x
+# (99.4 s against 24 s, 2026-09-08) and by more on a file walk. Carmack,
+# 2026-09-08.
+#
+# Its own file rather than a job inside digest.yml, because a measurement
+# harness that shares a file with the daily pipeline can break the daily
+# pipeline (Fowler, 2026-09-08). Row #19 deletes this file once the numbers are
+# recorded, so nothing else may come to depend on it - which is also why every
+# step below is inline rather than a script under .github/scripts/.
+#
+# It measures and prints. It never commits, never pushes and never deploys, and
+# `permissions: contents: read` is what holds that rather than a promise. Every
+# `rm -rf` below is inside the runner's own checkout.
+#
+# Arm 2 of the row - what the encoder costs on the wire from Hugging Face - is
+# NOT here. `test_every_fetched_weight_is_checked_before_anything_reads_it`
+# discovers a weights fetch by the substring `huggingface.co/` in a step's
+# shell, and then requires a pinned revision, a digest check and a named reader
+# step. A measurement that discards the body has no digest to check and no
+# reader, so it cannot meet that contract - and putting the URL in `env:` to
+# slip past the substring would be defeating a guard rather than satisfying it.
+# Arm 2 is an operator measurement taken from a terminal instead, and
+# docs/reference/measurements.md records where from.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: measure-migrated-tree
+  cancel-in-progress: false
+
+jobs:
+  # One job, because both arms have to answer for the same commit. Measuring the
+  # tree before the migration on Monday and after it on Tuesday compares two
+  # trees rather than one change, and the archive grows 1.69 MB a published day
+  # underneath both.
+  migrated-tree:
+    runs-on: ubuntu-latest
+    # Three site builds at about 24 s each plus three tree walks. The `site` job
+    # in ci.yml does one build and a type-check inside 15 minutes; this is sized
+    # from that, with room for a cold npm cache.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `site-weight` is a backend module: one reader of config/idhazh.json
+      # rather than a second copy of the Pages budget.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install the site
+        working-directory: frontend
+        run: npm ci
+
+      # No dev extra: nothing here runs a test.
+      - name: Install the backend
+        run: pip install -e .
+
+      - name: Say which machine and which commit produced every figure below
+        run: |
+          set -euo pipefail
+          {
+            echo "## Measure the migrated tree"
+            echo
+            echo "Commit \`${GITHUB_SHA}\`"
+            echo
+            echo '```'
+            uname -srm
+            echo "vCPU: $(nproc)"
+            echo "node: $(node --version)"
+            echo "RAM: $(free -h | awk '/^Mem:/ {print $2}')"
+            echo '```'
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          du -sb frontend/static/assist/models frontend/static/assist/wasm
+
+      # Arm 1a - the tree as it ships today, on this commit. The baseline the
+      # migrated figures are a delta against.
+      - name: Build the site as it ships today
+        working-directory: frontend
+        run: npm run build
+
+      - name: Measure today's tree against the Pages cap
+        working-directory: frontend
+        run: python -m idhazh site-weight --site-tree build
+
+      - name: Count today's tree
+        env:
+          ARM: today
+        run: |
+          set -euo pipefail
+          site_files=$(find frontend/build -type f | wc -l)
+          site_bytes=$(du -sb frontend/build | cut -f1)
+          out_files=$(find frontend/.svelte-kit/output -type f | wc -l)
+          out_bytes=$(du -sb frontend/.svelte-kit/output | cut -f1)
+          dated=$(find frontend/build -maxdepth 1 -type d \
+            -regex '.*/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | wc -l)
+          echo "arm=${ARM} build_files=${site_files} build_bytes=${site_bytes}"
+          echo "arm=${ARM} output_files=${out_files} output_bytes=${out_bytes}"
+          echo "arm=${ARM} dated_route_directories=${dated}"
+          printf '| %s | %s | %s | %s | %s | %s |\n' \
+            "${ARM}" "${site_bytes}" "${site_files}" "${out_bytes}" "${out_files}" "${dated}" \
+            >> "${RUNNER_TEMP}/counts.md"
+
+      # Arm 1b - the same commit with the two things the migration removes: the
+      # committed encoder weights, and the prerendered dated and topic
+      # documents. The weights go before the build, because the build is what
+      # copies them into the tree. The documents go after it, because the build
+      # is what writes them.
+      - name: Remove the committed encoder weights
+        run: rm -rf frontend/static/assist/models
+
+      - name: Rebuild without the weights
+        working-directory: frontend
+        run: npm run build
+
+      - name: Remove the prerendered dated and topic documents
+        run: |
+          set -euo pipefail
+          find frontend/build -maxdepth 1 -type d \
+            -regex '.*/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' -exec rm -rf {} +
+
+      - name: Measure the migrated tree against the Pages cap
+        working-directory: frontend
+        run: python -m idhazh site-weight --site-tree build
+
+      - name: Count the migrated tree
+        env:
+          ARM: migrated
+        run: |
+          set -euo pipefail
+          site_files=$(find frontend/build -type f | wc -l)
+          site_bytes=$(du -sb frontend/build | cut -f1)
+          out_files=$(find frontend/.svelte-kit/output -type f | wc -l)
+          out_bytes=$(du -sb frontend/.svelte-kit/output | cut -f1)
+          dated=$(find frontend/build -maxdepth 1 -type d \
+            -regex '.*/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | wc -l)
+          echo "arm=${ARM} build_files=${site_files} build_bytes=${site_bytes}"
+          echo "arm=${ARM} output_files=${out_files} output_bytes=${out_bytes}"
+          echo "arm=${ARM} dated_route_directories=${dated}"
+          printf '| %s | %s | %s | %s | %s | %s |\n' \
+            "${ARM}" "${site_bytes}" "${site_files}" "${out_bytes}" "${out_files}" "${dated}" \
+            >> "${RUNNER_TEMP}/counts.md"
+
+      # The same arm a second time. A tree size is deterministic given a commit,
+      # so this is here to say so with evidence rather than by assertion: two
+      # runs that disagree mean the build writes something that moves, and that
+      # would make every figure above an average of two different trees.
+      - name: Rebuild the migrated tree a second time
+        run: |
+          set -euo pipefail
+          rm -rf frontend/build frontend/.svelte-kit
+          npm --prefix frontend run build
+          find frontend/build -maxdepth 1 -type d \
+            -regex '.*/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' -exec rm -rf {} +
+
+      - name: Measure the migrated tree a second time
+        working-directory: frontend
+        run: python -m idhazh site-weight --site-tree build
+
+      - name: Count the migrated tree a second time
+        env:
+          ARM: migrated-again
+        run: |
+          set -euo pipefail
+          site_files=$(find frontend/build -type f | wc -l)
+          site_bytes=$(du -sb frontend/build | cut -f1)
+          out_files=$(find frontend/.svelte-kit/output -type f | wc -l)
+          out_bytes=$(du -sb frontend/.svelte-kit/output | cut -f1)
+          dated=$(find frontend/build -maxdepth 1 -type d \
+            -regex '.*/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | wc -l)
+          echo "arm=${ARM} build_files=${site_files} build_bytes=${site_bytes}"
+          echo "arm=${ARM} output_files=${out_files} output_bytes=${out_bytes}"
+          echo "arm=${ARM} dated_route_directories=${dated}"
+          printf '| %s | %s | %s | %s | %s | %s |\n' \
+            "${ARM}" "${site_bytes}" "${site_files}" "${out_bytes}" "${out_files}" "${dated}" \
+            >> "${RUNNER_TEMP}/counts.md"
+
+      - name: Put every arm on the run summary
+        run: |
+          set -euo pipefail
+          {
+            echo '| arm | build bytes | build files | output bytes | output files | dated dirs |'
+            echo '| --- | --- | --- | --- | --- | --- |'
+            cat "${RUNNER_TEMP}/counts.md"
+          } >> "$GITHUB_STEP_SUMMARY"

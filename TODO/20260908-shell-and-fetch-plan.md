@@ -55,7 +55,7 @@ discover. All are folded in. The five that would have cost the most:
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Measure the migrated tree and the two wire costs | - | A | PENDING | - | - | - |
+| 1 | Measure the migrated tree and the two wire costs | - | A | IN-FLIGHT | yi-s01-measure | #527 | worker |
 | 2 | The parcel carries the day, not the archive | - | A | LANDED | - | #523 | worker |
 | 4 | One verification call, and it is the one that assigns | - | A | IN-FLIGHT | yi-s04-verify | #524 | worker |
 | 5 | Stage only what changed | - | A | IN-FLIGHT | yi-s05-stage | #526 | worker |
