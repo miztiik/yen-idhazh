@@ -905,6 +905,15 @@ for the sample counts and the confirmed extraction defect.
 metrics by the recorded identities. Its text report names `DRIFT_VERSION`, date
 windows, thresholds, sample counts, findings and skipped comparisons. It does
 not persist a new drift-row contract or replay a fixed model benchmark.
+
+The workflow prints the complete report in its run log. Its GitHub issue keeps
+the findings and coverage counts, with a link to that log instead of repeating
+every skipped comparison. GitHub limits an issue body to 65,536 bytes. If the
+findings alone exceed that limit, the issue explicitly directs the operator to
+the full log. No finding is silently cut and no comparison changes to fit the
+message. The detail remains available for the run log's retention period,
+rather than the issue's lifetime.
+
 The fixed-set rules above remain the intended instrument. Offline captured-page
 regressions protect extraction code; they do not replace a scheduled model
 benchmark or prove that every live source still has the captured layout.

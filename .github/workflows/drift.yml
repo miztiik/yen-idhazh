@@ -56,7 +56,7 @@ jobs:
           python - <<'PY' | tee drift.txt
           import datetime, os, pathlib
           from idhazh.config import load
-          from idhazh.drift import read_windows, report
+          from idhazh.drift import issue_body, read_windows, report
 
           windows = read_windows(
               pathlib.Path("state"),
@@ -64,8 +64,16 @@ jobs:
               recent_days=int(os.environ["RECENT_DAYS"]),
               baseline_days=int(os.environ["BASELINE_DAYS"]),
           )
-          text, status = report(windows, config=load().app.drift)
+          config = load().app.drift
+          text, status = report(windows, config=config)
           print(text)
+          if status == 0:
+              run_url = (
+                  f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+                  f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+              )
+              body = issue_body(windows, config=config, run_url=run_url)
+              pathlib.Path("drift-issue.txt").write_text(body, encoding="utf-8", newline="\n")
           raise SystemExit(status)
           PY
 
@@ -76,7 +84,7 @@ jobs:
           if grep -qE '^(shorter_sources|more_copying|scoring_chrome) ' drift.txt; then
             gh issue create \
               --title "Drift detected $(date -u +%F)" \
-              --body-file drift.txt
+              --body-file drift-issue.txt
           fi
         env:
           GH_TOKEN: ${{ github.token }}

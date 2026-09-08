@@ -38,6 +38,7 @@ from idhazh.drift import (
     domain_of,
     extraction_is_rotting,
     failure_rate,
+    issue_body,
     read_windows,
     report,
     shortfall,
@@ -389,6 +390,67 @@ def test_a_thin_window_counts_as_nothing_compared() -> None:
 # --- The shipped review step -------------------------------------------------
 
 
+def test_the_issue_body_keeps_findings_when_skipped_details_exceed_githubs_limit() -> None:
+    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    after = rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.8)
+    sparse = [
+        row
+        for index in range(300)
+        for row in rows(f"https://sparse-{index}.example/story", words=150, hhem=0.9, extractiveness=0.2, n=1)
+    ]
+    windows = Windows(
+        datetime.date(2026, 8, 2),
+        datetime.date(2026, 8, 30),
+        datetime.date(2026, 9, 6),
+        [*after, *sparse],
+        before,
+        ("2026-08", "2026-09"),
+    )
+    run_url = "https://github.com/example/repository/actions/runs/123"
+
+    full, status = report(windows, config=DriftConfig())
+    body = issue_body(windows, config=DriftConfig(), run_url=run_url)
+
+    assert status == 0
+    assert len(full.encode("utf-8")) > 65536
+    assert len(body.encode("utf-8")) <= 65536
+    for alert in Alert:
+        assert f"{alert.value} news.example.com:" in body
+    assert "900 comparisons had insufficient evidence" in body
+    assert "sparse-299.example" in full
+    assert "sparse-299.example" not in body
+    assert run_url in body
+    assert "not evidence of healthy extraction" in body
+
+
+def test_the_issue_body_links_the_full_report_when_findings_alone_are_too_large() -> None:
+    before = [
+        row
+        for index in range(180)
+        for row in rows(f"https://changed-{index}.example/story", words=1200, hhem=0.85, extractiveness=0.2, n=2)
+    ]
+    after = [replace(row, source_word_count=150, hhem=0.9, extractiveness=0.8) for row in before]
+    windows = Windows(
+        datetime.date(2026, 8, 2),
+        datetime.date(2026, 8, 30),
+        datetime.date(2026, 9, 6),
+        after,
+        before,
+        ("2026-08", "2026-09"),
+    )
+    config = DriftConfig(min_domain_rows=2)
+    run_url = "https://github.com/example/repository/actions/runs/123"
+
+    summary, status = report(windows, config=config, include_skipped_details=False)
+    body = issue_body(windows, config=config, run_url=run_url)
+
+    assert status == 0
+    assert len(summary.encode("utf-8")) > 65536
+    assert len(body.encode("utf-8")) <= 65536
+    assert "findings exceed GitHub's issue-body limit" in body
+    assert run_url in body
+
+
 def compare_step() -> dict[str, object]:
     workflow = yaml.safe_load(read_text(DRIFT_WORKFLOW))
     for step in workflow["jobs"]["drift"]["steps"]:
@@ -472,7 +534,13 @@ def review(directory: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-c", review_program()],
         cwd=directory,
-        env={**os.environ, **scheduled_windows()},
+        env={
+            **os.environ,
+            **scheduled_windows(),
+            "GITHUB_SERVER_URL": "https://github.com",
+            "GITHUB_REPOSITORY": "example/repository",
+            "GITHUB_RUN_ID": "123",
+        },
         capture_output=True,
         text=True,
         check=False,
@@ -488,7 +556,7 @@ def test_the_review_reads_its_floor_from_config() -> None:
     """Rule #6. The shipped program asks config, and carries no number of its own."""
     program = review_program()
 
-    assert "config=load().app.drift" in program
+    assert "config = load().app.drift" in program
     assert "from idhazh.config import load" in program
     assert enough() >= 1
 
@@ -568,6 +636,15 @@ def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert Alert.SCORING_CHROME.value in result.stdout
     assert "scorer: fixture-scorer" in result.stdout
+    body = read_text(tmp_path / "drift-issue.txt")
+    assert Alert.SCORING_CHROME.value in body
+    assert "https://github.com/example/repository/actions/runs/123" in body
+    workflow = yaml.safe_load(read_text(DRIFT_WORKFLOW))
+    issue_step = next(
+        step for step in workflow["jobs"]["drift"]["steps"]
+        if step.get("name") == "Open an issue when something moved"
+    )
+    assert "--body-file drift-issue.txt" in issue_step["run"]
 
 
 def test_the_reader_uses_completed_utc_days_and_only_relevant_months(tmp_path: Path) -> None:

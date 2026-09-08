@@ -29,6 +29,7 @@ from idhazh.ledger import shards_in_window
 DRIFT_VERSION: Final = "idhazh-drift-3"
 
 FAILURE_RATE_MAX: Final = 0.20
+GITHUB_ISSUE_BODY_MAX_BYTES: Final = 65536
 
 type Series = tuple[str, str, str]
 
@@ -384,7 +385,9 @@ def shortfall(
     return "; ".join(thin) if thin else None
 
 
-def report(windows: Windows, *, config: DriftConfig) -> tuple[str, int]:
+def report(
+    windows: Windows, *, config: DriftConfig, include_skipped_details: bool = True
+) -> tuple[str, int]:
     """Plain-text operator report and exit code; findings do not stop publication."""
     recent_end = windows.end - timedelta(days=1)
     baseline_end = windows.recent_start - timedelta(days=1)
@@ -427,6 +430,25 @@ def report(windows: Windows, *, config: DriftConfig) -> tuple[str, int]:
         if finding.series is not None:
             model, scorer, pipeline = finding.series
             lines.append(f"  model: {model}; scorer: {scorer}; pipeline: {pipeline}")
-    if result.skipped:
+    if result.skipped and include_skipped_details:
         lines.extend(("", "Not compared (not evidence of healthy extraction):", *result.skipped))
     return "\n".join(lines), 0 if result.compared else 1
+
+
+def issue_body(windows: Windows, *, config: DriftConfig, run_url: str) -> str:
+    """Bound the GitHub notice; the linked run log keeps every comparison."""
+    text, _ = report(windows, config=config, include_skipped_details=False)
+    link = (
+        f"Full report: {run_url}\n"
+        "The run log includes every finding and skipped comparison. "
+        "Skipped comparisons are not evidence of healthy extraction."
+    )
+    body = f"{text}\n\n{link}"
+    if len(body.encode("utf-8")) > GITHUB_ISSUE_BODY_MAX_BYTES:
+        return (
+            f"Drift review {windows.end} ({DRIFT_VERSION})\n"
+            "The detailed findings exceed GitHub's issue-body limit. "
+            "Read the full report before diagnosing a failure.\n\n"
+            f"{link}"
+        )
+    return body
