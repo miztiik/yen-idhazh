@@ -551,19 +551,31 @@ jobs:
 
       # Neither of the two runs this shape was read from measured memory at all,
       # and the runner has 16 GB (Rule #2). `measure.yml` already samples exactly
-      # this; the daily path did not. VmRSS is what a process holds, and the
-      # cgroup peak read at job end is what the runner counted against the limit.
+      # this; the daily path did not. VmHWM is the high-water mark a process
+      # reached and VmRSS is what it holds right now, and the cgroup peak is what
+      # the runner counted against the limit.
+      #
+      # Both marks are taken for python as well as for llama-server, because
+      # llama-server is not the whole job. Reading only VmRSS there made the
+      # recorded python figure a LOWER bound - a 15-second sampler misses a spike
+      # between two samples - and a lower bound is the unsafe direction for a
+      # headroom decision.
+      #
+      # `python_vmhwm_kb` is appended at the END of the row rather than beside its
+      # VmRSS sibling. A file written before it existed then still parses, and
+      # nothing that reads `python_procs` by position moves.
       - name: Sample memory
         run: |
           set -euo pipefail
           cat > sample-rss.sh <<'SAMPLER'
           set -u
           pid="$1"
-          printf 'ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\n' > rss-samples.tsv
+          printf 'ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\tpython_vmhwm_kb\n' > rss-samples.tsv
           while kill -0 "$pid" 2>/dev/null; do
             rss=$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
             hwm=$(awk '/^VmHWM:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
             python_kb=0
+            python_hwm_kb=0
             python_n=0
             for proc in /proc/[0-9]*; do
               case "$(cat "$proc/comm" 2>/dev/null || true)" in
@@ -572,11 +584,13 @@ jobs:
               esac
               kb=$(awk '/^VmRSS:/ {print $2}' "$proc/status" 2>/dev/null || true)
               [ -n "$kb" ] || continue
+              proc_hwm=$(awk '/^VmHWM:/ {print $2}' "$proc/status" 2>/dev/null || true)
               python_kb=$((python_kb + kb))
+              python_hwm_kb=$((python_hwm_kb + ${proc_hwm:-$kb}))
               python_n=$((python_n + 1))
             done
-            printf '%s\t%s\t%s\t%s\t%s\n' \
-              "$(date -u +%FT%TZ)" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" >> rss-samples.tsv
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+              "$(date -u +%FT%TZ)" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" "$python_hwm_kb" >> rss-samples.tsv
             sleep 15
           done
           SAMPLER
@@ -661,12 +675,24 @@ jobs:
           # The arguments after the body are the job's own facts rather than the
           # server's, so the row that says what this shard read also says how
           # long it took, which processor read it, how much of that processor it
-          # used, how much memory it held and what the weights cost to open. `:-`
-          # because a reading that never ran must leave an empty cell, not send
-          # the word "unbound" to a contract that would refuse it. The two files
-          # are the ones this job has been writing all along and the ones the
-          # runtime artifact already carries, so nothing new is produced here -
-          # only read.
+          # used, how much memory it and the rest of the job held, and what the
+          # weights cost to open. `:-` because a reading that never ran must
+          # leave an empty cell, not send the word "unbound" to a contract that
+          # would refuse it.
+          #
+          # The kernel's own peak is read HERE rather than in the summary step
+          # below, because the row reads the file and a file written after the
+          # row is a file the row never saw. It is written rather than passed as
+          # a string so that the runtime artifact and the operator still get it,
+          # and it is written before the row so the two cannot disagree. The
+          # stage never opens `/sys` itself: that tree is on the runner and on no
+          # developer machine this project is written on, so a stage that read it
+          # could not be run or tested anywhere else.
+          if [ -f /sys/fs/cgroup/memory.peak ]; then
+            echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" > memory-peak.txt
+          else
+            echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
+          fi
           CPU_STAT_AT_END=$(awk '/^cpu / { print }' /proc/stat || true)
           python -m idhazh counters \
             --date "${{ needs.plan.outputs.date }}" \
@@ -678,7 +704,8 @@ jobs:
             --cpu-stat-at-start "${CPU_STAT_AT_START:-}" \
             --cpu-stat-at-end "${CPU_STAT_AT_END:-}" \
             --rss-samples-file rss-samples.tsv \
-            --server-log llama-server.log
+            --server-log llama-server.log \
+            --memory-peak-file memory-peak.txt
 
       # The shape the plan job uses, for the reason written there, and the same
       # script - eight shards racing one branch is what its rebase loop and the
@@ -745,18 +772,24 @@ jobs:
               }'
           done
 
+      # The operator's read of the same two files the counters row read, in the
+      # job log where a person looking at a failed shard will find it. It writes
+      # nothing: `memory-peak.txt` is written by the counters step above, so the
+      # number printed here and the number on the row are one reading.
       - name: What memory this shard used
         if: always()
         run: |
-          if [ -f /sys/fs/cgroup/memory.peak ]; then
-            echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" | tee memory-peak.txt
-          else
-            echo "cgroup_memory_peak_bytes=unavailable" | tee memory-peak.txt
-          fi
+          cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
           if [ -f rss-samples.tsv ]; then
             awk -F'\t' '
-              NR > 1 { if ($2 + 0 > llama) llama = $2 + 0; if ($4 + 0 > py) py = $4 + 0 }
-              END { printf "peak llama VmRSS %d kB, peak python VmRSS %d kB, n=%d samples\n", llama, py, NR - 1 }
+              NR > 1 {
+                if ($3 + 0 > llama) llama = $3 + 0
+                if ($6 + 0 > py) py = $6 + 0
+                if ($2 + $4 > together) together = $2 + $4
+              }
+              END {
+                printf "peak llama VmHWM %d kB, peak python VmHWM %d kB, most the two held at once %d kB, n=%d samples\n", llama, py, together, NR - 1
+              }
             ' rss-samples.tsv
           else
             echo "rss-samples.tsv not found"
