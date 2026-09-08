@@ -1,0 +1,32 @@
+{
+  "$id": "observation-index-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the observation digest, and the stamp every ledger row carries.",
+      "version": "2026-09-07",
+      "why": "The writer's dedupe read every live score shard and every archived month before a single append. Measured on this repository on 2026-09-07: 7,636 rows, 6,111.8 KB, 819.6 bytes a row, and about 173 MB once the ledger reaches steady state - a cost that rises on a day nobody writes any code, which is what Rule #12 refuses. The question is 64 hex characters wide, so the answer is a cheaper record of the same identities rather than a shorter memory: 566.8 KB over those same measurements, 10.8 times smaller. Nothing is forgotten and no clock is involved."
+    }
+  ],
+  "description": "One row of `state/score-index/<YYYY-MM>.csv`: one measurement already held.",
+  "properties": {
+    "observation_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Observation Digest",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-07",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "observation_digest"
+  ],
+  "title": "ObservationIndexRow",
+  "type": "object",
+  "version": "2026-09-07"
+}
