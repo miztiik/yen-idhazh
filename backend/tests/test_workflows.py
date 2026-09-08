@@ -2119,15 +2119,31 @@ def test_the_visuals_artifact_collects_the_file_the_stage_writes() -> None:
     empty artifact, `assemble` receives no decisions, every item publishes with
     no picture, and the run is green throughout. Nothing else in the repository
     connects the two: the glob is YAML and the suffix is a Python name.
+
+    The second line is the run's own day, and this asserts that as well as the
+    first, because the two failures are opposite and both are silent.
+    `render.write.asset_relpath` files every chart under the day that names it,
+    so a line naming the whole tree sends every committed day back to Actions on
+    every run - a parcel that grows when nobody writes any code (Rule #12), and
+    it grew 6.36 to 6.66 MB over six runs on 2026-09-07/08. A line that narrows
+    past the day loses the charts instead, and the day publishes with none.
     """
     workflow = _load_workflows()["digest.yml"]
     upload = _mapping(_artifact_upload(workflow, "visuals", "visuals").get("with"), "upload")
     paths = _string_list(str(upload.get("path")).splitlines(), "visuals upload path")
-    globs = [path.strip() for path in paths if path.strip()]
+    globs = [_substitute(path.strip()) for path in paths if path.strip()]
 
-    assert f"{RUN_ARTIFACTS}/{SUBSTITUTED_DATE}/items/*{PAYLOAD_SUFFIX}" in [
-        _substitute(glob) for glob in globs
-    ], f"the visuals upload must glob *{PAYLOAD_SUFFIX}, which is what the stage writes"
+    # Closed, and in order, because both lines are load-bearing and each one
+    # fails silently on its own: the day line without the items line publishes a
+    # day with no pictures, and either line alone would move the artifact root
+    # off the repository root that `assemble` unpacks into with `path: .`.
+    assert globs == [
+        f"{RUN_ARTIFACTS}/{SUBSTITUTED_DATE}/items/*{PAYLOAD_SUFFIX}",
+        f"{SUBSTITUTED_DAY_DIR}/",
+    ], (
+        f"the visuals upload must glob *{PAYLOAD_SUFFIX}, which is what the stage "
+        "writes, and carry this run's day rather than the whole digest tree"
+    )
     assert upload.get("if-no-files-found") == "ignore", (
         "a stage that decided nothing must not fail the job - which is why the "
         "glob above has to be checked here"
