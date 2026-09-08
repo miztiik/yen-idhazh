@@ -15,7 +15,8 @@ import {
 	leadSeries,
 	matchDays,
 	matchSeries,
-	newFactDays
+	newFactDays,
+	type DayScoredCounts
 } from '$lib/console/eval-instruments';
 import {
 	reasonColumnLabels,
@@ -32,13 +33,14 @@ import {
 	scoreCost,
 	sourceDoubts,
 	throughputWithin,
+	workDates,
 	writeTimes,
 	type DayWindow
 } from '$lib/server/model-work';
 import { stacked } from '$lib/charts/stacked';
 import { windowOfDays } from '$lib/charts/viewport';
 import { renderToSvg } from '$lib/server/chart-render';
-import { evalRows, itemHealthRows, loadDay, publishedDates } from '$lib/server/payload';
+import { dayMetrics, evalRows, itemHealthRows, loadDay, publishedDates } from '$lib/server/payload';
 
 export const prerender = true;
 
@@ -126,8 +128,7 @@ export async function load() {
 	//
 	// Anchored on the same day list the cards anchor on, so every panel on the
 	// page names one span.
-	const work = modelWork(rows, itemRows);
-	const dated = work.flatMap((row) => (row.kind === 'day' ? [row.day.date] : []));
+	const dated = workDates(rows, itemRows);
 	const windows = new Map<number, DayWindow>(
 		console.window_presets.map((days) => {
 			const span = windowOfDays(dated, today, days, console.today_anchor);
@@ -137,6 +138,23 @@ export async function load() {
 	// The widest span the control can reach. Nothing older than this can be drawn
 	// whatever the operator does, so nothing older is inlined.
 	const widest = [...windows.values()].reduce((a, b) => (a.days >= b.days ? a : b));
+	// The distinct-published counts each day settled, read one record a day for
+	// the days the widest span reaches and no wider - never a walk over the whole
+	// `state/day-metrics/` tree (CLAUDE.md Rule #12). A day the record does not
+	// cover falls back to the ledger row count, exactly as before. This corrects
+	// the scored count on the days a re-score or a dropped item ran it high, and
+	// leaves every measurement distribution reading the same rows it always did.
+	const settledCounts = new Map<string, DayScoredCounts>();
+	for (const [date, record] of dayMetrics(
+		dated.filter((date) => date >= widest.start && date <= widest.end)
+	)) {
+		settledCounts.set(date, {
+			scored: record.summariesScored,
+			determinismViolations: record.determinismViolations,
+			extractionSuspect: record.extractionSuspect
+		});
+	}
+	const work = modelWork(rows, itemRows, settledCounts);
 
 	// Why each day's summaries were doubted. Seeded to the widest span for the
 	// same reason `runLengths` is: each day is already seven small numbers, so
@@ -168,7 +186,7 @@ export async function load() {
 	// it. Inlining the rows to re-derive those numbers in a browser would put the
 	// whole checker's output into every prerendered document.
 	const leadFloor = evaluationConfig().lead_coverage_min;
-	const evaluated = evalWithin(evalDays(rows, leadFloor), {
+	const evaluated = evalWithin(evalDays(rows, leadFloor, settledCounts), {
 		start: widest.start,
 		end: widest.end
 	});

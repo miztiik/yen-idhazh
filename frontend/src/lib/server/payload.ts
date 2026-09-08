@@ -379,6 +379,83 @@ export function itemHealthRows(): CsvTable {
 	return readShards(join(STATE_ROOT, 'item-health'));
 }
 
+/** The three published-set counts a run settled about one day.
+ *
+ * Read back from the committed day-metrics record so the console does not
+ * re-count them by walking the whole score ledger. All three count the day's
+ * *distinct published* items, never score-ledger rows: the ledger dedupes by
+ * measurement, so one item re-scored under a new stamp keeps both rows, and a
+ * run may score an item it then drops (`backend/idhazh/publish_day_metrics.py`).
+ * The measurement distributions the console draws still read every row - only
+ * these per-item counts join the published set, so only these are read here. The
+ * whole record shape is `schemas/day-metrics.schema.json`; this is the slice the
+ * console reduces from.
+ */
+export interface DayMetrics {
+	date: string;
+	/** Distinct published items the checker gave a faithfulness score. */
+	summariesScored: number;
+	/** Of those, the ones whose identical inputs produced different words. */
+	determinismViolations: number;
+	/** Of those, the ones whose source read like page furniture. */
+	extractionSuspect: number;
+}
+
+/** The day-metrics record for each named date, read one file at a time.
+ *
+ * Opens only `state/day-metrics/<YYYY>/<MM>/<DD>.json` for the dates handed in -
+ * never a listing of the tree - so the cost is the window the caller asked for
+ * and not the archive it sits in (`CLAUDE.md` Rule #12). Adding another
+ * published day writes another file this call never opens unless the window
+ * reaches it. A date with no record, or a record that cannot be read, is left
+ * out of the map: the caller falls back to the raw ledger for that day, which is
+ * what it read before.
+ *
+ * `root` is overridable for the same reason the other ledger readers' roots are:
+ * the canary suite points it at a fixture state that must never reach the real
+ * records.
+ */
+export function dayMetrics(
+	dates: readonly string[],
+	root: string = STATE_ROOT
+): Map<string, DayMetrics> {
+	const found = new Map<string, DayMetrics>();
+	for (const date of dates) {
+		if (found.has(date)) continue;
+		const [year, month, day] = date.split('-');
+		if (!year || !month || !day) continue;
+		const path = join(root, 'day-metrics', year, month, `${day}.json`);
+		if (!existsSync(path)) continue;
+		try {
+			const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+			const scored = parsed.summaries_scored;
+			const drift = parsed.determinism_violations;
+			const suspect = parsed.extraction_suspect;
+			if (
+				typeof scored !== 'number' ||
+				typeof drift !== 'number' ||
+				typeof suspect !== 'number'
+			) {
+				throw new TypeError('a day-metrics count is missing or not a number');
+			}
+			found.set(date, {
+				date,
+				summariesScored: scored,
+				determinismViolations: drift,
+				extractionSuspect: suspect
+			});
+		} catch (cause) {
+			// Degrade, do not fail (`CLAUDE.md` section 1a): one unreadable record
+			// drops that day back to the ledger count, it does not take the build
+			// down for every other day.
+			console.warn(
+				`[day-metrics] ${date}: record unreadable, day falls back to the ledger - ${String(cause)}`
+			);
+		}
+	}
+	return found;
+}
+
 /** Public monthly telemetry shards. These are safe for a browser to fetch. */
 export function telemetryMonths(root: string = TELEMETRY_ROOT): string[] {
 	if (!existsSync(root)) return [];
