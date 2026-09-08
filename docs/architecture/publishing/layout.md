@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-07
+**Last Updated**: 2026-09-08
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -879,6 +879,28 @@ Three things were added and none of them fails a build.
 **A runway from nothing raises rather than returning a comfortable number.** Zero published items divides into an infinite runway, and an infinite runway reads exactly like a healthy site - the same failure as the green light on the wrong tree, one function along. So the per-item property raises on an empty tree, the CLI checks before it asks, and a tree carrying no day payloads prints `runway: unknown` instead. The zero-file tree still fails outright, as it already did.
 
 **What it printed the first time, 2026-08-30 at `76cdc72`:** 141.1 MB in 311 files, 883 MB of headroom, 48,457 B a published item, 7.39 MB a published day, and **119 published days to the cap**. The rate is an average over the whole tree, so it charges the on-device encoder and the JavaScript bundle - 46.5 percent of the site, and neither of them grows with a day - to every future item. **That makes the printed runway a floor: at least 119 days, and about 223 once the fixed directories are taken out.** It prints the conservative one on purpose, and `by_directory` is on the same output so a reader can do that subtraction rather than take the floor as the answer. Full working in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling).
+
+### The state prunes were already constant-cost, and the premise that said otherwise was wrong (2026-09-08)
+
+A plan row asked for the dated-directory walk [row 14 gave the visual tree](#what-bounds-the-committed-state-tree) to be given to the state prunes as well, on the premise that `retention.month_shards` and the prune inventories "list and sort every partition directory across every store, on every maintenance pass, including passes where nothing is due". Re-measured before anything was changed, that premise does not hold, so the performance work was not done. Rule #10: when a measurement contradicts the design, the design changes.
+
+Counted rather than timed, because a timing is flaky and says nothing about what was read. `os.scandir`, `os.listdir`, `os.stat` and `os.lstat` were counted around one pass of `prune_seen`, `prune_feed_health`, `prune_telemetry` and `prune_scores` over a built state tree - every store filled through its own real appender - on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM, Windows 11, CPython 3.14.2, 2026-09-08:
+
+| Tree | Ages in force | Directory opens | Shard stats |
+| --- | --- | --- | --- |
+| 3 months in every store | raised, nothing due | 5 | 0 |
+| 140 months in every store | raised, nothing due | 5 | 0 |
+| 3 months in every store | shipped | 5 | 0 |
+| 14 months in every store | shipped | 5 | 11 |
+| 140 months in every store | shipped | 5 | 389 |
+
+Counting a syscall is deterministic, so the spread is zero.
+
+**Five opens, and the five do not move when the tree holds forty-six times more.** They are one listing each of `state/seen/`, `state/feed-health/`, `state/item-health/`, `state/scores/` and `frontend/public/telemetry/` - one per store, never one per month. **A month partition is a file, not a directory**, so there is no partition directory to open and nothing for a dated walk to skip. The sort the premise objected to is a sort of names already in hand from that one listing: 140 strings, in memory, no I/O. The visual tree really is `<YYYY>/<MM>/<DD>/`, which is why row 14's walk was worth building there and buys nothing here.
+
+**What does move is the backlog, and that is already the shape row 14 landed.** Nothing due costs nothing, at 3 months and at 140 alike. The 11 stats at fourteen months are `state/seen/` on its own, whose window is 90 days rather than fourteen months, so 11 of its 14 shards are past it. The 389 at 140 months are exactly the due shards - 137 seen, 126 feed-health, 126 scores - each read once for the `bytes_freed` figure the committed result carries. A pass that has caught up reads nothing. So the cost already answers Rule #12 the right way: it rises with the work outstanding, never with what an earlier run appended, and it falls as the policy works.
+
+**The row was not empty, because the same measurement found a real defect underneath it.** Three month-name recognisers disagreed, so `2025-13.csv` was left alone in one store and deleted from another. That is [what counts as a month name](../../concepts/month-partitions.md#what-counts-as-a-month-name) in the concept doc, and the fix is one shared rule in `idhazh.month_partition`.
 
 ## Rejected alternatives
 
