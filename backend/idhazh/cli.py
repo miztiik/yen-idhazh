@@ -2660,8 +2660,8 @@ def stage_prune_stamp(*, corpus_dir: Path, date: str) -> int:
     return 0
 
 
-def stage_dedupe_ledgers(*, state_dir: Path | None = None) -> int:
-    """Settle every keyed ledger after a merge, and print what it dropped.
+def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> int:
+    """Settle the keyed ledgers after a merge, and print what it dropped.
 
     The one thing an appending stage cannot do for itself. Each of those stages
     filters what it is about to write against the file it checked out, and
@@ -2676,6 +2676,22 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None) -> int:
     once. `.github/scripts/commit-and-push.sh` calls it there through
     `DROP_REPEATED_ROWS_COMMAND`, between the rebase and the push.
 
+    **`date` names the run, and that is the whole cover.** A run appends only to
+    the shard its own date routes to, so a repeat the merge left can only be in a
+    file this run wrote - and the ordinary pass reads six files whether the
+    archive holds one month or sixty. It used to glob every feed-health shard,
+    every item-health shard and every score shard, which charged each run for
+    every month the pipeline had ever recorded and found nothing, because a
+    finished month was settled when it was written and cannot change again
+    (Rule #12).
+
+    **`date=None` is the operator's full pass, and it is the one that pays for
+    the history.** What the bounded pass gives up is an earlier run whose settle
+    step itself failed: no later run writes that month, so nothing sweeps the
+    repeat up in passing any more. `idhazh dedupe-ledgers --every-shard` is the
+    command a person runs to clear it, and it is deliberately a command rather
+    than a default - an unbounded read is a decision somebody takes out loud.
+
     Every ledger that declares what makes two of its rows the same record is
     settled here. `state/seen/` declares nothing and is left alone - see
     `ledger.keyed_paths`. Feed-health is the one whose repeats can disagree, so
@@ -2687,9 +2703,14 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None) -> int:
     run every ledger row staged beside the one it just fixed.
     """
     state = state_dir if state_dir is not None else STATE_ROOT
+    scores: list[tuple[Path, tuple[str, ...]]] = (
+        [(writer.ledger_path(state, date), writer.OBSERVATION_KEY)]
+        if date is not None
+        else [(shard, writer.OBSERVATION_KEY) for shard in writer.ledger_shards(state)]
+    )
     targets: list[tuple[Path, tuple[str, ...]]] = [
-        *ledger.keyed_paths(state),
-        *((shard, writer.OBSERVATION_KEY) for shard in writer.ledger_shards(state)),
+        *ledger.keyed_paths(state, date=date),
+        *scores,
     ]
     total = 0
     for path, key in targets:
@@ -2702,7 +2723,12 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None) -> int:
                 "+".join(key),
                 dropped,
             )
-    LOG.info("ledgers settled files=%s repeated_rows_dropped=%s", len(targets), total)
+    LOG.info(
+        "ledgers settled cover=%s files=%s repeated_rows_dropped=%s",
+        date or "every-shard",
+        len(targets),
+        total,
+    )
     return 0
 
 
@@ -4154,6 +4180,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Report what the telemetry fold would do and change nothing on disk.",
     )
+    parser.add_argument(
+        "--every-shard",
+        action="store_true",
+        help=(
+            "dedupe-ledgers: settle every committed shard rather than the run's. "
+            "The operator's full pass, and the only one that costs more every month."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -4188,7 +4222,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         # It runs from inside a commit step, between a rebase and a push, and a
         # step that opened a socket there would read the open web to decide what
         # to keep.
-        return stage_dedupe_ledgers()
+        #
+        # The cover is stated, never defaulted. `--date` is what a commit step
+        # passes and it settles that run's shards; `--every-shard` walks the
+        # archive and is a person's decision (Rule #12). A step that named
+        # neither would get the unbounded pass by accident, which is exactly the
+        # cost this stage stopped paying.
+        if (args.date is None) == (not args.every_shard):
+            parser.error(
+                "dedupe-ledgers needs --date (the run whose shards it settles) "
+                "or --every-shard (the operator's full pass), and not both"
+            )
+        return stage_dedupe_ledgers(date=None if args.every_shard else args.date)
 
     if args.stage == "prune-state":
         # And this one only reads and deletes committed files. A fold that opened

@@ -85,6 +85,11 @@ def ledger_shards(state_dir: Path) -> list[Path]:
     recognises rather than acting on what it does not. What counts as a month is
     `month_partition.is_month_stem` and nothing local - this directory is the
     one where getting that wrong deletes a file.
+
+    The daily settlement is no longer a caller. A run appends to the one shard
+    `ledger_path` names, so that shard is the only place a repeat can be, and
+    walking the rest charged every run for every month on record (Rule #12,
+    `cli.stage_dedupe_ledgers`). The operator's full pass still comes here.
     """
     return month_partition.month_files(state_dir / LEDGER_DIRNAME, ".csv")
 

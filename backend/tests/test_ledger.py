@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import tracemalloc
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import FIXTURES_DIR
@@ -1008,7 +1011,7 @@ def test_no_committed_ledger_repeats_a_key_it_says_makes_a_row_unique() -> None:
     repeated: list[str] = []
     state = REPO_ROOT / "state"
     targets = [
-        *ledger.keyed_paths(state),
+        *ledger.keyed_paths(state, date=None),
         *((shard, OBSERVATION_KEY) for shard in writer.ledger_shards(state)),
     ]
     for path, key in targets:
@@ -1068,6 +1071,10 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     the earliest, so a repeat costs bytes and never moves an age. Everything
     else here says what makes two of its rows one record, and everything that
     says so is settled.
+
+    Both covers name the same five ledgers on a tree with one month in it. What
+    separates them is what a second month would add: to the operator's pass, a
+    file; to a run's pass, nothing.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
@@ -1075,18 +1082,19 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
-
-    keyed = [
-        (path.relative_to(tmp_path).as_posix(), key) for path, key in ledger.keyed_paths(tmp_path)
-    ]
-
-    assert keyed == [
+    named = [
         ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
         ("visual-prunes.csv", ledger.VISUAL_PRUNE_KEY),
         (f"feed-health/{DATE[:7]}.csv", ledger.FEED_HEALTH_KEY),
         (f"item-health/{DATE[:7]}.csv", ledger.ITEM_HEALTH_KEY),
     ]
+
+    every = ledger.keyed_paths(tmp_path, date=None)
+    this_run = ledger.keyed_paths(tmp_path, date=DATE)
+
+    assert [(path.relative_to(tmp_path).as_posix(), key) for path, key in every] == named
+    assert [(path.relative_to(tmp_path).as_posix(), key) for path, key in this_run] == named
 
 
 # --- One feed, one run, one result ------------------------------------------
@@ -1179,9 +1187,176 @@ def test_the_whole_state_tree_settles_in_one_call(tmp_path: Path) -> None:
     with counters.open("a", encoding="utf-8", newline="") as handle:
         handle.write(counters.read_text(encoding="utf-8").splitlines()[1] + "\n")
 
-    assert cli.stage_dedupe_ledgers(state_dir=state) == 0
+    assert cli.stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
     assert ledger.repeated_keys(counters, ledger.RUNTIME_COUNTERS_KEY) == {}
     assert len(ledger.load_runtime_counters(state, run_id=RUN_ID)) == 1
+
+
+# --- What the settlement covers, and what that costs ------------------------
+
+
+@contextlib.contextmanager
+def _file_opens() -> Iterator[list[Path]]:
+    """Every file opened inside the block, in the order it was opened.
+
+    The instrument Rule #12 asks for. A pass that costs more every month spends
+    it in `open`, and a count of opens is the one thing a shared 4 vCPU box can
+    hold still - a stopwatch there measures the neighbour's build as much as
+    this one.
+    """
+    opened: list[Path] = []
+    real = Path.open
+
+    def record(self: Path, *args: Any, **kwargs: Any) -> Any:
+        opened.append(self)
+        return real(self, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patched:
+        patched.setattr(Path, "open", record)
+        yield opened
+
+
+def _repeat_last_row(path: Path) -> None:
+    """Append the file's last row again - the shape `merge=union` leaves behind."""
+    last = path.read_text(encoding="utf-8").splitlines()[-1]
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(last + "\n")
+
+
+def _month_of_history(state: Path, date: str) -> tuple[Path, Path, Path]:
+    """One month's three sharded ledgers, each left holding one repeated key.
+
+    Built here rather than read from the committed tree, and written by the
+    shipped appenders rather than by hand: the archive offers one shape however
+    far it grows, and a test that walked it would cost more every month than the
+    pass it is measuring (Rule #12, section 13).
+    """
+    ledger.append_health(state, date, [account(FetchOutcome.OK, items=1)])
+    ledger.append_item_health(state, date, [carried_row(1, source_id="wire", date=date)])
+    scores = writer.ledger_path(state, date)
+    scores.parent.mkdir(parents=True, exist_ok=True)
+    scores.write_text(_scores(date=date), encoding="utf-8", newline="")
+    shards = (ledger.health_path(state, date), ledger.item_health_path(state, date), scores)
+    for shard in shards:
+        _repeat_last_row(shard)
+    return shards
+
+
+def test_a_repeat_in_a_shard_this_run_wrote_is_still_settled(tmp_path: Path) -> None:
+    """The behaviour that matters. Bounding what it reads may not change what it fixes.
+
+    All four keyed shapes a commit step stages, each holding the repeat a union
+    merge leaves: the three month shards and one of the flat ledgers.
+    """
+    state = tmp_path / "state"
+    health, items, scores = _month_of_history(state, DATE)
+    ledger.append_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
+    counters = ledger.runtime_counters_path(state)
+    _repeat_last_row(counters)
+
+    assert cli.stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
+
+    assert ledger.repeated_keys(health, ledger.FEED_HEALTH_KEY) == {}
+    assert ledger.repeated_keys(items, ledger.ITEM_HEALTH_KEY) == {}
+    assert ledger.repeated_keys(scores, OBSERVATION_KEY) == {}
+    assert ledger.repeated_keys(counters, ledger.RUNTIME_COUNTERS_KEY) == {}
+
+
+def test_the_settlement_opens_no_shard_from_a_month_this_run_did_not_write(
+    tmp_path: Path,
+) -> None:
+    """Rule #12, proved by a count of opens rather than by a clock.
+
+    A run appends only to the shard its own date routes to, so a repeat the
+    merge left can only be in a file this run wrote. Every other month was
+    settled when it was written and cannot change again, so reading it buys an
+    answer we already had.
+    """
+    state = tmp_path / "state"
+    older = _month_of_history(state, "2026-05-14")
+    _month_of_history(state, DATE)
+
+    with _file_opens() as opened:
+        assert cli.stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
+
+    assert [path.as_posix() for path in opened if path in older] == []
+    assert ledger.repeated_keys(older[0], ledger.FEED_HEALTH_KEY) != {}, (
+        "the older month still holds its repeat, so the pass really did skip it"
+    )
+
+
+def test_more_history_does_not_make_the_ordinary_settlement_read_more(tmp_path: Path) -> None:
+    """Twelve months of archive against one, same run, same count of opens.
+
+    Without this a bounded pass and an unbounded one are indistinguishable until
+    the archive is big enough to hurt - which is years after the commit that made
+    it unbounded.
+
+    The operator's pass is measured beside it and is expected to rise, because a
+    comparison where both arms were flat would prove the fixture broken rather
+    than the bound real.
+
+    Measured on the fixture below, 2026-09-08: the run's cover opens 6 files at
+    one month of history and 6 at twelve. The operator's opens 12 and 78 - six
+    more for every month the archive gains. These are exact counts rather than
+    timings, so the spread is zero and the hardware does not enter (Rule #10).
+    """
+
+    def opens(cover: str, months: int) -> int:
+        state = tmp_path / f"state-{cover}-{months}"
+        for year in range(2000, 2000 + months):
+            _month_of_history(state, f"{year}-01-14")
+        _month_of_history(state, DATE)
+        settled = DATE if cover == "run" else None
+        with _file_opens() as opened:
+            assert cli.stage_dedupe_ledgers(state_dir=state, date=settled) == 0
+        return len(opened)
+
+    reads = {
+        (cover, months): opens(cover, months)
+        for cover in ("run", "every-shard")
+        for months in (1, 12)
+    }
+
+    assert reads[("run", 1)] == reads[("run", 12)] == 6, f"the settlement read the archive: {reads}"
+    assert reads[("every-shard", 12)] > reads[("every-shard", 1)], (
+        f"the operator's pass is the arm that does read the archive: {reads}"
+    )
+
+
+def test_the_operator_pass_settles_a_repeat_an_older_month_kept(tmp_path: Path) -> None:
+    """What the bounded pass gives up, and who gets it back.
+
+    A settle step that failed leaves a repeat no later run will find, because no
+    later run writes that month. `--every-shard` is the pass a person runs on
+    demand to clear it, and it is the only caller that pays for the history.
+    """
+    state = tmp_path / "state"
+    health, items, scores = _month_of_history(state, "2026-05-14")
+    _month_of_history(state, DATE)
+
+    assert cli.stage_dedupe_ledgers(state_dir=state, date=None) == 0
+
+    assert ledger.repeated_keys(health, ledger.FEED_HEALTH_KEY) == {}
+    assert ledger.repeated_keys(items, ledger.ITEM_HEALTH_KEY) == {}
+    assert ledger.repeated_keys(scores, OBSERVATION_KEY) == {}
+
+
+def test_the_settlement_refuses_to_run_until_it_is_told_what_it_covers() -> None:
+    """An unbounded pass is a person's decision and never a default (Rule #12).
+
+    `--date` is what a commit step passes, and it settles that run's shards.
+    `--every-shard` is the operator's full pass. Neither is the default, so a
+    step that forgot to say which one gets an error rather than a silent walk
+    over the whole archive.
+    """
+    with pytest.raises(SystemExit) as unsaid:
+        cli.main(["dedupe-ledgers"])
+    assert unsaid.value.code == 2
+
+    with pytest.raises(SystemExit) as both:
+        cli.main(["dedupe-ledgers", "--date", DATE, "--every-shard"])
+    assert both.value.code == 2
 
 
 # --- The server's own counters, and what they are for ----------------------
