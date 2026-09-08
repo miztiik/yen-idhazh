@@ -22,10 +22,14 @@ open at that moment anyway - and is never guessed from anything else.
 **What the skip consults, and why it is not the digest.** A digest cannot be
 compared without reading the file, and reading every file is the cost this
 record exists to remove. `os.stat` answers the length without opening anything,
-so a skip is `date`, length and validator. The digest is what makes two rows
-about one day detectable as disagreeing: `merge=union` concatenates, so two runs
-really can leave two rows for one date, and where they disagree the day is
-opened again rather than trusted.
+so a skip is `date`, length and validator.
+
+A day can carry more than one row, and only the rows at the length on disk say
+anything about the payload that is there now. A closed day that `backfill.yml`
+re-encoded leaves a truthful new row beside a row about the payload that used to
+be there, and the old one is ignored rather than held against the day. Where two
+rows claim the same length and different bytes, one of them is wrong and the day
+is opened again rather than trusted. That is what the digest is for.
 
 **What it therefore does not catch**, stated rather than hidden: a committed day
 edited outside the pipeline to exactly its old length. Everything a producer
@@ -35,7 +39,12 @@ wrote, and a named day is always opened.
 CSV rather than one JSON document, because `.gitattributes` marks
 `state/*.csv` `merge=union`. Two runs appending rows are merged by a machine
 that has never read this file, and a union over independent rows is exactly
-right here.
+right here. It also makes the file append-only: a rewrite that dropped a
+superseded row would be resolved by a union that puts it back. The file
+therefore grows by one row a day, plus one a day for each time the validator
+moves, at about 155 bytes a row. **Deleting it is always safe** - a missing
+receipt costs one full sweep and never a wrong answer - so an operator who
+wants it smaller truncates it and lets the next run rebuild it.
 """
 
 from __future__ import annotations
