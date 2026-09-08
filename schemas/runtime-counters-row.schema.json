@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Appended `n_ctx_configured`, the window one sequence got; `python_peak_rss_bytes`, the high-water mark summed over the job's own python processes; and `cgroup_peak_bytes`, what the kernel counted against the job's memory limit.",
+      "version": "2026-09-08",
+      "why": "`peak_rss_bytes` is llama-server's high-water mark ALONE, so every headroom figure this project has published is an upper bound on headroom - the unsafe direction. Measured over the four committed captures of run `2026-08-29-3`, llama-server and python together held 14.31 GiB at one instant on the worst shard, leaving 0.59 GiB of the runner's 14.90 GiB usable, where llama-server alone reads 13.16 GiB and 1.74 GiB free. Python was two thirds of the missing gigabyte and no committed row carried it. The cgroup peak is the only reading that covers every process at once, and it reached a two-day artifact and no further. The window lands beside them because a memory figure cannot be read against another run's without it - `n_ctx` is a config value, and raising it is what the next plan row does."
+    },
+    {
       "change": "Appended `cpu_busy_pct`, the share of every processor second the host spent busy over the job; `peak_rss_bytes`, llama-server's own high-water mark; and `model_load_ms`, the time the server took to open the weights.",
       "version": "2026-08-30",
       "why": "The row said what the server counted and how long the job took, and nothing about the machine that did it. Three questions had no committed answer. A shard that reads the prompt 2.30x slower than its sibling in the same run is either short of processor or waiting on something else, and only a busy figure separates those - the cgroup ran 3.99 of 4 processors when it was last measured by hand, so the reading is expected at or near 100 and a drop is the signal. Whether a candidate model fits the runner's 16 GB at `n_ctx` 8192 was answered by whether the run survived; a qualification proves a model is fast enough and faithful enough and proves nothing about what it holds. And model load is the fixed cost `run.shard_size` exists to amortise, which cannot be sized against a number nobody kept."
@@ -21,6 +26,20 @@
   ],
   "description": "One `work` shard, one run, one row.",
   "properties": {
+    "cgroup_peak_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the kernel counted against the job's own memory limit, off `/sys/fs/cgroup/memory.peak`. It is the only reading here that covers every process at once, so it is the only one a headroom claim can rest on outright. EXPECT IT EMPTY ON A GITHUB-HOSTED RUNNER: this project has measured that file absent there, and the shard job then writes the word `unavailable` instead of a number. Empty reads as unknown, never as a job that used no memory.",
+      "title": "Cgroup Peak Bytes"
+    },
     "cpu_busy_pct": {
       "anyOf": [
         {
@@ -97,6 +116,20 @@
       "default": null,
       "description": "Slots busy per decode call, averaged. Says whether batching happened at all, which is what separates 'more slots did not help' from 'more slots were never used'.",
       "title": "N Busy Slots Per Decode"
+    },
+    "n_ctx_configured": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The window one sequence got, off llama-server's own `load_model: initializing` line. It is what a sequence RECEIVED and not what `--ctx-size` asked for: with `kv_unified` off and more than one slot, llama.cpp divides the window between the slots. Every other memory cell in this row is unreadable against another run's without it, because the window is a config value that can move between one row and the next.",
+      "title": "N Ctx Configured"
     },
     "n_decode_total": {
       "anyOf": [
@@ -182,6 +215,20 @@
       "description": "Prompt tokens the server actually read, cached ones excluded. The same quantity the ledger spells `input_tokens - cached_tokens`.",
       "title": "Prompt Tokens Total"
     },
+    "python_peak_rss_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The highest `VmHWM` summed over the job's python processes, over every sample this shard took. llama-server is not the whole job - the stage that reads the feeds, extracts the text and scores the summaries runs beside it on the same 16 GB, and until this cell nothing committed counted it. A process that has already exited is out of the sum, so this is an UPPER bound on what python held at once and never a lower one, which is the safe direction for a headroom decision. Empty on every row whose sampler never took the column.",
+      "title": "Python Peak Rss Bytes"
+    },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
       "title": "Run Id",
@@ -234,7 +281,7 @@
       "title": "Tokens Predicted Total"
     },
     "version": {
-      "default": "2026-08-30",
+      "default": "2026-09-08",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -249,5 +296,5 @@
   ],
   "title": "RuntimeCountersRow",
   "type": "object",
-  "version": "2026-08-30"
+  "version": "2026-09-08"
 }

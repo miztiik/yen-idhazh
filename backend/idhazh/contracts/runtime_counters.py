@@ -9,15 +9,25 @@ one scrape at job end is the whole shard, and there is nothing to subtract. A
 per-request scrape would add requests to the thing it measures and still report
 only the last one.
 
-**Five cells are about the job rather than the server.** `job_seconds` is the
+**Seven cells are about the job rather than the server.** `job_seconds` is the
 shard job's own clock, `cpu_model` is the processor it drew, `cpu_busy_pct` is
-how much of that processor it actually used, `peak_rss_bytes` is the memory high
-point it reached, and `model_load_ms` is what it paid before the first item. They
-live here because one work job is one row, which is the grain all five facts
-have; the run manifest is one row per run and a run draws up to eight hosts. The
-truncation cap reverts on the slowest work job's wall-clock, and before these
-cells the only place that number existed was the GitHub jobs API, which drops a
-job record when the run ages out.
+how much of that processor it actually used, `model_load_ms` is what it paid
+before the first item, and three cells say what it held: `peak_rss_bytes` for
+llama-server, `python_peak_rss_bytes` for everything else the job ran, and
+`cgroup_peak_bytes` for what the kernel counted against the limit. They live
+here because one work job is one row, which is the grain all seven facts have;
+the run manifest is one row per run and a run draws up to eight hosts.
+
+**Read the three memory cells together or not at all.** llama-server's mark
+alone is an upper bound on headroom - the unsafe direction - because the python
+that reads the feeds and scores the summaries is on the same 16 GB. Measured
+over the four committed captures of run `2026-08-29-3`, the two together held
+14.31 GiB at one instant on the worst shard against 13.16 GiB for the server
+alone: 0.59 GiB free of the runner's 14.90 GiB usable rather than 1.74 GiB.
+
+The truncation cap reverts on the slowest work job's wall-clock, and before
+these cells the only place that number existed was the GitHub jobs API, which
+drops a job record when the run ages out.
 
 **Why this exists.** Every timing on the item-health ledger is a field the
 summarize stage copied out of one model reply, and two documents publish rates
@@ -133,11 +143,29 @@ _CPU_DOUBLE_COUNTED: Final = ("guest", "guest_nice")
 #: server lives.
 _RSS_PEAK_COLUMN: Final = "llama_vmhwm_kb"
 
+#: The column carrying the same mark summed over the job's python processes. The
+#: sampler began taking it on 2026-09-08; before that it recorded only `VmRSS`,
+#: which is instantaneous, so a 15-second sampler could miss a spike entirely and
+#: the figure was a LOWER bound on what python held.
+_PYTHON_RSS_PEAK_COLUMN: Final = "python_vmhwm_kb"
+
+#: How the shard job writes the kernel's own peak, and the word it writes instead
+#: of a number when the file is not there - which is what a GitHub-hosted runner
+#: has measured every time this project has looked.
+_CGROUP_PEAK_KEY: Final = "cgroup_memory_peak_bytes"
+
 #: The two lines llama-server brackets its own model load with, on llama.cpp
 #: `b10598`. Read from a real capture. A rename leaves the cell empty, which
 #: reads as unknown - never as a load that took no time.
 _LOAD_STARTED: Final = "load_model: loading model"
 _LOAD_FINISHED: Final = "llama_server: model loaded"
+
+#: The line llama-server prints between those two, naming the window one
+#: sequence gets. Read from a real capture. llama.cpp has spelled the field
+#: `n_ctx_slot`, `n_ctx_seq` and `n_ctx_per_seq`; build `b10598` prints the
+#: first, so all three are read and a fourth spelling leaves the cell empty.
+_LOAD_INITIALIZING: Final = "load_model: initializing"
+_CTX_CONFIGURED: Final = re.compile(r"\bn_ctx(?:_slot|_per_seq|_seq)? = (\d+)")
 
 #: How llama-server stamps a log line: minutes, seconds, milliseconds and
 #: microseconds since its own process started. Decoded from a real capture
@@ -151,6 +179,29 @@ class RuntimeCountersRow(Contract):
 
     __schema_stem__: ClassVar[str] = "runtime-counters-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-08",
+            change=(
+                "Appended `n_ctx_configured`, the window one sequence got; "
+                "`python_peak_rss_bytes`, the high-water mark summed over the job's own "
+                "python processes; and `cgroup_peak_bytes`, what the kernel counted "
+                "against the job's memory limit."
+            ),
+            why=(
+                "`peak_rss_bytes` is llama-server's high-water mark ALONE, so every "
+                "headroom figure this project has published is an upper bound on "
+                "headroom - the unsafe direction. Measured over the four committed "
+                "captures of run `2026-08-29-3`, llama-server and python together held "
+                "14.31 GiB at one instant on the worst shard, leaving 0.59 GiB of the "
+                "runner's 14.90 GiB usable, where llama-server alone reads 13.16 GiB "
+                "and 1.74 GiB free. Python was two thirds of the missing gigabyte and "
+                "no committed row carried it. The cgroup peak is the only reading that "
+                "covers every process at once, and it reached a two-day artifact and "
+                "no further. The window lands beside them because a memory figure "
+                "cannot be read against another run's without it - `n_ctx` is a config "
+                "value, and raising it is what the next plan row does."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30",
             change=(
@@ -318,6 +369,46 @@ class RuntimeCountersRow(Contract):
         ),
     )
 
+    n_ctx_configured: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The window one sequence got, off llama-server's own "
+            "`load_model: initializing` line. It is what a sequence RECEIVED and not "
+            "what `--ctx-size` asked for: with `kv_unified` off and more than one slot, "
+            "llama.cpp divides the window between the slots. Every other memory cell in "
+            "this row is unreadable against another run's without it, because the "
+            "window is a config value that can move between one row and the next."
+        ),
+    )
+    python_peak_rss_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The highest `VmHWM` summed over the job's python processes, over every "
+            "sample this shard took. llama-server is not the whole job - the stage that "
+            "reads the feeds, extracts the text and scores the summaries runs beside it "
+            "on the same 16 GB, and until this cell nothing committed counted it. A "
+            "process that has already exited is out of the sum, so this is an UPPER "
+            "bound on what python held at once and never a lower one, which is the safe "
+            "direction for a headroom decision. Empty on every row whose sampler never "
+            "took the column."
+        ),
+    )
+    cgroup_peak_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "What the kernel counted against the job's own memory limit, off "
+            "`/sys/fs/cgroup/memory.peak`. It is the only reading here that covers every "
+            "process at once, so it is the only one a headroom claim can rest on "
+            "outright. EXPECT IT EMPTY ON A GITHUB-HOSTED RUNNER: this project has "
+            "measured that file absent there, and the shard job then writes the word "
+            "`unavailable` instead of a number. Empty reads as unknown, never as a job "
+            "that used no memory."
+        ),
+    )
+
     @model_validator(mode="after")
     def _shard_fits_inside_the_run(self) -> Self:
         if self.shard >= self.shards:
@@ -375,6 +466,7 @@ class RuntimeCountersRow(Contract):
         cpu_stat_at_end: str | None = None,
         rss_samples: str | None = None,
         server_log: str | None = None,
+        memory_peak: str | None = None,
     ) -> Self:
         """Read one row out of a `GET /metrics` body and the host readings beside it.
 
@@ -392,9 +484,10 @@ class RuntimeCountersRow(Contract):
 
         The last four arguments are raw text the host printed, not numbers a
         caller worked out: the `cpu` line of `/proc/stat` at each end of the job,
-        the memory sampler's whole file, and llama-server's own log. Every
-        derivation happens here, so the arithmetic behind three cells is in one
-        testable place rather than spread across a shell script.
+        the memory sampler's whole file, llama-server's own log, and the one line
+        the job wrote out of the kernel's peak file. Every derivation happens
+        here, so the arithmetic behind six cells is in one testable place rather
+        than spread across a shell script.
         """
         values: dict[str, Any] = {}
         for line in text.splitlines():
@@ -416,8 +509,11 @@ class RuntimeCountersRow(Contract):
                 "job_seconds": _elapsed(scraped_at, job_started_at),
                 "cpu_model": (cpu_model or "").strip() or None,
                 "cpu_busy_pct": _cpu_busy_pct(cpu_stat_at_start, cpu_stat_at_end),
-                "peak_rss_bytes": _peak_rss_bytes(rss_samples),
+                "peak_rss_bytes": _peak_bytes(rss_samples, _RSS_PEAK_COLUMN),
                 "model_load_ms": _model_load_ms(server_log),
+                "n_ctx_configured": _n_ctx_configured(server_log),
+                "python_peak_rss_bytes": _peak_bytes(rss_samples, _PYTHON_RSS_PEAK_COLUMN),
+                "cgroup_peak_bytes": _cgroup_peak_bytes(memory_peak),
                 **values,
             }
         )
@@ -470,12 +566,13 @@ def _cpu_busy_pct(at_start: str | None, at_end: str | None) -> float | None:
     return round(100 * busy / available, 2)
 
 
-def _peak_rss_bytes(text: str | None) -> int | None:
-    """The highest `VmHWM` the memory sampler saw, in bytes.
+def _peak_bytes(text: str | None, column: str) -> int | None:
+    """The highest reading in one named column of the memory sampler's file, in bytes.
 
     The column is found by name off the sampler's own header rather than by
     position, so a column added to the left of it cannot silently shift which
-    number this reads. `/proc` reports kilobytes and this row reports bytes.
+    number this reads, and a file written before a column existed reads as absent
+    rather than as zero. `/proc` reports kilobytes and this row reports bytes.
     """
     if not text:
         return None
@@ -483,15 +580,32 @@ def _peak_rss_bytes(text: str | None) -> int | None:
     if not lines:
         return None
     header = lines[0].split("\t")
-    if _RSS_PEAK_COLUMN not in header:
+    if column not in header:
         return None
-    column = header.index(_RSS_PEAK_COLUMN)
+    index = header.index(column)
     peaks = [
-        int(cells[column])
+        int(cells[index])
         for cells in (line.split("\t") for line in lines[1:])
-        if len(cells) > column and cells[column].strip().isdigit()
+        if len(cells) > index and cells[index].strip().isdigit()
     ]
     return max(peaks) * 1024 if peaks else None
+
+
+def _cgroup_peak_bytes(text: str | None) -> int | None:
+    """The number the shard job read out of the kernel's own peak file.
+
+    The job writes one `<key>=<value>` line and writes the word `unavailable`
+    when the kernel file is not there, which is what a GitHub-hosted runner has
+    measured every time. Any value that is not a plain count leaves the cell
+    empty, and empty reads as unknown.
+    """
+    if not text:
+        return None
+    for line in text.splitlines():
+        key, found, raw = line.strip().partition("=")
+        if found and key.strip() == _CGROUP_PEAK_KEY and raw.strip().isdigit():
+            return int(raw.strip())
+    return None
 
 
 def _log_microseconds(line: str) -> int | None:
@@ -522,6 +636,25 @@ def _model_load_ms(text: str | None) -> float | None:
     if len(instants) != 2:
         return None
     return (instants[_LOAD_FINISHED] - instants[_LOAD_STARTED]) / 1000
+
+
+def _n_ctx_configured(text: str | None) -> int | None:
+    """The window one sequence got, off the line llama-server prints while loading.
+
+    Read only from that line, so a number that means something else cannot be
+    picked up from a request timing later in the same log. A build that renames
+    the line, or the field on it, leaves the cell empty - which reads as unknown,
+    and is the same failure `SERIES` is written for.
+    """
+    if not text:
+        return None
+    for line in text.splitlines():
+        if _LOAD_INITIALIZING not in line:
+            continue
+        found = _CTX_CONFIGURED.search(line)
+        if found is not None:
+            return int(found.group(1))
+    return None
 
 
 def _elapsed(scraped_at: str, job_started_at: int | None) -> int | None:
