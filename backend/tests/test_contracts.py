@@ -2556,9 +2556,10 @@ def test_the_window_that_produced_the_memory_figure_is_read_off_the_servers_own_
     )
 
     assert row.n_ctx_configured == expected
-    # The configured window on 2026-08-29. It is here so that a run which raises
-    # it fails this line and has to say so, rather than quietly making every
-    # earlier memory row incomparable with every later one.
+    # The window run 2026-08-29-3 actually ran under. These captures are frozen,
+    # so this does not move when the configured window does - it is here to say
+    # which window the memory figures of that run belong to, because a later run
+    # on a different window is not comparable with them.
     assert expected == 8192
 
 
