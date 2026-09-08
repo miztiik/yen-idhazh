@@ -430,6 +430,54 @@ export interface DayMetrics {
 	/** Published items whose source extract the cap cut short, from the record's
 	 * `items_truncated`. Null on the same terms as `notSure`. */
 	itemsTruncated: number | null;
+	/** What the candidate pass found on the day and what the page drew from it,
+	 * or null on a record written before 2026-09-08. */
+	extraction: DayExtraction | null;
+}
+
+/** One day's extraction block, exactly as `schemas/day-metrics.schema.json`
+ * holds it. Every count is additive across days, so a window is a sum.
+ *
+ * The two rates are not stored and are not read: a rate is not additive, so the
+ * page derives both from these counts over whichever window is open. */
+export interface DayExtraction {
+	items: number;
+	spanIntegrityPass: number;
+	elementsFound: number;
+	chartable: number;
+	narrative: number;
+	unclassified: number;
+	chartablePublished: number;
+	chartableCharted: number;
+}
+
+const EXTRACTION_CELLS = [
+	['items', 'items'],
+	['spanIntegrityPass', 'span_integrity_pass'],
+	['elementsFound', 'elements_found'],
+	['chartable', 'chartable'],
+	['narrative', 'narrative'],
+	['unclassified', 'unclassified'],
+	['chartablePublished', 'chartable_published'],
+	['chartableCharted', 'chartable_charted']
+] as const;
+
+/** The extraction block, or null where the record predates it or is short a cell.
+ *
+ * Lenient in one direction only. A record with no block is a day that measured
+ * nothing and reads null, which the page prints as such; a block missing a cell
+ * is a record this build cannot reduce, and a zero substituted for it would say
+ * the extractor found nothing. Both read null and neither takes the day down. */
+function extractionOf(parsed: Record<string, unknown>): DayExtraction | null {
+	const block = parsed.extraction as Record<string, unknown> | null | undefined;
+	if (block === null || block === undefined) return null;
+	const cells: Record<string, number> = {};
+	for (const [name, cell] of EXTRACTION_CELLS) {
+		const value = block[cell];
+		if (typeof value !== 'number') return null;
+		cells[name] = value;
+	}
+	return cells as unknown as DayExtraction;
 }
 
 /** The day-metrics record for each named date, read one file at a time.
@@ -482,7 +530,8 @@ export function dayMetrics(
 				determinismViolations: drift,
 				extractionSuspect: suspect,
 				notSure: typeof low === 'number' ? low : null,
-				itemsTruncated: typeof truncated === 'number' ? truncated : null
+				itemsTruncated: typeof truncated === 'number' ? truncated : null,
+				extraction: extractionOf(parsed)
 			});
 		} catch (cause) {
 			// Degrade, do not fail (`CLAUDE.md` section 1a): one unreadable record

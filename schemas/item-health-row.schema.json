@@ -1,5 +1,15 @@
 {
   "$defs": {
+    "ElementClass": {
+      "description": "What one article's numbers say it could carry, and nothing else.\n\n**Three classes, and the count is the point.** The visual programme names\nfive, and only two of them are a question about numbers. `comparative` and\n`processual` are claims about how an article is written, so they have no\nquery yet and land with the diagram plan. Anything reporting per class before\nthen names three and says so, rather than letting a reader take three for the\nwhole taxonomy.\n\nThe query rests on the element table's Tier 1 fields alone - `kind`, `value`\nand `unit` - so it is byte-exact and carries no model judgement.\n`idhazh.elements.classify` is the query; this is its vocabulary, and\n`docs/architecture/extraction/elements.md` is the page that owns it.\n\n**It is declared here rather than beside the element contract**, with the\nthree other closed vocabularies this census row carries, because\n`contracts/element.py` sits above `contracts/article.py`, which sits above\nthis module. A label a census row persists has to be declared at or below the\nrow's own level, and this is the level.",
+      "enum": [
+        "chartable",
+        "narrative",
+        "unclassified"
+      ],
+      "title": "ElementClass",
+      "type": "string"
+    },
     "FailureCode": {
       "description": "Stable failure vocabulary for item-health rows.",
       "enum": [
@@ -55,6 +65,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added nullable span_integrity, elements_found and element_class at the end of the row.",
+      "version": "2026-09-08T21:00",
+      "why": "The visual planner draws nothing on most items and nothing said whether the article had anything to draw, so a fall in published charts read the same whether the planner stopped choosing them or the extractor stopped finding numbers - and those have different fixes. The class is a query over the element table's Tier 1 fields alone, so it is byte-exact and carries no model judgement. It lands here rather than beside the visual decision because two writers append this ledger and the earlier one runs in the work job, hours before a plan exists: a cell only assemble could fill would be dropped for every item a shard had already recorded. Counts and a class label, never article text - span_excerpt stays inside the process that cut it (CLAUDE.md section 0a). Appended at the end and nullable, so a row an earlier run wrote still reads: those runs measured nothing here and their cells stay empty."
+    },
     {
       "change": "Added nullable shard at the end of the row.",
       "version": "2026-08-30",
@@ -160,6 +175,32 @@
       "default": null,
       "description": "Our own one-line reason, only for unknown. Never source text.",
       "title": "Detail"
+    },
+    "element_class": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ElementClass"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the article's own numbers say it could carry: chartable, narrative, or unclassified. Three classes and not five - the other two are claims about language and have no query yet. Null on the same terms as elements_found."
+    },
+    "elements_found": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Tier 1 elements the candidate pass kept for this article, after the rule that settles two passes claiming one span and after elements.max_per_article. A count, never the elements. Null before 2026-09-08 and whenever span_integrity is not true.",
+      "title": "Elements Found"
     },
     "extract_ms": {
       "anyOf": [
@@ -312,6 +353,19 @@
       "description": "Words in the extracted body before extract.truncation_cap_tokens cut it, taken from Article.source_word_count. source_words is the same counter after the cut, so source_words_before_cap > source_words is the cut and nothing else. A count, never the text. Null before 2026-08-28.",
       "title": "Source Words Before Cap"
     },
+    "span_integrity": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did every element span cut its own characters out of the article text? Empty means the pass never ran, because the item carried no text. False means it ran and the table would not re-slice, which degrades this item alone. The two cells after this one are filled only when it is true.",
+      "title": "Span Integrity"
+    },
     "stage": {
       "$ref": "#/$defs/ItemStage"
     },
@@ -347,7 +401,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-30",
+      "default": "2026-09-08T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -371,5 +425,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-08-30"
+  "version": "2026-09-08T21:00"
 }

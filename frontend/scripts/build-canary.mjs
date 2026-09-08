@@ -105,7 +105,7 @@ function writeItemHealthCanary() {
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
 		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap',
-		'shard'
+		'shard', 'span_integrity', 'elements_found', 'element_class'
 	];
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.
@@ -149,8 +149,25 @@ function writeItemHealthCanary() {
 			input_tokens: model[2],
 			output_tokens: model[3],
 			cached_tokens: model[4],
-			source_words_before_cap: cut?.[2]
+			source_words_before_cap: cut?.[2],
+			...extraction(id)
 		});
+
+	/** What the candidate pass got out of one article, as a published row holds it.
+	 *
+	 * Fixture, not measurement: this canary never runs the extractor, and the
+	 * article text a span was cut from is not in the ledger to re-read. The split
+	 * is by item id so it is stable across builds and so each of the three classes
+	 * is on the day - a fixture that only ever wrote one class is a panel two
+	 * thirds of which no test can reach.
+	 */
+	const extraction = (id) => {
+		const bucket = [...id].reduce((total, letter) => total + letter.charCodeAt(0), 0) % 4;
+		if (bucket === 0) return { span_integrity: 'True', elements_found: 0, element_class: 'narrative' };
+		if (bucket === 1)
+			return { span_integrity: 'True', elements_found: 2, element_class: 'unclassified' };
+		return { span_integrity: 'True', elements_found: 5, element_class: 'chartable' };
+	};
 
 	/** An item the extractor threw away. Not a failure: dropping a page that is
 	 * not an article is the job, so the row is `ok` and the failed-item list

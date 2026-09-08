@@ -23,6 +23,7 @@ from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.elements import ExtractionHealth
 from idhazh.fetch import BLOCKED_REASONS, ROBOTS_REFUSALS
 from idhazh.ledger import STATE_DIRNAME
 from idhazh.sanitize import sanitize
@@ -674,6 +675,7 @@ def classify_item(
     date: str,
     run_id: str,
     shard: int | None = None,
+    extraction: ExtractionHealth | None = None,
 ) -> ItemHealthRow:
     """Return the one terminal row for this planned item in this run.
 
@@ -682,6 +684,12 @@ def classify_item(
     runs once for the whole day and cannot know which machine an item was for, so
     the rows it adds leave the cell empty rather than naming a shard that may
     never have started.
+
+    `extraction` arrives already computed, because it needs two config sections
+    this module has no other reason to read. It rides on every branch: an article
+    the summarizer never reached still had text a pattern could read, and a class
+    recorded only for the items that published would make the extractor look
+    healthiest on the days it failed most.
     """
     if article is None:
         return _row(
@@ -689,6 +697,7 @@ def classify_item(
             date=date,
             run_id=run_id,
             shard=shard,
+            extraction=extraction,
             stage=ItemStage.PLAN,
             outcome=ItemOutcome.FAILED,
             code=FailureCode.NOT_ATTEMPTED,
@@ -701,6 +710,7 @@ def classify_item(
             date=date,
             run_id=run_id,
             shard=shard,
+            extraction=extraction,
             stage=stage,
             outcome=ItemOutcome.FAILED,
             code=code,
@@ -718,6 +728,7 @@ def classify_item(
                 date=date,
                 run_id=run_id,
                 shard=shard,
+                extraction=extraction,
                 stage=ItemStage.PUBLISH,
                 outcome=ItemOutcome.OK,
                 code=article.failure_code,
@@ -730,6 +741,7 @@ def classify_item(
             date=date,
             run_id=run_id,
             shard=shard,
+            extraction=extraction,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
             code=FailureCode.UNKNOWN,
@@ -746,6 +758,7 @@ def classify_item(
             date=date,
             run_id=run_id,
             shard=shard,
+            extraction=extraction,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
             code=code,
@@ -767,6 +780,7 @@ def classify_item(
         date=date,
         run_id=run_id,
         shard=shard,
+        extraction=extraction,
         stage=ItemStage.PUBLISH,
         outcome=ItemOutcome.OK,
         code=article.failure_code,
@@ -808,6 +822,7 @@ def _row(
     output_tokens: int | None = None,
     cached_tokens: int | None = None,
     source_words_before_cap: int | None = None,
+    extraction: ExtractionHealth | None = None,
 ) -> ItemHealthRow:
     return ItemHealthRow(
         version=ItemHealthRow.schema_version(),
@@ -836,6 +851,9 @@ def _row(
         cached_tokens=cached_tokens,
         source_words_before_cap=source_words_before_cap,
         shard=shard,
+        span_integrity=extraction.span_integrity if extraction is not None else None,
+        elements_found=extraction.elements_found if extraction is not None else None,
+        element_class=extraction.element_class if extraction is not None else None,
     )
 
 

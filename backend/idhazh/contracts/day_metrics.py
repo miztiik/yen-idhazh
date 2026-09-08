@@ -257,11 +257,88 @@ class DaySource(Model):
         return self
 
 
+class DayExtraction(Model):
+    """What the candidate pass found on the day, and what the page drew from it.
+
+    Every count is additive across days, so a window is a sum and never a re-walk.
+    The two rates a reader wants are not stored, because a rate is not additive:
+    `idhazh.evals.metrics` derives both from these counts, and the console does
+    the same arithmetic on the same cells.
+
+    **Three classes and not five.** `comparative` and `processual` are claims
+    about how an article is written rather than about its numbers, so they have
+    no query yet and land with the diagram plan. `unclassified` is that gap
+    stated plainly rather than folded into `narrative`, which would report an
+    article carrying two figures as one carrying none.
+    """
+
+    items: int = Field(
+        ge=0,
+        description=(
+            "Planned items whose article carried text, so the pass ran on them. The "
+            "denominator of the integrity rate, and never the published set."
+        ),
+    )
+    span_integrity_pass: int = Field(
+        ge=0,
+        description="Of those, the ones where every element span cut its own characters.",
+    )
+    elements_found: int = Field(
+        ge=0,
+        description=(
+            "Tier 1 elements the pass kept, added over the day. The extractor's own "
+            "signal: it falls when the patterns stop matching, whatever the planner does."
+        ),
+    )
+    chartable: int = Field(ge=0, description="Items whose numbers could have made a chart.")
+    narrative: int = Field(ge=0, description="Items stating no quantity at all.")
+    unclassified: int = Field(
+        ge=0, description="Items with quantities but no unit shared widely enough."
+    )
+    chartable_published: int = Field(
+        ge=0,
+        description=(
+            "Chartable items that reached the day's published set. The denominator of "
+            "the unused rate: an item that never published cannot carry a chart, and "
+            "counting it would blame the planner for a fetch that failed."
+        ),
+    )
+    chartable_charted: int = Field(
+        ge=0, description="Of those, the ones a reader can see a rendered chart on."
+    )
+
+    @model_validator(mode="after")
+    def _the_parts_fit_the_day(self) -> Self:
+        if self.span_integrity_pass > self.items:
+            raise ValueError("more spans held than there were items to hold them")
+        if self.chartable + self.narrative + self.unclassified > self.span_integrity_pass:
+            raise ValueError("an item was classified without its spans being re-sliced first")
+        if self.chartable_published > self.chartable:
+            raise ValueError("more chartable items published than were chartable")
+        if self.chartable_charted > self.chartable_published:
+            raise ValueError("a chart was drawn for a chartable item the day did not publish")
+        return self
+
+
 class DayMetrics(Contract):
     """Everything a run settled about one published day, for a later reducer to read."""
 
     __schema_stem__: ClassVar[str] = "day-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-08T21:00",
+            change="Added the nullable extraction block.",
+            why=(
+                "Nothing said whether an article the planner drew nothing for had "
+                "anything to draw, so a fall in published charts read the same whether "
+                "the planner stopped choosing them or the extractor stopped finding "
+                "numbers. The block is the day's join of the item-health census, which "
+                "carries the class, against the published day, which carries the chart - "
+                "both bounded by the day and neither by the archive (Rule #12). Nullable, "
+                "because a record an earlier run wrote carries no such block and the "
+                "console reads it leniently rather than dropping the whole day."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-07",
             change="Initial shape: one record per published day, additive against non-additive.",
@@ -363,6 +440,13 @@ class DayMetrics(Contract):
     sources: list[DaySource] = Field(
         default_factory=list,
         description="One entry per source that published (findings 67, 68, 73).",
+    )
+    extraction: DayExtraction | None = Field(
+        default=None,
+        description=(
+            "What the candidate pass found and what the page drew from it, or null on a "
+            "record written before 2026-09-08. Additive parts."
+        ),
     )
 
     @model_validator(mode="after")

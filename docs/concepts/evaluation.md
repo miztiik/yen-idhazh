@@ -282,6 +282,60 @@ This is deliberately not a fragility score, and it is not a reader-facing signal
 
 **What a lexicon cannot do.** These are surface markers. An article can attribute everything to one anonymous source, or make a firm false claim with no marker at all, and neither is visible here. What the columns catch is the article that hedges constantly and cites nobody, which is a real and common shape. Anything more requires corroboration across sources, which this pipeline does not do yet.
 
+## Two rates that score the run, not a summary
+
+Everything above reads one summary or one article. These two read a day's own
+counts, they are free, they need no labels, and they answer a question nothing
+else here can: **when published charts fall, which half of the pipeline moved?**
+
+Every article is read for the quantities and dates it states, before the visual
+planner sees it ([elements.md](../architecture/extraction/elements.md)). That
+reading puts three cells on the item-health census row - whether every span
+still cut its own characters, how many facts were kept, and which of three
+classes the article's numbers put it in - and
+[`backend/idhazh/publish_day_metrics.py`](../../backend/idhazh/publish_day_metrics.py)
+folds them into the day record's `extraction` block, joined against the
+published day so a chartable article that never published is not counted as one
+the planner passed over.
+
+| Rate | What it is | What a move means |
+| --- | --- | --- |
+| **`extractable_but_unused_rate`** | published articles that could carry a chart and carry none, over published articles that could carry one | it climbs and the planner is passing over material it was given |
+| **`span_integrity_rate`** | articles whose every element span still cut its own characters, over articles the pass ran on | it falls and an article's text moved under a fact we kept, so that article degrades on its own |
+
+**The denominator is the point.** Without it a fall in published charts reads
+the same whether the planner stopped choosing charts or the extractor stopped
+finding numbers, and those have different fixes. The two are told apart by
+reading the rate against the count beside it: the rate moving is the planner,
+`chartable` moving is the reading.
+
+**Three classes, and it will say three until the diagram plan lands.**
+`chartable` is an article stating at least `visuals.min_chart_points` distinct
+quantities that share a unit; `narrative` is an article stating no quantity at
+all; `unclassified` is everything between. `comparative` and `processual` are
+claims about how an article is written rather than about its numbers, so no
+query here can reach them. Anything that reports per class names three and says
+so, on the page as well as here - an operator who read three as the whole
+taxonomy would read `unclassified` as a defect rather than as a question nobody
+has asked yet.
+
+**The threshold is the planner's own knob and not a second one.**
+`visuals.min_chart_points` decides both whether a chart is reachable and whether
+an article is called chartable. Mint a second knob and the console can call an
+article chartable while the planner refuses to draw it, and the rate then
+measures two knobs drifting apart rather than measuring the planner.
+
+**Neither rate gates anything, and `span_integrity_rate` is the reporting face
+of an invariant that degrades one item.** A day of 500 stories does not fail
+because one article's text moved. That is the ruling on
+[elements.md](../architecture/extraction/elements.md): break the build on what
+our own code can get wrong, degrade the item on what one article's data can.
+
+**`METRICS_VERSION` did not move for either.** No band and no derived column
+reads them, so every row written under `metrics-3` still says exactly what it
+said - the same reason it did not move for `self_repetition`, `compression` or
+`new_fact_rate`.
+
 ### Three definitions that look reasonable and are not
 
 Each of these was specified one way, and the arithmetic says otherwise:
