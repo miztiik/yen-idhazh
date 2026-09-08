@@ -1743,8 +1743,6 @@
 						value={grouped(extraction.chartable)}
 						note="of {grouped(extraction.items)} read"
 						line="The article states at least {data.visuals.min_chart_points} separate figures measured in the same unit. Watch this number, not the share beside it: when it falls, the reading did."
-						windowed="extraction"
-						{windowDays}
 					/>
 					<KpiCard
 						label="Of those, published without one"
@@ -1754,8 +1752,6 @@
 							: `${grouped(extraction.unused)} of ${grouped(extraction.chartablePublished)}`}
 						line="Material the planner was handed and did not draw. It is never zero for long - the reading keeps figures the planner is right to drop - so read the direction, not the level."
 						tone={extraction.unusedPct !== null && extraction.unusedPct >= 50 ? 'warn' : 'neutral'}
-						windowed="extraction"
-						{windowDays}
 					/>
 					<KpiCard
 						label="Facts still where they were cut from"
@@ -1763,8 +1759,6 @@
 						note="{grouped(extraction.spanIntegrityPass)} of {grouped(extraction.items)} articles"
 						line="Every fact is kept with the characters it was cut from. Below 100 percent, an article's text moved underneath them: that article is degraded on its own and the rest of the day publishes."
 						tone={extraction.integrityPct !== null && extraction.integrityPct < 100 ? 'bad' : 'good'}
-						windowed="extraction"
-						{windowDays}
 					/>
 					<KpiCard
 						label="Facts found"
@@ -1773,8 +1767,6 @@
 							? 'day'
 							: 'days'}"
 						line="Quantities and dates the reading kept, added over the window. It answers to the patterns alone, so it moves when the reading changes and not when the planner does."
-						windowed="extraction"
-						{windowDays}
 					/>
 				</div>
 				<div class="console-table mt-4" data-extraction="classes">
