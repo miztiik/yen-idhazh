@@ -1,0 +1,52 @@
+{
+  "canonical_url": "https://example.org/grid/capacity-approved",
+  "elements": [
+    {
+      "attribution": null,
+      "dimension": null,
+      "element_id": "entity-0-17",
+      "entity": "grid-operator",
+      "extractor": "model",
+      "hedge": null,
+      "kind": "entity",
+      "label_source": "qwen35-9b",
+      "ledger_version": "2026-09-08",
+      "measure": null,
+      "measure_canonical": null,
+      "salience": 0.8,
+      "sentence_index": 0,
+      "span_end": 17,
+      "span_excerpt": "The grid operator",
+      "span_start": 0,
+      "time": null,
+      "unit": null,
+      "value": null
+    },
+    {
+      "attribution": "The grid operator",
+      "dimension": "grid",
+      "element_id": "quantity-27-35",
+      "entity": null,
+      "extractor": "regex",
+      "hedge": false,
+      "kind": "quantity",
+      "label_source": "qwen35-9b",
+      "ledger_version": "2026-09-08",
+      "measure": "new capacity",
+      "measure_canonical": "generation-capacity",
+      "salience": null,
+      "sentence_index": 0,
+      "span_end": 35,
+      "span_excerpt": "1,200 MW",
+      "span_start": 27,
+      "time": "2026-08-24",
+      "unit": "mw",
+      "value": "1200"
+    }
+  ],
+  "item_id": "energy-07",
+  "source_text_hash": "deb88888799e7f273b6660bc693e825af0521083f4769c2dfcf8797a73a827b1",
+  "source_text_length": 143,
+  "url_key": "c565a23ea741dae172267f42fb2cdc531b24f89ced9260f51013283dcd8200ac",
+  "version": "2026-09-08"
+}

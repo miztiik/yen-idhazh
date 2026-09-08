@@ -20,6 +20,7 @@ from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.day_validation import DayValidationReceipt
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
+from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
@@ -58,6 +59,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     DayValidationReceipt,
     DigestDay,
     DigestView,
+    ElementTable,
     EvalRow,
     EvidenceItem,
     FeedHealthRow,
