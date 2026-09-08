@@ -36,6 +36,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Final
 
+from idhazh import month_partition
 from idhazh.contracts.base import canonical_json, derive_text_digest
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.score_archive import (
@@ -122,22 +123,16 @@ def archive_files(state_dir: Path) -> list[Path]:
     """Every `<YYYY-MM>.json` in the archive directory, oldest first.
 
     Anything else in there is left alone. A directory a prune deletes from names
-    what it recognises rather than acting on what it does not.
+    what it recognises rather than acting on what it does not, and what it
+    recognises is `month_partition.is_month_stem` - the same rule the shard
+    directory beside it uses.
     """
-    directory = state_dir / ARCHIVE_DIRNAME
-    if not directory.is_dir():
-        return []
-    found = [path for path in directory.glob("*.json") if _is_month_stem(path.stem)]
-    return sorted(found, key=lambda path: path.stem)
+    return month_partition.month_files(state_dir / ARCHIVE_DIRNAME, ".json")
 
 
 def archived_months(state_dir: Path) -> list[str]:
     """The months that exist only as a summary, oldest first."""
     return [path.stem for path in archive_files(state_dir)]
-
-
-def _is_month_stem(stem: str) -> bool:
-    return len(stem) == 7 and stem[4] == "-" and stem.replace("-", "").isdigit()
 
 
 def digest_of(values: Iterable[str]) -> str:

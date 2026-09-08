@@ -120,11 +120,11 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Final, NoReturn
 
-from idhazh import ledger, publish_telemetry, telemetry
+from idhazh import ledger, month_partition, publish_telemetry, telemetry
 from idhazh.contracts.app_config import PAGES_HARD_CAP_MB, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
@@ -656,22 +656,12 @@ def month_shards(directory: Path) -> list[Path]:
 
     Anything else in there is left alone. A directory this walks is one a prune
     deletes from, so it names what it recognises rather than deleting what it
-    does not.
+    does not - and it recognises what `month_partition` recognises, which is the
+    same thing `evals.writer` and `evals.archive` recognise. Those three used to
+    hold three different answers, and `2025-13.csv` was left alone here and
+    deleted there.
     """
-    if not directory.is_dir():
-        return []
-    found = [path for path in directory.glob("*.csv") if _is_month_stem(path.stem)]
-    return sorted(found, key=lambda path: path.stem)
-
-
-def _is_month_stem(stem: str) -> bool:
-    if len(stem) != 7 or stem[4] != "-":
-        return False
-    try:
-        datetime.strptime(stem, "%Y-%m").replace(tzinfo=UTC)
-    except ValueError:
-        return False
-    return True
+    return month_partition.month_files(directory, ".csv")
 
 
 def _elapsed_ms(row: ItemHealthRow) -> int | None:
