@@ -1,7 +1,8 @@
 # Constant-Cost Reads: Ranks 1 And 10
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 **Level**: 5 (a new persisted contract, a published-payload change, and reader-facing removals)
+**Status**: Complete. All 27 rows delivered (see the Status Reckoner); this doc is now the record of how the work was done, not a queue.
 
 Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 4; honor the ESCALATE triggers in section 0.
 
@@ -61,9 +62,9 @@ Every entry is a defect a worker found, could not fix inside its own file list, 
 | Rows 1, 2 | Nine specs still carry a `?? [7, 14, 30, 90]` preset fallback. The committed list is now `[1, 7, 14, 30, 90]`, so each is a wrong answer waiting for the day the config file is missing. | Rows 11-18, whichever touches each spec |
 | Row 6 | The reading route's effect does not abort an in-flight day watch when the date changes, so a stale callback can deliver the wrong day. Part of finding 93. | Row 17 |
 | Row 6 | Finding 87's title map in `day-shape.ts` is still rebuilt per view; the `(date, item_id)` half is done. | Row 23 |
-| Row 9 | `docs/architecture/publishing/frontend.md` still describes the old chart lifetime, and six call sites keep a remount key they no longer need. | Docs half done in row 27 (#506). Code half open: the six `{#key windowDays}` remount blocks in the three console routes, and a now-false comment in `model/+page.svelte`, are redundant since #459 gave the engine `update()`. Row 27 is docs-only and cannot remove them - a follow-up cleanup outside this plan. |
+| Row 9 | `docs/architecture/publishing/frontend.md` still describes the old chart lifetime, and six call sites keep a remount key they no longer need. | Docs half done in row 27 (#506); code half closed in #509. The six `{#key windowDays}` remount blocks in the three console routes and the now-false `model/+page.svelte` comment were removed once #459's engine `update()` made them redundant. |
 | Row 4 | The same doc still says a read mark lasts seven days and that the console will not draw narrower than a week. Both numbers changed in row 1. | Row 27 |
-| Row 10 | `evals.writer.append` reads the header of every committed shard before appending one row - a growing read inside a writer that otherwise honours the freeze rule. Outside ranks 1 and 10. | Not this plan; belongs to the Indexed State package |
+| Row 10 | `evals.writer.append` reads the header of every committed shard before appending one row - a growing read inside a writer that otherwise honours the freeze rule. Outside ranks 1 and 10. | Closed in #496 by the Indexed State package: the writer now reads a committed digest index (`state/score-index/`) instead of every shard header. |
 | Row 14 | `frontend/src/lib/charts/viewport.ts` walks the window one day at a time to list its months (`monthsInWindow`) and re-sorts a fresh copy of the month list on every call (`coveredMonths`). The "advance months directly, index the dates" half of finding 104, outside row 14's `frame.ts`. | Row 17 |
 | Row 12 | The canary day carries one model, so the swap-dots panel never renders and its constant-cost parity is not exercised in the browser gate. Add a model swap to `backend/utilities/build_canary_day.py` so the panel appears. | Not this plan; needs a canary with a model swap |
 | Row 15 | The window control renders the one-day preset as "1 days" - the plural is not guarded for `n = 1`. Reader-facing, cosmetic, pre-existing, and in the shared window control no row here owns. | Not this plan; a label fix |
