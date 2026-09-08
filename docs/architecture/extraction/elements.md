@@ -4,8 +4,9 @@
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
-candidate pass that fills it, and the rule that settles two passes claiming one
-stretch of characters.
+candidate pass that fills it, the rule that settles two passes claiming one
+stretch of characters, and the invariant that says when a span has stopped
+pointing where it did.
 
 Two passes write into this table today, both pure code over the article's own
 bytes: [`backend/idhazh/elements.py`](../../../backend/idhazh/elements.py) finds
@@ -68,7 +69,8 @@ exists to catch.
 `source_text_hash`, the sha256 of that string, computed by the same
 `derive_text_digest` the rest of the pipeline uses. A hash on every element
 would be redundant against this one plus a re-slice, and it would be a hash per
-element on every article for ever.
+element on every article for ever. The re-slice itself is
+[the span-drift invariant](#the-span-drift-invariant) below.
 
 ## The two tiers
 
@@ -236,6 +238,74 @@ equal as strings or pinning the value as text buys nothing. The pass writes the
 plain decimal form with no exponent and no trailing zeros: `4200000000` for
 both. `span_excerpt` still holds whichever of the two the article wrote.
 
+## The span-drift invariant
+
+A span is two integers, and integers do not know when the string underneath them
+has changed. `Article.text` is derived from a page we fetched, through a
+sanitizer and a truncation cap, so it moves when any of those three move - and a
+table built against yesterday's string, read against today's, cuts characters
+nobody wrote.
+
+`ElementTable.span_drift(text)` is the whole check. It cuts `text` at every span
+and compares the result to `span_excerpt`. `None` means every span still holds,
+so the table is usable against that text. A string means one did not, and it is
+a reason the caller can log and record. Nothing is raised there, because the two
+callers want opposite dispositions out of one answer.
+
+| Part | Where | What it does |
+| --- | --- | --- |
+| Write time | `element_table()` | Raises. The pass cut every excerpt out of the string it hashed moments earlier, so a mismatch is its own arithmetic being wrong and every article in the run has it |
+| Read time | a consumer holding a table it did not build | Records the reason against that item and moves to the next. No sibling changes |
+| CI | `backend/tests/test_elements.py`, `backend/tests/test_contracts.py` | The nine bounded fixtures re-slice against their own text; a built run of five items with one text moved by a character degrades exactly one |
+
+The write-time half is what makes the one-hash-per-article decision mechanical:
+the hash, the length and every excerpt come out of one call against one string,
+and the re-slice proves it rather than the call site promising it. Neither
+pattern pass can fail it, because each cuts its excerpt at its own offsets. The
+failure it exists for is a caller that builds elements from one string and a
+table over another - `quantity_elements` and `date_elements` are public and take
+any text, so the pre-cap body is one wrong argument away - and plan 11's
+producers risk it on every article, because there a model proposes the location
+and code cuts at it.
+
+**"Read time" is the moment a consumer reads a table it did not build, and there
+is no such consumer today.** Nothing writes an element table to disk and no
+stage builds one: rows 1 to 3 kept the pass a pure function over one payload on
+purpose, and `span_excerpt` is article body text, which no published payload may
+carry (`CLAUDE.md` section 0a). So the check is a function the consumer calls
+against the text it already holds - a later stage in the same run, or a payload
+from an earlier run if one ever lands - and it is correct for both, because it
+takes the text as an argument and reads nothing else. It is deliberately not
+wired into `backend/idhazh/cli.py`: wiring it in would mean inventing the stage
+it protects.
+
+**It re-slices every span rather than comparing `source_text_hash` first, and
+the measurement is the reason.** The hash covers the whole article and the
+excerpts cover a few dozen characters of it, so the cheap-looking short-circuit
+is the more expensive half. Measured 2026-09-08 on a 12th Gen Intel Core
+i7-1265U with Python 3.14.2: on the densest captured page - 7 elements over
+1,337 characters - the re-slice takes a median 1.15 us against 1.78 us to hash
+the text, spread 1.12-1.33 and 1.77-1.87 over 9 runs of 2,000. At the ceiling of
+256 spans over 60,000 characters it is 41.30 us against 44.35 us, spread
+38.28-53.99 and 41.27-47.17 over 9 runs of 500. So a hash short-circuit would be
+a second code path that costs more than the work it skips, on every article for
+ever. `source_text_hash` keeps its own job: it says which string this table is
+about, which is what row 5's `span_integrity_rate` reports against.
+
+**What it answers, and the two things it does not.** It answers whether every
+span still cuts its own characters. It does not answer whether the table is
+still *complete* for that text - text that grew may hold facts the pass never
+saw, and the remedy is to run the pass again rather than to degrade an item. And
+it cannot see a span that moved onto identical characters elsewhere in the text:
+the excerpt, the value and the unit are all unchanged there, and only
+`sentence_index` could be stale. Both are stated rather than implied, because a
+check whose limits are folklore gets trusted for things it never did.
+
+**Nothing about the persisted shape moved.** The text a span indexes is not in
+the payload and is not going into it, so the invariant cannot be a model
+validator and there was no field to add. `element-table.schema.json` is
+unchanged and the `version` stamp stays where row 3 left it.
+
 ## `context` is gone, and this is the sentence saying so
 
 `visual_planner.NumericFact` carries `context`: a whitespace-cleaned window of
@@ -248,6 +318,46 @@ second copy of the reader's sentence. `NumericFact.context` is untouched by this
 contract and retires when its own producer does.
 
 ## Design rationale
+
+### Which invariants break the build, and which degrade the item
+
+Two invariants were declared build-failing while this subsystem was being
+planned and never ruled on, and a coverage row cited the span invariant's
+softening as though it had settled all three
+([`TODO/20260902-visual-planner-pseudo-plan.md`](../../../TODO/20260902-visual-planner-pseudo-plan.md),
+12.9 G13). It had not. Here is the ruling, one sentence each.
+
+**`derived_provenance_complete` breaks the build.** A displayed value that
+resolves to neither a Tier 1 element nor a complete provenance chain is a number
+whose origin our own code could not trace, so it is already failing for every
+value that took the same path, and degrading the one item that happened to
+surface it hides the rest.
+
+**`span_integrity_pass` degrades the item.** It is the reporting face of the
+invariant on this page rather than a second rule, so it inherits this page's
+disposition: one article's text moving is one article's problem, and a day of
+500 stories taken down by one drifted span is exactly the corpus-wide refusal
+this row was told not to build.
+
+**The span invariant is the exception because its cause sits outside our code.**
+Every other integrity claim in that document is a claim about arithmetic we
+control, and a claim about our own arithmetic that fails once is failing
+everywhere it runs; span drift is a source text moving, which is true of one
+article and says nothing about a sibling.
+
+That is the whole rule, and it is the same one the write-time and read-time
+halves above already follow: **break the build on what our own code can get
+wrong, degrade the item on what one article's data can.**
+
+`derived_value_rate` is the metric the pseudo-plan puts beneath
+`derived_provenance_complete` (12.11 G21), so this ruling names what it would
+report on; it is not built here and belongs to the plan that ships the derived
+values it counts.
+
+Authority: **Andre** (the trust boundary between what code found and what a
+model said) on `derived_provenance_complete`; **Fowler** (persisted contracts,
+and where an invariant is enforced) on `span_integrity_pass` and on the
+exception rule.
 
 ### A date takes the characters from any quantity it touches
 

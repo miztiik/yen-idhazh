@@ -530,6 +530,80 @@ def test_the_element_table_holds_one_hash_for_the_whole_article() -> None:
     assert not [name for name in Element.model_fields if "hash" in name]
 
 
+# --- The Oracle: the width of a span is not the characters in it ------------
+#
+# Row 1 checks that `span_excerpt` is as wide as its span, which refuses a
+# whitespace-cleaned string outright. Row 4 is the half that check cannot reach:
+# the text is not in the payload, so the shape can compare two numbers and never
+# two strings. `span_drift` takes the text and cuts it.
+
+
+def _element_table_payload() -> dict[str, Any]:
+    payload: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "element-table" / "regex-only.json")
+    )
+    return payload
+
+
+def _text_the_table_indexes(payload: dict[str, Any]) -> str:
+    """A string of the length the table names, with every excerpt at its own offset."""
+    characters = ["."] * payload["source_text_length"]
+    for element in payload["elements"]:
+        characters[element["span_start"] : element["span_end"]] = element["span_excerpt"]
+    return "".join(characters)
+
+
+def test_a_committed_table_re_slices_against_the_text_its_spans_describe() -> None:
+    """The invariant at rest. Without this the two tests below prove nothing."""
+    payload = _element_table_payload()
+    assert ElementTable.model_validate(payload).span_drift(_text_the_table_indexes(payload)) is None
+
+
+def test_a_same_width_excerpt_passes_the_shape_and_fails_the_re_slice() -> None:
+    """What row 4 adds over row 1, in one comparison.
+
+    `1,200 Mw` is exactly as wide as `1,200 MW`, so the width check has nothing
+    to say about it and the element loads. It is still not the characters the
+    span holds, and a figure drawn from it would carry an excerpt the article
+    never wrote.
+    """
+    payload = _element_table_payload()
+    text = _text_the_table_indexes(payload)
+    payload["elements"][0]["span_excerpt"] = "1,200 Mw"
+
+    misread = ElementTable.model_validate(payload)
+    assert misread.elements[0].span_excerpt == "1,200 Mw", "the shape accepts it"
+    drift = misread.span_drift(text)
+    assert drift is not None
+    assert drift.startswith(misread.elements[0].element_id)
+
+
+def test_a_text_that_moved_by_one_character_names_the_first_span_that_moved() -> None:
+    """The reason is a log line, so it carries no fetched bytes (Rule #11) - the
+    element's own address and the two lengths, which say what moved and by how
+    much without quoting a stranger's page back at an operator."""
+    payload = _element_table_payload()
+    table = ElementTable.model_validate(payload)
+    moved = " " + _text_the_table_indexes(payload)
+
+    drift = table.span_drift(moved)
+    assert drift is not None
+    assert drift.startswith(table.elements[0].element_id)
+    assert f"{table.source_text_length} characters" in drift
+    assert str(len(moved)) in drift
+    assert table.elements[0].span_excerpt not in drift
+
+
+def test_the_re_slice_added_no_field_to_the_persisted_shape() -> None:
+    """The text a span indexes is not in the payload and is not going into it -
+    `span_excerpt` is article body text, which no published payload may carry
+    (`CLAUDE.md` section 0a). So the check is a method over a text the caller
+    already holds, and the shape did not have to move for it."""
+    assert callable(ElementTable.span_drift)
+    assert "span_drift" not in ElementTable.model_fields
+    assert "text" not in ElementTable.model_fields
+
+
 # --- The drift gate --------------------------------------------------------
 
 
