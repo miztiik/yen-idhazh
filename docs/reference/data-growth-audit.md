@@ -1,6 +1,6 @@
 # Data Growth Audit
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-08
 
 Status: review and redesign proposal, not an implemented architecture. No application
 code, contracts, configuration, tests or stored publication data changed in this
@@ -11,6 +11,15 @@ The open checkout was at `b68f6256`, 38 commits behind. Reviewers read a separat
 snapshot. Source links below point to the audited revision, not the older editor
 checkout. Carmack, Fowler and Andre reviewed the relevant code. Their findings
 were reconciled against source and focused execution checks.
+
+**Finding 1 has since moved, and the row below is left as the audit found it.**
+`ledger.load_published` no longer reads one lifetime CSV. The ledger files by day
+under `state/published/YYYY/MM/DD.csv`, and the read carries
+`collect.published_window_days` - a cover the committed config sets to `-1`, so
+the shipping answer is still every address and the machinery for a finite cover
+is in place. The tables here are a snapshot pinned to the audited revision and
+are not rewritten when a finding is addressed; the current shape is in
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
 
 ## Ruling
 

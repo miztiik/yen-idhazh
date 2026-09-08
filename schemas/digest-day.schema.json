@@ -279,7 +279,7 @@
             }
           ],
           "default": null,
-          "description": "Reserved. Null in every payload ever written, because no run can revise an item: `rank.plan_vertical` drops a candidate already in `state/published.csv`, `cli` supplies that set, and `assemble.build_day` drops an item the day already holds. If a run ever does revise, the rule it must keep is that the item says so.",
+          "description": "Reserved. Null in every payload ever written, because no run can revise an item: `rank.plan_vertical` drops a candidate already in the published ledger under `state/published/`, `cli` supplies that set, and `assemble.build_day` drops an item the day already holds. If a run ever does revise, the rule it must keep is that the item says so.",
           "title": "Updated At"
         },
         "updated_by_run": {
@@ -591,6 +591,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "updated_at names the published ledger's day tree, not the flat file.",
+      "version": "2026-09-08",
+      "why": "The flat state/published.csv was split into state/published/YYYY/MM/DD.csv and removed, so the description named a file that no longer exists. No field moved and no payload changes, so nothing migrates - but the generated schema does change, and a schema that changes with no changelog entry is a diff nobody can explain."
+    },
+    {
       "change": "VisualKind, which types DigestVisual.kind, lost diagram and image. It now holds chart and none. No field was added, removed or retyped.",
       "version": "2026-09-05T18:00",
       "why": "Nothing draws either one. image never had a producer or a renderer, and the diagram renderer went with the Mermaid round trip it read (pseudo-plan row 63). Narrowing an enum a committed payload is typed with is breaking, so it was counted first: scanned 2026-09-05 over all 15 committed digest.json files, 6,425 items, 351 of them carrying a visual, and every one is a chart. Zero carry diagram and zero carry image, so no read-side migration is owed and no committed day stops loading."
@@ -720,7 +725,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-05T18:00",
+      "default": "2026-09-08",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -745,5 +750,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-05T18:00"
+  "version": "2026-09-08"
 }
