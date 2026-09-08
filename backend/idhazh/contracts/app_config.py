@@ -70,6 +70,106 @@ class LogLevel(StrEnum):
     ERROR = "ERROR"
 
 
+class InferenceConfig(Model):
+    """Decoding is pinned here so a change of output is a reviewable diff."""
+
+    n_ctx: int = Field(default=8192, ge=512)
+    n_threads: int = Field(default=4, ge=1)
+    n_batch: int = Field(default=512, ge=1)
+    n_ubatch: int = Field(default=512, ge=1)
+    n_parallel: int | None = Field(
+        default=None,
+        ge=1,
+        description="llama-server -np. None omits the flag and keeps the runtime default.",
+    )
+    n_threads_batch: int | None = Field(
+        default=None,
+        ge=1,
+        description="llama-server -tb. None omits the flag and lets it follow n_threads.",
+    )
+    startup_warmup: bool = Field(
+        default=True,
+        description="If false, emit --no-warmup. True lets llama-server warm at startup.",
+    )
+    metrics: bool = Field(
+        default=True,
+        description=(
+            "If true, emit --metrics and llama-server serves its counters on "
+            "/metrics. On by default: without them a run cannot say how close it came "
+            "to n_ctx, and a concurrency result has no busy-slot number to read it by."
+        ),
+    )
+    flash_attention: Literal["on", "off"] | None = Field(
+        default=None,
+        description="llama-server -fa. None omits the flag and leaves the runtime on auto.",
+    )
+    load_mode: Literal["mmap+mlock"] | None = Field(
+        default=None,
+        description="llama-server -lm. None omits the flag and keeps the runtime default.",
+    )
+    cache_type_k: Literal["q8_0"] | None = Field(
+        default=None,
+        description="llama-server -ctk. None omits the flag and keeps full-precision KV.",
+    )
+    cache_type_v: Literal["q8_0"] | None = Field(
+        default=None,
+        description="llama-server -ctv. None omits the flag and keeps full-precision KV.",
+    )
+    priority: int | None = Field(
+        default=None,
+        ge=-1,
+        le=3,
+        description="llama-server --prio. None omits the flag and keeps normal priority.",
+    )
+    poll: int | None = Field(
+        default=None,
+        ge=0,
+        description="llama-server --poll. None omits the flag and keeps the runtime default.",
+    )
+    temperature: float = Field(default=0.0, ge=0.0)
+    top_p: float = Field(default=1.0, gt=0.0, le=1.0)
+    seed: int = Field(
+        default=0,
+        description="Dead code under greedy decoding. Never cited as the determinism control.",
+    )
+    thinking: bool = Field(
+        default=False,
+        description="Off. Reasoning measurably increases hallucination when summarizing.",
+    )
+    max_output_tokens: int = Field(
+        default=900,
+        ge=1,
+        description=(
+            "A crash guard, not a length target. The prompt sets the length; this only "
+            "stops a runaway decode from burning a shard's whole timeout. Sized at 250 "
+            "the reply ran out of budget mid-object and failed as a shape error, which "
+            "named the wrong cause - so it is set well above any summary we want."
+        ),
+    )
+    request_timeout_minutes: float = Field(
+        default=22.1,
+        gt=0.0,
+        description=(
+            "One summarizer POST may wait this long. Sized from the measured worst "
+            "8B long article plus one cold prompt prefix, doubled; the shard timeout "
+            "remains the outer bound."
+        ),
+    )
+    declared_for: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The weights this block is set for - the sha256 of the entry that carries "
+            "it. Every number here is a measurement about one model on one runner, "
+            "never a property of the pipeline, so the entry states which bytes the "
+            "numbers were put in front of. Swap the weights and this is left behind, "
+            "which is the one event the field exists to make loud. It says a person "
+            "paired these numbers with these bytes; where the numbers came from is "
+            "docs/concepts/config.md, because a runner and a date cannot be checked "
+            "by a validator and a field nothing checks is a comment."
+        ),
+    )
+
+
 class ModelRef(Model):
     """Which weights, from where. Per-item payloads carry only the `id`."""
 
@@ -99,6 +199,17 @@ class ModelRef(Model):
             "apart, a model swap moves one and leaves the other, and a LoRA adapter "
             "loads onto a mismatched base without raising. Optional - only an entry we "
             "intend to fine-tune needs it."
+        ),
+    )
+    inference: InferenceConfig = Field(
+        default_factory=InferenceConfig,
+        description=(
+            "The runtime this entry's weights are served on. It sits on the entry for "
+            "the same reason `hf_base_repo` does: held apart, a model swap moves the "
+            "weights and leaves the numbers, and llama-server starts on them without "
+            "raising. `ModelsConfig` refuses a block whose declared_for is not this "
+            "entry's sha256, so a default block under measured weights is refused "
+            "rather than inherited."
         ),
     )
 
@@ -227,6 +338,15 @@ RENAMED_RUN_KEYS: Final[Mapping[str, str]] = MappingProxyType(
 #: model now. It is also the map `finetune` roles are read through, because a
 #: role names one of these keys as a value.
 RENAMED_MODELS_KEYS: Final[Mapping[str, str]] = MappingProxyType({"route": "visual_planner"})
+
+#: The one `models` key that is gone rather than renamed. It held a single
+#: settings block that both roles were served on, so a swap of either entry
+#: inherited numbers measured against the other. There is no lift onto the
+#: entries, because the lift IS the inheritance: it would hand a swapped entry
+#: the previous weights' numbers and raise nothing.
+SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {"inference": "<role>.inference"}
+)
 
 
 def read_a_renamed_key(block: str, data: Any, names: Mapping[str, str]) -> Any:
@@ -662,102 +782,52 @@ class ElementsConfig(Model):
     )
 
 
-class InferenceConfig(Model):
-    """Decoding is pinned here so a change of output is a reviewable diff."""
-
-    n_ctx: int = Field(default=8192, ge=512)
-    n_threads: int = Field(default=4, ge=1)
-    n_batch: int = Field(default=512, ge=1)
-    n_ubatch: int = Field(default=512, ge=1)
-    n_parallel: int | None = Field(
-        default=None,
-        ge=1,
-        description="llama-server -np. None omits the flag and keeps the runtime default.",
-    )
-    n_threads_batch: int | None = Field(
-        default=None,
-        ge=1,
-        description="llama-server -tb. None omits the flag and lets it follow n_threads.",
-    )
-    startup_warmup: bool = Field(
-        default=True,
-        description="If false, emit --no-warmup. True lets llama-server warm at startup.",
-    )
-    metrics: bool = Field(
-        default=True,
-        description=(
-            "If true, emit --metrics and llama-server serves its counters on "
-            "/metrics. On by default: without them a run cannot say how close it came "
-            "to n_ctx, and a concurrency result has no busy-slot number to read it by."
-        ),
-    )
-    flash_attention: Literal["on", "off"] | None = Field(
-        default=None,
-        description="llama-server -fa. None omits the flag and leaves the runtime on auto.",
-    )
-    load_mode: Literal["mmap+mlock"] | None = Field(
-        default=None,
-        description="llama-server -lm. None omits the flag and keeps the runtime default.",
-    )
-    cache_type_k: Literal["q8_0"] | None = Field(
-        default=None,
-        description="llama-server -ctk. None omits the flag and keeps full-precision KV.",
-    )
-    cache_type_v: Literal["q8_0"] | None = Field(
-        default=None,
-        description="llama-server -ctv. None omits the flag and keeps full-precision KV.",
-    )
-    priority: int | None = Field(
-        default=None,
-        ge=-1,
-        le=3,
-        description="llama-server --prio. None omits the flag and keeps normal priority.",
-    )
-    poll: int | None = Field(
-        default=None,
-        ge=0,
-        description="llama-server --poll. None omits the flag and keeps the runtime default.",
-    )
-    temperature: float = Field(default=0.0, ge=0.0)
-    top_p: float = Field(default=1.0, gt=0.0, le=1.0)
-    seed: int = Field(
-        default=0,
-        description="Dead code under greedy decoding. Never cited as the determinism control.",
-    )
-    thinking: bool = Field(
-        default=False,
-        description="Off. Reasoning measurably increases hallucination when summarizing.",
-    )
-    max_output_tokens: int = Field(
-        default=900,
-        ge=1,
-        description=(
-            "A crash guard, not a length target. The prompt sets the length; this only "
-            "stops a runaway decode from burning a shard's whole timeout. Sized at 250 "
-            "the reply ran out of budget mid-object and failed as a shape error, which "
-            "named the wrong cause - so it is set well above any summary we want."
-        ),
-    )
-    request_timeout_minutes: float = Field(
-        default=22.1,
-        gt=0.0,
-        description=(
-            "One summarizer POST may wait this long. Sized from the measured worst "
-            "8B long article plus one cold prompt prefix, doubled; the shard timeout "
-            "remains the outer bound."
-        ),
-    )
-
-
 class ModelsConfig(Model):
+    """One entry per role, and each entry carries the settings it runs on.
+
+    There is no block shared between the entries. Two roles are two model
+    families served by two llama-server processes, and one block over both is a
+    measurement about one of them quietly applied to the other.
+    """
+
     summarize: ModelRef
     visual_planner: ModelRef
-    inference: InferenceConfig = Field(default_factory=InferenceConfig)
 
     @model_validator(mode="before")
     @classmethod
     def _a_renamed_key_still_opens(cls, data: Any) -> Any:
+        refuse_a_removed_knob("models", data, SUPERSEDED_MODELS_NAMES)
         return read_a_renamed_key("models", data, RENAMED_MODELS_KEYS)
+
+    @model_validator(mode="after")
+    def _every_block_names_the_weights_it_is_declared_for(self) -> Self:
+        """A settings block belongs to one entry's bytes, and says which.
+
+        The swap this refuses is five strings edited in place: repo, file,
+        revision, digest and id, with the block underneath them untouched. That
+        used to raise nothing, and the run then stood a server up on numbers
+        derived for weights it never opened. It is not hypothetical - the
+        summarizer moved from the 8B to the 9B on 2026-08-27 and this block did
+        not move with it.
+
+        Both digests absent is legal and means an entry nobody has measured yet.
+        The stamp already refuses to run on one: `idhazh.fingerprint.build_inputs`
+        stops when the weights have no recorded digest.
+        """
+        for role in sorted(type(self).model_fields):
+            entry: ModelRef = getattr(self, role)
+            declared = entry.inference.declared_for
+            if declared == entry.sha256:
+                continue
+            raise ValueError(
+                f"models.{role}.inference is declared for "
+                f"{declared or 'no weights at all'}, and models.{role} names "
+                f"{entry.sha256 or 'no weights at all'}. Every setting in that block "
+                "was measured against one model on one runner, so re-derive them for "
+                f"these weights and set models.{role}.inference.declared_for to the "
+                "digest the entry carries - or put the entry back"
+            )
+        return self
 
 
 class SummaryBand(Model):
@@ -2760,6 +2830,26 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-09",
+            change=(
+                "Removed models.inference. Every models.<role> entry now carries its own "
+                "inference block, and that block carries declared_for - the sha256 of "
+                "the entry it is set for. A block whose declared_for is not the entry's "
+                "sha256 is refused, and a config still spelling models.inference is "
+                "refused by name."
+            ),
+            why=(
+                "One settings block served two model families, so a swap of either entry "
+                "inherited numbers measured against the other and nothing raised. It had "
+                "already happened: the summarizer moved from the 8B to the 9B on "
+                "2026-08-27 and the block did not move with it. Breaking, and the "
+                "read-side answer is refusal rather than a lift onto the entries, "
+                "because the lift is the inheritance - it would hand a swapped entry the "
+                "previous weights' numbers in silence. config/ is human-edited, so the "
+                "refusal names the block and the operator writes it once."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-08T16:49",
             change=(
                 "Added drift.min_domain_rows, source_word_count_drop and "
@@ -4616,7 +4706,7 @@ class AppConfig(Contract):
         Checked here because `FinetuneConfig` cannot see `models` and a typo
         would otherwise surface on a GPU somebody is paying for, hours later.
         """
-        roles = set(ModelsConfig.model_fields) - {"inference"}
+        roles = set(ModelsConfig.model_fields)
         for field in ("teacher", "student"):
             named = getattr(self.finetune, field)
             if named not in roles:

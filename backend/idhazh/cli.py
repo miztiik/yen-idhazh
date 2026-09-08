@@ -996,7 +996,7 @@ def stage_work(
         now=assemble.utc_now,
     )
     read_url = fetcher or live_fetcher(settings, tracer=tracer)
-    inference = settings.app.models.inference
+    inference = settings.app.models.summarize.inference
     model = settings.app.models.summarize
     observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
     inputs = build_inputs(
@@ -1277,7 +1277,7 @@ def _summarize_one(
     number.
     """
     trace = tracer if tracer is not None else silent_tracer()
-    inference = settings.app.models.inference
+    inference = settings.app.models.summarize.inference
     model_id = settings.app.models.summarize.id
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
@@ -1299,7 +1299,8 @@ def _summarize_one(
             span.set(telemetry.AttrKey.MODEL_ID, model_id)
             span.set(telemetry.AttrKey.PROMPT_DIGEST, prompt_digest)
             try:
-                request_timeout_seconds = settings.app.models.inference.request_timeout_minutes * 60
+                inference = settings.app.models.summarize.inference
+                request_timeout_seconds = inference.request_timeout_minutes * 60
                 completion = post(
                     payload,
                     endpoint=endpoint,
@@ -1571,7 +1572,7 @@ def _plan_one_visual(
         summary,
         facts,
         model_id=model_id,
-        inference=settings.app.models.inference,
+        inference=settings.app.models.visual_planner.inference,
         visuals=visuals,
     )
     completion: Completion
@@ -2034,7 +2035,7 @@ def _one_call(
     article: Article, settings: config.Settings, fingerprint: str, *, endpoint: str
 ) -> tuple[Summary, Completion | None, float]:
     """One live inference call, timed, with the reply kept for the gates."""
-    inference = settings.app.models.inference
+    inference = settings.app.models.summarize.inference
     model_id = settings.app.models.summarize.id
     payload = summarize.build_request(
         article,
@@ -2145,7 +2146,7 @@ def stage_qualify_canaries(
     section 4). The fixtures are the file in, `canaries.json` is the file out,
     and the exit code is the gate.
     """
-    inference = settings.app.models.inference
+    inference = settings.app.models.summarize.inference
     model = settings.app.models.summarize
     observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
     inputs = build_inputs(
@@ -2199,7 +2200,7 @@ def stage_qualify(
 
     started = time.monotonic()
     read_url = fetcher or live_fetcher(settings)
-    inference = settings.app.models.inference
+    inference = settings.app.models.summarize.inference
     model = settings.app.models.summarize
     observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
     inputs = build_inputs(
@@ -2341,7 +2342,7 @@ def stage_qualify_decide(
     frozen, outcomes = qualify.gates(
         shards,
         evaluation=evaluation,
-        inference=settings.app.models.inference,
+        inference=settings.app.models.summarize.inference,
         run=settings.app.run,
         budget_=qualify.Budget(
             job_budget_minutes=job_budget_minutes,

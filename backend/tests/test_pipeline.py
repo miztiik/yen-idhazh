@@ -982,7 +982,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
             update={
                 "models": settings.app.models.model_copy(
                     update={
-                        "inference": settings.app.models.inference.model_copy(
+                        "inference": settings.app.models.summarize.inference.model_copy(
                             update={"request_timeout_minutes": 0.01}
                         )
                     }
