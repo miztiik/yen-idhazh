@@ -651,23 +651,18 @@
 					no split to draw.
 				</p>
 			{:else}
-				<!-- Keyed on the span, so a chart hydrated at one window is torn down
-				     and rebuilt at the next. The engine takes its option once, at
-				     hydration, and never looks at it again. -->
-				{#key windowDays}
-					<Chart
-						svg={data.cacheSvg ?? ''}
-						option={cacheOption}
-						width={data.chart.width_px}
-						height={data.chart.height_px}
-						label="Prompt tokens per day over {view.days} days, split into the tokens the model server read and the tokens it served from its own cache. One column is one day."
-						columns={cacheStrip}
-						readoutName="cache"
-						readoutMaxShare={data.chart.readout_max_share}
-						restingNote=", the newest day"
-						hint="Point at a day to read both halves. Left and Right step through the days, Escape returns to the newest."
-					/>
-				{/key}
+				<Chart
+					svg={data.cacheSvg ?? ''}
+					option={cacheOption}
+					width={data.chart.width_px}
+					height={data.chart.height_px}
+					label="Prompt tokens per day over {view.days} days, split into the tokens the model server read and the tokens it served from its own cache. One column is one day."
+					columns={cacheStrip}
+					readoutName="cache"
+					readoutMaxShare={data.chart.readout_max_share}
+					restingNote=", the newest day"
+					hint="Point at a day to read both halves. Left and Right step through the days, Escape returns to the newest."
+				/>
 				<!-- Stacked says how many prompt tokens the day needed; lines say whether
 				     the read half fell while the cached half rose. One array, two shapes,
 				     nothing re-shaped between them. -->
@@ -1311,43 +1306,38 @@
 				</p>
 			{:else}
 				<div class="pair">
-					<!-- Keyed on the span for the same reason the cache chart is, and the
-					     readouts sit inside the key with the charts: a strip built at one
-					     window and a chart drawn at another would name two different runs. -->
-					{#key windowDays}
-						<figure class="pane" data-token-chart="input">
-							<figcaption>Prompt tokens</figcaption>
-							<Chart
-								svg={data.inputSvg ?? ''}
-								option={inputOption}
-								width={data.chart.width_px}
-								height={data.chart.height_px}
-								label="Prompt tokens each run sent to the model over {view.days} days. One bar is one run."
-								columns={inputStrip}
-								readoutName="tokens-input"
-								readoutMaxShare={data.chart.readout_max_share}
-								grid={data.inputGrid}
-								restingNote=", the last run"
-								hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
-							/>
-						</figure>
-						<figure class="pane" data-token-chart="output">
-							<figcaption>Written tokens</figcaption>
-							<Chart
-								svg={data.outputSvg ?? ''}
-								option={outputOption}
-								width={data.chart.width_px}
-								height={data.chart.height_px}
-								label="Tokens each run's answers were made of over {view.days} days. One bar is one run."
-								columns={outputStrip}
-								readoutName="tokens-output"
-								readoutMaxShare={data.chart.readout_max_share}
-								grid={data.outputGrid}
-								restingNote=", the last run"
-								hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
-							/>
-						</figure>
-					{/key}
+					<figure class="pane" data-token-chart="input">
+						<figcaption>Prompt tokens</figcaption>
+						<Chart
+							svg={data.inputSvg ?? ''}
+							option={inputOption}
+							width={data.chart.width_px}
+							height={data.chart.height_px}
+							label="Prompt tokens each run sent to the model over {view.days} days. One bar is one run."
+							columns={inputStrip}
+							readoutName="tokens-input"
+							readoutMaxShare={data.chart.readout_max_share}
+							grid={data.inputGrid}
+							restingNote=", the last run"
+							hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
+						/>
+					</figure>
+					<figure class="pane" data-token-chart="output">
+						<figcaption>Written tokens</figcaption>
+						<Chart
+							svg={data.outputSvg ?? ''}
+							option={outputOption}
+							width={data.chart.width_px}
+							height={data.chart.height_px}
+							label="Tokens each run's answers were made of over {view.days} days. One bar is one run."
+							columns={outputStrip}
+							readoutName="tokens-output"
+							readoutMaxShare={data.chart.readout_max_share}
+							grid={data.outputGrid}
+							restingNote=", the last run"
+							hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
+						/>
+					</figure>
 				</div>
 				<p class="reads" data-token-totals>
 					{grouped(view.tokenTotals.input)} prompt tokens and {grouped(view.tokenTotals.output)}
