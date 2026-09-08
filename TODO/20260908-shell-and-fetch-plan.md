@@ -4,7 +4,7 @@
 **Level**: 5 (core design, persisted contracts, and the trust boundary). Design consultation is
 complete; section 0a records the eleven owner rulings and no row re-opens one.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 2; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 2; honor the ESCALATE triggers in section 0.
 
 ---
 
