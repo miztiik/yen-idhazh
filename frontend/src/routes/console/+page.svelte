@@ -253,6 +253,33 @@
 	 * page states. */
 	const chartsInWindow = $derived(data.charts.filter((day) => inWindow(day.date)));
 	const arm = $derived(chartArm(chartsInWindow, thresholds, windowDays));
+	/** What the extractor found over the open window, reduced once per span on the
+	 * server. The browser picks the open one; nothing re-reads a record to change
+	 * window. */
+	const extraction = $derived(
+		data.extractionByWindow.find((entry) => entry.days === windowDays) ??
+			data.extractionByWindow[0]
+	);
+	/** The three classes, as rows. `Not yet classified` is named rather than
+	 * folded into `narrative`: an article carrying two figures is not an article
+	 * carrying none, and only one of those two is a gap in our own questions. */
+	const extractionClasses = $derived(
+		[
+			{ id: 'chartable', label: 'Enough figures of one kind to draw', count: extraction.chartable },
+			{
+				id: 'unclassified',
+				label: 'Figures, but not enough of one kind',
+				count: extraction.unclassified
+			},
+			{ id: 'narrative', label: 'No figures at all', count: extraction.narrative }
+		].map((row) => ({
+			...row,
+			share:
+				extraction.spanIntegrityPass <= 0
+					? null
+					: Math.round((row.count / extraction.spanIntegrityPass) * 100)
+		}))
+	);
 	/** Articles per published day, as a map, so the cost arithmetic reads it the
 	 * same way the server did. */
 	const articles = $derived(new Map(Object.entries(data.publishedItems)));
@@ -1683,6 +1710,106 @@
 			</details>
 		</div>
 	{/if}
+
+	<h2 class="console-h2">What the extractor found, and what was drawn from it</h2>
+	<div data-windowed="extraction" data-window-days={windowDays}>
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+			Every article is read for the quantities and dates it states, before the visual planner sees
+			it. This is what that reading found over {windowDays} days, so a fall in published charts can
+			name its own cause: if the planner stopped choosing charts this share climbs while the
+			chartable count holds, and if the extractor stopped finding numbers the chartable count falls
+			instead.
+		</p>
+		<Panel
+			title="Extraction"
+			tone="info"
+			note="Three classes and not five. Comparative and processual are claims about how an article is written rather than about its numbers, so they have no test yet and arrive with the diagram work."
+			wide
+		>
+			{#if extraction.measuredDays === 0}
+				<!-- Named rather than absent, and it keeps the taxonomy sentence below it.
+				     An operator who finds a heading and nothing under it cannot tell a
+				     panel that measured nothing from one that is broken. -->
+				<p class="text-[0.9375rem] text-text-secondary" data-extraction="none">
+					No day in these {windowDays} days carries a record of what the extractor found. Every run
+					before 2026-09-08 measured none of this, so a window reaching only those days is silent
+					rather than empty. Widen the window, or wait for the next run.
+				</p>
+			{:else}
+				<p class="text-[0.9375rem] text-text" data-extraction-verdict>{extraction.verdict}</p>
+				<div class="extraction-figures mt-4">
+					<KpiCard
+						label="Articles that could carry a chart"
+						value={grouped(extraction.chartable)}
+						note="of {grouped(extraction.items)} read"
+						line="The article states at least {data.visuals.min_chart_points} separate figures measured in the same unit. Watch this number, not the share beside it: when it falls, the reading did."
+						windowed="extraction"
+						{windowDays}
+					/>
+					<KpiCard
+						label="Of those, published without one"
+						value={extraction.unusedPct === null ? '-' : `${extraction.unusedPct}%`}
+						note={extraction.unusedPct === null
+							? 'nothing chartable published'
+							: `${grouped(extraction.unused)} of ${grouped(extraction.chartablePublished)}`}
+						line="Material the planner was handed and did not draw. It is never zero for long - the reading keeps figures the planner is right to drop - so read the direction, not the level."
+						tone={extraction.unusedPct !== null && extraction.unusedPct >= 50 ? 'warn' : 'neutral'}
+						windowed="extraction"
+						{windowDays}
+					/>
+					<KpiCard
+						label="Facts still where they were cut from"
+						value={extraction.integrityPct === null ? '-' : `${extraction.integrityPct}%`}
+						note="{grouped(extraction.spanIntegrityPass)} of {grouped(extraction.items)} articles"
+						line="Every fact is kept with the characters it was cut from. Below 100 percent, an article's text moved underneath them: that article is degraded on its own and the rest of the day publishes."
+						tone={extraction.integrityPct !== null && extraction.integrityPct < 100 ? 'bad' : 'good'}
+						windowed="extraction"
+						{windowDays}
+					/>
+					<KpiCard
+						label="Facts found"
+						value={grouped(extraction.elementsFound)}
+						note="over {grouped(extraction.measuredDays)} measured {extraction.measuredDays === 1
+							? 'day'
+							: 'days'}"
+						line="Quantities and dates the reading kept, added over the window. It answers to the patterns alone, so it moves when the reading changes and not when the planner does."
+						windowed="extraction"
+						{windowDays}
+					/>
+				</div>
+				<div class="console-table mt-4" data-extraction="classes">
+					<table class="w-full text-[0.8125rem]">
+						<thead class="text-text-tertiary">
+							<tr class="border-b border-rule">
+								<th class="py-2 text-start font-normal">What the article states</th>
+								<th class="py-2 text-end font-normal">Articles</th>
+								<th class="py-2 text-end font-normal">Share</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each extractionClasses as row (row.id)}
+								<tr class="border-b border-rule" data-extraction-class={row.id}>
+									<td class="py-2">{row.label}</td>
+									<td class="py-2 text-end tabular-nums" data-extraction-cell="count"
+										>{grouped(row.count)}</td
+									>
+									<td class="py-2 text-end tabular-nums" data-extraction-cell="share"
+										>{row.share === null ? '-' : `${row.share}%`}</td
+									>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
+			<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-extraction="taxonomy">
+				Two more classes are coming. Comparative and processual say how an article is written rather
+				than what it counts, so nothing here can test for them and they arrive with the diagram
+				work. Until then an article with figures but no comparison to draw is counted as not yet
+				classified, which is a gap in our own questions and not a fault in the article.
+			</p>
+		</Panel>
+	</div>
 </section>
 
 <style>
@@ -1780,6 +1907,16 @@ display: grid;
 grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
 gap: var(--space-6);
 margin-block-start: var(--space-4);
+}
+
+/* Four cards, and they wrap rather than scroll. The narrowest is set to hold
+   the longest label without breaking a word, so a 360px column gets one card a
+   row and a wide console gets four - the same rule the chart-arm figures above
+   follow, at the width four cards need instead of two. */
+.extraction-figures {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+gap: var(--space-4);
 }
 
 .arm-figure {
