@@ -14,14 +14,21 @@ shard is opened anyway and splitting the file buys nothing. The rule is in
 `state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
 carried no date. Read through `collect.seen_window_days`, so it shards.
 
-`state/published.csv` answers "have we already run this?" Read whole, because
-published is forever and the question has no time bound - so it is one file.
-Size it from the ceiling, not from today: a run plans at most
+`state/published/YYYY/MM/DD.csv` answers "have we already run this?" It is the
+grain the published tree itself uses, and a run appends to the day its own rows
+name and to nothing else. The read is still whole, because published is forever
+and the question has no time bound - so every day file is opened anyway, and the
+grain buys a small merge surface and a removal that is one `rm`, never a faster
+read. Size it from the ceiling, not from today: a run plans at most
 `run.safety_ceiling_per_run` items and the schedule fires five times a day, so
 a day writes at most 1000 rows and a year at most about 365,000. At the
-measured 214.9 B a row that is 78.4 MB on disk, and `load_published` peaks
-around 261 MB reading it - in the one job that loads no model, on a 16 GB
-runner. See `docs/reference/measurements.md`.
+measured 214.9 B a row that is 78.4 MB on disk. See
+`docs/reference/measurements.md`.
+
+`state/published.csv` is the one file it moved off. It is read and never
+written. `load_published` returns the union of both shapes, so no step of that
+move can lose an address - a split that half-finishes, or a flat file a union
+merge brings back after it was removed, still answers.
 
 `state/feed-health/<YYYY-MM>.csv` answers "is this source still working?" One
 row per feed per run, read through `HEALTH_WINDOW_DAYS`, so it shards.
@@ -65,11 +72,12 @@ fact, and it lives here.
 from __future__ import annotations
 
 import csv
+import re
 from collections.abc import Callable, Collection, Iterable, Iterator
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
-from typing import Final
+from typing import Final, NoReturn
 
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -86,6 +94,7 @@ HEALTH_DIRNAME: Final = "feed-health"
 ITEM_HEALTH_DIRNAME: Final = "item-health"
 TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
+PUBLISHED_DIRNAME: Final = "published"
 PUBLISHED_FILENAME: Final = "published.csv"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
@@ -231,8 +240,21 @@ def span_rollup_path(state_dir: Path, month: str) -> Path:
     return state_dir / SPAN_ROLLUP_DIRNAME / f"{month}.csv"
 
 
-def published_path(state_dir: Path) -> Path:
-    return state_dir / PUBLISHED_FILENAME
+def published_relpath(date: str) -> str:
+    """`state/published/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{PUBLISHED_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+
+
+def published_path(state_dir: Path, date: str) -> Path:
+    """The day file a run on this date appends to.
+
+    A day rather than a month, because this ledger mirrors
+    `frontend/public/digest/YYYY/MM/DD/` and every row in it is derived from one
+    of those days. Two runs collide on a file only when they are the same day,
+    and taking a day back off the site is one `rm` rather than an edit inside a
+    shared shard - which `merge=union` cannot express.
+    """
+    return state_dir / PUBLISHED_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def runtime_counters_relpath() -> str:
@@ -379,10 +401,16 @@ def append_seen(state_dir: Path, date: str, rows: Iterable[SeenRow]) -> int:
     return _append(seen_path(state_dir, date), SeenRow.csv_columns(), payloads)
 
 
-def append_published(state_dir: Path, rows: Iterable[PublishedRow]) -> int:
-    """Append what a committed digest actually carried."""
+def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -> int:
+    """Append what a committed digest actually carried, into that day's own file.
+
+    The caller hands the date, so the caller decides: a date inside a day that
+    has already closed performs a correction to that day, which is the one
+    rewrite the freeze rule permits and the same choice `append_seen` gives its
+    caller. See `docs/concepts/month-partitions.md`.
+    """
     payloads = [row.model_dump(mode="json") for row in rows]
-    return _append(published_path(state_dir), PublishedRow.csv_columns(), payloads)
+    return _append(published_path(state_dir, date), PublishedRow.csv_columns(), payloads)
 
 
 def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str]:
@@ -402,18 +430,86 @@ def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str
     return first_seen
 
 
+#: What a directory under `state/published/` must be named to be a year, and a
+#: month or a day. The names are matched rather than globbed, so that a file
+#: none of them describes is refused instead of quietly passed over.
+_YEAR: Final = re.compile(r"\d{4}")
+_TWO_DIGITS: Final = re.compile(r"\d{2}")
+
+
+def _refuse_stray(entry: Path, root: Path) -> NoReturn:
+    """Nothing under `state/published/` may be ignored, so an odd name stops the read."""
+    raise ValueError(
+        f"{STATE_DIRNAME}/{PUBLISHED_DIRNAME} holds "
+        f"{entry.relative_to(root).as_posix()}, which is not a YYYY/MM/DD published "
+        "day. A file the reader cannot place is how it starts missing rows, so it "
+        "refuses the read rather than skipping the file."
+    )
+
+
+def _flat_published_path(state_dir: Path) -> Path:
+    """`state/published.csv`, the one file this ledger moved off.
+
+    Private because no caller may write it: a row is filed under its own day
+    now, and `published_path` is the only path a writer asks for. It is still
+    opened by `load_published`, and it stops being opened when the split has
+    run and the file is gone.
+    """
+    return state_dir / PUBLISHED_FILENAME
+
+
+def _published_days(state_dir: Path) -> Iterator[Path]:
+    """Every `state/published/YYYY/MM/DD.csv`, oldest first.
+
+    Walked rather than globbed. A glob answers "what matched" and says nothing
+    about what did not, so an unexplained file would sit in a state directory
+    unread and unmentioned. This names every entry it meets and refuses the
+    ones it cannot place.
+
+    A missing directory yields nothing, because a clone with no history is what
+    a fresh checkout has and not a fault.
+    """
+    root = state_dir / PUBLISHED_DIRNAME
+    if not root.is_dir():
+        return
+    for year in sorted(root.iterdir()):
+        if not (year.is_dir() and _YEAR.fullmatch(year.name)):
+            _refuse_stray(year, root)
+        for month in sorted(year.iterdir()):
+            if not (month.is_dir() and _TWO_DIGITS.fullmatch(month.name)):
+                _refuse_stray(month, root)
+            for day in sorted(month.iterdir()):
+                if not (day.is_file() and day.suffix == ".csv"):
+                    _refuse_stray(day, root)
+                if not _TWO_DIGITS.fullmatch(day.stem):
+                    _refuse_stray(day, root)
+                try:
+                    date_type.fromisoformat(f"{year.name}-{month.name}-{day.stem}")
+                except ValueError:
+                    _refuse_stray(day, root)
+                yield day
+
+
 def load_published(state_dir: Path) -> dict[str, str]:
     """Address -> the digest date it ran on. Never windowed: published is forever.
 
+    Two shapes are read: the flat `state/published.csv` and the day tree under
+    `state/published/`. They coexist while the ledger moves to the day layout,
+    and reading both is what stops any step of that move losing an address - a
+    split that half-finishes, or a flat file a union merge brings back after it
+    was removed, still answers here.
+
     Streamed rather than materialised, because this is the one unwindowed read
     over the one ledger with no time bound - so its peak would otherwise be the
-    whole file, and the whole file is what grows.
+    whole file, and the whole file is what grows. Only the day paths are
+    listed, and a day is a file rather than a row.
     """
     published: dict[str, str] = {}
-    for row in _stream_rows(published_path(state_dir)):
-        url_key, on = row["url_key"], row["published_on"]
-        if url_key not in published or on < published[url_key]:
-            published[url_key] = on
+    for path in (_flat_published_path(state_dir), *_published_days(state_dir)):
+        for row in _stream_rows(path):
+            url_key, on = row["url_key"], row["published_on"]
+            if url_key not in published or on < published[url_key]:
+                published[url_key] = on
     return published
 
 
@@ -548,6 +644,9 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     of that failure is the safe one: an unreadable retirement costs one request
     to an address that is probably still gone, and the next run reads the same
     evidence and files it again. Refusing to start would cost the reader the day.
+
+    Cover: -1, unbounded on purpose. A retirement is permanent, so any cover in
+    days would forget the oldest ones and the run would ask a dead server again.
     """
     rows: list[FeedRetirementRow] = []
     for raw in _read_rows(feed_retirements_path(state_dir)):

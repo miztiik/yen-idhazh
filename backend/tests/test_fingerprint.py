@@ -15,7 +15,10 @@ fixture, so the test and the fixture cannot drift apart.
 
 from __future__ import annotations
 
+import csv
+import inspect
 import re
+import tracemalloc
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Final
@@ -24,7 +27,9 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig, InferenceConfig, ModelRef
+from idhazh.contracts.base import Contract
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
+from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
     LEDGER_RELPATH,
     NOT_DIGESTED,
@@ -37,12 +42,14 @@ from idhazh.fingerprint import (
     digested_inference_fields,
     host_cpu,
     read_ledger,
+    recorded_fingerprints,
     runner_class,
     runtime_build,
     runtime_flags_spelling,
     sampling_spelling,
     text_digest,
 )
+from idhazh.ledger import load_retirements
 
 pytestmark = pytest.mark.contract
 
@@ -327,6 +334,129 @@ def test_appending_nothing_creates_nothing(tmp_path: Path) -> None:
     ledger = tmp_path / LEDGER_RELPATH
     assert append_new(ledger, []) == []
     assert not ledger.exists()
+
+
+def _fingerprint_fixture(path: Path, *, rows: int, stamps: int) -> set[str]:
+    """`rows` records over `stamps` distinct identities. Returns the identities.
+
+    Every row validates, because `FingerprintRow` rebuilds the digest from the
+    inputs on read. A fixture of invented hex would fail the parse instead of
+    measuring it.
+    """
+    template = committed_row()
+    cap = template.inputs.truncation_cap_tokens
+    distinct = [restamp(template.inputs, truncation_cap_tokens=cap + n) for n in range(stamps)]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=FingerprintRow.csv_columns(), lineterminator="\n")
+        out.writeheader()
+        for number in range(rows):
+            out.writerow(distinct[number % stamps].csv_row())
+    return {row.pipeline_fingerprint for row in distinct}
+
+
+def _peak_of_append_new(path: Path, row: FingerprintRow) -> tuple[list[FingerprintRow], int]:
+    tracemalloc.start()
+    try:
+        fresh = append_new(path, [row])
+        return fresh, tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+
+
+def test_appending_costs_the_identities_and_not_the_file(tmp_path: Path) -> None:
+    """The append reads what it must refuse, not every row ever written.
+
+    `append_new` needs one answer from the ledger - which identities are already
+    on record - and used to build a parsed row per stored line to get it. The
+    answer is the distinct identities, so doubling the lines over the same
+    identities must not move the peak.
+
+    Measured 2026-09-07 on an Intel Core i7-1265U, Windows 11, Python 3.14.2,
+    over 600 and 1,200 lines carrying the same 300 identities. Before: 2,468,376 B
+    of peak against 4,781,120 B - the file doubled and so did the cost, 1.94x.
+    After, over three runs: 306,489 / 306,333 / 306,269 B against 306,269 /
+    306,189 / 306,066 B, a ratio of 0.999 to 1.000. So the 1,200-line arm now
+    peaks about 15.6 times lower, and it stops moving when the file grows.
+
+    Both populations are built and fixed, so this costs the same on the day the
+    committed ledger holds ten times either (Rule #12, `CLAUDE.md` section 13).
+    """
+    stamps = 300
+    small = tmp_path / "small" / LEDGER_RELPATH
+    large = tmp_path / "large" / LEDGER_RELPATH
+    known_small = _fingerprint_fixture(small, rows=stamps * 2, stamps=stamps)
+    known_large = _fingerprint_fixture(large, rows=stamps * 4, stamps=stamps)
+    assert known_small == known_large, "both arms must hold one answer or this proves nothing"
+    assert len(known_large) == stamps, "the fixture has to repeat identities or it proves nothing"
+
+    template = committed_row()
+    arriving = restamp(
+        template.inputs, truncation_cap_tokens=template.inputs.truncation_cap_tokens + stamps
+    )
+    fresh_small, peak_small = _peak_of_append_new(small, arriving)
+    fresh_large, peak_large = _peak_of_append_new(large, arriving)
+
+    assert fresh_small == [arriving], "an unrecorded identity is still appended"
+    assert fresh_large == [arriving]
+    assert peak_large < peak_small * 1.1, (
+        f"twice the lines over the same {stamps} identities moved peak from {peak_small} B "
+        f"to {peak_large} B, so the append is still holding the file rather than the answer"
+    )
+
+
+def test_a_repeated_identity_is_refused_however_many_lines_carry_it(tmp_path: Path) -> None:
+    """The behaviour the streaming read may not move: a known stamp never lands twice."""
+    path = tmp_path / LEDGER_RELPATH
+    known = _fingerprint_fixture(path, rows=12, stamps=4)
+    template = committed_row()
+    repeat = restamp(template.inputs, truncation_cap_tokens=template.inputs.truncation_cap_tokens)
+
+    assert repeat.pipeline_fingerprint in known
+    assert append_new(path, [repeat]) == [], "a recorded identity is never appended twice"
+    assert recorded_fingerprints(path) == known, "and the ledger gained no line"
+
+
+def test_the_recorded_identities_are_read_without_parsing_a_row(tmp_path: Path) -> None:
+    """The reader answers the one question the append asks, and no more."""
+    path = tmp_path / LEDGER_RELPATH
+    assert recorded_fingerprints(path) == set(), "an absent ledger has recorded nothing"
+    known = _fingerprint_fixture(path, rows=9, stamps=3)
+    assert recorded_fingerprints(path) == known
+    assert recorded_fingerprints(path) == set(read_ledger(path)), "the two reads agree"
+
+
+# --- The four bounds this row declares ---------------------------------------
+
+#: Items 18 to 21 of the plan's inventory: the reads ruled deliberately
+#: unbounded, and the word each one's cover turns on. They are asserted here
+#: rather than beside each module because they were declared together, in one
+#: row, against one rule - and a set that is checked in four places drifts.
+DECLARED_BOUNDS: Final[tuple[tuple[str, object, str], ...]] = (
+    ("ledger.load_retirements", load_retirements, "-1"),
+    ("corpus.scored_from_items", scored_from_items, "one run"),
+    ("corpus.read_rows", read_rows, "finetune.corpus_rows"),
+    ("contracts.base.Contract.read", Contract.read, "one payload"),
+)
+
+
+@pytest.mark.parametrize(
+    ("name", "read", "cover"),
+    DECLARED_BOUNDS,
+    ids=[name for name, _, _ in DECLARED_BOUNDS],
+)
+def test_a_deliberately_unbounded_read_declares_its_cover(
+    name: str, read: object, cover: str
+) -> None:
+    """Rule #12's escape hatch is a person agreeing in the open, so it is written down.
+
+    Each of these four reads was ruled unbounded on purpose. The ruling is worth
+    nothing to the next reader unless it sits next to the code, so each one names
+    what it covers and why a cover in days is not the answer.
+    """
+    doc = inspect.getdoc(read) or ""
+    assert "Cover:" in doc, f"{name} was ruled unbounded on purpose and declares no cover"
+    assert cover in doc, f"{name} declares a cover that does not name {cover!r}"
 
 
 def test_every_column_is_a_scalar() -> None:

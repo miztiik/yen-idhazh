@@ -464,7 +464,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
-        "state/published.csv",
+        "state/published",
         "state/scores",
         "state/score-index",
         "state/item-health",
@@ -2282,6 +2282,12 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
     the union of both sides is the answer. `frontend/public/telemetry/` is a
     full rewrite of `state/item-health/`, so a union of two rewrites is a file
     with every row twice; assemble regenerates it instead.
+
+    The set is closed rather than a membership check, because what this guards
+    is the pattern nobody chose. The published day tree is named on a line of
+    its own even though the catch-all above it already matched: a collection
+    that inherits a merge rule in silence has had that rule decided for it, and
+    a new pattern arriving here without its own reason should fail.
     """
     attributes = read_text(REPO_ROOT / ".gitattributes")
     unioned = {
@@ -2290,7 +2296,7 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
         if line and not line.startswith("#") and "merge=union" in line
     }
 
-    assert unioned == {"state/*.csv", "state/**/*.csv"}
+    assert unioned == {"state/*.csv", "state/**/*.csv", "state/published/**/*.csv"}
     assert not any(
         "telemetry" in pattern or pattern.startswith("frontend") for pattern in unioned
     )
@@ -2872,6 +2878,29 @@ def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
     assert set(COMMIT_STAGED_PATHS["work"]) <= set(refreshed)
 
 
+def test_assemble_hands_back_the_published_ledger_it_appends_to() -> None:
+    """The refresh set covers the day file this stage writes, and asks it where.
+
+    Assemble appends published rows blind, so a second attempt that rebuilt on
+    top of its own first attempt would file every item twice. The day is handed
+    back to origin's tip before the producer runs again, which is what makes the
+    rebuilt append land on the file origin holds rather than on this attempt's.
+
+    The path is read from the writer's own helper rather than spelled here, so
+    moving the ledger again fails this instead of leaving a refresh set naming a
+    directory nothing writes (Rule #6).
+    """
+    refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
+    day = ledger.published_relpath(SUBSTITUTED_DATE)
+
+    assert any(day == path or day.startswith(f"{path}/") for path in refreshed), (
+        f"{day} is written by this job and no entry of {refreshed} hands it back"
+    )
+    # The flat file is read and never written now, so handing it back would
+    # claim this job rebuilds something it does not touch.
+    assert f"{ledger.STATE_DIRNAME}/{ledger.PUBLISHED_FILENAME}" not in refreshed
+
+
 def test_every_committing_job_configures_the_same_identity() -> None:
     """The pipeline commits as itself, and it says so in one voice.
 
@@ -3088,7 +3117,7 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     manifest = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/run.json"))
     assert manifest["runs"] == day["runs"]
 
-    published = _rows(_git(origin, env, "show", "main:state/published.csv"))
+    published = _rows(_git(origin, env, "show", f"main:{ledger.published_relpath(date)}"))
     scores = _rows(_git(origin, env, "show", f"main:state/scores/{month}.csv"))
     health = _rows(_git(origin, env, "show", f"main:state/item-health/{month}.csv"))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]

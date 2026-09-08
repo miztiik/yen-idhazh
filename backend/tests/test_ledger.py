@@ -52,11 +52,11 @@ def seen_row() -> SeenRow:
     )
 
 
-def published_row() -> PublishedRow:
+def published_row(*, url_key: str = URL_KEY, on: str = DATE) -> PublishedRow:
     return PublishedRow(
         version=PublishedRow.schema_version(),
-        url_key=URL_KEY,
-        published_on=DATE,
+        url_key=url_key,
+        published_on=on,
         item_id="ai-01",
     )
 
@@ -93,10 +93,10 @@ def test_seen_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
 
 def test_published_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
     state = tmp_path / "state"
-    stale_header(ledger.published_path(state), PublishedRow.csv_columns())
+    stale_header(ledger.published_path(state, DATE), PublishedRow.csv_columns())
 
     with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
-        ledger.append_published(state, [published_row()])
+        ledger.append_published(state, DATE, [published_row()])
 
 
 def test_feed_health_ledger_rejects_stale_committed_header(tmp_path: Path) -> None:
@@ -121,10 +121,10 @@ def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> N
     wide, narrow_state = tmp_path / "wide", tmp_path / "narrow"
     for state, fixture in ((wide, "published-v1.csv"), (narrow_state, "published-v2.csv")):
         state.mkdir()
-        ledger.published_path(state).write_bytes((STATE_FIXTURES / fixture).read_bytes())
+        _flat_file(state).write_bytes((STATE_FIXTURES / fixture).read_bytes())
 
-    wide_header = ledger.read_header(ledger.published_path(wide))
-    narrow_header = ledger.read_header(ledger.published_path(narrow_state))
+    wide_header = ledger.read_header(_flat_file(wide))
+    narrow_header = ledger.read_header(_flat_file(narrow_state))
     assert set(wide_header) - set(narrow_header) == {"canonical_url"}
     assert {"url_key", "published_on"} <= set(narrow_header)
 
@@ -145,10 +145,10 @@ def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: 
     than a fact about a run.
     """
     state = tmp_path / "state"
-    assert ledger.append_published(state, [published_row()]) == 1
-    assert ledger.append_published(state, [published_row()]) == 1
+    assert ledger.append_published(state, DATE, [published_row()]) == 1
+    assert ledger.append_published(state, DATE, [published_row()]) == 1
 
-    with ledger.published_path(state).open(encoding="utf-8", newline="") as handle:
+    with ledger.published_path(state, DATE).open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
 
     assert len(rows) == 2, "the append path does not deduplicate"
@@ -159,7 +159,7 @@ def _published_fixture(state: Path, *, rows: int, keys: int) -> dict[str, str]:
     """`rows` records over `keys` distinct addresses. Returns what the read owes."""
     state.mkdir(parents=True, exist_ok=True)
     expected: dict[str, str] = {}
-    with ledger.published_path(state).open("w", encoding="utf-8", newline="") as handle:
+    with _flat_file(state).open("w", encoding="utf-8", newline="") as handle:
         out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
         out.writeheader()
         for number in range(rows):
@@ -218,6 +218,223 @@ def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> Non
         f"twice the rows over the same addresses moved peak from {peak_small} B to "
         f"{peak_large} B, so the read is still holding the file rather than the answer"
     )
+
+
+def _address(number: int) -> str:
+    return derive_url_key(f"https://example.org/items/{number}")
+
+
+def _day_file(state: Path, date: str) -> Path:
+    """`state/published/YYYY/MM/DD.csv`, spelled out rather than asked for.
+
+    The ledger's own path helper would make this a restatement of the code it
+    checks, and both the reader and the writer are checked against it now. The
+    layout is the thing under test, so the test writes it.
+    """
+    return state / "published" / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def _flat_file(state: Path) -> Path:
+    """`state/published.csv`, spelled out for the reason `_day_file` gives.
+
+    Read and never written. It has no path helper left to ask, because the
+    shape a caller names is the day tree.
+    """
+    return state / "published.csv"
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    """Every file under `root`, POSIX path to bytes. Bounded by what a test wrote."""
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _published_file(path: Path, dates: dict[str, str]) -> None:
+    """One published-shaped file at `path`, holding `url_key -> published_on`.
+
+    Rows go through the contract, so a fixture cannot drift from what a run
+    would really append. Every fixture here is built and fixed, so these checks
+    cost the same on the day the archive holds ten times the rows (Rule #12).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=PublishedRow.csv_columns(), lineterminator="\n")
+        out.writeheader()
+        for number, (url_key, on) in enumerate(sorted(dates.items())):
+            row = PublishedRow(
+                version=PublishedRow.schema_version(),
+                url_key=url_key,
+                published_on=on,
+                item_id=f"ai-{number:010d}",
+            )
+            out.writerow(row.model_dump(mode="json"))
+
+
+def test_load_published_reads_no_history_from_a_fresh_clone(tmp_path: Path) -> None:
+    """A missing flat file and a missing day tree both mean nothing has published yet.
+
+    Neither is an error. A clone with no history is the state every fresh
+    checkout is in, and an empty mapping is what "nothing has run" looks like.
+    """
+    assert ledger.load_published(tmp_path / "state") == {}
+
+
+def test_load_published_reads_the_flat_file_the_day_tree_and_their_union(
+    tmp_path: Path,
+) -> None:
+    """Both shapes answer, and holding both answers with the union of the two.
+
+    `state/published.csv` is moving to `state/published/YYYY/MM/DD.csv`. The
+    reader learns both shapes before anything writes the new one, so a split
+    that half-finishes, or a flat file a union merge brings back after it was
+    removed, still returns every address rather than silently dropping the
+    shape nobody is reading.
+    """
+    flat_only = tmp_path / "flat-only"
+    _published_file(_flat_file(flat_only), {_address(1): "2026-08-20"})
+    assert ledger.load_published(flat_only) == {_address(1): "2026-08-20"}
+
+    days_only = tmp_path / "days-only"
+    _published_file(_day_file(days_only, "2026-08-21"), {_address(2): "2026-08-21"})
+    _published_file(_day_file(days_only, "2026-08-22"), {_address(3): "2026-08-22"})
+    _published_file(_day_file(days_only, "2026-09-03"), {_address(4): "2026-09-03"})
+    assert ledger.load_published(days_only) == {
+        _address(2): "2026-08-21",
+        _address(3): "2026-08-22",
+        _address(4): "2026-09-03",
+    }, "two days of one month and a day of the next"
+
+    both = tmp_path / "both"
+    _published_file(_flat_file(both), {_address(1): "2026-08-20"})
+    _published_file(_day_file(both, "2026-08-21"), {_address(2): "2026-08-21"})
+    _published_file(_day_file(both, "2026-09-03"), {_address(4): "2026-09-03"})
+    assert ledger.load_published(both) == {
+        _address(1): "2026-08-20",
+        _address(2): "2026-08-21",
+        _address(4): "2026-09-03",
+    }, "the union, so neither shape can hide an address from the guard"
+
+
+@pytest.mark.parametrize("earlier_in_the_day_tree", [False, True])
+def test_load_published_keeps_the_earliest_date_whichever_shape_holds_it(
+    tmp_path: Path, earlier_in_the_day_tree: bool
+) -> None:
+    """One address in both shapes on two dates. The answer cannot follow read order.
+
+    Asserted both ways round because a reader that simply overwrote would pass
+    one arm and fail the other, and which arm it passed would depend on which
+    shape it happened to open first.
+    """
+    state = tmp_path / "state"
+    key = _address(1)
+    early, late = "2026-08-21", "2026-09-03"
+    flat_on, day_on = (late, early) if earlier_in_the_day_tree else (early, late)
+
+    _published_file(_flat_file(state), {key: flat_on})
+    _published_file(_day_file(state, day_on), {key: day_on})
+
+    assert ledger.load_published(state) == {key: early}
+
+
+@pytest.mark.parametrize(
+    ("relative", "what"),
+    [
+        ("2026/08/notes.csv", "a day stem that is not two digits"),
+        ("2026/8/21.csv", "a month that is not two digits"),
+        ("archive/08/21.csv", "a year that is not four digits"),
+        ("README.csv", "a file where a year directory belongs"),
+    ],
+)
+def test_load_published_refuses_a_file_it_cannot_place_in_the_day_tree(
+    tmp_path: Path, relative: str, what: str
+) -> None:
+    """A file the reader cannot place is a fault, and it is never skipped.
+
+    A glob would answer "what matched" and say nothing about what did not, so a
+    stray file would sit in a state directory unread and unmentioned - which is
+    how a reader starts missing rows without anyone noticing. Every arm here
+    holds a real published row, so the refusal is about the name and not about
+    the contents.
+    """
+    state = tmp_path / "state"
+    _published_file(state / "published" / relative, {_address(1): "2026-08-21"})
+
+    with pytest.raises(ValueError, match="is not a YYYY/MM/DD published day"):
+        ledger.load_published(state)
+
+
+def test_append_published_writes_the_day_its_rows_name_and_no_other_file(
+    tmp_path: Path,
+) -> None:
+    """The Oracle: one run writes one file, and it is that run's own day.
+
+    The whole state directory is compared rather than the day file alone. An
+    append that also touched the flat file, or that opened a neighbouring day
+    to check something, would pass an assertion about the day file and fail
+    here - and touching a day nobody is publishing is what a partitioned writer
+    must never do (`docs/concepts/month-partitions.md`).
+
+    The relpath is asserted against the file that was really written rather
+    than against a second spelling of the layout, so a log line cannot drift
+    from the file it names.
+    """
+    state = tmp_path / "state"
+    date = "2026-09-07"
+
+    landed = ledger.append_published(state, date, [published_row(on=date)])
+
+    assert landed == 1
+    assert list(_tree(state)) == ["published/2026/09/07.csv"]
+    assert not _flat_file(state).exists(), "the flat file is read and never written"
+    assert ledger.published_relpath(date) == "state/published/2026/09/07.csv"
+    assert ledger.published_path(state, date) == _day_file(state, date)
+
+
+def test_a_run_in_a_later_month_leaves_the_earlier_one_byte_identical(
+    tmp_path: Path,
+) -> None:
+    """A closed day is not rewritten, and the bytes say so rather than a count.
+
+    This is the freeze rule read from the writer's side: the run's own date
+    picks the file, so every other day is out of reach. Compared byte for byte
+    because a row appended to yesterday would leave the file count unchanged.
+    """
+    state = tmp_path / "state"
+    ledger.append_published(state, "2026-09-30", [published_row(on="2026-09-30")])
+    september = _tree(state)
+    assert september, "nothing was written, so the comparison below would prove nothing"
+
+    ledger.append_published(
+        state, "2026-10-01", [published_row(url_key=_address(2), on="2026-10-01")]
+    )
+
+    october = _tree(state)
+    assert set(october) - set(september) == {"published/2026/10/01.csv"}
+    assert {name: october[name] for name in september} == september
+
+
+def test_what_the_writer_files_by_day_answers_beside_the_flat_file(tmp_path: Path) -> None:
+    """The reader's union still holds once the writer produces the new shape.
+
+    The move only works while both halves agree, so the two are checked
+    together here rather than each against a fixture of the other's output: a
+    row this writer really appended, and a flat file the split has not taken
+    yet, and both addresses back from one read.
+    """
+    state = tmp_path / "state"
+    _published_file(_flat_file(state), {_address(1): "2026-08-20"})
+
+    ledger.append_published(
+        state, "2026-09-07", [published_row(url_key=_address(2), on="2026-09-07")]
+    )
+
+    assert ledger.load_published(state) == {
+        _address(1): "2026-08-20",
+        _address(2): "2026-09-07",
+    }
 
 
 def carried_row(
@@ -443,11 +660,15 @@ def test_a_row_the_fixed_pipeline_wrote_is_left_alone() -> None:
 def test_the_committed_published_ledger_has_the_shape_the_contract_writes() -> None:
     """The read-side migration for the narrowed row is the file itself.
 
-    `require_matching_header` stops the append when the two disagree, so a
+    `require_matching_header` stops an append when the two disagree, so a
     contract narrowed without the ledger being rewritten would take down every
-    scheduled run at the last stage of the day (CLAUDE.md section 11).
+    scheduled run at the last stage of the day (CLAUDE.md section 11). Nothing
+    appends to this file now - a row is filed under its own day - but
+    `load_published` still opens it, and the split that retires it copies these
+    cells across unchanged, so its header is still the shape the contract
+    writes.
     """
-    header = ledger.read_header(ledger.published_path(REPO_ROOT / "state"))
+    header = ledger.read_header(_flat_file(REPO_ROOT / "state"))
 
     assert header == PublishedRow.csv_columns()
 
