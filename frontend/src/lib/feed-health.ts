@@ -231,8 +231,8 @@ export function resultLabel(row: FeedRead): string {
 	return row.outcome;
 }
 
-/** How many feeds have never failed, out of how many the pipeline has read,
- * over how many runs.
+/** How many feeds did not fail, out of how many the pipeline read, over how
+ * many runs.
  *
  * The console lists only the feeds that broke, which is the right list and half
  * an answer: four broken feeds out of eight is a collapse and four out of two
@@ -252,28 +252,31 @@ export interface Reliability {
 	/** Feeds with at least one failing read. `clean.length + failed` is
 	 * `checked`, always. */
 	failed: number;
-	/** Feeds on record that the pipeline has never actually read - held back by
-	 * a rest or by a robots answer on every run. Alphabetically, for the same
-	 * reason `clean` is.
+	/** Feeds in `rows` that the pipeline did not read - held back by a rest or
+	 * by a robots answer on every run. Alphabetically, for the same reason
+	 * `clean` is.
 	 *
 	 * They are named rather than counted into either side because a source
 	 * honouring its own `robots.txt` has not failed and has not delivered
-	 * either. Until 2026-09-03 a refusal counted as an ask, so a source that has
-	 * never once given us an article was reported as one that had never failed -
+	 * either. Until 2026-09-03 a refusal counted as an ask, so a source that
+	 * gave us no article at all was reported as one that did not fail -
 	 * measured over the committed ledger that day, 5 feeds of 184. That is the
 	 * one number this section existed to get right. */
 	ineligible: string[];
-	/** Runs the ledger holds. This is the span "never failed" is read over, and
-	 * a shallow record is why the page has a third sentence: two runs deep,
-	 * "never failed" means "did not fail twice". */
+	/** Runs the rows hold. This is the span "did not fail" is read over, and a
+	 * shallow record is why the page has a third sentence: two runs deep, "did
+	 * not fail" means "did not fail twice". */
 	runs: number;
 }
 
-/** The whole record, not a window.
+/** Whatever span the caller handed it, and the caller says which.
  *
- * The same span the streak beside each feed is read over, because the pipeline
- * rests on the whole count and not on a windowed one. Two spans in one section
- * is the defect the shared window exists to remove.
+ * The console hands it `feedResults(shardMonths(widest))`, so the record is the
+ * newest shards the window control can reach rather than every run there has
+ * been. The same span the streak beside each feed is read over, because two
+ * spans in one section is the defect the shared window exists to remove - and
+ * the sentence the page prints names that span rather than claiming all of
+ * them (`CLAUDE.md` Rule #12).
  */
 export function reliability(rows: readonly FeedRecord[]): Reliability {
 	const read = new Map<string, FeedRecord[]>();
