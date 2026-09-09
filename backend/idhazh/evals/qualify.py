@@ -361,24 +361,26 @@ def determinism(observations: Sequence[ItemObservation], *, repeats: int) -> Gat
 
 
 def publishable_length(
-    observations: Sequence[ItemObservation], evaluation: EvaluationConfig
+    observations: Sequence[ItemObservation], summarize: SummarizeConfig
 ) -> GateOutcome:
-    """Every successful reply landed inside the publishable word range."""
+    """No successful reply was so short it reads as a failed extraction.
+
+    The gate asks the one length question production still refuses an item on.
+    It deliberately does not ask whether a reply sat inside its band's ask: that
+    is a request rather than a rule, and a reply past it is trimmed or published
+    long rather than dropped, so failing a candidate model for it would hold the
+    qualification to a standard the pipeline itself does not apply.
+    """
+    floor = summarize.length_policy.absolute_floor_words
     graded = [o for o in observations if o.ok]
-    outside = [
-        o
-        for o in graded
-        if not evaluation.summary_words_min <= o.summary_word_count <= evaluation.summary_words_max
-    ]
+    outside = [o for o in graded if o.summary_word_count < floor]
     return _outcome(
         GateName.PUBLISHABLE_LENGTH,
         passed=bool(graded) and not outside,
-        measured=f"{len(outside)}/{len(graded)} replies outside the range",
-        threshold=(
-            f"[{evaluation.summary_words_min}, {evaluation.summary_words_max}] words, every reply"
-        ),
-        source=f"{_CONFIG} evaluation.summary_words_min/max",
-        detail="a summary outside the range is rejected in production, so it is rejected here",
+        measured=f"{len(outside)}/{len(graded)} replies under the floor",
+        threshold=f"at least {floor} words, every reply",
+        source=f"{_CONFIG} summarize.length_policy.absolute_floor_words",
+        detail="a reply under the floor is a failed extraction, and production drops it",
     )
 
 
@@ -555,6 +557,7 @@ def gates(
     shards: Sequence[QualificationShard],
     *,
     evaluation: EvaluationConfig,
+    summarize: SummarizeConfig,
     inference: InferenceConfig,
     run: RunConfig,
     budget_: Budget,
@@ -568,7 +571,7 @@ def gates(
         schema_validity(corpus.observations),
         injection_canaries(corpus.canaries, required=required_canaries),
         determinism(corpus.observations, repeats=corpus.repeats),
-        publishable_length(corpus.observations, evaluation),
+        publishable_length(corpus.observations, summarize),
         context_fit(corpus.observations, inference),
         identity(shards),
         budget(budget_),

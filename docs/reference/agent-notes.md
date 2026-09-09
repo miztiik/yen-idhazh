@@ -3302,6 +3302,29 @@ The row is appended once. A second run finds the receipt and writes nothing, so
 re-running certifies green. CI is unaffected either way: `ci.yml` calls
 `npm run test:browser` directly and never takes the fingerprint. Seen 2026-09-09.
 
+## A length test written with two-letter words is graded by the character rail, not the length rule
+
+`summarize.output_schema` puts `minLength` and `maxLength` on the summary field,
+derived from the ladder times a characters-per-word constant. Pydantic checks
+those while parsing the reply, which happens **before** `to_summary` counts a
+single word. So a fixture built as `"y " * 100` is 100 words and 200 characters,
+and the rail wants at least 125 and at most a few thousand - the reply is thrown
+out as `bad_shape`, the length rule never runs, and the test fails claiming the
+length verdict is `None`.
+
+Nothing about the failure names the cause. It reads as "the verdict did not
+fire", which sends you into the verdict function, which is correct.
+
+Write the fixture with realistic words - `"deliberation " * 100` is 100 words and
+1,300 characters, which is what 100 real words costs. The rule of thumb the
+schema itself uses is roughly 5 characters per word at the floor and 13 at the
+ceiling, so any fixture between those is safe at both ends.
+
+The same trap catches the other direction: a test that wants an over-length reply
+has to stay under the character ceiling, or it proves the rail works rather than
+the rule. Seen 2026-09-10, in
+`backend/tests/test_summarize.py::test_the_tolerance_comes_from_config`.
+
 ## See also
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands these traps interfere with.

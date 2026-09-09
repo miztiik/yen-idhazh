@@ -11,6 +11,7 @@
   "input_tokens": 2500,
   "item_id": "energy-01",
   "key_points": [],
+  "length_action": null,
   "model_id": "qwen3-4b-q4-k-m",
   "output_digest": "8254cc9b9d84471f2b0bbc98ea4cd08ee7351c7be86704da9b2f96cfb7b7fb78",
   "output_tokens": 0,

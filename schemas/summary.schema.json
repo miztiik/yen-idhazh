@@ -29,6 +29,17 @@
       "title": "FailureCode",
       "type": "string"
     },
+    "LengthAction": {
+      "description": "What the length verdict did with this reply.\n\nRecorded because a trimmed summary and a compliant one are indistinguishable\nafterwards - the ledger stores the length after the trim - so without this\nfield the pipeline cannot say how often the tolerance is doing work.",
+      "enum": [
+        "publish",
+        "publish_over",
+        "trim",
+        "fail"
+      ],
+      "title": "LengthAction",
+      "type": "string"
+    },
     "SummaryStatus": {
       "enum": [
         "ok",
@@ -43,6 +54,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "length_action added, optional and defaulting to null.",
+      "version": "2026-09-10T00:30",
+      "why": "A reply outside its band's ask no longer deletes the item; it publishes, publishes over-length, or is trimmed at the last complete sentence that fits. A trimmed summary and a compliant one read identically afterwards, because summary_word_count is measured after the trim, so without this field there is no way to count how often the tolerance fires. Additive with a default, so a payload written by an earlier run still validates and reads as null - which is the truth about it, since no verdict was recorded when it was written."
+    },
     {
       "change": "attempt says in its description that it is a constant, not a measurement.",
       "version": "2026-08-30T20:00",
@@ -177,6 +193,18 @@
       "title": "Key Points",
       "type": "array"
     },
+    "length_action": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LengthAction"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the length verdict did with this reply, or null on a payload written before the verdict existed and on any item that never reached it. `publish` is inside the band's ask or inside the tolerance around it; `publish_over` ran long on a band that would rather be long than cut a qualification off the end; `trim` was cut at the last complete sentence that fits; `fail` did not reach the absolute floor and is a failed extraction rather than a summary."
+    },
     "model_id": {
       "description": "The ModelRef id from config. The full ref lives in the manifest.",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -256,7 +284,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-30T20:00",
+      "default": "2026-09-10T00:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -273,5 +301,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-08-30T20:00"
+  "version": "2026-09-10T00:30"
 }

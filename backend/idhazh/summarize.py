@@ -30,15 +30,21 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from string import Template
-from typing import Any, Final
+from typing import Any, Final, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
-from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig, SummarizeConfig
+from idhazh.contracts.app_config import (
+    EvaluationConfig,
+    InferenceConfig,
+    OverLengthAction,
+    SummarizeConfig,
+    SummaryBand,
+)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_output_digest
 from idhazh.contracts.item_health import FailureCode
-from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import restates_summary, verbatim_run
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
@@ -63,6 +69,9 @@ _MAX_CHARS_PER_WORD: Final = 12
 
 _THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
+# One sentence, ending at the terminator and keeping it. Used only by the
+# trimmer, which needs whole sentences and never a character offset.
+_SENTENCE = re.compile(r"[^.!?]*[.!?]+[\"')\]]*\s*|[^.!?]+$")
 
 # Why there was no reply to parse. One sentence per cause, because the operator
 # reading a failed item needs to know whether to restart a process or shorten a
@@ -155,7 +164,6 @@ def _key_point_rail(
 
 def draft_model(
     prompt_config: SummarizeConfig | None = None,
-    evaluation: EvaluationConfig | None = None,
     *,
     source_words: int | None = None,
     brief: bool = False,
@@ -166,35 +174,38 @@ def draft_model(
     enforces is the one that band asks for. With neither, the rail is the union
     across every band - the envelope the fingerprint and the offline harnesses
     hold a reply to when no single article applies.
+
+    The word rails come from the ladder and its tolerance, never from a global
+    pair. They are the widest any band can publish, because the decoder enforces
+    them as a character budget: a reply past the rail fails to parse, and a reply
+    that cannot parse never reaches the verdict that would have trimmed it or
+    published it long.
     """
     ask = prompt_config or SummarizeConfig()
-    bounds = evaluation or EvaluationConfig()
     key_points_min, key_points_max = _key_point_rail(ask, source_words, brief)
     return _draft_model(
         key_points_min,
         key_points_max,
-        bounds.summary_words_min * _MIN_CHARS_PER_WORD,
-        bounds.summary_words_max * _MAX_CHARS_PER_WORD,
+        ask.decoder_words_min() * _MIN_CHARS_PER_WORD,
+        ask.decoder_words_max() * _MAX_CHARS_PER_WORD,
         ask.title_words_max * _MAX_CHARS_PER_WORD,
     )
 
 
 def output_schema(
     prompt_config: SummarizeConfig | None = None,
-    evaluation: EvaluationConfig | None = None,
     *,
     source_words: int | None = None,
     brief: bool = False,
 ) -> dict[str, Any]:
     """Generated from the model, never hand-written (Rule #3)."""
     return draft_model(
-        prompt_config, evaluation, source_words=source_words, brief=brief
+        prompt_config, source_words=source_words, brief=brief
     ).model_json_schema()
 
 
 def output_schema_text(
     prompt_config: SummarizeConfig | None = None,
-    evaluation: EvaluationConfig | None = None,
     *,
     source_words: int | None = None,
     brief: bool = False,
@@ -206,7 +217,7 @@ def output_schema_text(
     `prompt_inputs` hashes every band's exact numbers besides.
     """
     return canonical_json(
-        output_schema(prompt_config, evaluation, source_words=source_words, brief=brief)
+        output_schema(prompt_config, source_words=source_words, brief=brief)
     )
 
 
@@ -300,7 +311,6 @@ def build_request(
     model_id: str,
     inference: InferenceConfig,
     prompt_config: SummarizeConfig | None = None,
-    evaluation: EvaluationConfig | None = None,
 ) -> dict[str, Any]:
     return request_payload(
         model_id=model_id,
@@ -310,7 +320,6 @@ def build_request(
         user=user_turn(article),
         output_schema=output_schema(
             prompt_config,
-            evaluation,
             source_words=article.band_source_words,
             brief=article.brief,
         ),
@@ -336,7 +345,6 @@ def parse_draft(
     raw: str,
     *,
     prompt_config: SummarizeConfig | None = None,
-    evaluation: EvaluationConfig | None = None,
     source_words: int | None = None,
     brief: bool = False,
 ) -> SummaryDraft:
@@ -356,8 +364,91 @@ def parse_draft(
     if fenced:
         content = fenced.group(1)
     return draft_model(
-        prompt_config, evaluation, source_words=source_words, brief=brief
+        prompt_config, source_words=source_words, brief=brief
     ).model_validate_json(content)
+
+
+class LengthVerdict(NamedTuple):
+    """What to do with a reply of this length, and the sentence that says why."""
+
+    action: LengthAction
+    detail: str
+
+
+def length_verdict(
+    words: int,
+    band: SummaryBand,
+    ask: SummarizeConfig,
+    *,
+    source_words: int,
+) -> LengthVerdict:
+    """Whether a reply of this many words publishes, and in what shape.
+
+    A length miss is the model rounding a request, not a claim we can check
+    against the article, so it may not cost the reader the story. Only one length
+    still fails an item: a reply under `absolute_floor_words` from a source long
+    enough to have said something, which is a failed extraction wearing a
+    summary's clothes rather than a short summary.
+
+    Overshoot past the allowance is the band's own call. A short band trims,
+    because wire-shaped prose front-loads and the tail is the safe end to cut. A
+    long band publishes over-length, because on a feature the qualification
+    arrives last and cutting it is how a summary stops being true.
+
+    Undershoot publishes. The reader can see that a summary is short; they cannot
+    see one that was deleted.
+    """
+    policy = ask.length_policy
+    if (
+        source_words > policy.floor_applies_above_source_words
+        and words < policy.absolute_floor_words
+    ):
+        return LengthVerdict(
+            LengthAction.FAIL,
+            f"summary is {words} words from a {source_words}-word source, under the "
+            f"{policy.absolute_floor_words}-word floor, so it is a failed extraction",
+        )
+    ceiling = band.target_words_max + ask.allowance(band)
+    if words > ceiling:
+        if band.over_length_action is OverLengthAction.PUBLISH:
+            return LengthVerdict(
+                LengthAction.PUBLISH_OVER,
+                f"summary is {words} words against a {band.target_words_max}-word ask; "
+                "published long rather than cut a qualification off the end",
+            )
+        return LengthVerdict(
+            LengthAction.TRIM,
+            f"summary is {words} words against a {band.target_words_max}-word ask; "
+            f"trimmed to the last complete sentence inside {ceiling}",
+        )
+    floor = band.target_words_min * (1.0 - policy.undershoot_ratio)
+    if words < floor:
+        return LengthVerdict(
+            LengthAction.PUBLISH,
+            f"summary is {words} words against a {band.target_words_min}-word ask; "
+            "published short, because a thin summary still tells the reader something",
+        )
+    return LengthVerdict(LengthAction.PUBLISH, "")
+
+
+def trim_to_words(summary: str, ceiling: int) -> str:
+    """The longest run of whole sentences that fits, or the summary untouched.
+
+    Never a mid-sentence cut. A summary with no sentence end inside the budget is
+    returned whole and published long: a dangling half-clause reads as a bug to a
+    reader, where an over-long paragraph reads only as an over-long paragraph.
+    """
+    kept: list[str] = []
+    running = 0
+    for sentence in _SENTENCE.findall(summary.strip()):
+        length = len(sentence.split())
+        if running + length > ceiling:
+            break
+        kept.append(sentence)
+        running += length
+    if not kept:
+        return summary
+    return " ".join(part.strip() for part in kept)
 
 
 def _failed(
@@ -367,6 +458,7 @@ def _failed(
     detail: str,
     generated_at: str,
     failure_code: FailureCode | None = None,
+    length_action: LengthAction | None = None,
 ) -> Summary:
     return Summary(
         version=Summary.schema_version(),
@@ -376,6 +468,7 @@ def _failed(
         output_digest=derive_output_digest(None, []),
         model_id=model_id,
         source_truncated=article.truncated,
+        length_action=length_action,
         generated_at=generated_at,
         status=SummaryStatus.FAILED,
         failure_code=failure_code,
@@ -494,7 +587,6 @@ def to_summary(
         draft = parse_draft(
             completion.content,
             prompt_config=prompt_config,
-            evaluation=bounds,
             source_words=article.band_source_words,
             brief=article.brief,
         )
@@ -507,15 +599,25 @@ def to_summary(
             failure_code=FailureCode.BAD_SHAPE,
         )
 
-    words = len(draft.summary.split())
-    if not bounds.summary_words_min <= words <= bounds.summary_words_max:
+    ask = prompt_config or SummarizeConfig()
+    band = ask.band_for(article.band_source_words)
+    verdict = length_verdict(
+        len(draft.summary.split()),
+        band,
+        ask,
+        source_words=article.band_source_words,
+    )
+    if verdict.action is LengthAction.FAIL:
         return _failed(
             article,
             model_id=model_id,
-            detail=f"summary is {words} words, outside the publishable range",
+            detail=verdict.detail,
             generated_at=generated_at,
             failure_code=FailureCode.LENGTH_OUT_OF_RANGE,
+            length_action=verdict.action,
         )
+    if verdict.action is LengthAction.TRIM:
+        draft.summary = trim_to_words(draft.summary, band.target_words_max + ask.allowance(band))
 
     # Read against `article.text`, which is the text the model was shown. For a
     # brief that is the whole article; on a truncated item it is less, so a run
@@ -537,7 +639,6 @@ def to_summary(
     # drop never removes the last one, so the item always keeps a publishable
     # floor of key points. The address check below then reads what we will
     # actually publish.
-    band = ask.band_for(article.band_source_words)
     key_points = _distinct_key_points(
         draft.key_points,
         draft.summary,
@@ -571,6 +672,7 @@ def to_summary(
         model_id=model_id,
         attempt=attempt,
         source_truncated=article.truncated,
+        length_action=verdict.action,
         input_tokens=completion.prompt_tokens,
         output_tokens=completion.completion_tokens,
         prefill_ms=completion.prefill_ms,
