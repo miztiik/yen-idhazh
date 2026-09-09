@@ -1,0 +1,342 @@
+{
+  "$defs": {
+    "BandRun": {
+      "additionalProperties": false,
+      "description": "One run of the newest day, as the band draws it.",
+      "properties": {
+        "health": {
+          "$ref": "#/$defs/Health"
+        },
+        "label": {
+          "description": "What the square means, for a reader who cannot see the colour.",
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "health",
+        "label"
+      ],
+      "title": "BandRun",
+      "type": "object"
+    },
+    "BandSize": {
+      "additionalProperties": false,
+      "description": "The committed tree against the 1 GB Pages cap (`CLAUDE.md` Rule #2).",
+      "properties": {
+        "articles_to_cap": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Articles to the cap, at the cost the whole record measured.",
+          "title": "Articles To Cap"
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The committed payload tree at the newest run, or null if unmeasured.",
+          "title": "Bytes"
+        },
+        "cap_fraction": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "That tree against the cap. Above 1.0 is a site over the cap, not an error.",
+          "title": "Cap Fraction"
+        },
+        "left_mb": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Megabytes left under the cap.",
+          "title": "Left Mb"
+        },
+        "measured_days": {
+          "default": 0,
+          "description": "Published days the per-article cost was measured over.",
+          "minimum": 0,
+          "title": "Measured Days",
+          "type": "integer"
+        },
+        "sentence": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Sentence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sentence"
+      ],
+      "title": "BandSize",
+      "type": "object"
+    },
+    "BandVerdict": {
+      "additionalProperties": false,
+      "description": "Whether the newest day worked, in one sentence and one row of squares.",
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The newest day the manifests hold, or null before any run.",
+          "title": "Date"
+        },
+        "health": {
+          "$ref": "#/$defs/Health"
+        },
+        "more_runs": {
+          "default": 0,
+          "description": "Runs past the squares drawn. A day of thirty squares is a chart.",
+          "minimum": 0,
+          "title": "More Runs",
+          "type": "integer"
+        },
+        "runs": {
+          "description": "One square a run, in the order they ran. It says what the sentence cannot: whether one run ate every failure or all five limped.",
+          "items": {
+            "$ref": "#/$defs/BandRun"
+          },
+          "title": "Runs",
+          "type": "array"
+        },
+        "sentence": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Sentence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sentence",
+        "health"
+      ],
+      "title": "BandVerdict",
+      "type": "object"
+    },
+    "BandWorst": {
+      "additionalProperties": false,
+      "description": "The one worst thing on the whole console, and which route it is on.",
+      "properties": {
+        "href": {
+          "maxLength": 128,
+          "pattern": "^/[a-z0-9-]+(?:/[a-z0-9-]+)*/$",
+          "title": "Href",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/RouteId"
+        },
+        "label": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "sentence": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Sentence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "href",
+        "sentence"
+      ],
+      "title": "BandWorst",
+      "type": "object"
+    },
+    "ConsoleRoute": {
+      "additionalProperties": false,
+      "description": "One route on the strip, carrying its own worst state.",
+      "properties": {
+        "carries": {
+          "description": "One sentence pointing at the panel another route owns.",
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Carries",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "href": {
+          "maxLength": 128,
+          "pattern": "^/[a-z0-9-]+(?:/[a-z0-9-]+)*/$",
+          "title": "Href",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/RouteId"
+        },
+        "label": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "severity": {
+          "description": "How loud the route's worst state is: 0 clear, 1 worth knowing, 2 worth a look, 3 broken. Ranked rather than coloured - the strip never takes the health ramp, because a route is a noun.",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Severity",
+          "type": "integer"
+        },
+        "worst": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The route's own worst state, appended to its label. Null when clear.",
+          "title": "Worst"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "href",
+        "description",
+        "severity",
+        "carries"
+      ],
+      "title": "ConsoleRoute",
+      "type": "object"
+    },
+    "Health": {
+      "description": "Green: it worked. Amber: look at it. Red: it did not work.",
+      "enum": [
+        "green",
+        "amber",
+        "red"
+      ],
+      "title": "Health",
+      "type": "string"
+    },
+    "RouteId": {
+      "description": "The three console routes. The id is the address; the label is the words.",
+      "enum": [
+        "pipelines",
+        "model",
+        "machine"
+      ],
+      "title": "RouteId",
+      "type": "string"
+    }
+  },
+  "$id": "console-band.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the verdict, the worst thing, the size, the route strip, and the months list the console pans over.",
+      "version": "2026-09-09",
+      "why": "The band is derived from six committed ledgers and was inlined into three prerendered documents, so the one thing an operator reads first was the one thing with no contract and no version stamp (Rule #3). Fetching it first and alone is what lets the console answer 'did it work' before a single month file lands, and the months list is on it because a shell that had to ask for the list separately would make the first month a third serial hop."
+    }
+  ],
+  "description": "What every console route carries above its own panels.",
+  "properties": {
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "months": {
+      "description": "Every month a payload shard exists for, oldest first. The console asks for a month by name, so this is the list it picks from - and it is here rather than in a file of its own so the first month is the second hop and not the third.",
+      "items": {
+        "pattern": "^\\d{4}-\\d{2}$",
+        "type": "string"
+      },
+      "title": "Months",
+      "type": "array"
+    },
+    "routes": {
+      "description": "The strip, in the order it is drawn.",
+      "items": {
+        "$ref": "#/$defs/ConsoleRoute"
+      },
+      "title": "Routes",
+      "type": "array"
+    },
+    "size": {
+      "$ref": "#/$defs/BandSize"
+    },
+    "verdict": {
+      "$ref": "#/$defs/BandVerdict"
+    },
+    "version": {
+      "default": "2026-09-09",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "worst": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BandWorst"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Null when every route is clear, which is a state and not an absence."
+    }
+  },
+  "required": [
+    "generated_at",
+    "verdict",
+    "size"
+  ],
+  "title": "ConsoleBand",
+  "type": "object",
+  "version": "2026-09-09"
+}
