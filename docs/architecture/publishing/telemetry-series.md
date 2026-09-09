@@ -628,6 +628,7 @@ asserts that no mark falls inside a tinted span -
 
 ## See also
 
+- [console-payloads.md](console-payloads.md) - every dataset the console fetches, and the forbidden-cell list for each.
 - [frontend.md](frontend.md) - the console view that consumes these shards.
 - [../contracts/schemas.md](../contracts/schemas.md) - why a migrated row keeps the `version` cell it was written with.
 - [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern, and the freeze rule this writer does not yet hold.
