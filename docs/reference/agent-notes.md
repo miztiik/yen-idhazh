@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -1264,6 +1264,33 @@ below, and the answer is a separate venv. Installing the one missing wheel is
 additive, takes seconds, and repairs the venv for every sibling agent sharing
 it.
 
+## Pydantic
+
+**`model_copy(update=...)` accepts a key the model does not have, and validates
+nothing.** It sets the attribute anyway, the real field keeps its committed
+value, and no exception, warning or type error appears anywhere. So a rename
+swept through the codebase with a text replace leaves every
+`model_copy(update={"old_key": ...})` writing to a dead attribute that nothing
+reads, and the test that thought it had changed a setting is running against the
+committed default.
+
+Observed 2026-09-09. A test meant to hold a request open for 0.01 minutes ran
+with `request_timeout_minutes` still at the committed 22.1, so a deliberately
+hanging endpoint held the run until CI's 15-minute bound killed the job. The
+symptom is the worst kind: `gates: cancelled`, every sibling job green, no
+failing assertion anywhere, and it happened twice before the cause was found.
+
+After moving or renaming any config key, grep for the call as well as for the
+attribute path - the attribute sweep is what misses it:
+
+```powershell
+Get-ChildItem -Recurse -File -Include *.py | Select-String -SimpleMatch 'model_copy(update='
+```
+
+Assert the field took, in the line after the copy, wherever the copy is what the
+test depends on. One `assert copy.<field> == <value>` turns a silent wrong value
+into a named failure.
+
 ## The editor's own search tools
 
 **A workspace search reads the folder VS Code has open, not your worktree.**
@@ -1946,6 +1973,37 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   sentinel and read the sentinel; never infer a pass from an empty log. For the
   same reason, do not chain two long redirects in one call (`ruff > a; mypy > b`
   returned no output and neither file existed afterwards). One long child a call.
+- **A long `pytest` PIPED into `Select-String` prints nothing until the whole
+  run has finished, so the call is idle from the shell's point of view and gets
+  cut or backgrounded.** The entries above are about redirects; this one is the
+  pipe, and it is the more deceptive of the two because the command looks like
+  it is filtering output as it arrives. `Select-String` reads its input to the
+  end before it writes anything, so a long selection produces not one line while
+  it works, the idle rule below fires, and the tool hands back a background
+  handle instead of a result. That reads as a hung suite on a branch you have
+  just changed. Observed 2026-09-09. The same fault has already been recorded
+  twice under other names - `| Select-Object -Last N | Out-File` under "Running
+  the gates", `pip install ... | Select-Object` under "The Python environment" -
+  and the pipe is the cause in all three. Redirect the whole stream to a file,
+  then filter the file:
+
+  ```powershell
+  & $py -m pytest backend/tests/test_workflows.py 1> $out 2> $err
+  Get-Content $out | Select-String -SimpleMatch 'passed', 'failed'
+  ```
+- **A double-quoted string carrying a backtick escape can leave the shell on a
+  `>>` continuation prompt, with no error and no output at all.** Observed
+  2026-09-09 with an escaped carriage return, ``"...`r..."``, inside a one-line
+  command: the two characters that were typed did not reach the parser as typed,
+  a backtick ended up at the end of a line, and PowerShell waited for the rest of
+  a statement it considered unfinished. Nothing failed and nothing printed, which
+  is the same picture as the idle kill below arriving from the opposite cause -
+  the tell is that no output appeared at all, rather than output starting and
+  then stopping. This is the here-string trap wearing another face, and it has
+  the same answer: write anything that needs a PowerShell escape into a `.ps1`
+  with the editor's file tool and run the file. Where a literal control character
+  is genuinely wanted, `[char]13` and `[Environment]::NewLine` have no escape
+  grammar to survive the trip.
 - **A log that stops growing is NOT a stalled process.** `*>> $log` from a
   detached script buffers, so the file sits at the same size for minutes while
   the child works. On 2026-08-30 a healthy `pytest` run was killed twice for
@@ -2723,6 +2781,17 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   once** - which reads as an infrastructure fault rather than as one stale
   assertion. Write the test against what a payload OMITS, not against what no
   payload has yet. Whenever a whole branch set goes red together, check
+  `origin/main` before reading a single diff.
+- **A local red against a green CI on the same commit is a stale base until
+  proved otherwise, and it can be 47 failures at once.** Observed 2026-09-09: a
+  worktree cut from `origin/main` failed 47 backend tests while CI was green on
+  the same commit, and every one of them cascaded from a single defect in
+  `config/sources.json` that `main` had already fixed in the next commit. GitHub
+  runs a pull request's checks against the MERGE CANDIDATE - the branch merged
+  into current `main` - so CI never saw the broken tree. The branch was not
+  wrong; the base it was cut from was. This is the mirror of the bullet above:
+  there a green check describes a base that no longer exists, here a red local
+  run does. On any wide local red whose failures share one cause, fetch and merge
   `origin/main` before reading a single diff.
 - The check that closes the gap, before merging anything into a base that has
   moved: merge `origin/main` into the branch locally and run the suite on the

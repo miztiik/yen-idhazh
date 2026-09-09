@@ -25,6 +25,7 @@ import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
 from idhazh import ledger, publish_telemetry
+from idhazh.contracts import runtime_counters
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
@@ -279,11 +280,25 @@ RUNTIME_LOG_LINES: Final = (
     "f_sim_best = 0.923 (> 0.100 thold), f_keep = 0.811",
     "slot print_timing: id  3 | task 172 | prompt eval time = 7119.70 ms / 75 tokens",
 )
-RSS_SAMPLE_SECONDS: Final = 15
 RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
 SERVER_LOG_FILE: Final = "llama-server.log"
 MEMORY_PEAK_FILE: Final = "memory-peak.txt"
 CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
+# The two steps of the work job that write and read those files. The third,
+# which writes `memory-peak.txt` and hands it to the stage, is `COUNTERS_STEP`
+# below.
+SAMPLE_MEMORY_STEP: Final = "Sample memory"
+MEMORY_SUMMARY_STEP: Final = "What memory this shard used"
+# Which `rss-samples.tsv` column the operator print reads at each `awk` field
+# number. It reads by position, so this mapping is the whole agreement between
+# the step that writes the file and the step that reads it - and it lives in no
+# other file, which is why it is written out here.
+RSS_SAMPLE_FIELDS: Final = {
+    2: "llama_vmrss_kb",
+    3: "llama_vmhwm_kb",
+    4: "python_vmrss_kb",
+    6: "python_vmhwm_kb",
+}
 #: The one reading that has to be taken at both ends of the job. `/proc/stat`
 #: counts since boot, so a single read is mostly the minutes the runner spent
 #: booting. `/proc/stat` rather than a cgroup file because two cgroup files this
@@ -3722,6 +3737,84 @@ def test_the_start_script_refuses_a_call_it_cannot_serve(
 
     assert completed.returncode == 2, completed.stdout
     assert message in completed.stderr
+
+
+def _work_step(name: str) -> str:
+    """One step body of the daily work job, without the shell comments."""
+    workflow = _load_workflows()["digest.yml"]
+    return _uncommented(_script(_step(workflow, "work", "name", name), name))
+
+
+def _sample_header() -> list[str]:
+    """The columns the memory sampler writes, in the order it writes them."""
+    script = _work_step(SAMPLE_MEMORY_STEP)
+    header = re.search(rf"printf '([^']*)' > {re.escape(RSS_SAMPLE_FILE)}", script)
+    assert header, f"{SAMPLE_MEMORY_STEP} must printf a header row into {RSS_SAMPLE_FILE}"
+    return header.group(1).removesuffix("\\n").split("\\t")
+
+
+def test_the_memory_sampler_and_both_its_readers_agree_on_the_columns() -> None:
+    """One writer, two readers, and only one of them reads by name.
+
+    `rss-samples.tsv` has two consumers and they disagree about what a column
+    is. `RuntimeCountersRow` reads it by NAME, so a rename there costs one empty
+    cell and the row reads as unknown. The operator print in the same job reads
+    it by POSITION, so a column inserted anywhere but the end shifts every field
+    after it and the job log reports `python_procs` - a count of three - as a
+    peak in kilobytes. Nothing fails, and the number is off by six orders of
+    magnitude.
+
+    That is why the sampler appends a new column at the END of the row. Nothing
+    held it there until this test.
+    """
+    header = _sample_header()
+    assert header[0] == "ts", header
+    assert len(header) == len(set(header)), f"a column name is written twice: {header}"
+
+    for column in (runtime_counters._RSS_PEAK_COLUMN, runtime_counters._PYTHON_RSS_PEAK_COLUMN):
+        assert column in header, f"the row reads {column} by name and the sampler stopped writing it"
+
+    operator = _work_step(MEMORY_SUMMARY_STEP)
+    assert RSS_SAMPLE_FILE in operator, f"{MEMORY_SUMMARY_STEP} must read {RSS_SAMPLE_FILE}"
+    for field, column in sorted(RSS_SAMPLE_FIELDS.items()):
+        assert f"${field}" in operator, f"{MEMORY_SUMMARY_STEP} no longer reads field {field}"
+        assert header[field - 1] == column, (
+            f"{MEMORY_SUMMARY_STEP} reads field {field} as {column}, "
+            f"and the sampler now writes {header[field - 1]} there"
+        )
+
+
+def test_the_kernel_peak_is_written_before_the_row_that_reads_it() -> None:
+    """A file written after the row is a file the row never saw.
+
+    One step writes `memory-peak.txt` and then calls the stage that reads it, so
+    the order inside that body is the whole promise. Reversed, the committed row
+    carries an empty cell while the job log prints a number that reached nobody.
+    The operator print below takes no second reading of its own, for the same
+    reason: two readings of a live kernel counter would not agree.
+    """
+    counters = _work_step(COUNTERS_STEP)
+
+    written = counters.find(f"> {MEMORY_PEAK_FILE}")
+    read = counters.find(f"--memory-peak-file {MEMORY_PEAK_FILE}")
+    assert written >= 0, f"{COUNTERS_STEP} must write {MEMORY_PEAK_FILE}"
+    assert read >= 0, f"{COUNTERS_STEP} must pass {MEMORY_PEAK_FILE} to the stage"
+    assert written < read, f"{COUNTERS_STEP} reads {MEMORY_PEAK_FILE} before it writes it"
+
+    # Guarded, because no GitHub-hosted runner this project has measured has the
+    # file. An unguarded read fails the step and costs the shard its whole row.
+    assert f"[ -f {CGROUP_PEAK_PATH} ]" in counters, f"{COUNTERS_STEP} must guard the cgroup read"
+    assert runtime_counters._CGROUP_PEAK_KEY in counters, "the row parses the key this step writes"
+
+    # The other two files the row reads are ones this job wrote.
+    assert f"--rss-samples-file {RSS_SAMPLE_FILE}" in counters
+    assert f"--server-log {SERVER_LOG_FILE}" in counters
+
+    operator = _work_step(MEMORY_SUMMARY_STEP)
+    assert f"cat {MEMORY_PEAK_FILE}" in operator, "the print must read the file the row read"
+    assert CGROUP_PEAK_PATH not in operator, "the print must not take a second kernel reading"
+
+
 # --- The qualification arm (Row #10) ----------------------------------------
 
 
