@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -462,6 +462,47 @@ and `reliability` - which asks whether the feed answered - scored it 1.0. The
 ratio was already on this view and already on the console. Nothing applied a
 threshold and nothing spoke. **Reliability asks whether the door opened; yield
 asks whether anything was behind it.**
+
+### What the current alarm proves, and what it does not
+
+Verified 2026-09-09 from the completed `assemble` job of
+[run 34323771996](https://github.com/miztiik/yen-idhazh/actions/runs/34323771996):
+Seeking Alpha triggered both the logged warning and the Actions warning
+annotation. The warning named 33 publications from 113 source-decided
+article/date pairs, about 29 percent, against the configured 50 percent bar
+and 30-decision minimum. It was not a missing notification. The RSS reliability
+factor was still 1.0 because the feed itself kept returning entries. The
+owner's later curation decision is recorded in
+[discovery.md](discovery.md#the-2026-09-09-finance-curation).
+
+**The alarm changes no request budget.** Same-day settled failures prevent
+another attempt at a known failed article, but a different blocked article can
+still take the next slot. A lower manual weight changes rank, not permission
+or a limit on failed requests. An article refused at fetch does not reach the
+summarizer; its waste is a request and a planned slot, not model tokens.
+
+**The maturity flag describes the whole record, not each source.**
+`_complete_dates` counts dates across the item-health input, and
+`SourceHealthView.yield_readable` is one flag for that shared span. A new feed
+does not acquire thirty observed days because other feeds supplied them.
+Per-feed maturity is not present in the current contract and must not be
+claimed from this flag.
+
+**Human retirement and endpoint retirement remain different facts.** The view
+lists only feeds a curator left active. Its `retired` field means the endpoint
+retirement ledger contains the address, not that a person moved the source to
+`Sources.retired`. A curated retirement leaves this active view on the next
+publish; its tombstone and historical health rows remain. Adding curation
+dates or reasons belongs on `FeedDef`, not on every feed-health observation.
+
+### Intelligent F.E.E.D - I Feed design direction
+
+The owner requested an earned, tunable source model on 2026-09-09.
+[Intelligent F.E.E.D - I Feed](i-feed.md) records
+the design guidelines, including a composite score, bounded allocation and
+recovery, evolving topic assignments, and optional weighted deterministic,
+LLM and human assessments. They are proposals, not deployed behavior. This
+page continues to describe the current warning-only and retirement policy.
 
 ## The run never edits the source list
 
