@@ -183,11 +183,19 @@ one argument.
 on GitHub-hosted `ubuntu-latest`. `MemTotal` 15.61 GiB. At the tightest instant
 of the whole run the kernel still reported **5.63 GiB available**, and the four
 shards' lows were 5.63, 5.95, 7.64 and 7.84 GiB. llama-server's worst `VmHWM`
-was 12.68 GiB and python's 1.76 GiB, which is the same shape as the earlier
-readings and is exactly why the two do not subtract to anything: the 5.29 GiB
-model file is memory-mapped, so it sits inside llama's figure as pages the
-kernel can drop, and the whole 8.33 GiB difference between 13.96 GiB resident
-and 5.63 GiB available is that file.
+was 12.68 GiB and python's 1.76 GiB.
+
+**Those two readings disagree, and the disagreement is the point.** The process
+marks sum to 14.44 GiB, while the kernel says only 9.98 GiB of the machine was
+unavailable - a gap of 4.46 GiB in the direction the earlier sections predicted.
+`load_mode` is null, so llama.cpp maps the 5.29 GiB weight file rather than
+reading it into anonymous memory: those pages count in `VmRSS` in full and the
+kernel can drop them, so a sum of resident sets overstates what has to fit. The
+two figures cannot be reconciled to the byte from what this run recorded - a
+`VmHWM` is a peak and `MemAvailable` is an instant, and nothing pairs them - but
+they do not need to be. **`MemAvailable` is the only one of the two that answers
+the question**, because it is the kernel's own estimate of what a new allocation
+could get.
 
 **What the raise costs is KV cache and nothing else, and it is arithmetic.** On
 `Qwen3.5-9B-Q4_K_M` the card gives 4 KV heads, a head dimension of 256, and 8
@@ -429,10 +437,11 @@ server exactly as before.
 
 **The cost is one job artifact, and it is not a committed file.** A server start
 goes from 12 stderr lines and 1,085 bytes to about 206 lines and 16,011 bytes -
-roughly 15 KB per start, on the readings in the table above. Five starts a day
-across the two roles is under 80 KB, it lands in the run's own log which GitHub
-Actions retains and nothing else reads, and no byte of it reaches the 1 GB
-published site (Rule #2) or the repository. The daily workflow already uploads
+roughly 15 KB per start, on the readings in the table above. A daily run makes
+five starts across the two roles, four work shards and the visual planner, so
+about 78 KiB a day. It lands in the run's own log, which GitHub Actions retains
+and nothing else reads, and no byte of it reaches the 1 GB published site
+(Rule #2) or the repository. The daily workflow already uploads
 `llama-server.log` as a two-day artifact, well inside the 500 MB allowance.
 
 **`log_verbosity` is not fingerprint-digested**, and sits in
