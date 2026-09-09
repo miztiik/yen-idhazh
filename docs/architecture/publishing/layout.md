@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -461,7 +461,7 @@ What it must never touch: a day's JSON payload, a date directory, the eval ledge
 
 Two promises to the reader, both non-negotiable: **the window is stated before anything is deleted**, on the archive page and on the missing-day page; and a pruned day lands in the designed missing state, **never a silent redirect to today**. A reader who cannot distinguish a dead link from a live one has lost the ability to trust any link.
 
-The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts older than N months are deleted. Every story and every link stays." is the promise, and "Nothing here is deleted." is what ships today at `image_months: -1`. The footer used to say days were removed, which promised the opposite of what the code does; it now says the same thing the archive does, because two sentences disagreeing about deletion on one page is the exact failure this section exists to prevent.
+The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts older than N months are deleted. Every story and every link stays." is the promise, and "Nothing here is deleted." is what ships today at `image_months: -1`. **The archive is now the only page that states it.** The footer carried a copy on every page from 2026-08-31 and lost it on 2026-09-09: it was read off the newest day, so a page a reader already held was rewritten each time one published, for a sentence about a job that has never deleted anything. The archive's copy stays because that is the page where deletion could matter to the reader looking at it, and because the promise above is that the window is stated **before** anything is deleted - one page stating it is what that asks for, and one page cannot disagree with itself.
 
 ### Unpublishing a day, a range or a month: the design (2026-09-06)
 
