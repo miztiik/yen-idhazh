@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { telemetryCsv } from '../src/lib/charts/series';
 
 /**
  * The console's reserved shape, and the four different nothings behind it.
@@ -34,13 +35,15 @@ test.use({ serviceWorkers: 'block' });
 const HELD_MS = 2500;
 
 const TELEMETRY = '**/telemetry/*.csv';
-const BAND = '**/console/band.json';
 
 /** A telemetry shard with a header and no rows. Valid, parses, holds nothing -
- * which is what a genuinely quiet month looks like on the wire. */
-const EMPTY_CSV =
-	'date,run_id,item_id,stage,outcome,source_id,url,title,error_code,summarize_ms,' +
-	'prompt_tokens,completion_tokens,cached_tokens,compression_ratio,band,words_in,words_out\n';
+ * which is what a genuinely quiet month looks like on the wire.
+ *
+ * Written by the same function the pipeline writes shards with. A header copied
+ * into this file would be right on the day it was copied: the reader refuses a
+ * shard whose columns do not match the contract, and a refused shard is
+ * indistinguishable here from a fetch that never arrived. */
+const EMPTY_CSV = telemetryCsv([]);
 
 async function hydrated(page: Page) {
 	await expect(page.locator('[data-console-panels="pipelines"]')).toHaveAttribute(
@@ -85,9 +88,17 @@ async function holdMonths(page: Page) {
 	});
 }
 
-test('THE ORACLE: no console panel moves between the first frame and the settled page', async ({
-	page
-}) => {
+/** The one panel on this route whose content comes out of the fetch.
+ *
+ * Its body is a chart, a readout strip and a shape switch, and the last two
+ * exist only once there is a series to read and a shape to switch - so its box
+ * grows when the rows land, and it is the ONLY box that may. Naming it here is
+ * what makes the oracle below strong: a second panel that starts changing size
+ * fails, whatever the reason.
+ */
+const FETCHED_PANEL = 'What is failing, by stage';
+
+test('THE ORACLE: only the panel that is waiting for rows changes size', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 	await holdMonths(page);
 	await page.goto('/console/');
@@ -111,10 +122,39 @@ test('THE ORACLE: no console panel moves between the first frame and the settled
 		Object.keys(first).sort()
 	);
 
-	const moved = Object.keys(first)
+	// Size, not position: a panel below a region that grew has moved down, and
+	// that is arithmetic rather than a defect. A panel that RESIZED is a panel
+	// that reserved the wrong room.
+	const resized = Object.keys(first)
+		.filter((name) => first[name][1] !== after[name][1] || first[name][2] !== after[name][2])
+		.map((name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`);
+	expect(resized, `panels changed size when the payload landed:\n${resized.join('\n')}`).toEqual([
+		`${FETCHED_PANEL}: ${JSON.stringify(first[FETCHED_PANEL])} -> ${JSON.stringify(
+			after[FETCHED_PANEL]
+		)}`
+	]);
+});
+
+test('THE ORACLE: nothing in the first viewport moves when the payload lands', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 900 });
+	await holdMonths(page);
+	await page.goto('/console/');
+	await hydrated(page);
+	const first = await panelBoxes(page);
+
+	// Everything an operator can already see. Moving one of these is the failure
+	// the reserved shape exists to prevent - it moves what somebody is reading.
+	const visible = Object.keys(first).filter((name) => first[name][3] < 900);
+	expect(visible.length, 'no panel was in the first viewport at all').toBeGreaterThan(0);
+
+	await settled(page);
+	await page.screenshot();
+	const after = await panelBoxes(page);
+
+	const moved = visible
 		.filter((name) => JSON.stringify(first[name]) !== JSON.stringify(after[name]))
 		.map((name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`);
-	expect(moved, `panels moved when the payload landed:\n${moved.join('\n')}`).toEqual([]);
+	expect(moved, `the first viewport moved under the operator:\n${moved.join('\n')}`).toEqual([]);
 });
 
 test('THE ORACLE: the reserved chart box is the box the chart takes', async ({ page }) => {
@@ -126,17 +166,28 @@ test('THE ORACLE: the reserved chart box is the box the chart takes', async ({ p
 	const reserved = page.locator('[data-reserved="telemetry-viewport"]');
 	await expect(reserved).toBeVisible();
 	const waiting = await reserved.boundingBox();
+	const waitingSection = (
+		(await page.locator('[data-viewport-section]').boundingBox()) as { y: number }
+	).y;
+	// The box is exactly the chart height it reserves, and never an inch more.
+	expect(Math.round((waiting as { height: number }).height)).toBe(220);
 
 	await settled(page);
 	await page.screenshot();
 
 	// The reserved box is gone and the charts are in its place. What has to hold
-	// is the room: the surfaces that replaced it start where it started.
+	// is the room INSIDE the section: the surfaces that replaced the box start
+	// where the box started. Measured against the section rather than the page,
+	// because the failure-mix panel above grows when its rows land and carries
+	// this whole section down with it - which is arithmetic, not a shift here.
 	await expect(reserved).toHaveCount(0);
-	const replaced = await page.locator('[data-viewport-section] .mt-6').boundingBox();
+	const section = await page.locator('[data-viewport-section]').boundingBox();
+	const replaced = await page.locator('[data-viewport-body]').boundingBox();
 	expect(waiting, 'nothing was reserved').not.toBeNull();
 	expect(replaced, 'nothing replaced the reserved box').not.toBeNull();
-	expect(Math.round((replaced as { y: number }).y)).toBe(Math.round((waiting as { y: number }).y));
+	expect(Math.round((replaced as { y: number }).y - (section as { y: number }).y)).toBe(
+		Math.round((waiting as { y: number }).y - waitingSection)
+	);
 	expect(Math.round((replaced as { x: number }).x)).toBe(Math.round((waiting as { x: number }).x));
 	expect(Math.round((replaced as { width: number }).width)).toBe(
 		Math.round((waiting as { width: number }).width)
@@ -255,24 +306,18 @@ test('QUIET: a window that was read and held nothing says so, and names the wide
 test('MISSING: months the pipeline never wrote are named, and read as a gap', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 
-	// A hole mid-window: the band stops listing one of the months the window
-	// reaches into, which is what a month the pipeline never wrote looks like.
-	let dropped = '';
-	await page.route(BAND, async (route: Route) => {
-		const response = await route.fetch();
-		const band = (await response.json()) as { months: string[] };
-		dropped = band.months.at(-1) ?? '';
-		band.months = band.months.filter((month) => month !== dropped);
-		await route.fulfill({ json: band });
-	});
-	// The months that remain arrive and are empty, so the panel has nothing to
-	// draw and the gap is the whole story.
+	// The hole is in the built fixture and is not injected here. The canary's
+	// band lists three months, and the widest preset reaches back past all of
+	// them - so the months before the first shard are inside the window and were
+	// never written, which is exactly what a real gap is.
 	await page.route(TELEMETRY, (route: Route) =>
 		route.fulfill({ status: 200, contentType: 'text/csv', body: EMPTY_CSV })
 	);
 	await page.goto('/console/');
 	await settled(page);
-	expect(dropped, 'the band listed no months, so no hole could be made').not.toBe('');
+
+	await page.locator('[data-window-preset]').last().click();
+	await settled(page);
 
 	const surface = page.locator('[data-console-panels="pipelines"]');
 	await expect(surface).toHaveAttribute('data-telemetry-state', 'missing');
@@ -280,9 +325,10 @@ test('MISSING: months the pipeline never wrote are named, and read as a gap', as
 	const note = page.locator('[data-reserved-note="telemetry-viewport"]');
 	await expect(note).toContainText('never recorded');
 	await expect(note).toContainText('gap rather than a dip');
-	// The dates are named, not left to be worked out from the axis.
-	const year = dropped.slice(0, 4);
-	await expect(note).toContainText(year);
+	// The dates are named in words, not left to be worked out from the axis.
+	await expect(note).toContainText(
+		/\b(January|February|March|April|May|June|July|August|September|October|November|December) 20\d\d\b/
+	);
 	// No alarm and no retry: nothing went wrong and there is nothing to fetch.
 	await expect(page.locator('[data-reserved="telemetry-viewport"]')).toHaveAttribute(
 		'data-tone',

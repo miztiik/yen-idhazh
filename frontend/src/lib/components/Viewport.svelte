@@ -146,7 +146,7 @@
 		     While the rows are away the three collapse into one reserved box, so
 		     the header, the controls and the hint above stay exactly where they
 		     were drawn and the box says which of the four nothings this is. -->
-		<div class="mt-6">
+		<div class="mt-6" data-viewport-body>
 			<Reserved
 				{panelState}
 				height={config.chart_height}
