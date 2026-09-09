@@ -33,11 +33,39 @@ class SummaryStatus(StrEnum):
     SKIPPED = "skipped"
 
 
+class LengthAction(StrEnum):
+    """What the length verdict did with this reply.
+
+    Recorded because a trimmed summary and a compliant one are indistinguishable
+    afterwards - the ledger stores the length after the trim - so without this
+    field the pipeline cannot say how often the tolerance is doing work.
+    """
+
+    PUBLISH = "publish"
+    PUBLISH_OVER = "publish_over"
+    TRIM = "trim"
+    FAIL = "fail"
+
+
 class Summary(Contract):
     """The Summarize stage's output payload, one per item."""
 
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-10T00:30",
+            change="length_action added, optional and defaulting to null.",
+            why=(
+                "A reply outside its band's ask no longer deletes the item; it publishes, "
+                "publishes over-length, or is trimmed at the last complete sentence that "
+                "fits. A trimmed summary and a compliant one read identically afterwards, "
+                "because summary_word_count is measured after the trim, so without this "
+                "field there is no way to count how often the tolerance fires. Additive "
+                "with a default, so a payload written by an earlier run still validates "
+                "and reads as null - which is the truth about it, since no verdict was "
+                "recorded when it was written."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30T20:00",
             change="attempt says in its description that it is a constant, not a measurement.",
@@ -166,6 +194,18 @@ class Summary(Contract):
         ),
     )
     source_truncated: bool = False
+    length_action: LengthAction | None = Field(
+        default=None,
+        description=(
+            "What the length verdict did with this reply, or null on a payload written "
+            "before the verdict existed and on any item that never reached it. "
+            "`publish` is inside the band's ask or inside the tolerance around it; "
+            "`publish_over` ran long on a band that would rather be long than cut a "
+            "qualification off the end; `trim` was cut at the last complete sentence "
+            "that fits; `fail` did not reach the absolute floor and is a failed "
+            "extraction rather than a summary."
+        ),
+    )
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     duration_ms: int = Field(
