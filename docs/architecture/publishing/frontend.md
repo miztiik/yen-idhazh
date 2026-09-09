@@ -3281,8 +3281,8 @@ was re-derived at the close of the console-signal plan instead, once the page ha
 settled and the unit it grows by had changed, and it came down to 259,908; the
 section above carries that derivation. The key is asserted in ten files,
 including `backend/tests/test_contracts.py` and
-`tests/fixtures/contracts/app-config/tuned.json`, so moving it is a change of its
-own and never a footnote to another one.
+`tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`,
+so moving it is a change of its own and never a footnote to another one.
 
 Two things that are still not the answer. **Raising the number** spends the
 headroom somebody measured and buys days, which is the move that got the last
