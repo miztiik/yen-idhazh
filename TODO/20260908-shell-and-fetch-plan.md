@@ -66,11 +66,11 @@ discover. All are folded in. The five that would have cost the most:
 | 7 | The console stops claiming "never" | 6 | C | LANDED | - | #540 | worker |
 | 8 | Inventory and mint every console payload contract | 6 | C | LANDED | - | #542 | worker |
 | 9 | The producer writes the console its payloads | 8 | D | LANDED | - | #543 | worker |
-| 10 | The console fetches instead of inlining | 9 | E | IN-FLIGHT | yi-s10-fetch | - | worker |
+| 10 | The console fetches instead of inlining | 9 | E | LANDED | - | #544 | worker |
 | 16 | Two origins, a digest manifest, and one guard that still works | 8, 15 | E | PENDING | - | - | - |
-| 11 | The verdict band arrives first and alone | 10 | F | PENDING | - | - | - |
-| 12 | The console surface: reserved shape and three states | 10, 11 | G | PENDING | - | - | - |
-| 14 | One document serves every date | 13 | G | PENDING | - | - | - |
+| 11 | The verdict band arrives first and alone | 10 | F | LANDED | - | #545 | worker |
+| 12 | The console surface: reserved shape and three states | 10, 11 | G | IN-FLIGHT | yi-s12-surface | - | worker |
+| 14 | One document serves every date | 13 | G | IN-FLIGHT | yi-s14-shell | - | worker |
 | 17 | Delete the committed weights | 16 | G | DESCOPED | - | - | owner, 2026-09-09 |
 | 18 | The gates measure a shell, not a document | 12, 14 | H | PENDING | - | - | - |
 | 19 | Record what was decided and what it cost | 1-18 | I | PENDING | - | - | - |
@@ -629,6 +629,55 @@ Verified against the working tree on 2026-09-08. A worker uses these and does no
 ---
 
 ## 16. Row #14 - One document serves every date
+
+> **CONTRACT WIDENING AUTHORISED 2026-09-09 by the owner**, after the first attempt
+> escalated at Level 5 rather than minting fields on a published payload.
+>
+> The blocker: a dated page renders `day.date`, `day.verticals` and `day.leads`
+> in `DigestList`, and `day.runs`, `day.partial` and `day.items_failed` in
+> `DayNotice`. Those travel in the prerendered document as `dayShell().facts`.
+> The served file is `{version, items}` and nothing else - `DAY_FIELDS =
+> ['items']`. Delete the document and the page loses its topic row, story count,
+> leading block and day notice, and `leads` cannot be derived from the items
+> because the pipeline decides them at assemble.
+>
+> **The owner authorised widening `DigestView` with nine fields**: `date`,
+> `generated_at`, `partial`, `items_planned`, `items_failed`,
+> `retention_window_months`, `runs`, `verticals`, `leads`. Owner's words:
+> *contract before code - dictum, documentation*. So the expand lands as its own
+> commit ahead of any consumer: the Pydantic model, the regenerated schema with a
+> fresh `version` and `changelog` entry, `VIEW_VERSION`, `DAY_FIELDS`, and the
+> living doc that owns the published day shape - **then** the loaders.
+>
+> Measured cost, i7-1265U, 2026-09-09, 20 committed days and 7,898 items,
+> `gzip -9`: **+317 bytes a day on average, +480 at worst, against 3,626,610
+> bytes of served days - 0.17 percent.** There is no migration hole:
+> `copy-visuals.mjs` re-stages a day whose projected size changed, so every
+> committed day updates itself on the next build.
+>
+> **A second defect was found and fixed on the branch before the escalation.**
+> `prerender = true` was not the only thing cascading from the root layout - the
+> server load cascades too, and the client router fetches `<route>/__data.json`
+> whenever any node in the branch has one. No build writes that file for a
+> client-rendered route, so every dated URL would have answered "Not here" on
+> GitHub Pages. `+layout.server.ts` is now a universal `+layout.ts` and the knobs
+> arrive as `__UI_CONFIG__`, resolved once per build in `vite.config.ts` out of
+> the same `uiConfig()` the server reader owns, which is what
+> `docs/concepts/config.md` already prescribes. It took about 230 gzipped bytes
+> off every document.
+>
+> **The row's real inventory**, against what it claimed: 116 dated and topic
+> documents, not 110 (20 day, 96 topic, of 123 in the tree). Four specs read a
+> dated document out of `build/`, not ten. Eleven more drive a dated route in a
+> browser, and `filter-bar`'s no-script arm drives `/<date>/` with JavaScript
+> disabled - under `ssr = false` that page renders nothing at all, which the row
+> did not anticipate.
+>
+> **What the reader still loses, recorded rather than hidden:** a dated URL
+> loaded cold paints nothing until the day payload arrives, because the fallback
+> shell has no layout data. In-app navigation is unaffected. Owner decision D11
+> accepted the cold-load path; it did not price the blank frame. Row 19 records
+> it.
 
 - **Scope:** The 110 dated and topic documents stop being written; one document serves every URL.
 - **Files touched:**
