@@ -26,9 +26,6 @@
 		width,
 		name,
 		label,
-		sentence = '',
-		action = null,
-		onRetry = null,
 		children
 	}: {
 		/** Named `panelState` rather than `state` because a prop called `state`
@@ -36,7 +33,7 @@
 		 * error that produces names a store rather than the shadowing. */
 		panelState: PanelState;
 		/** The drawn height of the panel's chart - `console.chart_height`. The
-		 * reserved box is exactly this, in every state. */
+		 * reserved box is exactly this, in every state it is in. */
 		height: number;
 		/** The width the chart is authored at - `console.chart_width`. It sets the
 		 * SVG's viewBox, so the frame scales with the column rather than being
@@ -46,24 +43,30 @@
 		name: string;
 		/** What the panel is, for anyone who cannot see it. */
 		label: string;
-		/** What is true, in one sentence. Empty while loading: the wait is said
-		 * once for the whole page by the window control, and a dozen panels each
-		 * announcing their own would be a dozen announcements of one fact. */
-		sentence?: string;
-		/** The retry's label, where there is something to retry. */
-		action?: string | null;
-		onRetry?: (() => void) | null;
 		children: Snippet;
 	} = $props();
 
 	const skeleton = $derived(skeletonFrame(width, height));
-	/** Warn only where something failed. A real gap and an empty window are
-	 * normal, and a page that tints them like a fault teaches an operator to
-	 * ignore the tint. */
+	/** Warn only where something failed. */
 	const tone = $derived(state === 'unreachable' ? 'warn' : 'neutral');
+	/** The box takes over for exactly two states, and the rule is one sentence:
+	 * **it appears where the panel's own words would be false.**
+	 *
+	 * A panel with rows on the way that printed "nothing is on record" would be
+	 * wrong for the next second; a panel whose month did not arrive and printed
+	 * the same thing would be wrong outright. Those are `loading` and
+	 * `unreachable`. An empty window and a real gap are the other way round - the
+	 * panel's own sentence is TRUE and more precise than anything a general box
+	 * could write, so it keeps it, and which of the two it is gets said once for
+	 * the whole page beside the control that governs the window.
+	 *
+	 * The box itself carries no words for the same reason: a dozen panels each
+	 * repeating one page-level fact is a dozen announcements of one thing.
+	 */
+	const passthrough = $derived(state !== 'loading' && state !== 'unreachable');
 </script>
 
-{#if state === 'ready'}
+{#if passthrough}
 	{@render children()}
 {:else}
 	<div
@@ -73,7 +76,9 @@
 		data-tone={tone}
 		style="block-size: {height}px"
 		role="img"
-		aria-label={state === 'loading' ? `${label} - waiting for its rows` : `${label} - ${sentence}`}
+		aria-label={state === 'loading'
+			? `${label} - waiting for its rows`
+			: `${label} - its rows did not arrive, and the sentence above the panels says which months`}
 		aria-busy={state === 'loading'}
 	>
 		<!-- The frame, and only the frame. Ticks are marks; a tick LABEL needs a
@@ -140,21 +145,6 @@
 					<span class="loading reserved-bar" style="block-size: {(bar * 100).toFixed(2)}%"></span>
 				{/each}
 			</div>
-		{:else}
-			<!-- Over the frame, not under it. A note under the box would add its own
-			     height, and the whole point of the box is that its height never
-			     changes. -->
-			<div class="reserved-say">
-				<p class="reserved-note" data-reserved-note={name}>{sentence}</p>
-				{#if action !== null && onRetry !== null}
-					<button
-						type="button"
-						class="reserved-retry"
-						data-reserved-retry={name}
-						onclick={onRetry}>{action}</button
-					>
-				{/if}
-			</div>
 		{/if}
 	</div>
 {/if}
@@ -193,42 +183,5 @@
 		flex: 1 1 0;
 		min-inline-size: 1px;
 		align-self: flex-end;
-	}
-
-	.reserved-say {
-		position: absolute;
-		inset: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-3);
-		padding: var(--space-4);
-		text-align: center;
-	}
-
-	.reserved-note {
-		max-inline-size: 46ch;
-		margin: 0;
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-secondary);
-	}
-
-	/* Scoped to this panel and to the month it names. Nothing else on the page
-	   moves when it is pressed. */
-	.reserved-retry {
-		min-block-size: 2.75rem;
-		padding: 0 var(--space-4);
-		border: 1px solid var(--color-rule-strong);
-		border-radius: var(--radius-full);
-		background: var(--color-surface);
-		font-size: var(--text-sm);
-		color: var(--color-text);
-		cursor: pointer;
-	}
-
-	.reserved-retry:hover {
-		border-color: var(--color-accent);
 	}
 </style>

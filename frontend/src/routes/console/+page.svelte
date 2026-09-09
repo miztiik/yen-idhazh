@@ -254,7 +254,17 @@
 		})
 	);
 	const rowsInView = $derived(rowsInWindow(rows, viewport));
-	const telemetryState = $derived(panelState(outcomes, rowsInView.length));
+	/** Which of the five states the fetched panels are in.
+	 *
+	 * `ready` until a browser has run, and that is not a lie - it is what the
+	 * document is. Nothing has been asked for yet, so nothing is late, and the
+	 * panels show the empty states they have always shown. The `<noscript>` line
+	 * in the console layout is what tells a reader with no script that those
+	 * panels draw rows a browser fetches.
+	 */
+	const telemetryState = $derived(
+		ready ? panelState(outcomes, rowsInView.length) : ('ready' as const)
+	);
 	const missingMonths = $derived(monthsIn(outcomes, 'missing'));
 	const refusedMonths = $derived(monthsIn(outcomes, 'unreachable'));
 	/** The narrowest preset that reaches a month with rows in it. Named in the
@@ -736,6 +746,27 @@
 >
 	<WindowControl days={windowDays} {presets} {monthsFor} busy={fetching} {ready} onChange={show} />
 
+	{#if stateSentence !== ''}
+		<!-- Said once, above every panel, and beside the control that governs the
+		     window. Every panel below is empty for the same reason, so a copy of
+		     this in each of them would be one fact repeated a dozen times - and each
+		     panel already has a better sentence about its OWN emptiness than this
+		     one. What no panel can say for itself is which of the three nothings
+		     this is, and that is the whole job of this line. -->
+		<p
+			class="console-standing"
+			data-console-standing={telemetryState}
+			data-tone={telemetryState === 'unreachable' ? 'warn' : 'neutral'}
+		>
+			{stateSentence}
+			{#if retryAction !== null}
+				<button type="button" class="standing-retry" data-console-retry onclick={retry}
+					>{retryAction}</button
+				>
+			{/if}
+		</p>
+	{/if}
+
 	<!-- One sentence, no chart. It is what stops this route hiding the panel on
 	     another route that explains its own numbers. -->
 	<p class="console-carry" data-console-carry="model">
@@ -943,30 +974,34 @@
 			width={data.console.chart_width}
 			name="failure-mix"
 			label="Failures per day by stage"
-			sentence={telemetryState === 'ready'
-				? 'No failure is on record in the months this session has read.'
-				: stateSentence}
-			action={retryAction}
-			onRetry={retryAction === null ? null : retry}
 		>
-			<Chart
-				svg=""
-				option={failureMix(mixSeries, mixShape).option}
-				width={760}
-				height={220}
-				label="Failures per day by stage. One column is one day, its height is that day's failures, and the bands are the stages they stopped at - so a quiet day and a clean day do not draw alike. Drawn as lines instead, each stage is its own count a day and the total is not shown."
-				columns={failureMixColumns(mixSeries)}
-				readoutName="failure-mix"
-				readoutMaxShare={data.chart.readout_max_share}
-				restingNote=", the newest day"
-				hint="Point at a day to read every stage at once. Left and Right step through the days, Escape returns to the newest."
-				pending="The stage mix is drawn once the engine loads. Every count is in the strip below it."
-				fetched
-			/>
-			<!-- Stacked answers what the mix is and how big the day got; lines answer
-			     what one stage did on its own, which a stack hides when one band
-			     halves while its neighbour doubles. Same array either way. -->
-			<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
+			{#if mixSeries.length === 0}
+				<!-- The window was read and it holds no failure. That is an answer, and
+				     it is a better one than the general "nothing was recorded" line
+				     above the panels, because it names what was looked for. -->
+				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-mix-empty="none">
+					No failure is on record in the months this session has read.
+				</p>
+			{:else}
+				<Chart
+					svg=""
+					option={failureMix(mixSeries, mixShape).option}
+					width={760}
+					height={220}
+					label="Failures per day by stage. One column is one day, its height is that day's failures, and the bands are the stages they stopped at - so a quiet day and a clean day do not draw alike. Drawn as lines instead, each stage is its own count a day and the total is not shown."
+					columns={failureMixColumns(mixSeries)}
+					readoutName="failure-mix"
+					readoutMaxShare={data.chart.readout_max_share}
+					restingNote=", the newest day"
+					hint="Point at a day to read every stage at once. Left and Right step through the days, Escape returns to the newest."
+					pending="The stage mix is drawn once the engine loads. Every count is in the strip below it."
+					fetched
+				/>
+				<!-- Stacked answers what the mix is and how big the day got; lines answer
+				     what one stage did on its own, which a stack hides when one band
+				     halves while its neighbour doubles. Same array either way. -->
+				<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
+			{/if}
 		</Reserved>
 	</Panel>
 
@@ -1081,10 +1116,6 @@
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
 		modelChanges={data.modelChanges}
-		panelState={telemetryState}
-		sentence={stateSentence}
-		action={retryAction}
-		onRetry={retryAction === null ? null : retry}
 		onPan={pan}
 		onStep={(direction) => show(stepPreset(windowDays, presets, direction))}
 	/>

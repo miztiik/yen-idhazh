@@ -363,6 +363,48 @@ body {
 	background: var(--color-surface);
 }
 
+/* Which of the three settled nothings the fetched panels are holding, said once
+   for the whole page and beside the control that governs the window. Neutral by
+   default, because an empty window and a real gap are answers rather than
+   faults - a page that tints an answer like a fault teaches its operator to stop
+   reading the tint. Only a failed fetch takes a hue. */
+.console-standing {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-3);
+	margin-top: var(--space-4);
+	padding: var(--space-3) var(--space-4);
+	border: 1px solid var(--color-rule);
+	border-radius: var(--radius-md);
+	background: var(--tint-neutral);
+	font-size: var(--text-sm);
+	line-height: var(--leading-sm);
+	color: var(--color-text-secondary);
+}
+
+.console-standing[data-tone='warn'] {
+	background: var(--tint-warn);
+}
+
+/* Scoped to the months that failed. Nothing else on the page moves when it is
+   pressed, and it names its own subject so it is still true read out of the
+   sentence beside it. */
+.console-standing .standing-retry {
+	min-block-size: 2.75rem;
+	padding: 0 var(--space-4);
+	border: 1px solid var(--color-rule-strong);
+	border-radius: var(--radius-full);
+	background: var(--color-surface);
+	font-size: var(--text-sm);
+	color: var(--color-text);
+	cursor: pointer;
+}
+
+.console-standing .standing-retry:hover {
+	border-color: var(--color-accent);
+}
+
 /* One sentence pointing at the panel another route owns. Not a chart and not a
    card: it is a signpost, and a signpost that looks like a figure gets read as
    one. */

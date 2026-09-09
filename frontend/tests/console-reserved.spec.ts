@@ -163,36 +163,35 @@ test('THE ORACLE: the reserved chart box is the box the chart takes', async ({ p
 	await page.goto('/console/');
 	await hydrated(page);
 
-	const reserved = page.locator('[data-reserved="telemetry-viewport"]');
+	const reserved = page.locator('[data-reserved="failure-mix"]');
 	await expect(reserved).toBeVisible();
 	const waiting = await reserved.boundingBox();
-	const waitingSection = (
-		(await page.locator('[data-viewport-section]').boundingBox()) as { y: number }
-	).y;
+	const panel = page.locator('[data-console-panel="What is failing, by stage"]');
+	const waitingPanel = ((await panel.boundingBox()) as { y: number }).y;
 	// The box is exactly the chart height it reserves, and never an inch more.
 	expect(Math.round((waiting as { height: number }).height)).toBe(220);
 
 	await settled(page);
 	await page.screenshot();
 
-	// The reserved box is gone and the charts are in its place. What has to hold
-	// is the room INSIDE the section: the surfaces that replaced the box start
-	// where the box started. Measured against the section rather than the page,
-	// because the failure-mix panel above grows when its rows land and carries
-	// this whole section down with it - which is arithmetic, not a shift here.
+	// The reserved box is gone and the chart is in its place. What has to hold is
+	// the room: the chart starts where the box started, at the same width, inside
+	// the same panel.
 	await expect(reserved).toHaveCount(0);
-	const section = await page.locator('[data-viewport-section]').boundingBox();
-	const replaced = await page.locator('[data-viewport-body]').boundingBox();
+	const settledPanel = ((await panel.boundingBox()) as { y: number }).y;
+	const replaced = await panel.locator('figure.chart').boundingBox();
 	expect(waiting, 'nothing was reserved').not.toBeNull();
 	expect(replaced, 'nothing replaced the reserved box').not.toBeNull();
-	expect(Math.round((replaced as { y: number }).y - (section as { y: number }).y)).toBe(
-		Math.round((waiting as { y: number }).y - waitingSection)
+	expect(Math.round((replaced as { y: number }).y - settledPanel)).toBe(
+		Math.round((waiting as { y: number }).y - waitingPanel)
 	);
 	expect(Math.round((replaced as { x: number }).x)).toBe(Math.round((waiting as { x: number }).x));
 	expect(Math.round((replaced as { width: number }).width)).toBe(
 		Math.round((waiting as { width: number }).width)
 	);
 });
+
+const RESERVED = 'failure-mix';
 
 test('a waiting plot draws its axis frame and its ticks, and prints no number', async ({
 	page
@@ -202,17 +201,14 @@ test('a waiting plot draws its axis frame and its ticks, and prints no number', 
 	await page.goto('/console/');
 	await hydrated(page);
 
-	const frame = page.locator('[data-reserved-frame="telemetry-viewport"]');
+	const frame = page.locator(`[data-reserved-frame="${RESERVED}"]`);
 	await expect(frame).toHaveAttribute('data-reserved-ticks', '6');
 	// Two axes plus six ticks each way.
 	expect(await frame.locator('line').count()).toBe(14);
 	// A tick LABEL needs a value and there is no value, so an invented one is the
 	// one thing a waiting plot may not print.
 	expect(await frame.locator('text').count(), 'a waiting plot printed a number').toBe(0);
-	await expect(page.locator('[data-reserved="telemetry-viewport"]')).toHaveAttribute(
-		'aria-busy',
-		'true'
-	);
+	await expect(page.locator(`[data-reserved="${RESERVED}"]`)).toHaveAttribute('aria-busy', 'true');
 });
 
 test('THE ORACLE: every shimmering block is on one timeline', async ({ page }) => {
@@ -278,7 +274,7 @@ test('under reduced motion a reserved block is a flat tint, with no gradient fro
 	);
 });
 
-test('QUIET: a window that was read and held nothing says so, and names the widening', async ({
+test('QUIET: a window that was read and held nothing says so once, and names the widening', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
@@ -293,14 +289,21 @@ test('QUIET: a window that was read and held nothing says so, and names the wide
 	const surface = page.locator('[data-console-panels="pipelines"]');
 	await expect(surface).toHaveAttribute('data-telemetry-state', 'quiet');
 
-	const note = page.locator('[data-reserved-note="telemetry-viewport"]');
-	await expect(note).toContainText('Nothing was recorded in these');
+	// Said ONCE, above the panels and beside the control that would widen the
+	// window, because every panel below is empty for the same reason.
+	const standing = page.locator('[data-console-standing]');
+	await expect(standing).toHaveCount(1);
+	await expect(standing).toHaveAttribute('data-console-standing', 'quiet');
+	await expect(standing).toContainText('Nothing was recorded in these');
+	await expect(standing).toContainText('reaches back to months that do');
 	// Neutral, never a warning: an empty window is an answer, not a fault.
-	await expect(page.locator('[data-reserved="telemetry-viewport"]')).toHaveAttribute(
-		'data-tone',
-		'neutral'
-	);
-	await expect(page.locator('[data-reserved-retry="telemetry-viewport"]')).toHaveCount(0);
+	await expect(standing).toHaveAttribute('data-tone', 'neutral');
+	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
+
+	// And the panels keep their own, more precise, empty sentences: the reserved
+	// box does not take over for a window that is simply empty.
+	await expect(page.locator('[data-reserved="failure-mix"]')).toHaveCount(0);
+	await expect(page.locator('[data-mix-empty="none"]')).toHaveCount(1);
 });
 
 test('MISSING: months the pipeline never wrote are named, and read as a gap', async ({ page }) => {
@@ -322,19 +325,16 @@ test('MISSING: months the pipeline never wrote are named, and read as a gap', as
 	const surface = page.locator('[data-console-panels="pipelines"]');
 	await expect(surface).toHaveAttribute('data-telemetry-state', 'missing');
 
-	const note = page.locator('[data-reserved-note="telemetry-viewport"]');
-	await expect(note).toContainText('never recorded');
-	await expect(note).toContainText('gap rather than a dip');
+	const standing = page.locator('[data-console-standing]');
+	await expect(standing).toContainText('never recorded');
+	await expect(standing).toContainText('gap rather than a dip');
 	// The dates are named in words, not left to be worked out from the axis.
-	await expect(note).toContainText(
+	await expect(standing).toContainText(
 		/\b(January|February|March|April|May|June|July|August|September|October|November|December) 20\d\d\b/
 	);
 	// No alarm and no retry: nothing went wrong and there is nothing to fetch.
-	await expect(page.locator('[data-reserved="telemetry-viewport"]')).toHaveAttribute(
-		'data-tone',
-		'neutral'
-	);
-	await expect(page.locator('[data-reserved-retry="telemetry-viewport"]')).toHaveCount(0);
+	await expect(standing).toHaveAttribute('data-tone', 'neutral');
+	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
 });
 
 test('UNREACHABLE: a fetch that did not arrive names its month and offers a retry', async ({
@@ -352,16 +352,13 @@ test('UNREACHABLE: a fetch that did not arrive names its month and offers a retr
 	const surface = page.locator('[data-console-panels="pipelines"]');
 	await expect(surface).toHaveAttribute('data-telemetry-state', 'unreachable');
 
-	const note = page.locator('[data-reserved-note="telemetry-viewport"]');
-	await expect(note).toContainText('did not arrive');
-	// A warn tint, and it is the only one of the four states that takes a hue.
-	await expect(page.locator('[data-reserved="telemetry-viewport"]')).toHaveAttribute(
-		'data-tone',
-		'warn'
-	);
+	const standing = page.locator('[data-console-standing]');
+	await expect(standing).toContainText('did not arrive');
+	// A warn tint, and it is the only one of the three settled states with a hue.
+	await expect(standing).toHaveAttribute('data-tone', 'warn');
 
 	// The retry names its own subject, so it is still true read out of context.
-	const retry = page.locator('[data-reserved-retry="telemetry-viewport"]');
+	const retry = page.locator('[data-console-retry]');
 	await expect(retry).toBeVisible();
 	const label = ((await retry.textContent()) ?? '').trim();
 	expect(label).toMatch(/^Try .+ again$/);
@@ -381,33 +378,25 @@ test('a blocked fetch and a quiet pipeline do not draw the same picture', async 
 	);
 	await page.goto('/console/');
 	await settled(page);
-	const quiet = {
+	const read = async () => ({
 		state: await page
 			.locator('[data-console-panels="pipelines"]')
 			.getAttribute('data-telemetry-state'),
-		tone: await page.locator('[data-reserved="telemetry-viewport"]').getAttribute('data-tone'),
-		says: ((await page.locator('[data-reserved-note="telemetry-viewport"]').textContent()) ?? '')
+		tone: await page.locator('[data-console-standing]').getAttribute('data-tone'),
+		says: ((await page.locator('[data-console-standing]').textContent()) ?? '')
 			.replace(/\s+/g, ' ')
 			.trim(),
-		retries: await page.locator('[data-reserved-retry="telemetry-viewport"]').count()
-	};
+		retries: await page.locator('[data-console-retry]').count()
+	});
+	const quiet = await read();
 
 	await page.unroute(TELEMETRY);
 	await page.route(TELEMETRY, (route: Route) => route.abort());
 	await page.goto('/console/');
 	await settled(page);
-	const broken = {
-		state: await page
-			.locator('[data-console-panels="pipelines"]')
-			.getAttribute('data-telemetry-state'),
-		tone: await page.locator('[data-reserved="telemetry-viewport"]').getAttribute('data-tone'),
-		says: ((await page.locator('[data-reserved-note="telemetry-viewport"]').textContent()) ?? '')
-			.replace(/\s+/g, ' ')
-			.trim(),
-		retries: await page.locator('[data-reserved-retry="telemetry-viewport"]').count()
-	};
+	const broken = await read();
 
-	// This is the whole reason the row exists. Three ways apart, not one.
+	// This is the whole reason the row exists. Four ways apart, not one.
 	expect(broken.state).not.toBe(quiet.state);
 	expect(broken.tone).not.toBe(quiet.tone);
 	expect(broken.says).not.toBe(quiet.says);
