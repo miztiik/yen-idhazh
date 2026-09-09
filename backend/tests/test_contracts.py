@@ -16,7 +16,7 @@ import re
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from conftest import (
@@ -123,6 +123,7 @@ from idhazh.contracts.visual import (
 )
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
+from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields, text_digest
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
 from idhazh.retention import oldest_month_kept
@@ -1068,6 +1069,56 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     assert models.visual_planner.inference.n_ctx == 8192
     assert InferenceConfig().n_ctx == 8192, (
         "the default is the conservative window for weights nobody has measured"
+    )
+
+
+#: What the summarize prompt costs before a word of the article reaches it - the
+#: system prompt, the fence and the instructions. Measured 2026-09-09 over the
+#: 4,117 published items in `state/item-health/2026-09.csv` (2026-09-01 to 09,
+#: stock ubuntu-latest 4 vCPU runners): a least-squares fit of `input_tokens`
+#: against `source_words` gives 997 tokens of overhead and 1.306 tokens a word,
+#: and the shortest items on the shard - 3 words each - measured 980 to 985
+#: tokens directly, which is the same constant read off the data twice.
+PROMPT_OVERHEAD_TOKENS: Final = 997
+
+#: The highest tokens a word any of those 4,117 items reached, same shard and
+#: date: (7,093 - 997) / 3,846. `extract.truncate_to_tokens` spends the cap at
+#: `TOKENS_PER_WORD`, which is 1.3, so a body that tokenizes above that overruns
+#: the budget its own cap gave it. The spread is the point: the median item runs
+#: 1.306 and this one runs 1.585, so a window sized on the median is sized on
+#: the article that never causes trouble.
+WORST_TOKENS_A_WORD: Final = 1.585
+
+
+def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
+    """The cap and the window are one decision, and this is where they meet.
+
+    Both sides are read from `config/` (Rule #6), so the assertion survives the
+    next move of either. It is the guard that was missing on 2026-09-09: the cap
+    went from 5,000 to 10,000 tokens that day and could not have, at the 8,192
+    window committed the day before - 14,089 tokens against 8,192 is 172 percent
+    of it. Nothing in the tree said so. A doc said so, and a doc does not fail.
+
+    The worst case is built from the measured expansion rather than from
+    `TOKENS_PER_WORD`. The cap is spent as words at 1.3 tokens each, so an
+    article whose prose tokenizes harder than that overruns the budget the cap
+    handed it, and the window has to cover the article that did, not the one
+    that behaved. At the committed cap of 10,000 that is 997 + 12,192 + 900 =
+    14,089 tokens of 16,384, which is 86 percent and a margin of 1.16x.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    inference = committed.models.summarize.inference
+
+    cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
+    worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
+    worst_sequence = worst_prompt + inference.max_output_tokens
+
+    assert worst_sequence <= inference.n_ctx, (
+        f"the longest article extract.truncation_cap_tokens "
+        f"({committed.extract.truncation_cap_tokens}) lets through is "
+        f"{worst_prompt} prompt tokens, and {inference.max_output_tokens} of answer "
+        f"puts the sequence at {worst_sequence} against a window of {inference.n_ctx}. "
+        "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
     )
 
 
