@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
+	DAY_FIELDS,
 	ITEM_FIELDS,
 	VIEW_VERSION,
 	VISUAL_FIELDS as PROJECTED_VISUAL_FIELDS
@@ -140,15 +141,17 @@ test('the allow-list is the twenty-three fields this file promises', () => {
 	expect([...PROJECTED_VISUAL_FIELDS].sort(), 'the visual allow-list moved').toEqual(VISUAL_FIELDS);
 });
 
-test('a staged day carries its items and the stamp that says what shape they are', () => {
+test('a staged day carries its items, its own facts, and the stamp that says what shape they are', () => {
 	// `assist/day.ts` refuses a payload whose `items` is not an array, and the
 	// version is what an older shell branches on when this shape next moves -
-	// `schemas/digest-view.schema.json` is the contract both answer to.
+	// `schemas/digest-view.schema.json` is the contract both answer to. The day's
+	// own facts joined it on 2026-09-09: a dated URL is served by one shell that
+	// no build writes a day into, so this file is the only source a browser has
+	// for the date, the desks, the leading block and the day notice.
 	for (const day of staged()) {
-		expect(Object.keys(day.payload).sort(), `${day.path} is not the day projection`).toEqual([
-			'items',
-			'version'
-		]);
+		expect(Object.keys(day.payload).sort(), `${day.path} is not the day projection`).toEqual(
+			[...DAY_FIELDS, 'version'].sort()
+		);
 		expect(Array.isArray(day.payload.items), `${day.path} has no items array`).toBe(true);
 		expect(day.payload.version, `${day.path} carries the wrong contract stamp`).toBe(VIEW_VERSION);
 	}

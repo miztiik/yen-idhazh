@@ -44,5 +44,25 @@
 	</head>
 	<body data-sveltekit-preload-data="hover">
 		<div style="display: contents">%sveltekit.body%</div>
+		<!-- The one thing a script-free reader on a dated URL can be told.
+
+		     From 2026-09-09 a dated address is answered by the fallback document,
+		     whose body is a boot script and nothing else, so with script off that
+		     page is blank - and a blank page is a site that looks broken to the one
+		     reader who will never report it. Two pages on this site render complete
+		     with no script at all, and this says which and links them.
+
+		     It is last in the body and it says nothing about needing anything, so on
+		     the pages that DO render it sits under what the reader came for and is
+		     true there too. That is the price: one quiet line at the foot of every
+		     prerendered page, for a script-free reader, in exchange for a dated URL
+		     that is not a white screen. -->
+		<noscript>
+			<p style="margin: 2rem 0; font-size: 0.875rem">
+				A page for one day opens with JavaScript. Without it, the newest digest is on
+				<a href="%sveltekit.assets%/">the front page</a> and every published day is listed in
+				<a href="%sveltekit.assets%/archive/">the archive</a>.
+			</p>
+		</noscript>
 	</body>
 </html>

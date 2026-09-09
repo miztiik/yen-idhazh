@@ -42,14 +42,14 @@ These are designed, not discovered:
 
 1. **Loaded** - the normal case.
 2. **Empty** - the payload exists and has nothing in it. A run can legitimately produce zero items. The page says so.
-3. **Missing** - the payload is not there at all, because the day has not run or the deploy raced. The page says so and offers the archive.
-4. **Waiting** - the page has the head of its day and the rest is still coming. It is a reading-route state only, and it stays silent until `ui.payload_slow_ms`, because the first frame is already readable and there is nothing to fill. Past that it is **one sentence**, never a spinner, a skeleton or a bar.
-5. **Unreachable** - the payload exists and the fetch for it failed. The stories already on screen stay exactly as they are, the page names the day that did not arrive, it offers a retry, and it lists the days this device can still read with no network.
+3. **Missing** - there is no payload for that date, because the day has not run, the address is wrong, or the deploy raced. The page says so and offers the archive.
+4. **Waiting** - the page has asked for its day and it has not arrived. It is a dated-route state only, and it stays silent until `ui.payload_slow_ms`, because a spinner fills a wait that may still turn out to be nothing. Past that it is **one sentence**, never a spinner, a skeleton or a bar.
+5. **Unreachable** - the fetch for the day failed for any reason that is not the host saying it has no such day. Whatever is already on screen stays exactly as it is, the page names the day that did not arrive, it offers a retry, and it lists the days this device can still read with no network.
 6. **Degraded** - the payload loaded but individual items are marked low-confidence, truncated, or without a visual. This is the *common* case, not an exception, and it is rendered inline rather than as an error ([digest.md](digest.md)).
 
 Six entries and five states, because Loaded is the one that is not a failure of any kind.
 
-**Missing is decided at build time and Unreachable in the browser**, so neither has to guess which it is. Telling a reader a day was never published when their train went into a tunnel is a lie they can check.
+**Missing and Unreachable are two sentences and they never merge**, because telling a reader a day was never published when their train went into a tunnel is a lie they can check. Until 2026-09-09 they could not be confused: a dated route was a page a build wrote, so a date nobody published had no page and Missing was settled before any request. One document answers every dated URL now, so both are decided in the browser - and what separates them is the host's own answer. A 404 or a 410 for `digest/<Y>/<M>/<D>/digest.json` is the host saying it holds no such day. Every other failure is the connection.
 
 **A page that white-screens on missing data is a failure**, and it is an explicit gate in `CLAUDE.md` section 12. States 2, 3 and 5 are the most often skipped and the most likely to be seen by a real reader.
 

@@ -71,6 +71,18 @@ function watchEgress(page: Page): string[] {
 	return escaped;
 }
 
+/** A dated page holds nothing until the day it names arrives.
+ *
+ * Until 2026-09-09 the document carried the head of its day, so a goto put the
+ * stories on the page. One shell answers every dated address now and the day is
+ * fetched - so every absence check in this file would pass on an empty page,
+ * which is the one way a prompt-injection oracle can go quiet without anybody
+ * noticing. The counter-oracles below are what catch that, and they need the
+ * same wait.
+ */
+const settled = async (page: Page) =>
+	expect(page.locator('[data-payload-state]')).toHaveAttribute('data-payload-state', 'ready');
+
 test.describe('the eight canaries, on the published surface', () => {
 	test('every named canary is present', () => {
 		expect(CANARIES.map((canary) => canary.name).sort()).toEqual(REQUIRED);
@@ -80,6 +92,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		const failures: string[] = [];
 		page.on('pageerror', (error) => failures.push(error.message));
 		await page.goto('/2026-08-20/');
+		await settled(page);
 		await expect(page.locator('article')).toHaveCount(CANARIES.length);
 		expect(failures).toEqual([]);
 	});
@@ -89,6 +102,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		// exfiltration route nobody thought to enumerate.
 		const escaped = watchEgress(page);
 		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
+		await settled(page);
 		await page.waitForTimeout(1500);
 		expect(escaped).toEqual([]);
 	});
@@ -99,6 +113,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		// string - inert, and outside <main>. What must not exist is a script the
 		// article body created.
 		await page.goto('/2026-08-20/');
+		await settled(page);
 		await expect(page.locator('main script')).toHaveCount(0);
 	});
 
@@ -106,6 +121,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		// href, src and srcset together are how markup becomes a request or a
 		// click. Text containing the same characters is inert and is fine.
 		await page.goto('/2026-08-20/');
+		await settled(page);
 		const carriers = await page.evaluate((host) => {
 			const found: string[] = [];
 			for (const node of document.querySelectorAll('*')) {
@@ -123,6 +139,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		// The other half of the previous test. A surface that stripped every link
 		// would pass every absence check and destroy the thing the digest is for.
 		await page.goto('/2026-08-20/');
+		await settled(page);
 		const sources = await page.evaluate(() =>
 			[...document.querySelectorAll('main a[href]')]
 				.map((node) => node.getAttribute('href') ?? '')
@@ -142,6 +159,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		// document, so the parts of SVG that can run or fetch have to be absent
 		// from the rendered page as well as refused before it is drawn (Rule #11).
 		await page.goto('/2026-08-20/');
+		await settled(page);
 		const smuggled = await page.evaluate(() =>
 			[
 				...document.querySelectorAll('main iframe, main object, main embed, main img'),
@@ -160,6 +178,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		// A surface that deleted the article would pass every absence check above
 		// and publish nothing worth reading.
 		await page.goto('/2026-08-20/');
+		await settled(page);
 		const body = await page.locator('main').innerText();
 		for (const canary of CANARIES) {
 			for (const phrase of canary.must_survive) {
@@ -172,6 +191,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		// The fake-system-delimiter attack. It must read as a quoted string
 		// inside an item, never as a boundary the page itself drew.
 		await page.goto('/2026-08-20/');
+		await settled(page);
 		const outside = await page.evaluate(() => {
 			const main = document.querySelector('main');
 			return (document.body.innerText ?? '')
@@ -197,6 +217,7 @@ test.describe('the visual path', () => {
 			}
 		});
 		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
+		await settled(page);
 
 		const figures = page.locator('main figure svg');
 		await expect(figures).toHaveCount(2);
@@ -213,6 +234,7 @@ test.describe('the visual path', () => {
 		// time on the story, so which of the two figures the page draws first is
 		// the day's business and not this file's.
 		await page.goto('/2026-08-20/');
+		await settled(page);
 		const alts = await page
 			.locator('main figure[role="img"]')
 			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
@@ -227,6 +249,7 @@ test.describe('the visual path', () => {
 		// arrived truncated, or whose `viewBox` the page could not resolve, is a
 		// zero-height box under the summary.
 		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
+		await settled(page);
 		const boxes = await page.locator('main figure svg').evaluateAll((nodes) =>
 			nodes.map((node) => {
 				const box = node.getBoundingClientRect();

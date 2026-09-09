@@ -29,6 +29,14 @@ ignores a key it does not know, so nothing else is owed. Breaking: the read-side
 migration lands in the shell, not only in the build, because the two are not
 upgraded together and a reader can hold a shell for as long as their cache does.
 
+**Since 2026-09-09 it carries the day's own facts as well as the day's stories**,
+and every one of them is optional. A dated URL is served by one shell that no
+build wrote a day into, so the browser has no other source for the date, the
+desks, the leading block, the run list or the day notice. A service worker keeps
+a day, so a shell built after that change can be handed a payload written before
+it - which is why absent has to be readable, and why absent reads as unknown and
+never as a value.
+
 What it drops, and what that is worth. Measured 2026-08-31 on this checkout,
 11 committed days and 3,733 items, `gzip -9` over the compact projection: the
 committed day is 792.65 gzipped bytes an item, and this projection is 468.58 -
@@ -43,8 +51,9 @@ payload ever written.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping
-from typing import Any, ClassVar, Self
+from typing import Annotated, Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -52,6 +61,7 @@ from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import (
     ChangelogEntry,
     Contract,
+    DateStamp,
     ItemId,
     Model,
     RelPath,
@@ -60,6 +70,7 @@ from idhazh.contracts.base import (
     Url,
     compact_json,
 )
+from idhazh.contracts.digest_day import DigestLead, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.taxonomy import LensId, SourceKind
@@ -181,6 +192,34 @@ class DigestView(Contract):
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-09",
+            change=(
+                "Added the day's own facts to a served day: date, generated_at, "
+                "partial, items_planned, items_failed, retention_window_months, runs, "
+                "verticals and leads. Every one of them is optional."
+            ),
+            why=(
+                "Until now this file carried a day's stories and nothing about the day "
+                "itself, which was enough while the only page reading it already held "
+                "those facts in its own document. A dated URL is about to be served by "
+                "one shell that no build wrote a day into, so the browser has no other "
+                "source for them: no topic pills, no leading block, no day notice and "
+                "no story count. Nine names, each with a named renderer - date, "
+                "verticals and leads for DigestList; runs, partial, items_planned, "
+                "items_failed and retention_window_months for the day notice and the "
+                "footer; generated_at for the revision key the day cache already reads "
+                "and never found. Measured 2026-09-09 on Intel Core i7-1265U / "
+                "Windows 11 over the 20 committed days and 7,967 items, gzip -9 over "
+                "the compact projection: 322 bytes a day on average and 478 on the "
+                "worst day, against 3,657,996 bytes of served days, which is 0.18 "
+                "percent. A day pays it once, where an item field pays it per story, "
+                "so nine names here cost less than one name on the item list. "
+                "Additive, so a shell holding a payload written before this - "
+                "a service worker keeps days - reads every one of them as absent, and "
+                "absent is unknown rather than a value."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01T09:00",
             change="Added also_covered_by to a served item.",
             why=(
@@ -224,6 +263,47 @@ class DigestView(Contract):
         ),
     )
 
+    # The day's own facts. Every one of them is optional and that is the read-side
+    # rule rather than a softness: a service worker keeps a day, so a shell built
+    # after this can fetch a payload written before it, and the only honest reading
+    # of a name that file does not carry is unknown. A page fills none of them in.
+    date: DateStamp | None = None
+    generated_at: Timestamp | None = Field(
+        default=None,
+        description=(
+            "What a republish moves and nothing else does, so a browser holding this "
+            "day can tell a re-fetch that changed nothing from one that did."
+        ),
+    )
+    partial: bool | None = Field(
+        default=None,
+        description="Null is unknown, never false: false says the run lost nothing.",
+    )
+    items_planned: int | None = Field(default=None, ge=0)
+    items_failed: int | None = Field(
+        default=None, ge=0, description="Null is unknown, never 0: 0 says nothing failed."
+    )
+    retention_window_months: int | None = Field(
+        default=None,
+        ge=-1,
+        description=(
+            "Stated to the reader before anything is deleted. -1 is the day saying "
+            "nothing is deleted; null is the payload not saying, and a page prints "
+            "neither sentence for it."
+        ),
+    )
+    runs: Annotated[list[DigestRunRef], Field(min_length=1)] | None = None
+    verticals: list[DigestVerticalRef] | None = Field(
+        default=None,
+        description="Null is unknown, never an empty list: empty says the day had no desk.",
+    )
+    leads: list[DigestLead] | None = Field(
+        default=None,
+        description=(
+            "Null is the payload not saying; an empty list is the day saying it has no "
+            "leading block, which is its ordinary state. Both draw nothing."
+        ),
+    )
     items: list[DigestViewItem]
 
     @classmethod
@@ -244,21 +324,26 @@ class DigestView(Contract):
         stack trace on day three tells nobody which day is broken or why, where
         the model reports both.
         """
+        served: dict[str, Any] = {
+            name: day.get(name) for name in cls.model_fields if name not in {"version", "items"}
+        }
+        served["version"] = cls.schema_version()
         written = day.get("items")
         if not isinstance(written, list) or not all(isinstance(item, Mapping) for item in written):
-            return cls.model_validate({"version": cls.schema_version(), "items": written})
+            return cls.model_validate({**served, "items": written})
         visual_names = list(DigestViewVisual.model_fields)
         items: list[dict[str, Any]] = []
         for item in written:
-            served: dict[str, Any] = {name: item.get(name) for name in DigestViewItem.model_fields}
+            names = DigestViewItem.model_fields
+            item_view: dict[str, Any] = {name: item.get(name) for name in names}
             visual = item.get("visual")
-            served["visual"] = (
+            item_view["visual"] = (
                 {name: visual.get(name) for name in visual_names}
                 if isinstance(visual, Mapping)
                 else None
             )
-            items.append(served)
-        return cls.model_validate({"version": cls.schema_version(), "items": items})
+            items.append(item_view)
+        return cls.model_validate({**served, "items": items})
 
     @model_validator(mode="after")
     def _the_published_order_survives_the_projection(self) -> Self:
@@ -268,6 +353,42 @@ class DigestView(Contract):
         introduced = [item.introduced_by_run for item in self.items]
         if introduced != sorted(introduced):
             raise ValueError("a later run appends; it never reorders what a reader already read")
+        return self
+
+    @model_validator(mode="after")
+    def _a_day_fact_agrees_with_the_stories_beside_it(self) -> Self:
+        """The same rules `DigestDay` holds, over whichever facts this file carries.
+
+        A narrowing that keeps a fact and drops the check on it is a weaker
+        contract than the one it narrows, and this is the copy a browser reads.
+        Each clause is skipped when the payload does not carry what it needs,
+        because an older file carries none of them.
+        """
+        if self.partial is not None and self.items_failed is not None:
+            if self.partial != (self.items_failed > 0):
+                raise ValueError("partial is exactly whether anything failed")
+        if self.items_planned is not None and self.items_failed is not None:
+            if len(self.items) + self.items_failed > self.items_planned:
+                raise ValueError("published plus failed cannot exceed planned")
+        if self.verticals is not None:
+            counted = {ref.id: ref.count for ref in self.verticals}
+            if len(counted) != len(self.verticals):
+                raise ValueError("vertical ids must be distinct")
+            drawn = Counter(item.vertical for item in self.items)
+            unlisted = sorted(set(drawn) - set(counted))
+            if unlisted:
+                raise ValueError(f"items name an unlisted vertical: {', '.join(unlisted)}")
+            for vertical_id, count in counted.items():
+                if drawn[vertical_id] != count:
+                    raise ValueError(f"vertical {vertical_id} count disagrees with its items")
+        if self.leads is not None:
+            led = [lead.item_id for lead in self.leads]
+            if len(set(led)) != len(led):
+                raise ValueError("one story may lead only once")
+            held = {item.item_id for item in self.items}
+            for item_id in led:
+                if item_id not in held:
+                    raise ValueError(f"lead {item_id} names a story this day does not hold")
         return self
 
     def to_json(self) -> str:
