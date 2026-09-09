@@ -658,8 +658,14 @@ test.describe('what the reader sees', () => {
 
 			const region = page.locator('[data-payload-state]');
 			await expect(region).toHaveAttribute('data-payload-state', 'unreachable');
-			await expect(region).toContainText('The rest of 30 August 2026 did not arrive.');
-			await expect(region).toContainText('The stories above are all here.');
+			// **"The rest of" went with the seed.** A dated page carried the head of
+			// its day in its own document until 2026-09-09; one shell answers every
+			// dated address now and carries no day at all, so a page holding nothing
+			// must not say "the rest" and must not tell a reader the stories above are
+			// all here when there are none above.
+			await expect(region).toContainText('30 August 2026 did not arrive.');
+			await expect(region).not.toContainText('The rest of');
+			await expect(region).not.toContainText('The stories above are all here.');
 			// It says the fetch failed. It never says the day was not published -
 			// that is a different state, and a claim a reader can check.
 			await expect(region).not.toContainText('published');
@@ -685,6 +691,22 @@ test.describe('what the reader sees', () => {
 			expect(look.width).toBeGreaterThan(0);
 		});
 	}
+
+	test('a page that IS holding stories says so, and says "the rest"', async ({ page }) => {
+		// The other half of the sentence rule. `/` is not this component's caller,
+		// but a page that has drawn something and then lost the rest of it is a
+		// state this component still has to say correctly - and a component that
+		// only ever said one of the two would pass the arm above by saying nothing.
+		const paint = await renderer('PayloadState');
+		await show(
+			page,
+			paint({ status: 'unreachable', day: '30 August 2026', onRetry: () => {}, holding: true }),
+			'dark'
+		);
+		const region = page.locator('[data-payload-state]');
+		await expect(region).toContainText('The rest of 30 August 2026 did not arrive.');
+		await expect(region).toContainText('The stories above are all here.');
+	});
 
 	test('the day that failed offers the days this device still holds', async ({ page }) => {
 		// A reader with no network, on a day they never opened, has been named the
@@ -732,7 +754,7 @@ test.describe('what the reader sees', () => {
 
 		const region = page.locator('[data-payload-state]');
 		await expect(region).toHaveAttribute('data-payload-state', 'slow');
-		await expect(region).toHaveText('The rest of 30 August 2026 is still loading.');
+		await expect(region).toHaveText('30 August 2026 is still loading.');
 		// No spinner, no skeleton, no bar. The frame a reader already has is
 		// readable, so there is nothing for one to fill.
 		expect(await page.locator('.waiting').count()).toBe(1);

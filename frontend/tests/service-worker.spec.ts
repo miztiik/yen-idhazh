@@ -484,6 +484,16 @@ test.describe('the way out', () => {
 		await page.reload();
 		await controlled(page);
 
+		// The switch is published from `/` rather than from the dated page that
+		// filled the caches above. Since 2026-09-09 a dated page fetches its whole
+		// day and then its drawings on reveal, and the page-side retirement cannot
+		// tell the worker it has been retired - so a request already in flight when
+		// the caches are cleared would put an empty one straight back. `/` renders
+		// its day from its own document and asks for nothing, which is what makes
+		// the count below a fact about the retirement rather than about timing.
+		await page.goto('/');
+		await controlled(page);
+
 		const before = await ourCaches(page);
 		console.log(`[service-worker] caches before the switch: ${before.length} [${before.join(', ')}]`);
 		expect(before.length, 'nothing was cached, so clearing it would prove nothing').toBeGreaterThan(

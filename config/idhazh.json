@@ -235,7 +235,7 @@
   },
   "page_weight": {
     "ceilings_bytes": {
-      "/404": 1706,
+      "/404": 2200,
       "/archive/": 7553,
       "/console/": 335051,
       "/console/machine/": 44706,

@@ -23,7 +23,7 @@
 		shortlist
 	} from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
-	import type { DigestDay, DigestItem } from '$lib/payload/types';
+	import type { DayForPage, DigestItem } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
 	import { onMount, tick } from 'svelte';
 
@@ -34,7 +34,7 @@
 		settled = true,
 		ui
 	}: {
-		day: DigestDay;
+		day: DayForPage;
 		vertical?: string | null;
 		datePrefix?: string;
 		/** Whether the list in hand is everything this page will ever hold. False
@@ -89,6 +89,10 @@
 	const scoped = $derived(
 		orderByTime(vertical ? day.items.filter((item) => item.vertical === vertical) : day.items)
 	);
+	// The desks the day published, or none when the payload does not say. A day
+	// fetched by a shell older than the facts carries no desk list, and an empty
+	// list is what draws no topic row - never an invented one.
+	const desks = $derived(day.verticals ?? []);
 	// What the day published, not what is in hand. A reading route's document
 	// carries a seed and fetches the rest, so counting the list here would print
 	// a number that ticks up while the reader watches - and the topic pill beside
@@ -96,9 +100,9 @@
 	// bounded fact off the payload instead: one desk's count, or every desk's.
 	const total = $derived(
 		vertical
-			? (day.verticals.find((ref) => ref.id === vertical)?.count ?? scoped.length)
-			: day.verticals.length > 0
-				? day.verticals.reduce((sum, ref) => sum + ref.count, 0)
+			? (desks.find((ref) => ref.id === vertical)?.count ?? scoped.length)
+			: desks.length > 0
+				? desks.reduce((sum, ref) => sum + ref.count, 0)
 				: scoped.length
 	);
 	const needle = $derived(filterNeedle(query, ui.filter_min_chars));
@@ -161,7 +165,7 @@
 	// way is not a story that was never here.
 	const missing = $derived(settled && wanted !== '' && !index.at.has(wanted));
 	const verticalNames = $derived(
-		Object.fromEntries(day.verticals.map((ref) => [ref.id, ref.display_name]))
+		Object.fromEntries(desks.map((ref) => [ref.id, ref.display_name]))
 	);
 
 	// The pager has just drawn a story the browser already looked for and did not
@@ -204,10 +208,10 @@
 		<DayNotice {day} count={total} />
 	{:else if section === 'leads'}
 		<LeadingStories stories={leads} />
-	{:else if section === 'topics' && day.verticals.length > 0}
+	{:else if section === 'topics' && desks.length > 0}
 		<FilterBar
 			label="Topics and filter"
-			verticals={day.verticals}
+			verticals={desks}
 			active={vertical}
 			{total}
 			pillsMax={ui.topic_pills_max}

@@ -90,6 +90,20 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 const SHELL_CACHE = `${SHELL_CACHE_PREFIX}${version}`;
 const KILL_URL = `${base}/${KILL_FILE}`;
 
+/** The document a static host answers an address it does not have with, and
+ * since 2026-09-09 the document every dated URL is served from.
+ *
+ * It is precached by name rather than through `svelte.config.js`'s
+ * `serviceWorker.files` predicate, because that predicate filters `static/` and
+ * this file is written by the adapter into `build/`. `$service-worker` does not
+ * name it either: it is neither a build asset nor a prerendered page.
+ *
+ * **Without it there is no offline dated reading at all.** A host answers a
+ * dated address with this file at status 404, so `fromNetworkFirst` refuses to
+ * keep it - a 404 is not a page to remember. The reader would then have a day
+ * payload on their device and no shell to draw it with. */
+const FALLBACK = `${base}/404.html`;
+
 /** Every path this build emitted, as a path rather than as a URL, so a request
  * can be looked up in it. `$service-worker` names them once, at build time, and
  * that list is the shell - which is what makes the shell cache's membership a
@@ -161,7 +175,7 @@ sw.addEventListener('install', (event) => {
 			// `files` is the shell's own assets and nothing else - `svelte.config.js`
 			// decides that, and it is the one place the decision belongs.
 			await Promise.all(
-				[...files, ...build.filter(isStylesheet)].map((path) =>
+				[FALLBACK, ...files, ...build.filter(isStylesheet)].map((path) =>
 					cache.add(path).catch((error) => {
 						console.warn(`[offline] ${path} was not kept for offline reading`, error);
 					})
@@ -321,7 +335,6 @@ async function evict(cache: Cache): Promise<void> {
  * holds one build's shell rather than a share of the archive.
  */
 async function fromNetworkFirst(request: Request, url: URL): Promise<Response> {
-	const cache = await caches.open(SHELL_CACHE);
 	const keep = shellKeeps({
 		pathname: url.pathname,
 		navigation: request.mode === 'navigate',
@@ -330,12 +343,24 @@ async function fromNetworkFirst(request: Request, url: URL): Promise<Response> {
 	try {
 		const answer = await fetch(request);
 		if (keep && answer.ok && answer.status === 200 && !answer.redirected) {
-			await cache.put(request, answer.clone());
+			// Opened only when there is something to store. `caches.open` CREATES
+			// the store, so opening it to read would put an empty `idhazh-` cache
+			// back on the device of a reader who has just retired the worker - the
+			// page clears the caches and cannot tell the worker it did.
+			await (await caches.open(SHELL_CACHE)).put(request, answer.clone());
 		}
 		return answer;
 	} catch (error) {
-		const held = await cache.match(request, { ignoreVary: true });
+		const held = await caches.match(request, { cacheName: SHELL_CACHE, ignoreVary: true });
 		if (held) return held;
+		// A dated address has no document of its own since 2026-09-09, so nothing
+		// was ever kept under it - the host answers one shell at status 404 and a
+		// 404 is not a page to remember. The shell is on the device from install,
+		// and it is what draws a day this reader already has.
+		if (request.mode === 'navigate') {
+			const shell = await caches.match(FALLBACK, { cacheName: SHELL_CACHE, ignoreVary: true });
+			if (shell) return shell;
+		}
 		throw error;
 	}
 }

@@ -99,8 +99,23 @@ async function wearing(page: Page, theme: string): Promise<void> {
 }
 
 test.describe('the drawing is in the document', () => {
+	/** A dated page holds nothing until its day arrives.
+	 *
+	 * Until 2026-09-09 the document carried the head of its day, so a `goto` was
+	 * enough to read a story off the page. One shell answers every dated address
+	 * now and the day is fetched, so an assertion made straight after `goto`
+	 * measures an empty page - and an absence check passes on one by accident.
+	 */
+	const drawn = async (page: Page, route: string) => {
+		await page.goto(route);
+		await expect(page.locator('[data-payload-state]')).toHaveAttribute(
+			'data-payload-state',
+			'ready'
+		);
+	};
+
 	test('a seeded story carries one svg and no image', async ({ page }) => {
-		await page.goto(DAY);
+		await drawn(page, DAY);
 		const figures = await page.evaluate(() =>
 			[...document.querySelectorAll('main article figure')].map((figure) => ({
 				svg: figure.querySelectorAll('svg').length,
@@ -120,7 +135,7 @@ test.describe('the drawing is in the document', () => {
 		// rather than kept for the stories past the seed, so the page-wide count is
 		// zero and not "zero among the seeded ones" - two treatments on one scroll
 		// is what reads as a broken site.
-		await page.goto(DAY);
+		await drawn(page, DAY);
 		await expect(page.locator('main img')).toHaveCount(0);
 	});
 
@@ -128,7 +143,7 @@ test.describe('the drawing is in the document', () => {
 		// The visual is never the only carrier of a fact, and an inlined svg has
 		// no `alt` to carry it. The label moves to the figure, which `role="img"`
 		// makes one named image rather than a tree of unnamed marks.
-		await page.goto(DAY);
+		await drawn(page, DAY);
 		const labels = await page
 			.locator('main article figure[role="img"]')
 			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
@@ -136,15 +151,46 @@ test.describe('the drawing is in the document', () => {
 		for (const label of labels) expect(label.length).toBeGreaterThan(0);
 	});
 
-	test('no drawing is fetched for a story the document already carries', async ({ page }) => {
-		// One fewer request per seeded story is the other half of what inlining
-		// bought. A drawing that is still requested is one that did not inline.
+	test('a drawing is fetched once and inlined, never left on an image', async ({ page }) => {
+		// **This is what a dated page stopped getting for free on 2026-09-09.**
+		// Until then the document carried the head of its day with each drawing
+		// read off disk and serialised into it, so a seeded story cost no request
+		// at all - and this asserted exactly that. One shell answers every dated
+		// address now, so the document carries no story and every drawing on a
+		// dated page is fetched. That is the trade the row makes, and hiding it
+		// behind a deleted test would be the dishonest half of it.
+		//
+		// What survives is the guarantee that matters. A drawing is asked for ONCE
+		// - twice would be the carrier and the fetch both running - and what lands
+		// is inlined markup rather than an `<img>`, so it reads the page's own
+		// colours and runs the same refusal `$lib/payload/drawing.ts` runs at
+		// build time. `/` still inlines its seed's drawings and asks for none of
+		// them, which the arm below holds.
 		const asked: string[] = [];
 		page.on('request', (request) => {
 			if (request.url().endsWith('.svg')) asked.push(request.url());
 		});
 		await page.goto(DAY, { waitUntil: 'networkidle' });
-		expect(asked).toEqual([]);
+
+		const drawings = await page.locator('main article figure svg').count();
+		expect(drawings, 'the canary day drew no visual at all').toBeGreaterThan(0);
+		expect(asked.length, 'a drawing was asked for more than once').toBe(new Set(asked).size);
+		await expect(page.locator('main img'), 'a drawing arrived on the image carrier').toHaveCount(0);
+	});
+
+	test('the home page asks for no drawing at all, because its document carries them', async ({
+		page
+	}) => {
+		// The half that did not move. `/` renders the whole newest day from its own
+		// document, with the seed's drawings read off disk and serialised into it,
+		// so a reader who lands there spends no request on one.
+		const asked: string[] = [];
+		page.on('request', (request) => {
+			if (request.url().endsWith('.svg')) asked.push(request.url());
+		});
+		await page.goto('/', { waitUntil: 'networkidle' });
+		expect(await page.locator('main article figure svg').count()).toBeGreaterThan(0);
+		expect(asked, 'the home page fetched a drawing its document already carries').toEqual([]);
 	});
 });
 

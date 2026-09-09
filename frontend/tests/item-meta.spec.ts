@@ -35,20 +35,16 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { KIND_WORTH_SAYING, SOURCE_KINDS } from '../src/lib/bands';
 import { loadDay } from '../src/lib/server/payload';
+import { CANARY, newestDate } from './support/published';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The tree the preview server serves, so a route here is a route that exists. */
 const BUILD = join(HERE, '..', 'build');
-/** The tree that built it. `loadDay` reads the day the page rendered. */
-const CANARY = resolve(HERE, '..', '..', 'backend', 'var', 'canary', 'digest');
 
 /** Never a date written here: a hardcoded one passes on an empty page the
- * moment the fixture moves. */
-const DAY = readdirSync(BUILD, { withFileTypes: true })
-	.filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(entry.name))
-	.map((entry) => entry.name)
-	.sort()
-	.at(-1) as string;
+ * moment the fixture moves. Read off the digest tree rather than out of
+ * `build/`, which since 2026-09-09 holds no dated directory at all. */
+const DAY = newestDate();
 
 /** A phone, the gap between two breakpoints, and a wide desktop. The same three
  * `layout-overflow.spec.ts` drives; `frame.breakpoints_px` is [640, 1024, 1400],

@@ -127,11 +127,8 @@ interface DayRoute {
 	 * the story. Computed through `orderByTime`, the function the page calls, so
 	 * this file cannot disagree with the page about what the order is. */
 	reading: string[];
-	/** Every story id the prerendered document renders, in document order. */
-	rendered: string[];
-	/** Every story id the document's leading block points at. */
+	/** Every story id the day's leading block points at. */
 	leads: string[];
-	html: string;
 }
 
 function dirsIn(at: string): string[] {
@@ -161,37 +158,48 @@ function renderedItems(html: string): string[] {
 }
 
 /** The day the built tree serves at that date - the file the browser fetches. */
-function servedDay(date: string): { items: DigestItem[] } | null {
+function servedDay(date: string): { items: DigestItem[]; leads?: { item_id: string }[] } | null {
 	const [year, month, day] = date.split('-');
 	const path = join(BUILD, 'digest', year, month, day, 'digest.json');
 	if (!existsSync(path)) return null;
 	return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-/** Every dated route in the tree the preview server serves. */
+/** Every dated route the preview server can answer.
+ *
+ * **Enumerated from the served days rather than from the built tree's
+ * directories**, and since 2026-09-09 that is the only source there is: one
+ * document answers every dated address, so `build/` holds no dated directory to
+ * list. It is also the better source, because the served file is what the
+ * browser fetches - a date here is a date the site has something to say about,
+ * where a date taken from `build/` only ever meant a build wrote a directory.
+ */
 function dayRoutes(): DayRoute[] {
 	const found: DayRoute[] = [];
-	for (const date of dirsIn(BUILD).filter((name) => DATE.test(name))) {
-		const html = join(BUILD, date, 'index.html');
-		const served = servedDay(date);
-		if (!existsSync(html) || served === null) continue;
-		const document = readFileSync(html, 'utf8');
-		found.push({
-			date,
-			served: served.items.map((item) => item.item_id),
-			reading: orderByTime(served.items).map((item) => item.item_id),
-			rendered: renderedItems(document),
-			leads: captured(document, /data-lead="([^"]+)"/g),
-			html
-		});
+	const root = join(BUILD, 'digest');
+	for (const year of dirsIn(root)) {
+		for (const month of dirsIn(join(root, year))) {
+			for (const day of dirsIn(join(root, year, month))) {
+				const date = `${year}-${month}-${day}`;
+				const served = servedDay(date);
+				if (served === null) continue;
+				found.push({
+					date,
+					served: served.items.map((item) => item.item_id),
+					reading: orderByTime(served.items).map((item) => item.item_id),
+					leads: (served.leads ?? []).map((lead) => lead.item_id)
+				});
+			}
+		}
 	}
 	return found;
 }
 
 const ROUTES = dayRoutes();
-/** The route whose deepest anchor sits furthest down the day. */
-const DEEPEST = ROUTES.filter((route) => route.rendered.length > 0).sort(
-	(a, b) => a.rendered.length - b.rendered.length
+/** The route whose day runs furthest, so its deepest anchor is the deepest
+ * address this site publishes. */
+const DEEPEST = ROUTES.filter((route) => route.served.length > 0).sort(
+	(a, b) => a.served.length - b.served.length
 ).at(-1);
 
 /** Every story the page can be walked to, in the order it draws them. */
@@ -215,25 +223,21 @@ test('the built tree has a dated route with stories, or nothing below proves any
 	).toBeGreaterThan(0);
 });
 
+/** The other half of the same oracle: the tree writes no dated document.
+ *
+ * Every date below is answered by one shell, so a directory here would mean a
+ * route grew a `prerender = true` back - which nothing else in the suite would
+ * catch, because the pages would go on working and the build would go on
+ * costing six documents a published day.
+ */
+test('no date in the tree has a document of its own', () => {
+	const dated = dirsIn(BUILD).filter((name) => DATE.test(name));
+	expect(dated, 'a build wrote a document for a dated address').toEqual([]);
+	expect(existsSync(join(BUILD, '404.html')), 'the fallback every date is served from').toBe(true);
+});
+
 for (const route of ROUTES) {
 	test.describe(`/${route.date}/`, () => {
-		test('the document carries a seed and says whether more is coming', () => {
-			const html = readFileSync(route.html, 'utf8');
-			const complete = route.rendered.length >= route.served.length;
-			expect(
-				html,
-				complete
-					? 'the document holds the whole day and still says it is waiting'
-					: 'the document is short of the day and does not say so'
-			).toContain(`data-payload-state="${complete ? 'ready' : 'loading'}"`);
-		});
-
-		test('every lead the document draws is an anchor it can reach', () => {
-			const held = new Set(route.rendered);
-			const dead = route.leads.filter((id) => !held.has(id));
-			expect(dead, 'a lead link in the prerendered document lands on nothing').toEqual([]);
-		});
-
 		// A day that published nothing renders the designed empty screen and has
 		// no list to walk. `day-states.spec.ts` owns that page; walking it here
 		// would only cost the suite a page load per quiet day - nineteen of them
@@ -272,16 +276,35 @@ for (const route of ROUTES) {
 			expect(errors, 'the day page logged an error').toEqual([]);
 			expect(failed, 'the day page asked for something that is not there').toEqual([]);
 		});
+
+		if (route.leads.length === 0) return;
+
+		test('every lead the page draws is an anchor it can reach', async ({ page }) => {
+			await page.goto(`/${route.date}/`);
+			await expect(page.locator('[data-payload-state]')).toHaveAttribute(
+				'data-payload-state',
+				'ready'
+			);
+			const drawn = await page
+				.locator('[data-lead]')
+				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-lead') ?? ''));
+			expect(drawn.length, 'the day publishes leads and the page drew none').toBeGreaterThan(0);
+			const held = new Set(await reachable(page));
+			expect(
+				drawn.filter((id) => !held.has(id)),
+				'a lead link on the page lands on nothing'
+			).toEqual([]);
+		});
 	});
 }
 
 /**
- * The deep link, on the route whose document reaches furthest down the day.
+ * The deep link, on the route whose day runs furthest.
  *
- * The target is the last story the document draws, because document order is
- * published order - so on a day with leads it is a lead the head could never
- * have held, and on a small day it is that day's last story. Either way it is
- * the deepest address the page publishes.
+ * The target is the last story in reading order, so it is the deepest address
+ * the page publishes and the one a pager has to walk all the way to. Until
+ * 2026-09-09 it was the last story the prerendered document drew, which was the
+ * same idea against a document that no longer exists.
  *
  * Scrolled AND focused, because a browser does the first by itself and never the
  * second: a reader arriving by keyboard on a page that only scrolled lands at
@@ -289,9 +312,9 @@ for (const route of ROUTES) {
  * to read.
  */
 test('a deep link into a day scrolls to its story and focuses it', async ({ page }) => {
-	expect(DEEPEST, 'no dated route in the tree renders a story').toBeDefined();
+	expect(DEEPEST, 'no dated route in the tree serves a story').toBeDefined();
 	const route = DEEPEST!;
-	const target = route.rendered.at(-1)!;
+	const target = route.reading.at(-1)!;
 
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(String(error)));

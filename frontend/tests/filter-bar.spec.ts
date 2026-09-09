@@ -42,6 +42,8 @@ import type { DigestItem, DigestVerticalRef } from '../src/lib/payload/types';
  * `frontend/src/lib/day-shape.ts` exists for.
  */
 
+import { newestDate } from './support/published';
+
 const BUILD = join(dirname(fileURLToPath(import.meta.url)), '..', 'build');
 
 function subdirectories(at: string): string[] {
@@ -51,8 +53,10 @@ function subdirectories(at: string): string[] {
 		.sort();
 }
 
-/** The newest published day in the built tree. Never a date written here. */
-const DAY = subdirectories(BUILD).filter((name) => /^\d{4}-\d{2}-\d{2}$/.test(name)).at(-1) as string;
+/** The newest published day. Never a date written here, and read off the digest
+ * tree rather than out of `build/`, which since 2026-09-09 holds no dated
+ * directory at all. */
+const DAY = newestDate();
 
 /** Anything under the on-device model's own directory. */
 const MODEL_DIR = /\/assist\/models\//;
@@ -390,13 +394,33 @@ test('the archive filter narrows the stories that arrive after it was typed', as
 	await expect(page.locator('[data-story-more]')).toHaveCount(0);
 });
 
-test('with no script the field is gone, one sentence replaces it, and a pill still navigates', async ({
+/**
+ * What a script-free reader gets, and it is two different answers now.
+ *
+ * **On `/` it is the whole newest day**, filter panel and all, with the dead
+ * input taken off the page and one sentence in its place. That is the arm this
+ * test used to drive on `/<date>/`, and it moved rather than went: `/` is the
+ * page that renders complete with no script at all, and it draws the same
+ * `DigestList` with the same `FilterBar`.
+ *
+ * **On a dated address it is a signpost.** From 2026-09-09 one shell answers
+ * every dated URL and its body is a boot script, so with no script that page is
+ * blank. `app.html` carries one `<noscript>` line naming the two pages that do
+ * render - the front page and the archive - and linking both.
+ *
+ * **What a script-free reader lost is stated rather than hidden**: a topic pill
+ * used to be one click to a prerendered desk, and it is now one click to that
+ * line. The pills are still links to real addresses, which is what the second
+ * half below still checks - what changed is what is at the other end for a
+ * reader with no script.
+ */
+test('with no script the field is gone, one sentence replaces it, and a pill is still a link', async ({
 	browser
 }) => {
 	const context = await browser.newContext({ javaScriptEnabled: false });
 	const page = await context.newPage();
 	try {
-		await page.goto(`/${DAY}/`);
+		await page.goto('/');
 
 		// The input is in the prerendered document, so hydration has nothing to
 		// reconcile - and the `<noscript>` rule is what takes it off the page.
@@ -406,16 +430,39 @@ test('with no script the field is gone, one sentence replaces it, and a pill sti
 			'Filtering needs JavaScript. Every topic above is a link and still works.'
 		);
 
-		// And the half that must survive: the pills are links to prerendered
-		// routes, so a topic is still one click away.
+		// And the half that survives: a topic is still one address away.
 		const topic = page.locator('[data-topic-row] a').nth(1);
 		await expect(topic).toBeVisible();
 		expect(await topic.getAttribute('href'), 'a topic pill is not a link to a route').toMatch(
-			/\/[a-z0-9-]+\/$/
+			/\/\d{4}-\d{2}-\d{2}\/[a-z0-9-]+\/$/
 		);
-		await topic.click();
-		await expect(page).toHaveURL(new RegExp(`/${DAY}/[a-z0-9-]+/$`));
-		await expect(page.locator('article').first()).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
+test('with no script a dated address says where the reader can go instead', async ({ browser }) => {
+	const context = await browser.newContext({ javaScriptEnabled: false });
+	const page = await context.newPage();
+	try {
+		// The fallback document itself, because `vite preview` decides for itself
+		// what an unknown path gets and that decision is not a static host's. This
+		// is the same file GitHub Pages answers every dated address with.
+		await page.goto('/404.html');
+
+		const signpost = page.locator('noscript');
+		await expect(signpost, 'the shell carries no no-script signpost').toHaveCount(1);
+		const said = (await signpost.textContent()) ?? '';
+		expect(said, 'the signpost does not say a dated page needs script').toContain(
+			'opens with JavaScript'
+		);
+		// Both links, because a sentence with no way out of it is not a signpost.
+		// Read out of the markup rather than clicked: a `<noscript>` element's
+		// children are not in the DOM as elements when script is off.
+		expect(said, 'the signpost does not name the front page').toContain('front page');
+		expect(said, 'the signpost does not name the archive').toContain('archive');
+		const markup = await signpost.innerHTML();
+		expect(markup, 'the signpost does not link the archive').toContain('archive/');
 	} finally {
 		await context.close();
 	}

@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { orderByTime } from '../src/lib/day-shape';
 import type { DigestItem } from '../src/lib/payload/types';
+import { publishedDates, topicsOf } from './support/published';
 
 /**
  * Row #25's oracle: a topic page holds the stories it used to inline.
@@ -47,9 +48,6 @@ interface TopicRoute {
 	/** The same ids in the order the page draws them: newest first by the time on
 	 * the story. Computed through `orderByTime`, the function the page calls. */
 	reading: string[];
-	/** What the prerendered document carries. */
-	seeded: number;
-	html: string;
 }
 
 function dirsIn(at: string): string[] {
@@ -68,25 +66,26 @@ function committedDay(date: string): { items: DigestItem[] } | null {
 	return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-/** Every topic route in the tree the preview server serves. */
+/** Every topic route the preview server can answer.
+ *
+ * **Enumerated from the committed day rather than from the built tree**, and
+ * since 2026-09-09 that is the only source there is: one document answers every
+ * dated address, so `build/` holds no `<date>/<topic>/` directory to list. The
+ * day's own `verticals` is where that list always lived - it is what the page
+ * draws its pills from and what decides whether a topic ran at all.
+ */
 function topicRoutes(): TopicRoute[] {
 	const found: TopicRoute[] = [];
-	for (const date of dirsIn(BUILD).filter((name) => DATE.test(name))) {
+	for (const date of publishedDates(CANARY)) {
 		const day = committedDay(date);
 		if (day === null) continue;
-		for (const vertical of dirsIn(join(BUILD, date))) {
-			const html = join(BUILD, date, vertical, 'index.html');
-			if (!existsSync(html)) continue;
+		for (const vertical of topicsOf(date, CANARY)) {
 			const own = day.items.filter((item) => item.vertical === vertical);
 			found.push({
 				date,
 				vertical,
 				published: own.map((item) => item.item_id),
-				reading: orderByTime(own).map((item) => item.item_id),
-				// The same marker `payload-weight.spec.ts` counts: on every published
-				// item and on nothing else this site serialises.
-				seeded: readFileSync(html, 'utf8').split('key_points').length - 1,
-				html
+				reading: orderByTime(own).map((item) => item.item_id)
 			});
 		}
 	}
@@ -109,26 +108,27 @@ async function reachable(page: Page): Promise<string[]> {
 }
 
 test('the canary build has a topic route, or nothing below proves anything', () => {
-	expect(ROUTES.length, 'no topic route in the built tree').toBeGreaterThan(0);
+	expect(ROUTES.length, 'no topic route in the digest tree').toBeGreaterThan(0);
 	expect(
 		ROUTES.filter((route) => route.published.length > 0).length,
 		'every topic route in the tree is empty, so the set comparison is vacuous'
 	).toBeGreaterThan(0);
 });
 
+/** The other half of the oracle: no topic has a document of its own.
+ *
+ * 96 of the 116 documents this row deleted were this route. A directory here
+ * would mean the route grew a `prerender = true` back, which nothing else in the
+ * suite would catch - the pages would go on working and the build would go on
+ * writing five documents a published day.
+ */
+test('no topic in the tree has a document of its own', () => {
+	const dated = dirsIn(BUILD).filter((name) => DATE.test(name));
+	expect(dated, 'a build wrote a document under a dated address').toEqual([]);
+});
+
 for (const route of ROUTES) {
 	test.describe(`/${route.date}/${route.vertical}/`, () => {
-		test('the document carries the seed and says whether more is coming', () => {
-			const html = readFileSync(route.html, 'utf8');
-			const complete = route.seeded >= route.published.length;
-			expect(
-				html,
-				complete
-					? 'the document holds the whole desk and still says it is waiting'
-					: 'the document is short of the desk and does not say so'
-			).toContain(`data-payload-state="${complete ? 'ready' : 'loading'}"`);
-		});
-
 		test('every story the day published under this topic is reachable', async ({ page }) => {
 			const failed: string[] = [];
 			const errors: string[] = [];

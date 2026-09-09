@@ -1,6 +1,16 @@
 import { shellSeedItems } from '$lib/server/config';
 import { dayShell, latestDate, loadDay, publishedDates, wholeDay } from '$lib/server/payload';
 
+/** The flag is here rather than on the root layout, and it has to be.
+ *
+ * Until 2026-09-09 one `prerender = true` on `+layout.server.ts` cascaded to
+ * every route on the site. The layout is a universal load now and page options
+ * went with it, so each route that ships a document declares its own. Without
+ * this line the site root emits no `index.html` at all and GitHub Pages answers
+ * `/` with the fallback, at HTTP 404.
+ */
+export const prerender = true;
+
 /** The home page reads the day it renders.
  *
  * It used to read one the root layout returned, which is why every other page

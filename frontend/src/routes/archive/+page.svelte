@@ -38,7 +38,7 @@
 	import { monthsInWindow, windowStart } from '$lib/assist/month';
 	import { filterNeedle } from '$lib/day-shape';
 	import type { SearchHit, SearchOutcome } from '$lib/assist/search';
-	import type { DigestDay, SearchIndexEntry } from '$lib/payload/types';
+	import type { DayForPage, SearchIndexEntry } from '$lib/payload/types';
 	import { onMount } from 'svelte';
 
 	let { data } = $props();
@@ -49,7 +49,7 @@
 	let status = $state<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
 	let results = $state<SearchOutcome | null>(null);
 	// One entry per result day, so a re-render sees a day the moment it lands.
-	let dayPayloads = $state<Record<string, DigestDay | null>>({});
+	let dayPayloads = $state<Record<string, DayForPage | null>>({});
 	/** What the panel's field holds. Typing narrows the stories already fetched
 	 * and fetches nothing; only the Search button spends the encoder download. */
 	let query = $state('');

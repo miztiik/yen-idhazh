@@ -359,8 +359,19 @@ would answer nothing at all for a ledger whose last run was two months ago.
 | --- | --- | --- |
 | `routes/archive` -> `publishedDates(root, -1)` and `loadDay` | every committed day payload | this page **is** the archive: the calendar names every published day, the topic pills count stories across all of them, and a cover would delete the older half of the page rather than make it cheaper to draw |
 | `routes/archive` -> `indexMonths(root, -1)` | the index directory listing | it is the list of months a reader may ask for, so a cover hides the older ones |
-| `routes/[date]` and `routes/[date]/[vertical]`, both `entries()` -> `publishedDates(root, -1)` | the day directories, and the day payload for the topic list | it is the list of pages the build writes; a cover stops writing them past it, so the calendar links to nothing and a dated link 404s |
 | `routes/console` -> `telemetryMonths(root, -1)` | the telemetry directory listing | it is how far the operator can pan, which is a different question from how far a panel can draw; it opens no file, and what crosses is seven characters a month |
+
+**Two entries retired on 2026-09-09, and they were the two the build paid for
+every run.** `routes/[date]` and `routes/[date]/[vertical]` each took a `-1`
+because `entries()` is the list of pages the build writes, and a cover there
+stops writing them past it - the calendar would link to nothing and a dated link
+would 404. Neither route is prerendered any more. One document answers every
+dated URL and the browser fetches the day it names, so there is no list of pages
+to build and nothing to cover: the build reads the digest tree for `/` and
+`/archive/` and for nothing else. **The uncovered read did not move somewhere
+cheaper - it stopped existing**, which is the only way one of these entries is
+ever meant to leave this page. What replaced it is one bounded read a reader's
+own browser makes: one date, one payload, decided by the address they asked for.
 
 ### What the cover bought
 

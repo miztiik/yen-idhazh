@@ -1,128 +1,72 @@
 import { expect, test } from '@playwright/test';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
 import config from '../svelte.config.js';
 
 /**
- * The build used to fail on a clone that had never run the pipeline: `/[date]`
- * and `/[date]/[vertical]` are prerendered, their entries come from the
- * committed digest tree, and an empty tree produces no page. SvelteKit calls
- * that an unseen route and exits 1.
+ * An unseen prerender route is a defect, and since 2026-09-09 there is no
+ * innocent reading of one.
  *
- * These drive the real handler off the real config, so the wiring is under test
- * with the rule. The fixtures are the canary day and copies of it - no invented
- * payload, and nothing written inside the repository.
+ * The guard used to have a real question to answer. `/[date]` and
+ * `/[date]/[vertical]` were prerendered off the committed digest tree, so a
+ * clone that had never run the pipeline produced no dated page and SvelteKit
+ * exited 1 - a build that could not run until a day existed, against the rule
+ * that a fresh clone runs on the defaults (CLAUDE.md section 1a). The guard read
+ * the tree and excused exactly those two routes when it was empty.
+ *
+ * Both dated routes render in the browser now, from one shell, so neither is
+ * prerenderable and neither can be unseen. What is left prerendered is `/`,
+ * `/archive/`, `/evals/` and the three console routes, and not one of them reads
+ * a published day to decide whether it exists.
+ *
+ * These drive the real handler off the real config, so the wiring stays under
+ * test with the rule. Nothing here reads the digest tree, because the handler no
+ * longer does - which is the change.
  */
-
-const ROOT = resolve(process.cwd(), '..');
-const CANARY = resolve(ROOT, 'backend', 'var', 'canary', 'digest');
 
 const handleUnseenRoutes = config.kit.prerender.handleUnseenRoutes;
 
-const DATED = '/[date]';
-const TOPIC = '/[date]/[vertical]';
-
-const temporary: string[] = [];
-
-function scratch(): string {
-	const path = mkdtempSync(join(tmpdir(), 'yi-prerender-'));
-	temporary.push(path);
-	return path;
+function unseen(routes: string[]): () => void {
+	return () => handleUnseenRoutes({ routes, message: 'routes were not prerendered' });
 }
 
-/** The canary day, copied out, with every topic taken off it. */
-function dayWithNoTopic(): string {
-	const root = scratch();
-	cpSync(CANARY, root, { recursive: true });
-	for (const file of payloadsUnder(root)) {
-		const day = JSON.parse(readFileSync(file, 'utf8'));
-		day.verticals = [];
-		day.items = [];
-		writeFileSync(file, JSON.stringify(day));
-	}
-	return root;
-}
-
-function payloadsUnder(root: string): string[] {
-	const found: string[] = [];
-	for (const year of readdirSync(root)) {
-		for (const month of readdirSync(join(root, year))) {
-			for (const day of readdirSync(join(root, year, month))) {
-				found.push(join(root, year, month, day, 'digest.json'));
-			}
-		}
-	}
-	return found;
-}
-
-function unseen(root: string, routes: string[]): () => void {
-	return () => {
-		const previous = process.env.DIGEST_ROOT;
-		process.env.DIGEST_ROOT = root;
-		try {
-			handleUnseenRoutes({ routes, message: 'routes were not prerendered' });
-		} finally {
-			if (previous === undefined) delete process.env.DIGEST_ROOT;
-			else process.env.DIGEST_ROOT = previous;
-		}
-	};
-}
-
-test.afterAll(() => {
-	for (const path of temporary) rmSync(path, { recursive: true, force: true });
+test('a prerendered route that built no page fails the build', () => {
+	expect(unseen(['/archive'])).toThrow(/is prerendered and built no page/);
 });
 
-test('a clone that has never run the pipeline still builds', () => {
-	expect(unseen(scratch(), [DATED, TOPIC])).not.toThrow();
+test('the two routes the old guard excused are not excused any more', () => {
+	// Neither is prerendered, so neither can arrive here - and if one does, a
+	// route file has grown a `prerender = true` that nothing else would catch.
+	expect(unseen(['/[date]'])).toThrow(/is prerendered and built no page/);
+	expect(unseen(['/[date]/[vertical]'])).toThrow(/is prerendered and built no page/);
 });
 
-test('a day that published nothing still builds', () => {
-	expect(unseen(dayWithNoTopic(), [TOPIC])).not.toThrow();
-});
-
-test('a dated page missing while days are published fails the build', () => {
-	expect(unseen(CANARY, [DATED])).toThrow(/had a page to build and did not build it/);
-});
-
-test('a topic page missing while days name topics fails the build', () => {
-	expect(unseen(CANARY, [TOPIC])).toThrow(/had a page to build and did not build it/);
-});
-
-test('a day directory holding no payload is not a published day', () => {
-	const root = scratch();
-	mkdirSync(join(root, '2026', '08', '26'), { recursive: true });
-
-	expect(unseen(root, [DATED, TOPIC])).not.toThrow();
+test('the failure names every route it was handed', () => {
+	expect(unseen(['/evals', '/console/model'])).toThrow(/\/evals, \/console\/model/);
 });
 
 /**
- * The reason this is a handler and not `handleUnseenRoutes: 'ignore'`. Every
- * other route is reached by a link, so one that stops being prerendered is a
- * dead page nobody asked for - the empty tree excuses the dated routes and
- * nothing else.
+ * The message is a record leaving the process, so it carries no absolute path
+ * and no drive letter (CLAUDE.md section 2). The old handler printed where the
+ * digest tree was and had to be careful about it; this one names routes, which
+ * is a shape that cannot carry a path - and that is worth an assertion rather
+ * than an assumption.
  */
-test('a static route that stopped being reached fails even on an empty tree', () => {
-	expect(unseen(scratch(), ['/archive'])).toThrow(/had a page to build and did not build it/);
-});
-
-/**
- * The build log is a record leaving the process, so it carries no absolute path
- * and no drive letter (CLAUDE.md section 2). Every fixture here sits outside the
- * repository, which is exactly the case that used to print a traversal.
- */
-test('the log record names no absolute path and no traversal', () => {
-	const said: string[] = [];
-	const previous = console.log;
-	console.log = (line: string) => said.push(line);
+test('the failure names no absolute path and no drive letter', () => {
+	let said = '';
 	try {
-		unseen(scratch(), [DATED, TOPIC])();
-	} finally {
-		console.log = previous;
+		unseen(['/archive'])();
+	} catch (error) {
+		said = String(error);
 	}
+	expect(said, 'the handler did not throw').not.toBe('');
+	expect(said).not.toMatch(/[A-Za-z]:[\\/]/);
+	expect(said).not.toContain('\\');
+});
 
-	expect(said).toHaveLength(1);
-	expect(said[0]).toContain('DIGEST_ROOT');
-	expect(said[0]).not.toMatch(/[A-Za-z]:[\\/]/);
-	expect(said[0]).not.toContain('..');
+/**
+ * The reason this is a handler and not `handleUnseenRoutes: 'ignore'`. Ignoring
+ * would allow the same builds and allow every other unseen route with them, and
+ * it would say nothing when it did. What a handler buys is the sentence.
+ */
+test('the build is told what to look at', () => {
+	expect(unseen(['/archive'])).toThrow(/route file, its page options, and the links that reach it/);
 });
