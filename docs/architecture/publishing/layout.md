@@ -678,6 +678,16 @@ reader that wants a window can skip whole files - `payload.ts` has a shared
 `readShards` helper now, which `state/item-health/` was already using and this
 ledger could not.
 
+**The reader half landed on 2026-09-09.** `readShards(dir, months)` opens the
+newest `months` shards and nothing older. The default is `shardMonths(90)`, which
+is five - a month is at least 28 days, so the rule rounds up, and 90 is where
+`console.window_presets` ends. `evalRows`, `itemHealthRows`, `feedResults` and
+`loadSpanRollup` are all thin wrappers over it, so all four inherit the cover.
+Pass `-1` to read every month and say beside the call why
+([growing-reads.md](../../concepts/growing-reads.md)). The listing still names
+every shard - one directory entry a month - because the newest stem cannot be
+derived from today's date for a ledger whose last run was two months ago.
+
 It also shrinks what one commit touches. Every run appended to a single file, so
 git stored a new blob of the whole ledger several times a day; it now stores a
 new blob of the current month.

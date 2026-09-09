@@ -23,11 +23,12 @@ import {
 	itemHealthForDay,
 	loadManifests,
 	publishedItems,
+	shardMonths,
 	type DayMetrics,
 	type FeedResult,
 	type RunRecord
 } from '$lib/server/payload';
-import { collectConfig, retentionConfig, runConfig } from '$lib/server/config';
+import { collectConfig, consoleConfig, retentionConfig, runConfig } from '$lib/server/config';
 import { loadMachineCounters, type MachineCounters } from '$lib/server/runtime-counters';
 
 /** Green: it worked. Amber: look at it. Red: it did not work. */
@@ -411,18 +412,25 @@ function modelCandidates(day: BandModel | null): Candidate[] {
  *
  * One read of the committed ledger, one derivation, three routes. The band and
  * the strip cannot disagree between routes because neither is computed twice.
+ *
+ * Every read here is covered by the widest span the window control offers, which
+ * is the furthest back any panel on any of the three routes can draw
+ * (`CLAUDE.md` Rule #12). The span comes from `console.window_presets` rather
+ * than a literal, so raising the widest preset widens the read with it (Rule #6).
  */
 export function consoleShell(): ConsoleShell {
-	const manifests = loadManifests();
+	const widest = Math.max(...consoleConfig().window_presets);
+	const shards = shardMonths(widest);
+	const manifests = loadManifests(undefined, widest);
 	const newest = manifests[0] ?? null;
 	const floorPct = runConfig().success_floor_pct;
 	const budgetBytes = retentionConfig().site_budget_mb * 1024 * 1024;
 	const quarantineAfter = collectConfig().availability_strikes_before_rest;
-	const feeds = feedTrouble(feedResults(), quarantineAfter);
+	const feeds = feedTrouble(feedResults(shards), quarantineAfter);
 	// One published count for the whole function: the size figure divides the tree
 	// by it and the machine carry names it, and two reads of the same ledger are
 	// one read too many (Carmack, plan row 24 decision 3).
-	const published = publishedItems();
+	const published = publishedItems(undefined, widest);
 
 	// The band shows one day - the newest the manifests hold - and it shows it on
 	// all three routes, so it reads that one day's model facts from their
@@ -478,7 +486,7 @@ export function consoleShell(): ConsoleShell {
 	// derived from them like the other two rather than being a standing note that
 	// nothing reads them. A route whose label never changes is a route an operator
 	// stops opening.
-	const worstMachine = worstOf(machineCandidates(loadMachineCounters()));
+	const worstMachine = worstOf(machineCandidates(loadMachineCounters(shards)));
 
 	const routes: ConsoleRoute[] = [
 		{
