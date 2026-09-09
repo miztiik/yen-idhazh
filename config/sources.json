@@ -144,6 +144,17 @@
       "weight": 1.0
     },
     {
+      "id": "bank-underground",
+      "kind": "research",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Bank Underground",
+      "url": "https://bankunderground.co.uk/feed/",
+      "vertical": "business-economy",
+      "weight": 1.0
+    },
+    {
       "id": "bbc-business",
       "kind": "reporting",
       "retired_on": null,
@@ -305,6 +316,17 @@
       "tier": 3,
       "title": "Conversable Economist",
       "url": "https://conversableeconomist.com/feed/",
+      "vertical": "business-economy",
+      "weight": 1.0
+    },
+    {
+      "id": "damodaran",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Aswath Damodaran - Musings on Markets",
+      "url": "https://aswathdamodaran.blogspot.com/feeds/posts/default?alt=rss",
       "vertical": "business-economy",
       "weight": 1.0
     },
@@ -559,6 +581,28 @@
       "title": "Federal Reserve speeches",
       "url": "https://www.federalreserve.gov/feeds/speeches.xml",
       "vertical": "business-economy",
+      "weight": 1.0
+    },
+    {
+      "id": "finshots-daily",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Finshots Daily",
+      "url": "https://finshots.in/archive/rss/",
+      "vertical": "india",
+      "weight": 1.0
+    },
+    {
+      "id": "finshots-markets",
+      "kind": "analysis",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Finshots Markets",
+      "url": "https://finshots.in/markets/rss/",
+      "vertical": "india",
       "weight": 1.0
     },
     {
@@ -1311,17 +1355,6 @@
       "weight": 1.0
     },
     {
-      "id": "seekingalpha",
-      "kind": "community",
-      "retired_on": null,
-      "status": "active",
-      "tier": 3,
-      "title": "Seeking Alpha",
-      "url": "https://seekingalpha.com/market_currents.xml",
-      "vertical": "business-economy",
-      "weight": 1.0
-    },
-    {
       "id": "semafor",
       "kind": "reporting",
       "retired_on": null,
@@ -2049,6 +2082,17 @@
       "title": "South China Morning Post",
       "url": "https://www.scmp.com/rss/91/feed",
       "vertical": "world",
+      "weight": 1.0
+    },
+    {
+      "id": "seekingalpha",
+      "kind": "community",
+      "retired_on": "2026-09-09",
+      "status": "retired",
+      "tier": 3,
+      "title": "Seeking Alpha",
+      "url": "https://seekingalpha.com/market_currents.xml",
+      "vertical": "business-economy",
       "weight": 1.0
     },
     {

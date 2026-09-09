@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -460,6 +460,88 @@ the fetch is allowed, but `corpus/` commits article text as training samples
 (CLAUDE.md section 0a), so the publisher's stated intent and one of our uses
 point in opposite directions. Recorded here rather than resolved: the owner
 takes that call, and if it goes the other way the fix is one `retired_on`.
+
+## Feed Admission Check
+
+The **Feed Admission Check** is the source-entry review before adding or
+restoring a feed. Its instrument is
+[`backend/utilities/probe_feeds.py`](../../../backend/utilities/probe_feeds.py).
+It uses the production fetcher, configured user agent, public-address check,
+robots policy, bounded retries, paywall detector and text extractor. It makes
+no model call and changes neither curation nor the pipeline's health ledgers.
+
+The utility is a minimum access check, not an editorial acceptance gate. Its
+current limits matter when reading a green exit code:
+
+- `--articles` defaults to one. A larger value samples the first entries in
+  feed order, not a representative selection across dates or content types.
+- **Any one readable article passes the feed.** Asking for three records all
+  three results, but does not stop one free article hiding two blocked ones in
+  the headline verdict. Review the per-article results, not only `passed`.
+- A parser warning is recorded as `malformed` but does not fail the verdict.
+  An undated feed can also pass, with `no_dated_entries` beside it.
+- It does not apply the production freshness limit or decide whether the page
+  is a single useful story. An article's successful status can carry a shape
+  warning that the probe's verdict does not expose; see
+  [item-health.md](item-health.md#stages-and-outcomes).
+- A local pass establishes access from that machine on that date. It does
+  not establish access from the GitHub runner or permission to reuse text for
+  training. Publisher restrictions still apply.
+
+Sample several articles and keep the report for review, for example:
+
+```text
+python backend/utilities/probe_feeds.py --articles 3 --report backend/var/probes/candidate-feeds.jsonl https://finshots.in/archive/rss/
+```
+
+Admission remains a curator's decision. Ongoing feed availability and article
+yield answer different questions and have different controls; see
+[health.md](health.md#per-source-yield-is-measured-and-since-2026-09-06-it-speaks).
+
+### The 2026-09-09 finance curation
+
+Owner decision, 2026-09-09: add these four feeds and retire the existing
+Seeking Alpha feed. Each addition passed one production-path probe from a
+Windows developer machine that day. Three articles per feed returned HTTP 200
+without login or a detected paywall. The word ranges are the minimum and
+maximum extracted across those three articles, not a future quality claim.
+
+| Feed | Address | Placement | Sampled articles |
+| --- | --- | --- | --- |
+| Finshots Daily | `https://finshots.in/archive/rss/` | `india`, tier 2, `analysis` | 3 of 3 readable; 1,327 to 1,510 words |
+| Finshots Markets | `https://finshots.in/markets/rss/` | `india`, tier 2, `analysis` | 3 of 3 readable; 908 to 1,619 words |
+| Aswath Damodaran - Musings on Markets | `https://aswathdamodaran.blogspot.com/feeds/posts/default?alt=rss` | `business-economy`, tier 3, `analysis` | 3 of 3 readable; 2,642 to 5,098 words |
+| Bank Underground | `https://bankunderground.co.uk/feed/` | `business-economy`, tier 1, `research` | 3 of 3 readable; 1,535 to 1,726 words |
+
+Damodaran follows the existing independent-analysis tier, as Conversable
+Economist does. Bank Underground publishes its staff's own research; its views
+are not necessarily Bank of England policy. All four start at weight 1.0.
+The 24-hour freshness limit is unchanged: weekly and occasional feeds contribute
+when they publish new work, not by replaying older articles.
+
+**Seeking Alpha is retired for repeated article access failures, not for a
+measured paywall.** At commit `64699c54`, the published source-health view
+covered 2026-08-24 through 2026-09-08: 115 article opportunities, 33
+publications, 80 source-owned failures and two summarizer failures. The raw
+record held 82 HTTP 403 attempts across those 80 article/date pairs. All 71
+feed reads returned HTTP 200. The 33 publications carried 12 to 149 source
+words; 30 also carried short-text or non-prose signals. Reading this fixed
+committed record is deterministic, so the spread is zero.
+
+The same day's local probe read its seven-entry `market_currents.xml` feed,
+but all three sampled articles returned HTTP 403. None of the five requested
+Seeking Alpha tag or sector feeds passed either: Long Ideas and Editors' Picks
+each returned 20 dated entries with three blocked articles; India, Financial
+and Utilities returned HTTP 403 on the feed itself.
+
+This is direct owner curation with 16 complete days recorded, not an automatic
+yield judgement before the configured 30-day requirement. The entry moves from
+`feeds` to `retired`, keeps `id: seekingalpha` and its descriptive fields, and
+sets `retired_on: 2026-09-09`. Future plans stop selecting it. Historical
+health rows and published items stay unchanged and can still resolve its name
+through `Sources.known_feeds()`. No source or feed-health schema changes: this
+uses the existing lifecycle fields. A run already holding a plan is not
+rewritten by a later curation edit.
 
 ### The 2026-09-06 requested feed check: three of fourteen entered live config
 
