@@ -1854,7 +1854,7 @@
         },
         "histogram_bins": {
           "default": 3,
-          "description": "How many equal-width bins a histogram's values fall into. Binning is config and never the model's - it has no numeric field that could say. The channel holds between min_chart_points and max_chart_points values, so a count above that floor asks for bins nothing can fall into and the item draws no picture; the default is the floor rather than a textbook rule for a sample size this stage never sees.",
+          "description": "How many equal-width bins a histogram's values fall into. Binning is config and never the model's - it has no numeric field that could say. A histogram's bins ARE the marks a reader counts, so this sits inside the same min_chart_points to max_chart_points window every other type's mark count does, and a value outside it is refused here rather than left to refuse every histogram of every run for a reason no article can fix. It is also the floor on how many values a histogram may cite: fewer values than bins leaves a bin empty, and a bar counting nothing has no chain and draws nothing. The default is min_chart_points rather than a textbook rule for a sample size this stage never sees.",
           "minimum": 2,
           "title": "Histogram Bins",
           "type": "integer"
@@ -1921,6 +1921,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "visuals.histogram_bins is now held between visuals.min_chart_points and visuals.max_chart_points. A config outside that window no longer loads.",
+      "version": "2026-09-09T05:20",
+      "why": "A histogram's bins are the marks a reader counts, so they are bounded by the two knobs that already say how many marks a chart may draw. Before this, a value above max_chart_points loaded and the validator admitted the plans asking for it, because enough_data counted the values being distributed rather than the bars drawn. The bin count is the same for every histogram in a run, so refusing it here says the fault once, to the operator who caused it, instead of refusing every histogram of every run and naming the article. Semantic narrowing with nothing to migrate: the committed config reads 3 and the tuned fixture 4, both inside the window."
+    },
     {
       "change": "Added visuals.histogram_bins with a default of 3. Additive - a config written before this still validates and reads the default.",
       "version": "2026-09-09T05:00",
@@ -2466,7 +2471,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-09T05:00",
+      "default": "2026-09-09T05:20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2480,5 +2485,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-09T05:00"
+  "version": "2026-09-09T05:20"
 }
