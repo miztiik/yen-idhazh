@@ -333,6 +333,31 @@ stage never sees. **What reaches that refusal is a lack of spread and nothing el
 `enough_data` refuses a plan citing fewer values than bins: a count shortfall is a plan fault the
 validator names, and only values that crowd into one end of their own range get this far.
 
+### The resolver refuses with a value, because the caller degrades
+
+`resolve_displayed_values` returns a `Resolution`: the figures it drew, or one `Refusal` naming the
+check that stopped it. It is the counterpart of the validator's `Rejection` and it exists for the
+same reason - a refusal that cannot say which rule fired is a rule nobody can retire, tune or show to
+work.
+
+**It returns rather than raises because the empty bin above is reachable on a plan the validator
+passed.** Thirteen of the fourteen refusals restate one of the nine checks, so a caller meeting one of
+those resolved a plan it never validated - this run's own arithmetic being wrong. The fourteenth,
+`values_have_spread`, is the resolver's own: values crowding into one end of their own range leave a
+bar empty with a figure for every bin, and no check above refuses that. The paragraph above says the
+item degrades and publishes no picture, and a caller can only do that if the refusal is something it
+reads off the return. A caller that has to remember a `try` is a caller who will one day not, and the
+`try` it forgets takes a whole day's digest off the air to punish one story - the trade `CLAUDE.md`
+section 1a already refuses.
+
+**The two empty-bin causes carry different names, and the difference is what an operator acts on.**
+`enough_values_for_bins` says the article was thin; `values_have_spread` says
+`visuals.histogram_bins` is set higher than the article's figures can fill. Folded into one name,
+every empty bar reads as the knob. The four functions and the helpers under them still raise
+`DerivedValueError`, which now carries the same check name - reaching `convert` with two units that
+do not measure the same thing is a bug rather than an article with a problem, and the boundary a
+stage calls is the one place that turns the raise into a refusal.
+
 ### Three stamps, and none of them is a config key
 
 The plan's file list proposed `visuals.unit_table_version`. It is refused. A stamp an operator can
