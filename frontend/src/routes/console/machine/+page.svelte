@@ -30,8 +30,6 @@
 	import { base } from '$app/paths';
 	import Chart from '$lib/charts/Chart.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
-	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
-	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import RateControl from '$lib/components/RateControl.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
@@ -437,11 +435,10 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<section class="py-6" data-surface="operator" data-console-route="machine">
-	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
-
-	<ConsoleNav routes={data.routes} active="machine" />
-	<ConsoleBand band={data.band} />
+<!-- The title, the strip and the band are the shell and live in
+     `../+layout.svelte`. The control stays here because it governs this route's
+     panels and nothing above them. -->
+<div data-console-panels="machine">
 	<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 
 	<!-- One sentence, no chart. It is what stops this route reading as a page
@@ -1397,7 +1394,7 @@
 			{/if}
 		</Panel>
 	</div>
-</section>
+</div>
 
 <style>
 	.empty {
