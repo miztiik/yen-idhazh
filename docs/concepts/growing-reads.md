@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 
 One question, asked of every read:
 
@@ -194,7 +194,8 @@ them as the set of places the rule applies.
 
 **Twenty-one reads over a collection a run appends to**, each with the cover or
 the bound its own code declares. A helper that opens one named file is not
-listed: its cover is its argument.
+listed: its cover is its argument. These are `backend/`'s;
+[the site's are below](#the-site-reads-the-same-collections-2026-09-09).
 
 ### A cover that is a span of days
 
@@ -236,6 +237,105 @@ listed: its cover is its argument.
 `ledger.py` twice, `corpus.py` twice, `fingerprint.py` and `contracts/base.py`.
 The rest declare it in the sentence the docstring opens with, or in the signature
 itself, and either is enough. What is not enough is nothing.
+
+## The site reads the same collections, 2026-09-09
+
+Everything above is `backend/`. The published site reads the committed tree too -
+at build time, in the same CI job - and until 2026-09-09 eleven of its reads
+opened everything on disk and filtered afterwards. The three answers are the same
+three; only the language they are written in changed.
+
+**The cover is a constant in `payload.ts` and not a config read.** `config.ts`
+imports `REPO_ROOT` from `payload.ts`, so importing the config reader back would
+close a cycle. `ARCHIVE_WINDOW_DAYS` is 90 because that is where
+`console.window_presets` ends, and `LEDGER_WINDOW_MONTHS` is `shardMonths(90)`
+rather than a second number, so the two covers cannot drift apart. Every console
+route works out its own widest preset from the config and converts it with the
+same `shardMonths`, so raising the preset widens both reads together; the
+constants are what a caller with no window of its own inherits.
+
+**`shardMonths` rounds up and says so.** A month is at least 28 days, so it
+returns `ceil(days / 28) + 1` - five for 90, where the calendar allows only four,
+because the three shortest consecutive months run to 89 days. One shard too many
+costs a file; one too few costs a panel a day it should have drawn.
+
+**The window is anchored on the newest day found, never on today.** A clock
+anchor would answer with nothing at all for a corpus that stopped publishing
+three months ago, and `latestDate` is `publishedDates(root)[0]` - so the home
+page and the root layout would go blank on a quiet quarter rather than showing
+the last day there was.
+
+### A cover that is a span of days
+
+| Read | What it opens | Its cover |
+| --- | --- | --- |
+| `payload.publishedDates` | the day directories the window reaches, newest first, then stops | `ARCHIVE_WINDOW_DAYS`, 90 |
+| `payload.latestDate` | the first entry of the above | the same 90, and it only needs the first |
+| `payload.loadManifests` | one `run.json` a day in range | its caller's `windowDays` |
+| `payload.publishedItems` | one day payload a day in range | its caller's `windowDays` |
+| `payload.publishedCharts` | one day payload a day in range | its caller's `windowDays` |
+| `payload.telemetryRows` | the telemetry shards the span touches | its caller's `windowDays` |
+
+### A cover that is not a clock
+
+| Read | What it opens | Its cover |
+| --- | --- | --- |
+| `payload.readShards` | the newest `months` shards of a month-sharded ledger | `LEDGER_WINDOW_MONTHS`, which is `shardMonths(90)` and so 5 |
+| `payload.evalRows`, `payload.itemHealthRows`, `payload.feedResults` | through `readShards`, over `state/scores/`, `state/item-health/` and `state/feed-health/` | the same 5 |
+| `span-rollup.loadSpanRollup` | through `readShards`, over `state/span-rollup/` | the same 5, and the caller wants the newest entry |
+| `runtime-counters.loadMachineCounters` | one file, plus item-health through `readShards` | the shard cover, and `state/runtime-counters.csv` is one file |
+| `payload.itemHealthForDay` | one item-health shard | one date |
+| `payload.dayMetrics` | one record a date | the dates handed in |
+| `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
+
+**Two residues are named rather than hidden.** `publishedDates` lists the root
+once to find the newest year, which costs one directory entry a year for ever.
+`readShards`, `telemetryMonths` and `indexMonths` list their directory to learn
+which shards are newest, which costs one entry a month for ever. Neither opens a
+file it does not need, and deriving the newest stem from today's date instead
+would answer nothing at all for a ledger whose last run was two months ago.
+
+### Unbounded, and it says so
+
+| Read | What it opens | Why no cover |
+| --- | --- | --- |
+| `routes/archive` -> `publishedDates(root, -1)` and `loadDay` | every committed day payload | this page **is** the archive: the calendar names every published day, the topic pills count stories across all of them, and a cover would delete the older half of the page rather than make it cheaper to draw |
+| `routes/archive` -> `indexMonths(root, -1)` | the index directory listing | it is the list of months a reader may ask for, so a cover hides the older ones |
+| `routes/[date]` and `routes/[date]/[vertical]`, both `entries()` -> `publishedDates(root, -1)` | the day directories, and the day payload for the topic list | it is the list of pages the build writes; a cover stops writing them past it, so the calendar links to nothing and a dated link 404s |
+| `routes/console` -> `telemetryMonths(root, -1)` | the telemetry directory listing | it is how far the operator can pan, which is a different question from how far a panel can draw; it opens no file, and what crosses is seven characters a month |
+
+### What the cover bought
+
+Measured 2026-09-09 on an Intel Core i7-1265U, Node 24.12.0, over a synthetic
+digest tree of 410 published days and 15 month shards, 214,632,096 bytes. Both
+covers run alternately in one process, nine passes each, so page cache and
+machine load are the same for both.
+
+The ten reads together took **9,570.5 ms uncovered and 2,657.8 ms covered** -
+**3.6 times faster, and 72.2 percent of the time is gone**. The four that cost
+the most: the score ledger 2,124.0 ms against 604.5 ms, the shard primitive
+1,615.0 ms against 597.8 ms, the article counts 1,724.4 ms against 356.7 ms, the
+chart counts 1,718.4 ms against 367.9 ms. Spread was wide on the uncovered arm
+and narrow on the covered one - the score ledger ran 2,003.8 to 2,817.4 ms
+uncovered and 503.4 to 726.5 ms covered.
+
+**The clock cannot answer the question the cover exists for, and this box proves
+it.** The same covered arm on the same 410-day tree measured 2,657.8 ms inside
+the paired run and 3,099.3 ms standalone a few minutes later - 16.6 percent apart
+on identical work, which is more than ten days of archive could ever cost. So the
+oracle is taken on what the reads open, which is arithmetic over the tree and has
+no spread at all:
+
+| Tree on disk | Days it holds | Bytes it holds | Files the cover opens | Bytes the cover opens |
+| --- | --- | --- | --- | --- |
+| before | 420 | 224,223,165 | 195 | 53,328,670 |
+| ten days later | 430 | 227,199,355 | 195 | 53,328,670 |
+
+Ten more published days, 2,976,190 more bytes on disk, and **the same 195 files
+and the same 53,328,670 bytes read - equal to the byte**. Every count the reads
+return is identical too: 90 dates, 20,550 score rows, 26,135 item-health rows, 90
+manifests, 90 day payloads, 5 telemetry months. That is what Rule #12 asks for,
+and it is why the answer is a count of files rather than a stopwatch.
 
 ## Two rows did not land what was asked, and the page is more useful for saying so
 
