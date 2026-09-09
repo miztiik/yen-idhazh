@@ -30,6 +30,36 @@ import {
 const REPO = resolve(process.cwd(), '..');
 const CANARY = join(REPO, 'backend', 'var', 'canary');
 
+/** Open the console and wait until it holds the rows this section draws from.
+ *
+ * Every panel here is built from telemetry rows, and since 2026-09-09 the page
+ * holds none of them at first paint - it fetches its months on mount (owner
+ * decision D3, `docs/architecture/publishing/console-payloads.md`). Reading the
+ * section the moment the document arrived read the empty state and called it the
+ * answer, so every count came back zero and the assertions that guard against a
+ * fixture reaching no state at all fired instead.
+ *
+ * The page says where it is: `data-telemetry-rows` is how many it holds and
+ * `data-telemetry-fetching` is whether more are in the air. Waiting on the count
+ * rather than on a timeout means this cannot pass by being slow enough.
+ */
+async function open(page: Page): Promise<void> {
+	await page.goto('/console/');
+	// The count, not the flag. `data-telemetry-fetching` reads `no` before the
+	// first fetch starts as well as after the last one lands, so waiting on it
+	// alone would go straight through on an empty page.
+	await page.waitForFunction(
+		() =>
+			Number(
+				document
+					.querySelector('[data-surface="operator"]')
+					?.getAttribute('data-telemetry-rows') ?? 0
+			) > 0,
+		undefined,
+		{ timeout: 20_000 }
+	);
+}
+
 /** The ladder the prompt is built from - the same file the page reads. */
 const BANDS = (
 	JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')) as {
@@ -164,7 +194,7 @@ async function drawn(page: Page): Promise<Record<string, Split>> {
 test('THE ORACLE: the three-way split adds up to the day, every day in the window', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	const want = await expected(page);
 	const got = await drawn(page);
@@ -188,7 +218,7 @@ test('THE ORACLE: the three-way split adds up to the day, every day in the windo
 test('the fixture reaches all three states, so none of them can pass by never firing', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	const totals = Object.values(await drawn(page)).reduce(
 		(sum, day) => ({
@@ -216,7 +246,7 @@ test('the fixture reaches all three states, so none of them can pass by never fi
 });
 
 test('the scatter is gone, and nothing draws a point an article', async ({ page }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	await expect(page.locator('[data-compression]')).toHaveCount(0);
 	await expect(page.locator('[data-band-distance]')).toHaveCount(1);
@@ -231,7 +261,7 @@ test('the scatter is gone, and nothing draws a point an article', async ({ page 
 test('the bounds are printed as numbers, and they are the ones the prompt asks for', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	const table = page.locator('[data-band-bounds]');
 	await expect(table.locator('tbody tr')).toHaveCount(BANDS.length);
@@ -251,7 +281,7 @@ test('the bounds are printed as numbers, and they are the ones the prompt asks f
 });
 
 test('the outlier list ranks by distance, prints its divisor, and caps itself', async ({ page }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	const list = page.locator('[data-band-outliers]');
 	const rows = list.locator('[data-ranked-row]');
@@ -292,7 +322,7 @@ test('the outlier list ranks by distance, prints its divisor, and caps itself', 
 });
 
 test('the tail says how many rows are hidden, and never sums the distances', async ({ page }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	// Recomputed from the fixture, so a canary that grows a row moves this with
 	// it rather than going stale on a number typed here.
@@ -318,7 +348,7 @@ test('the tail says how many rows are hidden, and never sums the distances', asy
 });
 
 test('a window with nothing in it says so, rather than drawing an empty chart', async ({ page }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	const chart = page.locator('[data-band-distance]');
 	await expect(chart.locator('[data-band-part]')).not.toHaveCount(0);
@@ -337,7 +367,7 @@ test('a window with nothing in it says so, rather than drawing an empty chart', 
 });
 
 test('the section declares its own window and follows the control', async ({ page }) => {
-	await page.goto('/console/');
+	await open(page);
 	await expect(page.locator('[data-window-preset] input').first()).toBeEnabled();
 
 	for (const days of [7, 90]) {
@@ -352,7 +382,7 @@ test('the section declares its own window and follows the control', async ({ pag
 test('the chart draws in CSS pixels at every width, and labels its own axis', async ({ page }) => {
 	for (const width of [380, 768, 1400]) {
 		await page.setViewportSize({ width, height: 900 });
-		await page.goto('/console/');
+		await open(page);
 
 		// A viewBox is a scale factor, not a unit. One that disagrees with the
 		// rendered width puts `font-size="10"` on screen at some other size.
@@ -378,7 +408,7 @@ test('the chart draws in CSS pixels at every width, and labels its own axis', as
 });
 
 test('nothing on the section names a ledger column or prints a score', async ({ page }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	const text = await page.locator('[data-windowed="band-distance"]').innerText();
 	for (const name of [
@@ -398,7 +428,7 @@ test('nothing on the section names a ledger column or prints a score', async ({ 
 });
 
 test('a day axis carries dates, capped by the tick density the config sets', async ({ page }) => {
-	await page.goto('/console/');
+	await open(page);
 
 	const density = (
 		JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {

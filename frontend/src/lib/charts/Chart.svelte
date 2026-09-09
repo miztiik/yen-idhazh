@@ -47,9 +47,13 @@
 		readoutMaxShare = 0.33,
 		restingNote = ', the newest column',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
-		grid = { left: 48, right: 12 }
+		grid = { left: 48, right: 12 },
+		pending = 'This chart is drawn from rows the page fetches, so it appears once they arrive.',
+		fetched = false
 	}: {
-		/** Prerendered by `$lib/server/chart-render`. */
+		/** Prerendered by `$lib/server/chart-render`, or empty where the chart is
+		 * drawn from rows only a browser has. An empty one shows `pending` until
+		 * the engine draws over it. */
 		svg: string;
 		option: EChartsOption;
 		width: number;
@@ -71,11 +75,24 @@
 		/** The engine's own plot insets, in pixels. They decide where a column
 		 * centre falls, and they are not the same for every option this wraps. */
 		grid?: PlotGrid;
+		/** What stands in the plot's place while nothing has been drawn there.
+		 * A box that is simply empty says nothing about which of the two
+		 * nothings happened - no rows yet, or no engine ever. */
+		pending?: string;
+		/** True where the rows behind this chart arrive by fetch rather than in
+		 * the document. It changes what the chart owes a reader with no script:
+		 * a chart over inlined data owes its resting column in the prerendered
+		 * markup, and one over fetched rows cannot have it there and says so. */
+		fetched?: boolean;
 	} = $props();
 
 	// Bound in one of two branches, so it is state rather than a plain binding.
 	let host = $state<HTMLDivElement | null>(null);
 	let live: LiveChart | null = null;
+	/** True once something has been drawn in the host - either the server's SVG
+	 * or the engine's. It is what decides whether `pending` is on the page. */
+	// svelte-ignore state_referenced_locally
+	let drawn = $state(svg !== '');
 	/** The option the live chart is holding, so an unchanged one is not handed
 	 * over again the first time the effect runs. */
 	let handed: EChartsOption | null = null;
@@ -135,6 +152,7 @@
 			if (engine === null || cancelled) return;
 			handed = option;
 			live = engine.hydrate(node, option, { width: measured, height });
+			drawn = true;
 		})();
 
 		return () => {
@@ -162,6 +180,8 @@
 	aria-label={label}
 	data-readout-columns={columns.length > 0 ? columns.length : undefined}
 	data-readout-none={columns.length > 0 || noReadout === '' ? undefined : noReadout}
+	data-readout-fetched={fetched ? 'yes' : undefined}
+	data-chart-drawn={drawn ? 'yes' : 'no'}
 >
 	{#if columns.length > 0}
 		<!-- The action goes on the wrapper, never on the SVG: the engine swaps that
@@ -180,6 +200,14 @@
 			<div bind:this={host} class="chart-host" style="height: {height}px">
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 				{@html svg}
+				{#if !drawn}
+					<p
+						class="chart-pending text-[0.8125rem] text-text-tertiary"
+						data-chart-pending={readoutName || undefined}
+					>
+						{pending}
+					</p>
+				{/if}
 			</div>
 			{#if guide !== null}
 				<span
@@ -202,6 +230,9 @@
 		<div bind:this={host} class="chart-host" style="height: {height}px">
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			{@html svg}
+			{#if !drawn}
+				<p class="chart-pending text-[0.8125rem] text-text-tertiary">{pending}</p>
+			{/if}
 		</div>
 	{/if}
 </figure>
@@ -235,6 +266,21 @@
 
 	.chart-host {
 		width: 100%;
+	}
+
+	/* What stands where the plot will be until something draws there. Centred in
+	   the reserved height so the panel does not change size when the engine
+	   arrives, and quiet enough that a chart which draws immediately never reads
+	   as having flashed a warning. Its colour and size are classes rather than
+	   custom properties, so it takes the same two the readout strip takes. */
+	.chart-pending {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		margin: 0;
+		padding: 0 1rem;
+		text-align: center;
 	}
 
 	/* The prerendered SVG is authored at a fixed width and then asked to fill

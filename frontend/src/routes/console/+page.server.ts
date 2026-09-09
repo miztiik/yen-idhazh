@@ -1,12 +1,9 @@
-import type { StageTiming, StageTimingDay, TelemetryRow } from '$lib/charts/series';
-import { datesIn, failureSeries } from '$lib/charts/series';
+import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 import { windowOfDays } from '$lib/charts/viewport';
-import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
+import { chartFlow } from '$lib/charts/chart-flow';
 import { targetMarks, type TargetMarks } from '$lib/charts/targetbar';
-import { failureMix, runHealth, siteCost } from '$lib/charts/glance';
 import { itemCost, type ItemCost } from '$lib/console/item-cost';
 import { extraction, type Extraction } from '$lib/console/extraction';
-import { renderToSvg } from '$lib/server/chart-render';
 import { pipelineChanges, sourceCuts, wasCut, SOURCE_CUT_ROWS } from '$lib/server/model-work';
 import {
 	chronological,
@@ -32,7 +29,6 @@ import {
 	publishedItems,
 	shardMonths,
 	sourceHealthView,
-	telemetryMonths,
 	telemetryRows,
 	TELEMETRY_ROOT,
 	type DayVisuals,
@@ -390,58 +386,6 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
 	return grouped;
 }
 
-/** One published row as the browser reads it.
- *
- * **The eight stage timings and token counts are deliberately not seeded.** They
- * are in the published shard and in `TelemetryRow`, so the browser can read them
- * the moment a surface asks; this list is inlined into the prerendered document,
- * and the one section that draws them is reduced on the server instead.
- *
- * Measured 2026-09-05 on Intel Core i7-1265U / Windows 11 / node 24, one build
- * per arm, `npm run bundle-gate` on the real digest. `/console/` weighs
- * 198,624 gzipped bytes without them. Seeded with their real values it weighs
- * 375,377 - 176,753 more, an 89 percent page for numbers nothing renders, and
- * 98,182 over the 277,195 ceiling of that day. Seeded as the nulls below it
- * weighs 214,985, which is 16,361 more and 62,210 under. The eight untouched
- * routes moved -2 to +5 bytes between the arms, so the 176,753 is the columns
- * and not the build. The ceiling was re-derived to 335,051 on 2026-09-06 and the
- * page read 222,819 that day; both arms above stay the dated record of what the
- * columns cost, which is the figure this comment is for.
- *
- * A ceiling is re-recorded by the change that grows it, and bytes the first
- * paint does not use are not bytes to record a ceiling around.
- *
- * A panel that draws them wants them for the seeded months too, and `+page.svelte`
- * marks those months loaded so nothing re-fetches them. `What one item cost the
- * model` takes neither of the two ways out of that: it reduces this projection on
- * the server, once per window preset, so the rows never have to carry the cells.
- * The price is that it follows the window's length and not a pan, and it says so
- * (`docs/architecture/publishing/telemetry-series.md`).
- */
-function publicTelemetry(row: Record<string, string>): TelemetryRow {
-	return {
-		date: row.date ?? '',
-		run_id: row.run_id ?? '',
-		item_id: row.item_id ?? '',
-		vertical: row.vertical ?? '',
-		source_id: row.source_id ?? '',
-		stage: row.stage ?? '',
-		outcome: row.outcome ?? '',
-		code: row.code ?? '',
-		source_words: measured(row, 'source_words'),
-		summary_words: measured(row, 'summary_words'),
-		source_words_before_cap: measured(row, 'source_words_before_cap'),
-		fetch_ms: null,
-		extract_ms: null,
-		summarize_ms: null,
-		prefill_ms: null,
-		decode_ms: null,
-		input_tokens: null,
-		output_tokens: null,
-		cached_tokens: null
-	};
-}
-
 /** One square's colour, from what the run wrote down about itself.
  *
  * Skipped items are not failures. An article already published, or one a feed
@@ -616,46 +560,27 @@ export async function load() {
 	// prerendered document, so the rows the cap drops cost the page nothing.
 	const feeds = troubled.slice(0, console.feed_rows);
 	const hidden = troubled.slice(feeds.length);
-	// Seeded to the window the viewport opens on, not to every committed month:
-	// this list is inlined into the prerendered HTML, so an unbounded seed makes
-	// the page grow for as long as the pipeline runs. The compression plot is
-	// drawn from these same rows in the browser, so it costs the page nothing and
-	// grows by month fetch exactly as the failure panels do.
-	const publicRows = telemetryRows(TELEMETRY_ROOT, console.default_window_days).rows.map(
-		publicTelemetry
-	);
 	const charts = chartDays(manifests, publishedCharts(undefined, widest));
 	const flow = chartFlow(charts);
-	// The window the page opens on, drawn here so the prerendered card and the
-	// control above it cannot disagree at first paint. The browser recomputes the
-	// same card from the same rows when the operator moves the control.
 	const today = new Date().toISOString().slice(0, 10);
 	// The cost section is reduced here, once per span the control offers, and it
 	// is the reason those eight columns were published at all.
 	//
-	// It reads the projection with its cells intact rather than the seeded array
-	// above, which carries the eight as nulls on purpose - seeded with their real
-	// values they cost this page 176,753 gzipped bytes for numbers a distribution
-	// throws away anyway. What crosses instead is two binnings and about twenty
-	// counts per preset, which is the same trade the Summaries route's own
-	// distributions take.
+	// This reads the ledger and only the reduction of it crosses. Two binnings
+	// and about twenty counts per preset, against the 3,334 KB the rows
+	// themselves used to cost this document (measured 2026-09-09) - which is the
+	// same trade the Summaries route's own distributions take.
 	//
 	// The price is that the section follows the window's LENGTH and not a pan,
 	// exactly as `Sources cut short most often` below it does. A pan asks a
-	// question about days the reduction was not taken over, and re-taking it in
-	// the browser needs the rows the seed deliberately does not carry.
+	// question about days the reduction was not taken over, and the browser has
+	// only the months it has fetched to re-take it from.
 	const costRows = telemetryRows(TELEMETRY_ROOT, widest).rows;
 	const costDates = [...new Set(costRows.map((row) => row.date ?? '').filter(Boolean))].sort();
 	const itemCostByWindow: ItemCost[] = console.window_presets.map((days) => {
 		const span = windowOfDays(costDates, today, days, console.today_anchor);
 		return itemCost(costRows, { ...span, days });
 	});
-	const seed = windowOfDays(
-		datesIn(publicRows),
-		today,
-		console.default_window_days,
-		console.today_anchor
-	);
 	// One day record per date the window holds, read once at the widest preset and
 	// sliced per preset from that map. `charts` already names every published day,
 	// so this adds no listing of the tree - only `widest` file opens, whatever the
@@ -673,29 +598,6 @@ export async function load() {
 			days
 		);
 	});
-	// Six questions, six shapes. Each is drawn here so the console is complete
-	// before any script runs; the client rebuilds the same option to hydrate.
-	const runsDonut = runHealth(manifests);
-	const articles = publishedItems(undefined, widest);
-	const perArticle = siteCost(manifests, articles, seed);
-	const mixDates = datesIn(publicRows);
-	const mix =
-		mixDates.length === 0
-			? failureMix([])
-			: failureMix(
-					failureSeries(publicRows, {
-						start: mixDates[0],
-						end: mixDates[mixDates.length - 1]
-					})
-				);
-	// The published skyline is not drawn here. It is markup over `charts`, which
-	// already crosses, so the page renders it at prerender time and redraws it
-	// from the same array when the window moves - one drawing, not two.
-	const draw = async (
-		chart: { option: import('echarts').EChartsOption; empty: boolean },
-		width: number,
-		height: number
-	) => (chart.empty ? null : await renderToSvg(chart.option, { width, height }));
 	return {
 		timingDays,
 		manifests,
@@ -706,29 +608,13 @@ export async function load() {
 		// The denominator of the console's per-article cost, and the numerator's own
 		// corpus - a count taken from anywhere else divides one tree's bytes by
 		// another tree's articles.
-		publishedItems: Object.fromEntries(articles),
+		publishedItems: Object.fromEntries(publishedItems(undefined, widest)),
 		charts,
-		glance: {
-			healthSvg: await draw(runsDonut, 260, 200),
-			healthShare: runsDonut.empty ? null : runsDonut.share,
-			healthTotal: runsDonut.total,
-			perArticleSvg: await draw(perArticle, 760, 220),
-			mixSvg: await draw(mix, 760, 220)
-			// No size chart and no published strip beside them: both follow the
-			// window, and the page rebuilds each from an array it already carries
-			// rather than from a second drawing on the server.
-		},
-		// Drawn here, so the shape is on the page before any script runs and stays
-		// there if none ever does. Colour leaves as a custom-property reference, so
-		// both themes work with no JavaScript at all.
-		flowSvg: flow.empty
-			? null
-			: await renderToSvg(flow.option, {
-					width: consoleConfig().chart_width,
-					height: FLOW_HEIGHT
-				}),
-		// Printed where the diagram would have been. A panel that is simply absent
-		// says nothing about which of the two nothings happened.
+		// The three glance charts and the flow diagram are drawn in the browser,
+		// from arrays that already cross. The server drew them here until
+		// 2026-09-09, which put 143 KB of finished SVG in a document that had to
+		// come in under 400 KB, and a drawing the operator cannot re-take is a
+		// drawing the window control cannot move.
 		flowNote: flow.reason,
 		grid,
 		// Every day the pipeline that writes the summaries changed, derived once here
@@ -781,14 +667,11 @@ export async function load() {
 		// so the cost is the widest preset - 90 files - however many days the archive
 		// holds behind it (`CLAUDE.md` Rule #12).
 		extractionByWindow,
-		telemetryRows: publicRows,
-		// Every month a browser may ask for, and `-1` says so out loud
-		// (`docs/concepts/growing-reads.md`). A cover here would cap how far the
-		// operator can pan, which is a different thing from how far a panel can
-		// draw - so it is the one console read that stays uncovered. It opens no
-		// file: it is one directory listing, and what crosses is a seven-character
-		// month name, so the page grows by seven bytes a month and by nothing a day.
-		telemetryMonths: telemetryMonths(undefined, -1),
+		// **No telemetry rows.** The page fetches its months, and the list of which
+		// months exist rides on the band the layout already fetched. Inlined they
+		// were 3,414,043 of this document's 3,880,361 bytes - 88 percent of what an
+		// operator downloaded to open the console, for panels most visits never
+		// scroll to (measured 2026-09-09, Intel Core i7-1265U, one build).
 		console,
 		// How many separate figures of one unit make an article chartable. The
 		// extraction panel prints it, and the pass it reports on reads the same knob.
