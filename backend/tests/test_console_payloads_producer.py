@@ -48,6 +48,12 @@ from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 
+#: These are the published shapes and the committed digest tree, which is what
+#: the `contract` selector is for. Its three sibling producer modules are in
+#: `test_marks.UNMARKED_MODULES` and stay there - moving them is a change to
+#: what those selectors mean and belongs in its own commit.
+pytestmark = pytest.mark.contract
+
 #: Twenty months of everything, which is more than any retention knob keeps and
 #: enough that a producer reading them all is obvious in a handle count.
 MONTHS: Final[tuple[str, ...]] = tuple(
