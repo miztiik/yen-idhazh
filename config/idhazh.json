@@ -120,7 +120,7 @@
     "reject_boilerplate": false,
     "reject_not_prose": false,
     "request_timeout_seconds": 20.0,
-    "truncation_cap_tokens": 5000,
+    "truncation_cap_tokens": 10000,
     "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
   },
   "finetune": {

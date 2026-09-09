@@ -137,11 +137,14 @@ win: a stray window holding one supporting sentence and nothing to contradict it
 scores high on almost anything. The last window is now anchored to the end of the
 article, so it holds the same 900 words every other window does.
 
-Anchoring buys correctness now and time later. At today's cap of 1,923 words
-(`extract.truncation_cap_tokens` of 2500) an article takes 3 windows either way.
-At 3,846 words it takes 6 windows unanchored and 5 anchored, which is 16.7
-percent less scorer work on a full-length item - a saving that arrives when the
-cap does.
+Anchoring buys correctness now and time later. At the cap of 2500 committed when
+this was written, the cut point was 1,923 words and an article took 3 windows
+either way. At 3,846 words it takes 6 windows unanchored and 5 anchored, which is
+16.7 percent less scorer work on a full-length item - a saving that arrives when
+the cap does. The cap reached 3,846 words on 2026-08-29 and 7,692 words on
+2026-09-09, so the saving has arrived and it grows with every move: `hhem` reads
+the post-cap text, so its window count doubles with the cap, while `hhem_full`
+reads the body before the cut and is unchanged by any of this.
 
 **Anchoring does not restore `hhem_full >= hhem`.** The two window sets are still
 not nested: a cut article's last window is not a window of the whole article, so

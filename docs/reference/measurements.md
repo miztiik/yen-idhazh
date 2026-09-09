@@ -16,6 +16,98 @@ Two rules govern this page:
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
 
+## How often the truncation cap actually bites, 2026-09-09
+
+**Input:** `state/item-health/2026-09.csv`, one month shard, 4,556 rows covering
+2026-09-01 to 2026-09-09. The 4,117 of them at the `publish` stage carry the
+whole per-item record. One file, named here, because a walk over every shard
+costs more every month for an answer one month already gives (Rule #12).
+**Hardware:** the stock GitHub-hosted `ubuntu-latest` runners those rows were
+written on - 4 vCPU, no GPU. Nothing here was taken on a laptop.
+
+**The cap cut 36 of 4,117 published items, which is 0.87 percent.** At a cap of
+5,000 tokens the cut point is `int(5000 / 1.3)` = 3,846 words, and those 36 rows
+sit exactly on it. Nine of them - 0.22 percent - ran past 7,692 words and would
+still be cut at a cap of 10,000. The cut articles ran 3,864 to 11,399 words
+before the cut, median 5,089.
+
+**So the new headroom is reached about four times a day and is fully spent about
+once.** The shard covers 9 days at about 457 published items a day.
+
+| | at cap 5,000 | at cap 10,000 |
+| --- | --- | --- |
+| Items cut | 36 of 4,117 (0.87 percent) | 9 of 4,117 (0.22 percent) |
+| Extra prefill tokens a cut item | - | 23 to 5,000, median 1,616 |
+| Extra prefill tokens over the 9 days | - | 78,489 |
+
+**The often-quoted "largest prompt ever seen is 5,516 tokens" is withdrawn.** It
+was measured under the 5,000-token cap, so it says what the cap allowed rather
+than how long an article runs, and it is stale as well: the largest
+`input_tokens` on this shard is **7,093**. Neither figure is evidence about
+article length. `source_words_before_cap` is, because it counts the body before
+the cut, and that is what the rows above use.
+
+### What a prompt costs, and what the cap raise adds to it
+
+**The prompt is 997 tokens plus 1.306 a word.** Least squares over the same
+4,117 rows, `input_tokens` against `source_words`. The constant reads off the
+data twice: the shortest items on the shard are 3 words each and measured 980 to
+985 tokens. So 997 tokens is the system prompt, the fence and the instructions -
+everything before a word of the article arrives.
+
+**1.306 tokens a word is the median, and the spread is what the window has to
+cover.** Over the 36 rows the cap cut, where the word count is fixed at 3,846,
+the article itself measured 4,327 to 5,838 tokens - **1.125 to 1.518 tokens a
+word**, and 1.585 once the whole prompt is read against the article's words.
+`extract.truncate_to_tokens` spends the cap as `int(cap / 1.3)` words, so an
+article that tokenizes harder than 1.3 overruns the budget its own cap gave it.
+The worst one overran by 16.8 percent.
+
+**Worst case at the committed cap of 10,000, against the committed window of
+16,384:**
+
+| | tokens | share of 16,384 |
+| --- | --- | --- |
+| Typical article (1.306 a word) | 997 + 10,046 + 900 = **11,943** | 73 percent |
+| Worst article this shard produced (1.585 a word) | 997 + 12,192 + 900 = **14,089** | 86 percent |
+
+The margin falls from 1.9x to **1.16x**. At the 8,192 window committed the day
+before, 14,089 tokens is 172 percent of the window: this cap raise was not
+possible until that window raise landed, and the two are one decision.
+`test_the_longest_article_the_cap_allows_still_fits_the_window` in
+[../../backend/tests/test_contracts.py](../../backend/tests/test_contracts.py)
+reads both sides from `config/` and fails on any later pair that does not fit.
+
+**A two-call design has almost nothing left.** The pseudo-plan's second call
+adds about 1,200 tokens of first answer, about 300 of second instruction and
+about 1,200 of second answer. On the typical article that is 13,580 tokens, 83
+percent, a margin of 1.21x. On the worst article this shard produced it is
+**15,889 tokens, 97 percent of the window, a margin of 1.03x**. Write that down:
+the next cap raise needs a window raise beside it, and a second call at this cap
+needs one too.
+
+### What the wall clock pays
+
+**Prefill runs at a median 9.85 tokens a second** over the 4,117 timed rows, the
+slowest row at 8.25 and the fastest at 44.71. That is the same figure the
+2026-08-23 sweep took on the configured model at 4,850 tokens - 9.84 - re-derived
+from nine days of real items, which is the strongest corroboration on this page.
+
+**So 5,000 more prefill tokens is 8.5 minutes, and 10.1 at the slowest rate.**
+That is the whole cost of the raise, and it lands on the item that was cut.
+
+**Against what a summarize call costs today:** median **114.6 s**, 95th
+percentile **312.7 s**, longest **800.9 s**, over the same 4,117 rows. So the
+worst item roughly doubles: 800.9 s becomes about 1,311 s. `run.shard_size` is 5
+and `run.shard_timeout_minutes` is 200, so a shard of five worst-case items goes
+from about 67 minutes to about 109 - still inside the timeout, and a shard where
+all five items are cut is unlikely at a cut rate of 0.87 percent.
+
+**What is not measured:** what the extra text does to summary quality. That is
+the reason for the change and it needs the eval ledger over runs written at the
+new fingerprint, which cannot exist until the change has run. It is a row 4
+question, not a row 7 one.
+
 ## What the 1.6 GiB of python beside the model actually is, 2026-09-09
 
 **Three python processes, and only one of them is ours.** A work shard records
