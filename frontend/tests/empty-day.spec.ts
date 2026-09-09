@@ -61,16 +61,21 @@ test('the home page names the payload date, not the build clock', async ({ page 
 	await expect(page.locator('main').getByText(longDate(date)).first()).toBeVisible();
 });
 
-test('the root empty state cannot point at an absent notice or hide the latest link', () => {
+test('the root empty state offers a way out that no later run can move', () => {
 	const page = readFileSync(resolve(ROOT, 'frontend', 'src', 'routes', '+page.svelte'), 'utf8');
 	const copy = readFileSync(
 		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'EmptyDay.svelte'),
 		'utf8'
 	);
 
-	expect(page).toContain('latest={data.latest}');
+	// It used to name the newest day and link straight to it. That name is read
+	// off the newest day on disk and the root layout handed it to every page,
+	// so publishing rewrote the bytes of every older page carrying this panel.
+	// `/archive/` is the same way out and it says the same thing every day.
+	expect(page).not.toContain('data.latest');
 	expect(copy).not.toContain('run notice above');
-	expect(copy).toContain('Latest day -');
+	expect(copy).not.toContain('Latest day -');
+	expect(copy).toContain('All days');
 });
 
 test('the root load does not read the build clock', () => {

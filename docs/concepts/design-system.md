@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-09
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -1366,6 +1366,58 @@ The measurements that settled it, taken in the integrated browser on 2026-08-28:
 **The token list on this page specified a shadow scale and a space scale that were never built.** That is not a doctrine change and it is worth naming separately: the doctrine was right and the implementation stopped short, which is the quieter half of the same failure.
 
 **Sufficiency became a gate because the review roster was six vetoes and no demand.** Jony removes, Fowler deletes, Carmack refuses on budget, Reader and Editor report. Nothing asked whether the result was good enough to be worth a stranger's attention, and a system of pure vetoes converges on the minimum that passes every veto. The rejected alternative was giving Jony the demand mandate as well; one head holding both "remove before adding" and "this is not enough" resolves to the veto every time, which is the observed outcome. Susan was added at a distinct altitude instead, and a veto now has to name what the reader loses. Authority: owner and Fowler, 2026-08-29.
+
+### The footer ships as one row of links, and it fails two sufficiency checks
+
+**On 2026-09-09 the footer lost three of its four blocks and gained nothing.**
+What is left is the three links: Archive, Console, Source code. This entry
+exists because that surface fails the gate above, and `CLAUDE.md` section 9 says
+a surface that fails ships only with the reason written down.
+
+Two of the four checks fail. **Nothing lands first** - three links of one weight
+in one row have no order to be read in. And **it does not look like it was made
+this year**: a bare link strip under a hairline is the plainest footer a page
+can have, and it is the exact "thin, cold, unloved" shape Susan exists to catch
+([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)).
+The other two pass and are unchanged by the row: the footer uses the width of
+the frame it sits in, and the top rule plus `--color-text-tertiary` still hold
+it away from the reading surface.
+
+**What the reader loses, named rather than implied.** The build line said which
+commit produced the page, so a reader who thought something looked wrong could
+open that commit; there is now no way to tell one build from another from the
+page. The verification sentence - "Every summary is checked against the article
+it came from" - was the only place that told a stranger why an item is allowed
+to say it is unsure, and Reader
+([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md))
+argued to keep it beside the day. The retention promise is now stated on
+`/archive/` alone, so a reader on a dated page is told nothing about what may
+later be deleted. On an empty dated page the panel also loses its "Latest day"
+link and offers only "All days"
+([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
+
+**Why it ships anyway, and why the fix is not a smaller version of the same
+thing.** Every one of those sentences is read off the newest day or off the
+build, and the footer is on every page - so each rewrote the bytes of every
+document on the site whenever anything published. Measured 2026-09-09 on an
+Intel Core i7-1265U, Windows 11, node 24.12.0, over the 19 committed days:
+publishing one more day changed the SHA-256 of the 21 August document while
+leaving its size at 32,014 bytes exactly, so the page said the same thing and
+arrived as different bytes. A page a reader already holds should not go stale
+for a reason that is nothing to do with what it says.
+
+**The alternatives were considered and refused by the owner, and they are not
+reopened here.** A manifest the page fetches to print a commit: refused, because
+the commit is not worth a file, a schema, a request and a cleanup story. Keeping
+the verification sentence beside the day: refused. Replacing the retention
+promise with a promise to delete: refused. Authority: owner, 2026-09-08.
+
+**What would fix the two failed checks costs nothing this row cares about,** and
+it is written here so the next person does not have to rediscover it: the footer
+needs one block that does not come from a day or a build. A sentence about what
+the site is, set above the links at the heading step, would give the eye
+somewhere to land and give the strip a reason to be a footer rather than a
+leftover. It is a fixed string, so it moves no bytes on any later run.
 
 Driving the look from fields the payload already carries - visual kind, band, truncation - rather than from per-item styling decisions is what keeps the surface one component instead of many, and it means a new visual kind or band arrives with a slot already waiting for it. The rejected alternative, bespoke treatment per item type, produces a page that must be edited every time the pipeline learns something new. Authority: Jony.
 

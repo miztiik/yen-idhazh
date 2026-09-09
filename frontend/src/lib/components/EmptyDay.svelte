@@ -8,14 +8,14 @@
 	 * So it is the card an item is: `--color-surface`, the item's hairline and
 	 * the item's radius. A quiet day and a busy day are then visibly the same
 	 * site. What it does not take is the item's hover lift - the panel is not a
-	 * target, and the two links inside it answer the pointer and the keyboard
-	 * themselves.
+	 * target, and the link inside it answers the pointer and the keyboard
+	 * itself.
 	 */
 	import { base } from '$app/paths';
 	import { longDate } from '$lib/format';
 	import Icon from '$lib/icons/Icon.svelte';
 
-	let { date, latest }: { date: string | null; latest: string | null } = $props();
+	let { date }: { date: string | null } = $props();
 </script>
 
 <section class="empty" data-empty-day>
@@ -29,11 +29,6 @@
 	{/if}
 	<p class="empty-note">That can mean there was no news, or the run did not finish.</p>
 	<nav class="empty-nav" aria-label="Other days">
-		{#if latest && latest !== date}
-			<a href="{base}/{latest}/" class="empty-link">
-				Latest day - {longDate(latest)}
-			</a>
-		{/if}
 		<a href="{base}/archive/" class="empty-link">All days</a>
 	</nav>
 </section>
@@ -86,9 +81,9 @@
 		margin-block-start: var(--space-2);
 	}
 
-	/* A thumb needs a target, and these two links are the only thing on the
-	   screen to press. The height is a step on the space scale, not a number
-	   chosen here. */
+	/* A thumb needs a target, and this link is the only thing on the screen to
+	   press. The height is a step on the space scale, not a number chosen
+	   here. */
 	.empty-link {
 		display: inline-flex;
 		align-items: center;
