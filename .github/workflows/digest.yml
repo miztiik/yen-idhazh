@@ -1186,7 +1186,11 @@ jobs:
       # race is answered by replaying this run's rows onto the new base - the
       # same branch of the script `state/seen` takes - and never by rebuilding
       # them.
+      #
+      # The `id` is here so the rebuild below can read this step's `rebased`
+      # output. Nothing else reads it.
       - name: Commit the day
+        id: commit_day
         env:
           COMMIT_MESSAGE: "digest: ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing changed"
@@ -1288,7 +1292,11 @@ jobs:
           --date "${{ needs.plan.outputs.date }}"
           --execution "${{ github.run_id }}" --dry-run
 
+      # The `id` is here for the same reason the day's commit carries one. This
+      # step stages `frontend/public/telemetry`, which the console pages read,
+      # so a rebase here moves the built site exactly as a rebase there does.
       - name: Commit the folded telemetry
+        id: commit_fold
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "state: retire the shards past their reading window"
@@ -1306,11 +1314,36 @@ jobs:
       # with the rebase, while the build it measured was 5 B off the record its
       # own source carried. The day was fine and had already published.
       #
+      # So this runs when a commit step above rewrote the checkout and not
+      # otherwise. Both of them are named: the day's commit stages the digest,
+      # the fold's stages `frontend/public/telemetry`, and the console pages read
+      # that - so either one rebasing leaves this build's input stale. An `if:`
+      # naming only the first would skip the rebuild on the second and put run
+      # 33270983446 back.
+      #
+      # An output nobody wrote is the empty string, so a commit step that was
+      # skipped or that died before it could answer reads as "no rebase" and
+      # this step does not run. That is the right answer: the tree was not
+      # pushed, so there is nothing to rebuild against, and a commit step that
+      # failed has already failed the job.
+      #
+      # What this saves today is nothing, and the reason is worth writing down.
+      # Measured 2026-09-09 over the 20 most recent successful runs
+      # (33901670861 through 34260129217): the day's push lost the race in 20 of
+      # 20, so the rebuild was needed every time. It costs a median 24 s, spread
+      # 17-27 s. The cause is this job racing its own run - the checkout above
+      # is main's tip at trigger time, and `plan` and every `work` shard have
+      # pushed to main since. Fix that and this `if:` starts paying: 24 s times
+      # five publishes a day, about two minutes of wall-clock a day.
+      #
       # `npm ci` is deliberately not repeated. frontend/package-lock.json moved
       # 8 times in 60 days against about 8 frontend source commits a day, so a
       # reinstall would delete node_modules on every run to cover the rarer of
       # the two. The build alone is 17 s and writes only gitignored output.
       - name: Rebuild the site against the tree that was pushed
+        if: >-
+          steps.commit_day.outputs.rebased == 'true'
+          || steps.commit_fold.outputs.rebased == 'true'
         working-directory: frontend
         run: npm run build
 

@@ -43,6 +43,10 @@
 #
 # The last four are word-split on spaces, so no path and no argument may carry
 # one. The first two are given together or not at all.
+#
+# Outputs, when the caller is a workflow step:
+#   rebased  true when the push lost a race and this script rewrote the
+#            checkout, false when what it pushed is what it was handed
 set -euo pipefail
 
 : "${COMMIT_MESSAGE:?commit-and-push.sh needs COMMIT_MESSAGE}"
@@ -149,11 +153,40 @@ spare_the_published_assets() {
   git ls-tree -r --name-only "$tip" -- "$@" | "${DROP_RACED[@]}" || return 1
 }
 
+# Whether the tree this script pushed is still the tree it was handed. A push
+# that lands first try leaves the checkout every earlier step read; a push that
+# rebases replaces it with origin's, and a later step that measured the old one
+# is measuring a tree nobody has.
+#
+# So the answer is written where a workflow can read it, and the step that
+# rebuilds the site keys its `if:` off it. Both values are written explicitly:
+# an output nobody wrote is the empty string, which is falsy and would look
+# exactly like this script dying before it got here.
+#
+# `GITHUB_OUTPUT` is absent when a test drives this script in a temporary clone,
+# and `set -u` would end the run on the expansion. The guard is what lets the
+# same bytes run in both places.
+#
+# Actions gives every step its own output file, so the three other steps that
+# call this script write into their own and reach nothing. Only a step with an
+# `id` is addressable at all, and only the two in `assemble` have one.
+#
+# Every call is guarded, like every other command here. A runner whose output
+# file will not take a line is broken, and by then the push has either happened
+# or is past saving; the rebuild is skipped, which costs a red gate rather than
+# the day (section 1a: degrade, do not fail).
+REBASED=false
+report_rebased() {
+  [ -n "${GITHUB_OUTPUT:-}" ] || return 0
+  echo "rebased=$REBASED" >> "$GITHUB_OUTPUT"
+}
+
 git config user.name "yen-idhazh pipeline"
 git config user.email "pipeline@yen-idhazh.invalid"
 git add "$@"
 if git diff --cached --quiet; then
   echo "$NOTHING_STAGED_MESSAGE"
+  report_rebased || echo "could not say whether the push rebased" >&2
   exit 0
 fi
 git commit -m "$COMMIT_MESSAGE"
@@ -163,9 +196,14 @@ git commit -m "$COMMIT_MESSAGE"
 # times spent one attempt and left the checkout mid-rebase.
 for attempt in 1 2 3; do
   if git push; then
+    report_rebased || echo "could not say whether the push rebased" >&2
     exit 0
   fi
   echo "push rejected, rebasing (attempt $attempt)"
+  # Set before the rebase rather than after it. Every path out of here has
+  # either rewritten the checkout or is about to, and a later step that skipped
+  # its rebuild on a maybe is the failure this output exists to stop.
+  REBASED=true
   if ! discard_noise; then
     echo "could not clear the working tree before the rebase" >&2
     break
@@ -237,6 +275,7 @@ for attempt in 1 2 3; do
   if git diff --cached --quiet; then
     # origin already carries everything this run made.
     echo "$NOTHING_STAGED_MESSAGE"
+    report_rebased || echo "could not say whether the push rebased" >&2
     exit 0
   fi
   if ! git commit -m "$COMMIT_MESSAGE"; then
@@ -244,5 +283,6 @@ for attempt in 1 2 3; do
     break
   fi
 done
+report_rebased || echo "could not say whether the push rebased" >&2
 echo "$PUSH_FAILED_MESSAGE" >&2
 exit 1

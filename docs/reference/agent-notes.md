@@ -2014,6 +2014,17 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   with the editor's file tool and run the file. Where a literal control character
   is genuinely wanted, `[char]13` and `[Environment]::NewLine` have no escape
   grammar to survive the trip.
+- **A git revision that carries `@{` is eaten before git sees it, and the error
+  names a revision you never typed.** `git diff --name-only HEAD@{1} HEAD` comes
+  back `fatal: ambiguous argument 'HEAD@': unknown revision or path not in the
+  working tree`, which reads as a repository with no reflog rather than as a
+  shell fault - and the giveaway is that the quoted revision is `HEAD@`, one
+  character short of what was typed. PowerShell reads `@{` as the opening of a
+  hashtable literal and splits the token there. Observed 2026-09-09 checking
+  what a `git merge` had just brought in. Single-quote the whole revision
+  (`'HEAD@{1}'`), or sidestep it: the two SHAs are in `git log --oneline -3` and
+  naming them takes one more line and cannot be misparsed. The same bite waits
+  for `'main@{yesterday}'` and `'@{u}'`.
 - **A log that stops growing is NOT a stalled process.** `*>> $log` from a
   detached script buffers, so the file sits at the same size for minutes while
   the child works. On 2026-08-30 a healthy `pytest` run was killed twice for
@@ -3020,6 +3031,28 @@ Two traps in the harness rather than the bundle. `process.env.S06_MOD` has to be
 a `file://` URI or Node reads a Windows drive letter as a protocol. And a
 throwaway spec under `frontend/tests/` would have been picked up by the shared
 selector on the next run, which is the reason to bundle instead.
+
+## A pytest harness inherits CI's `$GITHUB_OUTPUT`, and the guard test goes hollow
+
+`backend/tests/test_workflows.py` runs `.github/scripts/commit-and-push.sh` in a
+temporary clone, and it builds the subprocess environment from `os.environ`. In
+CI that environment belongs to the `gates` step, so it carries a real
+`GITHUB_OUTPUT` pointing at that step's own output file. Any line the script
+under test writes goes into the outputs of the step running the test.
+
+It costs nothing today, because nothing reads the `gates` step's outputs - and
+that is what makes it worth writing down, because the same shape is a bug the
+day somebody gives that step an `id`. The sharper cost is the test: a case
+asserting the script survives with the variable unset passes locally, where no
+shell has one, and asserts nothing at all on the runner, which is the only
+machine that ever does.
+
+The fix is one line in the harness's environment builder - drop `GITHUB_OUTPUT`
+from the inherited copy, and let a test that wants one hand over a file of its
+own. Landed 2026-09-09 with row 3 of the shell-and-fetch plan. The rule
+generalises: a harness that inherits `os.environ` to run a workflow script
+inherits every `GITHUB_*` variable the runner set, and each one is a fact the
+script can read that the developer machine never had.
 
 ## See also
 
