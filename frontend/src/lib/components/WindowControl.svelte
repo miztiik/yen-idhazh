@@ -43,7 +43,11 @@
 
 	const status = $derived.by(() => {
 		if (!ready) {
-			return `This control needs JavaScript. Every windowed section below is showing ${days} days.`;
+			// It used to say the sections below were "showing N days", which stopped
+			// being true on 2026-09-09: the page holds no telemetry row until a
+			// browser fetches one, so with no script the windowed sections below
+			// hold their reserved shape and nothing else.
+			return `This control needs JavaScript, and so do the sections below - they draw rows a browser fetches. Their shape is ${days} days.`;
 		}
 		if (busy) return `Fetching ${files(pending)}.`;
 		const shown = `Every windowed section below is showing ${days} days.`;
@@ -78,13 +82,20 @@
 						onchange={() => onChange(preset)}
 					/>
 					<span class="segment-days">{preset} days</span>
-					{#if monthsFor(preset) > 0}
-						<!-- The price, before it is paid. A wider window is not free: it
-						     pulls a month file per month it reaches back into. -->
-						<span class="segment-cost" data-window-preset-cost={preset}>
-							+{files(monthsFor(preset))}
-						</span>
-					{/if}
+					<!-- The price, before it is paid, and its ROOM is here whether or not
+					     there is one to pay. A chip that appeared only when a preset cost
+					     something vanished the moment its months landed, and every panel
+					     below this control jumped up a line with it - measured 2026-09-09
+					     at 1280 CSS px, 15 px, on seven panels. It stays WORDLESS when the
+					     window is free: five tiles each saying the same thing is five
+					     labels an operator cannot act on. -->
+					<span
+						class="segment-cost"
+						data-window-preset-cost={monthsFor(preset) > 0 ? preset : null}
+						data-window-preset-free={monthsFor(preset) === 0 ? preset : null}
+						aria-hidden={monthsFor(preset) === 0}
+						>{monthsFor(preset) > 0 ? `+${files(monthsFor(preset))}` : ''}</span
+					>
 				</label>
 			{/each}
 		</div>
@@ -174,12 +185,22 @@
 	}
 
 	.segment-cost {
+		/* One line of room, always. See the markup above: the slot has to hold its
+		   height whether or not there is a price in it. */
+		min-block-size: var(--leading-xs);
 		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
 		color: var(--color-text-tertiary);
 	}
 
 	.window-status {
 		flex: 1 1 15rem;
+		/* Two lines, always. The four sentences this slot holds are different
+		   lengths, and the no-script one is the longest - so without a floor the
+		   slot loses a line the moment a browser hydrates and every panel below it
+		   jumps 16 px up. Measured 2026-09-09 at 1280 CSS px on an Intel Core
+		   i7-1265U: seven panels moved by exactly that, for a sentence changing. */
+		min-block-size: calc(2 * var(--leading-xs));
 		margin: 0;
 		font-size: var(--text-xs);
 		line-height: var(--leading-xs);

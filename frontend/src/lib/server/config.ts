@@ -178,6 +178,10 @@ export interface ConsoleConfig {
 	 * re-measures the container. Declared once, in `config/appearance.json`. */
 	chart_height: number;
 	chart_width: number;
+	/** How long a reserved console block stays still before it shimmers, in
+	 * milliseconds. A fetch that lands inside it never animates at all. 400 is a
+	 * declared estimate and not a measurement - see `design-system.md`. */
+	shimmer_after_ms: number;
 	failure_list_max: number;
 	/** How many sources the failure section ranks by articles lost, before the
 	 * tail sentence. */
@@ -368,6 +372,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_attempts_for_rate: 5,
 	chart_height: 220,
 	chart_width: 760,
+	shimmer_after_ms: 400,
 	failure_list_max: 25,
 	source_rows: 10,
 	feed_rows: 10,
