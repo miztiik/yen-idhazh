@@ -201,7 +201,12 @@
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 				{@html svg}
 				{#if !drawn}
-					<p class="chart-pending" data-chart-pending={readoutName || undefined}>{pending}</p>
+					<p
+						class="chart-pending text-[0.8125rem] text-text-tertiary"
+						data-chart-pending={readoutName || undefined}
+					>
+						{pending}
+					</p>
 				{/if}
 			</div>
 			{#if guide !== null}
@@ -226,7 +231,7 @@
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			{@html svg}
 			{#if !drawn}
-				<p class="chart-pending">{pending}</p>
+				<p class="chart-pending text-[0.8125rem] text-text-tertiary">{pending}</p>
 			{/if}
 		</div>
 	{/if}
@@ -266,7 +271,8 @@
 	/* What stands where the plot will be until something draws there. Centred in
 	   the reserved height so the panel does not change size when the engine
 	   arrives, and quiet enough that a chart which draws immediately never reads
-	   as having flashed a warning. */
+	   as having flashed a warning. Its colour and size are classes rather than
+	   custom properties, so it takes the same two the readout strip takes. */
 	.chart-pending {
 		display: flex;
 		align-items: center;
@@ -275,8 +281,6 @@
 		margin: 0;
 		padding: 0 1rem;
 		text-align: center;
-		font-size: 0.8125rem;
-		color: var(--text-tertiary);
 	}
 
 	/* The prerendered SVG is authored at a fixed width and then asked to fill

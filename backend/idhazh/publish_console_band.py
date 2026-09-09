@@ -1076,7 +1076,12 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
 
     Telemetry is the one that matters most: the console holds no row until a
     telemetry shard lands, so a month missing from this list is a month of the
-    page that never fills.
+    page that never fills. It is a parameter because it predates
+    `publish_console` and owns its own root - the canary keeps it under
+    `state/`. Unnamed, it is looked for beside the digest root like the other
+    six, which is where the real tree has it. It is never taken from
+    `publish_telemetry`'s module default: a tree under test would then answer
+    with the repository's own months.
 
     Seven directory listings and no file opened, and each directory is bounded
     by its own retention knob, so this costs the same on any size of archive
@@ -1085,7 +1090,9 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
     found: set[str] = set()
     for dirname, suffix in FETCHED_SERIES:
         found.update(publish_console.published_months(digest_root, dirname, suffix))
-    shards = telemetry_root or publish_telemetry.DEFAULT_PUBLIC_ROOT
+    shards = telemetry_root or publish_console.series_root(
+        digest_root, publish_telemetry.PUBLIC_TELEMETRY_DIRNAME
+    )
     found.update(path.stem for path in month_files(shards, ".csv"))
     return sorted(found)
 
