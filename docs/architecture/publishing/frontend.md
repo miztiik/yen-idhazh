@@ -1216,7 +1216,11 @@ measurement and not a second reading of anything, so the stroke says so.
 Measured on the committed ledger 2026-09-01 over 18 readable runs, the longest
 sequence ran 4,120 to 7,186 tokens of the configured 8,192 - so the worst run in
 the window used 88 percent of the window, and the panel's answer to "can the
-truncation cap go up" is currently no.
+truncation cap go up" was no. It was yes on 2026-09-09, when the window went to
+16,384 and the same 7,186-token worst run became 44 percent of it. The cap
+doubled to 10,000 that day and the panel's answer is no again, at a worst case
+of about 86 percent. That is the panel working: it is the one surface that says
+when the lever is free and when it is spent.
 
 **The panel is about the worst run in the span, not the newest**, which is why
 it stays windowed and why every run in the span keeps a mark. Drawing only the
@@ -2740,9 +2744,10 @@ exists, and a floating domain gives a reader nothing to place a mark against.
 comes off the `source_words` cell a run wrote after its own cap fired. Two
 things break if the page reads `extract.truncation_cap_tokens` instead. The
 setting is one number, so a window spanning a change draws one rule where the
-rows say two - measured on this tree the file says 5,000 tokens, which is 3,846
-words, and half the window's cut rows sit at 1,923. And a rule from the file
-draws even in a window where nothing was cut at all, which a derived one cannot.
+rows say two - measured on this tree the file says 10,000 tokens, which is 7,692
+words, and the window's cut rows sit at 1,923 and 3,846 from the two caps
+before it. And a rule from the file draws even in a window where nothing was cut
+at all, which a derived one cannot.
 [frontend/tests/console-sources.spec.ts](../../../frontend/tests/console-sources.spec.ts)
 holds it with a pair of calls over rows cut at two different lengths: no
 constant satisfies both.
