@@ -1,0 +1,25 @@
+{
+  "annotations": [],
+  "caption": null,
+  "confidence": 0.2,
+  "decision": "none",
+  "element_ids": [],
+  "encodings": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": [],
+  "plan_version": "2026-09-09",
+  "purpose": null,
+  "title": null,
+  "type": null,
+  "version": "2026-09-09T03:11",
+  "why": "No quantity in this article compares with another, so there is nothing to draw."
+}

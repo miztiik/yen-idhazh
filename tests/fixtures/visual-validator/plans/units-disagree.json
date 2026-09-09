@@ -1,0 +1,48 @@
+{
+  "annotations": [
+    "quantity-77-83"
+  ],
+  "caption": "The last bar counts people rather than megawatts.",
+  "confidence": 0.82,
+  "decision": "visual",
+  "element_ids": [
+    "date-52-56",
+    "date-68-72",
+    "date-87-91",
+    "entity-101-107",
+    "quantity-42-48",
+    "quantity-58-64",
+    "quantity-77-83",
+    "quantity-120-133"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [
+      "date-52-56",
+      "date-68-72",
+      "date-87-91",
+      "entity-101-107"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "quantity-42-48",
+      "quantity-58-64",
+      "quantity-77-83",
+      "quantity-120-133"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": [
+    "quantity-42-48"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "comparison",
+  "title": "Solar capacity, and the workforce beside it",
+  "type": "bar",
+  "version": "2026-09-09T03:11",
+  "why": "Three years of capacity, and the headcount the model appended to them."
+}
