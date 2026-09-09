@@ -355,7 +355,6 @@ class LiveSummarizer:
 
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
-        evaluation = self._settings.app.evaluation
         inference = self._settings.app.models.summarize.inference
         model_id = self._settings.app.models.summarize.id
         produced: list[ItemSummary] = []
@@ -366,7 +365,6 @@ class LiveSummarizer:
                 model_id=model_id,
                 inference=inference,
                 prompt_config=ask,
-                evaluation=evaluation,
             )
             payload["messages"][0]["content"] = render_system(
                 prompt, ask, source_words=article.band_source_words, brief=article.brief
@@ -377,7 +375,6 @@ class LiveSummarizer:
             draft = summarize.parse_draft(
                 completion.content,
                 prompt_config=ask,
-                evaluation=evaluation,
                 source_words=article.band_source_words,
                 brief=article.brief,
             )

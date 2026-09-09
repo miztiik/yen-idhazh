@@ -500,36 +500,49 @@ Not to be done: seeding the queue with model pre-labels for a human to confirm. 
 
 ### Current qualification-gate implementation gap
 
-**The `publishable_length` gate cannot fail, and this is not fixed.** It grades
-the survivors of the rule it is grading, so the only answer its arithmetic
-allows is "none outside the range". Rule 1 above is broken here inside our own
-instrument rather than by a model: the word range is the selector, and the same
-word range is the alarm.
+**The `publishable_length` gate could not fail at all until 2026-09-10, and it
+still reads a population narrower than the run.** It grades the survivors of the
+rule it is grading, so for most of its life the only answer its arithmetic
+allowed was "none outside the range". Rule 1 above was broken here inside our own
+instrument rather than by a model: the word range was the selector, and the same
+word range was the alarm.
 
-The range is enforced twice, off the same two knobs. `summarize.to_summary`
-counts the drafted words and refuses anything outside
+The range was enforced twice, off the same two knobs. `summarize.to_summary`
+counted the drafted words and refused anything outside
 `evaluation.summary_words_min` to `evaluation.summary_words_max` with
 `length_out_of_range`, returning a payload whose status is `failed` and whose
 summary text is unset. `cli._observe` sets both `ok` and `schema_valid` from that
 status, and takes `summary_word_count` from the summary text - zero for a refused
-reply, never the count the model actually wrote. `evals/qualify.py` then grades
+reply, never the count the model actually wrote. `evals/qualify.py` then graded
 `[o for o in observations if o.ok]` against those same two knobs. Every reply
 that could fail the gate was refused before the gate looked.
 
 Run 33016222069 reported 0 of 90 replies outside the range, and passed
 ([../reference/measurements.md](../archive/measurements-2026-08.md#the-configured-summarizer-qwen35-9b-q4_k_m)).
-Zero is the only number that arithmetic can return, on any model and at any
-threshold, so the result is not evidence that this summarizer writes publishable
-lengths. Read the gate as "not measured", never as "passed".
+Zero was the only number that arithmetic could return, on any model and at any
+threshold, so that result is not evidence that this summarizer writes publishable
+lengths. Read every `publishable_length` verdict before 2026-09-10 as "not
+measured", never as "passed".
 
-**The fix is to record the measurement instead of dropping the item, and it has
-not been written.** `stage_qualify` already appends an observation for every
-call, refused ones included, so the only thing missing is the number: `_observe`
-would carry the words the reply actually held, and the gate would read every
-reply rather than the survivors. That widens the persisted `ItemObservation`
-contract, which makes it a Level 3 change ([../../CLAUDE.md](../../CLAUDE.md)
-section 6) needing its own schema stamp, changelog entry and review. Nothing
-here does it.
+**What changed on 2026-09-10, and what did not.** The two global knobs are gone.
+A summary that misses its band's ask is now published, or trimmed at a sentence,
+or published over-length - never dropped
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md#what-happens-when-a-reply-misses-the-ask)).
+One case still refuses the item: a summary under
+`summarize.length_policy.absolute_floor_words` drawn from a source above
+`floor_applies_above_source_words`, which says the extraction failed rather than
+that the model wrote briefly. The gate reads the same floor. So the overlap is
+narrower rather than gone, and the gate can now return a number other than zero -
+a summary under the floor from a **short** source is refused by nothing and fails
+the gate. It is a real reading of one narrow case, not a length measurement.
+
+**Recording the words the model actually wrote is still not done.** `stage_qualify`
+already appends an observation for every call, refused ones included, so the only
+thing missing is the number: `_observe` would carry the words the reply actually
+held, and the gate would read every reply rather than the survivors. That widens
+the persisted `ItemObservation` contract, which makes it a Level 3 change
+([../../CLAUDE.md](../../CLAUDE.md) section 6) needing its own schema stamp,
+changelog entry and review. Nothing here does it.
 
 **The same question hangs over any gate that reads only survivors.** Filtering is
 sound when the filter and the grade are different properties, and a tautology
@@ -588,9 +601,9 @@ promotion - which is the whole reason a model is allowed to propose at all.
 
 Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config.md](config.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
 
-The absolute summary gate starts at `evaluation.summary_words_min = 25`. That
-lets the brief band ask for 30 to 45 words without the decoder padding a short
-source to the old floor.
+The absolute summary gate starts at
+`summarize.length_policy.absolute_floor_words = 25`. That lets the brief band ask
+for 30 to 45 words without the decoder padding a short source to the old floor.
 
 A low-confidence item still publishes, marked. Hiding it would make the digest look better than it is, which is the opposite of the point.
 

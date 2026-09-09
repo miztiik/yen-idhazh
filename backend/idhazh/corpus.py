@@ -342,7 +342,7 @@ def _target(
     """
     if summary.title is None or summary.summary is None:
         return None
-    shape = summarize.draft_model(prompt_config, evaluation)
+    shape = summarize.draft_model(prompt_config)
     try:
         draft = shape(
             title=summary.title,
