@@ -290,6 +290,30 @@ def _read_date(match: re.Match[str]) -> str | None:
         return None
 
 
+def read_value(kind: ElementKind, excerpt: str) -> str | None:
+    """What an element's own characters state, read back by the pass that wrote it.
+
+    `Element` holds `span_excerpt` to the width of its span. It cannot hold it to
+    the `value` beside it, because the value is a *reading* of those characters
+    and the shape does no reading - so a table crossing a stage boundary can
+    carry a cell that disagrees with the characters it names, and the consumer
+    about to draw that figure is the last place to notice.
+
+    `None` for the four kinds that are words, which is what they carry, so one
+    comparison covers every kind. `None` also for characters this reader cannot
+    read at all, which fails closed: an unreadable excerpt is not a value
+    anybody can show.
+    """
+    if kind is ElementKind.QUANTITY:
+        match = NUMBER.match(excerpt)
+        reading = _read(match) if match is not None else None
+        return reading.value if reading is not None else None
+    if kind is ElementKind.DATE:
+        match = DATE.match(excerpt)
+        return _read_date(match) if match is not None else None
+    return None
+
+
 def quantity_elements(text: str, *, limit: int) -> Candidates:
     """Every quantity the number pattern matches, in the order the article wrote them.
 
