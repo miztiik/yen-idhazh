@@ -1492,6 +1492,68 @@ class ObservabilityConfig(Model):
             "source month with no published copy is a window the console cannot draw."
         ),
     )
+    public_scores_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long frontend/public/scores/ keeps a published shard. It must EQUAL "
+            "scores_full_grain_months, on the same argument public_telemetry_keep_months "
+            "makes about its own source: the projection is the browser's copy of the "
+            "eval ledger, so any other pair leaves either a published month nothing can "
+            "check against its source or a window the console's model panels cannot draw."
+        ),
+    )
+    public_feed_health_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long frontend/public/feed-health/ keeps a published shard. It must "
+            "EQUAL feed_health_keep_months for the same reason."
+        ),
+    )
+    public_run_days_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long frontend/public/run-days/ keeps a month of day rows. Fourteen "
+            "because the console reaches 367 inclusive days and those days can fall in "
+            "fourteen month shards, which is the same reason feed_health_keep_months "
+            "is fourteen. It has no state ledger to be paired with: the source is the "
+            "committed day payloads themselves, whose retention is the archive's, and "
+            "this row is a reduction of two of them to counts."
+        ),
+    )
+    public_day_metrics_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long frontend/public/day-metrics/ keeps a month of day records. "
+            "Fourteen on the same argument as public_run_days_keep_months. The source "
+            "under state/day-metrics/ has no age of its own - a day record is a few "
+            "kilobytes and it is the only place a band count or an extraction census "
+            "survives once the day's items are folded - so this bounds the published "
+            "copy without claiming to bound the ledger."
+        ),
+    )
+    public_machine_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long frontend/public/machine/ keeps a month of runtime counters. "
+            "Fourteen on the same argument. The source is one appended CSV rather than "
+            "a shard directory, so the published copy is where the month boundary is "
+            "first drawn and this is the only age it has."
+        ),
+    )
+    public_span_rollup_keep_months: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "How long frontend/public/span-rollup/ keeps a published shard. Fourteen "
+            "on the same argument, and the record starts on 2026-09-06, so for its "
+            "first year this knob deletes nothing at all."
+        ),
+    )
     cost_currency: str = Field(
         default="USD",
         pattern=r"^[A-Z]{3}$",
@@ -1549,13 +1611,26 @@ class ObservabilityConfig(Model):
         return refuse_a_removed_knob("observability", data, SUPERSEDED_RETENTION_NAMES)
 
     def full_grain_months(self) -> Mapping[str, int]:
-        """Every window that has to outlive what a console read can still select."""
+        """Every window that has to outlive what a console read can still select.
+
+        The published windows are in here beside the state ones because the
+        console fetches them now: a published shard deleted while a window
+        preset still reaches it blanks the panel that draws it, and it does so
+        silently, because a month with no file is indistinguishable from a month
+        with no runs.
+        """
         return MappingProxyType(
             {
                 "item_health_full_grain_months": self.item_health_full_grain_months,
                 "feed_health_keep_months": self.feed_health_keep_months,
                 "scores_full_grain_months": self.scores_full_grain_months,
                 "public_telemetry_keep_months": self.public_telemetry_keep_months,
+                "public_scores_keep_months": self.public_scores_keep_months,
+                "public_feed_health_keep_months": self.public_feed_health_keep_months,
+                "public_run_days_keep_months": self.public_run_days_keep_months,
+                "public_day_metrics_keep_months": self.public_day_metrics_keep_months,
+                "public_machine_keep_months": self.public_machine_keep_months,
+                "public_span_rollup_keep_months": self.public_span_rollup_keep_months,
             }
         )
 
@@ -1592,13 +1667,25 @@ class ObservabilityConfig(Model):
 
     @model_validator(mode="after")
     def _the_published_copy_lasts_as_long_as_its_source(self) -> Self:
-        if self.public_telemetry_keep_months != self.item_health_full_grain_months:
-            raise ValueError(
-                "observability.public_telemetry_keep_months must equal "
-                "item_health_full_grain_months. The projection is the browser's copy "
-                "of that ledger, so any other pair leaves either a published month "
-                "nothing can check or a window the console cannot draw"
-            )
+        """A projection and the ledger it projects age together.
+
+        The other three published payloads have no state ledger of their own and
+        so appear in no pair here - `public_run_days`, `public_day_metrics` and
+        `public_machine` are bounded by their own knob and by
+        `refuse_windows_shorter_than`.
+        """
+        for published, source in (
+            ("public_telemetry_keep_months", "item_health_full_grain_months"),
+            ("public_scores_keep_months", "scores_full_grain_months"),
+            ("public_feed_health_keep_months", "feed_health_keep_months"),
+        ):
+            if getattr(self, published) != getattr(self, source):
+                raise ValueError(
+                    f"observability.{published} must equal {source}. The projection is "
+                    "the browser's copy of that ledger, so any other pair leaves either "
+                    "a published month nothing can check or a window the console cannot "
+                    "draw"
+                )
         return self
 
 
@@ -2857,6 +2944,39 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T18:00",
+            change=(
+                "observability gains six retention knobs, one per console payload that "
+                "files by month: public_scores_keep_months, "
+                "public_feed_health_keep_months, public_run_days_keep_months, "
+                "public_day_metrics_keep_months, public_machine_keep_months and "
+                "public_span_rollup_keep_months, each defaulting to 14. The three that "
+                "project a state ledger must equal that ledger's own window, and all "
+                "six are now checked by refuse_windows_shorter_than."
+            ),
+            why=(
+                "The console is moving from inlining six committed ledgers into its "
+                "document to fetching them, and a payload the pipeline appends to every "
+                "run with no age is a directory that grows for ever (Rule #12). Every "
+                "one is minted with a NON-NULL default in the same commit as its "
+                "contract, because item_health_aggregate_keep_months and "
+                "score_archive_keep_months are null today and a null that spreads stops "
+                "reading as a decision. Fourteen is the number the two existing windows "
+                "already carry: the console reaches 367 inclusive days and those days "
+                "can fall in fourteen month shards. Adding them to full_grain_months() "
+                "is what stops a knob being set narrower than a window preset can still "
+                "select - a deleted shard blanks its panel silently, because a month "
+                "with no file reads exactly like a month with no runs. Minted here "
+                "rather than beside the producer so the producer, the consumer and the "
+                "gates read one list instead of guessing at three "
+                "(TODO/20260908-shell-and-fetch-plan.md row 8, Fowler and Carmack, "
+                "2026-09-08). appearance-config is NOT restamped beside this one: the "
+                "only console key that row would have added, console.shimmer_after_ms, "
+                "is minted in row 12 where it gets a measured value, so an entry here "
+                "would record a change that did not happen."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T05:20",
             change=(
