@@ -18,12 +18,19 @@ llama-server, `python_peak_rss_bytes` for everything else the job ran, and
 here because one work job is one row, which is the grain all seven facts have;
 the run manifest is one row per run and a run draws up to eight hosts.
 
-**Read the three memory cells together or not at all.** llama-server's mark
-alone is an upper bound on headroom - the unsafe direction - because the python
-that reads the feeds and scores the summaries is on the same 16 GB. Measured
-over the four committed captures of run `2026-08-29-3`, the two together held
-14.31 GiB at one instant on the worst shard against 13.16 GiB for the server
-alone: 0.59 GiB free of the runner's 14.90 GiB usable rather than 1.74 GiB.
+**Read the three memory cells together or not at all.** llama-server's mark is
+not the job's, because the python that reads the feeds and scores the summaries
+is on the same 16 GB. Measured over the four committed captures of run
+`2026-08-29-3`, the two together held 14.31 GiB at one instant on the worst
+shard against 13.16 GiB for the server alone.
+
+**None of the three is headroom.** Adding two RSS marks counts mapped weight
+pages the kernel can evict and counts any page the two share twice, so the sum
+bounds what was held rather than measuring what the machine committed - and
+subtracting it from 16 GB reserves nothing for the kernel or the runner agent.
+What the machine had free was never captured. `docs/reference/measurements.md`
+carries the retraction of the 0.59 GiB figure this docstring used to quote, and
+the `/proc/meminfo` columns the sampler took up on 2026-09-09 to close it.
 
 The truncation cap reverts on the slowest work job's wall-clock, and before
 these cells the only place that number existed was the GitHub jobs API, which
