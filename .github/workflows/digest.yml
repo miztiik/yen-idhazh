@@ -564,6 +564,22 @@ jobs:
       # `python_vmhwm_kb` is appended at the END of the row rather than beside its
       # VmRSS sibling. A file written before it existed then still parses, and
       # nothing that reads `python_procs` by position moves.
+      #
+      # `python-procs.tsv` names them, one row per process per sample. A count
+      # and a sum cannot say what was counted, and that is not a small gap: the
+      # four captures under `tests/fixtures/runtime/` record three python
+      # processes at every peak, and two of the three are already running before
+      # this job's own python starts. Those two hold 63,432 to 69,780 kB across
+      # 1,261 samples, so about 4 percent of the recorded python figure belongs
+      # to something the job did not start - and nothing on the row says what.
+      # A roll-call turns the next run into the answer.
+      #
+      # The executable and three argv fields, not the whole command line. `comm`
+      # is `python3` for every one of them, which names nothing; the executable
+      # path plus argv 1 to 3 separates a hosted-tool-cache `python -m idhazh`
+      # from a distribution `/usr/bin/python3 -u /usr/sbin/...` and stops there,
+      # so a secret further along a command line is never copied into an
+      # artifact (`CLAUDE.md` section 1b).
       - name: Sample memory
         run: |
           set -euo pipefail
@@ -571,14 +587,17 @@ jobs:
           set -u
           pid="$1"
           printf 'ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\tpython_vmhwm_kb\n' > rss-samples.tsv
+          printf 'ts\tpid\tcomm\tvmrss_kb\tvmhwm_kb\texe\targs\n' > python-procs.tsv
           while kill -0 "$pid" 2>/dev/null; do
+            now=$(date -u +%FT%TZ)
             rss=$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
             hwm=$(awk '/^VmHWM:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
             python_kb=0
             python_hwm_kb=0
             python_n=0
             for proc in /proc/[0-9]*; do
-              case "$(cat "$proc/comm" 2>/dev/null || true)" in
+              comm=$(cat "$proc/comm" 2>/dev/null || true)
+              case "$comm" in
                 python*) ;;
                 *) continue ;;
               esac
@@ -588,9 +607,14 @@ jobs:
               python_kb=$((python_kb + kb))
               python_hwm_kb=$((python_hwm_kb + ${proc_hwm:-$kb}))
               python_n=$((python_n + 1))
+              exe=$(readlink "$proc/exe" 2>/dev/null || true)
+              args=$(tr '\0\t\n' '   ' < "$proc/cmdline" 2>/dev/null | cut -d' ' -f2-4 || true)
+              printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "$now" "${proc##*/}" "$comm" "$kb" "${proc_hwm:-}" "${exe:-}" "${args:-}" \
+                >> python-procs.tsv
             done
             printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-              "$(date -u +%FT%TZ)" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" "$python_hwm_kb" >> rss-samples.tsv
+              "$now" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" "$python_hwm_kb" >> rss-samples.tsv
             sleep 15
           done
           SAMPLER
@@ -753,13 +777,24 @@ jobs:
           # A fixed list of known lines hid the proof of prefix reuse for two
           # measured runs: the list greps `kv cache rm [`, which this build never
           # emits, while the line that settles it starts `slot get_availabl:`.
-          # `^(srv|slot) ` cannot hide a line the runtime chose to print.
+          # The list was replaced by `^(srv|slot) `, which was worse - it can
+          # match nothing at all, because every line the runtime prints opens
+          # with a timestamp and a level letter:
+          #   `0.04.686.486 I srv    load_model: initializing, n_slots = 4, ...`
+          # Measured against the four captures in `tests/fixtures/runtime/`:
+          # that pattern found 1 line of 40 per capture, and the one it found
+          # was matched by `n_ctx_slot` rather than by the anchor. The tag is
+          # the third field, so the anchor reads the first two. It now finds 38
+          # of 40; the two it leaves are tagged `cmn` and are the common-args
+          # block, which this step is not for.
           # `n_ctx_slot` and `n_ctx_seq` are one field under two llama.cpp
           # spellings, and the pin does not stop a later bump from renaming it.
-          grep -E '^(srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' llama-server.log || true
+          grep -E '^[0-9.]+ [A-Z] (srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' llama-server.log || true
           # `f_sim_best` is the shared prefix over the incoming prompt and
           # `f_keep` the same prefix over what the slot held. The distribution is
           # where a prefix-reuse loss shows; the presence of the line is not.
+          # Both of these do match a real line - checked the same way, against
+          # the same four captures.
           for field in f_sim_best f_keep; do
             grep -oE "${field} = [0-9.]+" llama-server.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
               { v[NR] = $1 + 0 }
@@ -794,6 +829,23 @@ jobs:
           else
             echo "rss-samples.tsv not found"
           fi
+          # Which python processes those kilobytes belonged to. The line above
+          # is a sum, and a sum of three processes says nothing about which one
+          # to look at.
+          if [ -f python-procs.tsv ]; then
+            awk -F'\t' '
+              NR > 1 {
+                who = $2 "  " $3 "  " $6 "  " $7
+                if ($4 + 0 > peak[who]) peak[who] = $4 + 0
+                seen[who]++
+              }
+              END {
+                for (who in peak) printf "python %s peak VmRSS %d kB in %d samples\n", who, peak[who], seen[who]
+              }
+            ' python-procs.tsv | sort
+          else
+            echo "python-procs.tsv not found"
+          fi
 
       - name: Upload runtime log
         if: always()
@@ -803,6 +855,7 @@ jobs:
           path: |
             llama-server.log
             rss-samples.tsv
+            python-procs.tsv
             memory-peak.txt
             llama-metrics.prom
           retention-days: 2
@@ -994,7 +1047,7 @@ jobs:
             echo "visual-planner.log not found"
             exit 0
           fi
-          grep -E '^(srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' visual-planner.log || true
+          grep -E '^[0-9.]+ [A-Z] (srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' visual-planner.log || true
           for field in f_sim_best f_keep; do
             grep -oE "${field} = [0-9.]+" visual-planner.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
               { v[NR] = $1 + 0 }

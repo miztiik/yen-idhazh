@@ -22,7 +22,7 @@ from typing import Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, llama_server_flags, read_text
 
 from idhazh import ledger, publish_telemetry
 from idhazh.contracts import runtime_counters
@@ -33,6 +33,7 @@ from idhazh.contracts.visual_decision import (
     VisualState,
 )
 from idhazh.evals import writer as score_writer
+from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
 
 pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
@@ -231,16 +232,6 @@ WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "visuals": "visual_planner"}
 # entry nobody can attribute.
 WEIGHTS_CACHE_SUFFIX: Final = "v4"
 MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime", "batched"})
-# The batched-bench arm's own definition. `docs/reference/measurements.md`
-# publishes these values as the invocation behind its number, so a silent edit
-# here would leave that page describing a run nobody made.
-BATCHED_BENCH_SETTINGS: Final = {
-    "BENCH_PROMPT_TOKENS": "900",
-    "BENCH_GENERATE_TOKENS": "300",
-    "BENCH_PARALLEL_LEVELS": "1,2,4",
-    "BENCH_REPEATS": "3",
-    "BENCH_GATE_RATIO": "1.4",
-}
 # Every job that stands up llama-server, and the log that job writes. Both must
 # name the host, the binary and the weights: a shard's throughput is decided by
 # the host it drew, and a number that cannot name the bytes that produced it is
@@ -270,16 +261,46 @@ RUNTIME_LOG_SUMMARY_STEPS: Final = {
     "work": ("Prompt cache log summary", "llama-server.log"),
     "visuals": ("Visual planner cache log summary", "visual-planner.log"),
 }
-# Four real llama-server lines. The first two are the same field under the two
-# spellings llama.cpp has used; the third is the one the old fixed pattern list
-# hid for two measured runs.
+# Four llama-server lines, copied from the captures under
+# `tests/fixtures/runtime/` and then edited in one place each: the second
+# carries `n_ctx_seq` where the capture carries `n_ctx_slot`, and the fourth
+# carries `n_ctx_per_seq`. Those two spellings appear in no capture this project
+# holds - they are what a later llama.cpp bump renames the field to, and the
+# whole reason the summary step greps three names for one field.
+#
+# Until 2026-09-09 every line here opened at `srv` or `slot` and the first two
+# said `kv_unified = 'true'`. No line llama-server prints looks like that: the
+# tag is the third field, after a timestamp and a level letter, and all four
+# captures print `'false'`. That is the same mistake the summary step's own
+# pattern made, written down twice and agreeing with itself.
 RUNTIME_LOG_LINES: Final = (
-    "srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'true'",
-    "srv    load_model: initializing, n_slots = 1, n_ctx_seq = 8192, kv_unified = 'true'",
-    "slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, "
-    "f_sim_best = 0.923 (> 0.100 thold), f_keep = 0.811",
-    "slot print_timing: id  3 | task 172 | prompt eval time = 7119.70 ms / 75 tokens",
+    (
+        "0.03.804.331 I srv    load_model: initializing, n_slots = 1, "
+        "n_ctx_slot = 8192, kv_unified = 'false'"
+    ),
+    (
+        "0.03.804.331 I srv    load_model: initializing, n_slots = 1, "
+        "n_ctx_seq = 8192, kv_unified = 'false'"
+    ),
+    (
+        "3.09.738.586 I slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, "
+        "f_sim_best = 0.926 (> 0.100 thold), f_keep = 0.782"
+    ),
+    (
+        "0.33.179.385 I srv    load_model: initializing, n_slots = 1, "
+        "n_ctx_per_seq = 8192, kv_unified = 'false'"
+    ),
 )
+# The head of llama-server's own log, one per work shard of run `2026-08-29-3`.
+# The pattern below is checked against these rather than against the four
+# strings above, because a pattern nobody ran against a real line is how the
+# `^(srv|slot) ` anchor survived review (Rule #7).
+RUNTIME_LOG_CAPTURES: Final = sorted(
+    (FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt")
+)
+# The tag a capture carries that this step is not for: the common-args block.
+# Named so the count below is a number and not "most of them".
+RUNTIME_LOG_UNCLAIMED_TAG: Final = "cmn"
 RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
 SERVER_LOG_FILE: Final = "llama-server.log"
 MEMORY_PEAK_FILE: Final = "memory-peak.txt"
@@ -299,12 +320,26 @@ RSS_SAMPLE_FIELDS: Final = {
     4: "python_vmrss_kb",
     6: "python_vmhwm_kb",
 }
+# The roll-call beside it: one row per python process per sample, so the count
+# in `python_procs` can be attributed. Same two-reader hazard as above - the
+# operator print reads it by position - so the same agreement is written down.
+PYTHON_PROCS_FILE: Final = "python-procs.tsv"
+PYTHON_PROCS_FIELDS: Final = {
+    2: "pid",
+    3: "comm",
+    4: "vmrss_kb",
+    6: "exe",
+    7: "args",
+}
 #: The one reading that has to be taken at both ends of the job. `/proc/stat`
 #: counts since boot, so a single read is mostly the minutes the runner spent
 #: booting. `/proc/stat` rather than a cgroup file because two cgroup files this
 #: repository has read - `memory.peak` and `cpu.max` - are absent on a
 #: GitHub-hosted runner, and `/proc/stat` is on every Linux there is.
 CPU_STAT_READING: Final = "awk '/^cpu / { print }' /proc/stat"
+#: The step that takes the first of the two readings. The second is taken in
+#: `COUNTERS_STEP`, which is also where both are handed to the row.
+CPU_STAT_STEP: Final = "Stamp the shard clock and the host"
 # llama-server's own loopback counters, read once at job end. The two series are
 # named because they are the two a run is read by: the busy-slot average says
 # whether batching ever happened, and the high watermark says how close the day
@@ -3907,10 +3942,15 @@ def test_the_start_script_refuses_a_call_it_cannot_serve(
     assert message in completed.stderr
 
 
+def _digest_step(job_name: str, name: str) -> str:
+    """One step body of a daily-run job, without the shell comments."""
+    workflow = _load_workflows()["digest.yml"]
+    return _uncommented(_script(_step(workflow, job_name, "name", name), name))
+
+
 def _work_step(name: str) -> str:
     """One step body of the daily work job, without the shell comments."""
-    workflow = _load_workflows()["digest.yml"]
-    return _uncommented(_script(_step(workflow, "work", "name", name), name))
+    return _digest_step("work", name)
 
 
 def _sample_header() -> list[str]:
@@ -3981,6 +4021,248 @@ def test_the_kernel_peak_is_written_before_the_row_that_reads_it() -> None:
     operator = _work_step(MEMORY_SUMMARY_STEP)
     assert f"cat {MEMORY_PEAK_FILE}" in operator, "the print must read the file the row read"
     assert CGROUP_PEAK_PATH not in operator, "the print must not take a second kernel reading"
+
+
+def test_the_sampler_names_every_python_process_it_counts() -> None:
+    """A count of three cannot say which three, and here two of them are not ours.
+
+    Over the four captures of run `2026-08-29-3` the peak lands at three python
+    processes on every shard, and two of those three are already running at the
+    first sample - taken before this job's own python starts. So the recorded
+    python figure carries about 66 MB that belongs to something the job did not
+    launch, and no cell on the row or the artifact says what. The roll-call is
+    what turns the next run into the answer.
+
+    Two things are asserted because two things can disagree. The roll-call has
+    to be written by the SAME loop that produces the count, or it names a
+    different set from the one the sum was taken over; and the operator print
+    reads the roll-call by POSITION, so a column inserted anywhere but the end
+    silently reports a process id as a size in kilobytes.
+    """
+    script = _work_step(SAMPLE_MEMORY_STEP)
+    header = re.search(rf"printf '([^']*)' > {re.escape(PYTHON_PROCS_FILE)}", script)
+    assert header, f"{SAMPLE_MEMORY_STEP} must printf a header row into {PYTHON_PROCS_FILE}"
+    columns = header.group(1).removesuffix("\\n").split("\\t")
+    assert columns[0] == "ts", columns
+    assert len(columns) == len(set(columns)), f"a column name is written twice: {columns}"
+
+    # One loop, one filter. The count and the roll-call have to come off the
+    # same pass over `/proc`, or the sum is over a set the roll-call never named.
+    loop = re.search(r"for proc in /proc/\[0-9\]\*; do\n(.*?)\n *done\n", script, re.DOTALL)
+    assert loop, f"{SAMPLE_MEMORY_STEP} must walk /proc once per sample"
+    body = loop.group(1)
+    assert "python_n=$((python_n + 1))" in body, "the count must be taken inside that walk"
+    assert f">> {PYTHON_PROCS_FILE}" in body, "the roll-call must be written inside that walk"
+    assert body.count("python*)") == 1, "one filter decides what counts as python, not two"
+
+    operator = _work_step(MEMORY_SUMMARY_STEP)
+    assert PYTHON_PROCS_FILE in operator, f"{MEMORY_SUMMARY_STEP} must read {PYTHON_PROCS_FILE}"
+    for field, column in sorted(PYTHON_PROCS_FIELDS.items()):
+        assert f"${field}" in operator, f"{MEMORY_SUMMARY_STEP} no longer reads field {field}"
+        assert columns[field - 1] == column, (
+            f"{MEMORY_SUMMARY_STEP} reads field {field} as {column}, "
+            f"and the sampler now writes {columns[field - 1]} there"
+        )
+
+    upload = _artifact_upload(_load_workflows()["digest.yml"], "work", "runtime-log-${{ matrix.shard }}")
+    uploaded = str(_mapping(upload.get("with"), "runtime log upload").get("path"))
+    assert PYTHON_PROCS_FILE in uploaded, "a roll-call nobody can download answers nothing"
+
+
+def _log_summary_pattern(job_name: str, step_name: str, log_file: str) -> re.Pattern[str]:
+    """The `grep -E` the cache summary step runs, as this test can run it too.
+
+    Read out of the workflow rather than restated here. A pattern a test writes
+    down for itself agrees with itself and proves nothing.
+    """
+    found = re.search(
+        rf"grep -E '([^']*)' {re.escape(log_file)}", _digest_step(job_name, step_name)
+    )
+    assert found, f"{step_name} must grep {log_file} for the lines the runtime prints"
+    return re.compile(found.group(1))
+
+
+def test_the_cache_log_summary_matches_the_lines_the_runtime_actually_prints() -> None:
+    """The pattern that found one line in forty, and the captures that say so.
+
+    `^(srv|slot) ` matched nothing and had never matched anything. Every line
+    llama-server prints opens with a timestamp and a level letter, so the tag is
+    the third field:
+
+        0.03.804.331 I srv    load_model: initializing, n_slots = 1, ...
+
+    The step still printed something on every run, because the `n_ctx_slot`
+    alternative beside it does match - which is why nobody noticed the other
+    half was dead. Measured over the four committed captures: the old anchor
+    found 1 line of 40 and it was the `n_ctx_slot` one, so 37 lines of prefix
+    reuse went unprinted on every shard of every run.
+
+    Driven from real captures rather than from hand-written text, because a
+    pattern nobody ran against a real line is how this got here (Rule #7). The
+    four strings in `RUNTIME_LOG_LINES` are checked as well, for the two field
+    spellings no capture carries.
+    """
+    assert RUNTIME_LOG_CAPTURES, "the committed captures this pattern is checked against are gone"
+
+    for job_name, (step_name, log_file) in sorted(RUNTIME_LOG_SUMMARY_STEPS.items()):
+        pattern = _log_summary_pattern(job_name, step_name, log_file)
+
+        for line in RUNTIME_LOG_LINES:
+            assert pattern.search(line), f"{step_name} would not print {line!r}"
+
+        for capture in RUNTIME_LOG_CAPTURES:
+            lines = read_text(capture).splitlines()
+            missed = [line for line in lines if not pattern.search(line)]
+            unclaimed = [line for line in missed if f" {RUNTIME_LOG_UNCLAIMED_TAG} " in line]
+            assert missed == unclaimed, (
+                f"{step_name} would not print these lines of {capture.name}: {missed[:3]}"
+            )
+            assert len(lines) - len(missed) > len(lines) // 2, (
+                f"{step_name} prints {len(lines) - len(missed)} of {len(lines)} lines "
+                f"of {capture.name}, which is not a summary of the log"
+            )
+
+
+def test_the_prefix_reuse_fields_match_a_real_line_too() -> None:
+    """The other half of the same step, and this half was never broken.
+
+    `f_sim_best` and `f_keep` are greped as `<field> = <number>` and both do
+    match: llama-server prints them on one line together, and the two `grep -oE`
+    passes take one number each. Checked because the anchor above was not, and
+    "the rest of the step is fine" was an assumption until now.
+    """
+    for job_name, (step_name, log_file) in sorted(RUNTIME_LOG_SUMMARY_STEPS.items()):
+        script = _digest_step(job_name, step_name)
+        found = re.search(rf'grep -oE "\$\{{field\}} ([^"]*)" {re.escape(log_file)}', script)
+        assert found, f"{step_name} must grep each field as a name and a number"
+        fields = re.search(r"for field in ([a-z_ ]+); do", script)
+        assert fields, f"{step_name} must name the fields it loops over"
+
+        for field in fields.group(1).split():
+            pattern = re.compile(f"{field} {found.group(1)}")
+            seen = sum(len(pattern.findall(read_text(path))) for path in RUNTIME_LOG_CAPTURES)
+            assert seen, f"{step_name} finds no {field} in any committed capture"
+
+
+def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
+    """A server on one port and a stage posting to another is every item failing.
+
+    Five parties hold this number and any of them can be edited alone: two
+    workflows declare it, `start-llama-server.sh` refuses to start without it,
+    `idhazh.llm.server` builds the address the stage posts to, and the
+    measurement harness in `measure.yml` writes its own copy because it builds
+    its server invocation inline rather than through the shared script.
+
+    The Python side carries a fallback literal for a developer running the stage
+    by hand, and that literal is the one a port move would leave behind: the
+    workflows set the variable, so nothing in CI would ever reach the fallback
+    and nothing would say it had gone stale.
+    """
+    expected = os.environ.get(LLAMA_PORT_ENV) or LLAMA_PORT_VALUE
+    assert str(DEFAULT_PORT) == expected, (
+        f"{LLAMA_PORT_ENV} is {expected} and idhazh.llm.server answers {DEFAULT_PORT}"
+    )
+    address = LLAMA_PORT_READ.replace("${" + LLAMA_PORT_ENV + "}", expected)
+    assert DEFAULT_ENDPOINT.startswith(f"{address}/"), (
+        f"the stage posts to {DEFAULT_ENDPOINT} and the workflow probes {address}"
+    )
+
+    declaring = 0
+    for filename, workflow in sorted(_load_workflows().items()):
+        env = workflow.get("env")
+        declared = env.get(LLAMA_PORT_ENV) if isinstance(env, dict) else None
+        if declared is not None:
+            declaring += 1
+            assert str(declared) == LLAMA_PORT_VALUE, (
+                f"{filename} declares {LLAMA_PORT_ENV}={declared}, "
+                f"and the fallback in idhazh.llm.server is {LLAMA_PORT_VALUE}"
+            )
+        for text in _strings(workflow):
+            assert f"127.0.0.1:{LLAMA_PORT_VALUE}" not in text, (
+                f"{filename} writes the port into an address instead of reading it back"
+            )
+    assert declaring >= 2, "the daily run and the validation arm each declare the port"
+
+    assert f'"${{{LLAMA_PORT_ENV}:?' in read_text(START_SERVER_SCRIPT), (
+        f"{START_SERVER_SCRIPT.name} must refuse to start without {LLAMA_PORT_ENV}"
+    )
+    # The one copy that is not the variable. Named rather than tolerated: the
+    # harness starts its server from an inline python block, so it never reads
+    # the environment the shared script does.
+    assert f"SERVER_PORT = {LLAMA_PORT_VALUE}" in read_text(WORKFLOWS_DIR / "measure.yml"), (
+        f"the measurement harness holds its own port and it no longer says {LLAMA_PORT_VALUE}"
+    )
+
+
+def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> None:
+    """One name, given once on a command line, read by five later steps.
+
+    The start script takes the log stem as its second argument, so the filename
+    exists in the workflow exactly once as an argument and four more times as a
+    literal in steps that read it. Every one of those readers ends `|| true` or
+    `if: always()`, so a stem that no longer matches costs the job its runtime
+    identity, its failure tail and its whole prompt-cache summary, and fails
+    nothing. `visual-planner` and `visual_planner` are one character apart and
+    the second is the role name in the same command.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    assert set(RUNTIME_IDENTITY_JOBS) <= set(_mapping(workflow.get("jobs"), "jobs")), (
+        "a job named here no longer exists in digest.yml"
+    )
+    for job_name, (log_file, weights_output) in sorted(RUNTIME_IDENTITY_JOBS.items()):
+        start_step, _ = SERVER_STARTERS[("digest.yml", job_name)]
+        call = re.search(r"start-llama-server\.sh (\S+) (\S+)", _digest_step(job_name, start_step))
+        assert call, f"{job_name} must start its server through the shared script"
+        assert f"{call.group(2)}.log" == log_file, (
+            f"{job_name} starts a server logging to {call.group(2)}.log "
+            f"and its readers read {log_file}"
+        )
+
+        identity = _digest_step(job_name, RUNTIME_IDENTITY_STEP)
+        assert log_file in identity, f"{RUNTIME_IDENTITY_STEP} in {job_name} must read {log_file}"
+        assert f"needs.plan.outputs.{weights_output}" in identity, (
+            f"{RUNTIME_IDENTITY_STEP} in {job_name} must name the weights it ran"
+        )
+        assert "sha256sum backend/bin/llama-server" in identity, (
+            f"{RUNTIME_IDENTITY_STEP} in {job_name} must name the binary it ran"
+        )
+
+        summary_step, summary_log = RUNTIME_LOG_SUMMARY_STEPS[job_name]
+        assert summary_log == log_file, (
+            f"{summary_step} reads {summary_log} and {job_name} writes {log_file}"
+        )
+        assert log_file in _digest_step(job_name, summary_step), f"{summary_step} must read {log_file}"
+
+
+def test_the_counters_step_and_the_row_agree_on_what_it_reads() -> None:
+    """Three readings, two of them taken in different steps an hour apart.
+
+    The metrics body is written by one line of the step and read by two more, so
+    a rename in any one of them leaves the row's counter cells empty and prints
+    nothing that says why. The two series are named again in the contract that
+    parses them, in another language, and llama.cpp has renamed a counter
+    before. And `/proc/stat` is read at both ends of the job by two separate
+    steps: a reading of the per-cpu line at one end and the aggregate at the
+    other would make `cpu_busy_pct` a number with no meaning, and nothing would
+    fail.
+    """
+    counters = _work_step(COUNTERS_STEP)
+    assert f"-o {METRICS_FILE}" in counters, f"{COUNTERS_STEP} must write {METRICS_FILE}"
+    assert f'"{METRICS_ENDPOINT}"' in counters, f"{COUNTERS_STEP} must scrape {METRICS_ENDPOINT}"
+    assert f"--counters-file {METRICS_FILE}" in counters, "the stage must read the file curl wrote"
+    for series in METRICS_SERIES:
+        assert series in counters, f"{COUNTERS_STEP} stopped naming {series}"
+        assert series in runtime_counters.SERIES, f"the row no longer parses {series}"
+
+    clock = _work_step(CPU_STAT_STEP)
+    assert clock.count(CPU_STAT_READING) == 1, f"{CPU_STAT_STEP} must read /proc/stat once"
+    assert counters.count(CPU_STAT_READING) == 1, f"{COUNTERS_STEP} must read /proc/stat once"
+    assert "--cpu-stat-at-start" in counters and "--cpu-stat-at-end" in counters, (
+        "both readings must reach the row, or the difference between them is not taken"
+    )
+    assert runtime_counters._CPU_FIELDS[0] == "user", (
+        "the row parses the aggregate cpu line, which is what both steps read"
+    )
 
 
 # --- The qualification arm (Row #10) ----------------------------------------
