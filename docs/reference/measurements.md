@@ -50,7 +50,7 @@ the three settings this run was dispatched to price.
 
 ### The KV buffer is 512.00 MiB, and the projection was exact
 
-All four shards print the same three lines:
+All four shards print the same four lines:
 
 ```
 llama_context: flash_attn            = enabled
