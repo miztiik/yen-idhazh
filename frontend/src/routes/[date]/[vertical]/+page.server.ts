@@ -4,10 +4,16 @@ import { dayShell, loadDay, publishedDates } from '$lib/server/payload';
 
 export const prerender = true;
 
-/** Only verticals actually present get a page, so no route leads to an empty room. */
+/** Only verticals actually present get a page, so no route leads to an empty room.
+ *
+ * `-1` for the same reason the dated route takes one: this is the list of pages
+ * the build writes, and a cover would stop writing them past it
+ * (`docs/concepts/growing-reads.md`). The day payload is opened to learn which
+ * topics that day carried, which is the only place that fact lives.
+ */
 export function entries() {
 	const found: { date: string; vertical: string }[] = [];
-	for (const date of publishedDates()) {
+	for (const date of publishedDates(undefined, -1)) {
 		const day = loadDay(date);
 		for (const vertical of day?.verticals ?? []) {
 			found.push({ date, vertical: vertical.id });

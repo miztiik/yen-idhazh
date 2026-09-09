@@ -28,7 +28,7 @@ import {
 	observabilityConfig,
 	runConfig
 } from '$lib/server/config';
-import { itemHealthRows, evalRows } from '$lib/server/payload';
+import { itemHealthRows, evalRows, shardMonths } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
@@ -124,10 +124,15 @@ export interface RunSeries {
  */
 export async function load() {
 	const console_ = consoleConfig();
+	// The widest span the control can reach, in the months the ledgers shard by.
+	// Nothing older can be drawn whatever the operator does, so nothing older is
+	// read (`CLAUDE.md` Rule #12), and the cover follows `console.window_presets`
+	// rather than a literal so raising a preset widens it (Rule #6).
+	const shards = shardMonths(Math.max(...console_.window_presets));
 	const chart = chartConfig();
 	const limits = machineLimits();
-	const counters = loadMachineCounters();
-	const health = itemHealthRows().rows;
+	const counters = loadMachineCounters(shards);
+	const health = itemHealthRows(shards).rows;
 	const observability = observabilityConfig();
 	const today = new Date().toISOString().slice(0, 10);
 
@@ -244,7 +249,7 @@ export async function load() {
 	// own ledger - `state/span-rollup/`, empty until a traced run commits - so it
 	// is often a different run from `newest`, and its own empty state when the
 	// real rollup holds nothing.
-	const spanView = spanBreakdown(loadSpanRollup()[0] ?? null);
+	const spanView = spanBreakdown(loadSpanRollup(shards)[0] ?? null);
 
 	// The newest run the item ledger timed enough items on, which is not always
 	// the newest run the counters reached: a run can publish before its shards
@@ -296,11 +301,13 @@ export async function load() {
 		// keeps the rows inside the open span.
 		series,
 		// Every day the pipeline that writes the summaries changed, derived once
-		// here over the whole ledger and handed to the two charts a change can
-		// move: a longest sequence is prompt plus answer, and an item's model time
-		// is the model call itself. Derived per chart it would be derived twice off
-		// two different day lists, and the two would eventually disagree.
-		modelChanges: pipelineChanges(evalRows().rows),
+		// here over the rows this route read and handed to the two charts a change
+		// can move: a longest sequence is prompt plus answer, and an item's model
+		// time is the model call itself. Derived per chart it would be derived twice
+		// off two different day lists, and the two would eventually disagree. The
+		// rows stop at the widest preset, which is as far back as either chart draws
+		// (`CLAUDE.md` Rule #12).
+		modelChanges: pipelineChanges(evalRows(shards).rows),
 		board,
 		spanBreakdown: spanView,
 		memory,

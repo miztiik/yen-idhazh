@@ -17,6 +17,11 @@ export function load() {
 	// A handful of recent days, so "what did I miss on Tuesday" is answered in
 	// place. Dates and counts only: the stories stay where they are, and this
 	// list grows per day rather than per story.
+	//
+	// Seven is a count and the read's cover is a span, so this takes the default
+	// cover and slices seven from the front of it. The two only disagree where
+	// the pipeline published fewer than seven days in the last ninety, and then
+	// there are fewer than seven recent days to show.
 	const recent = publishedDates()
 		.slice(0, 7)
 		.map((date) => ({ date, items: loadDay(date)?.items.length ?? 0 }));

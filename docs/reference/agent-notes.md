@@ -2957,6 +2957,49 @@ file. Add the module to `UNMARKED_MODULES`, or give it a mark, in the same commi
 that creates it. Cost one CI round each on two separate plans: `test_rank.py`
 (2026-09-06) and `test_prompt_loop.py` (2026-09-07).
 
+## A stopwatch cannot prove a cost stopped growing on this box
+
+A "the time must not move" oracle over a large fixture reads as a failure when
+nothing is wrong. Measured 2026-09-09 on an Intel Core i7-1265U: the same
+bounded reads over the same 410-day fixture took 2,657.8 ms in one run and
+3,099.3 ms a few minutes later, nine passes each - **16.6 percent apart on work
+that opened exactly the same files**. Ten days of archive cannot cost that much,
+so the drift buries the signal. It is the page cache: a 224 MB tree does not sit
+in it the way a 115 MB one does, and every growth arm makes the tree bigger,
+which is the confound.
+
+Two things fix it and use both. **Run the two arms alternately in one process**,
+so cache and machine load are shared - a separate-process before and after
+compares two different machines. And **take the oracle on what the code opens,
+not on how long it took**: a count of files and a sum of `statSync().size` over
+the paths the cover selects is arithmetic, has no spread, and answers the
+question Rule #12 actually asks. The row-6 oracle came out as 195 files and
+53,328,670 bytes at 420 published days and the same 195 files and 53,328,670
+bytes at 430 - equal to the byte, where the clock said plus 20 percent.
+
+## Timing a `$lib/server/` module in plain Node, with no test file
+
+`frontend/src/lib/server/payload.ts` and its neighbours can be measured directly
+without adding a spec: bundle with the local esbuild and import the bundle.
+
+```pwsh
+node_modules\.bin\esbuild.cmd src/lib/server/payload.ts `
+  --bundle --format=esm --platform=node --packages=external --outfile=$out
+```
+
+It works because the only `$lib` import in that module is `import type`, which
+esbuild erases before it has to resolve the alias; the relative imports it does
+resolve. Run from `frontend/`, and set `DIGEST_ROOT`, `STATE_ROOT` and
+`TELEMETRY_ROOT` in the importing script **before** the dynamic `import()`, since
+the module reads them at evaluation. The one warning it prints - `Cannot find
+base config file "./.svelte-kit/tsconfig.json"` - is harmless and appears even on
+a healthy tree.
+
+Two traps in the harness rather than the bundle. `process.env.S06_MOD` has to be
+a `file://` URI or Node reads a Windows drive letter as a protocol. And a
+throwaway spec under `frontend/tests/` would have been picked up by the shared
+selector on the next run, which is the reason to bundle instead.
+
 ## See also
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands these traps interfere with.
