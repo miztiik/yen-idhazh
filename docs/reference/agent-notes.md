@@ -3235,6 +3235,35 @@ rows and every one of them is `publish`. A stage that carries none of the
 columns you are measuring is not the stage that did the work. Measured
 2026-09-09 while raising the truncation cap.
 
+## `test:changed` exits 1 with every test green when the browser suite writes a validation receipt
+
+`malformed-day.spec.ts` runs `idhazh validate-days` as a real subprocess with
+`cwd` at the repository root, and that command appends a row to
+`state/day-validations.csv` for any committed day it has no receipt for. That
+file is tracked, so it is inside the input fingerprint `run-checks.ts` takes
+before the checks and asserts again after the browser groups. The row lands
+during the browser phase, the fingerprint moves, and the run ends
+`The canary build has stale inputs` and `Result: exit 1` under a list where
+every one of the 1,009 browser tests passed and nothing failed.
+
+It reads as a broken build. It is bookkeeping. The tell is `git status` - a
+modified `state/day-validations.csv` that no edit of yours touched - and the
+confirmation is one line:
+
+```powershell
+python -c "from idhazh.cli import _validator_identity; print(_validator_identity())"
+```
+
+Run it in your worktree and in a clean checkout of `main`. Identical values mean
+your change did not move the rules, so the missing receipt was missing before
+you started; the daily pipeline is the thing that normally writes it, and every
+row in that ledger's history came from a `digest:` commit. Do not commit the row
+- it is written from the spec's scratch tree, not from a published run.
+
+The row is appended once. A second run finds the receipt and writes nothing, so
+re-running certifies green. CI is unaffected either way: `ci.yml` calls
+`npm run test:browser` directly and never takes the fingerprint. Seen 2026-09-09.
+
 ## See also
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands these traps interfere with.

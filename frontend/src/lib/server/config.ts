@@ -353,7 +353,8 @@ const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 		{ min_source_words: 60, target_words_min: 50, target_words_max: 90, key_points_min: 1, key_points_max: 2 },
 		{ min_source_words: 700, target_words_min: 70, target_words_max: 150, key_points_min: 2, key_points_max: 3 },
 		{ min_source_words: 2000, target_words_min: 110, target_words_max: 200, key_points_min: 2, key_points_max: 4 },
-		{ min_source_words: 3000, target_words_min: 150, target_words_max: 230, key_points_min: 2, key_points_max: 5 }
+		{ min_source_words: 3000, target_words_min: 150, target_words_max: 230, key_points_min: 2, key_points_max: 5 },
+		{ min_source_words: 5000, target_words_min: 180, target_words_max: 230, key_points_min: 2, key_points_max: 5 }
 	]
 };
 const CONSOLE_DEFAULTS: ConsoleConfig = {
