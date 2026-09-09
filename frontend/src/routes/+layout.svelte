@@ -56,6 +56,6 @@
 		{@render children()}
 	</main>
 	{#if data?.ui}
-		<SiteFooter facts={data.footer ?? null} repoUrl={data.ui.repo_url} />
+		<SiteFooter repoUrl={data.ui.repo_url} />
 	{/if}
 </div>

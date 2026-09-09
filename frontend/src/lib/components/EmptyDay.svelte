@@ -15,7 +15,7 @@
 	import { longDate } from '$lib/format';
 	import Icon from '$lib/icons/Icon.svelte';
 
-	let { date, latest }: { date: string | null; latest: string | null } = $props();
+	let { date }: { date: string | null } = $props();
 </script>
 
 <section class="empty" data-empty-day>
@@ -29,10 +29,12 @@
 	{/if}
 	<p class="empty-note">That can mean there was no news, or the run did not finish.</p>
 	<nav class="empty-nav" aria-label="Other days">
-		{#if latest && latest !== date}
-			<a href="{base}/{latest}/" class="empty-link">
-				Latest day - {longDate(latest)}
-			</a>
+		{#if date}
+			<!-- The address, never the date. This link used to name the newest day,
+			     which is read off the published tree - so it rewrote every page
+			     carrying this panel each time a day published. `/` is the same
+			     destination under a name no later run can change. -->
+			<a href="{base}/" class="empty-link">Today's digest</a>
 		{/if}
 		<a href="{base}/archive/" class="empty-link">All days</a>
 	</nav>

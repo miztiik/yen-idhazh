@@ -31,14 +31,12 @@
 		day,
 		vertical = null,
 		datePrefix = '',
-		latest = null,
 		settled = true,
 		ui
 	}: {
 		day: DigestDay;
 		vertical?: string | null;
 		datePrefix?: string;
-		latest?: string | null;
 		/** Whether the list in hand is everything this page will ever hold. False
 		 * while a reading route is still fetching the stories past its seed, which
 		 * is the one moment a story that is on its way looks like a story that was
@@ -225,7 +223,7 @@
 		/>
 	{:else if section === 'items'}
 		{#if day.items.length === 0}
-			<EmptyDay date={day.date} {latest} />
+			<EmptyDay date={day.date} />
 		{:else if list.matched === 0}
 			<p class="py-12 text-base text-text-secondary">
 				Nothing on today's page matches &ldquo;{query}&rdquo;.
