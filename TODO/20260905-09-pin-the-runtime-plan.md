@@ -32,7 +32,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | Six numbers the job already has and throws away | - | A | DONE #525 (three of six) | yi-h01-memory | #525 | worker |
 | 2 | A model swap can no longer inherit in silence | - | A | DONE #528 | yi-h02-inherit | #528 | worker |
 | 3 | The window doubles and flash attention pays for it | 1, 2 | B | DONE #547 - trigger 1 CLEARED by measurement | yi-h06-window | #547 | worker |
-| 4 | One run prices the runtime and nothing else | 3 | C | PENDING - now prices three changes, see below | - | - | - |
+| 4 | One run prices the runtime and nothing else | 3 | C | IN-FLIGHT - run `34379502244`, dispatched 2026-09-09 16:53Z on `0d49b61f` | - | - | orchestrator |
 | 5 | The article cap doubles to 10,000 tokens | 3 | B2 | DONE #548 | yi-h07-cap | #548 | worker |
 
 ### Trigger 1 is CLEARED. The window fits, and here is the reading that settles it
@@ -496,6 +496,38 @@ is comparable with one written after** - which is correct rather than a cost, as
 the text the model read is not the same text.
 
 Dispatch: `gh workflow run digest.yml -f shards=4`, nothing else in flight.
+
+### The dispatch, and what to read when it lands
+
+**Run `34379502244`**, `workflow_dispatch`, 4 shards, faithfulness on, started
+2026-09-09 16:53Z on `0d49b61f`. Nothing else was in flight, and
+`concurrency: group: digest` with `cancel-in-progress: false` means the 18:20Z
+cron queues behind it rather than overlapping.
+
+**The baseline it is read against is run `2026-09-09-34323771996`** - the 07:25Z
+scheduled run, same day, same 4 shards, `n_ctx` 8,192, 5,000-token cap, 601
+memory samples. Same-day is deliberate: it holds the source set and the news
+volume roughly still, so the delta is the runtime rather than the calendar.
+
+**Not a frozen article set, and that is a second deviation.** The `date` input
+would re-run a past day, which overwrites that day's published digest, so it was
+not used. The article set therefore differs between the two runs. It does not
+weaken what row 4 is for: memory at a doubled window, the KV-buffer line and the
+prefill rate are properties of the runtime, not of which articles arrived.
+It does mean **no summary-quality comparison may be drawn from this pair** - and
+decision 3 already refused that claim for a different reason.
+
+| What to read | Where | What each answer means |
+| --- | --- | --- |
+| KV buffer at `-lv 4` | the shard's server log, first real runner capture at raised verbosity | near 512 MiB confirms the 0.25 GiB projection; near 2,304 MiB says the head-dimension card was read wrong and the raise cost about 1.1 GiB |
+| `resolve_fused_ops: Flash Attention enabled` | same log | present means `on` was honoured on a runner's processor; absent means the verbosity did not take, which fails the CHECK rather than attention |
+| `MemAvailable` low-water mark | the `/proc/meminfo` capture PR #541 added | against 5.63 GiB at 8,192. Under 1.0 GiB fires ESCALATE trigger 1 |
+| `peak_rss_bytes`, `python_peak_rss_bytes` | `state/runtime-counters.csv` | the second, independent instrument |
+| prefill seconds on cut items | `state/item-health/2026-09.csv`, `source_words_before_cap` | against a predicted 8.5 minutes for a cut item and about one cut item a day |
+| `pipeline_fingerprint` | `state/fingerprints.csv` | it MUST have moved. `n_ctx` and `truncation_cap_tokens` are both digested, so a stamp that did not move means the config change did not reach the run |
+
+Every number written from this run carries the model entry, the runner, the date
+and the spread (Rule #10), and lands in `docs/reference/measurements.md`.
 
 ---
 
