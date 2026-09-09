@@ -1090,6 +1090,21 @@ PROMPT_OVERHEAD_TOKENS: Final = 997
 WORST_TOKENS_A_WORD: Final = 1.585
 
 
+def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
+    """The longest prompt the cap allows, and that prompt plus a full answer.
+
+    One derivation because the serving window and the training window have to
+    agree about it. The cap is spent as words at `TOKENS_PER_WORD`, so an
+    article whose prose tokenizes harder than that overruns the budget its own
+    cap gave it, and both windows have to cover the article that did rather than
+    the one that behaved.
+    """
+    inference = committed.models.summarize.inference
+    cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
+    worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
+    return worst_prompt, worst_prompt + inference.max_output_tokens
+
+
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     """The cap and the window are one decision, and this is where they meet.
 
@@ -1100,18 +1115,12 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     of it. Nothing in the tree said so. A doc said so, and a doc does not fail.
 
     The worst case is built from the measured expansion rather than from
-    `TOKENS_PER_WORD`. The cap is spent as words at 1.3 tokens each, so an
-    article whose prose tokenizes harder than that overruns the budget the cap
-    handed it, and the window has to cover the article that did, not the one
-    that behaved. At the committed cap of 10,000 that is 997 + 12,192 + 900 =
-    14,089 tokens of 16,384, which is 86 percent and a margin of 1.16x.
+    `TOKENS_PER_WORD`. At the committed cap of 10,000 that is 997 + 12,191 + 900
+    = 14,088 tokens of 16,384, which is 86 percent and a margin of 1.16x.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     inference = committed.models.summarize.inference
-
-    cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
-    worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
-    worst_sequence = worst_prompt + inference.max_output_tokens
+    worst_prompt, worst_sequence = _worst_sequence_tokens(committed)
 
     assert worst_sequence <= inference.n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
@@ -1119,6 +1128,34 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
         f"{worst_prompt} prompt tokens, and {inference.max_output_tokens} of answer "
         f"puts the sequence at {worst_sequence} against a window of {inference.n_ctx}. "
         "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
+    )
+
+
+def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
+    """The same sum again, against the window a training session opens.
+
+    A training row is a prompt the pipeline could have sent and an answer it
+    could have returned, so it is the same sequence the test above sizes - and
+    `finetune.sequence_length` short of it does not fail loudly. The wrangler and
+    the notebook DROP an over-length row and count it, never truncate it, which
+    is the right refusal and a silent one: at 8,192 against a 10,000-token cap
+    the training set lost every article past about 5,500 words while production
+    went on summarizing them.
+
+    So the failure this catches is not a crash. It is a model tuned on the short
+    half of its own job, found a session too late.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    _, worst_sequence = _worst_sequence_tokens(committed)
+    window = committed.finetune.sequence_length
+
+    assert worst_sequence <= window, (
+        f"the longest article extract.truncation_cap_tokens "
+        f"({committed.extract.truncation_cap_tokens}) lets through makes a "
+        f"{worst_sequence}-token training row against finetune.sequence_length of "
+        f"{window}, so the wrangler and the notebook would drop it and say so in a "
+        "line nobody reads until the adapter is short. Raise "
+        "finetune.sequence_length beside the cap, or lower the cap."
     )
 
 

@@ -1844,20 +1844,25 @@ class FinetuneConfig(Model):
     )
     epochs: int = Field(default=2, ge=1)
     sequence_length: int = Field(
-        default=8192,
+        default=16384,
         ge=1,
         description=(
-            "Measured worst case, rounded up to a power of two - and the cap has since "
-            "outgrown it. At extract.truncation_cap_tokens of 5,000 the system prompt "
-            "was 920 tokens, a user turn carrying an article measured 5,335 with its "
-            "fence and instructions, and the output budget is 900 - so 7,155, which "
-            "8192 cleared. The cap doubled to 10,000 on 2026-09-09 and the same sum is "
-            "about 11,900 for a typical article and about 14,100 for the longest one "
-            "the ledger has recorded, both above 8192. A row longer than this is "
-            "dropped and counted by the wrangler, never truncated, so the training set "
-            "loses its longest rows rather than teaching the model to stop mid-summary. "
-            "Raising it costs GPU memory on the machine that trains, which is not the "
-            "runner, so it is a separate decision with its own measurement."
+            "How long a training row is allowed to be, and it is the same sequence "
+            "models.<teacher>.inference.n_ctx serves: a training row is a prompt the "
+            "pipeline could have sent and an answer it could have returned. So this "
+            "tracks that window rather than being derived on its own. At "
+            "extract.truncation_cap_tokens of 10,000 the worst case is 997 tokens of "
+            "prompt overhead, 12,191 for the longest and hardest-tokenizing article the "
+            "cap lets through, and 900 of answer - 14,088 of 16,384, which is 86 "
+            "percent. A row longer than this is dropped and counted by the wrangler and "
+            "by the notebook, never truncated, because a truncated target teaches the "
+            "model to stop mid-summary; at this value nothing is over, where at the "
+            "8,192 this replaced on 2026-09-09 the training set silently lost every "
+            "article past about 5,500 words. What it costs is GPU memory on the machine "
+            "that trains, quadratically in attention - that machine is not the runner "
+            "(Rule #2 does not reach it), and a card that cannot hold the row lowers "
+            "SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb, which drops the long "
+            "rows for that session only and says how many it dropped."
         ),
     )
     prompt_iterations: int = Field(
@@ -2984,6 +2989,38 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T23:30",
+            change=(
+                "finetune.sequence_length default and config/idhazh.json both move from "
+                "8192 to 16384, which is models.summarize.inference.n_ctx. No field was "
+                "added, removed or retyped."
+            ),
+            why=(
+                "The other half of the cap raise earlier the same day, which the entry "
+                "below deferred. The cap went to 10,000 tokens and the window to 16,384, "
+                "so the longest article the pipeline now reads makes a 14,088-token "
+                "sequence - 997 of prompt overhead, 12,191 of article, 900 of answer, "
+                "measured over the 4,117 published items in state/item-health/2026-09.csv "
+                "(2026-09-01 to 09, stock ubuntu-latest 4 vCPU runners). At 8,192 the "
+                "wrangler and the notebook DROPPED that row and counted it, so the "
+                "training set quietly lost every article past about 5,500 words while "
+                "production kept summarizing them: the model would have been tuned on "
+                "the short half of the work it does. Dropping is the right refusal - a "
+                "truncated target teaches the model to stop mid-summary - so the fix is "
+                "to stop making rows that have to be refused. 16384 is n_ctx rather than "
+                "a second derivation, because a training row is a prompt the pipeline "
+                "could have sent and an answer it could have returned; one number now "
+                "covers both, and test_the_training_window_covers_the_longest_row_the_cap_"
+                "allows fails on any later pair that does not fit. The cost is GPU memory "
+                "on the machine that trains, quadratically in attention. That machine is "
+                "not the runner, so Rule #2's budget does not price it, and no number "
+                "here is a measurement of a card - nothing has trained yet (Rule #10). "
+                "The escape hatch is per-session and already existed: "
+                "SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb lowers it for a "
+                "card that cannot hold the row, and prints how many rows that dropped."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T21:30",
             change=(

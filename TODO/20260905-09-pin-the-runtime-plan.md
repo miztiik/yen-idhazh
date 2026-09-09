@@ -174,11 +174,12 @@ said it, and a doc does not fail.
 
 ### Two knobs the cap raise moved that row 5 did NOT touch
 
-Both need an owner decision and neither is a runner question.
+`finetune.sequence_length` has since been settled; `elements.max_per_article`
+still needs an owner decision, and neither is a runner question.
 
 | Knob | Value | What the cap raise did to it |
 | --- | --- | --- |
-| `finetune.sequence_length` | 8192, **unchanged** | The worst training row is now about 11,900 typical and 14,100 worst, both above 8,192. The wrangler DROPS an over-length row and counts it - it never truncates - so the training set silently loses its longest rows. Raising it costs GPU memory on the machine that trains, which is not the runner, so it is out of this plan's scope and needs its own dispatch |
+| `finetune.sequence_length` | 8192 -> **16384, landed 2026-09-09** | The worst training row is now about 11,900 typical and 14,088 worst, both above 8,192. The wrangler DROPS an over-length row and counts it - it never truncates - so the training set silently lost its longest rows: every article past about 5,500 words, while production went on summarizing them. Settled by raising the window to `models.summarize.inference.n_ctx` rather than by truncating, because a truncated target teaches the model to stop mid-summary. One sum now sizes both windows and `test_the_training_window_covers_the_longest_row_the_cap_allows` fails on any later pair that does not fit. The cost is GPU memory on the machine that trains, which is not the runner, and it is unmeasured because nothing has trained yet - `SEQUENCE_LENGTH_OVERRIDE` in the notebook is the per-session way down |
 | `elements.max_per_article` | 256, **unchanged** | Was above the densest article's candidate count of about 211; now below it at about 420. **A bound that did not bind now binds.** The densest long article keeps its first 256 quantities in article order and `candidates_found` records what the pass matched. News prose front-loads and the planner reads at most 16 by index, so the loss is small and recorded - but it is no longer theoretical |
 
 One more question was recorded open rather than answered, in
