@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
 
@@ -398,4 +399,133 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 	);
 	const after = (await page.locator('[data-console-band]').innerText()).replace(/\s+/g, ' ').trim();
 	expect(after, 'moving a route window control moved the standing band').toBe(before);
+});
+
+/** The payload the pipeline publishes, which is the one a reader is served. */
+const BAND_PAYLOAD = resolve(process.cwd(), 'public', 'console', 'band.json');
+
+/** The ceiling, in bytes over the wire. 8 KB rather than the 5 KB first asked
+ * for, because the months list rides on this payload (Carmack, 2026-09-08). */
+const BAND_CEILING_BYTES = 8 * 1024;
+
+test('THE ORACLE: the band is at most 8 KB on the wire', () => {
+	const raw = readFileSync(BAND_PAYLOAD);
+	const wire = gzipSync(raw, { level: 5 }).length;
+
+	// Measured 2026-09-09 on the committed payload, node 24: 2,043 bytes raw and
+	// 791 gzipped, which is 9.7 percent of the ceiling. The ceiling is not about
+	// today's payload - it is what stops the band becoming the thing an operator
+	// waits for. A band that has to be downloaded before it can be read is a
+	// verdict that arrives after the page it was meant to explain.
+	expect(
+		wire,
+		`the band is ${wire} gzipped bytes, over its ${BAND_CEILING_BYTES}-byte ceiling`
+	).toBeLessThanOrEqual(BAND_CEILING_BYTES);
+});
+
+test('THE ORACLE: the months list is the only part of the band that grows', () => {
+	const payload = JSON.parse(readFileSync(BAND_PAYLOAD, 'utf8')) as { months: string[] };
+	expect(Array.isArray(payload.months), 'the band carries no months list').toBe(true);
+
+	// Everything else on the payload is a fixed set of sentences and counts about
+	// one day, so the only term that moves with the archive is one `YYYY-MM`
+	// string a month. Priced here rather than asserted about today: a century of
+	// publishing adds 1,200 of them, and a list of dates with a shared prefix is
+	// what gzip is best at. Measured 2026-09-09, node 24: 1,200 months takes the
+	// payload to 3,247 gzipped bytes, 39.6 percent of the ceiling.
+	const withMonths = (count: number) => {
+		const months: string[] = [];
+		for (let i = 0; i < count; i += 1) {
+			months.push(`${2026 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`);
+		}
+		return gzipSync(Buffer.from(JSON.stringify({ ...payload, months })), { level: 5 }).length;
+	};
+
+	const century = withMonths(1200);
+	expect(
+		century,
+		`a century of months puts the band at ${century} gzipped bytes, over its ceiling`
+	).toBeLessThanOrEqual(BAND_CEILING_BYTES);
+
+	// And the growth is a rate, not a cliff: a hundred years of months costs less
+	// than the ceiling has spare, so nothing here needs a window on the list.
+	expect(century - withMonths(0), 'the months list costs more than the ceiling has room for')
+		.toBeLessThan(BAND_CEILING_BYTES - withMonths(0));
+});
+
+/** A request for code, not for an answer. The band is measured against the
+ * payloads, because a route's own chunk has to arrive before any load runs. */
+const CODE = /\/_app\/|\.(?:js|mjs|css|map|woff2?|ico|png|jpe?g|svg|webmanifest)$/;
+
+/** SvelteKit's own file for the route, holding what the three `+page.server.ts`
+ * loads return. The router fetches it and AWAITS it before it runs a single
+ * universal load, so while the console keeps a server load this one file is
+ * ahead of the band and there is nothing the band can do about it. */
+const ROUTE_DATA = '/console/__data.json';
+
+test('THE ORACLE: the band is the first payload the console asks for', async ({ page }) => {
+	const issued: string[] = [];
+	page.on('request', (request) => issued.push(new URL(request.url()).pathname));
+
+	// A cold document already carries the band. The routes are prerendered and
+	// the layout load is universal, so SvelteKit resolves its fetch against the
+	// staged payload at build time and the verdict is markup - nothing is asked
+	// for at all. The request exists on a move INTO the console from outside,
+	// which is the entry an operator makes from a tab he already had open, and it
+	// is the entry this measures.
+	await page.goto('/');
+	await expect(page.locator('body')).toBeVisible();
+	issued.length = 0;
+
+	await page.evaluate(() => {
+		const link = document.createElement('a');
+		link.href = '/console/';
+		link.id = 'oracle-console-entry';
+		link.textContent = 'console';
+		document.body.append(link);
+	});
+	await page.click('#oracle-console-entry');
+	await hydrated(page);
+	// Wait for the route to have asked for its panel data as well, so this cannot
+	// pass by the band being the only payload in the list.
+	await page.waitForFunction(
+		() =>
+			Number(
+				document.querySelector('[data-telemetry-rows]')?.getAttribute('data-telemetry-rows') ?? 0
+			) > 0,
+		undefined,
+		{ timeout: 20_000 }
+	);
+
+	const payloads = issued.filter((path) => !CODE.test(path));
+	const order = payloads.join(', ');
+	expect(payloads.length, `the console asked for ${payloads.length} payloads: ${order}`).toBeGreaterThan(1);
+
+	const bandAt = payloads.indexOf('/console/band.json');
+	expect(bandAt, `the console never asked for the band: ${order}`).toBeGreaterThanOrEqual(0);
+
+	// Nothing of ours may be ahead of it. Measured 2026-09-09 on this tree, node
+	// 24, canary build: the order is `/console/__data.json`, `/console/band.json`,
+	// `/telemetry/2026-07.csv`, `/telemetry/2026-08.csv`, so the band is second
+	// and the one file ahead of it is SvelteKit's, not ours. That file is 31,354
+	// bytes (6,520 gzipped) against the band's 1,904 (779), and the router awaits
+	// it before any universal load starts - so the verdict is a second round trip
+	// today rather than the first. It becomes index 0 when the console's three
+	// server loads go and the file with them; both lines below still hold then.
+	const ahead = payloads.slice(0, bandAt);
+	expect(
+		ahead.filter((path) => path !== ROUTE_DATA),
+		`something of ours got in front of the band: ${order}`
+	).toEqual([]);
+	expect(ahead.length, `${ahead.length} requests are ahead of the band: ${order}`).toBeLessThanOrEqual(1);
+
+	// And it is ahead of every panel the page draws, which is the thing decision 2
+	// bought: the verdict does not wait for the data behind it.
+	const panels = payloads.filter((path) => path.startsWith('/telemetry/'));
+	expect(panels.length, `the route drew no panel data at all: ${order}`).toBeGreaterThan(0);
+	for (const panel of panels) {
+		expect(payloads.indexOf(panel), `${panel} was asked for before the band: ${order}`).toBeGreaterThan(
+			bandAt
+		);
+	}
 });

@@ -3114,6 +3114,14 @@ await context.route((url) => url.pathname.endsWith('band.json'), (r) => r.abort(
 blocks nothing renders a working page and reports a pass, which is the failure
 this whole note is about.
 
+**In the VS Code integrated browser there is no context to create**, and the
+same arm reported `blocked: 0` and a working page on 2026-09-09. What worked
+there: unregister every worker AND empty every cache, navigate again, and only
+then install the block. The site re-registers a worker on mount, but a fresh
+registration does not control the page it was made on, so the request reaches
+the network and the block sees it. Count the aborts here too - that count is the
+only thing that tells the two outcomes apart.
+
 ## A payload a cold document already carries is never fetched, so blocking it on load proves nothing
 
 The console's band is read by a universal `load`. At build time SvelteKit
