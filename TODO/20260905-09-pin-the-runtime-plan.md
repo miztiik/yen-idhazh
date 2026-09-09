@@ -31,7 +31,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Six numbers the job already has and throws away | - | A | DONE #525 (three of six) | yi-h01-memory | #525 | worker |
 | 2 | A model swap can no longer inherit in silence | - | A | DONE #528 | yi-h02-inherit | #528 | worker |
-| 3 | The window doubles and flash attention pays for it | 1, 2 | B | HELD - ESCALATE 1 and 2 | - | - | - |
+| 3 | The window doubles and flash attention pays for it | 1, 2 | B | HELD - ESCALATE 1 only (2 resolved #530) | - | - | - |
 | 4 | One run prices the runtime and nothing else | 3 | C | HELD - blocked by row 3 | - | - | - |
 
 ### What rows 1 and 2 changed under the plan
@@ -88,16 +88,54 @@ asks for, at `n_ctx` 8,192. The independent second instrument agrees: the widene
 `docs/reference/measurements.md` recorded on 2026-09-01, with no model or window
 change in between.
 
-**Trigger 2 - the instrument - does not exist.** The row's oracle asserts flash
-attention active from the server's own startup line, and refuses the flag having
-been passed as evidence. At `b10598` there is no such line to read. `-fa` is
-already wired in `server_argv` (`backend/idhazh/llm/server.py` line 136) and no
-`-lv` is passed, so the server runs at its default verbosity of 3 and prints
-nothing about attention, the KV cache or either buffer.
+**Trigger 2 - the instrument - is RESOLVED, by PR #530.** It was raised because
+no captured log carries a flash-attention line, a KV-buffer line or a
+compute-buffer line. The cause was the verbosity, not the build. Measured
+2026-09-09 on a Windows developer box against `llama-server` `b10444`
+(`5f754ea0e`) and the 8B weights, three runs an arm, zero spread on every
+figure:
 
-**Row 4 inherits both.** Its decision 2 closes the 7.7 GiB gap between
-arithmetic and measurement by reading the KV-buffer and compute-buffer lines out
-of `llama-server.log`. Those are the same absent lines.
+| Reading, at `-lv 4` | no flag, as committed | `-fa on` | `-fa off` |
+| --- | --- | --- | --- |
+| `llama_context: flash_attn` | `auto` | `enabled` | `disabled` |
+| `resolve_fused_ops: Flash Attention enabled` | present | absent | absent |
+| `sched_reserve: CPU compute buffer size` | 112.01 MiB | 112.01 MiB | 572.01 MiB |
+| `/props` and `/metrics`, whole documents | identical | identical | identical |
+
+Three consequences, and the third is the one that changes the plan.
+
+1. **The instrument is the log at `-lv 4`, not `/props`.** `/props` and
+   `/metrics` are byte-identical between the two arms, so neither can answer the
+   question. `/props` remains the right reader for the effective `n_ctx` and the
+   build string, and needs no verbosity change for those.
+2. **The check has three states, not two.** `llama_context: flash_attn` prints
+   what was ASKED for, so with no flag it says `auto` - which is exactly the
+   non-answer the oracle exists to refuse. `resolve_fused_ops` is the decision
+   and prints only when there was one to make. Absent means the verbosity was
+   not raised, and that fails the CHECK rather than attention. Corroborate with
+   the compute-buffer size, which is a physical consequence where a log string
+   is grammar that moves between builds. `-lv 4` costs 1,085 bytes a start
+   rather than 16,011 - 206 lines against 12.
+3. **The committed config already resolves to flash attention ON.** `null` emits
+   no flag, no flag means `auto`, and `auto` resolved to enabled on all four
+   no-flag runs. So row 3's flash-attention half may be a no-op on this
+   processor, and O22's "flash attention pays for the doubling" may already be
+   priced into the 13.29 GiB baseline rather than being a saving still to come.
+   Whether `auto` resolves the same way on a runner's processor is untested and
+   one CI run with `-lv 4` settles it.
+
+Build gap, stated rather than hidden: `digest.yml` pins `b10598` and the box
+tested `b10444`, 154 builds apart. Half the gap is closed by evidence -
+`tests/fixtures/runtime/2026-08-29-3-shard-0.server-head.txt` is a real `b10598`
+runner capture and opens with the same eleven startup lines in the same order,
+`verbosity = 3` among them. So the startup grammar matches across both builds
+and both machines, and the absent loader block was never a CI artefact.
+
+**Trigger 1 still stands, and row 4 still has no memory instrument.** Row 4
+decision 2 closes the 7.7 GiB gap from the KV-buffer and compute-buffer lines,
+which `-lv 4` does now produce - but the arithmetic that gap sits in was written
+against llama-server alone, and the concurrent figure above is what a raise has
+to clear.
 
 ---
 
