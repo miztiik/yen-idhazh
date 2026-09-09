@@ -31,8 +31,108 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Six numbers the job already has and throws away | - | A | DONE #525 (three of six) | yi-h01-memory | #525 | worker |
 | 2 | A model swap can no longer inherit in silence | - | A | DONE #528 | yi-h02-inherit | #528 | worker |
-| 3 | The window doubles and flash attention pays for it | 1, 2 | B | HELD - ESCALATE 1 stands, owner decision (2 resolved #530) | - | - | - |
-| 4 | One run prices the runtime and nothing else | 3 | C | HELD - blocked by row 3 | - | - | - |
+| 3 | The window doubles and flash attention pays for it | 1, 2 | B | IN-FLIGHT - trigger 1 CLEARED by measurement | yi-h06-window | - | worker |
+| 4 | One run prices the runtime and nothing else | 3 | C | PENDING - now prices three changes, see below | - | - | - |
+| 5 | The article cap doubles to 10,000 tokens | 3 | B2 | PENDING | - | - | - |
+
+### Trigger 1 is CLEARED. The window fits, and here is the reading that settles it
+
+**Run `2026-09-09-34323771996`** - Content refresh, scheduled, 4 shards, 601 memory
+samples over the work jobs, `n_ctx` 8,192 throughout. The `/proc/meminfo` capture
+landed by PR #541 is what answers it.
+
+| Reading | Value | What it is |
+| --- | --- | --- |
+| `MemTotal` | **15.61 GiB** | the whole runner, constant |
+| llama-server `VmHWM` | **12.68 GiB** | worst shard; ledger `peak_rss_bytes` 13,612,503,040 B |
+| python | **1.76 GiB** | ledger `python_peak_rss_bytes` 1,893,068,800 B |
+| the model file | **5.29 GiB** | memory-mapped, so it sits INSIDE llama-server's 12.68 as evictable pages rather than on top of it |
+| **`MemAvailable`, tightest instant** | **5.63 GiB free** | shard 0 at 08:01:32Z; never lower across 601 samples |
+
+Per-shard low-water marks: shard 0 **5.63 GiB**, shard 3 5.95, shard 1 7.64,
+shard 2 7.84. The two heavier shards ran hotter and still left over 5.6 GiB.
+
+**Why the earlier 0.59 GiB reading was wrong, in one sentence.** It summed two
+processes' resident sets and subtracted from the machine, which treats the
+memory-mapped weights as committed. They are not committed - they are
+file-backed and the kernel can drop and reload them, which is why it reports
+them as available. At the tightest instant llama and python held 13.96 GiB
+resident while `MemAvailable` stood at 5.63 GiB, and the 5.29 GiB model is the
+difference.
+
+**The raise costs +0.25 GiB and it clears on both framings.** Per full-attention
+layer per token the cache is 4 KV heads x 256 head dim x 2 for K and V; across 8
+attention layers at f16 that is 32 KiB a token, so 0.25 GiB at 8,192 and 0.50 at
+16,384. Kernel framing: 5.63 - 0.25 = **5.38 GiB spare**, 5.4 times the 1.0 GiB
+the trigger asks for. Pessimistic framing, machine minus llama peak:
+15.61 - 12.68 - 0.25 = **2.68 GiB**, still 2.7 times the bar. **The answer does
+not depend on which framing is accepted**, which is the strongest thing that can
+be said for it.
+
+**One instrument caveat, stated rather than buried.** `cgroup_peak_bytes` is
+empty and the cgroup memory files read `unavailable` on all four shards, as the
+schema warned. So the container limit is not readable and `/proc/meminfo` - the
+whole virtual machine - is the reading we have. On a GitHub-hosted runner the job
+owns the machine, so the two are the same thing; if that ever changes,
+`MemAvailable` would overstate what the job may have and this calculation needs
+redoing.
+
+### Row 3 decision 1's REASON is now false, and its conclusion still holds
+
+Decision 1 says the two changes belong in one commit "because flash attention
+removes the term that scales with `ubatch` times `n_ctx`". **Flash attention is
+already on**: `null` emits no flag, no flag means `auto`, and `auto` resolved to
+enabled on every no-flag run (PR #530). So there is no saving still to come - it
+is already inside the 12.68 GiB, and the raise pays the full 0.25 GiB.
+
+One commit is still right, for a different reason: **`n_ctx` and
+`flash_attention` are both fingerprint-digested**, so `n_ctx` moves
+`pipeline_fingerprint` anyway and pinning the flag in the same commit costs
+nothing extra. Split, the tree pays two comparability breaks for one change.
+
+And pinning is worth doing even though it is behaviourally a no-op on this
+processor: `auto` is a runtime autodetect that can resolve differently on other
+silicon, so writing `on` removes a silent dependency. That is the opposite of
+decision 5's `n_threads_batch` case, where `4` and `null` mean the same thing
+everywhere.
+
+### 32,768 is still refused, on the surviving half of its reason
+
+The memory objection is dead - 32,768 costs 1.00 GiB and still fits. The other
+objection stands untouched: the two-call worst case is about 8,580 tokens, so
+16,384 is 1.9 times headroom and 32,768 is 3.8 times. It buys nothing.
+
+### Row 5 is new, and it may not land before row 3
+
+**The article cap goes from 5,000 to 10,000 tokens** (`extract.truncation_cap_tokens`),
+by owner instruction 2026-09-09. **It does not fit at today's window and that is
+arithmetic, not caution**: 880 system + 10,000 article + 900 output is 11,780
+tokens against 8,192, which is 144 percent of it. At 16,384 the same prompt is 72
+percent. So row 5 depends on row 3 and the order is not negotiable.
+
+What it does to plan 11's two-call worst case: 880 + 10,000 + about 1,200 call-1
+output + about 300 call-2 instructions + about 1,200 call-2 output is **13,580
+tokens, 83 percent of 16,384** - so it still fits, with the margin falling from
+1.9 times to 1.2 times. A further cap raise would need a window raise with it.
+
+**The wall-clock cost is unmeasured and row 4 is what measures it.** Prefill ran
+at 9.84 tokens a second when last timed, so an article that actually uses the new
+headroom pays up to 5,000 more tokens of prefill, about 8.5 minutes. How often
+that happens is unknown: the largest prompt on record is 5,516 tokens, but that
+was measured UNDER the 5,000-token cap, so it says how much the cap allowed
+rather than how many articles would have run longer. `run.shard_size` is 5 and
+`run.shard_timeout_minutes` is 200, which is the budget this has to stay inside.
+
+### Row 4 now prices three changes, and that is a deviation with a reason
+
+Its decision 1 wanted one suspect rather than three. It will now carry the window,
+the pinned flag and the article cap together. The alternative is a second
+three-hour dispatch to separate a window raise from a cap raise, and plan 11 can
+still tell them apart because they move different metrics - the window moves
+memory, the cap moves prefill seconds and the words of long articles. Recorded as
+a deviation rather than taken silently.
+
+---
 
 ### The window does not fit, and the reading is now complete (#539)
 
