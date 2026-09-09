@@ -238,6 +238,64 @@ listed: its cover is its argument. These are `backend/`'s;
 The rest declare it in the sentence the docstring opens with, or in the signature
 itself, and either is enough. What is not enough is nothing.
 
+### The console payload producers, 2026-09-09
+
+Seven producers write the console's own payloads at publication
+([console-payloads.md](../architecture/publishing/console-payloads.md)). They
+are listed apart because their cover is a **store** bound rather than a read
+bound: each published directory is pruned to its own
+`observability.public_*_keep_months`, so it holds at most fourteen files however
+long the project runs, and every later listing of it is bounded by that. This is
+the shape the note above calls "a cover enforced on the store instead of on the
+read".
+
+| Read | What it opens | Its cover |
+| --- | --- | --- |
+| `publish_console.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries |
+| `publish_scores.publish`, `publish_feed_health.publish`, `publish_span_rollup.publish` | the state shard for the month named | the month the run appended to |
+| `publish_day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
+| `publish_run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
+| `publish_console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards | `max(console.window_presets)`, committed at 90 |
+
+**Two of them list a tree to learn which months exist**, and that residue is
+named rather than hidden: `publish_run_days.months_published` and
+`publish_day_metrics.months_recorded` cost one directory entry a year plus one a
+month, for ever. Deriving the newest stem from today's date instead would answer
+nothing at all for a tree whose last run was two months ago - the same reason
+`payload.readShards` lists its own directory.
+
+**One is unbounded on purpose.** `publish_machine.months_on_file` streams
+`state/runtime-counters.csv`, which is one appended file with no shards and no
+prune, so a run that wants September's rows walks every row ever appended to
+find them. No cover in days, no cover in months and no identity set answers
+"which rows are September's" more cheaply than reading them. It costs **one file
+handle** whatever it holds - the same handle `ledger.load_runtime_counters`
+already opens for one run - and what it WRITES is bounded: a row below
+`public_machine_keep_months` is dropped on the way through rather than written
+into a file the prune would delete on the next pass.
+
+### The oracle, and what it caught
+
+Measured 2026-09-09 against a built fixture of twenty months - twenty state
+shards a ledger, twenty day payloads, twenty run manifests - by counting the
+files each pass opens with a `sys.addaudithook` hook rather than by timing it.
+A stopwatch on this box cannot tell one month from twenty: a sibling row
+measured 16.6 percent run-to-run variance on identical work, which is more than
+nineteen months of fixture could ever cost. What the reads open is arithmetic
+and has no spread at all.
+
+The first pass reads every month, because every target is missing. The second
+names the month it appended to and reads **that month and no other**, which is
+what `backend/tests/test_console_payloads_producer.py` asserts on the set of
+month stems opened.
+
+**The oracle found a defect the design did not.** The missing-file rule and the
+prune disagreed about the boundary: the prune deleted the six months past
+fourteen, the next pass found them missing and wrote them, and the prune deleted
+them again - every run, for ever, on months no console window can reach.
+`months_to_write` now refuses a month below `oldest_month_kept`, and the second
+pass reads one month rather than seven.
+
 ## The site reads the same collections, 2026-09-09
 
 Everything above is `backend/`. The published site reads the committed tree too -

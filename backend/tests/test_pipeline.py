@@ -998,6 +998,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
                 )
             }
         ),
+        appearance=settings.appearance,
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         watchlist=settings.watchlist,
@@ -1262,6 +1263,7 @@ def test_the_visual_planner_stops_at_its_budget_instead_of_being_killed(
         app=settings.app.model_copy(
             update={"run": settings.app.run.model_copy(update={"visual_planner_budget_minutes": 1})}
         ),
+        appearance=settings.appearance,
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         watchlist=settings.watchlist,
@@ -2662,6 +2664,7 @@ def observed(observability: ObservabilityConfig) -> config.Settings:
     settings = config.load(CONFIG_DIR)
     return config.Settings(
         app=settings.app.model_copy(update={"observability": observability}),
+        appearance=settings.appearance,
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         watchlist=settings.watchlist,

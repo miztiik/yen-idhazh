@@ -27,15 +27,18 @@ throughput figure is interpolated as `series.ts` takes it.
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import math
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
+from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import ledger
+from idhazh import ledger, publish_console
 from idhazh.assemble import write_atomic
+from idhazh.contracts.base import canonical_json
 from idhazh.contracts.day_metrics import (
     INSTRUMENT_COLUMNS,
     DayBands,
@@ -631,3 +634,97 @@ def backfill(state_root: Path, days: Iterable[tuple[str, DigestDay, RunManifest]
         publish(state_root=state_root, date=date, day=day, manifest=manifest)
         for date, day, manifest in days
     ]
+
+
+# --- the browser's copy ------------------------------------------------------
+#
+# The record above is written under `state/`, which is never served. The console
+# reads one record a date, so the copy files by month: one fetch answers for
+# every day of the month an operator is panning over.
+
+
+PUBLIC_DIRNAME: Final = publish_console.DAY_METRICS_DIRNAME
+PUBLIC_SUFFIX: Final = ".json"
+
+
+def public_shard_path(digest_root: Path, month: str) -> Path:
+    """The browser's copy of one month of day records."""
+    return publish_console.month_path(digest_root, PUBLIC_DIRNAME, month, PUBLIC_SUFFIX)
+
+
+def public_shard_relpath(month: str) -> str:
+    """`frontend/public/day-metrics/<YYYY-MM>.json` - the POSIX form, for a log line."""
+    return publish_console.relpath(PUBLIC_DIRNAME, f"{month}{PUBLIC_SUFFIX}")
+
+
+def records_in_month(state_root: Path, month: str) -> list[DayMetrics]:
+    """Every record one month holds, oldest day first.
+
+    One directory listing and at most 31 small files, whatever the archive
+    grows to - the state records are nested `<YYYY>/<MM>/<DD>.json` for exactly
+    this reason (Rule #12). A record that will not validate raises rather than
+    being skipped: this is the only place a band count or an extraction census
+    survives once a day's items are folded, and a month quietly published short
+    would report work that happened as work that did not.
+    """
+    root = state_root / DIRNAME / month[:4] / month[5:7]
+    if not root.is_dir():
+        return []
+    return [DayMetrics.read(path) for path in sorted(root.glob("*.json"))]
+
+
+def months_recorded(state_root: Path) -> list[str]:
+    """Every `<YYYY-MM>` the record tree holds, oldest first.
+
+    One listing a year plus one a month, and no record opened. It grows by one
+    entry a month for ever, and there is no cheaper way to answer which months
+    exist than to look.
+    """
+    root = state_root / DIRNAME
+    found: list[str] = []
+    if not root.is_dir():
+        return found
+    for year in sorted(entry for entry in root.iterdir() if entry.is_dir()):
+        if len(year.name) != 4 or not year.name.isascii() or not year.name.isdigit():
+            continue
+        for month in sorted(entry for entry in year.iterdir() if entry.is_dir()):
+            if len(month.name) != 2 or not month.name.isascii() or not month.name.isdigit():
+                continue
+            found.append(f"{year.name}-{month.name}")
+    return found
+
+
+def read_public_shard(path: Path) -> list[DayMetrics]:
+    """Load a published month back through the contract that wrote it."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError(f"{path.as_posix()} is not a list of day records")
+    return [DayMetrics.model_validate(row) for row in payload]
+
+
+def publish_public(
+    *,
+    state_root: Path,
+    digest_root: Path,
+    keep_months: int,
+    today: date,
+    months: Collection[str] | None = None,
+    ensure_month: str | None = None,
+) -> list[Path]:
+    """Write the browser's copy of each record month that changed."""
+
+    def encode(month: str) -> bytes:
+        rows = records_in_month(state_root, month)
+        return canonical_json([row.model_dump(mode="json") for row in rows]).encode("utf-8")
+
+    return publish_console.publish_series(
+        digest_root=digest_root,
+        dirname=PUBLIC_DIRNAME,
+        suffix=PUBLIC_SUFFIX,
+        available=months_recorded(state_root),
+        encode=encode,
+        keep_months=keep_months,
+        today=today,
+        months=months,
+        ensure_month=ensure_month,
+    )

@@ -1,0 +1,730 @@
+[
+  {
+    "date": "2026-08-21",
+    "models": [
+      "qwen3-8b-q4-k-m"
+    ],
+    "published_charts": 0,
+    "published_items": 4,
+    "runs": [
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 1,
+        "n": 1,
+        "planned": 5,
+        "prefiltered": 0,
+        "run_id": "2026-08-21-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-21T20:09:00Z",
+        "status": "partial",
+        "succeeded": 4
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 1,
+        "n": 2,
+        "planned": 5,
+        "prefiltered": 0,
+        "run_id": "2026-08-21-2",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-21T20:09:00Z",
+        "status": "partial",
+        "succeeded": 4
+      }
+    ],
+    "site_bytes": 13595,
+    "site_files": 2,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-22",
+    "models": [
+      "qwen3-8b-q4-k-m"
+    ],
+    "published_charts": 1,
+    "published_items": 10,
+    "runs": [
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 7,
+        "n": 1,
+        "planned": 17,
+        "prefiltered": 0,
+        "run_id": "2026-08-22-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-22T11:59:39Z",
+        "status": "partial",
+        "succeeded": 10
+      }
+    ],
+    "site_bytes": 54230,
+    "site_files": 4,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-23",
+    "models": [
+      "qwen3-8b-q4-k-m"
+    ],
+    "published_charts": 1,
+    "published_items": 147,
+    "runs": [
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 9,
+        "n": 1,
+        "planned": 17,
+        "prefiltered": 0,
+        "run_id": "2026-08-23-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-23T06:55:32Z",
+        "status": "partial",
+        "succeeded": 8
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 8,
+        "n": 2,
+        "planned": 17,
+        "prefiltered": 0,
+        "run_id": "2026-08-23-2",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-23T10:39:13Z",
+        "status": "partial",
+        "succeeded": 9
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 63,
+        "n": 3,
+        "planned": 200,
+        "prefiltered": 0,
+        "run_id": "2026-08-23-3",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-23T15:20:27Z",
+        "status": "partial",
+        "succeeded": 137
+      }
+    ],
+    "site_bytes": 450011,
+    "site_files": 8,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-24",
+    "models": [
+      "qwen3-8b-q4-k-m"
+    ],
+    "published_charts": 4,
+    "published_items": 731,
+    "runs": [
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 54,
+        "n": 1,
+        "planned": 200,
+        "prefiltered": 0,
+        "run_id": "2026-08-24-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-24T01:35:45Z",
+        "status": "partial",
+        "succeeded": 146
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 55,
+        "n": 2,
+        "planned": 200,
+        "prefiltered": 0,
+        "run_id": "2026-08-24-2",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-24T07:32:59Z",
+        "status": "partial",
+        "succeeded": 145
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 54,
+        "n": 3,
+        "planned": 200,
+        "prefiltered": 0,
+        "run_id": "2026-08-24-3",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-24T10:57:34Z",
+        "status": "partial",
+        "succeeded": 146
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 51,
+        "n": 4,
+        "planned": 200,
+        "prefiltered": 0,
+        "run_id": "2026-08-24-4",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-24T15:05:24Z",
+        "status": "partial",
+        "succeeded": 149
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 55,
+        "n": 5,
+        "planned": 200,
+        "prefiltered": 0,
+        "run_id": "2026-08-24-5",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-24T19:05:26Z",
+        "status": "partial",
+        "succeeded": 145
+      }
+    ],
+    "site_bytes": 2261378,
+    "site_files": 28,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-25",
+    "models": [
+      "qwen3-8b-q4-k-m"
+    ],
+    "published_charts": 27,
+    "published_items": 724,
+    "runs": [
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 55,
+        "n": 1,
+        "planned": 200,
+        "prefiltered": 0,
+        "run_id": "2026-08-25-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-25T03:15:08Z",
+        "status": "partial",
+        "succeeded": 145
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 0,
+        "decision_ms": null,
+        "failed": 55,
+        "n": 2,
+        "planned": 200,
+        "prefiltered": 0,
+        "run_id": "2026-08-25-2",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-25T07:11:18Z",
+        "status": "partial",
+        "succeeded": 145
+      },
+      {
+        "charts_drafted": 0,
+        "decided": 119,
+        "decision_ms": 3032450,
+        "failed": 55,
+        "n": 3,
+        "planned": 200,
+        "prefiltered": 57,
+        "run_id": "2026-08-25-3",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-25T10:52:20Z",
+        "status": "partial",
+        "succeeded": 145
+      },
+      {
+        "charts_drafted": 8,
+        "decided": 108,
+        "decision_ms": 2399954,
+        "failed": 54,
+        "n": 4,
+        "planned": 200,
+        "prefiltered": 54,
+        "run_id": "2026-08-25-4",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-25T15:08:52Z",
+        "status": "partial",
+        "succeeded": 146
+      },
+      {
+        "charts_drafted": 15,
+        "decided": 143,
+        "decision_ms": 2390761,
+        "failed": 57,
+        "n": 5,
+        "planned": 200,
+        "prefiltered": 73,
+        "run_id": "2026-08-25-5",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-25T19:31:00Z",
+        "status": "partial",
+        "succeeded": 143
+      }
+    ],
+    "site_bytes": 4204287,
+    "site_files": 57,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-26",
+    "models": [
+      "qwen3-8b-q4-k-m"
+    ],
+    "published_charts": 40,
+    "published_items": 621,
+    "runs": [
+      {
+        "charts_drafted": 7,
+        "decided": 92,
+        "decision_ms": 2403290,
+        "failed": 57,
+        "n": 1,
+        "planned": 198,
+        "prefiltered": 45,
+        "run_id": "2026-08-26-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-26T03:28:00Z",
+        "status": "partial",
+        "succeeded": 141
+      },
+      {
+        "charts_drafted": 18,
+        "decided": 93,
+        "decision_ms": 2411293,
+        "failed": 62,
+        "n": 2,
+        "planned": 194,
+        "prefiltered": 49,
+        "run_id": "2026-08-26-2",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-26T07:11:57Z",
+        "status": "partial",
+        "succeeded": 132
+      },
+      {
+        "charts_drafted": 11,
+        "decided": 96,
+        "decision_ms": 2416636,
+        "failed": 48,
+        "n": 3,
+        "planned": 160,
+        "prefiltered": 50,
+        "run_id": "2026-08-26-3",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-26T10:53:38Z",
+        "status": "partial",
+        "succeeded": 112
+      },
+      {
+        "charts_drafted": 11,
+        "decided": 83,
+        "decision_ms": 2406767,
+        "failed": 40,
+        "n": 4,
+        "planned": 160,
+        "prefiltered": 35,
+        "run_id": "2026-08-26-4",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-26T15:54:44Z",
+        "status": "partial",
+        "succeeded": 120
+      },
+      {
+        "charts_drafted": 8,
+        "decided": 103,
+        "decision_ms": 2437064,
+        "failed": 44,
+        "n": 5,
+        "planned": 160,
+        "prefiltered": 55,
+        "run_id": "2026-08-26-5",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-26T20:06:06Z",
+        "status": "partial",
+        "succeeded": 116
+      }
+    ],
+    "site_bytes": 7024424,
+    "site_files": 99,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-27",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 25,
+    "published_items": 334,
+    "runs": [
+      {
+        "charts_drafted": 14,
+        "decided": 114,
+        "decision_ms": 1226361,
+        "failed": 46,
+        "n": 1,
+        "planned": 160,
+        "prefiltered": 52,
+        "run_id": "2026-08-27-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-27T12:51:03Z",
+        "status": "partial",
+        "succeeded": 114
+      },
+      {
+        "charts_drafted": 13,
+        "decided": 95,
+        "decision_ms": 2424565,
+        "failed": 47,
+        "n": 2,
+        "planned": 160,
+        "prefiltered": 45,
+        "run_id": "2026-08-27-2",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-27T20:40:15Z",
+        "status": "partial",
+        "succeeded": 113
+      },
+      {
+        "charts_drafted": 7,
+        "decided": 104,
+        "decision_ms": 2405952,
+        "failed": 53,
+        "n": 3,
+        "planned": 160,
+        "prefiltered": 54,
+        "run_id": "2026-08-27-3",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-27T23:48:50Z",
+        "status": "partial",
+        "succeeded": 107
+      }
+    ],
+    "site_bytes": 8028685,
+    "site_files": 112,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-28",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 13,
+    "published_items": 117,
+    "runs": [
+      {
+        "charts_drafted": 15,
+        "decided": 78,
+        "decision_ms": 2409311,
+        "failed": 43,
+        "n": 1,
+        "planned": 160,
+        "prefiltered": 28,
+        "run_id": "2026-08-28-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-28T14:24:17Z",
+        "status": "partial",
+        "succeeded": 117
+      }
+    ],
+    "site_bytes": 8502162,
+    "site_files": 126,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-29",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 20,
+    "published_items": 366,
+    "runs": [
+      {
+        "charts_drafted": 7,
+        "decided": 93,
+        "decision_ms": 2419571,
+        "failed": 52,
+        "n": 1,
+        "planned": 160,
+        "prefiltered": 41,
+        "run_id": "2026-08-29-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-29T01:46:40Z",
+        "status": "partial",
+        "succeeded": 108
+      },
+      {
+        "charts_drafted": 10,
+        "decided": 104,
+        "decision_ms": 2219924,
+        "failed": 56,
+        "n": 2,
+        "planned": 160,
+        "prefiltered": 58,
+        "run_id": "2026-08-29-2",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-29T09:06:50Z",
+        "status": "partial",
+        "succeeded": 104
+      },
+      {
+        "charts_drafted": 8,
+        "decided": 105,
+        "decision_ms": 2450605,
+        "failed": 10,
+        "n": 3,
+        "planned": 129,
+        "prefiltered": 52,
+        "run_id": "2026-08-29-3",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-29T19:29:35Z",
+        "status": "partial",
+        "succeeded": 119
+      },
+      {
+        "charts_drafted": 9,
+        "decided": 103,
+        "decision_ms": 2454568,
+        "failed": 8,
+        "n": 4,
+        "planned": 123,
+        "prefiltered": 53,
+        "run_id": "2026-08-29-4",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-29T21:54:13Z",
+        "status": "partial",
+        "succeeded": 115
+      }
+    ],
+    "site_bytes": 9695809,
+    "site_files": 150,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-30",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 38,
+    "published_items": 431,
+    "runs": [
+      {
+        "charts_drafted": 11,
+        "decided": 93,
+        "decision_ms": 2430612,
+        "failed": 9,
+        "n": 1,
+        "planned": 106,
+        "prefiltered": 47,
+        "run_id": "2026-08-30-1",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-30T08:22:07Z",
+        "status": "partial",
+        "succeeded": 97
+      },
+      {
+        "charts_drafted": 10,
+        "decided": 91,
+        "decision_ms": 2444507,
+        "failed": 6,
+        "n": 2,
+        "planned": 99,
+        "prefiltered": 41,
+        "run_id": "2026-08-30-2",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-30T11:58:05Z",
+        "status": "partial",
+        "succeeded": 93
+      },
+      {
+        "charts_drafted": 9,
+        "decided": 88,
+        "decision_ms": 1080984,
+        "failed": 5,
+        "n": 3,
+        "planned": 93,
+        "prefiltered": 43,
+        "run_id": "2026-08-30-3",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-30T14:52:45Z",
+        "status": "partial",
+        "succeeded": 88
+      },
+      {
+        "charts_drafted": 9,
+        "decided": 81,
+        "decision_ms": 1979489,
+        "failed": 7,
+        "n": 4,
+        "planned": 88,
+        "prefiltered": 43,
+        "run_id": "2026-08-30-4",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-30T18:05:39Z",
+        "status": "partial",
+        "succeeded": 81
+      },
+      {
+        "charts_drafted": 6,
+        "decided": 72,
+        "decision_ms": 1745930,
+        "failed": 7,
+        "n": 5,
+        "planned": 79,
+        "prefiltered": 38,
+        "run_id": "2026-08-30-5",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-30T21:13:41Z",
+        "status": "partial",
+        "succeeded": 72
+      }
+    ],
+    "site_bytes": 11266823,
+    "site_files": 189,
+    "version": "2026-09-09"
+  },
+  {
+    "date": "2026-08-31",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 43,
+    "published_items": 601,
+    "runs": [
+      {
+        "charts_drafted": 10,
+        "decided": 111,
+        "decision_ms": 1369643,
+        "failed": 6,
+        "n": 1,
+        "planned": 117,
+        "prefiltered": 48,
+        "run_id": "2026-08-31-33374118069",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-31T08:42:14Z",
+        "status": "partial",
+        "succeeded": 111
+      },
+      {
+        "charts_drafted": 8,
+        "decided": 86,
+        "decision_ms": 2416397,
+        "failed": 8,
+        "n": 2,
+        "planned": 145,
+        "prefiltered": 36,
+        "run_id": "2026-08-31-33399830093",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-31T13:57:51Z",
+        "status": "partial",
+        "succeeded": 137
+      },
+      {
+        "charts_drafted": 12,
+        "decided": 127,
+        "decision_ms": 1379596,
+        "failed": 6,
+        "n": 3,
+        "planned": 133,
+        "prefiltered": 76,
+        "run_id": "2026-08-31-33420639886",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-31T17:38:34Z",
+        "status": "partial",
+        "succeeded": 127
+      },
+      {
+        "charts_drafted": 14,
+        "decided": 118,
+        "decision_ms": 2371280,
+        "failed": 12,
+        "n": 4,
+        "planned": 130,
+        "prefiltered": 70,
+        "run_id": "2026-08-31-33434587836",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-31T20:11:01Z",
+        "status": "partial",
+        "succeeded": 118
+      },
+      {
+        "charts_drafted": 9,
+        "decided": 108,
+        "decision_ms": 2136144,
+        "failed": 6,
+        "n": 5,
+        "planned": 114,
+        "prefiltered": 61,
+        "run_id": "2026-08-31-33448379177",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-08-31T22:55:14Z",
+        "status": "partial",
+        "succeeded": 108
+      }
+    ],
+    "site_bytes": 13392838,
+    "site_files": 234,
+    "version": "2026-09-09"
+  }
+]
