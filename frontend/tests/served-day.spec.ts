@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ITEM_FIELDS, VIEW_VERSION, projectDay } from '../src/lib/payload/project';
+import { DAY_FIELDS, ITEM_FIELDS, VIEW_VERSION, projectDay } from '../src/lib/payload/project';
 
 /**
  * The served day, read the way a browser reads it.
@@ -163,15 +163,38 @@ test('every day serves the shape the contract names', () => {
 	}
 
 	for (const one of DAYS) {
-		expect(Object.keys(one.served).sort(), `${one.name} is not the served day`).toEqual([
-			'items',
-			'version'
-		]);
+		expect(Object.keys(one.served).sort(), `${one.name} is not the served day`).toEqual(
+			[...DAY_FIELDS, 'version'].sort()
+		);
 		expect(one.served.version, `${one.name} carries the wrong stamp`).toBe(VIEW_VERSION);
 		for (const item of one.served.items) {
 			expect(Object.keys(item).sort(), `${one.name} ${String(item.item_id)}`).toEqual(
 				[...ITEM_FIELDS].sort()
 			);
+		}
+	}
+});
+
+/** The day's own facts reach the wire, and an absent one is null rather than a
+ * value.
+ *
+ * They joined the served day on 2026-09-09, because deleting the dated document
+ * left the browser with no other source for the date, the desks, the leading
+ * block, the run list or the day notice. A fixture that carries none of them is
+ * what says the projector writes an explicit null rather than leaving the key
+ * out - which is what makes every served day the same shape whichever day it was
+ * published on.
+ */
+test('the day facts are projected, and an absent one is null', () => {
+	const facts = DAY_FIELDS.filter((name) => name !== 'items');
+	expect(facts.length, 'the served day carries no day-level fact at all').toBeGreaterThan(0);
+
+	for (const one of DAYS) {
+		const committed = one.committed as unknown as Record<string, unknown>;
+		const served = one.served as unknown as Record<string, unknown>;
+		for (const name of facts) {
+			expect(name in served, `${one.name} left ${name} out instead of nulling it`).toBe(true);
+			expect(served[name], `${one.name} invented ${name}`).toEqual(committed[name] ?? null);
 		}
 	}
 });

@@ -25,7 +25,26 @@
  */
 
 import { base } from '$app/paths';
-import type { DigestDay, DigestItem } from '$lib/payload/types';
+import type { DayForPage, DigestItem } from '$lib/payload/types';
+
+/** What one ask came back with.
+ *
+ * **`missing` is not a kind of failure, and that is the whole reason this shape
+ * exists.** Until 2026-09-09 a dated route was a page a build wrote, so a date
+ * nobody published had no page and the reader met the 404 screen before any
+ * request was made - which let this module read every failed fetch as a day that
+ * went missing after publication. One shell answers every dated URL now, so the
+ * host's answer about the payload is the only thing that can tell the two apart:
+ * a 404 or a 410 is the host saying it has no such day, and everything else is a
+ * connection that did not work.
+ */
+export interface DayReply {
+	day: DayForPage | null;
+	/** The host answered, and its answer was that this date has no payload. A
+	 * dropped connection is never this: telling a reader a day was never
+	 * published when their train went into a tunnel is a lie they can check. */
+	missing: boolean;
+}
 
 /** One date this session has asked for.
  *
@@ -36,8 +55,8 @@ import type { DigestDay, DigestItem } from '$lib/payload/types';
  */
 interface HeldDay {
 	revision: string | null;
-	payload: DigestDay | null;
-	day: Promise<DigestDay | null>;
+	payload: DayForPage | null;
+	day: Promise<DayReply>;
 }
 
 /** How many days one session keeps in hand.
@@ -94,8 +113,8 @@ export function dayUrl(date: string, root: string = base): string | null {
 }
 
 /** The day published on that date, or null when it cannot be read. */
-export function loadDay(date: string, fetcher: typeof fetch = fetch): Promise<DigestDay | null> {
-	return requestDay(date, fetcher, false);
+export function loadDay(date: string, fetcher: typeof fetch = fetch): Promise<DayForPage | null> {
+	return requestDay(date, fetcher, false).then((reply) => reply.day);
 }
 
 /** One ask for a date, answered from what the session holds or from the host.
@@ -104,11 +123,7 @@ export function loadDay(date: string, fetcher: typeof fetch = fetch): Promise<Di
  * whatever this session holds, because the reader is asking about the host and
  * not about this session.
  */
-function requestDay(
-	date: string,
-	fetcher: typeof fetch,
-	again: boolean
-): Promise<DigestDay | null> {
+function requestDay(date: string, fetcher: typeof fetch, again: boolean): Promise<DayReply> {
 	const held = days.get(date);
 	if (held !== undefined && !again) {
 		// Asked-for-last is held-longest, so the cap drops the day this session
@@ -121,16 +136,16 @@ function requestDay(
 	return fetchDay(date, fetcher, held ?? null);
 }
 
-function fetchDay(
-	date: string,
-	fetcher: typeof fetch,
-	previous: HeldDay | null
-): Promise<DigestDay | null> {
+function fetchDay(date: string, fetcher: typeof fetch, previous: HeldDay | null): Promise<DayReply> {
 	// The record exists before the request settles, because the settling has to
 	// know whether it is still the request this date is holding. An `again` or an
 	// eviction between the two replaces it, and a late arrival may not overwrite
 	// what took its place.
-	const entry: HeldDay = { revision: null, payload: null, day: Promise.resolve(null) };
+	const entry: HeldDay = {
+		revision: null,
+		payload: null,
+		day: Promise.resolve({ day: null, missing: false })
+	};
 	entry.day = readDay(date, fetcher).then((fresh) => settle(date, entry, previous, fresh));
 	hold(date, entry);
 	return entry.day;
@@ -140,31 +155,34 @@ function settle(
 	date: string,
 	entry: HeldDay,
 	previous: HeldDay | null,
-	fresh: DigestDay | null
-): DigestDay | null {
+	fresh: DayReply
+): DayReply {
 	const ours = days.get(date) === entry;
-	if (fresh === null) {
-		// A day that could not be read is not an answer, so nothing holds one.
+	if (fresh.day === null) {
+		// A day that could not be read is not an answer, so nothing holds one -
+		// including a host that says it has no such day, because the host is what
+		// the next ask is about.
 		if (ours) days.delete(date);
-		return null;
+		return fresh;
 	}
 	// The revision is the key. A day that came back unchanged is the day the page
 	// already holds, so it is handed back as the same value and every index built
 	// on it survives; a day that came back at another revision, or at none this
 	// can read, replaces it.
-	const revision = typeof fresh.generated_at === 'string' && fresh.generated_at !== ''
-		? fresh.generated_at
-		: null;
+	const revision =
+		typeof fresh.day.generated_at === 'string' && fresh.day.generated_at !== ''
+			? fresh.day.generated_at
+			: null;
 	const unchanged =
 		revision !== null && previous !== null && previous.payload !== null
 			? previous.revision === revision
 			: false;
-	const day = unchanged && previous?.payload ? previous.payload : fresh;
+	const day = unchanged && previous?.payload ? previous.payload : fresh.day;
 	if (ours) {
 		entry.revision = revision;
 		entry.payload = day;
 	}
-	return day;
+	return { day, missing: false };
 }
 
 /** Newest ask last, oldest ask first, and never more than the cap. */
@@ -206,17 +224,24 @@ function renderable(item: DigestItem): boolean {
 	);
 }
 
-async function readDay(date: string, fetcher: typeof fetch): Promise<DigestDay | null> {
+async function readDay(date: string, fetcher: typeof fetch): Promise<DayReply> {
 	const url = dayUrl(date);
-	if (url === null) return null;
+	// Not a date at all. One shell answers every URL under the dated route now, so
+	// `/nonsense/` reaches here - and the honest answer is that this site has no
+	// such day, which is the same answer a real date nobody published gets.
+	if (url === null) return { day: null, missing: true };
 	try {
 		const response = await fetcher(url);
 		if (!response.ok) {
+			// 404 and 410 are the host answering. Anything else - a 500, a proxy, a
+			// captive portal - is the connection, and a reader must not be told a day
+			// was never published because of one.
+			const missing = response.status === 404 || response.status === 410;
 			console.warn(`[digest] the stories of ${date} are not available (${response.status})`);
-			return null;
+			return { day: null, missing };
 		}
-		const payload = (await response.json()) as DigestDay;
-		if (!Array.isArray(payload?.items)) return null;
+		const payload = (await response.json()) as DayForPage;
+		if (!Array.isArray(payload?.items)) return { day: null, missing: false };
 		// Degrade, do not fail (`CLAUDE.md` section 1a). One story the page cannot
 		// render must not cost a reader the other three hundred, so it is dropped
 		// and counted. The console is the whole logging surface (section 1b), so
@@ -229,27 +254,28 @@ async function readDay(date: string, fetcher: typeof fetch): Promise<DigestDay |
 					'stories are not readable and were dropped'
 			);
 		}
-		return { ...payload, items };
+		return { day: { ...payload, items }, missing: false };
 	} catch (error) {
 		console.warn(`[digest] the stories of ${date} could not be read`, error);
-		return null;
+		return { day: null, missing: false };
 	}
 }
 
-/** How a page's wait is going. Four states, and the last is the new one.
+/** How a page's wait is going.
  *
- * `unreachable` covers every way a fetch can fail, a 404 included, and that is
- * not a shortcut. A reading route exists only for a day that published, so a
- * payload the host will not serve is a day that went missing after publication
- * - never a day that was never published. **Missing is decided at build time
- * and Unreachable in the browser**, so neither has to guess which it is, and a
- * reader whose train went into a tunnel is never told the day does not exist.
+ * `unreachable` is every way a fetch can fail except one, and `missing` is that
+ * one: the host answered, and its answer was that it holds no payload for this
+ * date. **Missing used to be decided at build time** - a dated route was a page
+ * a build wrote, so a date nobody published had no page. One shell answers every
+ * dated URL since 2026-09-09, so both are decided here, and they are still two
+ * different sentences: a reader whose train went into a tunnel is never told the
+ * day does not exist.
  */
-export type DayStatus = 'loading' | 'slow' | 'ready' | 'unreachable';
+export type DayStatus = 'loading' | 'slow' | 'ready' | 'unreachable' | 'missing';
 
 export interface DayWatch {
 	/** Told on every change, so the page holds no timer of its own. */
-	onStatus: (status: DayStatus, day: DigestDay | null) => void;
+	onStatus: (status: DayStatus, day: DayForPage | null) => void;
 	/** How long the wait may last before it is worth one sentence. It comes from
 	 * `ui.payload_slow_ms` and is never a number written here (Rule #6). */
 	slowMs: number;
@@ -277,13 +303,13 @@ export interface DayWatch {
  * length is the compressed length, and a bar built on that prints precision the
  * number does not carry.
  */
-export function watchDay(date: string, watch: DayWatch): Promise<DigestDay | null> {
+export function watchDay(date: string, watch: DayWatch): Promise<DayForPage | null> {
 	const { signal } = watch;
 	let settled = false;
 	// Every status goes through here, so an aborted watch is told nothing - not
 	// the slow note, not the final one. The request itself runs on, because the
 	// day-cache and any other caller waiting on it still want the answer.
-	const report = (status: DayStatus, day: DigestDay | null) => {
+	const report = (status: DayStatus, day: DayForPage | null) => {
 		if (signal?.aborted !== true) watch.onStatus(status, day);
 	};
 	report('loading', null);
@@ -295,11 +321,11 @@ export function watchDay(date: string, watch: DayWatch): Promise<DigestDay | nul
 		clearTimeout(slow);
 	};
 	signal?.addEventListener('abort', stop, { once: true });
-	return requestDay(date, watch.fetcher ?? fetch, watch.again === true).then((day) => {
+	return requestDay(date, watch.fetcher ?? fetch, watch.again === true).then((reply) => {
 		stop();
 		signal?.removeEventListener('abort', stop);
-		report(day === null ? 'unreachable' : 'ready', day);
-		return day;
+		report(reply.day !== null ? 'ready' : reply.missing ? 'missing' : 'unreachable', reply.day);
+		return reply.day;
 	});
 }
 
@@ -344,7 +370,7 @@ export function restoreAnchor(hash?: string): boolean {
  * Keying on the date string would do neither. Weak, so an index is collected
  * with the day it describes and holds nothing open.
  */
-const lookups = new WeakMap<DigestDay, Map<string, DigestItem>>();
+const lookups = new WeakMap<DayForPage, Map<string, DigestItem>>();
 
 /** One item out of a day already in hand, or null.
  *
@@ -356,7 +382,7 @@ const lookups = new WeakMap<DigestDay, Map<string, DigestItem>>();
  * Both fallbacks are unchanged and both are designed states: a day that could
  * not be read is null, and a story the day does not hold is null.
  */
-export function itemOf(day: DigestDay | null, itemId: string): DigestItem | null {
+export function itemOf(day: DayForPage | null, itemId: string): DigestItem | null {
 	if (!day) return null;
 	let byId = lookups.get(day);
 	if (byId === undefined) {

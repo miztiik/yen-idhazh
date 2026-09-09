@@ -1,6 +1,38 @@
 import adapter from '@sveltejs/adapter-static';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { assetBaseUrl, connectSources } from './asset-base.js';
 import { handleUnseenRoutes } from './prerender-guard.js';
+
+/** The CSP hash of every inline script `src/app.html` carries.
+ *
+ * **`mode: 'auto'` covers our inline script on a prerendered page and not on the
+ * fallback.** SvelteKit hashes the scripts of a page it prerenders and nonces
+ * the scripts of one it renders dynamically, and `404.html` is the second kind -
+ * so from 2026-09-09, when that document started answering every dated address,
+ * the theme script in `app.html` was blocked on every one of them. What a reader
+ * lost was small and only visible to some of them: the stored light choice is
+ * applied by that script before the first frame, so a light-theme reader met a
+ * dark flash on a dated URL and nowhere else.
+ *
+ * A hash source and a nonce source coexist in one directive - a script matching
+ * either is allowed - so this adds the hash and changes nothing about the nonce.
+ *
+ * Derived rather than written down, because a hash somebody pasted goes stale
+ * the next time the script is edited and takes the theme with it, silently
+ * (Rule #6).
+ */
+function inlineScriptHashes() {
+	const shell = readFileSync(
+		join(dirname(fileURLToPath(import.meta.url)), 'src', 'app.html'),
+		'utf8'
+	);
+	return [...shell.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(
+		(found) => `sha256-${createHash('sha256').update(found[1], 'utf8').digest('base64')}`
+	);
+}
 
 // SvelteKit's own default for `kit.version.name` is one `Date.now()` taken when
 // its options module loads, so it is the same string for every pass of a build.
@@ -75,7 +107,7 @@ export default {
 				'connect-src': connectSources(assetBaseUrl()),
 				// The encoder is WebAssembly, which needs its own compile permission.
 				// It does NOT need 'unsafe-eval'.
-				'script-src': ['self', 'wasm-unsafe-eval'],
+				'script-src': ['self', 'wasm-unsafe-eval', ...inlineScriptHashes()],
 				'style-src': ['self', 'unsafe-inline'],
 				'img-src': ['self', 'data:'],
 				'worker-src': ['self', 'blob:'],

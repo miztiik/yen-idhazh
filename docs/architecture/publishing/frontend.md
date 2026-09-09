@@ -6,38 +6,38 @@ The reader's surface: what is built, what deliberately is not, and the rulings b
 
 Concept-level *why* lives in [../../concepts/digest.md](../../concepts/digest.md), [../../concepts/design-system.md](../../concepts/design-system.md) and [../../concepts/ui-shell.md](../../concepts/ui-shell.md). This page is the *shape*, and it records where the owner, Jony and Reader disagreed and how it was settled.
 
-## Every document is prerendered
+## Six documents, and a seventh that answers every dated address
 
-Every route is generated at build time. SvelteKit with `adapter-static`, `prerender = true`, and `entries()` enumerating the committed date directories. `/`, `/archive/`, `/404`, `/evals/` and the console inline everything they draw; both reading routes inline the head of the list they draw and fetch the served day for the rest. **The document is prerendered either way** - what moved on 2026-09-01 is the item list, not the page.
+Six routes are generated at build time - `/`, `/archive/`, `/evals/` and the three console routes - and `adapter-static`'s fallback, `404.html`, answers everything else. SvelteKit with `adapter-static`, `prerender = true` declared on each of those six, and no `entries()` reading the digest tree anywhere. `/`, `/archive/`, `/404`, `/evals/` and the console inline everything they draw; a dated URL is the fallback document, and the page fetches the served day for the whole of it.
 
-Three consequences, and the third one changed shape when the reading routes split:
+**Until 2026-09-09 every route was prerendered, and that cost six documents a published day.** 20 dated pages and 96 topic pages, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. Measured on a real build, Intel Core i7-1265U, 2026-09-09, `BUILD_VERSION` pinned across both arms: 796 files and 116,050,183 bytes before, **572 files and 101,880,352 after** - 224 files and 14,169,831 bytes, 12.2 percent of the built site. 123 documents become 7 and 121 `__data.json` files become 5. **The document count no longer moves when a day is added**, which is the whole of it.
 
-- **The reading path makes at most one request, and the first screen needs none of it.** A reading page is one document with the head of its day in it; if that day is longer than `ui.shell_seed_items` the browser then asks for one file this same site publishes, which is well inside the two-request budget. `/` is one document and it is done. Every page renders with JavaScript off; a reading page then shows its seed.
-- **There is one loading state and it is a sentence**, not a spinner and not a skeleton. The first frame is already readable, so there is nothing to fill: past `ui.payload_slow_ms` a reading page says that the rest of the day is still coming, and a fetch that fails says so and offers a retry ([../../../frontend/src/lib/components/PayloadState.svelte](../../../frontend/src/lib/components/PayloadState.svelte)). The build-time payload loader is still exactly one module under `frontend/src/lib/server/`; the browser's is a second one under `$lib/assist/`, and it reads the served projection rather than the committed day.
-- **A day that fails its contract cannot be merged, and until 2026-09-01 it could not even be built.** The build serialised every story a day published, so a payload the contract refused failed it. A seeded document does not, so `python -m idhazh validate-days` opens every story of every committed day instead - in `ci.yml`, and immediately before the commit in both publishing jobs, because `ci.yml` never starts from a push the pipeline made. **The guarantee is weaker than the one it replaces and that is stated rather than hidden.**
+Three consequences, and the third one changed shape again when the dated routes moved into the browser:
 
-**Four files are fetched, and one of them is on the reading path.** The
+- **The reading path makes at most one request, and a dated page now needs it.** `/` is one document with the newest day in it and it is done. A dated URL is a cold load of the fallback, the bundle and then the day payload - and only a typed link, a bookmark or a shared link pays that, because in-app navigation never asks the host for a dated address (owner decision, 2026-09-09). What a dated page does not do is wait: the fetch is started by the page component rather than awaited in its `load`, so the chrome and the date are on screen while a payload that runs to 1.9 MB comes down. Awaiting it in the `load` was the simpler code and a blank page.
+- **There is one loading state and it is a sentence**, not a spinner and not a skeleton. Past `ui.payload_slow_ms` a dated page says the day is still loading, and a fetch that fails says so and offers a retry ([../../../frontend/src/lib/components/PayloadState.svelte](../../../frontend/src/lib/components/PayloadState.svelte)). The build-time payload loader is still exactly one module under `frontend/src/lib/server/`; the browser's is a second one under `$lib/assist/`, and it reads the served projection rather than the committed day.
+- **A day that fails its contract cannot be merged, and since 2026-09-01 it could not be caught by building either.** `python -m idhazh validate-days` opens every story of every committed day instead - in `ci.yml`, and immediately before the commit in both publishing jobs, because `ci.yml` never starts from a push the pipeline made. **The guarantee is weaker than the one prerendering gave and that is stated rather than hidden.**
+
+**A dated URL with no script is blank, and that is answered rather than accepted.** The fallback's body is a boot script and nothing else, so [../../../frontend/src/app.html](../../../frontend/src/app.html) carries one `<noscript>` line at the foot of the body: a page for one day opens with JavaScript, the newest digest is on the front page, and every published day is listed in the archive. Both of those render complete with no script at all. It is last in the body and it claims nothing, so on the pages that do render it sits under what the reader came for and is true there too. **What a script-free reader loses is real**: a topic pill used to be one click to a prerendered desk, and it is now one click to that line. Reader's own rule decided it - a blank page is a site that looks broken to the one reader who will never report it.
+
+**Four files are fetched, and one of them is the whole of a dated page.** The
 console reads older telemetry shards when an operator pans back. The archive
 reads the month index behind its story list, that month's sibling vector file
 when a reader asks to search, and the day payload behind a result it is showing.
-Since 2026-09-01 both reading routes read that same day payload for the stories
-past their seed - a topic page since that morning, a day page since the same
-afternoon. `/` still makes no request at all, and neither does a reading page
-whose whole list already fits inside the seed. The rule was that a reader waits
-for nothing to read the news, and it is now that they wait for nothing to read
-the first screen of it.
+Both reading routes read that same day payload - since 2026-09-01 for the
+stories past a seed, and since 2026-09-09 for all of them. `/` still makes no
+request at all. The rule was that a reader waits for nothing to read the news,
+and it is now that they wait for nothing on `/` and for one file on a date.
 
-The loader lives under `frontend/src/lib/server/`, which is the framework's own guarantee that it can never be bundled into anything a browser receives.
+The build-time loader lives under `frontend/src/lib/server/`, which is the framework's own guarantee that it can never be bundled into anything a browser receives. A `+page.ts` may not import from it at all, which is what makes the dated routes' move checkable rather than promised.
 
-**A tree with no day in it still builds.** The dated routes are prerendered and their entries come from the committed digest tree, so on a clone that has never run the pipeline they produce no page and SvelteKit exits 1 on `/[date], /[date]/[vertical] not found while crawling`. That made building the site wait on a pipeline run, against [../../../CLAUDE.md](../../../CLAUDE.md) section 1a - a fresh clone runs on the defaults. One published day with no item did the same to `/[date]/[vertical]` on its own.
-
-`handleUnseenRoutes: 'ignore'` clears both and hides every later prerender defect with them, so the build asks the tree instead. [../../../frontend/prerender-guard.js](../../../frontend/prerender-guard.js) excuses `/[date]` only when no day is published, and `/[date]/[vertical]` only when no published day names a topic. Any other unseen route still fails, and so do those two when the tree says they had a page to build. The guard asks a smaller question than `entries()` does - `entries()` lists the days, the guard only asks whether any day is there at all - so the two can disagree, and a disagreement fails the build. [../../../frontend/tests/prerender-guard.spec.ts](../../../frontend/tests/prerender-guard.spec.ts) drives the real handler off the real config, so the wiring is under test with the rule.
+**A tree with no day in it still builds, and nothing has to be excused for it to.** The six prerendered routes read no committed day to decide whether they exist, so every one of them produces a page on every build. [../../../frontend/prerender-guard.js](../../../frontend/prerender-guard.js) is what is left of the guard that used to tell a fresh clone's empty digest tree from a dated page that went missing: an unseen prerender route is now a defect with no innocent reading, and the handler exists for the sentence a failing build prints. `handleUnseenRoutes: 'ignore'` would allow the same builds and every other unseen route with them, silently.
 
 **Whatever the root layout's load returns is inlined into every page beneath it**, so from 2026-09-09 it returns **the config and nothing else** - no day, no date, no field read off one. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB. The last two fields it kept - `retention_window_months` for the footer's promise, and `latest` for the empty state's shortcut - went on 2026-09-09, because both are read off the newest day and both therefore rewrote every older page each time one published ([the footer, below](#the-footer-is-its-links-and-nothing-else)).
 
-[frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line, and since 2026-09-01 a second one. It counts a marker only a day payload carries and fails on any page below the layout that has one. It had one exclusion, `/archive/`, which inlined every committed day on purpose to feed the on-device search; the exclusion is gone from 2026-08-27, and the archive now carries an assertion of its own that it holds **zero** day markers.
+[frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line. It counts a marker only a day payload carries and fails on any page below the layout that has one. It had one exclusion, `/archive/`, which inlined every committed day on purpose to feed the on-device search; the exclusion is gone from 2026-08-27, and the archive now carries an assertion of its own that it holds **zero** day markers.
 
-**The second line is the guard prerendering used to give free.** A dated route was exempt from the sweep above while it genuinely rendered its whole day, and left exempt after the split it would have gone on passing whatever a reading page inlined - a guard that cannot fail, which [layout.md](layout.md) records as a shape this repository has had twice. So a dated document is now held to its own seed: `ui.shell_seed_items` markers on a topic route, and that plus `ui.leading_stories` on a day route, because a day's seed is the head of the day UNION every story its leading block points at. Both numbers come from config, and `backend/tests/test_contracts.py` fails if either drifts from the contract. `/` is deliberately not held to anything: it keeps the whole day inline for ever, it is one document per build rather than one per published day, and a ceiling there would cap the news.
+**The second line was the guard prerendering used to give free, and it retired with the pages it guarded.** A dated route was exempt from the sweep above while it genuinely rendered its whole day; after the 2026-09-01 split it was held to its own seed, `ui.shell_seed_items` markers on a topic route and that plus `ui.leading_stories` on a day route, so that an exemption could not quietly become a guard that cannot fail - which [layout.md](layout.md) records as a shape this repository has had twice. From 2026-09-09 there is no dated document at all, so there is nothing to hold to a seed: the sweep runs over the six documents a build writes, every one of which must carry zero day markers. `/` is deliberately not held to anything: it keeps the whole day inline for ever, it is one document per build rather than one per published day, and a ceiling there would cap the news.
 
 **The same rule bites a chart, and it is the reason a `load` never returns an
 echarts option.** A chart is drawn to SVG on the server and the sentinel
@@ -55,14 +55,16 @@ the server sends the drawing and the numbers, never a drawing instruction.
 
 | State | When | What ships |
 | --- | --- | --- |
-| Ready | Normal | Prerendered HTML. The whole day on `/`; the head of it on a reading route, with the rest fetched |
+| Ready | Normal | Prerendered HTML on `/`, with the whole day in it. A dated URL is one shell and the day it fetched |
 | Empty | Payload exists, no items | "Nothing was published for *date*", with plain copy that does not point at a notice that may not be on the page |
-| Missing | No payload for that date | A 404 that names the date and offers the archive. **Never a redirect to today** - a reader who cannot tell a dead link from a live one has lost the ability to trust any link |
-| Waiting | A reading page has its seed and the rest is still coming | Nothing at all until `ui.payload_slow_ms`, then one sentence. Never a spinner, a skeleton or a bar |
-| Unreachable | A reading page's fetch for the rest of its day failed | One sentence naming the day, a note that the stories on screen are all there, and a retry. Decided in the browser, where Missing is decided at build time |
+| Missing | The host has no payload for that date | A named screen that offers the archive and the front page. **Never a redirect to today** - a reader who cannot tell a dead link from a live one has lost the ability to trust any link. It was decided at build time until 2026-09-09 and is decided in the browser now, off a 404 or a 410 from the host |
+| Waiting | A dated page has asked for its day and it has not arrived | Nothing at all until `ui.payload_slow_ms`, then one sentence. Never a spinner, a skeleton or a bar |
+| Unreachable | A dated page's fetch failed for any reason that is not the host saying it has no such day | One sentence naming the day, a retry, and the days this device still holds |
 | Unpublished | No day published at all - a fresh clone | The build succeeds. `/` says "No digest has been published yet" and `/archive/` says "Nothing has been published yet". There is no dated page to link to, so neither offers one |
-| Invalid | Payload breaks its contract | `idhazh validate-days` fails, in CI and before the publish. The build fails too where the story is inside the document it renders |
+| Invalid | Payload breaks its contract | `idhazh validate-days` fails, in CI and before the publish |
 | Degraded | Low band, source-limit sentence, no visual | The common case, rendered inline. Not an error |
+
+**Missing and Unreachable are two sentences and they never merge.** Telling a reader a day was never published when their train went into a tunnel is a lie they can check. What separates them is now the host's own answer: a 404 or a 410 for `digest/<Y>/<M>/<D>/digest.json` is the host saying it has no such day, and every other failure is the connection. [NotHere.svelte](../../../frontend/src/lib/components/NotHere.svelte) is the one copy of the Missing screen - the framework's error page renders it for a status it was handed, and a dated page renders it when the host says it has no such day, because a reader cannot tell those two apart and must not be told different things by them.
 
 The home page uses the newest committed payload as the day it can prove. It never
 uses the build clock as "today". If the site is rebuilt after a quiet or failed
@@ -828,8 +830,27 @@ deleted. Every one of them is a fact a later build or a later day can change,
 and the footer is on every page, so each rewrote the bytes of every document on
 the site whenever anything published. That is what makes an unchanged page stale
 to a browser cache and to a reader's copy: the page said the same thing and
-arrived as different bytes. `frontend/src/routes/+layout.server.ts` now returns
-the config and nothing else, and imports nothing from `$lib/server/payload`.
+arrived as different bytes. The root layout now returns the config and nothing
+else, and imports nothing from `$lib/server/payload`.
+
+**It is `frontend/src/routes/+layout.ts` rather than `+layout.server.ts`, since
+2026-09-09.** A server load is not only a read - it is a promise that a file
+called `<route>/__data.json` exists, and SvelteKit's client asks a static host
+for one whenever any node in the branch has a server load. Only a prerendered
+route has such a file. The root layout is above every route on the site, so
+keeping its `load` on the server decided that for all of them, and a route that
+ever stops being prerendered would meet the framework's error screen instead of
+its own page. The knobs travel as `__UI_CONFIG__` instead, which
+`vite.config.ts` resolves once per build out of the same `uiConfig()` the server
+reader owns - a knob a surface needs is imported into the bundle at build time
+and never fetched, which is the rule in
+[../../concepts/config.md](../../concepts/config.md). Page options went with the
+file, so `/`, `/archive/` and `/evals/` each declare `prerender = true`
+themselves; `/console/` already did. Measured on a real build, 2026-09-09, Intel
+Core i7-1265U, `BUILD_VERSION` pinned across both arms: it takes about 230
+gzipped bytes off every prerendered document - `/` 46,691 to 46,445, `/archive/`
+5,264 to 5,057, `/evals/` 2,895 to 2,669 - because the config no longer rides in
+each document as a server-load payload.
 
 What the reader loses is written down rather than implied, under "Design
 rationale" in

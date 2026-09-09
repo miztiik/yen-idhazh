@@ -338,11 +338,32 @@ All nine together are +107.42 bytes an item rather than the +109.42 those nine s
 
 **`key_points` is nine tenths of that and it is the one worth defending.** `DigestList` filters on it now, so once a reading route fetches this file an absent `key_points` is a thrown `TypeError` rather than a narrower filter. The twelve prerendered documents it replaces carry the same words twelve times over, so on the wire it is cheaper here than it was there. Three names were refused: `events` and `entities` have no renderer and are out of scope as reader-facing chips (+1.63 and +1.80 B an item), and `source_form` has no reader at all (+1.21).
 
+**On 2026-09-09 the file gained the day's own facts as well as its stories**, because the document that used to carry them stopped being written. That is recorded with its price under [the served day carries the day's own facts](#the-served-day-carries-the-days-own-facts-2026-09-09).
+
 **What it cost, end to end.** Two builds of this branch, one an arm, back to back on the same machine, over the 11 days and 3,596 items on disk at the time: the staged payloads went 361.98 to 468.51 gzipped bytes an item, 29.4 percent more, and the 178 rendered images were untouched. A day landed while this row was in flight and took the tree to 3,733 items; the same arithmetic over that tree reads 361.10 to 468.58, which is the check that this is a rate and not a level - the two trees agree to 0.2 percent. The projection is still 40.9 percent under the committed day, which compacts to 792.65 gzipped bytes an item. No prerendered page moved: the six routes the bundle gate names read -1 to +6 bytes across the two builds, because a prerendered document reads the committed day and not this file.
 
 **The runway, re-derived rather than restated (Rule #10).** Two arms of `idhazh site-weight` on the machine that publishes - `ubuntu-latest`, 2026-08-31, `main` at `bb7fd4a` against this branch at `82ebd5c`, both over the same 3,733 items in the same 409 files - read **44,009 against 44,700 bytes a published item**, a built site of 156.7 against 159.1 MB, and **129 against 127 published days to the 1024 MB Pages cap** (96 against 94 to the 800 MB alarm). A local pair on Intel Core i7-1265U / Windows 11 the same day read 44,578 to 45,267 and 128 to 126, which agrees to 1.3 percent and is the check that the platform is not the story. Those day figures divide the headroom by `run.safety_ceiling_per_run` - a per-run ceiling of 160 spent as a per-day rate. **Over the committed days a published day holds a median of 334 items and ranges from 4 to 731**, so the same headroom is 60.8 published days against 61.8: **this change costs about one published day of runway, and the cap arrives about 2026-10-31.** Both figures charge `assist/` and `_app/` - 65.6 MB, 41.2 percent of the site, neither of which grows with a day - to the items, so both are floors.
 
 That is what this row spends. What it buys is the migration, and one day priced on a build of this branch says how much: **2026-08-30 is twelve prerendered documents totalling 8,822,134 bytes raw and 2,528,812 gzipped, against one served payload of 717,709 raw and 194,016 gzipped.** Twelve times the bytes, after this row grew the payload by 62 percent. The documents are the six HTML pages and their six `__data.json` twins, and every one of them carries the whole item list.
+
+### The dated documents stop being written (2026-09-09)
+
+The two rows above moved the item list out of a dated document and left the document. This row deletes the document. **116 of them**: 20 for the published days and 96 for their topics, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. `adapter-static`'s fallback, `404.html`, answers every dated address; the client router resolves the route out of the URL; the page fetches the served day.
+
+Measured on a real build, Intel Core i7-1265U, 2026-09-09, `BUILD_VERSION` pinned across both arms:
+
+| Measured | Before | After | Saved |
+| --- | ---: | ---: | ---: |
+| Files in `build/` | 796 | 572 | 224 |
+| Bytes in `build/` | 116,050,183 | 101,880,352 | 14,169,831 B, 12.2 percent |
+| Documents | 123 | 7 | 116 |
+| `__data.json` | 121 | 5 | 116 |
+
+**The oracle is the last row rather than the byte count.** A saving of 12.2 percent is a number about today's archive; what this row changes is the slope. Six documents a published day is what the tree used to charge, so the count moved every time the pipeline ran and nobody wrote a line - the shape Rule #12 is about. The count is 7 on a tree of 20 days and it is 7 on a tree of 400.
+
+**The reader pays for it on a cold dated load, and only there.** A dated URL is now the fallback, the bundle, and then the day payload - which runs to 1.9 MB on the heaviest committed day - where it used to be one document of about 30 gzipped KB. In-app navigation never asks the host for a dated address, so only a typed link, a bookmark or a shared link takes that path (owner decision, 2026-09-09). What the page does not do is wait for the day: the fetch is started by the page component rather than awaited in its `load`, so the chrome and the date are on screen while the payload comes down, and past `ui.payload_slow_ms` one sentence says so. Awaiting it in the `load` was the simpler code and a blank page.
+
+**Two entries left [../../concepts/growing-reads.md](../../concepts/growing-reads.md) and nothing replaced them.** Both dated routes' `entries()` carried a `-1` because a cover on the list of pages a build writes stops writing them past it. There is no list of pages now, so the uncovered read did not move somewhere cheaper - it stopped existing, which is the only way one of those entries is meant to leave that page.
 
 ### The topic routes spend it (2026-09-01)
 
@@ -790,6 +811,30 @@ The reader-facing half of this design is driven by one asymmetry: a reader who l
 That is why the plain address is the moving one and dated addresses are the frozen ones, rather than the reverse. The tempting design makes the dated page canonical and the front page a pointer to it; the failure it invites is a front page that lags, which presents as a perfectly healthy site showing last month's news.
 
 The engineering half is driven by arithmetic rather than preference. Segmented date directories were chosen over a flat layout because a flat directory of tens of thousands of entries rewrites a large tree object on every commit. One file per day was chosen over per-item files because compression works far better across a whole day than across many small bodies, and because a per-item file buys nothing an already-fetched day payload does not have.
+
+### The served day carries the day's own facts (2026-09-09)
+
+A dated URL used to be answered by a document a build wrote for that date, and the day's own facts rode in it: the date, the desks and their counts, the leading block, the run list, and the counts the day notice reads. The served day carried the stories and nothing else, and that was enough while a page already holding the facts was the only thing fetching it.
+
+**One shell now answers every dated URL, and no build writes a day into it.** So the browser has no other source for any of that: no topic pills, no leading block, no day notice, no story count and no date in the heading. The nine names below are the file's answer, and each of them has a named renderer.
+
+| Added | What draws it |
+| --- | --- |
+| `date` | the day heading, and the link every story's own address is built from |
+| `verticals` | the topic pills, with the count each one prints |
+| `leads` | the leading block, and the anchors it points into the stream with |
+| `runs` | the footer's run list, and the sentence naming how many runs published the day |
+| `partial`, `items_failed`, `items_planned` | the day notice: a run that lost stories says so, and says how many of how many |
+| `retention_window_months` | the footer's promise, stated before anything is deleted |
+| `generated_at` | the revision key [../../../frontend/src/lib/assist/day.ts](../../../frontend/src/lib/assist/day.ts) has always read and never found, so a re-fetch that changed nothing now keeps the day the page is holding |
+
+**Every one of them is optional, and that is the read-side rule rather than a softness.** The service worker keeps day payloads, so a shell built after this change can be handed a file written before it, carrying none of the nine. Absent is unknown: a page may not read an absent `partial` as false, an absent `items_failed` as 0, or an absent `verticals` as a day with no desk. `retention_window_months` carries the sharpest version of that - `-1` is the day saying nothing is deleted, and null is the payload not saying, so the footer prints neither sentence for a null.
+
+**What it cost.** Measured 2026-09-09 on Intel Core i7-1265U / Windows 11 over the 20 committed days and 7,967 items, `gzip -9` over the compact projection, both arms built in one process so the nine names are the only difference between them: the served tree went **3,657,996 to 3,664,435 bytes**, which is **6,439 bytes over twenty days - 322 a day on average, 478 on the worst day, and 0.18 percent of what the tree already weighed.** The spread is worth reading: +140 on a four-story day and +478 on a 582-story one, because `verticals` grows with the number of desks and `leads` with how many the day named, and neither grows with the stories. **A day pays this once where an item field pays it per story**, which is why nine names here cost a fifth of what `also_covered_by` cost on its own.
+
+What it buys is the 116 dated and topic documents this row deletes, and the `__data.json` twin each of them had. 6,439 bytes spread across the days a reader opens, against a tree the build rewrites in full on every run.
+
+**The contract keeps every check `DigestDay` holds over the facts it now carries.** `partial` is exactly whether anything failed, published plus failed cannot exceed planned, a desk's count agrees with the stories under it, and a lead names a story the payload holds. Each clause is skipped when the payload does not carry what it needs, so an older file is not failed for being older. A narrowing that keeps a fact and drops the rule on it is a weaker contract than the one it narrows, and this is the copy a browser reads.
 
 ### The two revision fields stay, unwritten (2026-08-26)
 

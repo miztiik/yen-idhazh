@@ -27,29 +27,16 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { splitPills } from '../src/lib/day-shape';
 import type { DigestVerticalRef } from '../src/lib/payload/types';
+import { newestDate, topicOf } from './support/published';
 
-/** The tree the preview server serves, so a route here is a route that exists. */
-const BUILD = join(dirname(fileURLToPath(import.meta.url)), '..', 'build');
-
-function subdirectories(at: string): string[] {
-	return readdirSync(at, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => entry.name)
-		.sort();
-}
-
-/** The newest published day in the built tree. Never a date written here: a
- * hardcoded one passes on an empty page the moment the fixture moves. */
-const DAY = subdirectories(BUILD).filter((name) => /^\d{4}-\d{2}-\d{2}$/.test(name)).at(-1) as string;
-
-/** A topic of that day, taken from the tree rather than named. The canary day
- * publishes one vertical, and which one is the fixture's business. */
-const TOPIC = subdirectories(join(BUILD, DAY)).at(0) as string;
+/** The newest published day, and one of its topics. Read off the digest tree
+ * rather than out of `build/`: since 2026-09-09 a build writes no dated
+ * directory, so a listing there finds nothing at all. Never a date written
+ * here - a hardcoded one passes on an empty page the moment the fixture moves. */
+const DAY = newestDate();
+const TOPIC = topicOf(DAY);
 
 /** Every reader-facing route kind the build emits. */
 const ROUTES = ['/', `/${DAY}/`, `/${DAY}/${TOPIC}/`, '/archive/', '/evals/'];

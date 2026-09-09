@@ -1902,10 +1902,43 @@ path MSYS never touches. That is why it stayed correct on 2026-08-28 while the
 colon-free form first and the environment variable only as a fallback, because
 the variable protects the shell you remember to set it in and nothing else.
 
+## `vite preview` renders the fallback per request, so a link in `app.html` reads differently there than in the shipped file
+
+`404.html` is what a static host answers an unknown address with, and since
+2026-09-09 that is every dated address. The shipped file resolves
+`%sveltekit.assets%` to the absolute base, so a link written in `src/app.html`
+comes out as `/` and `/archive/` and is correct at any depth.
+
+`vite preview` does not serve that file. SvelteKit's preview middleware renders
+a fallback for the request it was given and computes a **request-relative** base
+from the path, so the same link comes out as `../` on `/2026-09-09/` and `../../`
+on `/2026-09-09/ai/`. Both are right for that request; neither is the artefact
+that ships. Observed 2026-09-09 smoking the no-script signpost: the document
+served at `/2026-09-09/` was 3,967 bytes and matched no file in `build/`, which
+is the tell - hash what the server returned against the files on disk and if it
+matches none of them, the server rendered it.
+
+Smoke the shipped fallback at its own address, `/404.html`, which is the same
+technique `frontend/tests/day-states.spec.ts` uses for the same reason.
+
 ## PowerShell
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **`[System.IO.File]` resolves a relative path against the PROCESS directory,
+  which `Set-Location` never moves.** `Set-Location` changes PowerShell's own
+  location; a .NET call knows nothing about it. So
+  `[System.IO.File]::ReadAllBytes('tests/fixtures/x.json')` after
+  `Set-Location <a worktree>` reads that path under the shell process's original
+  directory - which on this box is the shared main checkout. Observed 2026-09-09
+  normalising a fixture's line endings: the read reported 3,806 bytes where the
+  file in the worktree was 4,324, the "fix" was written back to the main
+  checkout, and the worktree's file was untouched. It was only harmless because
+  the bytes round-tripped identically. Two tells that this happened: a size that
+  matches the file before your edit, and a `git status` in the OTHER checkout.
+  Pass an absolute path to any `[System.IO.*]` call, or do the work in the
+  interpreter that already has the path - `python -c` with an absolute
+  `pathlib.Path` cannot make this mistake.
 - **A function that logs with `Write-Output` returns the log as part of its
   value.** PowerShell returns everything a function writes to the success
   stream, not just the last expression, so a helper that prints a progress line

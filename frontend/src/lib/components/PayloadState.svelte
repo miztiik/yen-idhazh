@@ -1,11 +1,13 @@
 <script lang="ts">
-	/** What a reading page says while the rest of a day is on its way, and when
-	 * it never arrives.
+	/** What a reading page says while a day is on its way, and when it never
+	 * arrives.
 	 *
 	 * **Unreachable is its own state, and it is the reason this file exists.**
 	 * Missing means a day was never published; Unreachable means the fetch
 	 * failed. Telling a reader a day was never published when their train went
-	 * into a tunnel is a lie they can check, so the two never share a sentence.
+	 * into a tunnel is a lie they can check, so the two never share a sentence -
+	 * and Missing is not drawn here at all. It is the same screen a wrong address
+	 * gets, which [NotHere.svelte](NotHere.svelte) owns.
 	 *
 	 * **No spinner, no skeleton, no bar.** The frame a reader already has is
 	 * readable, so there is nothing to fill. Past the threshold this says one
@@ -29,12 +31,21 @@
 		status,
 		day,
 		onRetry,
+		holding = false,
 		held = []
 	}: {
 		status: DayStatus;
 		/** The day in the reader's own words, already formatted by the caller. */
 		day: string;
 		onRetry: () => void;
+		/** Whether stories are already on screen.
+		 *
+		 * A dated page carried the head of its day in its own document until
+		 * 2026-09-09, so "the rest of 30 August" was the whole truth. One shell
+		 * answers every dated URL now and it carries no day at all, so a page that
+		 * is holding nothing must not say "the rest" - and it must not tell a reader
+		 * the stories above are all here when there are none above. */
+		holding?: boolean;
 		/** The days this device still holds, newest first, already named and
 		 * addressed by the caller. Empty on a first visit, in a browser that keeps
 		 * nothing, and whenever the day that failed is the only one kept. */
@@ -47,11 +58,15 @@
      rendering it only when there is something to say announces nothing. -->
 <div aria-live="polite" data-payload-state={status}>
 	{#if status === 'slow'}
-		<p class="waiting">The rest of {day} is still loading.</p>
+		<p class="waiting">{holding ? `The rest of ${day} is still loading.` : `${day} is still loading.`}</p>
 	{:else if status === 'unreachable'}
 		<section class="failed">
-			<p class="failed-headline">The rest of {day} did not arrive.</p>
-			<p class="failed-note">The stories above are all here.</p>
+			<p class="failed-headline">
+				{holding ? `The rest of ${day} did not arrive.` : `${day} did not arrive.`}
+			</p>
+			{#if holding}
+				<p class="failed-note">The stories above are all here.</p>
+			{/if}
 			<button type="button" class="failed-retry" onclick={onRetry}>Try again</button>
 			{#if held.length > 0}
 				<!-- A reader with no network on a day they never opened has been told
