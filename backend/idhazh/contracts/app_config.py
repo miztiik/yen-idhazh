@@ -73,7 +73,20 @@ class LogLevel(StrEnum):
 class InferenceConfig(Model):
     """Decoding is pinned here so a change of output is a reviewable diff."""
 
-    n_ctx: int = Field(default=8192, ge=512)
+    n_ctx: int = Field(
+        default=8192,
+        ge=512,
+        description=(
+            "The window one sequence gets. The default stays 8192 because it is the "
+            "conservative window for weights nobody has put in front of a runner; "
+            "models.summarize pins 16384 and models.visual_planner does not, and the "
+            "measurement that earns the raise is about the 9B on a GitHub-hosted "
+            "runner rather than about this field. Doubling buys nothing but KV cache: "
+            "32 KiB a token on those weights, so 0.25 GiB at 8192 and 0.50 at 16384. "
+            "Whether that fits is decided by what the machine had free and never by "
+            "what the processes held - docs/reference/measurements.md."
+        ),
+    )
     n_threads: int = Field(default=4, ge=1)
     n_batch: int = Field(default=512, ge=1)
     n_ubatch: int = Field(default=512, ge=1)
@@ -125,6 +138,22 @@ class InferenceConfig(Model):
         default=None,
         ge=0,
         description="llama-server --poll. None omits the flag and keeps the runtime default.",
+    )
+    log_verbosity: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "llama-server -lv. None omits the flag and keeps the runtime default of 3, "
+            "which prints twelve lines and none of them names flash attention, the KV "
+            "buffer or the compute buffer. At 4 the whole model-loader block comes back, "
+            "which is what lets a check read the attention state off the server's own "
+            "line instead of off the flag we passed it. Measured 2026-09-09 on a 12th "
+            "Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and "
+            "zero spread: one server start goes from 12 lines and 1,085 bytes to about "
+            "206 lines and 16,011 bytes. That is a job artifact kept for two days, never "
+            "a committed file. It changes what the server says about itself and nothing "
+            "about what it decodes, so idhazh.fingerprint leaves it out of the stamp."
+        ),
     )
     temperature: float = Field(default=0.0, ge=0.0)
     top_p: float = Field(default=1.0, gt=0.0, le=1.0)
@@ -772,12 +801,18 @@ class ElementsConfig(Model):
         ge=1,
         description=(
             "Candidate elements kept per article. Sized against the truncation cap "
-            "rather than guessed: at 5000 tokens an article body holds about 3,846 "
+            "rather than guessed: at 10000 tokens an article body holds about 7,692 "
             "words, and the densest committed page fixture carries 9.2 quantities per "
-            "1000 characters, which is about 211 over a body that long (measured "
+            "1000 characters, which is about 420 over a body that long (measured "
             "2026-09-08 on tests/fixtures/pages and tests/fixtures/canaries). It is 16 "
             "times visuals.max_facts because that one is a menu a small model reads by "
-            "index and this one is a fact table nothing has to read at once."
+            "index and this one is a fact table nothing has to read at once. The cap "
+            "was above that estimate until extract.truncation_cap_tokens doubled on "
+            "2026-09-09 and now sits below it, so the densest long article keeps the "
+            "first 256 quantities in article order and ElementTable.candidates_found "
+            "says how many the pass matched. That is a bound on work behaving as one, "
+            "not a silent loss: news prose front-loads, and the planner reads at most "
+            "visuals.max_facts of the table by index."
         ),
     )
 
@@ -869,7 +904,7 @@ class SummaryBand(Model):
 
 
 def _default_bands() -> list[SummaryBand]:
-    """Five sizes: the note, the report, the feature, the long feature, the investigation.
+    """Six sizes: note, report, feature, long feature, investigation, whole-read long read.
 
     Starting points chosen from the shape of the sources we collect, not
     measurements - nothing here may be quoted as one (Rule #10). The first
@@ -881,6 +916,12 @@ def _default_bands() -> list[SummaryBand]:
     `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)`, so no rung
     asks for a summary of words the model was never handed
     (`docs/architecture/summarize/prompt.md`).
+
+    The top rung raises the floor of the ask and leaves its ceiling where the
+    rung below it stands. The complaint it answers is a compression one, and
+    compression at a rung's floor is set by `target_words_min`; the ceiling
+    cannot move without moving `evaluation.summary_words_max`, which is a
+    separate decision about what we agree to publish.
 
     Each band also carries its own key-point ask, graded from one at the brief
     band to five at the investigation band: a note holds one fact, and asking it
@@ -905,6 +946,10 @@ def _default_bands() -> list[SummaryBand]:
         ),
         SummaryBand(
             min_source_words=3000, target_words_min=150, target_words_max=230,
+            key_points_min=2, key_points_max=5,
+        ),
+        SummaryBand(
+            min_source_words=5000, target_words_min=180, target_words_max=230,
             key_points_min=2, key_points_max=5,
         ),
     ]
@@ -1812,12 +1857,17 @@ class FinetuneConfig(Model):
         default=8192,
         ge=1,
         description=(
-            "Measured worst case, rounded up to a power of two: the system prompt is 920 "
-            "tokens, a user turn carrying an article at extract.truncation_cap_tokens "
-            "(5,000) measures 5,335 with its fence and instructions, and the output "
-            "budget is 900 - so 7,155. 7168 clears that by 13 tokens, which is not a "
-            "margin. A row longer than this is truncated in training with no error, "
-            "which teaches the model to stop mid-summary."
+            "Measured worst case, rounded up to a power of two - and the cap has since "
+            "outgrown it. At extract.truncation_cap_tokens of 5,000 the system prompt "
+            "was 920 tokens, a user turn carrying an article measured 5,335 with its "
+            "fence and instructions, and the output budget is 900 - so 7,155, which "
+            "8192 cleared. The cap doubled to 10,000 on 2026-09-09 and the same sum is "
+            "about 11,900 for a typical article and about 14,100 for the longest one "
+            "the ledger has recorded, both above 8192. A row longer than this is "
+            "dropped and counted by the wrangler, never truncated, so the training set "
+            "loses its longest rows rather than teaching the model to stop mid-summary. "
+            "Raising it costs GPU memory on the machine that trains, which is not the "
+            "runner, so it is a separate decision with its own measurement."
         ),
     )
     prompt_iterations: int = Field(
@@ -2944,6 +2994,116 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T23:00",
+            change=(
+                "summarize.bands gained a sixth rung at min_source_words 5000, asking "
+                "180 to 230 words and the same 2 to 5 key points as the rung below it. "
+                "No existing rung moved and evaluation.summary_words_max did not move."
+            ),
+            why=(
+                "extract.truncation_cap_tokens went to 10000 earlier the same day, so "
+                "the model is now handed 7,692 words rather than 3,846 and the top rung "
+                "covers a span twice as wide as the one it was cut for: a 3,000-word "
+                "piece and a 7,692-word piece both arrive whole and both got the "
+                "identical 150-to-230-word ask, at 20 to 1 and 51 to 1. The floor is "
+                "5000 because 5,346 is the midpoint of that whole-read range and 5000 is "
+                "the nearest seam the ledger reports, which is how the fifth rung's "
+                "floor was derived on 2026-08-29. Measured 2026-09-09 over the 7,970 "
+                "distinct scored items in state/scores/ that carry a length from before "
+                "the cut: 90 reach 3,000 words and 23 reach 5,000, so the new rung takes "
+                "23 items and the rung below keeps 67 - 0.29 percent of items, about one "
+                "item every three runs over the 77 runs in that ledger. Only the floor "
+                "of the ask moves, because compression at a rung's floor is set by "
+                "target_words_min and the ceiling cannot rise without moving "
+                "evaluation.summary_words_max, which is what the pipeline agrees to "
+                "publish and a separate decision. 5000 stays below the cut point of "
+                "7,692, so this is still not the rung that asks for words the model "
+                "never saw. Additive with a default, so an older config still validates "
+                "and no read-side migration is needed (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-09T21:30",
+            change=(
+                "config/idhazh.json moves extract.truncation_cap_tokens from 5000 to "
+                "10000. No field was added, removed or retyped. elements.max_per_article "
+                "and finetune.sequence_length restate their arithmetic against the new "
+                "cap; neither value moves."
+            ),
+            why=(
+                "The cap is the largest quality lever nobody had pulled, and it was held "
+                "shut by the window rather than by a measurement: at 8,192 the doubled "
+                "cap did not fit. The window went to 16,384 earlier the same day, so it "
+                "fits now. Measured 2026-09-09 over the 4,117 published items in "
+                "state/item-health/2026-09.csv (2026-09-01 to 09, stock ubuntu-latest 4 "
+                "vCPU runners): 36 of them, 0.87 percent, were cut at 5,000 tokens, and "
+                "9 of them, 0.22 percent, would still be cut at 10,000. A cut article "
+                "gains 23 to 5,000 tokens of prefill, median 1,616, and prefill runs at "
+                "a median 9.85 tokens a second over those 4,117 rows, so the worst item "
+                "pays about 8.5 more minutes against a summarize call that costs 114.6 s "
+                "at the median and 312.7 s at the 95th. The prompt is 997 tokens plus "
+                "1.306 a word by least squares over the same rows, so the worst case is "
+                "about 14,100 tokens of a 16,384 window - 86 percent, a margin of 1.16x "
+                "where it was 1.9x. The cap is fingerprint-digested, so every stamp "
+                "moves and no summary written before today is comparable with one "
+                "written after; that is correct, because the text the model read is not "
+                "the same text. Rule #11 is untouched: extract sanitizes before it "
+                "truncates, so a longer article is more untrusted text handled on "
+                "exactly the terms the short one was."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-09T20:40",
+            change=(
+                "InferenceConfig.n_ctx now states what the window is and why the "
+                "default stays 8192. No field was added, removed or retyped. "
+                "config/idhazh.json moves models.summarize to n_ctx 16384 with "
+                "flash_attention pinned on; models.visual_planner is unchanged."
+            ),
+            why=(
+                "The field carried no description at all, so the one number in this "
+                "block that decides whether a prompt fits was the only one with no "
+                "reason beside it. The raise is the summarizer's alone: the visual "
+                "planner is different weights with its own settings block since the "
+                "roles were split, and nothing has measured a 16,384 window against "
+                "it. Doubling buys nothing but KV cache - 32 KiB a token on those "
+                "weights, so 0.25 GiB more - and run 2026-09-09-34323771996 read "
+                "MemAvailable at 5.63 GiB at the tightest of 601 samples on a 15.61 "
+                "GiB runner, which clears the 1.0 GiB bar 5.4 times over after the "
+                "raise is paid. flash_attention is pinned in the same commit rather "
+                "than a later one because n_ctx is fingerprint-digested and moves the "
+                "stamp anyway, so pinning the flag beside it costs no second break in "
+                "comparability. Pinning still earns its place: auto is a runtime "
+                "autodetect that may resolve differently on other silicon, and a run "
+                "that cannot say which kernel it used cannot be compared with one that "
+                "can (Rule #10)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-09T20:10",
+            change=(
+                "InferenceConfig gains log_verbosity, an optional llama-server -lv "
+                "level. Null omits the flag and keeps the runtime default of 3. "
+                "config/idhazh.json sets 4 on both model roles."
+            ),
+            why=(
+                "The server was never asked to describe itself. At its default verbosity "
+                "it prints twelve lines, and no line among them names flash attention, "
+                "the KV buffer or the compute buffer - so every claim about what the "
+                "runtime did with those settings was a claim about the flag we passed "
+                "rather than about what happened (Rule #10). At 4 the model-loader block "
+                "comes back and the log states the attention decision three ways: a "
+                "named state, a compute buffer 5.1 times larger without fusion, and a "
+                "graph 180 nodes longer. Measured 2026-09-09 on a 12th Gen Intel Core "
+                "i7-1265U against llama.cpp b10444, eleven server starts, three runs an "
+                "arm, zero spread. It is a knob rather than a literal because an "
+                "operator debugging a start wants 9 and a daily run does not (Rule #6), "
+                "and it is set on both roles because both write a log nobody can read "
+                "otherwise. What it costs is one job artifact growing from 1,085 bytes "
+                "to about 16,011 - kept two days, committed never."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T18:00",
             change=(

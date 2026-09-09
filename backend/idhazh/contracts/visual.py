@@ -178,8 +178,8 @@ WORST_CASE_REPLY_CHARACTERS: Final = 3767
 
 #: `<kind>-<span_start>-<span_end>` at its longest: `quantity` is the longest
 #: element kind at 8 characters, and six digits an offset. `extract` truncates a
-#: body at `truncation_cap_tokens` (5000), which `truncate_to_tokens` spends as
-#: `int(5000 / 1.3)` = 3,846 words, so six digits covers an article of 999,999
+#: body at `truncation_cap_tokens` (10000), which `truncate_to_tokens` spends as
+#: `int(10000 / 1.3)` = 7,692 words, so six digits covers an article of 999,999
 #: characters and is an upper bound with room in it. The ceiling is here rather
 #: than on `ElementId` itself because it is a decoder bound, not an identity
 #: rule: the pattern, and so the identity, stays element.py's.

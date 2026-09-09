@@ -1902,10 +1902,43 @@ path MSYS never touches. That is why it stayed correct on 2026-08-28 while the
 colon-free form first and the environment variable only as a fallback, because
 the variable protects the shell you remember to set it in and nothing else.
 
+## `vite preview` renders the fallback per request, so a link in `app.html` reads differently there than in the shipped file
+
+`404.html` is what a static host answers an unknown address with, and since
+2026-09-09 that is every dated address. The shipped file resolves
+`%sveltekit.assets%` to the absolute base, so a link written in `src/app.html`
+comes out as `/` and `/archive/` and is correct at any depth.
+
+`vite preview` does not serve that file. SvelteKit's preview middleware renders
+a fallback for the request it was given and computes a **request-relative** base
+from the path, so the same link comes out as `../` on `/2026-09-09/` and `../../`
+on `/2026-09-09/ai/`. Both are right for that request; neither is the artefact
+that ships. Observed 2026-09-09 smoking the no-script signpost: the document
+served at `/2026-09-09/` was 3,967 bytes and matched no file in `build/`, which
+is the tell - hash what the server returned against the files on disk and if it
+matches none of them, the server rendered it.
+
+Smoke the shipped fallback at its own address, `/404.html`, which is the same
+technique `frontend/tests/day-states.spec.ts` uses for the same reason.
+
 ## PowerShell
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **`[System.IO.File]` resolves a relative path against the PROCESS directory,
+  which `Set-Location` never moves.** `Set-Location` changes PowerShell's own
+  location; a .NET call knows nothing about it. So
+  `[System.IO.File]::ReadAllBytes('tests/fixtures/x.json')` after
+  `Set-Location <a worktree>` reads that path under the shell process's original
+  directory - which on this box is the shared main checkout. Observed 2026-09-09
+  normalising a fixture's line endings: the read reported 3,806 bytes where the
+  file in the worktree was 4,324, the "fix" was written back to the main
+  checkout, and the worktree's file was untouched. It was only harmless because
+  the bytes round-tripped identically. Two tells that this happened: a size that
+  matches the file before your edit, and a `git status` in the OTHER checkout.
+  Pass an absolute path to any `[System.IO.*]` call, or do the work in the
+  interpreter that already has the path - `python -c` with an absolute
+  `pathlib.Path` cannot make this mistake.
 - **A function that logs with `Write-Output` returns the log as part of its
   value.** PowerShell returns everything a function writes to the success
   stream, not just the last expression, so a helper that prints a progress line
@@ -3185,6 +3218,51 @@ own. Landed 2026-09-09 with row 3 of the shell-and-fetch plan. The rule
 generalises: a harness that inherits `os.environ` to run a workflow script
 inherits every `GITHUB_*` variable the runner set, and each one is a fact the
 script can read that the developer machine never had.
+
+## In `state/item-health/`, the `publish` row is the whole record and the `summarize` row is the degrade path
+
+A measurement over the September shard filtered on `stage == "summarize"` and
+found 42 rows over nine days, which reads as "this pipeline summarized 42
+articles". It summarized 4,117. The row a successful item leaves is stamped
+`publish`; a `summarize` row is what a **failed** or degraded summarize call
+leaves behind. So the honest filter for per-item timings, token counts and
+lengths is `stage == "publish"`, and the count of `summarize` rows is a failure
+count.
+
+The tell is the column coverage, and it is cheap to check before trusting a
+filter: over `state/item-health/2026-09.csv`, `input_tokens` is present on 4,117
+rows and every one of them is `publish`. A stage that carries none of the
+columns you are measuring is not the stage that did the work. Measured
+2026-09-09 while raising the truncation cap.
+
+## `test:changed` exits 1 with every test green when the browser suite writes a validation receipt
+
+`malformed-day.spec.ts` runs `idhazh validate-days` as a real subprocess with
+`cwd` at the repository root, and that command appends a row to
+`state/day-validations.csv` for any committed day it has no receipt for. That
+file is tracked, so it is inside the input fingerprint `run-checks.ts` takes
+before the checks and asserts again after the browser groups. The row lands
+during the browser phase, the fingerprint moves, and the run ends
+`The canary build has stale inputs` and `Result: exit 1` under a list where
+every one of the 1,009 browser tests passed and nothing failed.
+
+It reads as a broken build. It is bookkeeping. The tell is `git status` - a
+modified `state/day-validations.csv` that no edit of yours touched - and the
+confirmation is one line:
+
+```powershell
+python -c "from idhazh.cli import _validator_identity; print(_validator_identity())"
+```
+
+Run it in your worktree and in a clean checkout of `main`. Identical values mean
+your change did not move the rules, so the missing receipt was missing before
+you started; the daily pipeline is the thing that normally writes it, and every
+row in that ledger's history came from a `digest:` commit. Do not commit the row
+- it is written from the spec's scratch tree, not from a published run.
+
+The row is appended once. A second run finds the receipt and writes nothing, so
+re-running certifies green. CI is unaffected either way: `ci.yml` calls
+`npm run test:browser` directly and never takes the fingerprint. Seen 2026-09-09.
 
 ## See also
 

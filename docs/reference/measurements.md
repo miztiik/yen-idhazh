@@ -16,6 +16,303 @@ Two rules govern this page:
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
 
+## What the doubled window and the doubled cap cost, measured 2026-09-09
+
+**The run:** `2026-09-09-34379502244`, `workflow_dispatch`, 4 shards,
+faithfulness on, commit `0d49b61f`, 16:53:05Z to 18:35:48Z. Wall clock
+**1h42m43s**. `n_ctx` 16,384, `flash_attention: "on"`, `log_verbosity` 4,
+`extract.truncation_cap_tokens` 10,000. Model `Qwen3.5-9B-Q4_K_M`, 8.95 B
+parameters, llama.cpp build 10598 (`56db501e7`). 846 memory samples.
+
+**The baseline:** `2026-09-09-34323771996`, scheduled, same day, 07:25:34Z to
+09:10:39Z, wall clock **1h45m05s**, 4 shards, `n_ctx` 8,192, cap 5,000,
+`log_verbosity` 3, 601 samples.
+
+**Hardware:** stock GitHub-hosted `ubuntu-latest`, 4 vCPU, no GPU, `MemTotal`
+15.61 GiB. **The two runs drew different processors**, and that turns out to
+matter more than anything in `config/`: the priced run got AMD EPYC 9V74 on
+shards 0 and 2 and AMD EPYC 7763 on 1 and 3; the baseline got Intel Xeon
+Platinum 8573C on 0 and 3 and EPYC 9V74 on 1 and 2.
+
+**Two deviations, stated rather than buried.** The article sets differ - the
+`date` input would overwrite a published day, so it was not used - therefore
+**no summary-quality comparison may be drawn from this pair**. And this run
+carries three changes at once, the window, the pinned attention flag and the
+article cap. Memory, KV size, attention and prefill rate are runtime properties
+and are unaffected by either deviation.
+
+**The fingerprint moved, which is what says the config reached the run.**
+`22f44b21c1bdf4cd104c4a41e5f27c7bb62dc67020f61c7ee2ac7e4533641c24`, first seen
+at 16:59:26Z, replacing `30d96862...`. `n_ctx` 8,192 to 16,384,
+`truncation_cap_tokens` 5,000 to 10,000, `flash_attention` `runtime-default` to
+`on`. Every other digested field is unchanged, so the stamp moved for exactly
+the three settings this run was dispatched to price.
+
+### The KV buffer is 512.00 MiB, and the projection was exact
+
+All four shards print the same four lines:
+
+```
+llama_context: flash_attn            = enabled
+llama_kv_cache:        CPU KV buffer size =   512.00 MiB
+llama_kv_cache: size =  512.00 MiB ( 16384 cells,   8 layers,  1/1 seqs), K (f16):  256.00 MiB, V (f16):  256.00 MiB
+llama_kv_cache: attn_rot_k = 0, n_embd_head_k_all = 256
+```
+
+**512.00 MiB over 16,384 cells is 32 KiB a token, which is the projected figure
+to the byte.** Spread: none - four shards, four identical readings. The
+alternative on the table was 2,304 MiB, which would have meant the head
+dimension was read wrong and the raise cost about 1.1 GiB. It is refuted. **The
+window raise cost 0.25 GiB**, being 512 MiB at 16,384 against 256 MiB at 8,192,
+and the model card's 4 KV heads at head dimension 256 across 8 attention layers
+is confirmed by the server's own `n_embd_head_k_all = 256`.
+
+Two more sizes from the same start, for the record: `CPU_Mapped model buffer`
+5,406.91 MiB, `CPU_REPACK model buffer` 2,616.75 MiB, `CPU compute buffer`
+112.02 MiB, 1,831 graph nodes.
+
+### Flash attention is enabled, and the plan looked for the wrong line
+
+`llama_context: flash_attn = enabled` on all four shards. **The prediction that
+`resolve_fused_ops: Flash Attention enabled` would appear was wrong** - that
+line does not exist in this build. `resolve_fused_ops` prints nine lines per
+start, for Gated Delta Net, Lightning Indexer and DeepSeek V4 HC, so the reader
+is present and the verbosity took; it simply does not carry attention. The
+answer itself is unambiguous, and `flash_attention: "on"` was honoured on a
+runner's processor.
+
+**The verbosity raise is what made any of this readable.** The baseline at
+`verbosity = 3` writes 342 to 404 log lines and none of them mention flash
+attention, the KV cache or `n_ctx`. The priced run at `verbosity = 4` writes
+1,306. Without `log_verbosity: 4` the most valuable number in this section could
+not have been taken.
+
+### MemAvailable went up by 1.21 GiB, and the runner is why
+
+| | priced, `n_ctx` 16,384 | baseline, `n_ctx` 8,192 |
+| --- | --- | --- |
+| `MemAvailable` low-water mark | **6.84 GiB** | **5.63 GiB** |
+| per-shard lows | 6.84, 7.36, 7.44, 7.46 | 5.63, 5.95, 7.64, 7.84 |
+| tightest instant | shard 3, 18:01:44Z | shard 0, 08:01:32Z |
+| samples | 846 | 601 |
+
+**ESCALATE trigger 1 asks for 1.0 GiB and the run left 6.84. It is 6.8 times the
+bar and does not fire.**
+
+**More free memory at twice the window is not a saving, it is a different
+runner.** The baseline's two tight shards were the Intel Xeon 8573C ones, whose
+`Committed_AS` peaked at 12.68 and 12.31 GiB against 10.37 to 10.66 GiB for the
+same job on EPYC. The priced run drew no Intel shard at all. So 5.63 GiB is a
+property of the processor a shard landed on, not of the window.
+
+**Matched on the same processor, the cost appears and it is the projected
+size.** On EPYC 9V74, `Committed_AS` peak went from 10.52 GiB (2 shards,
+baseline) to **10.84 GiB** (2 shards, priced): **+0.32 GiB**, against +0.25 GiB
+projected for the KV cache, with the remainder from the longer prompts the cap
+raise admits. That is the like-for-like reading and it is the one to quote.
+
+**What was not measured: the doubled window on an Intel Xeon 8573C shard.** The
+KV buffer is a fixed 512 MiB whatever the processor, so the arithmetic carries -
+5.63 - 0.25 leaves 5.38 GiB, 5.4 times the bar - but no run has yet observed it.
+
+### `peak_rss_bytes` cannot resolve a 0.25 GiB change, and says so honestly
+
+| | priced | baseline |
+| --- | --- | --- |
+| llama `peak_rss_bytes`, worst shard | 12.16 GiB (13,053,390,848 B) | 12.68 GiB (13,612,503,040 B) |
+| llama, all four shards | 11.67, 11.89, 11.97, 12.16 | 11.26, 11.31, 12.36, 12.68 |
+| `python_peak_rss_bytes`, worst | 1.79 GiB (1,920,172,032 B) | 1.76 GiB (1,893,068,800 B) |
+| `cgroup_peak_bytes` | empty on all four | empty on all four |
+
+**The worst llama peak fell 0.52 GiB while the window doubled**, which is not a
+real effect. The instrument's own spread across four shards is 0.49 GiB in the
+priced run and 1.42 GiB in the baseline - two to six times the 0.25 GiB it is
+being asked to see. Read it as ruling out a large regression and nothing
+finer. Python is flat at +0.03 GiB. `cgroup_memory_peak_bytes` reads
+`unavailable` on all four shards for the second run running, so the container
+limit still cannot be read and `/proc/meminfo` remains the instrument.
+
+### The cap cut nothing, and the rate it was priced at did not move
+
+**Zero of 75 items ran past the 10,000-token cut point** of 7,692 words. The
+baseline cut 2 of 75 at its 3,846-word point. The prediction was about one cut
+item a day across roughly six runs a day, which is about 0.17 for a single
+70-item run - **zero is what that predicts, not evidence against it.** The
+8.5-minute cost of a cut item is therefore still untested by a cut item.
+
+**Its ingredient is re-confirmed, and doubling the window cost nothing per
+token.** Matched on EPYC 9V74, uncached prefill ran at a median **9.86 tokens a
+second** at 16,384 against **9.97** at 8,192 - down 1.1 percent, which is inside
+the run-to-run spread. Whole-month median 9.85 over 4,187 timed rows, min 8.25,
+max 44.71.
+
+**The processor sorts the prefill rate four times harder than any setting
+does.** On the baseline, the Intel Xeon 8573C shards ran at a median **41.00
+tokens a second** against 9.86 on EPYC 9V74 - **4.2 times faster on the same
+work**. Which runner class a shard draws is the largest single term in its wall
+clock, and nothing in `config/` touches it. Every per-shard timing on this page
+carries that lottery inside it.
+
+| prefill, uncached tokens a second | n | min | median | max |
+| --- | --- | --- | --- | --- |
+| priced, EPYC 9V74 | 35 | 9.79 | **9.86** | 9.98 |
+| priced, EPYC 7763 | 35 | 9.43 | 9.76 | 9.84 |
+| baseline, EPYC 9V74 | 38 | 9.70 | **9.97** | 14.60 |
+| baseline, Intel Xeon 8573C | 35 | 33.34 | **41.00** | 43.94 |
+
+### The wall clock did not pay
+
+**6,163 s against 6,305 s - 142 seconds faster, 2.3 percent.** The slowest shard
+went 3,994 s to 4,012 s, 18 seconds slower, 0.5 percent. The article sets
+differ, so neither figure attributes cleanly to the runtime change; jointly they
+rule out a large regression, which is what a pricing run is for. Per-item
+summarize seconds matched on EPYC 9V74: median 101.7 s to 122.0 s, but the 95th
+percentile fell 471.3 s to 221.5 s and the longest 716.5 s to 427.5 s. The tails
+move opposite ways because they are different articles. **Do not read a per-item
+timing across this boundary.**
+
+### The window raise was load-bearing on the first run, and nothing predicted that
+
+**One item reached 8,741 input tokens** - 5,937 words, `ai` vertical, not cut
+because 5,937 is under the 7,692-word point. It is the largest prompt in the
+whole 4,187-row month shard and the only one over 8,192. **Under the previous
+8,192 window it would not have fitted.** Under the previous 5,000-token cap it
+would have been cut to 3,846 words and never grown that large. So the window
+raise and the cap raise are load-bearing **as a pair**, and the pair was
+exercised on the day it landed rather than at some later margin. That item cost
+927 s of prefill and 1,003 s in total.
+
+Largest KV occupancy on the run, `n_tokens_max`, was **9,082 of 16,384 cells -
+55 percent**. So the busiest single request used just over half the new window.
+
+### What a further raise would now cost, measured rather than projected
+
+At 32 KiB a token, `n_ctx` 32,768 costs **1,024 MiB of KV, 512 MiB more than
+today**. Against a measured low-water mark of 6.84 GiB that leaves about 6.3
+GiB, 6.3 times the trigger's 1.0 GiB bar. **If a later plan needs a wider window,
+memory is not what stops it** - the standing objection to 32,768 is that nothing
+needs it, and that objection is now the only one.
+
+### Recorded, not attributed
+
+The priced run wrote 5 summarize failures against the baseline's 2, out of about
+75 items each: `length_out_of_range` 3 against 1, plus one `bad_shape` and one
+`copied_source`. **The article sets differ and no claim is made here.** It is
+written down so that a later run at this fingerprint has something to compare
+against.
+
+## How often the truncation cap actually bites, 2026-09-09
+
+**Input:** `state/item-health/2026-09.csv`, one month shard, 4,556 rows covering
+2026-09-01 to 2026-09-09. The 4,117 of them at the `publish` stage carry the
+whole per-item record. One file, named here, because a walk over every shard
+costs more every month for an answer one month already gives (Rule #12).
+**Hardware:** the stock GitHub-hosted `ubuntu-latest` runners those rows were
+written on - 4 vCPU, no GPU. Nothing here was taken on a laptop.
+
+**The cap cut 36 of 4,117 published items, which is 0.87 percent.** At a cap of
+5,000 tokens the cut point is `int(5000 / 1.3)` = 3,846 words, and those 36 rows
+sit exactly on it. Nine of them - 0.22 percent - ran past 7,692 words and would
+still be cut at a cap of 10,000. The cut articles ran 3,864 to 11,399 words
+before the cut, median 5,089.
+
+**So the new headroom is reached about four times a day and is fully spent about
+once.** The shard covers 9 days at about 457 published items a day.
+
+| | at cap 5,000 | at cap 10,000 |
+| --- | --- | --- |
+| Items cut | 36 of 4,117 (0.87 percent) | 9 of 4,117 (0.22 percent) |
+| Extra prefill tokens a cut item | - | 23 to 5,000, median 1,616 |
+| Extra prefill tokens over the 9 days | - | 78,489 |
+
+**The often-quoted "largest prompt ever seen is 5,516 tokens" is withdrawn.** It
+was measured under the 5,000-token cap, so it says what the cap allowed rather
+than how long an article runs, and it is stale as well: the largest
+`input_tokens` on this shard is **7,093**. Neither figure is evidence about
+article length. `source_words_before_cap` is, because it counts the body before
+the cut, and that is what the rows above use.
+
+### What a prompt costs, and what the cap raise adds to it
+
+**The prompt is 997 tokens plus 1.306 a word.** Least squares over the same
+4,117 rows, `input_tokens` against `source_words`. The constant reads off the
+data twice: the shortest items on the shard are 3 words each and measured 980 to
+985 tokens. So 997 tokens is the system prompt, the fence and the instructions -
+everything before a word of the article arrives.
+
+**1.306 tokens a word is the median, and the spread is what the window has to
+cover.** Over the 36 rows the cap cut, where the word count is fixed at 3,846,
+`input_tokens` ran 5,582 to 7,093. Take off the 997-token constant and the
+article itself measured **4,585 to 6,096 tokens - 1.192 to 1.585 tokens a
+word**. `extract.truncate_to_tokens` spends the cap as `int(cap / 1.3)` words,
+so an article that tokenizes harder than 1.3 overruns the budget its own cap
+gave it. **The worst one overran by 21.9 percent**: 3,846 words at 1.585 is
+6,096 tokens against a cap that asked for 5,000, and `(6096 - 5000) / 5000` is
+0.219. The ratio is a property of the prose, not of the cap, so the same article
+at the 10,000-token cap gives 7,692 x 1.585 = 12,192 tokens, over by the same
+21.9 percent - which is where the 14,089 in the table below comes from.
+
+**This paragraph said 16.8 percent until 2026-09-09, and that figure was
+irreproducible from the numbers beside it.** It came from subtracting a
+1,255-token constant instead of the 997 this same section derives, which lowers
+the worst ratio to 1.518 and the overrun to 16.8 percent - while the worst-case
+table two paragraphs down used 1.585 and 14,089. One section, two constants, two
+worst-case ratios. 997 is the one the evidence supports: this section's own
+least-squares intercept, corroborated by 3-word items measuring 980 to 985
+tokens. So 21.9 percent stands and 14,089 was right all along. Re-derived from
+the same 36 rows on 2026-09-09.
+
+**Worst case at the committed cap of 10,000, against the committed window of
+16,384:**
+
+| | tokens | share of 16,384 |
+| --- | --- | --- |
+| Typical article (1.306 a word) | 997 + 10,046 + 900 = **11,943** | 73 percent |
+| Worst article this shard produced (1.585 a word) | 997 + 12,192 + 900 = **14,089** | 86 percent |
+
+The margin falls from 1.9x to **1.16x**. At the 8,192 window committed the day
+before, 14,089 tokens is 172 percent of the window: this cap raise was not
+possible until that window raise landed, and the two are one decision.
+`test_the_longest_article_the_cap_allows_still_fits_the_window` in
+[../../backend/tests/test_contracts.py](../../backend/tests/test_contracts.py)
+reads both sides from `config/` and fails on any later pair that does not fit.
+
+**A two-call design has almost nothing left.** The pseudo-plan's second call
+adds about 1,200 tokens of first answer, about 300 of second instruction and
+about 1,200 of second answer. On the typical article that is 13,580 tokens, 83
+percent, a margin of 1.21x. On the worst article this shard produced it is
+**15,889 tokens, 97 percent of the window, a margin of 1.03x**. Write that down:
+the next cap raise needs a window raise beside it, and a second call at this cap
+needs one too.
+
+### What the wall clock pays
+
+**Prefill runs at a median 9.85 tokens a second** over the 4,117 timed rows, the
+slowest row at 8.25 and the fastest at 44.71. That is the same figure the
+2026-08-23 sweep took on the configured model at 4,850 tokens - 9.84 - re-derived
+from nine days of real items, which is the strongest corroboration on this page.
+
+**So 5,000 more prefill tokens is 8.5 minutes, and 10.1 at the slowest rate.**
+That is the whole cost of the raise, and it lands on the item that was cut.
+
+**Against what a summarize call costs today:** median **114.6 s**, 95th
+percentile **312.7 s**, longest **800.9 s**, over the same 4,117 rows. So the
+worst item roughly doubles: 800.9 s becomes about 1,311 s. `run.shard_size` is 5
+and `run.shard_timeout_minutes` is 200, so a shard of five worst-case items goes
+from about 67 minutes to about 109 - still inside the timeout, and a shard where
+all five items are cut is unlikely at a cut rate of 0.87 percent.
+
+**What is not measured:** what the extra text does to summary quality. **Row 4
+has now run at the new fingerprint and still cannot answer it**, because the
+`date` input would overwrite a published day, so the priced run summarized
+different articles from its baseline and no quality comparison may be drawn from
+the pair ([what the doubled window and the doubled cap
+cost](#what-the-doubled-window-and-the-doubled-cap-cost-measured-2026-09-09)).
+One run of eval rows now exists on the far side of the boundary. What settles
+the question is a second run at this same fingerprint over a frozen article set,
+against rows written at the same fingerprint - not against anything older, since
+the model read different text.
+
 ## What the 1.6 GiB of python beside the model actually is, 2026-09-09
 
 **Three python processes, and only one of them is ours.** A work shard records
@@ -175,6 +472,62 @@ So both sides of the comparison are open, not one. An owner choosing today is
 choosing without an instrument, and the cheap next step is one run rather than
 one argument.
 
+### The run arrived, and 16,384 is now committed - what it is projected to cost
+
+**Answered on one reading, and the reading is the kernel's own.** Run
+`2026-09-09-34323771996` is the first this project has taken with
+`MemAvailable` beside the process marks: 4 shards, 601 samples, `n_ctx` 8,192,
+on GitHub-hosted `ubuntu-latest`. `MemTotal` 15.61 GiB. At the tightest instant
+of the whole run the kernel still reported **5.63 GiB available**, and the four
+shards' lows were 5.63, 5.95, 7.64 and 7.84 GiB. llama-server's worst `VmHWM`
+was 12.68 GiB and python's 1.76 GiB.
+
+**Those two readings disagree, and the disagreement is the point.** The process
+marks sum to 14.44 GiB, while the kernel says only 9.98 GiB of the machine was
+unavailable - a gap of 4.46 GiB in the direction the earlier sections predicted.
+`load_mode` is null, so llama.cpp maps the 5.29 GiB weight file rather than
+reading it into anonymous memory: those pages count in `VmRSS` in full and the
+kernel can drop them, so a sum of resident sets overstates what has to fit. The
+two figures cannot be reconciled to the byte from what this run recorded - a
+`VmHWM` is a peak and `MemAvailable` is an instant, and nothing pairs them - but
+they do not need to be. **`MemAvailable` is the only one of the two that answers
+the question**, because it is the kernel's own estimate of what a new allocation
+could get.
+
+**What the raise costs is KV cache and nothing else, and it is arithmetic.** On
+`Qwen3.5-9B-Q4_K_M` the card gives 4 KV heads, a head dimension of 256, and 8
+attention layers: 4 x 256 x 2 (K and V) x 2 bytes is 4 KiB a token a layer, so
+32 KiB a token across the eight - **0.25 GiB at 8,192 and 0.50 GiB at 16,384**.
+The raise is +0.25 GiB. Read two ways, it clears the plan's 1.0 GiB bar both
+times: on the kernel's own reading 5.63 - 0.25 leaves **5.38 GiB, 5.4 times the
+bar**; on the harsher machine-minus-llama-peak framing, 15.61 - 12.68 - 0.25
+leaves **2.68 GiB, 2.7 times it**. The answer does not turn on which framing
+is accepted.
+
+**This was a projection until row 4 dispatched. It has now been read, and it was
+right to the byte.** Run `2026-09-09-34379502244` printed
+`llama_kv_cache: CPU KV buffer size = 512.00 MiB` on all four shards - see
+[what the doubled window and the doubled cap cost](#what-the-doubled-window-and-the-doubled-cap-cost-measured-2026-09-09).
+The 2,304 MiB alternative is refuted and the raise cost 0.25 GiB. The one
+cross-check this repository already held is about other weights and agreed with
+the method rather than with the number: the 8B prints
+`llama_kv_cache: CPU KV buffer size = 1152.00 MiB` at `n_ctx` 8,192, which is
+144 KiB a token - 4.5 times the 9B's, because the 8B carries 36 attention layers
+of 8 KV heads at head dimension 128 and the 9B carries 8 of 4 at 256. Same
+arithmetic, different architecture.
+
+**32,768 was refused, and not on memory.** Its memory objection died with this
+reading. The one that stands is that it buys nothing: the widest two-call
+request this pipeline can build is about 8,580 tokens, so 16,384 is 1.9 times
+that and 32,768 is 3.8 times. Doubling again pays 0.5 GiB more for headroom over
+headroom. **That 8,580 was measured under the 5,000-token cap and is superseded
+at 10,000** - the two-call worst case is now 15,889 tokens, 97 percent of the
+window. The refusal stands; the margin behind it does not.
+
+**The cache types stay `f16`.** `q8_0` on K or V changes how the partial sums
+accumulate, which changes the words. That is a separate measurement against the
+scorers, not a memory knob to reach for while raising a window.
+
 ## What llama-server reports about its own runtime settings, 2026-09-09
 
 **Flash attention is observable, and only in the log, and only at verbosity 4 or
@@ -193,6 +546,12 @@ held on - its section 1a reads "the instrument does not exist" - and the same
 flag hands row 4 the KV-buffer and compute-buffer lines it needs. The hold
 itself is not lifted by this page: the row's other trigger is memory, which this
 page has nothing to say about, and the build tested here is not the pinned one.
+
+**Both were lifted on the runner, and this instrument is what read them.** Run
+`2026-09-09-34379502244` at `log_verbosity: 4` wrote 1,306 log lines a shard
+against 342 to 404 at verbosity 3, and the KV-buffer line was among them. One
+correction from that run: on build 10598 the named state is
+`llama_context: flash_attn = enabled`, not a `resolve_fused_ops` line.
 
 **Hardware and method.** 12th Gen Intel Core i7-1265U, 12 logical CPUs,
 32,592 MiB of host memory as the binary itself reports it, Windows 11. Taken
@@ -318,6 +677,17 @@ at `n_ctx` 8192 it is 112.01 MiB with attention fused and 572.01 MiB without.
 Corroboration is worth the line because the log grammar is llama.cpp's and moves
 between builds, while the buffer difference is arithmetic and does not.
 
+**Written, 2026-09-09.** `idhazh.llm.server.flash_attention_state` is that
+reader and returns those three states by those names. Its four arms are driven
+from committed fixtures and never from a live server (Rule #7): the three
+`tests/fixtures/runtime/2026-09-09-lv4-*.readings.txt` excerpts carry the
+readings above, and the `UNREADABLE` arm is driven by the four real
+`2026-08-29-3-shard-*.server-head.txt` captures, which are runner logs taken
+before the verbosity knob existed and therefore hold no attention line at all.
+A fifth case removes the `resolve_fused_ops` line from the recorded `auto` arm
+and asserts the verdict falls back to `UNREADABLE`, which is what stops `auto`
+being read as a yes.
+
 ### `/props` settles the build and the window, and cannot settle flash attention
 
 `/props` is the right instrument for three questions and the wrong one for this
@@ -357,6 +727,31 @@ state whether it is on. Seconds to first health ranged 10.1 to 34.6 s over the
 eleven starts, and that range is page cache rather than anything about the
 flags: the first start of the session was the 34.6 and every later one was 10.1
 to 16.3.
+
+### What landed from this, and what one server start now costs
+
+**The flag is committed.** `models.summarize.inference.log_verbosity` and
+`models.visual_planner.inference.log_verbosity` are both `4` in
+`config/idhazh.json`, and `idhazh.llm.server.server_argv` emits `-lv 4` from
+them. It is a knob rather than a literal because an operator debugging a start
+wants `9` and a daily run does not (Rule #6). Null omits the flag and keeps the
+runtime's own default of 3, so a checkout with no config file starts a quiet
+server exactly as before.
+
+**The cost is one job artifact, and it is not a committed file.** A server start
+goes from 12 stderr lines and 1,085 bytes to about 206 lines and 16,011 bytes -
+roughly 15 KB per start, on the readings in the table above. A daily run makes
+five starts across the two roles, four work shards and the visual planner, so
+about 78 KiB a day. It lands in the run's own log, which GitHub Actions retains
+and nothing else reads, and no byte of it reaches the 1 GB published site
+(Rule #2) or the repository. The daily workflow already uploads
+`llama-server.log` as a two-day artifact, well inside the 500 MB allowance.
+
+**`log_verbosity` is not fingerprint-digested**, and sits in
+`idhazh.fingerprint.NOT_DIGESTED` with that reason written next to it. A log
+level cannot move a logit, so digesting it would have invalidated every earlier
+work identity on the day somebody turned the logging up - which is what
+`n_threads_batch` was refused for on the other side of the same argument.
 
 ## What the encoder costs on the wire from Hugging Face, 2026-09-09
 

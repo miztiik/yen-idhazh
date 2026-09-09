@@ -35,14 +35,18 @@
 	 * depending on which page this is.
 	 */
 	import { clockUtc, longDate } from '$lib/format';
-	import type { DigestDay } from '$lib/payload/types';
+	import type { DayForPage } from '$lib/payload/types';
 
-	let { day, count }: { day: DigestDay; count: number } = $props();
+	let { day, count }: { day: DayForPage; count: number } = $props();
 
+	// A payload written before a served day carried its runs says nothing about
+	// them, so this block does not draw. Absent is unknown, and "this page came
+	// from run 1" is a claim nothing here can make.
+	const runs = $derived(day.runs ?? []);
 	const laterAdded = $derived(
-		day.runs.filter((run) => run.n > 1).reduce((total, run) => total + run.items_added, 0)
+		runs.filter((run) => run.n > 1).reduce((total, run) => total + run.items_added, 0)
 	);
-	const lastRun = $derived(day.runs.at(-1) ?? null);
+	const lastRun = $derived(runs.at(-1) ?? null);
 </script>
 
 <section class="notice" aria-label="About today">
@@ -57,7 +61,7 @@
 			{count}
 			{count === 1 ? 'story' : 'stories'}.
 		{/if}
-		{#if day.partial}
+		{#if day.partial === true && day.items_failed !== null && day.items_failed !== undefined}
 			{day.items_failed} did not finish, because we could not read enough of the page to summarize
 			them fairly.
 		{/if}

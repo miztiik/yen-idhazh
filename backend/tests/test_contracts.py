@@ -16,7 +16,7 @@ import re
 from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from conftest import (
@@ -41,6 +41,7 @@ from idhazh.contracts.app_config import (
     CollectConfig,
     ConsoleConfig,
     EvaluationConfig,
+    InferenceConfig,
     ModelsConfig,
     ObservabilityConfig,
     PageWeightConfig,
@@ -122,7 +123,8 @@ from idhazh.contracts.visual import (
 )
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
-from idhazh.fingerprint import text_digest
+from idhazh.extract import TOKENS_PER_WORD
+from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields, text_digest
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
 from idhazh.retention import oldest_month_kept
 from utilities import build_canary_day
@@ -925,6 +927,29 @@ def test_version_is_stamped_when_a_writer_omits_it() -> None:
     assert load_summary(payload).version == BY_STEM["summary"].schema_version()
 
 
+def test_a_manifest_written_before_the_verbosity_knob_still_reads() -> None:
+    """Section 11's release blocker, for the other document the knob reached.
+
+    `log_verbosity` landed on the embedded inference block on 2026-09-09, so
+    every manifest published before that day has no such key. The claim that
+    those still read is only worth making if something removes the key and
+    checks - the canonical fixture carries it, so the fixture alone proves the
+    new shape and nothing about the old one.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    stripped = 0
+    for run in payload["runs"]:
+        for use in run["models"]:
+            del use["model_ref"]["inference"]["log_verbosity"]
+            stripped += 1
+    assert stripped, "the fixture stopped carrying an inference block, so this proves nothing"
+
+    manifest = RunManifest.model_validate(payload)
+    for run in manifest.runs:
+        for use in run.models:
+            assert use.model_ref.inference.log_verbosity is None
+
+
 # --- Config ----------------------------------------------------------------
 
 
@@ -1006,9 +1031,9 @@ def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
 def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
     """A run that did not count is a run that cannot say how close it came.
 
-    `n_ctx` is 8192 and llama-server publishes the high watermark only under
-    `--metrics`. Off by default would mean the number exists on the runs nobody
-    thought to switch it on for, which is every ordinary day.
+    llama-server publishes the context high watermark only under `--metrics`.
+    Off by default would mean the number exists on the runs nobody thought to
+    switch it on for, which is every ordinary day.
 
     The fresh-clone arm drops the settings block and the weights digest
     together. Those two move as a pair now: an entry that names measured bytes
@@ -1023,6 +1048,92 @@ def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
 
     assert fresh.models.summarize.inference.metrics is True, "a fresh clone must count"
     assert committed.models.summarize.inference.metrics is True, "the committed config must count"
+
+
+def test_the_wider_window_is_the_summarizers_alone() -> None:
+    """Row 3 raised one role, because one role is what was measured.
+
+    The visual planner is different weights with its own settings block, and
+    nothing has put a 16,384 window in front of them - so it keeps 8,192. That
+    is the whole reason the block sits on the entry rather than on `models`:
+    a number measured against one model may not be inherited by another.
+
+    Attention is pinned in the same file. `auto` is a runtime autodetect that
+    may resolve differently on other silicon, and a run that cannot name the
+    kernel it used cannot be compared with one that can (Rule #10).
+    """
+    models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models
+
+    assert models.summarize.inference.n_ctx == 16384
+    assert models.summarize.inference.flash_attention == "on"
+    assert models.visual_planner.inference.n_ctx == 8192
+    assert InferenceConfig().n_ctx == 8192, (
+        "the default is the conservative window for weights nobody has measured"
+    )
+
+
+#: What the summarize prompt costs before a word of the article reaches it - the
+#: system prompt, the fence and the instructions. Measured 2026-09-09 over the
+#: 4,117 published items in `state/item-health/2026-09.csv` (2026-09-01 to 09,
+#: stock ubuntu-latest 4 vCPU runners): a least-squares fit of `input_tokens`
+#: against `source_words` gives 997 tokens of overhead and 1.306 tokens a word,
+#: and the shortest items on the shard - 3 words each - measured 980 to 985
+#: tokens directly, which is the same constant read off the data twice.
+PROMPT_OVERHEAD_TOKENS: Final = 997
+
+#: The highest tokens a word any of those 4,117 items reached, same shard and
+#: date: (7,093 - 997) / 3,846. `extract.truncate_to_tokens` spends the cap at
+#: `TOKENS_PER_WORD`, which is 1.3, so a body that tokenizes above that overruns
+#: the budget its own cap gave it. The spread is the point: the median item runs
+#: 1.306 and this one runs 1.585, so a window sized on the median is sized on
+#: the article that never causes trouble.
+WORST_TOKENS_A_WORD: Final = 1.585
+
+
+def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
+    """The cap and the window are one decision, and this is where they meet.
+
+    Both sides are read from `config/` (Rule #6), so the assertion survives the
+    next move of either. It is the guard that was missing on 2026-09-09: the cap
+    went from 5,000 to 10,000 tokens that day and could not have, at the 8,192
+    window committed the day before - 14,089 tokens against 8,192 is 172 percent
+    of it. Nothing in the tree said so. A doc said so, and a doc does not fail.
+
+    The worst case is built from the measured expansion rather than from
+    `TOKENS_PER_WORD`. The cap is spent as words at 1.3 tokens each, so an
+    article whose prose tokenizes harder than that overruns the budget the cap
+    handed it, and the window has to cover the article that did, not the one
+    that behaved. At the committed cap of 10,000 that is 997 + 12,192 + 900 =
+    14,089 tokens of 16,384, which is 86 percent and a margin of 1.16x.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    inference = committed.models.summarize.inference
+
+    cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
+    worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
+    worst_sequence = worst_prompt + inference.max_output_tokens
+
+    assert worst_sequence <= inference.n_ctx, (
+        f"the longest article extract.truncation_cap_tokens "
+        f"({committed.extract.truncation_cap_tokens}) lets through is "
+        f"{worst_prompt} prompt tokens, and {inference.max_output_tokens} of answer "
+        f"puts the sequence at {worst_sequence} against a window of {inference.n_ctx}. "
+        "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
+    )
+
+
+def test_a_wider_window_moves_the_stamp_and_the_verbosity_does_not() -> None:
+    """The two halves of row 3's digest decision, in one place.
+
+    `n_ctx` is digested, so raising it stamps the work apart from every summary
+    written at 8,192 - which is correct, because the prompt those summaries were
+    written under could not have carried as much. `log_verbosity` is not, because
+    a log level cannot move a logit and digesting it would have invalidated every
+    earlier identity the day somebody turned the logging up.
+    """
+    assert "n_ctx" in digested_inference_fields()
+    assert "log_verbosity" in NOT_DIGESTED
+    assert NOT_DIGESTED["log_verbosity"].moves_logits is False
 
 
 def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:
@@ -3918,6 +4029,35 @@ def test_the_block_this_projection_exists_to_drop_can_never_be_served() -> None:
     assert "embeddings" in forbidden, "the vector block is why this projection exists"
     kept = set(DigestViewItem.model_fields) | set(DigestView.model_fields)
     assert forbidden.isdisjoint(kept), f"served and forbidden at once: {sorted(forbidden & kept)}"
+
+
+def test_a_served_day_written_before_the_day_facts_still_reads() -> None:
+    """The widening of 2026-09-09 is additive, and this is what says so.
+
+    A service worker keeps day payloads, so a shell built today can be handed a
+    file written under `2026-09-01T09:00` - which carries the items and nothing
+    else. It has to validate, and every name added since has to read as unknown
+    rather than as a value. A default here would be a false claim about a day:
+    `false` for `partial` says the run lost nothing, `0` for `items_failed` says
+    the same, and an empty `verticals` says the day had no desk.
+
+    Built here rather than read off a committed day, because the archive is
+    re-staged on every build and carries no payload at the older stamp any more
+    (`CLAUDE.md` section 13).
+    """
+    day = DigestView.project(
+        json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    )
+    older = {"version": "2026-09-01T09:00", "items": json.loads(day.to_json())["items"]}
+
+    read = DigestView.model_validate(older)
+
+    assert read.version == "2026-09-01T09:00"
+    assert read.items, "an older payload still carries its stories"
+    unknown = {name for name in DigestView.model_fields if name not in {"version", "items"}}
+    assert unknown, "the day facts are what this test is about"
+    for name in sorted(unknown):
+        assert getattr(read, name) is None, f"{name} must read as unknown on an older payload"
 
 
 def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:

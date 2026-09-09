@@ -204,10 +204,54 @@ export type DigestViewItem = Pick<
  *
  * `version` is the contract's own stamp, not the committed day's. A shell that
  * does not recognise it still renders: an unknown key is ignored, and a known
- * key that is absent reads as unknown. */
+ * key that is absent reads as unknown.
+ *
+ * **Every day-level fact is optional, and that is the read-side rule rather
+ * than a softness.** A service worker keeps a day, so a shell built after
+ * 2026-09-09 can be handed a payload written before it, which carries none of
+ * them. Absent is unknown: never read an absent `partial` as false, an absent
+ * `items_failed` as 0, or an absent `verticals` as a day with no desk. */
 export interface DigestView {
 	version: string;
+	date?: string | null;
+	generated_at?: string | null;
+	partial?: boolean | null;
+	items_planned?: number | null;
+	items_failed?: number | null;
+	/** `-1` is the day saying nothing is deleted. Null is the payload not
+	 * saying, and the footer prints neither sentence for it. */
+	retention_window_months?: number | null;
+	runs?: DigestRunRef[] | null;
+	verticals?: DigestVerticalRef[] | null;
+	/** Null is the payload not saying; empty is the day saying it has no leading
+	 * block, which is its ordinary state. Both draw nothing. */
+	leads?: DigestLead[] | null;
 	items: DigestViewItem[];
+}
+
+/** What a page needs to draw a day, from whichever carrier brought it.
+ *
+ * `/` reads a committed `DigestDay` off disk at build time; a dated URL fetches
+ * a `DigestView`. The two agree on every name below, and this is the shape the
+ * reading components take so neither carrier has to be converted into the
+ * other.
+ *
+ * **`date` is required and the rest of the facts are not.** A page always knows
+ * its own date - it is in the address - so a component may lean on it. Every
+ * other fact can be absent, because a service worker keeps day payloads and a
+ * shell can be handed one written before those names existed. Absent is
+ * unknown: never fill one in. */
+export interface DayForPage {
+	date: string;
+	generated_at?: string | null;
+	partial?: boolean | null;
+	items_planned?: number | null;
+	items_failed?: number | null;
+	retention_window_months?: number | null;
+	runs?: DigestRunRef[] | null;
+	verticals?: DigestVerticalRef[] | null;
+	leads?: DigestLead[] | null;
+	items: DigestItem[];
 }
 
 /** One published story as the archive's list reads it, mirroring
