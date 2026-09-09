@@ -44,17 +44,6 @@ to. Skip a row you cannot describe from the item's own words.
   ("doubled", "a third", "seventeen"): there is nothing to copy. Never propose
   a change you worked out yourself.
 
-"entities" - the organisations, people and products the item is about.
-  "name" - the fullest form of the name the item uses.
-  "kind_hint" - "organisation", "person" or "product".
-  "mentions" - where the item writes that name. "sentence_id" is the address of
-  the sentence. "surface" is the name exactly as that sentence writes it, and
-  it must appear in that sentence once and once only.
-  "salience" - "primary", "supporting" or "background".
-
-"places" - the same shape, for locations. "kind_hint" is "city", "region" or
-"country".
-
 "quotes" - words the item puts in someone's mouth.
   "sentence_start_id" and "sentence_end_id" - the addresses of the first and
   last sentence of the quote. The same address twice for a one-sentence quote.
@@ -80,9 +69,7 @@ Table: [quantity-19-30] 4,200 tonnes | [date-34-38] 2025 | [quantity-70-81]
 Answer: labels [{"element_id":"quantity-19-30","measure":"exports",
 "dimension":"year","entity":"the ministry","time_element_id":"date-34-38",
 "attribution":"named","hedge":false,"salience":"primary"}]; proposed
-[{"sentence_id":"s2","surface":"about 5,000 tonnes"}]; entities [{"name":"the
-ministry","kind_hint":"organisation","mentions":[{"sentence_id":"s0",
-"surface":"the ministry"}],"salience":"supporting"}]; places []; quotes [];
+[{"sentence_id":"s2","surface":"about 5,000 tonnes"}]; quotes [];
 claims [{"sentence_start_id":"s2","sentence_end_id":"s2","speaker":"Officials",
 "attribution":"anonymous","hedge":true}]; keyphrases ["exports","tonnes"];
 lede_sentence_ids ["s0"].

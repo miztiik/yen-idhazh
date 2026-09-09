@@ -325,9 +325,16 @@ assertion so the check is known to be able to go red.
 | --- | --- |
 | `labels[]` - a candidate's `element_id`, and what it means | Writes the Tier 2 cells onto that element. An address the pass never minted drops **that label**; its siblings stand |
 | `proposed[]` - a sentence address and the words a figure was written in | Searches only the named sentence, demands exactly one hit, and re-reads the value and the unit from the article's own bytes. Stamped `extractor: model` |
-| `entities[]`, `places[]` - a name and where the item writes it | Declared, and anchored by the row that adds the four model-pointed kinds. `name` groups; the mention draws |
-| `quotes[]`, `claims[]` - two sentence addresses, no text | Declared, same row. Indices only: an exact search over a long quotation rejects a real one over a single changed word, silently |
+| `quotes[]`, `claims[]` - two sentence addresses, no text | Declared, and anchored by the row that adds the four model-pointed kinds. Indices only: an exact search over a long quotation rejects a real one over a single changed word, silently |
 | `keyphrases[]`, `lede_sentence_ids[]` | Carried for search and for `lead_coverage`. Nothing draws them |
+
+**It asks for no entity and no place.** A prompt in this repository may not ask
+a model to name an entity - a page choosing its own reader-facing tags steers a
+control - and
+[`backend/tests/test_tag.py`](../../../backend/tests/test_tag.py) holds every
+prompt to it. The naming lists the plan sketches for call 1 are not among the
+signals it was authorised to take either, so they go with the row that builds
+their producers and can put the collision to the person who owns the ruling.
 
 **A band is a word, and the score is code's arithmetic.** `salience` is
 `primary`, `supporting` or `background`, and `Element.salience` gets the

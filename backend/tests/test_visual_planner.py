@@ -967,8 +967,6 @@ def a_reply(**named: object) -> CallOneReply:
     body: dict[str, object] = {
         "labels": [],
         "proposed": [],
-        "entities": [],
-        "places": [],
         "quotes": [],
         "claims": [],
         "keyphrases": [],
@@ -1059,13 +1057,22 @@ class TestCallOneShape:
         assert set(call_one_schema()["required"]) == {
             "labels",
             "proposed",
-            "entities",
-            "places",
             "quotes",
             "claims",
             "keyphrases",
             "lede_sentence_ids",
         }
+
+    def test_the_reply_cannot_ask_the_model_to_name_an_entity(self) -> None:
+        """Andre's ruling on tags binds every prompt, and it binds this shape too.
+
+        A page choosing its own reader-facing tags steers a control, so no prompt
+        in this repository asks a model to name one. The two naming lists the
+        pseudo-plan sketches are not among the signals this call was authorised to
+        take either, so they belong to the row that builds their producers.
+        """
+        assert "entities" not in call_one_schema()["properties"]
+        assert "entities" not in call_one_system_prompt().lower()
 
     def test_what_was_found_decodes_before_what_it_means(self) -> None:
         """Field order is decode order (row 12): the anchor first, the judgement last."""
@@ -1375,7 +1382,10 @@ def test_a_recorded_call_one_reply_labels_the_table_over_a_loopback_socket(
     The reply is played back by a real HTTP server on loopback and read through
     the transport every stage uses. The envelope is a llama-server envelope; the
     content is written by hand rather than captured, because no stage dispatches
-    call 1 yet - the call that turns this table into a page is a later row.
+    call 1 yet - the call that turns this table into a page is a later row. It
+    carries no `usage` block for the same reason: a token count nobody measured
+    is not a token count (Rule #10), and the transport reads a missing one as
+    zero.
     """
     table = element_table(article_ok, config=ElementsConfig())
     payload = build_call_one_request(

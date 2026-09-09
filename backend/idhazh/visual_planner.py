@@ -638,8 +638,6 @@ LABEL_PASS_VERSION: Final = "2026-09-09"
 #: with call 2's own bounds in the row that adds the second call.
 LABELS_MAX: Final = 16
 PROPOSED_MAX: Final = 4
-NAMES_MAX: Final = 12
-MENTIONS_MAX: Final = 6
 RANGES_MAX: Final = 8
 KEYPHRASES_MAX: Final = 8
 LEDE_MAX: Final = 2
@@ -728,27 +726,6 @@ class ElementLabel(BaseModel):
     salience: Salience
 
 
-class NameGroup(BaseModel):
-    """A name, and every place the item writes it.
-
-    `name` is Tier 2: it groups mentions for the alias ledger and it is never
-    drawn. The **mention** is what draws, because an item writes "Vestas Wind
-    Systems A/S" once and "Vestas" four times and the canonical form may appear
-    nowhere verbatim.
-
-    Declared here and anchored by a later row: this row builds the request, the
-    schema and the reply, and the four kinds only a model can find get their
-    producers next.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(max_length=PHRASE_MAX)
-    kind_hint: str = Field(max_length=PHRASE_MAX)
-    mentions: list[Citation] = Field(max_length=MENTIONS_MAX)
-    salience: Salience
-
-
 class SentenceRange(BaseModel):
     """A quote or a claim, as two addresses and no text.
 
@@ -756,7 +733,9 @@ class SentenceRange(BaseModel):
     real one over a single changed word, and it does so silently - which is
     worse than no check at all. Code slices the bytes between the two addresses.
 
-    Declared here and anchored by a later row, for the reason `NameGroup` says.
+    Here because decision 5 takes the attribution type and the hedge marker per
+    claim, and the quote indices. The rule that anchors one is the row that adds
+    the four kinds only a model can find.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -779,16 +758,22 @@ class CallOneReply(BaseModel):
     generated schema, which is where it can fail if somebody adds an `int`.
 
     Field order is decode order. What was found is written before what it means:
-    the labels come first, then the figure code missed, then the names, then the
-    sentence ranges, and the two article-level observations last.
+    the labels come first, then the figure code missed, then the sentence
+    ranges, and the two article-level observations last.
+
+    **It asks for no entity and no place, and that is not an omission.** A
+    prompt in this repository may not ask a model to name an entity - a page
+    choosing its own reader-facing tags steers a control, and
+    `test_tag.py::test_no_prompt_asks_a_model_for_a_tag` holds every prompt to
+    it. The two naming lists are not among the signals this call was authorised
+    to take either, so they go to the row that builds their producers and that
+    can put the collision to the person who owns the ruling.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     labels: list[ElementLabel] = Field(max_length=LABELS_MAX)
     proposed: list[Citation] = Field(max_length=PROPOSED_MAX)
-    entities: list[NameGroup] = Field(max_length=NAMES_MAX)
-    places: list[NameGroup] = Field(max_length=NAMES_MAX)
     quotes: list[SentenceRange] = Field(max_length=RANGES_MAX)
     claims: list[SentenceRange] = Field(max_length=RANGES_MAX)
     keyphrases: list[Phrase] = Field(max_length=KEYPHRASES_MAX)
