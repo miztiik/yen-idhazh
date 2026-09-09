@@ -1,0 +1,44 @@
+{
+  "annotations": [
+    "quantity-55-61"
+  ],
+  "caption": "Two mills report in tonnes and one in kilotonnes.",
+  "confidence": 0.82,
+  "decision": "visual",
+  "element_ids": [
+    "entity-22-27",
+    "entity-50-54",
+    "entity-66-71",
+    "quantity-36-48",
+    "quantity-55-61",
+    "quantity-72-79"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [
+      "entity-22-27",
+      "entity-50-54",
+      "entity-66-71"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "quantity-36-48",
+      "quantity-55-61",
+      "quantity-72-79"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": [
+    "quantity-36-48"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "comparison",
+  "title": "Steel shipped, three mills",
+  "type": "bar",
+  "version": "2026-09-09T03:11",
+  "why": "One dimension in three spellings is still one comparison."
+}

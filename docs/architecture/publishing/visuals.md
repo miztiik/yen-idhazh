@@ -133,6 +133,114 @@ fires five scheduled runs a day, so the day's ceiling is 400 plans: 12 to 14 min
 wall-clock on the 4B, 26 to 31 on the summarizer. The worst-case reply ceiling did not move: it
 already counted every declared key, because a grammar-constrained decoder emits them all.
 
+## The validator refuses, and each check refuses on its own
+
+`backend/idhazh/visual_validator.py` reads one plan and one article's element table and returns the
+checks that did not hold. An empty answer means the plan may be drawn. Nine checks, all of them
+deterministic code over committed data - **no check calls a model, and a test reads the module's own
+imports so none can start to** (`CLAUDE.md` section 0a).
+
+It is a sibling module rather than part of the planner. A validator is not a contract, so it may
+import both `contracts/visual.py` and `contracts/element.py`, which a contract may not
+([`../contracts/schemas.md`](../contracts/schemas.md)); and the planner it would otherwise sit inside
+is the module being replaced.
+
+| Check | What must hold | What it catches |
+| --- | --- | --- |
+| `element_exists` | Every id in `element_ids` is in the article's table. | A plan drawing an element the article never had. |
+| `semantically_compatible` | Each element's kind fits the channel it fills. | A quote drawn as a bar height; a number used as an axis tick's name. |
+| `units_convertible` | Within one measured channel, every unit is convertible or identical. | Three megawatt bars and a headcount on one axis. |
+| `roles_valid_for_type` | The filled roles are the ones the type declares. | A `bar` carrying `bins`; a `bar` with an empty `quantity`. |
+| `enough_data` | The marks sit between `visuals.min_chart_points` and `visuals.max_chart_points`. | Two bars, which is a sentence rather than a comparison. |
+| `no_duplicate_in_role` | No element fills one channel twice. | One number drawn three times under three names. |
+| `no_invented_values` | Every figure reads out of the characters its element names. | A table cell that disagrees with its own excerpt. |
+| `numerals_matched` | Every numeral in `title`, `caption` and `why` is one a cited element states. | A caption that converted a figure, or reached one from nowhere. |
+| `plan_version_current` | The plan met the vocabulary this build holds. | Contract drift, found rather than drawn. |
+
+**Each check returns at most one refusal, carrying its own stable name.** That is a design
+constraint rather than a testing preference. A validator that answers with one string cannot say
+which rule fired, so no rule can ever be retired, tuned or trusted. It also decides the order:
+`element_exists` resolves first and every later check reads resolved elements only, or one absent
+element would trip four rules at once and the report would name the wrong cause.
+
+`backend/tests/test_visual_validator.py` holds **one fixture per check, each tripping only its own**,
+asserted as `[rejection.check for rejection in rejections] == [check]` rather than as a membership -
+a membership passes while three other rules are firing. Each check was also neutered in turn against
+its own fixture, and all nine left the plan accepted, so every one of them is the sole cause of the
+refusal it is credited with.
+
+### Where the two tables live, and why neither is in `config/`
+
+`visuals.min_chart_points` and `visuals.max_chart_points` are knobs and are read from `config/`
+(Rule #6). The two tables the validator carries are not knobs and are in code:
+
+- **Which roles a type may fill** is a relation between `VisualType` and `EncodingRole`, two closed
+  vocabularies that are both Python enums in `contracts/visual.py`. A JSON file cannot reference
+  either, so a copy there is a second spelling that drifts. "A bar has no bins" is also what a bar
+  *is* rather than something an operator should be able to edit: a config edit that let a bar draw
+  bins would publish a plan no compiler has a template for.
+- **Which units measure the same thing** is arithmetic. A kilotonne is a thousand tonnes whatever
+  anybody configures. `MAGNITUDE` in `idhazh.elements` is the precedent - a magnitude word's
+  multiplier lives in code beside the pattern that reads it.
+
+Eleven of the eighteen declarable types have a role rule: the grammar-of-graphics forms, where the
+channels follow from the role names and anybody would write the same table. The other seven -
+`table`, `flow`, `comparison`, `callout`, `quotecard`, `whowhat`, `keyfacts` - are **named as having
+no rule yet**, and a plan naming one is refused by name. Naming them is the point: a type in neither
+set would be waved through by both per-type checks and drawn with nothing having ruled on it.
+Refusing them is also correct rather than a stopgap - declarable is not renderable, `enabled_kinds`
+is `["chart"]`, and a downgrade ladder re-enters this same validator with a nearer neighbour.
+
+`PLAN_VOCABULARY_VERSION` is the date-stamp of both tables, and it is not the plan contract's
+`version`, which says when the *shape* last moved. `plan_version_current` compares the two
+date-stamps rather than matching them, because the two directions are different faults: a plan
+behind the vocabulary is re-planned, and a plan ahead of it came from a build this one cannot read.
+It earns its place beside `roles_valid_for_type`, which already refuses a plan the current table
+disallows - this one is for the plan the table still allows *by accident*, where a role's meaning
+moved rather than its legality.
+
+### Units are convertible or identical, not merely equal strings
+
+Comparing unit strings for equality is cheaper and it is wrong in the direction that matters. It
+refuses `4,200 tonnes` beside `4.2 kt`, which is the pair a reader most needs joined, and it accepts
+`tonnes` beside `t` only by accident of spelling. So two units are commensurable when they are the
+same string, **or** when one table names both under one dimension - power, energy, mass, length or
+duration.
+
+That table is a closed allow-list and its omissions are the safety. A unit is read off a stranger's
+page (Rule #11), so a unit the table does not name is compared by identity and is never assumed
+compatible with anything. `m` is out because it is metres or millions, and a guess there is a
+one-million-fold error on a published bar - the same reason `MAGNITUDE` omits it. `ton` is out
+because short, long and metric tons are three different masses. Currency symbols are out because
+joining two of them needs an exchange rate, which is a number no article wrote.
+
+**What is not settled here is the conversion itself.** A channel mixing commensurable units passes
+this check and is not drawable until something converts it, because drawing 4,200 beside 4.2 on one
+axis is worse than refusing both. This check answers whether a conversion is *possible*; what it
+produces, and the provenance chain that records it, belong to the derived-value contract.
+
+### The two provenance invariants, ruled
+
+Both were declared build-failing where they were first written, and neither had been ruled against
+`CLAUDE.md` section 1a's "degrade, do not fail". They are ruled here, and neither ruling changes what
+a corpus build does today.
+
+- **`derived_provenance_complete` degrades the item.** A plan whose drawn figure resolves neither to
+  a Tier 1 element nor to a derived value with a complete chain is refused by the validator, the item
+  publishes with no picture, and the check that refused it is recorded - because taking a whole day's
+  digest off the air to punish one story is the trade section 1a already refuses.
+- **`span_integrity_pass` breaks the build on its write side and degrades the item on its read
+  side.** That is what `ElementTable.span_drift` already does, and it is the three-part regime the
+  element table shipped with rather than one build-failing gate.
+
+**The span invariant is the exception because it is the only one asked on both sides of a boundary,
+not because span drift is graver.** A producer cut every excerpt out of the string it hashed moments
+earlier, so a mismatch there is this run's own arithmetic being wrong and every article in the run
+has it - failing the build says exactly what is true. Every other invariant in this area is asked
+only of a payload the asker did not build, where the worst case is one item's problem and says
+nothing about a sibling. Degrading is the rule; what the exception turns on is the side of the
+boundary, not the invariant.
+
 ## What the extractor drops, and why
 
 | Dropped | Reason |
@@ -581,6 +689,10 @@ file before it can be enabled.
 | `mermaid-cli` for diagrams | A headless Chromium to lay out a linear chain of boxes. |
 | PNG or WebP for charts and diagrams | A bar chart is a dozen paths. The vector is smaller than any raster of it, stays sharp on a phone, and costs the retention budget less. Raster stays the right answer for a photographic image. |
 | Discard the whole chart when one bar disagrees on units | Observed live: the model picked three correct year-on-year megawatt bars and appended the sector headcount. Three good bars thrown away to reject one bad one. |
+| A model checks the plan | A judge that shares the failure modes of the thing judged is not a measurement (`CLAUDE.md` section 0a). Every check the plan needs is a comparison against the article's own element table, which is committed data - so the model buys nothing and costs the only guarantee the subsystem sells. |
+| Compare unit strings for equality in the validator | Cheaper, and wrong in the direction that matters: it refuses `4,200 tonnes` beside `4.2 kt`, which is the pair a reader most needs joined, while accepting `tonnes` beside `t` only by accident of spelling. |
+| Put the per-type role table in `config/` | It is a relation between two Python enums, and a JSON file can reference neither - so the copy there would be a second spelling that drifts from both. It is also not a knob: a config edit that let a `bar` draw `bins` would publish a plan no compiler has a template for. |
+| Return one refusal string from the validator | Cheaper to write and it makes every rule unfalsifiable at once. Nothing can then say which check fired, so no check can be retired, tuned or shown to work - and a fixture that trips three rules proves none of them. |
 | Plan on the 8B | Classification is the easy task. The big model belongs on summarization, and a second set of weights would not fit the pass anyway. |
 | Keep `image` out of the enum until it is built | A payload must be able to say `image`, and the four-way vocabulary is a contract. The gate belongs in config, so switching it on is an edit rather than a schema change. |
 
