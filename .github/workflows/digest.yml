@@ -580,13 +580,50 @@ jobs:
       # from a distribution `/usr/bin/python3 -u /usr/sbin/...` and stops there,
       # so a secret further along a command line is never copied into an
       # artifact (`CLAUDE.md` section 1b).
+      #
+      # `mem_total_kb`, `mem_available_kb`, `committed_as_kb` and
+      # `cgroup_current_bytes` are the machine's own account of itself, taken
+      # beside the two process marks from 2026-09-09. Everything above this line
+      # measures processes, and adding two process marks together does not give
+      # the memory the machine committed: no `-lm` flag is passed, so llama.cpp
+      # maps the weights and their resident pages count in every RSS figure as
+      # file-backed and evictable, and pages two processes share are counted
+      # twice. `MemAvailable` is the kernel's own estimate of what a new
+      # allocation could get, which is the question a headroom decision actually
+      # asks; `Committed_AS` is what has been promised; `MemTotal` is what the
+      # machine has, which this repository has never once read. Until it does,
+      # `docs/reference/measurements.md` can say how large the marks were and
+      # cannot say how near the edge they came.
+      #
+      # `absent` is written in full wherever a file does not exist. An empty
+      # cell reads as zero, and zero available memory is a very different claim
+      # from no reading - which is the confusion `cgroup_peak_bytes` already
+      # walked into, being blank on all 225 committed rows. The four columns are
+      # appended to the RIGHT for the reason `python_vmhwm_kb` was: a capture
+      # written before they existed still parses, the reader finds its column by
+      # name off the file's own header, and the operator print reads fields 2 to
+      # 6 by position and does not move.
       - name: Sample memory
         run: |
           set -euo pipefail
           cat > sample-rss.sh <<'SAMPLER'
           set -u
           pid="$1"
-          printf 'ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\tpython_vmhwm_kb\n' > rss-samples.tsv
+          meminfo_kb() {
+            [ -r /proc/meminfo ] || { printf 'absent\n'; return; }
+            awk -v key="$1:" \
+              '$1 == key { print $2; seen = 1; exit } END { if (!seen) print "absent" }' \
+              /proc/meminfo
+          }
+          cgroup_current() {
+            for file in /sys/fs/cgroup/memory.current \
+                        /sys/fs/cgroup/memory/memory.usage_in_bytes; do
+              if [ -r "$file" ]; then cat "$file"; return; fi
+            done
+            printf 'absent\n'
+          }
+          printf 'ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\tpython_vmhwm_kb' > rss-samples.tsv
+          printf '\tmem_total_kb\tmem_available_kb\tcommitted_as_kb\tcgroup_current_bytes\n' >> rss-samples.tsv
           printf 'ts\tpid\tcomm\tvmrss_kb\tvmhwm_kb\texe\targs\n' > python-procs.tsv
           while kill -0 "$pid" 2>/dev/null; do
             now=$(date -u +%FT%TZ)
@@ -613,8 +650,10 @@ jobs:
                 "$now" "${proc##*/}" "$comm" "$kb" "${proc_hwm:-}" "${exe:-}" "${args:-}" \
                 >> python-procs.tsv
             done
-            printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-              "$now" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" "$python_hwm_kb" >> rss-samples.tsv
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+              "$now" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" "$python_hwm_kb" \
+              "$(meminfo_kb MemTotal)" "$(meminfo_kb MemAvailable)" \
+              "$(meminfo_kb Committed_AS)" "$(cgroup_current)" >> rss-samples.tsv
             sleep 15
           done
           SAMPLER
