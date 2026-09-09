@@ -417,8 +417,8 @@ export function evalWithin(
 //
 // The item count and the summed rate ride per day, never the rate itself: a rate
 // averaged across days is meaningless, so the window sums the parts and divides
-// once. One small object a day over five bands, so a wider window filters this
-// array and re-aggregates nothing - the same shape `evalDays` keeps.
+// once. One small object a day over the ladder's rungs, so a wider window filters
+// this array and re-aggregates nothing - the same shape `evalDays` keeps.
 
 export interface NewFactDay {
 	date: string;

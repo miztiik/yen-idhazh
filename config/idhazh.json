@@ -294,6 +294,13 @@
         "min_source_words": 3000,
         "target_words_max": 230,
         "target_words_min": 150
+      },
+      {
+        "key_points_max": 5,
+        "key_points_min": 2,
+        "min_source_words": 5000,
+        "target_words_max": 230,
+        "target_words_min": 180
       }
     ],
     "key_point_restatement_ceiling": 0.5,

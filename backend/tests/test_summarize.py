@@ -755,6 +755,32 @@ def test_a_long_read_is_asked_for_more_than_a_long_feature() -> None:
     assert ask.band_for(2999) is long_feature
 
 
+def test_the_longest_whole_read_is_asked_for_more_than_an_investigation() -> None:
+    """The sixth rung, and the reason it was added.
+
+    At the cap of 10000 the model is handed 7,692 words. Before this rung a
+    3,000-word article and a 7,692-word one - both read whole - got the
+    identical ask, so one was compressed 20 to 1 and the other 51 to 1.
+
+    Only the floor of the ask climbs. The ratio is taken from
+    `target_words_min`, and the ceiling cannot rise without moving
+    `evaluation.summary_words_max`, which is what the pipeline agrees to
+    publish rather than what the prompt requests. So the invariant a rung has
+    to keep is the weaker one asserted here: a longer article is never asked
+    for a shorter summary than a shorter article.
+    """
+    ask = SummarizeConfig()
+    investigation = ask.band_for(3000)
+    whole_read = ask.band_for(5000)
+    assert whole_read is not investigation
+    assert whole_read.target_words_min > investigation.target_words_min
+    assert ask.band_for(4999) is investigation
+
+    for lower, upper in zip(ask.bands, ask.bands[1:], strict=False):
+        assert upper.target_words_min >= lower.target_words_min
+        assert upper.target_words_max >= lower.target_words_max
+
+
 def test_the_band_chosen_is_the_longest_one_the_article_reaches() -> None:
     ask = SummarizeConfig(
         bands=[
