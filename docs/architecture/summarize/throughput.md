@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-09
 
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
@@ -13,12 +13,15 @@ behaviour.
 **Every figure on this page was taken at `extract.truncation_cap_tokens` = 2500,
 which reads at most 1,923 words of an article.** The cap is a throughput lever,
 so a rate taken at another cap is not comparable item for item with anything
-here. **The configured cap moved to 5000 on 2026-08-29**, so every rate on this
-page is a cap-2500 rate and the first scheduled run after that date is the first
-one taken at the new cap. The two conditions that revert the move are in
+here. **The configured cap has moved twice since - to 5000 on 2026-08-29 and to
+10,000 on 2026-09-09** - so every rate on this page is a cap-2500 rate and is two
+moves behind the running config. The two conditions that revert the first move
+are in
 [The first run at cap 5000](../../archive/measurements-2026-08.md#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it),
 and what that run has to record is in
 [What the first run at cap 5000 must record](../../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record).
+What the move to 10,000 cost is measured in
+[How often the truncation cap actually bites](../../reference/measurements.md#how-often-the-truncation-cap-actually-bites-2026-09-09).
 **Read is the end that moves.** A longer article is more prompt to take in;
 write does not move at all, because the summary length asked for comes from
 `article.band_source_words`, which is the count from before the cap cut it.
@@ -31,6 +34,22 @@ The runtime charges a summary in two parts, and they run at different speeds:
 | --- | --- | --- |
 | **read** (prefill) | The model taking the article in. Batched, so the machine works on many tokens at once. | 10.95 tok/s, 91.3 ms per token |
 | **write** (decode) | The model producing the summary. One token at a time, each conditioned on all the ones before it. | 5.05 tok/s, 198 ms per token |
+
+**Both rates were taken on a model that is no longer configured, and the read
+rate is no longer the one to quote.** They come from run `32742672105` on
+2026-08-24, 149 articles on `Qwen3-8B-Q4_K_M.gguf`, and the summarizer moved to
+`Qwen3.5-9B-Q4_K_M` on 2026-08-27. On the configured 9B, read runs at a median
+**9.85 tokens a second**, slowest timed item 8.25 and fastest 44.71, measured
+2026-09-09 over the timed items of 2026-09-01 to 2026-09-09 on GitHub-hosted
+`ubuntu-latest`, 4 vCPU, no GPU
+([What the wall clock pays](../../reference/measurements.md#what-the-wall-clock-pays)).
+**Do not subtract those two numbers.** They differ by model, by cap and by which
+processor their shards drew, and the last of those three is worth 4.2 times on
+its own - see
+[The processor a shard draws](#the-processor-a-shard-draws-moves-read-four-times-harder-than-any-knob)
+below. The retired figures stay on this page because the ratio between read and
+write is what the page is about, and that ratio is a property of the two phases
+rather than of the model.
 
 **Read is 10.95 tokens the model actually read per second, not 10.95 tokens of
 prompt per second.** The two differ by a factor of about 1.8, because roughly
@@ -165,6 +184,46 @@ is 1.92x, on a day whose total tokens were within 1 percent of the four-shard
 baseline's. It is not a paired measurement and it did not publish - the caveats
 and every other figure are under
 [Eight work shards](../../archive/measurements-2026-08.md#eight-work-shards).
+
+## The processor a shard draws moves read four times harder than any knob
+
+**Measured 2026-09-09** across run `2026-09-09-34379502244` and its same-day
+baseline `2026-09-09-34323771996`, on stock GitHub-hosted `ubuntu-latest`,
+4 vCPU, no GPU. Uncached read on the Intel Xeon Platinum 8573C shards ran at a
+median **41.00 tokens a second** against **9.86** on AMD EPYC 9V74. **That is 4.2
+times faster on the same job at the same settings.**
+
+| Read, uncached tokens a second | items | min | median | max |
+| --- | --- | --- | --- | --- |
+| baseline, Intel Xeon Platinum 8573C | 35 | 33.34 | **41.00** | 43.94 |
+| baseline, AMD EPYC 9V74 | 38 | 9.70 | 9.97 | 14.60 |
+| priced, AMD EPYC 9V74 | 35 | 9.79 | **9.86** | 9.98 |
+| priced, AMD EPYC 7763 | 35 | 9.43 | 9.76 | 9.84 |
+
+**Which processor a shard lands on is a larger term in its read time than any
+knob in `config/`, and no knob touches it.** GitHub assigns the host. The two
+runs above drew different mixes of processor on the same day, so one shard can
+read about four times faster than its sibling in the same run.
+
+Three things follow for anyone reading a rate off this page or the console:
+
+- **A rate that moved between two runs is not evidence of a change we made**
+  until both runs are known to have drawn the same processor. `cpu_model` is a
+  committed per-shard cell on `state/runtime-counters.csv`, so that check costs
+  a column read.
+- **Compare within a processor, never across one.** Every paired figure in
+  [../../reference/measurements.md](../../reference/measurements.md) that prices a
+  runtime setting is matched on EPYC 9V74 for this reason. Doubling `n_ctx` moved
+  read by about 1 percent; the processor moves it by 4.2 times.
+- **A whole-run median hides it.** The month figure of 9.85 tokens a second runs
+  from 8.25 to 44.71, and a 5.4x spread in one column is not measurement noise.
+  The table above is what is in it.
+
+**This is not a lever we can pull**, which is why it sits beside the levers
+rather than among them. It is on this page because it is the largest single term
+in a shard's read time, and a page about what moves throughput that leaves out
+the biggest mover teaches the wrong model of the machine
+([The cap cut nothing, and the rate it was priced at did not move](../../reference/measurements.md#the-cap-cut-nothing-and-the-rate-it-was-priced-at-did-not-move)).
 
 ## What this means when reading the chart
 
