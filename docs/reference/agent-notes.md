@@ -1902,6 +1902,25 @@ path MSYS never touches. That is why it stayed correct on 2026-08-28 while the
 colon-free form first and the environment variable only as a fallback, because
 the variable protects the shell you remember to set it in and nothing else.
 
+## `vite preview` renders the fallback per request, so a link in `app.html` reads differently there than in the shipped file
+
+`404.html` is what a static host answers an unknown address with, and since
+2026-09-09 that is every dated address. The shipped file resolves
+`%sveltekit.assets%` to the absolute base, so a link written in `src/app.html`
+comes out as `/` and `/archive/` and is correct at any depth.
+
+`vite preview` does not serve that file. SvelteKit's preview middleware renders
+a fallback for the request it was given and computes a **request-relative** base
+from the path, so the same link comes out as `../` on `/2026-09-09/` and `../../`
+on `/2026-09-09/ai/`. Both are right for that request; neither is the artefact
+that ships. Observed 2026-09-09 smoking the no-script signpost: the document
+served at `/2026-09-09/` was 3,967 bytes and matched no file in `build/`, which
+is the tell - hash what the server returned against the files on disk and if it
+matches none of them, the server rendered it.
+
+Smoke the shipped fallback at its own address, `/404.html`, which is the same
+technique `frontend/tests/day-states.spec.ts` uses for the same reason.
+
 ## PowerShell
 
 - **One line only.** Multi-line commands are mangled before they reach the
