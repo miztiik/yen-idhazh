@@ -415,6 +415,194 @@ back in `Access-Control-Allow-Origin`, and the model's CDN response answered
 which reads exactly like a refusal and is not one. Any later check of this has
 to send an origin.
 
+## Whether a browser can read the encoder from a second origin, 2026-09-09
+
+**A GitHub Release asset cannot be read by a browser from another origin.** It
+carries no `Access-Control-Allow-Origin` header on any hop, so Chromium refuses
+the `fetch()` before a byte arrives, and no setting of ours changes that -
+`connect-src` is our list, CORS is the other origin's answer, and both have to
+say yes. The failover origin
+[row #15 of the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md)
+named therefore does not work as a fetch target, and this is the row's
+escalation trigger 2 firing rather than a detail.
+
+Two origins that do work were measured in the same run, and both returned our
+exact bytes on all five files. `raw.githubusercontent.com` at the release tag
+answers in one hop with `Access-Control-Allow-Origin: *`. Hugging Face at the
+pinned revision answers with the requesting origin echoed back, and hands the
+23 MB weights to a CDN that answers `*`.
+
+**The pinned revision is `751bff37182d3f1213fa05d7196b954e230abad9`** and the
+bytes we hold are the bytes at it. That closes the escalation trigger for being
+unable to resolve one: `PROVENANCE.md` recorded no commit SHA, and now the
+repository does.
+
+### The pin, and why the head of `main` is the right one
+
+`Xenova/all-MiniLM-L6-v2` has 17 commits. `751bff37` is the head of `main`, so it
+is what a `revision=main` fetch resolves to today, and it is what the five
+committed files were taken from on 2026-08-22. Two independent checks agree:
+
+- **The file tree at that revision.** `GET /api/models/Xenova/all-MiniLM-L6-v2/tree/751bff37...?recursive=1`
+  returns a git blob SHA-1 for each small file and an LFS SHA-256 for the model.
+  All five equal what we hold - `72147e4f`, `a8b3208c`, `37fca747`, `c17ed520`
+  and `afdb6f1a...` - computed with `git hash-object` for the four and
+  `Get-FileHash -Algorithm SHA256` for the model.
+- **The response headers at that revision.** Every file returns
+  `X-Repo-Commit: 751bff37...`, and the model returns
+  `X-Linked-ETag: "afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1"`.
+
+**The digests do not identify one commit, and a checker that assumes they do is
+wrong.** The parent commit `48a5a372879ed2ed147ab84836e345977276d9b2` carries the
+same five digests: the head commit added other ONNX variants and left the
+quantised one alone. So "the commit whose digests match" is a set of at least
+two, and the pin is chosen as the head of `main` at the fetch date rather than
+derived from the bytes.
+
+### The release, published and checked both ways
+
+Tag `encoder-2026-08-22` on `miztiik/yen-idhazh`, targeting commit
+`5f1eaf60067cc036a2927dc838935ad1fb8ece86`. A Release asset name cannot contain
+`/`, so the five are flat. Each was uploaded from the committed file, then
+downloaded again and hashed; **all five matched, so the spread is zero.**
+
+| Asset | Path under the model directory | Bytes | SHA-256, committed file and downloaded asset |
+| --- | --- | --- | --- |
+| `config.json` | `config.json` | 650 | `7135149f7cffa1a573466c6e4d8423ed73b62fd2332c575bf738a0d033f70df7` |
+| `special_tokens_map.json` | `special_tokens_map.json` | 125 | `b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3` |
+| `tokenizer_config.json` | `tokenizer_config.json` | 366 | `9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3` |
+| `tokenizer.json` | `tokenizer.json` | 711,661 | `da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0` |
+| `model_quantized.onnx` | `onnx/model_quantized.onnx` | 22,972,370 | `afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1` |
+
+The release is kept even though a browser cannot read its assets, because the
+**tag** is what makes the working alternative work: it holds the commit where the
+weights are still committed, so `raw.githubusercontent.com` at that tag keeps
+serving them after they leave `main`.
+
+**What the tag costs, stated rather than left to be discovered.**
+`.github/workflows/prune.yml` force-pushes `main` and pushes no tags, so this tag
+survives every prune and keeps its commit - and that commit's whole tree,
+`corpus/` included - reachable for ever. The prune bounds the repository by
+making old commits unreachable; a tag is a ref, and a ref is reachability. This
+is the first tag in the repository, so nothing was paying that before.
+
+**Hardware and method.** 12th Gen Intel Core i7-1265U, 12 logical CPUs,
+Windows 11 build 26200, over a residential connection. Taken 2026-09-09 between
+04:21 and 04:22 local. The browser is Chromium 151.0.7922.34 driven by
+Playwright 1.62.1 on node v24.12.0, from
+`backend/utilities/encoder_origin_probe.mjs` - an operator tool, run by hand,
+not a spec and in no suite, because Rule #7 forbids a test that touches the
+network. The page is `https://miztiik.github.io/yen-idhazh/`, the deployed Pages
+origin; `location.origin` and `isSecureContext` were read out of the loaded
+document to prove it. Every fetch runs inside that document, so the `Origin`
+header and the CORS check are production's. Twenty fetches per repetition,
+**three repetitions of the widened arm and one of the as-deployed arm: every
+verdict and every byte count was identical in all of them, so the spread is
+zero.** Each fetched body is hashed in the page with `crypto.subtle.digest` and
+compared against the file on disk, so a match means the browser got our bytes
+and not merely a 200.
+
+### Two arms, because one arm cannot tell the two gates apart
+
+| Arm | What the document's `connect-src` said | Result |
+| --- | --- | --- |
+| As deployed | `'self'` | all 15 fetches refused, and the browser recorded no hop - the request never left |
+| Widened | `'self'` plus the six hosts below | 10 of 20 read, 10 refused; the refusals are the other origin's, not ours |
+
+The widened arm rewrites the `connect-src` directive in the CSP meta tag the
+Pages document ships, and changes nothing else. Same scheme, same host, same
+port, same document - only our own policy differs, and that policy is what
+row #16 changes. Running one arm alone would have reported our CSP as a CORS
+refusal, or a CORS refusal as our CSP.
+
+### The four routes, and where each one breaks
+
+Every row below is all five files. The chain is what Chromium recorded, hop by
+hop; `BLOCKED` is where the browser stopped following it.
+
+| Route | Chain | Verdict |
+| --- | --- | --- |
+| `github.com/miztiik/yen-idhazh/releases/download/encoder-2026-08-22/<asset>` | `github.com` **BLOCKED**, `net::ERR_FAILED`, no `Access-Control-Allow-Origin` | refused, 15 of 15 |
+| `api.github.com/repos/miztiik/yen-idhazh/releases/assets/<id>` with `Accept: application/octet-stream` | `api.github.com` 302, `Access-Control-Allow-Origin: *` -> `release-assets.githubusercontent.com` **BLOCKED**, no header | refused, 15 of 15 |
+| `raw.githubusercontent.com/miztiik/yen-idhazh/encoder-2026-08-22/<path>` | `raw.githubusercontent.com` 200, `Access-Control-Allow-Origin: *`, no redirect | read, 15 of 15, every digest matched |
+| `huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/751bff37.../<path>` | four small files: `huggingface.co` 307 -> `huggingface.co` 200, header echoes the origin. The model: `huggingface.co` 302 -> `us.aws.cdn.hf.co` 200, `Access-Control-Allow-Origin: *` | read, 15 of 15, every digest matched |
+
+**The two GitHub release routes fail at different hops and for the same reason.**
+The download URL fails at hop one, because a CORS request will not follow a
+redirect whose response carries no header - so `github.com` in `connect-src` buys
+nothing at all. The API URL gets past hop one and dies on the object host. Both
+end at `release-assets.githubusercontent.com`, which sends no CORS header on a
+GET, a HEAD or after a redirect, and `github.com` answers an `OPTIONS` preflight
+with a 404 HTML page.
+
+### The `connect-src` list, measured
+
+Three hosts and `'self'`, not the four the plan expected:
+
+```text
+connect-src 'self' https://huggingface.co https://us.aws.cdn.hf.co https://raw.githubusercontent.com
+```
+
+`us.aws.cdn.hf.co` is the hub's LFS CDN and it is where the 23 MB file actually
+comes from; listing `huggingface.co` alone passes the four small JSON files and
+blocks the weights, which is the half-loaded failure Andre named on 2026-09-08.
+That prediction is confirmed. What is amended is the rest of his list:
+`github.com` and `objects.githubusercontent.com` were expected to carry the
+failover and neither appears here - `objects.githubusercontent.com` is not even
+the host a release download redirects to any more, and
+`release-assets.githubusercontent.com`, which is, cannot be fetched from at all.
+**Adding an unusable host to `connect-src` widens the exfiltration surface and
+buys nothing**, so all three are left out.
+
+### What each route costs in seconds
+
+Median of three, from `performance.now()` around the in-page `fetch`, on the
+hardware above. These are one laptop on one residential connection and they size
+nothing; they are here because a failover that takes a minute is a different
+design from one that takes a second.
+
+| File | `raw.githubusercontent.com` | `huggingface.co` |
+| --- | --- | --- |
+| `config.json` | 19 ms, spread 19-29 | 173 ms, spread 168-180 |
+| `special_tokens_map.json` | 13 ms, spread 13-14 | 134 ms, spread 134-137 |
+| `tokenizer_config.json` | 19 ms, spread 17-21 | 138 ms, spread 134-138 |
+| `tokenizer.json` | 29 ms, spread 26-30 | 180 ms, spread 166-187 |
+| `model_quantized.onnx` | 1,282 ms, spread 1,234-1,327 | 1,758 ms, spread 1,730-2,023 |
+
+The two refused routes returned in 21 to 135 ms. That is the time to be refused,
+not the time to read anything, and it is quoted only to say that a CORS failure
+is fast rather than a timeout.
+
+### Three traps this run walked into
+
+**A response that fails CORS never reaches Playwright's `response` event.** The
+first version of the probe listened for responses only, and reported "no request
+left the browser" for a request that had left, gone out, and come back refused.
+It reads as a client-side block when it is a server-side one. A probe needs
+`requestfailed` as well, and that is the listener that names the hop.
+
+**The final `ETag` on the model is not its SHA-256.** Hugging Face's CDN returns
+`etag: "c96f5f1e2aee643bd8191bb520a3e175db7b05821579a02a70acdf31e655d194"`, which
+is the storage layer's content hash and will never equal the file's digest. The
+SHA-256 is on the **302**, as `X-Linked-ETag`, and a checker that reads the final
+response's `ETag` reports a mismatch on a file that is perfectly correct.
+
+**`curl -I` and a browser disagree about the release asset, and the browser is
+the one that matters.** `curl -sIL` follows the redirect and prints a 200 with
+the right bytes, because curl enforces no same-origin policy. Nothing about that
+200 says a page cannot read it.
+
+### What this does not measure
+
+One machine, one network, one browser engine. Firefox and Safari implement the
+same CORS rule, but they were not run, so the refusal above is Chromium's and
+the inference to other engines is a prior rather than evidence. Nothing here
+measures a rate limit: `raw.githubusercontent.com` is documented as
+rate-limited and no request in this run was throttled, which says nothing about
+what happens when a hundred readers search in a minute. And no arm measured a
+reader who already holds the bytes, because every fetch ran with
+`cache: 'no-store'`.
+
 ## Drift review and source extraction, 2026-09-08
 
 **One length warning remains from issue 438; the other flagged domains lack
