@@ -204,9 +204,28 @@ export type DigestViewItem = Pick<
  *
  * `version` is the contract's own stamp, not the committed day's. A shell that
  * does not recognise it still renders: an unknown key is ignored, and a known
- * key that is absent reads as unknown. */
+ * key that is absent reads as unknown.
+ *
+ * **Every day-level fact is optional, and that is the read-side rule rather
+ * than a softness.** A service worker keeps a day, so a shell built after
+ * 2026-09-09 can be handed a payload written before it, which carries none of
+ * them. Absent is unknown: never read an absent `partial` as false, an absent
+ * `items_failed` as 0, or an absent `verticals` as a day with no desk. */
 export interface DigestView {
 	version: string;
+	date?: string | null;
+	generated_at?: string | null;
+	partial?: boolean | null;
+	items_planned?: number | null;
+	items_failed?: number | null;
+	/** `-1` is the day saying nothing is deleted. Null is the payload not
+	 * saying, and the footer prints neither sentence for it. */
+	retention_window_months?: number | null;
+	runs?: DigestRunRef[] | null;
+	verticals?: DigestVerticalRef[] | null;
+	/** Null is the payload not saying; empty is the day saying it has no leading
+	 * block, which is its ordinary state. Both draw nothing. */
+	leads?: DigestLead[] | null;
 	items: DigestViewItem[];
 }
 
