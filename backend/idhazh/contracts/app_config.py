@@ -1817,11 +1817,15 @@ class VisualsConfig(Model):
         ge=2,
         description=(
             "How many equal-width bins a histogram's values fall into. Binning is config "
-            "and never the model's - it has no numeric field that could say. The channel "
-            "holds between min_chart_points and max_chart_points values, so a count above "
-            "that floor asks for bins nothing can fall into and the item draws no picture; "
-            "the default is the floor rather than a textbook rule for a sample size this "
-            "stage never sees."
+            "and never the model's - it has no numeric field that could say. A histogram's "
+            "bins ARE the marks a reader counts, so this sits inside the same "
+            "min_chart_points to max_chart_points window every other type's mark count "
+            "does, and a value outside it is refused here rather than left to refuse every "
+            "histogram of every run for a reason no article can fix. It is also the floor "
+            "on how many values a histogram may cite: fewer values than bins leaves a bin "
+            "empty, and a bar counting nothing has no chain and draws nothing. The default "
+            "is min_chart_points rather than a textbook rule for a sample size this stage "
+            "never sees."
         ),
     )
     min_diagram_steps: int = Field(default=3, ge=2)
@@ -1911,10 +1915,22 @@ class VisualsConfig(Model):
 
     @model_validator(mode="after")
     def _bounds_are_orderable(self) -> Self:
+        """Each pair of knobs in the right order, and the bin count inside the mark window.
+
+        A histogram draws `histogram_bins` bars whatever any one plan says, so
+        whether that many bars is readable is a question about the config and not
+        about an article. Asked once here, a wrong knob names the operator who set
+        it and the run never starts.
+        """
         if self.max_chart_points < self.min_chart_points:
             raise ValueError("max_chart_points is below min_chart_points")
         if self.max_diagram_steps < self.min_diagram_steps:
             raise ValueError("max_diagram_steps is below min_diagram_steps")
+        if not self.min_chart_points <= self.histogram_bins <= self.max_chart_points:
+            raise ValueError(
+                "histogram_bins is a histogram's mark count, so it sits between "
+                "min_chart_points and max_chart_points like every other type's"
+            )
         if VisualKind.NONE in self.enabled_kinds:
             raise ValueError("`none` is always reachable and is never listed as enabled")
         return self
@@ -2841,6 +2857,24 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T05:20",
+            change=(
+                "visuals.histogram_bins is now held between visuals.min_chart_points and "
+                "visuals.max_chart_points. A config outside that window no longer loads."
+            ),
+            why=(
+                "A histogram's bins are the marks a reader counts, so they are bounded by "
+                "the two knobs that already say how many marks a chart may draw. Before "
+                "this, a value above max_chart_points loaded and the validator admitted "
+                "the plans asking for it, because enough_data counted the values being "
+                "distributed rather than the bars drawn. The bin count is the same for "
+                "every histogram in a run, so refusing it here says the fault once, to the "
+                "operator who caused it, instead of refusing every histogram of every run "
+                "and naming the article. Semantic narrowing with nothing to migrate: the "
+                "committed config reads 3 and the tuned fixture 4, both inside the window."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T05:00",
             change=(
