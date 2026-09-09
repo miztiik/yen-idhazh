@@ -181,8 +181,26 @@ test('a month opens and its days navigate with no script at all', async ({ brows
 	// own `<noscript>` line says so. A `<details>` is stateful and
 	// keyboard-reachable with no script, which is asserted here rather than
 	// assumed.
+	//
+	// **What is at the other end of a day link changed on 2026-09-09.** A dated
+	// address used to be a document a build wrote, so with no script it rendered
+	// its day. One shell answers every dated address now and its body is a boot
+	// script, so a script-free reader lands on the signpost `app.html` carries:
+	// one sentence naming the two pages that do render, and a link to each. The
+	// link itself is unchanged and it is still the address it always was - what
+	// this file now asserts is the arrival, honestly.
 	const context = await browser.newContext({ javaScriptEnabled: false });
 	const page = await context.newPage();
+
+	/** What a script-free reader is given on a dated address. */
+	const arrived = async () => {
+		const signpost = page.locator('noscript');
+		await expect(signpost, 'the shell carries no no-script signpost').toHaveCount(1);
+		const said = (await signpost.textContent()) ?? '';
+		expect(said, 'a script-free reader was left with no way on').toContain('front page');
+		expect(said, 'the signpost does not name the archive they came from').toContain('archive');
+	};
+
 	try {
 		await page.goto('/archive/');
 
@@ -191,7 +209,7 @@ test('a month opens and its days navigate with no script at all', async ({ brows
 		expect(first).toMatch(/\/\d{4}-\d{2}-\d{2}\/$/);
 		await recent.click();
 		await expect(page).toHaveURL(new RegExp(`${first}$`));
-		await expect(page.locator('h1').first()).toBeVisible();
+		await arrived();
 
 		await page.goBack();
 		const month = page.locator('[data-archive-month]').first();
@@ -204,7 +222,7 @@ test('a month opens and its days navigate with no script at all', async ({ brows
 		expect(href).toMatch(/\/\d{4}-\d{2}-\d{2}\/$/);
 		await folded.click();
 		await expect(page).toHaveURL(new RegExp(`${href}$`));
-		await expect(page.locator('h1').first()).toBeVisible();
+		await arrived();
 	} finally {
 		await context.close();
 	}
