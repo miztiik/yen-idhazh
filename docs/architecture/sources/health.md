@@ -495,6 +495,15 @@ retirement ledger contains the address, not that a person moved the source to
 publish; its tombstone and historical health rows remain. Adding curation
 dates or reasons belongs on `FeedDef`, not on every feed-health observation.
 
+### Intelligent F.E.E.D - I Feed design direction
+
+The owner requested an earned, tunable source model on 2026-09-09.
+[Intelligent F.E.E.D - I Feed](i-feed.md) records
+the design guidelines, including a composite score, bounded allocation and
+recovery, evolving topic assignments, and optional weighted deterministic,
+LLM and human assessments. They are proposals, not deployed behavior. This
+page continues to describe the current warning-only and retirement policy.
+
 ## The run never edits the source list
 
 Retirement of a **source** is a person moving a feed into the `retired` key of `config/sources.json`. Quarantine is a run declining to ask, based on rows it wrote itself. Retirement of an **address** is a third thing, and it is a row under `state/` for the same reason quarantine is: a run may write evidence about curation and may never write curation.
