@@ -1878,6 +1878,16 @@ the variable protects the shell you remember to set it in and nothing else.
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **A function that logs with `Write-Output` returns the log as part of its
+  value.** PowerShell returns everything a function writes to the success
+  stream, not just the last expression, so a helper that prints a progress line
+  and then returns a hash hands the caller both, joined. Observed 2026-09-09 in
+  a build-hash oracle: the comparison read
+  `IDENTICAL=` with nothing after it, because `$a` and `$b` were arrays rather
+  than strings, and the two arms printed the same hash because the second build
+  had failed and the helper hashed the first build's leftover file. Two habits
+  fix it: log with `Write-Host` inside any function whose return value you use,
+  and return an explicit sentinel string on failure rather than falling through.
 - **`Start-Process -Wait` does not set `$LASTEXITCODE`, so a poller's verdict
   reads as empty rather than as a failure.** Every long gate here runs through
   `Start-Process pwsh -WindowStyle Hidden`, and a waiter script that exits 0 on
@@ -2923,6 +2933,17 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   complete, which is what makes it convincing. The fix is one more
   `npm run build`. Measured 2026-08-31. Prefer letting a queued gate finish;
   if you do kill one, rebuild before serving anything.
+- **Two builds back to back in one worktree can fail the second one with
+  `EPERM, Permission denied: ...\.svelte-kit\output`.** SvelteKit deletes that
+  directory in `buildStart`, and on Windows something still holds a handle to it
+  seconds after the previous build exited. The message names a permission and
+  reads like a broken checkout; it is a lock that has not been released yet.
+  Observed 2026-09-09 taking a paired build measurement, where it is worse than
+  it looks: the second build wrote nothing, so a script that hashes the output
+  afterwards hashes the FIRST build's file and reports two arms that agree.
+  Delete `frontend/.svelte-kit/output` before each build, retry the delete until
+  the directory is gone, and refuse to read the output at all when the build's
+  exit code is not zero.
 - **A green local `svelte-check` says nothing about the `site` job, because CI
   type-checks the MERGE with `main` and your worktree is not that tree.** A test
   helper built a `TelemetryRow` by spreading `Partial<TelemetryRow>` over a
