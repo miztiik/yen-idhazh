@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-09
 
 How an item gets a chart or - most of the time - nothing at all.
 
@@ -35,6 +35,57 @@ This is the whole safety design, and it is structural rather than instructed.
 A chart value that is not in the article is therefore unreachable, not merely unlikely. The Row #8
 oracle - "every value in a rendered chart is present in the source article" - is a property of the
 shape rather than a hope about the prompt, and the test asserts it directly.
+
+## The plan a compiler draws from, and the four things it may not carry
+
+`VisualPlan` in [`backend/idhazh/contracts/visual.py`](../../../backend/idhazh/contracts/visual.py)
+is the shape a planner decodes into and the only thing a compiler is allowed to read. It carries
+element references and closed vocabularies: a decision, a purpose, a type, the map of which element
+fills which channel, the elements it draws from, which of them name the marks and which one lands
+first, one sentence of reasoning, a title, a caption, a confidence and the vocabulary date-stamp it
+was planned against. It lands ahead of its producers, so nothing writes one yet (Rule #3).
+
+What it may not carry is as much of the contract as what it holds.
+
+| Prohibition | What refuses it |
+| --- | --- |
+| **No geometry** | Geometry is a number, and the schema admits exactly one number. A payload naming a pixel names a key the model does not declare, and an undeclared key does not load. |
+| **No literal values** | Same guard. Every drawn figure is reached by citing an element, so a number pushed into a reference field fails that field's own grammar. |
+| **No authored text where a reader reads a fact** | `labels` and `annotations` are element ids, not strings. Code cuts every character a reader sees off a chart; the model points at which characters. |
+| **No `alt_text`** | The field is not declared, it is named in `FORBIDDEN_FIELDS`, and the module refuses to import if one is added back. |
+
+**The geometry ban is what keeps the compiler swappable.** A plan that names a pixel is a plan bound
+to one renderer, and the renderer is a choice this project has already changed once. Nothing in the
+plan says how wide, how tall, what colour or what font; a compiler decides all four and a second
+compiler may decide them differently over the same plan.
+
+**Alt text is the compiler's, and the reason is worth keeping.** Assembled from element values the
+compiler already holds, it is correct by construction. Written by the model it would be one prose
+channel restating the chart's own data, and no validator can read prose to check it - so it would be
+the last unguarded channel in a design whose whole claim is that a stranger's page cannot reach a
+drawn figure.
+
+**Three prose channels remain, and the shape only bounds them.** `title`, `caption` and `why` are
+length-capped here. Whether a numeral inside one is matched by a cited element is the validator's
+check, not the shape's - it needs the article's element table, which the plan deliberately does not
+carry.
+
+**`confidence` decodes after `type`, and that ordering is the field's licence to exist.** Field order
+is decode order. Second in the list a confidence conditions every field after it, and the model reads
+its own hedge back as evidence. Last but one it records what the model thought and gates nothing.
+
+**Every array has a `maxItems` and every decoded string a `maxLength`, so the worst-case reply length
+is arithmetic.** At the bounds the contract declares, the longest plan the decoder can produce is
+**3,767 characters** - and a token spans at least one character, so that is also a ceiling of 3,767
+tokens. The two committed fixtures measure 751 characters for an eight-bar plan and 254 for one that
+declines, a fifth and a fifteenth of the ceiling. The derivation is field by field in the module
+docstring, it is recomputed from the generated schema, and the module refuses to import if a bound
+moves without the ceiling moving with it.
+
+The ceiling is loose by construction and the arithmetic says where: `encodings` is 51 percent of it
+and `element_ids` a further 22 percent, because the schema can bound each channel at eight elements
+and cannot say that no type fills more than four channels. That last sentence is a validator rule,
+and a validator runs after the tokens are already spent.
 
 ## What the extractor drops, and why
 
@@ -490,6 +541,7 @@ file before it can be enabled.
 ## See also
 
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the visual rule this serves.
+- [`../contracts/schemas.md`](../contracts/schemas.md) - where a persisted shape lives, and the drift gate over it.
 - [`../../reference/github-actions.md`](../../reference/github-actions.md) - the commit loop that drops a raced chart.
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text is data.
 - [`../contracts/determinism.md`](../contracts/determinism.md) - why decoding is pinned in one place.
