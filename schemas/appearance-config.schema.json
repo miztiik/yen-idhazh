@@ -256,6 +256,14 @@
           "title": "Pan Days",
           "type": "integer"
         },
+        "shimmer_after_ms": {
+          "default": 400,
+          "description": "How long a reserved console block stays still before it starts to shimmer, in milliseconds. The block is drawn the moment the document is, so this knob decides nothing about the shape of the page - only whether a wait short enough to be over already gets animated on its way past. Four hundred is a DECLARED ESTIMATE and not a measurement (CLAUDE.md Rule #10): the console started fetching its months on 2026-09-09 and no median arrival time has been taken yet. The plan row that takes it re-derives this number from the measured median payload arrival (TODO/20260908-shell-and-fetch-plan.md row 19). `config/appearance.json` owns the value, as `console.shimmer_after_ms`.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Shimmer After Ms",
+          "type": "integer"
+        },
         "source_rows": {
           "default": 10,
           "description": "How many sources the console ranks by the articles their failures cost, before it states the tail in one sentence. Measured 2026-09-01 over the committed projection, a thirty-day window holds 60 sources with a loss, which is a list nobody reads to the end. Ten, matching the source-cut list above it.",
@@ -747,6 +755,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console gains shimmer_after_ms, defaulting to 400 and bounded at 0 and 5000. config/appearance.json sets it to 400. `ConsoleConfig` is defined in `app_config.py` and imported here, so app-config is restamped with the same version. Additive and defaulted, so an appearance file written before today still validates.",
+      "version": "2026-09-09T22:00",
+      "why": "The console started fetching its months on 2026-09-09, so for the first time a panel on this site has a wait to draw. A reserved block that animates the moment it appears turns a 90 ms fetch into a flicker, so the shimmer waits and a fetch that lands first never animates at all. It is a knob rather than a literal because the right value is a property of the payloads and the network, not of the stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a measurement: no median payload arrival has been taken since the fetches landed, and Rule #10 refuses an unmeasured number the right to justify a design, so this one justifies nothing - it is the value the surface ships on until row 19 of TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured median. Ruled by Fowler, 2026-09-08: a user-interface row is not a measurement harness."
+    },
+    {
       "change": "digest.read_mark_days moves from 7 to 14, and its meaning moves from 'the newest 7 dates the store holds' to '14 calendar days back from today'. digest.archive_recent_days moves from 7 to 14. console.window_presets gains a 1-day span and is now [1, 7, 14, 30, 90]; console.min_window_days moves from 7 to 1 so the new preset satisfies the existing range check. console.max_window_days keeps 366 and gains a description. Two fields are added: digest.offline_bytes_kept, defaulting to 20,000,000 and bounded at 2,000,000 and 100,000,000, and digest.archive_window_days, defaulting to 30 and refused unless it names one of console.window_presets. The shapes are `UiConfig` and `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together. Every value legal before today is legal now and both new fields carry defaults, so an appearance file written before today still validates.",
       "version": "2026-09-06T14:00",
       "why": "This file owns everything the published surface is drawn from (docs/concepts/config.md), and all four moved knobs are drawn here: the read marks on a day page, the day rows on the archive, and the console's window control. Read marks used to expire by position - the newest 7 dates the store happened to hold - which needs no clock but bounds the store by how often a reader comes back rather than by how long ago they read. A reader who opens one day a month kept marks from seven different months and each greyed out an article last seen most of a year ago. Fourteen calendar days trusts the device clock, which the old rule deliberately did not, and the field says so. archive_recent_days follows it because a row in that block invites a reader back to a day, and a day whose marks were already dropped comes back looking unread. The presets gain one day because every span is a distinct fetch cost and there was no way to ask for the cheapest read of all - the run that has just finished - and min_window_days drops to 1 to admit it. max_window_days is unchanged: it is a retention floor rather than a viewport clamp, so lowering it would make no page cheaper and would authorise deleting month shards the console can still ask for. offline_bytes_kept exists because a day count cannot bound bytes - measured 2026-09-02 over the 12 served days, one day payload runs 8,231 to 1,373,593 bytes, a factor of 167. archive_window_days names a span out of console.window_presets rather than declaring a second list, so this file holds exactly one list of spans. Neither new knob has a reader yet; rows 8 and 25 of TODO/20260906-constant-cost-reads-plan.md are the readers, and the knobs land in one commit so no later row edits the config contract."
@@ -902,7 +915,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-06T14:00",
+      "default": "2026-09-09T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -910,5 +923,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-06T14:00"
+  "version": "2026-09-09T22:00"
 }

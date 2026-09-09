@@ -388,6 +388,44 @@ body {
 	border-radius: var(--radius-sm);
 }
 
+/* --- The reserved block ------------------------------------------------
+   `loading` is one of the five state classes design-system.md names, and this
+   is where it lives. A block wearing it is holding a place: it is in the
+   document from the first frame, it is exactly the size of the thing it
+   reserves, and it never changes that size. Nothing under it moves when the
+   payload lands. */
+.loading {
+	background-color: var(--color-surface-sunken);
+	border-radius: var(--radius-sm);
+}
+
+/* ONE timeline for every reserved block on the surface, and hanging the switch
+   on an ancestor is the whole reason it is one. A dozen blocks each starting
+   its own sweep at the moment it happened to mount reads as a dozen broken
+   things; a dozen starting in the same frame reads as one page waiting.
+   The switch also arrives late - `console.shimmer_after_ms` - so a fetch that
+   lands first never animates at all. */
+[data-shimmer='on'] .loading {
+	background-image: linear-gradient(
+		90deg,
+		transparent 0%,
+		var(--shimmer-band) 50%,
+		transparent 100%
+	);
+	background-size: 200% 100%;
+	background-repeat: no-repeat;
+	animation: shimmer var(--dur-shimmer) linear infinite;
+}
+
+@keyframes shimmer {
+	from {
+		background-position: -100% 0;
+	}
+	to {
+		background-position: 100% 0;
+	}
+}
+
 /* A reading surface that animates is a reading surface that interrupts. This
    sits ABOVE the motion switch in config/appearance.json on purpose: a reader
    who asked their operating system for stillness is not overridden by a file. */
@@ -414,5 +452,17 @@ body {
 		:active
 	) {
 		transform: none !important;
+	}
+
+	/* The blanket rule two blocks up does NOT stop a moving gradient - it
+	   freezes one mid-sweep, and a frozen sweep is a bright band across the
+	   block that nobody chose and that says nothing. So a reserved block loses
+	   the gradient outright here and stays a flat tint. It still says "this is
+	   holding a place"; what it stops saying is "and it is moving".
+	   This wins on specificity, not on order: (0,2,0) against the blanket's
+	   (0,0,0), with both marked important. */
+	[data-shimmer='on'] .loading {
+		background-image: none !important;
+		animation: none !important;
 	}
 }

@@ -43,7 +43,11 @@
 
 	const status = $derived.by(() => {
 		if (!ready) {
-			return `This control needs JavaScript. Every windowed section below is showing ${days} days.`;
+			// It used to say the sections below were "showing N days", which stopped
+			// being true on 2026-09-09: the page holds no telemetry row until a
+			// browser fetches one, so with no script the windowed sections below
+			// hold their reserved shape and nothing else.
+			return `This control needs JavaScript, and so do the sections below - they draw rows a browser fetches. Their shape is ${days} days.`;
 		}
 		if (busy) return `Fetching ${files(pending)}.`;
 		const shown = `Every windowed section below is showing ${days} days.`;

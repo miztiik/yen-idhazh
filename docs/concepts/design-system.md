@@ -20,7 +20,7 @@ This is a reading surface before it is anything else. Measure, leading, hierarch
 
 The DOM state is the single source of truth for the view. Nothing is styled imperatively: **state is reflected by toggling a class or a `data-` attribute, and CSS reacts declaratively.**
 
-- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`.
+- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`. `loading` is a global class in [../../frontend/src/styles/app.css](../../frontend/src/styles/app.css) rather than a component's scoped one, because the surface it belongs to switches every block on at once from one ancestor - see [the reserved box](#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
 - **Data-attribute styling** carries variants: an item keys its treatment off `data-visual` (the visual's state - `rendered`, `render_failed` or `absent`) and `data-band` (the confidence band from [evaluation.md](evaluation.md)).
 - **No inline styles** except genuinely dynamic values. Everything else is a token or a class.
 
@@ -468,15 +468,16 @@ There is almost no motion here, and that is the correct amount. This is a page a
 
 - **`transform` and `opacity`, plus the paint-only properties.** A colour, a border colour and a shadow change without moving anything, so they may ease - `RankedList`, the topic pills and the theme control already do. Never animate a layout-triggering property.
 - **`prefers-reduced-motion` is a hard kill-switch** - a media query that zeroes durations, and removes a transform an interaction brings on rather than making it instant. A zeroed duration shortens a movement; it does not remove one, so a 2px rise on hover becomes a jump in one frame and a reader who asked for stillness still sees it move. The reset names the elements that take an interaction rather than every element, because a transform that **positions** something - a rotated axis title, a chart readout centred on its own width - is not motion and a blanket reset drops both on the floor.
-- The whole named set: `fadeIn` (content arriving), `shimmer` (skeleton while a payload parses), `toastIn` (the rare notice). Anything beyond these needs an argument.
+- **A moving gradient is the case a zeroed duration gets wrong, not slightly but completely.** `animation-duration: 0.01ms !important` on `*` does not stop the sweep across a skeleton block - it FREEZES it, and a frozen sweep is a bright band across the block that nobody chose and that says nothing. So a reserved block loses the gradient outright under reduced motion and stays a flat tint. It wins on specificity, `(0,2,0)` against the blanket's `(0,0,0)`, and the proof is a computed style read in a browser that asked for stillness rather than an argument about the cascade.
+- The whole named set: `fadeIn` (content arriving), `shimmer` (skeleton while a payload parses), `toastIn` (the rare notice). Anything beyond these needs an argument. `shimmer` has exactly one caller and it is the console's reserved box; it is not available to a reading page, where a skeleton would draw boxes over prose a reader is already reading.
 
-Nothing on the reading path waits on a network for its first frame, so **there is no excuse for a spinner.**
+Nothing on the reading path waits on a network for its first frame, so **there is no excuse for a spinner.** Nothing on the operator path gets one either, and there the reason is different: the console has a dozen waits at once and an operator who can act from the first frame. A spinner suits one wait, a blank page and a person who can do nothing until it stops - and none of those three is true here. Authority: Susan, accepted as owner decision D3, plan row #12.
 
-**Two things do wait, and neither gets one.** A reading page fetches the stories
-past its seed. What it shows meanwhile is nothing at all, because the frame the
-reader already has is readable; past `ui.payload_slow_ms` it is one sentence,
-and a fetch that fails is one sentence and a retry. A skeleton there would draw
-boxes where a reader is already reading.
+**Three things wait, and none of them gets a spinner.** A reading page fetches
+the stories past its seed. What it shows meanwhile is nothing at all, because
+the frame the reader already has is readable; past `ui.payload_slow_ms` it is
+one sentence, and a fetch that fails is one sentence and a retry. A skeleton
+there would draw boxes where a reader is already reading.
 
 And the archive's search downloads a 43 MB encoder the first time a
 reader uses it. What it shows meanwhile is bytes as type, taken from the
@@ -485,11 +486,40 @@ the weights land that count goes blind, because the runtime behind them reports
 nothing to anybody, so the line stops printing numbers and prints a word. A bar
 that keeps moving on no measurement is a bar that is making it up.
 
+The console is the third and it is the one that gets the skeleton, because it is
+the only surface here whose panels have nothing at all to show until a fetch
+lands. What it draws is [a reserved box with the axis frame in it](#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
+
 **A day payload gets no byte readout, and that is the same rule read the other
 way.** A compressed response reports its compressed length, so a bar drawn on
 one would print precision the number does not carry - which is a bar making it
 up, exactly as above. The encoder is different because the library counts real
 bytes and because 43 MB is worth naming before a click.
+
+### A console panel reserves its room, and names which nothing it is holding
+
+> **A reserved box with no failure state lies, and a failure state with no reserved box shifts the layout.** They are one decision and they shipped as one row.
+
+The console held its telemetry inside its own document until 2026-09-09. Every row it draws arrives by fetch now, which split one "nothing" into four - and three of them used to draw the same unmarked gap, so **a quiet pipeline and a broken fetch were the same picture.** That is the exact pair this page exists to tell apart.
+
+| State | What happened | What is on screen | What the operator does |
+| --- | --- | --- | --- |
+| Waiting | the month files are in the air | the axis frame, its ticks, and marks that shimmer | wait |
+| Quiet | every month arrived and held nothing | neutral tint, and the one preset that reaches a month with rows in it | widen the window |
+| Missing | the pipeline never wrote those months | the span marked, the months named in words | nothing - it is real |
+| Unreachable | a month was asked for and did not come back | warn tint, the month named, what is drawn instead, and a retry that names its own subject | press it |
+
+Five rules hold under that table.
+
+- **The box is the same height in every one of the five states, and the sentence sits inside it.** A note under the box would add its own height, which is the shift the box exists to prevent. `frontend/tests/console-reserved.spec.ts` measures every panel's real bounding box twice in one page session - while the months are in the air and once they have landed - and fails on any that moved. It reads the boxes and never a CSS property, because a CSS property is not what moves under a cursor.
+- **An empty plot draws its axis frame and its tick marks and no numbers.** A tick label needs a value and there is no value, so a number printed there would be invented. Both come out of the same `frame()` and the same margins the real charts use, so the frame a reader watches is the frame they get.
+- **Every skeleton on the surface is on one timeline.** The sweep is switched on by a single attribute on an ancestor, so every block starts its animation in the same frame. Out of phase, a dozen sweeping boxes read as a dozen broken things rather than as one page waiting.
+- **The sweep starts late.** `console.shimmer_after_ms` is how long a wait has to outlast before it is worth drawing as one, so a fetch that lands first never animates at all. **It ships at 400 as a declared estimate and not a measurement** - see the design rationale below.
+- **Only a failure takes a hue.** A quiet window and a real gap are normal, and a page that tints normal things like faults teaches its operator to stop reading the tint.
+
+**And a retry names its own subject.** `Try again` is shorter and it is what the shape asks for, but a button read out of the sentence above it then names nothing. `Try August 2026 again` is three words longer and true on its own. It re-fetches only the months that failed: a retry that re-fetched the whole window would spend an operator's connection on months already in hand, and would blank panels that are answering correctly.
+
+Authority: Susan and Fowler, plan row #12.
 
 ## A machine's state is a sentence, never a dot
 
@@ -1327,6 +1357,10 @@ a regression nobody measured. Those numbers stay in
 to them.
 
 ## Design rationale
+
+**`console.shimmer_after_ms` ships at 400 and 400 is a declared estimate, not a measurement.** Rule #10 refuses an unmeasured number the right to justify a design, so this one justifies nothing: it is the value the surface ships on and no argument on this page rests on it. Nothing about the shape of the console depends on it either - the reserved box is drawn the moment the document is, and the knob decides only whether a wait short enough to be over already gets animated on its way past. The console started fetching its months on 2026-09-09, so no median payload arrival exists yet to derive it from. Row 19 of [../../TODO/20260908-shell-and-fetch-plan.md](../../TODO/20260908-shell-and-fetch-plan.md) takes that measurement and re-derives this number from it. The alternative was to take the measurement inside this row; it was refused because a user-interface row is not a measurement harness, and because a number measured on a laptop's loopback would be the wrong number twice over. Authority: Fowler, 2026-09-08.
+
+**Every skeleton is switched on by one attribute on an ancestor, and that is what makes them one timeline.** The rejected alternative was the obvious one: give each block its own timer and let it start sweeping when it starts waiting. Each block is then correct on its own and the page is wrong - twelve sweeps at twelve offsets read as twelve separate broken things rather than as one page waiting, which is the opposite of what a skeleton is for. Hanging the switch on the ancestor costs one flag on the page that does the fetching and buys a property a test can state in one line: every animation on the surface reports the same `startTime`. What it does not cover is a block that enters the waiting state on its own later, out of step with the others; on this surface there is none, because every panel waits on the same set of month files and the flag turns on and off for all of them together.
 
 **The refusal of a shared table component was reversed on 2026-08-29, and the
 reason it was right at the time is the reason it is wrong now.** It was refused

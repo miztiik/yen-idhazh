@@ -2225,6 +2225,23 @@ class ConsoleConfig(Model):
             "`config/appearance.json` owns the value, as `console.chart_width`."
         ),
     )
+    shimmer_after_ms: int = Field(
+        default=400,
+        ge=0,
+        le=5000,
+        description=(
+            "How long a reserved console block stays still before it starts to "
+            "shimmer, in milliseconds. The block is drawn the moment the document "
+            "is, so this knob decides nothing about the shape of the page - only "
+            "whether a wait short enough to be over already gets animated on its "
+            "way past. Four hundred is a DECLARED ESTIMATE and not a measurement "
+            "(CLAUDE.md Rule #10): the console started fetching its months on "
+            "2026-09-09 and no median arrival time has been taken yet. The plan row "
+            "that takes it re-derives this number from the measured median payload "
+            "arrival (TODO/20260908-shell-and-fetch-plan.md row 19). "
+            "`config/appearance.json` owns the value, as `console.shimmer_after_ms`."
+        ),
+    )
     failure_list_max: int = Field(
         default=25,
         ge=1,
@@ -2984,6 +3001,32 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T22:00",
+            change=(
+                "ConsoleConfig gains shimmer_after_ms, defaulting to 400 and bounded "
+                "at 0 and 5000. config/appearance.json sets it to 400. The shape is "
+                "shared with AppearanceConfig, so appearance-config is restamped with "
+                "the same version. Additive and defaulted, so a config file written "
+                "before today still validates."
+            ),
+            why=(
+                "The console started fetching its months on 2026-09-09, so for the "
+                "first time a panel on this site has a wait to draw. A reserved block "
+                "that animates the moment it appears turns a 90 ms fetch into a "
+                "flicker, so the shimmer waits and a fetch that lands first never "
+                "animates at all. It is a knob rather than a literal because the right "
+                "value is a property of the payloads and the network, not of the "
+                "stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a "
+                "measurement: no median payload arrival has been taken since the "
+                "fetches landed, and Rule #10 refuses an unmeasured number the right "
+                "to justify a design, so this one justifies nothing - it is the value "
+                "the surface ships on until row 19 of "
+                "TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured "
+                "median. Ruled by Fowler, 2026-09-08: a user-interface row is not a "
+                "measurement harness."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T21:30",
             change=(

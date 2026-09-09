@@ -103,6 +103,11 @@
 	--tint-bad: rgba(240, 131, 108, 0.14);
 	--tint-neutral: rgba(230, 237, 245, 0.06);
 
+	/* The lit band that crosses a reserved block while its payload is in the
+	   air. It is a highlight over --color-surface-sunken and it has to stay
+	   under text weight: this says "still working", not "read me". */
+	--shimmer-band: rgba(230, 237, 245, 0.07);
+
 	/* --- Source swatches -------------------------------------------------
 	   Eight tints, one per publication, indexed from the source id. The hue is
 	   decoration - the publication is named in words on the same line - but
@@ -246,6 +251,11 @@
 	--tint-bad: rgba(180, 51, 31, 0.08);
 	--tint-neutral: rgba(16, 24, 40, 0.04);
 
+	/* The lit band that crosses a reserved block while its payload is in the
+	   air. White over the sunken surface here, where the dark theme lifts with
+	   a pale wash - the same move in both directions, not one value flipped. */
+	--shimmer-band: rgba(255, 255, 255, 0.85);
+
 	/* --- Source swatches -------------------------------------------------
 	   Deeper than the pale tints these replaced, for the reason above: on white
 	   the old set read 1.18:1 to 1.28:1, so a filled ring and a hollow one were
@@ -308,6 +318,10 @@
 
 	--dur-fast: 120ms;
 	--dur-base: 200ms;
+	/* One sweep of a reserved block. Long enough that a dozen of them read as
+	   one slow page rather than a dozen flashing boxes, and slow enough to sit
+	   under the eye rather than in front of it. */
+	--dur-shimmer: 1600ms;
 	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 
 	/* A 4px base. On a page that is mostly text the space scale does more work

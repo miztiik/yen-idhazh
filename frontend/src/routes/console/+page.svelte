@@ -29,6 +29,7 @@
 		failureSeries,
 		grouped,
 		parseTelemetryCsv,
+		rowsInWindow,
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import {
@@ -41,12 +42,24 @@
 	} from '$lib/charts/viewport';
 	import {
 		applyShard,
+		heldMonths,
 		holdRows,
 		monthCeiling,
 		monthsToLoad,
 		seedHold,
 		type TelemetryHold
 	} from '$lib/charts/telemetry-hold';
+	import {
+		missingSentence,
+		monthOutcomes,
+		monthsIn,
+		panelState,
+		quietSentence,
+		retryLabel,
+		unreachableSentence,
+		wideningPreset
+	} from '$lib/console/waiting';
+	import Reserved from '$lib/components/Reserved.svelte';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
@@ -129,19 +142,34 @@
 	const monthCap = monthCeiling(data.console.max_window_days);
 	/** Months a fetch is in flight for, so a second widen started before the
 	 * first settles does not ask for the same file twice. Not reactive: nothing
-	 * on the page reads it, and `inFlight` below is what drives the busy note. */
+	 * on the page reads it, and `flying` below is what drives the busy note. */
 	const pending = new Set<string>();
 	// svelte-ignore state_referenced_locally
 	let viewport = $state<TimeWindow>(opening);
-	/** How many month files are in the air. A count, not a flag: a pan can start
-	 * a second fetch while the first is still running, and a flag would clear the
-	 * busy state on the first one to finish. */
-	let inFlight = $state(0);
+	/** The months whose files are in the air. A list rather than a flag: a pan
+	 * can start a second fetch while the first is still running, and a flag would
+	 * clear the busy state on the first one to finish. The names are here because
+	 * a panel that reports a failed month has to know which month it was. */
+	let flying = $state<string[]>([]);
+	/** Months that were asked for and did not come back.
+	 *
+	 * **This list is the difference between a broken fetch and a quiet
+	 * pipeline.** Without it both draw an unmarked gap, which is the one pair of
+	 * facts this page exists to tell apart (Susan, plan row #12). */
+	let refused = $state<string[]>([]);
 	/** False until a browser has run this page. The control cannot do anything
 	 * before that, so it says so rather than pretending. */
 	let ready = $state(false);
+	/** True once a wait has run past `console.shimmer_after_ms`.
+	 *
+	 * One flag for the whole surface, and that is what makes the sweep one
+	 * timeline: every reserved block starts its animation in the frame this
+	 * turns on, so twelve blocks read as one page waiting rather than as twelve
+	 * broken things. A fetch that lands inside the delay never animates at all.
+	 */
+	let shimmer = $state(false);
 
-	const fetching = $derived(inFlight > 0);
+	const fetching = $derived(flying.length > 0);
 
 	/** The choice is read on mount and never during prerender, so first paint is
 	 * always the window the server drew and the control always agrees with it.
@@ -181,26 +209,99 @@
 	 * cannot ask for a month until it knows which months exist, so a list of its
 	 * own would be one more wait before the first row (Carmack, 2026-09-08).
 	 */
-	async function loadVisibleMonths() {
-		const wanted = monthsToLoad(hold, viewport, data.months).filter(
+	async function loadVisibleMonths(only: readonly string[] | null = null) {
+		const wanted = (only ?? monthsToLoad(hold, viewport, data.months)).filter(
 			(month) => !pending.has(month)
 		);
 		if (wanted.length === 0) return;
 		for (const month of wanted) pending.add(month);
-		inFlight += wanted.length;
+		// A month being tried again is no longer refused. Clearing it here rather
+		// than on the answer means the panel drops its warning the moment the
+		// retry starts, which is what a pressed button owes the person who
+		// pressed it.
+		refused = refused.filter((month) => !wanted.includes(month));
+		flying = [...flying, ...wanted];
 		for (const month of wanted) {
 			try {
 				const response = await fetch(`${base}/telemetry/${month}.csv`);
 				if (response.ok) merge(month, parseTelemetryCsv(await response.text()));
-				else console.warn(`telemetry ${month} unavailable; showing a gap`);
+				else {
+					refused = [...refused, month];
+					console.warn(`telemetry ${month} unavailable; showing a gap`);
+				}
 			} catch (error) {
+				refused = [...refused, month];
 				console.warn(`telemetry ${month} could not be read; showing a gap`, error);
 			} finally {
 				pending.delete(month);
-				inFlight -= 1;
+				flying = flying.filter((name) => name !== month);
 			}
 		}
 	}
+
+	/** What became of every month the open window reaches into.
+	 *
+	 * The band's `months` is the list of months a shard exists for, so a month
+	 * absent from it was never written and is a real gap rather than a failure.
+	 */
+	const outcomes = $derived(
+		monthOutcomes({
+			window: viewport,
+			published: data.months,
+			held: heldMonths(hold),
+			loading: flying,
+			unreachable: refused
+		})
+	);
+	const rowsInView = $derived(rowsInWindow(rows, viewport));
+	const telemetryState = $derived(panelState(outcomes, rowsInView.length));
+	const missingMonths = $derived(monthsIn(outcomes, 'missing'));
+	const refusedMonths = $derived(monthsIn(outcomes, 'unreachable'));
+	/** The narrowest preset that reaches a month with rows in it. Named in the
+	 * quiet sentence, because widening is the only move an empty window offers. */
+	const widen = $derived(
+		wideningPreset(windowDays, presets, data.months, (days) =>
+			windowOfDays(publishedDates, data.today, days, data.console.today_anchor)
+		)
+	);
+	/** What every waiting panel says. One sentence per state, written once, so
+	 * two panels in the same state cannot word it differently. */
+	const stateSentence = $derived.by(() => {
+		if (telemetryState === 'quiet') return quietSentence(windowDays, widen);
+		if (telemetryState === 'missing') return missingSentence(missingMonths);
+		if (telemetryState === 'unreachable') {
+			return unreachableSentence(refusedMonths, datesIn(rowsInView).length);
+		}
+		return '';
+	});
+	const retryAction = $derived(
+		telemetryState === 'unreachable' ? retryLabel(refusedMonths) : null
+	);
+
+	/** Ask again for the months that did not come back, and nothing else.
+	 *
+	 * Scoped to the failure rather than to the page: a retry that re-fetched the
+	 * whole window would spend an operator's connection on months already in
+	 * hand, and would blank panels that are answering correctly.
+	 */
+	function retry() {
+		void loadVisibleMonths([...refusedMonths]);
+	}
+
+	/** The shimmer starts late and stops the moment the last file lands.
+	 *
+	 * `console.shimmer_after_ms` is what a wait has to outlast before it is worth
+	 * drawing as one. Below it a reserved block is simply still, which is the
+	 * right answer for a fetch that is over before the eye finds the box.
+	 */
+	$effect(() => {
+		if (!fetching) {
+			shimmer = false;
+			return;
+		}
+		const timer = setTimeout(() => (shimmer = true), data.console.shimmer_after_ms);
+		return () => clearTimeout(timer);
+	});
 
 	/** Set the span every windowed section reads.
 	 *
@@ -622,11 +723,16 @@
      `data-telemetry-rows` is how anything outside this page knows whether the
      rows it draws from have landed. The page holds none at first paint and
      fills by fetch, so a check that read a panel the moment the document
-     arrived would be reading the empty state and calling it the answer. -->
+     arrived would be reading the empty state and calling it the answer.
+
+     `data-shimmer` is the one switch every reserved block on this page reads,
+     and having exactly one is what puts them all on one timeline (app.css). -->
 <div
 	data-console-panels="pipelines"
 	data-telemetry-rows={rows.length}
 	data-telemetry-fetching={fetching ? 'yes' : 'no'}
+	data-telemetry-state={telemetryState}
+	data-shimmer={shimmer ? 'on' : 'off'}
 >
 	<WindowControl days={windowDays} {presets} {monthsFor} busy={fetching} {ready} onChange={show} />
 
@@ -826,16 +932,23 @@
 	     moment the switch below drew lines. It survives verbatim in the chart's
 	     accessible description, so nobody loses it. -->
 	<Panel title="What is failing, by stage">
-		{#if mixSeries.length === 0}
-			<!-- Two different nothings and the panel says which. Waiting is a state
-			     the operator can act on by waiting; a window with no failures in it
-			     is an answer. -->
-			<p class="mt-2 text-[0.8125rem] text-text-secondary" data-mix-empty={fetching ? 'fetching' : 'none'}>
-				{fetching
-					? 'Reading the months this window covers.'
-					: 'No failure is on record in the months this session has read.'}
-			</p>
-		{:else}
+		<!-- The box is the same height whether it is waiting, empty, gapped or
+		     full, so this panel and everything under it stay where they were
+		     drawn. Four different nothings, and the panel says which one it is:
+		     before this row a broken fetch and a clean window drew the same
+		     unmarked gap. -->
+		<Reserved
+			panelState={mixSeries.length === 0 ? telemetryState : 'ready'}
+			height={data.console.chart_height}
+			width={data.console.chart_width}
+			name="failure-mix"
+			label="Failures per day by stage"
+			sentence={telemetryState === 'ready'
+				? 'No failure is on record in the months this session has read.'
+				: stateSentence}
+			action={retryAction}
+			onRetry={retryAction === null ? null : retry}
+		>
 			<Chart
 				svg=""
 				option={failureMix(mixSeries, mixShape).option}
@@ -854,7 +967,7 @@
 			     what one stage did on its own, which a stack hides when one band
 			     halves while its neighbour doubles. Same array either way. -->
 			<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
-		{/if}
+		</Reserved>
 	</Panel>
 
 	<div data-windowed="run-health" data-window-days={windowDays}>
@@ -968,6 +1081,10 @@
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
 		modelChanges={data.modelChanges}
+		panelState={telemetryState}
+		sentence={stateSentence}
+		action={retryAction}
+		onRetry={retryAction === null ? null : retry}
 		onPan={pan}
 		onStep={(direction) => show(stepPreset(windowDays, presets, direction))}
 	/>

@@ -6,9 +6,11 @@
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
+	import type { PanelState } from '$lib/console/waiting';
 	import BandDistance from './BandDistance.svelte';
 	import FailureList from './FailureList.svelte';
 	import FailurePanels from './FailurePanels.svelte';
+	import Reserved from './Reserved.svelte';
 
 	/** The item-telemetry surfaces, over the window the page is holding.
 	 *
@@ -24,6 +26,10 @@
 		tickDensity,
 		readoutMaxShare,
 		modelChanges = [],
+		panelState = 'ready',
+		sentence = '',
+		action = null,
+		onRetry = null,
 		onPan,
 		onStep
 	}: {
@@ -47,6 +53,15 @@
 		 * re-derived: the page reads it once from the server and the band chart is
 		 * the only child here a summarizer change can move. */
 		modelChanges?: string[];
+		/** Whether the rows these surfaces draw have arrived, and if not, why not.
+		 * Decided by the page, because the page is what fetches. Not called `state`:
+		 * that name shadows the `$state` rune inside this component. */
+		panelState?: PanelState;
+		/** What is true, in one sentence, where the state is not `ready`. */
+		sentence?: string;
+		/** The retry's label, where there is something to retry. */
+		action?: string | null;
+		onRetry?: (() => void) | null;
 		/** Move the window by this many days, keeping its span. */
 		onPan: (days: number) => void;
 		/** Widen (`1`) or narrow (`-1`) to the next preset. */
@@ -126,38 +141,53 @@
 		</p>
 
 		<!-- Shape first, rows last. The list is the only child that can outgrow
-		     the screen, so it cannot sit between two charts. -->
+		     the screen, so it cannot sit between two charts.
+
+		     While the rows are away the three collapse into one reserved box, so
+		     the header, the controls and the hint above stay exactly where they
+		     were drawn and the box says which of the four nothings this is. -->
 		<div class="mt-6">
-			<FailurePanels
-				{rows}
-				window={viewport}
-				minAttempts={config.min_attempts_for_rate}
+			<Reserved
+				{panelState}
 				height={config.chart_height}
 				width={config.chart_width}
-				{selectedCode}
-				{tickDensity}
-				{readoutMaxShare}
-				onSelect={(code) => (selectedCode = code)}
-			/>
-			<BandDistance
-				points={compression.points}
-				viewport={viewport}
-				{bands}
-				unplotted={compression.unplotted}
-				height={config.chart_height}
-				width={config.chart_width}
-				{tickDensity}
-				{readoutMaxShare}
-				{modelChanges}
-				outlierRows={config.band_outlier_rows}
-			/>
-			<FailureList
-				{rows}
-				window={viewport}
-				{selectedCode}
-				max={config.failure_list_max}
-				sourceMax={config.source_rows}
-			/>
+				name="telemetry-viewport"
+				label="Item telemetry"
+				{sentence}
+				{action}
+				{onRetry}
+			>
+				<FailurePanels
+					{rows}
+					window={viewport}
+					minAttempts={config.min_attempts_for_rate}
+					height={config.chart_height}
+					width={config.chart_width}
+					{selectedCode}
+					{tickDensity}
+					{readoutMaxShare}
+					onSelect={(code) => (selectedCode = code)}
+				/>
+				<BandDistance
+					points={compression.points}
+					viewport={viewport}
+					{bands}
+					unplotted={compression.unplotted}
+					height={config.chart_height}
+					width={config.chart_width}
+					{tickDensity}
+					{readoutMaxShare}
+					{modelChanges}
+					outlierRows={config.band_outlier_rows}
+				/>
+				<FailureList
+					{rows}
+					window={viewport}
+					{selectedCode}
+					max={config.failure_list_max}
+					sourceMax={config.source_rows}
+				/>
+			</Reserved>
 		</div>
 	</div>
 </section>

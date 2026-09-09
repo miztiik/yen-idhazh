@@ -37,5 +37,31 @@
 	<ConsoleNav routes={data.routes} {active} />
 	<ConsoleBand band={data.band} />
 
+	<!-- Said once, above every panel, and only to a reader with no script.
+	     The band above is real markup and stays readable; the panels below draw
+	     rows a browser fetches, so with no script they keep their reserved shape
+	     and stay empty. A page that let those boxes sit there unexplained would
+	     be a page claiming the pipeline recorded nothing. -->
+	<noscript>
+		<p class="console-noscript" data-console-noscript>
+			The verdict above is in this page. Everything below it is drawn from
+			month files a browser fetches, so with JavaScript off the panels keep
+			their shape and stay empty.
+		</p>
+	</noscript>
+
 	{@render children()}
 </section>
+
+<style>
+	.console-noscript {
+		margin-top: var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-md);
+		background: var(--tint-neutral);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
+	}
+</style>

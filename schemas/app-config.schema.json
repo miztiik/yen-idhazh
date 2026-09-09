@@ -400,6 +400,14 @@
           "title": "Pan Days",
           "type": "integer"
         },
+        "shimmer_after_ms": {
+          "default": 400,
+          "description": "How long a reserved console block stays still before it starts to shimmer, in milliseconds. The block is drawn the moment the document is, so this knob decides nothing about the shape of the page - only whether a wait short enough to be over already gets animated on its way past. Four hundred is a DECLARED ESTIMATE and not a measurement (CLAUDE.md Rule #10): the console started fetching its months on 2026-09-09 and no median arrival time has been taken yet. The plan row that takes it re-derives this number from the measured median payload arrival (TODO/20260908-shell-and-fetch-plan.md row 19). `config/appearance.json` owns the value, as `console.shimmer_after_ms`.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Shimmer After Ms",
+          "type": "integer"
+        },
         "source_rows": {
           "default": 10,
           "description": "How many sources the console ranks by the articles their failures cost, before it states the tail in one sentence. Measured 2026-09-01 over the committed projection, a thirty-day window holds 60 sources with a loss, which is a list nobody reads to the end. Ten, matching the source-cut list above it.",
@@ -1979,6 +1987,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "ConsoleConfig gains shimmer_after_ms, defaulting to 400 and bounded at 0 and 5000. config/appearance.json sets it to 400. The shape is shared with AppearanceConfig, so appearance-config is restamped with the same version. Additive and defaulted, so a config file written before today still validates.",
+      "version": "2026-09-09T22:00",
+      "why": "The console started fetching its months on 2026-09-09, so for the first time a panel on this site has a wait to draw. A reserved block that animates the moment it appears turns a 90 ms fetch into a flicker, so the shimmer waits and a fetch that lands first never animates at all. It is a knob rather than a literal because the right value is a property of the payloads and the network, not of the stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a measurement: no median payload arrival has been taken since the fetches landed, and Rule #10 refuses an unmeasured number the right to justify a design, so this one justifies nothing - it is the value the surface ships on until row 19 of TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured median. Ruled by Fowler, 2026-09-08: a user-interface row is not a measurement harness."
+    },
+    {
       "change": "config/idhazh.json moves extract.truncation_cap_tokens from 5000 to 10000. No field was added, removed or retyped. elements.max_per_article and finetune.sequence_length restate their arithmetic against the new cap; neither value moves.",
       "version": "2026-09-09T21:30",
       "why": "The cap is the largest quality lever nobody had pulled, and it was held shut by the window rather than by a measurement: at 8,192 the doubled cap did not fit. The window went to 16,384 earlier the same day, so it fits now. Measured 2026-09-09 over the 4,117 published items in state/item-health/2026-09.csv (2026-09-01 to 09, stock ubuntu-latest 4 vCPU runners): 36 of them, 0.87 percent, were cut at 5,000 tokens, and 9 of them, 0.22 percent, would still be cut at 10,000. A cut article gains 23 to 5,000 tokens of prefill, median 1,616, and prefill runs at a median 9.85 tokens a second over those 4,117 rows, so the worst item pays about 8.5 more minutes against a summarize call that costs 114.6 s at the median and 312.7 s at the 95th. The prompt is 997 tokens plus 1.306 a word by least squares over the same rows, so the worst case is about 14,100 tokens of a 16,384 window - 86 percent, a margin of 1.16x where it was 1.9x. The cap is fingerprint-digested, so every stamp moves and no summary written before today is comparable with one written after; that is correct, because the text the model read is not the same text. Rule #11 is untouched: extract sanitizes before it truncates, so a longer article is more untrusted text handled on exactly the terms the short one was."
@@ -2548,7 +2561,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-09T21:30",
+      "default": "2026-09-09T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2562,5 +2575,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-09T21:30"
+  "version": "2026-09-09T22:00"
 }
