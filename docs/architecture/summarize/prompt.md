@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-07
+**Last Updated**: 2026-09-09
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -39,7 +39,7 @@ Band 0 is the brief band: `{0, 30, 45}`. The former first band starts at 60
 words and asks for 50 to 90 words. The split is forced by the source floor:
 `30 / 0.5 = 60`.
 
-Five rungs, and what a reader gets on each:
+Six rungs, and what a reader gets on each:
 
 | Rung | From | Ask | The item |
 | ---: | ---: | --- | --- |
@@ -48,10 +48,14 @@ Five rungs, and what a reader gets on each:
 | 2 | 700 | 70-150 | A feature or an analysis. The event, why it matters, the main caveat. |
 | 3 | 2000 | 110-200 | A long feature. The event, the evidence, who disputes it, what is still open. |
 | 4 | 3000 | 150-230 | An investigation or long read. The distinct things the piece established, named separately, plus the response from whoever it accuses and the qualification it ends on. The one item on the page a reader may finish and treat as read. |
+| 5 | 5000 | 180-230 | The longest piece the model still reads whole. The same things rung 4 names, and never in fewer than 180 words - at this length 150 is a headline with evidence attached. |
 
-Rung 4 is 2.02 percent of items - 9 of the 445 rows in `state/scores.csv` that
-carry a trustworthy length from before the cap, measured 2026-08-29, which is 1
-to 4 items a run over four runs of 107 to 117 items.
+Measured 2026-09-09 over the 7,970 distinct scored items in `state/scores/`
+that carry a length from before the cut: 90 reach 3,000 words and 23 reach
+5,000. So rung 4 holds 67 items, 0.84 percent, and rung 5 holds 23, 0.29
+percent - about one item every three runs over the 77 runs in that ledger. Rung
+5 is thin, and that is the honest price of covering a range the cap opened
+rather than a range the feeds fill.
 
 Three rules make band selection safe rather than approximate:
 
@@ -97,33 +101,52 @@ moves a threshold to make a corpus pass - which Row #10 decision 3 forbids.
 
 ### Design rationale - the ladder tops out at the cut point
 
-**The rung exists because two articles read whole were asked for the same
-summary.** At the `extract.truncation_cap_tokens` of 5000 committed when the
+**Rung 4 exists because two articles read whole were asked for the same
+summary.** At the `extract.truncation_cap_tokens` of 5000 committed when that
 rung was added, the model was handed 3,846 words. A 2,000-word article and a
 3,846-word article both arrived whole, and before this rung both got the
 identical 110-to-200-word ask: one compressed 10 to 1, the other 19 to 1, for
 the same 155-word midpoint. The floor is 3000 because 2,923 is the midpoint of
 that whole-read range and 3000 is the nearest seam the ledger actually reports.
 
-**Rung 4 is the last rung, and no later rung may sit above the cut point.** At
+**Rung 5 is the last rung, and no later rung may sit above the cut point.** At
 the cap of 10000 committed now the model is handed 7,692 words, so a
 16,000-word piece and a 7,692-word piece are handed the same 7,692 words: they
-get the same ask and they should. A sixth rung asking 280 words of the
+get the same ask and they should. A seventh rung asking 280 words of the
 16,000-word piece would pay for text that is not in the fenced block, and the
 model would close the gap by elaborating the opening - which reads as
-completeness. This is the rule the ladder has to keep, not the number 3000: the
+completeness. This is the rule the ladder has to keep, not the number 5000: the
 cap moved from 2500 to 5000 on 2026-08-29 and from 5000 to 10000 on 2026-09-09,
 and it will move again, so the assertion reads both sides from `config/`
 (Rule #6). A test that only checks the rungs climb passes either way and proves
 nothing.
 
-**The ladder was derived at the cap of 5000 and has not been re-derived.** Every
-rung floor still sits below the cut point, so nothing is broken and no rung asks
-for words the model never saw. What changed is that the whole-read range now
-runs to 7,692 words rather than 3,846, so the top rung covers a span twice as
-wide as the one it was cut for: a 3,000-word piece and a 7,692-word piece now
-share an ask, at 20 to 1 and 51 to 1. Whether that earns a sixth rung is an
-editorial call about compression rather than a contract break, and it is open.
+**Why the sixth rung landed on 2026-09-09.** The cap doubling left the top rung
+covering a span twice as wide as the one it was cut for: a 3,000-word piece and
+a 7,692-word piece both arrive whole and both got the identical 150-to-230-word
+ask, at 20 to 1 and 51 to 1. The floor is 5000 because 5,346 is the midpoint of
+that whole-read range and 5000 is the nearest seam the ledger reports, which is
+how rung 4's floor was derived. The widest compression on the ladder now runs to
+43 to 1 rather than 51 to 1.
+
+**Only the floor of the ask climbs, and rung 5 keeps rung 4's ceiling.** The
+complaint is about compression, and compression at a rung's floor is set by
+`target_words_min`. The rejected alternative was to ask 250 words, which would
+hold the ratio at the floor near rung 4's. It puts the ask on the accept gate
+exactly - `evaluation.summary_words_max` is 250 - so a reply two words over
+would lose the story, on the rarest and most valuable items on the page. Moving
+that gate is a separate decision about what the pipeline agrees to publish, and
+it is not this one. So the ladder's invariant is the weaker one: a longer
+article is never asked for a shorter summary than a shorter article.
+`test_the_longest_whole_read_is_asked_for_more_than_an_investigation` asserts
+it over every adjacent pair.
+
+**What it cost the canary day, stated rather than hidden.** The console's
+compression plot needs a mark under every target zone, the day publishes one
+item per canary file, and six zones against six placeable rows is exactly one
+mark a zone. The 60-to-700-word zone carried a second mark until this rung
+landed; that row is now the 4,200-word one filling the new seam, and restoring
+the pair needs a ninth canary.
 
 **Honesty about a partial read is a sentence, and never a word count.** The
 tempting alternative is to ask for *fewer* words when the article was cut. It
@@ -142,13 +165,15 @@ a cut piece the model never saw either. A 230-word summary that reads as
 complete and omits the denial is the worst item this pipeline can publish, and
 the sentence is what stops it.
 
-**`summarize.bands[].key_points_max` grades with the rung: 1, 2, 3, 4, 5 from the
-brief band to the investigation.** The count moved off `SummarizeConfig` and onto
-`SummaryBand` on 2026-09-07, so each rung asks for its own. The shortest asks for
-one, because a 30-to-45-word note carries about one distinct fact, and asking it
-for five requests facts the article does not hold - the extra bullets then
-restate the summary. The longest keeps five, where a long read genuinely carries
-that many. `key_points_min` moved with it - 1 at the brief band, 2 at the top -
+**`summarize.bands[].key_points_max` grades with the rung: 1, 2, 3, 4, 5, 5 from
+the brief band to the longest whole read.** The count moved off `SummarizeConfig`
+and onto `SummaryBand` on 2026-09-07, so each rung asks for its own. The shortest
+asks for one, because a 30-to-45-word note carries about one distinct fact, and
+asking it for five requests facts the article does not hold - the extra bullets
+then restate the summary. The top two keep five, where a long read genuinely
+carries that many: rung 5 is a longer piece rather than a piece with more
+separately nameable findings, so it asks for more words and the same bullets.
+`key_points_min` moved with it - 1 at the brief band, 2 at the top -
 because the prompt reads both numbers off the band, and the shortest rung's
 ceiling of one sits below the old global floor of two. The decoder is held to the
 same per-band range, so the ceiling is a control and not a request: a note cannot
@@ -156,12 +181,12 @@ emit the five bullets that would pad it.
 
 Each rung is checked against a simple bound: a key point is one sentence of about
 20 words, so a summary of W words carries about W/20 distinct facts, and no rung
-may ask for more key points than that. At the five committed rungs that bound is
-2, 4, 7, 10 and 11 facts against asks of 1, 2, 3, 4 and 5, so every rung sits
-under it with room to spare.
+may ask for more key points than that. At the six committed rungs that bound is
+2, 4, 7, 10, 11 and 11 facts against asks of 1, 2, 3, 4, 5 and 5, so every rung
+sits under it with room to spare.
 `test_no_band_asks_for_more_key_points_than_its_summary_can_carry` reads the
-ladder from `config/` and asserts it per band, so a sixth rung cannot be added at
-five by accident.
+ladder from `config/` and asserts it per band, so a seventh rung cannot be added
+at six by accident.
 
 **No existing rung moved.** Rung 2 covers about 30 percent of a day, so re-asking
 it would put a measured cost on a third of every run to fix a seam nobody has
@@ -169,25 +194,28 @@ measured. Rung 3 across 2,000 to 2,999 words runs 10 to 1 up to 27 to 1, which i
 the compression rung 2 already carries at its own top. It was never the broken
 one.
 
-## What the fifth rung has not proved yet
+## What the top two rungs have not proved yet
 
 Two things are written down here because they are cheap to record now and
-expensive to reconstruct later.
+expensive to reconstruct later. Both were written for rung 4 and both apply
+unchanged to rung 5, which was cut the same way from the same argument.
 
-**The falsification test, which has not been run.** Summarize the 9 items at
-3,000 words and up twice - once at 110-200 and once at 150-230 - and count
-**distinct findings**: a fact a reader could act on that the other summary does
-not contain. If the longer summary names no more findings on two thirds of them,
-the rung buys padding and it should be withdrawn. It is a count, not a score, so
-it needs no labels and no grader (`CLAUDE.md` section 0a forbids a model grading
-a model). Second observation to take at the same time: if the still-cut pieces
-draw every fact from the first 40 percent of what the model read, the extra words
-went into elaborating the opening, and those items belong on rung 3.
+**The falsification test, which has not been run.** Summarize the items at
+3,000 words and up twice - once at the ask below and once at the rung's own ask
+- and count **distinct findings**: a fact a reader could act on that the other
+summary does not contain. If the longer summary names no more findings on two
+thirds of them, the rung buys padding and it should be withdrawn. It is a count,
+not a score, so it needs no labels and no grader (`CLAUDE.md` section 0a forbids
+a model grading a model). Second observation to take at the same time: if the
+still-cut pieces draw every fact from the first 40 percent of what the model
+read, the extra words went into elaborating the opening, and those items belong
+a rung lower.
 
-**A score drop on rung 4 is not a regression.** `hhem` scores a summary against
-one window of the article at a time, and a rung-4 summary drawing on both the
-opening and the closing of a long piece has no single 900-word window supporting
-all of it. This is measured, not feared: over the 117 real evidence pairs of run
+**A score drop on the top two rungs is not a regression.** `hhem` scores a
+summary against one window of the article at a time, and a rung-4 or rung-5
+summary drawing on both the opening and the closing of a long piece has no
+single 900-word window supporting all of it. This is measured, not feared: over
+the 117 real evidence pairs of run
 `33179908136`, a three-window article scores **0.3986 lower** than the same
 article read whole, and a two-window article 0.2178 lower, while the one-window
 control reads exactly 0.0000 on 91 of 91
@@ -195,7 +223,8 @@ control reads exactly 0.0000 on 91 of 91
 band starts at 0.80 and the medium at 0.50, so a 0.40 drop is wider than the
 whole medium band. Every rung-4 article is at least three windows by
 construction, because 3,000 words at `evaluation.chunk_words` of 900 cannot be
-fewer. **The score is expected to fall while the summary improves.** Read it
+fewer, and a rung-5 article is at least six. **The score is expected to fall
+while the summary improves.** Read it
 against the length bias, or the first run at the new ladder will look like a
 quality failure.
 

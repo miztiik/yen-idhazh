@@ -520,7 +520,7 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-09T22:00",
+            version="2026-09-09T23:30",
             change=(
                 "console gains shimmer_after_ms, defaulting to 400 and bounded at 0 "
                 "and 5000. config/appearance.json sets it to 400. `ConsoleConfig` is "

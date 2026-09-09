@@ -219,10 +219,16 @@ class _Measured(NamedTuple):
 #: same way would leave every one of those states undrawn and so untested.
 #:
 #: Read down the source-word column: 38 to 6100 words is four decades of x axis
-#: and at least one mark under each of the five configured target zones. Read
+#: and at least one mark under each of the six configured target zones. Read
 #: down the faithfulness columns: all three confidence bands, and every reason
 #: an item can miss the top one. Two rows record no length before the cut, so
 #: the plot drops them and the sentence under it has a count to print.
+#:
+#: Six zones and six placeable rows is exactly one mark a zone, so no zone can
+#: hold two any more. That is what the sixth rung cost this fixture: until
+#: 2026-09-09 the 60-to-700-word zone carried a second mark, and the row that
+#: carried it is the one moved up to fill the new 5000-word seam. Restoring it
+#: needs a ninth canary, because the day publishes one item per canary file.
 SCORED: Final[tuple[_Measured, ...]] = (
     # A release note. Under the shortest target zone, and left of the 100-word
     # floor the plot seeds its axis with - the one mark that can say whether the
@@ -236,10 +242,11 @@ SCORED: Final[tuple[_Measured, ...]] = (
         source_words=140, summary_words=62,
         hhem=0.86, hhem_full=0.84, coverage=0.61, score_ms=240,
     ),
-    # Medium on faithfulness alone, and a second mark in that zone, so the zone
-    # is not a step drawn under a single point.
+    # Medium on faithfulness alone, and the only mark under the zone the sixth
+    # rung opened on 2026-09-09 - long enough that the model read part of it and
+    # short enough to stay under the top rung's floor.
     _Measured(
-        source_words=410, summary_words=78,
+        source_words=4200, summary_words=78,
         hhem=0.71, hhem_full=0.70, coverage=0.52, score_ms=290,
     ),
     # Faithful, but the lead's names and figures did not survive, so the band is

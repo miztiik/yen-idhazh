@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-09
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -652,7 +652,7 @@ feed-health rows and the score rows are all written by `build_canary_day.py`;
 the item-health rows are written by `build:canary`. The score rows are shaped
 for the compression plot rather than picked at random - eight items from 38 to
 6100 source words, so the log x axis spans four decades, every configured target
-zone has a mark under it, and two items carry the truncation flag that draws a
+zone has a mark under it, and three items carry the truncation flag that draws a
 diamond. A chart state the fixture does not reach is a chart state this suite
 cannot test.
 

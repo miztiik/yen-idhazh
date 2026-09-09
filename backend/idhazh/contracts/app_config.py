@@ -904,7 +904,7 @@ class SummaryBand(Model):
 
 
 def _default_bands() -> list[SummaryBand]:
-    """Five sizes: the note, the report, the feature, the long feature, the investigation.
+    """Six sizes: note, report, feature, long feature, investigation, whole-read long read.
 
     Starting points chosen from the shape of the sources we collect, not
     measurements - nothing here may be quoted as one (Rule #10). The first
@@ -916,6 +916,12 @@ def _default_bands() -> list[SummaryBand]:
     `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)`, so no rung
     asks for a summary of words the model was never handed
     (`docs/architecture/summarize/prompt.md`).
+
+    The top rung raises the floor of the ask and leaves its ceiling where the
+    rung below it stands. The complaint it answers is a compression one, and
+    compression at a rung's floor is set by `target_words_min`; the ceiling
+    cannot move without moving `evaluation.summary_words_max`, which is a
+    separate decision about what we agree to publish.
 
     Each band also carries its own key-point ask, graded from one at the brief
     band to five at the investigation band: a note holds one fact, and asking it
@@ -940,6 +946,10 @@ def _default_bands() -> list[SummaryBand]:
         ),
         SummaryBand(
             min_source_words=3000, target_words_min=150, target_words_max=230,
+            key_points_min=2, key_points_max=5,
+        ),
+        SummaryBand(
+            min_source_words=5000, target_words_min=180, target_words_max=230,
             key_points_min=2, key_points_max=5,
         ),
     ]
@@ -3002,7 +3012,7 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-09T22:00",
+            version="2026-09-09T23:30",
             change=(
                 "ConsoleConfig gains shimmer_after_ms, defaulting to 400 and bounded "
                 "at 0 and 5000. config/appearance.json sets it to 400. The shape is "
@@ -3025,6 +3035,35 @@ class AppConfig(Contract):
                 "TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured "
                 "median. Ruled by Fowler, 2026-09-08: a user-interface row is not a "
                 "measurement harness."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-09T23:00",
+            change=(
+                "summarize.bands gained a sixth rung at min_source_words 5000, asking "
+                "180 to 230 words and the same 2 to 5 key points as the rung below it. "
+                "No existing rung moved and evaluation.summary_words_max did not move."
+            ),
+            why=(
+                "extract.truncation_cap_tokens went to 10000 earlier the same day, so "
+                "the model is now handed 7,692 words rather than 3,846 and the top rung "
+                "covers a span twice as wide as the one it was cut for: a 3,000-word "
+                "piece and a 7,692-word piece both arrive whole and both got the "
+                "identical 150-to-230-word ask, at 20 to 1 and 51 to 1. The floor is "
+                "5000 because 5,346 is the midpoint of that whole-read range and 5000 is "
+                "the nearest seam the ledger reports, which is how the fifth rung's "
+                "floor was derived on 2026-08-29. Measured 2026-09-09 over the 7,970 "
+                "distinct scored items in state/scores/ that carry a length from before "
+                "the cut: 90 reach 3,000 words and 23 reach 5,000, so the new rung takes "
+                "23 items and the rung below keeps 67 - 0.29 percent of items, about one "
+                "item every three runs over the 77 runs in that ledger. Only the floor "
+                "of the ask moves, because compression at a rung's floor is set by "
+                "target_words_min and the ceiling cannot rise without moving "
+                "evaluation.summary_words_max, which is what the pipeline agrees to "
+                "publish and a separate decision. 5000 stays below the cut point of "
+                "7,692, so this is still not the rung that asks for words the model "
+                "never saw. Additive with a default, so an older config still validates "
+                "and no read-side migration is needed (section 11)."
             ),
         ),
         ChangelogEntry(
