@@ -4147,11 +4147,18 @@ def test_the_prefix_reuse_fields_match_a_real_line_too() -> None:
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     """A server on one port and a stage posting to another is every item failing.
 
-    Five parties hold this number and any of them can be edited alone: two
-    workflows declare it, `start-llama-server.sh` refuses to start without it,
-    `idhazh.llm.server` builds the address the stage posts to, and the
-    measurement harness in `measure.yml` writes its own copy because it builds
-    its server invocation inline rather than through the shared script.
+    Every workflow that stands a llama-server up declares the port once at
+    workflow level, `start-llama-server.sh` refuses to start without it, and
+    `idhazh.llm.server` builds the address the stage posts to out of the same
+    variable. Until 2026-09-09 the measurement harness was a fifth party: it
+    starts its server from an inline python block rather than through the shared
+    script, and it held its own `SERVER_PORT = 8080`. It reads the variable now,
+    so the number is declared and never spelled.
+
+    The declaration is the only place a runtime workflow may write the digits.
+    Asserted line by line on a whole-token match rather than as "the file holds
+    it once", so a hex digest that happens to carry `8080` inside it does not
+    read as a second port.
 
     The Python side carries a fallback literal for a developer running the stage
     by hand, and that literal is the one a port move would leave behind: the
@@ -4167,12 +4174,12 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
         f"the stage posts to {DEFAULT_ENDPOINT} and the workflow probes {address}"
     )
 
-    declaring = 0
+    declaring = set()
     for filename, workflow in sorted(_load_workflows().items()):
         env = workflow.get("env")
         declared = env.get(LLAMA_PORT_ENV) if isinstance(env, dict) else None
         if declared is not None:
-            declaring += 1
+            declaring.add(filename)
             assert str(declared) == LLAMA_PORT_VALUE, (
                 f"{filename} declares {LLAMA_PORT_ENV}={declared}, "
                 f"and the fallback in idhazh.llm.server is {LLAMA_PORT_VALUE}"
@@ -4181,17 +4188,28 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
             assert f"127.0.0.1:{LLAMA_PORT_VALUE}" not in text, (
                 f"{filename} writes the port into an address instead of reading it back"
             )
-    assert declaring >= 2, "the daily run and the validation arm each declare the port"
+    assert declaring == set(LLAMA_RUNTIME_WORKFLOWS), (
+        "every workflow that starts a llama-server declares the port and nothing else does"
+    )
+
+    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
+        for line in read_text(WORKFLOWS_DIR / filename).splitlines():
+            if re.search(rf"\b{LLAMA_PORT_VALUE}\b", line):
+                assert LLAMA_PORT_ENV in line, (
+                    f"{filename} spells the port at `{line.strip()}` rather than "
+                    f"reading {LLAMA_PORT_ENV} back"
+                )
 
     assert f'"${{{LLAMA_PORT_ENV}:?' in read_text(START_SERVER_SCRIPT), (
         f"{START_SERVER_SCRIPT.name} must refuse to start without {LLAMA_PORT_ENV}"
     )
-    # The one copy that is not the variable. Named rather than tolerated: the
-    # harness starts its server from an inline python block, so it never reads
-    # the environment the shared script does.
-    assert f"SERVER_PORT = {LLAMA_PORT_VALUE}" in read_text(WORKFLOWS_DIR / "measure.yml"), (
-        f"the measurement harness holds its own port and it no longer says {LLAMA_PORT_VALUE}"
-    )
+    # The one starter that does not go through the shared script. It sweeps a
+    # setting over per-candidate config roots and holds the process object to
+    # sample its memory, neither of which the script can do - so it keeps its own
+    # start sequence and reads the port the workflow declared.
+    assert f'SERVER_PORT = int(os.environ["{LLAMA_PORT_ENV}"])' in read_text(
+        WORKFLOWS_DIR / "measure.yml"
+    ), f"the measurement harness must read {LLAMA_PORT_ENV} rather than hold a port"
 
 
 def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> None:
