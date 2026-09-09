@@ -35,6 +35,8 @@ from idhazh.contracts.visual import EncodingRole, VisualPlan, VisualType
 from idhazh.derived_values import (
     DERIVED_VALUE_VERSION,
     DerivedValueError,
+    Refusal,
+    ResolverCheck,
     bin_edges,
     convert,
     count,
@@ -77,7 +79,22 @@ def elements_of(table: ElementTable, *ids: str) -> list[Element]:
 
 
 def resolve(plan: VisualPlan, table: ElementTable) -> list[DisplayedValue]:
-    return resolve_displayed_values(plan, table, visuals=committed_visuals())
+    """The figures, and the assertion that nothing refused on the way to them.
+
+    Reading `values` on its own would let a refusal pass as a plan that drew
+    nothing, and keeping those two apart is what the third state is for.
+    """
+    resolution = resolve_displayed_values(plan, table, visuals=committed_visuals())
+    assert resolution.refusal is None, f"expected figures, got {resolution.refusal}"
+    return resolution.values
+
+
+def refusal_of(plan: VisualPlan, table: ElementTable) -> Refusal:
+    """The check that stopped a plan, for a test whose subject is the refusal."""
+    resolution = resolve_displayed_values(plan, table, visuals=committed_visuals())
+    assert resolution.refusal is not None, "this plan was expected to refuse"
+    assert resolution.values == [], "a refusal draws nothing, so there is no half-drawn set"
+    return resolution.refusal
 
 
 #: `wind`'s four megawatt quantities, largest last so the binning case is not
@@ -111,6 +128,40 @@ def built_plan(visual_type: VisualType, **channels: list[str]) -> VisualPlan:
     payload["labels"] = []
     payload["annotations"] = []
     return VisualPlan.model_validate(payload)
+
+
+#: `wind`'s four figures rewritten to crowd into one end of their own range:
+#: 100, 1,000, 1,100 and 9,000 MW. Three bins over that range leave the middle
+#: one empty with a value for every bin, which is the one empty bar no validator
+#: check refuses. Each excerpt keeps its element's span width, so the slice is
+#: still verbatim and the digits still read out of the characters.
+CROWDED_QUANTITIES: Final = (
+    ("quantity-58-66", "1,000 MW", "1000"),
+    ("quantity-76-84", "9,000 MW", "9000"),
+    ("quantity-93-99", "100 MW", "100"),
+    ("quantity-112-120", "1,100 MW", "1100"),
+)
+
+
+def crowded_table(*keep: str) -> ElementTable:
+    """`wind` with the named figures rewritten to crowd, and nothing else moved.
+
+    Built rather than found, for the reason section 13 gives: no committed
+    article has produced this shape and the shape is the whole point. A fixture
+    would also fix how many values there are, and the two empty-bin causes are
+    told apart by exactly that count.
+    """
+    payload = json.loads(read_text(VALIDATOR_FIXTURES / "tables" / "wind.json"))
+    rewritten = {one[0]: one for one in CROWDED_QUANTITIES if one[0] in keep}
+    elements = []
+    for element in payload["elements"]:
+        if element["kind"] != "quantity":
+            elements.append(element)
+        elif element["element_id"] in rewritten:
+            _, excerpt, value = rewritten[element["element_id"]]
+            elements.append(element | {"span_excerpt": excerpt, "value": value})
+    payload["elements"] = elements
+    return ElementTable.model_validate(payload)
 
 
 def test_the_allow_list_is_four_functions_and_it_is_closed() -> None:
@@ -383,6 +434,47 @@ def test_a_histogram_of_one_repeated_value_is_refused_rather_than_binned() -> No
         bin_edges([Decimal(900), Decimal(900)], bins=3)
 
 
+def test_a_valid_plan_whose_values_crowd_degrades_the_item_instead_of_raising() -> None:
+    """The one refusal no validator check makes, and the reason this returns a value.
+
+    Every one of the validator's nine checks passes here: four figures in one
+    unit, three bins to put them in, and each figure read out of the characters
+    its element names. They still leave the middle bin empty, because they crowd
+    into one end of their own range. `docs/architecture/publishing/visuals.md`
+    says the item degrades and publishes no picture, and a caller can only do
+    that if the refusal is something it reads rather than something it catches
+    (`CLAUDE.md` section 1a).
+    """
+    table = crowded_table(*(one[0] for one in CROWDED_QUANTITIES))
+    plan = built_plan(VisualType.HISTOGRAM, bins=[one[0] for one in CROWDED_QUANTITIES])
+    assert validate_plan(plan, table, visuals=committed_visuals()) == [], (
+        "the validator passes this plan, which is what makes the empty bar the resolver's own"
+    )
+    refusal = refusal_of(plan, table)
+    assert refusal.check is ResolverCheck.VALUES_HAVE_SPREAD
+    assert "crowd" in refusal.detail
+
+
+def test_an_empty_bin_from_too_few_values_names_the_other_check() -> None:
+    """Two causes, one empty bar, and the refusal says which - so a tuning knob is not blamed.
+
+    Fewer values than bins leaves a bin empty by counting alone, and that is a
+    plan fault `enough_data` names. Reaching it here means resolving a plan the
+    validator never passed, which the first assertion states rather than
+    assumes. Told apart from the spread case, an operator can see whether the
+    article was thin or `visuals.histogram_bins` is set too high; folded
+    together, both read as the knob.
+    """
+    kept = [CROWDED_QUANTITIES[0][0], CROWDED_QUANTITIES[1][0]]
+    table = crowded_table(*kept)
+    plan = built_plan(VisualType.HISTOGRAM, bins=kept)
+    assert validate_plan(plan, table, visuals=committed_visuals()) != [], (
+        "two values for three bins is a plan fault the validator already refuses"
+    )
+    refusal = refusal_of(plan, table)
+    assert refusal.check is ResolverCheck.ENOUGH_VALUES_FOR_BINS
+
+
 def test_a_type_this_build_cannot_resolve_is_refused_by_name() -> None:
     """The seven types with no role rule have no answer to "what is displayed".
 
@@ -394,9 +486,9 @@ def test_a_type_this_build_cannot_resolve_is_refused_by_name() -> None:
     payload = plan_payload("passes")
     payload["type"] = VisualType.KEYFACTS.value
     plan = VisualPlan.model_validate(payload)
-    with pytest.raises(DerivedValueError) as refusal:
-        resolve(plan, table)
-    assert "keyfacts" in str(refusal.value)
+    refusal = refusal_of(plan, table)
+    assert refusal.check is ResolverCheck.TYPE_HAS_ROLE_RULE
+    assert "keyfacts" in refusal.detail
 
 
 def test_a_plan_that_declines_displays_nothing_and_the_rates_say_so() -> None:
