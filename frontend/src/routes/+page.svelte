@@ -12,9 +12,9 @@
 </svelte:head>
 
 {#if data.day}
-	<DigestList day={data.day} datePrefix="{data.day.date}/" latest={data.latest} ui={data.ui} />
+	<DigestList day={data.day} datePrefix="{data.day.date}/" ui={data.ui} />
 	<MoreDays days={data.recent} current={data.day.date} />
 {:else}
-	<EmptyDay date={data.today} latest={data.latest} />
+	<EmptyDay date={data.today} />
 	<MoreDays days={data.recent} current={data.today} />
 {/if}
