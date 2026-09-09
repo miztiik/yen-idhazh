@@ -134,7 +134,7 @@
     "prune_keep_days": 60,
     "reference_rows": 500,
     "reference_test_rows": 100,
-    "sequence_length": 8192,
+    "sequence_length": 16384,
     "student": "visual_planner",
     "teacher": "summarize",
     "train_rows": 1000
