@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-09
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -365,13 +365,36 @@ All in the `finetune` block of `config/idhazh.json`.
 | `reference_rows` | 500 | human hours, once. About 2 min a drafted row |
 | `reference_test_rows` | 100 | human hours, once. About 5 min a read row |
 | `epochs` | 2 | GPU hours |
-| `sequence_length` | 4096 | free-tier memory, quadratically in attention |
+| `sequence_length` | 16384 | GPU memory on the training machine, quadratically in attention |
 
 `train_rows` and `corpus_rows` are two knobs because they price differently: the
 window costs storage, the sample costs wall-clock. Window 2000 with sample 1000
 is strictly better than window 1000 with sample 1000 - the same training time,
 twice the pool to sample a diverse 1000 from, at 154 MB of history a year instead
 of 77 MB.
+
+**`sequence_length` is `models.<teacher>.inference.n_ctx` and not a second
+derivation.** A training row is a prompt the pipeline could have sent and an
+answer it could have returned, so it is the same sequence the server sizes: 997
+tokens of prompt overhead, up to 12,191 for the longest and hardest-tokenizing
+article `extract.truncation_cap_tokens` lets through, and 900 of answer - 14,088
+of 16,384, or 86 percent. Both windows are asserted against that one sum in
+`backend/tests/test_contracts.py`, so a later move of the cap fails rather than
+drifts.
+
+It was 8,192 until 2026-09-09, and the cap doubling that day made it wrong in a
+way nothing would have reported: the worst row went to 14,088 tokens, the
+wrangler and the notebook drop an over-length row rather than truncate it, and
+the training set therefore lost every article past about 5,500 words while
+production kept summarizing them - a model tuned on the short half of its own
+job. Dropping stays the right refusal; what changed is that nothing now has to
+be refused.
+
+**Nobody has measured what 16,384 costs a card, because nothing has trained
+yet** (Rule #10). If a session runs out of memory, `SEQUENCE_LENGTH_OVERRIDE` in
+the notebook lowers the window for that session and prints how many rows the
+lower value dropped. That is a session's choice and not a config edit, because
+the config states how long the work really is.
 
 **Where 1000 came from, plainly.** It is derived, not measured, and from one
 constraint only: a free T4 session has to finish. Estimated 1.8 h for 1000 rows
@@ -404,7 +427,7 @@ Four things it refuses to train on, and each one raises rather than warns:
 | The corpus holdout | Held out by date, so the model trains on the past and is measured on the future. Training on it produces a model that measures well and is worthless. |
 | The reference set's test slice | The one honest measurement of the work. `reference.jsonl` carries no slice, so the notebook joins `queue.jsonl` on `url_key` to recover it. |
 | A row whose assistant turn carries an injection marker | That turn is our own model's output on a stranger's web page. If an attack ever landed, the row teaches the tuned model the injected behaviour. |
-| A row longer than `finetune.sequence_length` | Dropped and counted. A truncated target teaches the model to stop mid-summary. |
+| A row longer than `finetune.sequence_length` | Dropped and counted. A truncated target teaches the model to stop mid-summary. At the committed window nothing is over, so the count reads zero - it is a net, not a filter the corpus leans on. |
 
 **The cell that matters most asserts the loss mask before a step runs.** The
 median article is about six times the length of its summary, so training on the
