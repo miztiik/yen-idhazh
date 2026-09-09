@@ -926,6 +926,29 @@ def test_version_is_stamped_when_a_writer_omits_it() -> None:
     assert load_summary(payload).version == BY_STEM["summary"].schema_version()
 
 
+def test_a_manifest_written_before_the_verbosity_knob_still_reads() -> None:
+    """Section 11's release blocker, for the other document the knob reached.
+
+    `log_verbosity` landed on the embedded inference block on 2026-09-09, so
+    every manifest published before that day has no such key. The claim that
+    those still read is only worth making if something removes the key and
+    checks - the canonical fixture carries it, so the fixture alone proves the
+    new shape and nothing about the old one.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    stripped = 0
+    for run in payload["runs"]:
+        for use in run["models"]:
+            del use["model_ref"]["inference"]["log_verbosity"]
+            stripped += 1
+    assert stripped, "the fixture stopped carrying an inference block, so this proves nothing"
+
+    manifest = RunManifest.model_validate(payload)
+    for run in manifest.runs:
+        for use in run.models:
+            assert use.model_ref.inference.log_verbosity is None
+
+
 # --- Config ----------------------------------------------------------------
 
 
