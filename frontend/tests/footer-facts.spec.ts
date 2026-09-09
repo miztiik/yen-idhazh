@@ -3,18 +3,19 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
- * The footer lost three of its six blocks and no fact left the site.
+ * The footer is its links, and the page carries nothing a later run can change.
  *
- * Two of those blocks were about today's run - the run number and time, and
- * how many stories did not finish. The footer is on every page that has one, so
- * both were printed under `/archive/`, `/console/` and `/evals/`, which render
- * no day at all, and printed a second time under `/`, where the day notice was
- * already saying them.
+ * Two of its six August blocks were about today's run - the run number and
+ * time, and how many stories did not finish. Those moved to the day notice and
+ * these tests still count them there. Three more went in September and did not
+ * move anywhere: the commit and build date, and the promise about what is
+ * deleted, which was read off the newest day. The footer is on every page, so
+ * each of the three rewrote the bytes of every page on the site whenever
+ * anything published or anyone built.
  *
- * These tests are the relocation proof. Every sentence the old footer carried
- * is counted exactly once in its new home, and the documents that render no day
- * are read for any trace of the day's run - the sentences and the inlined
- * payload both.
+ * So this file now proves two things at once. The facts that moved are counted
+ * exactly once in their new home. The facts that went are counted at zero, and
+ * the root layout is held to handing every page nothing that comes from a day.
  */
 
 const BUILD = resolve(process.cwd(), 'build');
@@ -58,14 +59,24 @@ const FOOTER_ROUTES = ['/', '/archive/', '/evals/'];
 /** The routes with a footer and no day on them. */
 const NO_DAY = ['/archive/', '/evals/'];
 
-/** What the old footer stated, and what every page with a footer still states. */
+/** What every page with a footer still states. */
 const FOOTER_FACTS: Array<[string, RegExp]> = [
-	['the verification sentence', /Every summary is checked against the article it came from\./],
-	['the git build line', /Built from git/],
-	['the retention promise', /Nothing is deleted\.|Charts older than \d+ months? are deleted\./],
 	['the archive link', /href="[^"]*\/archive\/"/],
 	['the console link', /href="[^"]*\/console\/"/],
 	['the source-code link', />\s*Source code\s*</]
+];
+
+/** What the footer stated until this row, and what no page states now.
+ *
+ * The retention promise is counted in the footer rather than in the document,
+ * because `/archive/` states its own version in its own header - about the
+ * archive a reader is looking at, and only on the page where deletion could
+ * matter to them. Two different sentences would count as one over a whole page.
+ */
+const FOOTER_GONE: Array<[string, RegExp]> = [
+	['the verification sentence', /Every summary is checked against the article it came from\./],
+	['the git build line', /Built from git/],
+	['the retention promise', /Nothing is deleted\.|Charts older than \d+ months? are deleted\./]
 ];
 
 /** What the old footer stated about today's run, in its new wording. */
@@ -75,7 +86,7 @@ const DAY_FACTS: Array<[string, RegExp]> = [
 	['the reason a story was skipped', /could not read enough of the page/]
 ];
 
-test.describe('the three-line footer', () => {
+test.describe('the one-line footer', () => {
 	for (const route of FOOTER_ROUTES) {
 		test(`${route} states every footer fact exactly once`, () => {
 			const footer = footerOf(documentFor(route));
@@ -83,21 +94,29 @@ test.describe('the three-line footer', () => {
 			for (const [name, pattern] of FOOTER_FACTS) {
 				expect(occurrences(footer, pattern), `${name} on ${route}`).toBe(1);
 			}
+			for (const [name, pattern] of FOOTER_GONE) {
+				expect(occurrences(footer, pattern), `${name} is back on ${route}`).toBe(0);
+			}
 		});
 	}
 
-	test('the footer is three blocks, in the order Susan ruled', () => {
+	test('the footer is its links and nothing else', () => {
 		const footer = footerOf(documentFor('/'));
 		const nav = footer.indexOf('<nav');
-		const git = footer.search(/Built from git/);
-		const check = footer.search(/Every summary is checked/);
 
 		expect(nav, 'the nav is missing').toBeGreaterThan(-1);
-		expect(git, 'the git line does not follow the nav').toBeGreaterThan(nav);
-		expect(check, 'the verification sentence is not last').toBeGreaterThan(git);
-		// Three blocks and no fourth: one nav plus two paragraphs.
+		// One block and no second: one nav and no paragraph at all.
 		expect(occurrences(footer, /<nav\b/)).toBe(1);
-		expect(occurrences(footer, /<p\b/)).toBe(2);
+		expect(occurrences(footer, /<p\b/)).toBe(0);
+	});
+
+	test('no document carries the build stamp', () => {
+		for (const route of [...FOOTER_ROUTES, '/404']) {
+			const html = documentFor(route);
+
+			expect(occurrences(html, /Built from git/), `the build line is on ${route}`).toBe(0);
+			expect(occurrences(html, /deployed \d{4}-\d\d-\d\d/), `a build date is on ${route}`).toBe(0);
+		}
 	});
 });
 
@@ -144,7 +163,7 @@ test.describe('a document that renders no day carries none of the day', () => {
 	});
 });
 
-test.describe('the sentences moved rather than died', () => {
+test.describe('what the layout hands every page', () => {
 	test('the skipped-story reason is in the day notice and gone from the footer', () => {
 		const notice = readFileSync(join(COMPONENTS, 'DayNotice.svelte'), 'utf8');
 		const footer = readFileSync(join(COMPONENTS, 'SiteFooter.svelte'), 'utf8');
@@ -157,17 +176,39 @@ test.describe('the sentences moved rather than died', () => {
 		expect(footer).not.toContain('items_failed');
 	});
 
-	test('the footer takes one field from the day and no more', () => {
+	/**
+	 * The layout reads no day, and that is the whole row in one assertion.
+	 *
+	 * What a layout returns is inlined into every page beneath it, so one fact
+	 * read off the newest day rewrites the bytes of every older page the next
+	 * time a day publishes. The import is pinned rather than the field, because
+	 * a field can be renamed and the cost comes from the read.
+	 */
+	test('the root layout reads no day and no build clock', () => {
 		const layout = readFileSync(
 			resolve(process.cwd(), 'src', 'routes', '+layout.server.ts'),
 			'utf8'
 		);
 
-		expect(layout).toContain(
-			'footer: day ? { retention_window_months: day.retention_window_months }'
-		);
-		for (const field of ['items_failed', 'lastRun', 'day.date']) {
+		expect(layout, 'the layout reads the published tree again').not.toContain('$lib/server/payload');
+		expect(layout).not.toContain('new Date');
+		for (const field of ['items_failed', 'lastRun', 'day.date', 'retention_window_months']) {
 			expect(layout, `the layout still hands ${field} to every page`).not.toContain(field);
+		}
+	});
+
+	test('nothing injects a commit or a build date any more', () => {
+		const footer = readFileSync(join(COMPONENTS, 'SiteFooter.svelte'), 'utf8');
+		const vite = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+		const types = readFileSync(resolve(process.cwd(), 'src', 'app.d.ts'), 'utf8');
+
+		for (const [name, source] of [
+			['the footer', footer],
+			['the vite config', vite],
+			['the ambient types', types]
+		] as Array<[string, string]>) {
+			expect(source, `${name} still names __BUILD_COMMIT__`).not.toContain('__BUILD_COMMIT__');
+			expect(source, `${name} still names __BUILD_DATE__`).not.toContain('__BUILD_DATE__');
 		}
 	});
 });

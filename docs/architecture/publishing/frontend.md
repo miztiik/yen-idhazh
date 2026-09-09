@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -33,7 +33,7 @@ The loader lives under `frontend/src/lib/server/`, which is the framework's own 
 
 `handleUnseenRoutes: 'ignore'` clears both and hides every later prerender defect with them, so the build asks the tree instead. [../../../frontend/prerender-guard.js](../../../frontend/prerender-guard.js) excuses `/[date]` only when no day is published, and `/[date]/[vertical]` only when no published day names a topic. Any other unseen route still fails, and so do those two when the tree says they had a page to build. The guard asks a smaller question than `entries()` does - `entries()` lists the days, the guard only asks whether any day is there at all - so the two can disagree, and a disagreement fails the build. [../../../frontend/tests/prerender-guard.spec.ts](../../../frontend/tests/prerender-guard.spec.ts) drives the real handler off the real config, so the wiring is under test with the rule.
 
-**Whatever the root layout's load returns is inlined into every page beneath it**, so the root layout returns the one fact the footer still prints - `retention_window_months` - and never the day it was read from. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB.
+**Whatever the root layout's load returns is inlined into every page beneath it**, so from 2026-09-09 it returns **the config and nothing else** - no day, no date, no field read off one. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB. The last two fields it kept - `retention_window_months` for the footer's promise, and `latest` for the empty state's shortcut - went on 2026-09-09, because both are read off the newest day and both therefore rewrote every older page each time one published ([the footer, below](#the-footer-is-its-links-and-nothing-else)).
 
 [frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line, and since 2026-09-01 a second one. It counts a marker only a day payload carries and fails on any page below the layout that has one. It had one exclusion, `/archive/`, which inlined every committed day on purpose to feed the on-device search; the exclusion is gone from 2026-08-27, and the archive now carries an assertion of its own that it holds **zero** day markers.
 
@@ -806,43 +806,56 @@ Asked for, and Reader ruled **no**, decisively:
 
 It would also be three removes from the source - a summary of summaries of articles - and every layer of compression is a layer of invention. What sits at the top instead is a line of facts with no voice: the date, the counts, and, when a run was partial, plainly how many did not finish. If four of five items failed and the page does not say so, a reader who works it out later has spent the trust the digest was saving.
 
-## The footer is three lines, and none of them is about today
+## The footer is its links, and nothing else
 
 ```
 Archive   Console   Source code
-Built from git 473ba32, deployed 2026-08-21. Nothing is deleted.
-Every summary is checked against the article it came from. Where the check went badly, the item says so.
 ```
 
-Links first, because they are the only thing in a footer anyone came to use. The
-build line next. The verification sentence last and at the smallest type step -
-it is the only sentence that tells a stranger why an item is allowed to say it
-is unsure, so it stays, but a reader who has read it once never needs it again.
+Links only, because they are the only thing in a footer anyone came to use.
 
-**It printed six blocks until 2026-08-31 and two of them stated today's run**:
-which run produced the day and at what time, and how many stories did not
-finish. The footer is on every page that has one, so both were printed under
-`/archive/`, `/console/` and `/evals/`, which render no day at all - and printed
-a second time under `/`, where
+**It printed six blocks until 2026-08-31 and three until 2026-09-09.** Two of
+the six stated today's run - which run produced the day and at what time, and
+how many stories did not finish. The footer is on every page that has one, so
+both were printed under `/archive/`, `/console/` and `/evals/`, which render no
+day at all - and printed a second time under `/`, where
 [the day notice](#the-day-notice-is-one-line-and-one-divider-marks-the-later-runs)
-was already saying them. Both live beside the day now. The git line and the
-retention line were two blocks stating one thing about the build and one about
-what is kept; they are one line.
+was already saying them. Both live beside the day now.
 
-The run is the data's provenance and the commit is the site's. They still never
-merge into one line, because they move independently and a single line claiming
-both would be wrong half the time - they are simply on different parts of the
-page now. The SHA comes from the build environment, injected at build time -
-never fetched, never read from a committed pointer that could go stale.
+**Three more went on 2026-09-09, and those did not move anywhere.** They are the
+build line - the commit and the deploy date - and the promise about what is
+deleted. Every one of them is a fact a later build or a later day can change,
+and the footer is on every page, so each rewrote the bytes of every document on
+the site whenever anything published. That is what makes an unchanged page stale
+to a browser cache and to a reader's copy: the page said the same thing and
+arrived as different bytes. `frontend/src/routes/+layout.server.ts` now returns
+the config and nothing else, and imports nothing from `$lib/server/payload`.
 
-**What the root layout hands every page shrank with it, from four fields to
-one.** `retention_window_months` is all the footer still reads, so `date`, `run`
-and `items_failed` stopped travelling to `/archive/`, `/console/` and `/evals/`.
-Measured 2026-08-31 on a Windows developer box, 4 cores, with the same node
-`zlib` level 9 the bundle gate uses, over one tree carrying ten published days,
-and with `kit.version.name` pinned so a build-to-build difference could not be
-mistaken for a change. Two builds of each arm came out byte-identical, so the
-spread is 0 and every difference below is the change:
+What the reader loses is written down rather than implied, under "Design
+rationale" in
+[../../concepts/design-system.md](../../concepts/design-system.md).
+The short version: the commit was the site's own provenance and there is now no
+way to tell which build a page came from, the verification sentence was the only
+place that told a stranger why an item is allowed to say it is unsure, and the
+retention promise is stated on `/archive/` alone. The quiet-day panel keeps its
+two ways on and loses the one that named a date: "Latest day - 8 September 2026"
+is now "Today's digest", the same destination under an address no later run can
+change, and
+[frontend/tests/day-states.spec.ts](../../../frontend/tests/day-states.spec.ts)
+is what forced a second link rather than one - a screen with nothing to do on it
+reads as a dead site. **No replacement surface was
+built.** A manifest a page fetches to print a commit was considered and refused -
+the commit is not worth a file, a schema, a request and a cleanup story
+(owner, 2026-09-08).
+
+**What the root layout hands every page went from four fields to one, and then
+to none.** The first step was 2026-08-31: `date`, `run` and `items_failed`
+stopped travelling to `/archive/`, `/console/` and `/evals/`. Measured that day
+on a Windows developer box, 4 cores, with the same node `zlib` level 9 the
+bundle gate uses, over one tree carrying ten published days, and with
+`kit.version.name` pinned so a build-to-build difference could not be mistaken
+for a change. Two builds of each arm came out byte-identical, so the spread is 0
+and every difference below is the change:
 
 | Document | Before | After | Change |
 | --- | --- | --- | --- |
@@ -864,12 +877,32 @@ The two that mattered are the two that inlined a day they do not render.
 196 now, which is the difference between a ceiling that fires on the next
 unrelated edit and one that does not.
 
+**The second step was 2026-09-09, and its measure is a hash rather than a
+size.** The last two fields were `retention_window_months`, which the footer
+printed, and `latest`, which the empty state used to offer the newest day by
+name. Both are read off the newest day on disk. Measured that day on an Intel
+Core i7-1265U, Windows 11, node 24.12.0, over the 19 committed days, two builds
+back to back with `BUILD_VERSION` pinned so the version string could not move
+the answer. Publishing one more day into the digest root and rebuilding:
+
+| Tree | Before the day | After the day | Same bytes? |
+| --- | --- | --- | --- |
+| `main` | 32,014 raw, 7,256 gz, `02dcbc7b` | 32,014 raw, 7,258 gz, `63f8594a` | **no** |
+| this row | 31,493 raw, 7,069 gz, `facd4cf1` | 31,493 raw, 7,069 gz, `facd4cf1` | **yes** |
+
+`build/2026-08-21/index.html` in every cell, `gzip -9`, SHA-256 truncated to
+eight characters. **The raw size did not move on `main` either** - `2026-09-08`
+and `2026-09-30` are the same length - so no size gate could ever have caught
+this and only a hash can. The row also takes **521 raw bytes and 187 gzipped
+bytes off every page that has a footer**, but that is the small half of it. The
+point is that a page for 21 August now depends on 21 August and on nothing else.
+
 [frontend/tests/footer-facts.spec.ts](../../../frontend/tests/footer-facts.spec.ts)
-is what keeps the facts from leaking back or leaking away. It counts every
-sentence the old footer carried exactly once in the footer of every route that
-has one, counts the day's run facts at exactly zero in the documents that render
-no day, pins `/404` as a footerless shell, and fails if the layout hands down a
-second field.
+is what keeps the facts from leaking back or leaking away. It counts the three
+links exactly once in the footer of every route that has one, counts the three
+deleted sentences at zero there, counts the day's run facts at zero in the
+documents that render no day, pins `/404` as a footerless shell, and fails if
+the root layout imports the day loader again.
 
 ## The console answers "is it working", in one screen
 
