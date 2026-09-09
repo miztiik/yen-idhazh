@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -465,6 +465,24 @@ The same CRLF also breaks a byte-identical round trip, so the contract drift
 gate reports a diff in a file whose content never changed.
 
 ## Gate commands
+
+**`service-worker.spec.ts` "a day already opened reads again with no network at
+all" is flaky in CI, and it reads exactly like a regression in whatever you just
+changed.** It fails `expect(received).toBe(expected) // Expected: 8, Received:
+0` with the message `the day read short offline` - the dated page rendered no
+stories, so the worker appears not to have kept the payload. Nothing about the
+message suggests timing. Seen on 2026-09-09 at `81edf049`, a commit on `main`
+that touched none of the offline path, and again the same evening on the
+unrelated encoder-origin branch; both passed on a rerun, and the same test
+passed locally on the same tree. Two things to check before you spend an hour on
+it: whether the same signature appears in a recent `browser` job on `main`
+(`gh api repos/<o>/<r>/commits/<sha>/check-runs --jq '.check_runs[] |
+select(.conclusion=="failure") | .name'`, then `gh run view --log-failed --job
+<id>`), and whether the test passes in your own `test:changed` run. If both say
+yes it is the flake. `gh run rerun <run-id> --failed` is the whole fix. The
+`offline` group runs alone and installs a real service worker, so its
+install-then-activate window is the timing-sensitive part; the flake has not
+been traced further than that.
 
 **`npm run test:changed --python <interpreter>` does NOT reach the canary
 build, so the selector fails at a step you already proved green.** The `--python`
