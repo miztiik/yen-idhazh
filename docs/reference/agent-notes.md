@@ -466,6 +466,23 @@ gate reports a diff in a file whose content never changed.
 
 ## Gate commands
 
+**`npm run test:changed --python <interpreter>` does NOT reach the canary
+build, so the selector fails at a step you already proved green.** The `--python`
+flag goes to the checks runner and is what pytest and the schema export use.
+`frontend/scripts/build-canary.mjs` resolves its own interpreter separately, as
+`$IDHAZH_PYTHON` and then a bare `python`, and it shells out to
+`build_canary_day.py --console-payloads-only`. In a worktree borrowing a
+sibling's venv the bare `python` has no `idhazh` on it, so the step prints
+`wrote 0 console payload file(s)` and the build then dies with a bare Node
+`Error: Command failed` and a `status: 1` object - no Python traceback anywhere,
+because the child's streams were not inherited. It reads as a build regression
+and it is an interpreter that was never named. Set BOTH:
+
+```powershell
+$env:IDHAZH_PYTHON = '<the shared venv>\Scripts\python.exe'
+npm run test:changed -- --fresh --python '<the shared venv>\Scripts\python.exe'
+```
+
 **A Playwright spec that runs a backend command needs `IDHAZH_PYTHON` in a
 worktree.** `frontend/tests/malformed-day.spec.ts` runs `python -m idhazh
 validate-days` as a process, because half its oracle is the CI step refusing a
