@@ -1,6 +1,6 @@
 # 09 - The runtime stops guessing which model it was tuned for
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-09
 **Level**: 4 (structural: the settings block every stage inherits, and the window every later plan is sized against)
 
 **Chain**: previous [`20260905-08-element-table-plan.md`](20260905-08-element-table-plan.md) | next [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md).
@@ -17,7 +17,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Why this plan exists | `ModelsConfig` carries two model roles and **one shared** `InferenceConfig`. Change which weights a role names and the new model silently inherits the previous one's window, cache types, batch shape and attention flags. Nothing raises. The run comes back slower, or out of memory, or with different words, and the config diff shows one repository string. Separately, the two-call design does not fit today's 8,192-token window at all - its worst case is 105 percent of it |
 | Hard scope - in | Six memory numbers the job already collects and discards; ending the silent inheritance; `n_ctx` to 16,384 with flash attention on; one measured run that prices the runtime change alone |
 | Hard scope - out | **Retiring the small model** - plan 11 does that, in the same commit as the flag flip, because it is what draws a chart today. Any prompt change. Any second call. Any cache-type change - `q8_0` moves the words and is a separate measurement |
-| ESCALATE triggers | 1. The measured peak resident memory at 16,384 leaves less than 1.0 GiB free on the 14.90 GiB usable runner. 2. Flash attention does not report as active in the server's own startup line. 3. Any setting in section 11.2a is proposed without the model entry, runner and date it was derived against |
+| ESCALATE triggers | 1. The measured peak resident memory at 16,384 leaves less than 1.0 GiB free on the runner. **Read `MemAvailable`, not machine-minus-resident-sets** - the weights are memory-mapped and a resident-set sum counts them as committed. `MemTotal` measures 15.61 GiB, not the 14.90 GiB this trigger was first written against. 2. Flash attention does not report as active in the server's own startup line. 3. Any setting in section 11.2a is proposed without the model entry, runner and date it was derived against |
 | Chosen strategy | Measure the memory first so the window raise can be judged, then close the inheritance, then raise the window, then price it. Every intermediate state ships |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
 
@@ -31,9 +31,9 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Six numbers the job already has and throws away | - | A | DONE #525 (three of six) | yi-h01-memory | #525 | worker |
 | 2 | A model swap can no longer inherit in silence | - | A | DONE #528 | yi-h02-inherit | #528 | worker |
-| 3 | The window doubles and flash attention pays for it | 1, 2 | B | IN-FLIGHT - trigger 1 CLEARED by measurement | yi-h06-window | - | worker |
+| 3 | The window doubles and flash attention pays for it | 1, 2 | B | DONE #547 - trigger 1 CLEARED by measurement | yi-h06-window | #547 | worker |
 | 4 | One run prices the runtime and nothing else | 3 | C | PENDING - now prices three changes, see below | - | - | - |
-| 5 | The article cap doubles to 10,000 tokens | 3 | B2 | PENDING | - | - | - |
+| 5 | The article cap doubles to 10,000 tokens | 3 | B2 | DONE #548 | yi-h07-cap | #548 | worker |
 
 ### Trigger 1 is CLEARED. The window fits, and here is the reading that settles it
 
@@ -96,45 +96,117 @@ silicon, so writing `on` removes a silent dependency. That is the opposite of
 decision 5's `n_threads_batch` case, where `4` and `null` mean the same thing
 everywhere.
 
-### 32,768 is still refused, on the surviving half of its reason
+### 32,768 is still refused, and its surviving reason is now much thinner
 
 The memory objection is dead - 32,768 costs 1.00 GiB and still fits. The other
-objection stands untouched: the two-call worst case is about 8,580 tokens, so
-16,384 is 1.9 times headroom and 32,768 is 3.8 times. It buys nothing.
+objection was that the two-call worst case is about 8,580 tokens, so 16,384 was
+1.9 times headroom. **That 8,580 was measured under the 5,000-token cap and is
+superseded**: at the 10,000-token cap row 5 landed, the two-call worst case is
+15,889 tokens - 97 percent of 16,384. See the row 5 findings below. 32,768 is
+still refused because nothing today needs it, but the phrase "it buys nothing"
+no longer describes the margin. **The next plan that adds a call or raises the
+cap has to re-derive this**, not inherit it.
 
-### Row 5 is new, and it may not land before row 3
+### Row 5 shipped, and it corrected four of the numbers that authorized it (#548)
 
-**The article cap goes from 5,000 to 10,000 tokens** (`extract.truncation_cap_tokens`),
-by owner instruction 2026-09-09. **It does not fit at today's window and that is
-arithmetic, not caution**: 880 system + 10,000 article + 900 output is 11,780
-tokens against 8,192, which is 144 percent of it. At 16,384 the same prompt is 72
-percent. So row 5 depends on row 3 and the order is not negotiable.
+**The article cap went from 5,000 to 10,000 tokens**
+(`extract.truncation_cap_tokens`), by owner instruction 2026-09-09. The
+dependency on row 3 was real and the arithmetic that stated it was right in
+direction and light in size. Measured on the real prompt rather than estimated:
 
-What it does to plan 11's two-call worst case: 880 + 10,000 + about 1,200 call-1
-output + about 300 call-2 instructions + about 1,200 call-2 output is **13,580
-tokens, 83 percent of 16,384** - so it still fits, with the margin falling from
-1.9 times to 1.2 times. A further cap raise would need a window raise with it.
+| | tokens | share of 16,384 |
+| --- | --- | --- |
+| The estimate that authorized the row | 880 + 10,000 + 900 = 11,780 | 72 percent |
+| Typical article, measured at 1.306 tokens a word | 997 + 10,046 + 900 = **11,943** | 73 percent |
+| Worst article the ledger holds, at 1.585 tokens a word | 997 + 12,192 + 900 = **14,089** | **86 percent** |
 
-**The wall-clock cost is unmeasured and row 4 is what measures it.** Prefill ran
-at 9.84 tokens a second when last timed, so an article that actually uses the new
-headroom pays up to 5,000 more tokens of prefill, about 8.5 minutes. How often
-that happens is unknown: the largest prompt on record is 5,516 tokens, but that
-was measured UNDER the 5,000-token cap, so it says how much the cap allowed
-rather than how many articles would have run longer. `run.shard_size` is 5 and
-`run.shard_timeout_minutes` is 200, which is the budget this has to stay inside.
+**The constant overhead is 997 tokens, not 880**, and the tokenizer expansion has
+a spread the single figure hid. Margin falls from 1.9 times to **1.16 times**.
+Against the 8,192 window of the day before, 14,089 is 172 percent - so the row
+was impossible until #547 landed, which is what the dependency was for.
+
+**An article can overrun the budget its own cap gave it.** `truncate_to_tokens`
+spends the cap as `int(cap / 1.3)` **words**, so prose that tokenizes harder than
+1.3 tokens a word comes back over. The worst one overran by 16.8 percent, and
+that is the whole difference between 11,943 and 14,089.
+
+**The number plan 11 must be sized against.** On a typical article the two-call
+worst case is 13,580 tokens, 83 percent, margin 1.21 times - the estimate holds.
+On the worst article the ledger holds it is **15,889 tokens, 97 percent of the
+window, a margin of 1.03 times.** A second call at this cap has nothing left.
+Plan 11 either sizes itself against 15,889 or raises the window with it.
+
+**How often the cap actually bites**, from `state/item-health/2026-09.csv` - one
+month shard, 4,556 rows over 2026-09-01 to 09, of which 4,117 are published
+items, written on stock `ubuntu-latest` runners. `source_words_before_cap` counts
+the body BEFORE the cut, so it is not censored by the cap the way `input_tokens`
+is:
+
+| Reading | Value |
+| --- | --- |
+| Cut at 5,000 tokens | 36 of 4,117 = **0.87 percent**, about four a day |
+| Still cut at 10,000 | 9 of 4,117 = **0.22 percent**, about one a day |
+| Cut articles, pre-cap words | 3,864 to 11,399, median 5,089 |
+| Extra prefill a cut item gains | 23 to 5,000 tokens, median 1,616 |
+| Prefill rate | median **9.85 tokens a second**, min 8.25, max 44.71 |
+| Cost of 5,000 more tokens | **8.5 minutes**, 10.1 at the slowest rate |
+| A summarize call today | median **114.6 s**, p95 **312.7 s**, longest 800.9 s |
+
+That 9.85 independently re-derives the 9.84 the 2026-08-23 sweep took. A
+five-item shard of worst cases goes from about 67 minutes to about **109**,
+against a 200-minute timeout - inside it, and an all-five-cut shard is unlikely
+at a 0.87 percent cut rate.
+
+**"The largest prompt ever seen is 5,516 tokens" is WITHDRAWN on both counts.**
+It was measured under the cap, so it recorded what the cap allowed rather than
+what articles wanted; and it is stale, because the largest `input_tokens` on this
+shard is 7,093. It appears in row 3 decision 2 below, which is superseded with
+it.
+
+**Still unmeasured and labelled so:** what the extra text does to summary
+quality. It needs eval rows written at the new fingerprint, which cannot exist
+until the pipeline has run - row 4.
+
+**A new gate holds the pair.** `test_the_longest_article_the_cap_allows_still_fits_the_window`
+reads the cap, the output budget and the window from `config/` and fails on any
+later pair that does not fit. Nothing in the tree held that pair before; a doc
+said it, and a doc does not fail.
+
+### Two knobs the cap raise moved that row 5 did NOT touch
+
+Both need an owner decision and neither is a runner question.
+
+| Knob | Value | What the cap raise did to it |
+| --- | --- | --- |
+| `finetune.sequence_length` | 8192, **unchanged** | The worst training row is now about 11,900 typical and 14,100 worst, both above 8,192. The wrangler DROPS an over-length row and counts it - it never truncates - so the training set silently loses its longest rows. Raising it costs GPU memory on the machine that trains, which is not the runner, so it is out of this plan's scope and needs its own dispatch |
+| `elements.max_per_article` | 256, **unchanged** | Was above the densest article's candidate count of about 211; now below it at about 420. **A bound that did not bind now binds.** The densest long article keeps its first 256 quantities in article order and `candidates_found` records what the pass matched. News prose front-loads and the planner reads at most 16 by index, so the loss is small and recorded - but it is no longer theoretical |
+
+One more question was recorded open rather than answered, in
+`docs/architecture/summarize/prompt.md`: **whether the summary band ladder earns
+a sixth rung.** The whole-read range doubled from 3,846 words to 7,692, so the
+top rung now covers a span twice as wide as the one it was cut for - a
+3,000-word piece and a 7,692-word piece share an ask, at 20 to 1 and 51 to 1.
+Every rung floor still sits below the cut point, so nothing is broken. Editor's
+call, then the owner's.
 
 ### Row 4 now prices three changes, and that is a deviation with a reason
 
-Its decision 1 wanted one suspect rather than three. It will now carry the window,
-the pinned flag and the article cap together. The alternative is a second
-three-hour dispatch to separate a window raise from a cap raise, and plan 11 can
-still tell them apart because they move different metrics - the window moves
-memory, the cap moves prefill seconds and the words of long articles. Recorded as
-a deviation rather than taken silently.
+Its decision 1 wanted one suspect rather than three. It now carries the window,
+the pinned flag and the article cap together. Written up with the four questions
+the dispatch settles, in section 5.
 
 ---
 
-### The window does not fit, and the reading is now complete (#539)
+### SUPERSEDED - "the window does not fit", and the reading that was incomplete (#539)
+
+**Everything under this heading down to the rows 1-and-2 summary is WRONG about
+its conclusion and right about its method.** It subtracted two processes'
+resident sets from the machine, which counts the memory-mapped weights as
+committed; they are not. The correct reading is the `MemAvailable` capture at the
+top of this section, and the window shipped at 16,384 in #547. Kept rather than
+deleted because the process detail below - which python is the job's, when the
+two peaks coincide, why the ONNX encoder is absent - is still accurate and still
+useful. Read the conclusions as retracted and the observations as good.
 
 **16,384 does not fit, and the raise does not have to be priced to say so - the
 deficit exists at 8,192, before the change, and doubling the window can only add
@@ -357,7 +429,7 @@ to clear.
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | One commit, because flash attention removes the term that scales with `ubatch` times `n_ctx` - which is exactly what the larger cache costs. Split, the intermediate state pays a bill it need not | O22, section 11.2 |
-| 2 | **32,768 is refused even though it fits.** The largest prompt ever seen is 5,516 tokens and the truncation cap is 5,000, so a 32K window is more than five times what the pipeline can put into it, and it would spend 1 GiB of a 1.61 GiB margin doing so | Section 11.2 |
+| 2 | ~~**32,768 is refused even though it fits.** The largest prompt ever seen is 5,516 tokens and the truncation cap is 5,000, so a 32K window is more than five times what the pipeline can put into it, and it would spend 1 GiB of a 1.61 GiB margin doing so~~ **SUPERSEDED by row 5.** Both numbers in this reason are dead: the cap is 10,000 and 5,516 was measured under the old cap. The conclusion stands on the thinner reason recorded in section 1 | Section 11.2, superseded 2026-09-09 |
 | 3 | 131,072 fails on wall clock before memory: filling it once at 9.84 tokens a second takes 222 minutes for a single article, against a shard timeout of 200 | Section 11.2 |
 | 4 | Cache types stay `f16`. `q8_0` halves the cache and **changes how partial sums accumulate**, so it changes the words - a separate measurement, not this commit | Section 11.2a |
 | 5 | `--ubatch-size` stays 512 and `--threads-batch` stays unset. The first exists only to pay for a window this pipeline cannot fill; writing `4` where `null` sits invalidates every prior work identity for zero change in output | Section 11.2a |
@@ -392,6 +464,38 @@ to clear.
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Fold this measurement into plan 11's cutover | Then three changes land together and no test separates them | Andre |
+
+### What row 4 has to answer, as it now stands (2026-09-09)
+
+Rows 1, 2, 3 and 5 are merged, so the dispatch is unblocked and `main` carries
+`n_ctx` 16,384, `flash_attention` `on`, `log_verbosity` 4 and a 10,000-token
+article cap. Four things this run settles, and the last one is new:
+
+1. **The KV-buffer question, from the first real runner log at `-lv 4`.** The
+   projection says the raise costs 0.25 GiB. A KV buffer near 512 MiB confirms
+   it; near 2,304 MiB says the head-dimension card was read wrong and the raise
+   actually cost about 1.1 GiB. Either way the window still clears the trigger -
+   this decides how much margin plan 11 inherits.
+2. **Whether `auto` resolves to enabled on a RUNNER's processor.** Every arm of
+   the 2026-09-09 measurement was a Windows developer box. `resolve_fused_ops`
+   is now the reader and `flash_attention: on` is now the ask, so the run either
+   prints the decision or fails the check.
+3. **Memory at the doubled window**, against the 5.63 GiB `MemAvailable` low-water
+   mark this section's opening table recorded at 8,192.
+4. **What the cap raise cost in wall clock**, against the predicted 8.5 minutes
+   for a cut item and about one cut item a day at the new cap.
+
+**The deviation, stated rather than taken silently:** decision 1 wanted one
+suspect and this run carries three - the window, the pinned flag and the article
+cap. The alternative was a second three-hour dispatch to separate a window raise
+from a cap raise. Plan 11 can still tell them apart because they move different
+metrics: the window moves memory, the cap moves prefill seconds and the words of
+long articles. `pipeline_fingerprint` moves once for both, because `n_ctx` and
+`truncation_cap_tokens` are both digested, so **no summary written before today
+is comparable with one written after** - which is correct rather than a cost, as
+the text the model read is not the same text.
+
+Dispatch: `gh workflow run digest.yml -f shards=4`, nothing else in flight.
 
 ---
 
