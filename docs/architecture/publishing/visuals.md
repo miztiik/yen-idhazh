@@ -128,9 +128,10 @@ empty role.
 Eighty is `run.safety_ceiling_per_run` and is the most items a run plans for, so the run figure is an
 upper bound - an item the reachability predicate refuses never reaches the model at all. On the 4B it
 is 6 to 7 percent of the 40-minute `run.visual_planner_budget_minutes`, and 8 to 10 percent on top of
-the 21.0 s an item this stage measured on `ubuntu-latest`, 2026-08-24 over 148 items. The worst-case
-ceiling did not move: it already counted every declared key, because a grammar-constrained decoder
-emits them all.
+the 21.0 s an item this stage measured on `ubuntu-latest`, 2026-08-24 over 148 items. `digest.yml`
+fires five scheduled runs a day, so the day's ceiling is 400 plans: 12 to 14 minutes of runner
+wall-clock on the 4B, 26 to 31 on the summarizer. The worst-case reply ceiling did not move: it
+already counted every declared key, because a grammar-constrained decoder emits them all.
 
 ## What the extractor drops, and why
 
