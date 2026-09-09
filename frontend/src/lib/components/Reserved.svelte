@@ -150,11 +150,16 @@
 {/if}
 
 <style>
+	/* No tint of its own. The axis frame is the only thing this box says, and a
+	   tint under it costs exactly that: measured 2026-09-09 over the committed
+	   token values, `--chart-axis` reads 2.76:1 dark and 2.38:1 light on a tinted
+	   box, against 3.2:1 and 2.58:1 on the panel itself - which is where every
+	   real chart on this page draws its axis. So the waiting frame is exactly as
+	   legible as the chart it stands in for, neither louder nor quieter. */
 	.reserved {
 		position: relative;
 		inline-size: 100%;
 		border-radius: var(--radius-md);
-		background: var(--tint-neutral);
 	}
 
 	/* A failed fetch is the only one of the four that is a fault, so it is the
