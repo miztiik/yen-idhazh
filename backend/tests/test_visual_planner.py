@@ -18,28 +18,45 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from idhazh import assemble, cli, config
-from idhazh.contracts.app_config import VisualsConfig
+from idhazh.contracts.app_config import ElementsConfig, VisualsConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.element import ElementKind, ElementTable, Extractor
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
-from idhazh.llm.server import Completion
+from idhazh.elements import SpanDriftError, element_table
+from idhazh.llm.server import Completion, post
 from idhazh.visual_planner import (
+    LABEL_PASS_VERSION,
+    PROPOSED_MAX,
+    SALIENCE_SCORE,
+    CallOneReply,
     ChartPoint,
     VisualDraft,
+    anchored,
+    apply_labels,
+    build_call_one_request,
+    call_one_schema,
+    call_one_system_prompt,
+    call_one_user_turn,
+    candidate_menu,
     chart_is_reachable,
     chart_spec,
     common_unit,
     decided_without_the_model,
     fact_menu,
+    numbered_sentences,
     numeric_facts,
     output_schema,
+    parse_call_one,
     parse_draft,
+    proposed_quantities,
     reachable_kinds,
     same_unit_bars,
+    sentence_id,
     system_prompt,
     to_decision,
     user_turn,
@@ -803,10 +820,10 @@ class TestChartDrafts:
 # --- A planner that answered is not a planner that is down -------------------
 
 
-class RecordedErrorEndpoint:
-    """A real local server that replays one recorded llama-server error reply.
+class RecordedEndpoint:
+    """A real local server that replays one recorded llama-server reply.
 
-    Nothing is mocked: the planner makes its ordinary POST over a loopback
+    Nothing is mocked: the caller makes its ordinary POST over a loopback
     socket, and the bytes it reads back are the ones a llama-server wrote
     (Rule #7). The stdlib server owns the framing, so the test is about the
     body and not about HTTP.
@@ -831,7 +848,7 @@ class RecordedErrorEndpoint:
     def endpoint(self) -> str:
         return f"http://127.0.0.1:{self._server.server_port}/v1/chat/completions"
 
-    def __enter__(self) -> RecordedErrorEndpoint:
+    def __enter__(self) -> RecordedEndpoint:
         self._thread.start()
         return self
 
@@ -872,7 +889,7 @@ def test_a_planner_prompt_the_server_refused_for_length_says_so(
     caplog.set_level("WARNING", logger="idhazh")
     body = (LLM_ERRORS / "context-exceeded.json").read_bytes()
 
-    with RecordedErrorEndpoint(400, body) as server:
+    with RecordedEndpoint(400, body) as server:
         decision, asked = decided_against(server.endpoint, article_ok, summary_ok)
 
     assert asked is True, "the fixture has to reach the model, or this proves nothing"
@@ -906,10 +923,480 @@ def test_a_planner_error_the_transport_does_not_recognise_stays_unreachable(
     caplog.set_level("WARNING", logger="idhazh")
     body = (LLM_ERRORS / "server-unavailable.json").read_bytes()
 
-    with RecordedErrorEndpoint(503, body) as server:
+    with RecordedEndpoint(503, body) as server:
         decision, asked = decided_against(server.endpoint, article_ok, summary_ok)
 
     assert asked is True
     assert "visual planner unreachable" in caplog.text
     assert "context window" not in caplog.text
     assert decision.kind is VisualKind.NONE
+
+
+# --- Call 1: the model reads the article and points at it --------------------
+#
+# The oracle for this row is one sentence: no field of call 1's schema accepts a
+# number, a span or a character offset. It is asserted against the schema the
+# decoder is handed, so a figure the article does not carry is unreachable by
+# grammar rather than caught by a check downstream - and `schema_types` is shown
+# to fail on a shape that does accept one, two tests below.
+
+CALL_ONE_REPLIES = FIXTURES_DIR / "completions" / "call-one"
+
+#: Five figures, two sentences apart, one of them a date. Small enough that a
+#: cap of two bites where a reader can see it bite.
+DENSE_TEXT = (
+    "The plant produced 4,200 megawatt hours in March 2026, up from 3,150 megawatt hours in "
+    "February. Costs fell 12 percent. Officials expect about 5,000 megawatt hours next year."
+)
+
+
+def schema_types(node: object) -> set[str]:
+    """Every JSON type the schema declares anywhere in it, `$defs` included."""
+    if isinstance(node, dict):
+        declared = node.get("type")
+        named = {declared} if isinstance(declared, str) else set(declared or [])
+        return named.union(*(schema_types(value) for value in node.values()), set())
+    if isinstance(node, list):
+        return set().union(*(schema_types(value) for value in node), set())
+    return set()
+
+
+def a_reply(**named: object) -> CallOneReply:
+    """A reply with every required field filled, so a case reads as its point."""
+    body: dict[str, object] = {
+        "labels": [],
+        "proposed": [],
+        "entities": [],
+        "places": [],
+        "quotes": [],
+        "claims": [],
+        "keyphrases": [],
+        "lede_sentence_ids": [],
+    }
+    body.update(named)
+    return CallOneReply.model_validate(body)
+
+
+def a_label(element_id: str, **named: object) -> dict[str, object]:
+    body: dict[str, object] = {
+        "element_id": element_id,
+        "measure": "",
+        "dimension": "",
+        "entity": "",
+        "time_element_id": "",
+        "attribution": "unattributed",
+        "hedge": False,
+        "salience": "background",
+    }
+    body.update(named)
+    return body
+
+
+def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> ElementTable:
+    """The candidate pass over an article's own text, or over `text` in its place.
+
+    A prompt is built from an article and a table together and refuses a pair
+    that disagree, so a case that renders one passes the article whose text the
+    table indexes.
+    """
+    if text is not None:
+        article = article.model_copy(update={"text": text})
+    return element_table(article, config=ElementsConfig(max_per_article=cap))
+
+
+@pytest.fixture
+def dense(article_ok: Article) -> Article:
+    return article_ok.model_copy(update={"text": DENSE_TEXT})
+
+
+class TestTheOracle:
+    def test_no_field_of_call_one_accepts_a_number_a_span_or_an_offset(self) -> None:
+        """The row's whole point. A span and an offset are integers, so this covers both."""
+        assert schema_types(call_one_schema()) & {"integer", "number"} == set()
+
+    def test_the_same_check_fails_on_a_shape_that_does_accept_one(self) -> None:
+        """The bite proof: a passing oracle that cannot fail is not an oracle.
+
+        This is the shape section 10.1a rejected - the model handing back the
+        offsets it means. It is written here so the assertion above is known to
+        be able to go red, rather than passing because it looks at nothing.
+        """
+
+        class SpanCitation(BaseModel):
+            span_start: int
+            surface: str
+
+        assert schema_types(SpanCitation.model_json_schema()) & {"integer", "number"} == {"integer"}
+
+    def test_an_unknown_element_id_drops_that_label_and_keeps_its_siblings(
+        self, dense: Article
+    ) -> None:
+        """The other half of the oracle. A rejection costs one label, never the article."""
+        table = a_table(dense)
+        real = table.elements[0].element_id
+        reply = a_reply(
+            labels=[
+                a_label("quantity-9000-9010", measure="a fact no pass found"),
+                a_label(real, measure="output", salience="primary"),
+            ]
+        )
+
+        labelled = apply_labels(table, reply, label_source="m")
+
+        by_id = {element.element_id: element for element in labelled.elements}
+        assert by_id[real].measure == "output"
+        assert len(labelled.elements) == len(table.elements)
+        assert all(element.measure != "a fact no pass found" for element in labelled.elements)
+
+
+class TestCallOneShape:
+    def test_the_schema_is_generated_from_the_model(self) -> None:
+        assert call_one_schema() == CallOneReply.model_json_schema()
+
+    def test_every_field_is_required_so_the_decoder_must_emit_it(self) -> None:
+        """A field with a default is absent from `required`, and the grammar skips it."""
+        assert set(call_one_schema()["required"]) == {
+            "labels",
+            "proposed",
+            "entities",
+            "places",
+            "quotes",
+            "claims",
+            "keyphrases",
+            "lede_sentence_ids",
+        }
+
+    def test_what_was_found_decodes_before_what_it_means(self) -> None:
+        """Field order is decode order (row 12): the anchor first, the judgement last."""
+        label = list(call_one_schema()["$defs"]["ElementLabel"]["properties"])
+        assert label[0] == "element_id"
+        assert label[-1] == "salience"
+
+    def test_the_schema_forbids_an_unknown_key(self) -> None:
+        with pytest.raises(ValidationError):
+            CallOneReply.model_validate({"labels": [], "tool_call": {"name": "rm"}})
+
+    def test_a_reply_missing_a_field_is_a_shape_failure(self) -> None:
+        with pytest.raises(ValidationError):
+            parse_call_one('{"labels":[],"proposed":[]}')
+
+    def test_a_reply_that_found_nothing_is_a_legal_reply(self) -> None:
+        """`can emit no number at all` includes emitting nothing at all."""
+        assert parse_call_one(json.dumps(a_reply().model_dump())).labels == []
+
+    def test_it_strips_a_thinking_block(self) -> None:
+        raw = "<think>reading it</think>" + json.dumps(a_reply().model_dump())
+        assert parse_call_one(raw).proposed == []
+
+
+class TestCallOnePrompting:
+    def test_the_article_reaches_the_model_fenced_as_data(self, dense: Article) -> None:
+        turn = call_one_user_turn(dense, a_table(dense))
+        assert "UNTRUSTED" in turn.upper()
+        assert "4,200 megawatt hours" in turn
+
+    def test_the_system_prompt_never_carries_the_article(self, dense: Article) -> None:
+        assert (dense.text or "") not in call_one_system_prompt()
+
+    def test_the_model_reads_the_article_and_not_a_summary(
+        self, dense: Article, summary_ok: Summary
+    ) -> None:
+        """Decision 1. A compression cannot carry the series a chart exists to show."""
+        turn = call_one_user_turn(dense, a_table(dense))
+        assert (summary_ok.summary or "") not in turn
+
+    def test_every_sentence_the_model_may_cite_carries_its_address(self) -> None:
+        addressed = numbered_sentences(DENSE_TEXT)
+        assert addressed.startswith("[s0] The plant produced")
+        assert "[s2] Officials expect" in addressed
+
+    def test_the_menu_addresses_every_candidate_by_its_own_id(self, dense: Article) -> None:
+        table = a_table(dense)
+        menu = candidate_menu(table)
+        assert all(f"[{element.element_id}]" in menu for element in table.elements)
+
+    def test_an_article_with_nothing_in_it_says_so(self, article_ok: Article) -> None:
+        bare = article_ok.model_copy(update={"text": "Nothing to count here."})
+        assert "no quantities or dates" in candidate_menu(a_table(bare))
+
+    def test_a_table_over_another_string_is_refused_rather_than_printed(
+        self, dense: Article, article_ok: Article
+    ) -> None:
+        """Every row of the menu is an offset. Against the wrong text they all point elsewhere."""
+        with pytest.raises(SpanDriftError):
+            call_one_user_turn(article_ok, a_table(dense))
+
+    def test_the_request_hands_the_decoder_the_reply_shape(self, dense: Article) -> None:
+        payload = build_call_one_request(
+            dense,
+            a_table(dense),
+            model_id="m",
+            inference=config.load(CONFIG_DIR).app.models.summarize.inference,
+        )
+        assert payload["response_format"]["json_schema"]["schema"] == call_one_schema()
+        assert payload["messages"][0]["role"] == "system"
+        assert (dense.text or "") not in payload["messages"][0]["content"]
+        assert "4,200 megawatt hours" in payload["messages"][1]["content"]
+
+
+class TestLabelling:
+    def test_a_label_writes_the_cells_it_can_anchor(self, article_ok: Article) -> None:
+        table = a_table(article_ok, DENSE_TEXT)
+        first = table.elements[0].element_id
+        reply = a_reply(
+            labels=[
+                a_label(
+                    first,
+                    measure="output",
+                    dimension="by month",
+                    attribution="named",
+                    hedge=True,
+                    salience="primary",
+                )
+            ]
+        )
+
+        element = apply_labels(table, reply, label_source="qwen").elements[0]
+
+        assert element.measure == "output"
+        assert element.dimension == "by-month", "a dimension groups, so it is one controlled word"
+        assert element.attribution == "named"
+        assert element.hedge is True
+        assert element.label_source == "qwen"
+        assert element.ledger_version == LABEL_PASS_VERSION
+
+    def test_a_band_becomes_the_score_that_band_means(self, article_ok: Article) -> None:
+        """The model picks a word; code converts. It never types the number."""
+        table = a_table(article_ok, DENSE_TEXT)
+        reply = a_reply(labels=[a_label(table.elements[0].element_id, salience="supporting")])
+
+        assert apply_labels(table, reply, label_source="m").elements[0].salience == pytest.approx(
+            SALIENCE_SCORE["supporting"]
+        )
+
+    def test_a_fact_stated_in_the_items_own_voice_records_no_attribution(
+        self, article_ok: Article
+    ) -> None:
+        table = a_table(article_ok, DENSE_TEXT)
+        reply = a_reply(labels=[a_label(table.elements[0].element_id, attribution="unattributed")])
+
+        assert apply_labels(table, reply, label_source="m").elements[0].attribution is None
+
+    def test_a_time_that_names_a_date_copies_the_date_the_article_wrote(
+        self, article_ok: Article
+    ) -> None:
+        table = a_table(article_ok, DENSE_TEXT)
+        date = next(one for one in table.elements if one.kind is ElementKind.DATE)
+        reply = a_reply(
+            labels=[a_label(table.elements[0].element_id, time_element_id=date.element_id)]
+        )
+
+        assert apply_labels(table, reply, label_source="m").elements[0].time == date.value
+
+    def test_a_time_that_names_no_date_drops_the_time_and_keeps_the_measure(
+        self, article_ok: Article
+    ) -> None:
+        """Each cell degrades on its own. One unusable judgement is not eight."""
+        table = a_table(article_ok, DENSE_TEXT)
+        reply = a_reply(
+            labels=[
+                a_label(
+                    table.elements[0].element_id, measure="output", time_element_id="date-1-2"
+                )
+            ]
+        )
+
+        element = apply_labels(table, reply, label_source="m").elements[0]
+        assert element.time is None
+        assert element.measure == "output"
+
+    def test_a_time_that_names_a_quantity_is_not_a_time(self, article_ok: Article) -> None:
+        """A date is the only kind that reads as a date, whatever the reply cites."""
+        table = a_table(article_ok, DENSE_TEXT)
+        other = next(
+            one for one in table.elements[1:] if one.kind is ElementKind.QUANTITY
+        ).element_id
+        reply = a_reply(labels=[a_label(table.elements[0].element_id, time_element_id=other)])
+
+        assert apply_labels(table, reply, label_source="m").elements[0].time is None
+
+    def test_an_entity_nothing_tracks_is_not_minted(self, article_ok: Article) -> None:
+        """The name groups mentions. The slug is the watchlist's and is never invented."""
+        table = a_table(article_ok, DENSE_TEXT)
+        reply = a_reply(labels=[a_label(table.elements[0].element_id, entity="The Plant")])
+
+        assert apply_labels(table, reply, label_source="m").elements[0].entity is None
+
+    def test_a_tracked_entity_lands_under_the_slug_the_watchlist_holds(
+        self, article_ok: Article
+    ) -> None:
+        table = a_table(article_ok, DENSE_TEXT)
+        reply = a_reply(labels=[a_label(table.elements[0].element_id, entity="The Plant")])
+
+        labelled = apply_labels(
+            table, reply, label_source="m", entity_slugs={"the plant": "example-plant"}
+        )
+        assert labelled.elements[0].entity == "example-plant"
+
+    def test_the_first_citation_of_one_address_wins(self, article_ok: Article) -> None:
+        """A second opinion about one fact must not make the result depend on decode order."""
+        table = a_table(article_ok, DENSE_TEXT)
+        first = table.elements[0].element_id
+        reply = a_reply(
+            labels=[a_label(first, measure="output"), a_label(first, measure="revenue")]
+        )
+
+        assert apply_labels(table, reply, label_source="m").elements[0].measure == "output"
+
+    def test_a_label_leaves_every_tier_one_cell_alone(self, article_ok: Article) -> None:
+        """Tier 1 is what code cut. No judgement may move a span or a value."""
+        table = a_table(article_ok, DENSE_TEXT)
+        reply = a_reply(
+            labels=[a_label(one.element_id, measure="anything") for one in table.elements]
+        )
+
+        labelled = apply_labels(table, reply, label_source="m")
+        before = [(one.span_start, one.span_end, one.value, one.unit) for one in table.elements]
+        after = [(one.span_start, one.span_end, one.value, one.unit) for one in labelled.elements]
+        assert after == before
+
+
+class TestProposals:
+    def test_a_figure_past_the_pattern_cap_is_recovered(self, article_ok: Article) -> None:
+        """What `proposed` is for: the bound on work is what a dense article hits."""
+        table = a_table(article_ok, DENSE_TEXT, cap=2)
+        reply = a_reply(proposed=[{"sentence_id": "s2", "surface": "5,000 megawatt hours"}])
+
+        recovered = anchored(
+            table, DENSE_TEXT, reply, config=ElementsConfig(max_per_article=2), label_source="m"
+        )
+
+        landed = [one for one in recovered.elements if one.extractor is Extractor.MODEL]
+        assert [one.value for one in landed] == ["5000"]
+        assert [one.unit for one in landed] == ["megawatt"]
+
+    def test_a_recovered_figure_is_cut_from_the_article_and_not_from_the_reply(self) -> None:
+        """The model pointed. Code cut. The characters are the article's own."""
+        reply = a_reply(proposed=[{"sentence_id": "s2", "surface": "5,000 megawatt hours"}])
+
+        landed = proposed_quantities(DENSE_TEXT, reply)
+
+        assert [DENSE_TEXT[one.span_start : one.span_end] for one in landed] == [
+            one.span_excerpt for one in landed
+        ]
+
+    def test_a_surface_the_article_never_wrote_is_refused(self) -> None:
+        """A figure the model typed rather than found has nowhere to anchor."""
+        reply = a_reply(proposed=[{"sentence_id": "s2", "surface": "9,900 megawatt hours"}])
+        assert proposed_quantities(DENSE_TEXT, reply) == []
+
+    def test_a_surface_that_occurs_twice_in_its_sentence_is_refused(self) -> None:
+        """Mis-pointing is the failure no span check can see, so ambiguity is a rejection."""
+        text = "It shipped 500 tonnes and then 500 tonnes more."
+        reply = a_reply(proposed=[{"sentence_id": "s0", "surface": "500 tonnes"}])
+        assert proposed_quantities(text, reply) == []
+
+    def test_a_surface_holding_two_figures_is_refused(self) -> None:
+        text = "Output moved between 1,100 tonnes and 1,900 tonnes."
+        reply = a_reply(
+            proposed=[{"sentence_id": "s0", "surface": "1,100 tonnes and 1,900 tonnes"}]
+        )
+        assert proposed_quantities(text, reply) == []
+
+    def test_an_address_that_names_no_sentence_is_refused(self) -> None:
+        text = "Costs fell 12 percent."
+        for address in ("s9", "twelve", ""):
+            reply = a_reply(proposed=[{"sentence_id": address or "x", "surface": "12 percent"}])
+            assert proposed_quantities(text, reply) == [], address
+
+    def test_a_number_spelled_out_in_words_stays_refused(self) -> None:
+        """Decision 4. There is nothing for the pattern to parse."""
+        text = "Cost fell by about a third against the model it replaces."
+        reply = a_reply(proposed=[{"sentence_id": "s0", "surface": "about a third"}])
+        assert proposed_quantities(text, reply) == []
+
+    def test_a_relative_change_stays_refused(self) -> None:
+        text = "Throughput doubled against the previous release."
+        reply = a_reply(proposed=[{"sentence_id": "s0", "surface": "doubled"}])
+        assert proposed_quantities(text, reply) == []
+
+    def test_a_proposal_over_characters_the_pass_already_read_is_dropped(
+        self, article_ok: Article
+    ) -> None:
+        """A second reading of what code already read is not a recovery."""
+        table = a_table(article_ok, DENSE_TEXT)
+        reply = a_reply(proposed=[{"sentence_id": "s0", "surface": "4,200 megawatt hours"}])
+
+        merged = anchored(table, DENSE_TEXT, reply, config=ElementsConfig(), label_source="m")
+
+        assert [one.element_id for one in merged.elements] == [
+            one.element_id for one in table.elements
+        ]
+
+    def test_the_count_of_what_was_found_still_covers_what_was_kept(
+        self, article_ok: Article
+    ) -> None:
+        """A proposal that read is a candidate, whether or not it survived the merge."""
+        table = a_table(article_ok, DENSE_TEXT, cap=2)
+        reply = a_reply(proposed=[{"sentence_id": "s2", "surface": "5,000 megawatt hours"}])
+
+        merged = anchored(
+            table, DENSE_TEXT, reply, config=ElementsConfig(max_per_article=2), label_source="m"
+        )
+
+        found = merged.candidates_found[ElementKind.QUANTITY]
+        assert found == table.candidates_found[ElementKind.QUANTITY] + 1
+
+    def test_the_merge_never_evicts_what_the_pattern_found(self, article_ok: Article) -> None:
+        """The recovery is not spent out of the pattern's budget, or it is unreachable."""
+        table = a_table(article_ok, DENSE_TEXT, cap=2)
+        reply = a_reply(proposed=[{"sentence_id": "s2", "surface": "5,000 megawatt hours"}])
+
+        merged = anchored(
+            table, DENSE_TEXT, reply, config=ElementsConfig(max_per_article=2), label_source="m"
+        )
+
+        assert {one.element_id for one in table.elements} <= {
+            one.element_id for one in merged.elements
+        }
+        assert len(merged.elements) <= 2 + PROPOSED_MAX
+
+
+def test_a_recorded_call_one_reply_labels_the_table_over_a_loopback_socket(
+    article_ok: Article,
+) -> None:
+    """The row end to end, with no network and nothing mocked.
+
+    The reply is played back by a real HTTP server on loopback and read through
+    the transport every stage uses. The envelope is a llama-server envelope; the
+    content is written by hand rather than captured, because no stage dispatches
+    call 1 yet - the call that turns this table into a page is a later row.
+    """
+    table = element_table(article_ok, config=ElementsConfig())
+    payload = build_call_one_request(
+        article_ok,
+        table,
+        model_id="m",
+        inference=config.load(CONFIG_DIR).app.models.summarize.inference,
+    )
+    body = (CALL_ONE_REPLIES / "labelled.json").read_bytes()
+
+    with RecordedEndpoint(200, body) as server:
+        completion = post(payload, endpoint=server.endpoint, timeout=10.0)
+
+    reply = parse_call_one(completion.content)
+    labelled = anchored(
+        table, article_ok.text or "", reply, config=ElementsConfig(), label_source="m"
+    )
+
+    judged = {one.element_id: one.measure for one in labelled.elements if one.measure}
+    assert judged == {
+        "quantity-149-159": "cost per million tokens",
+        "quantity-197-201": "throughput on commodity CPUs",
+    }
+    assert all(one.extractor is Extractor.REGEX for one in labelled.elements), (
+        "the one proposal in the reply is 'about a third', which no pattern can read"
+    )
+    assert labelled.span_drift(article_ok.text or "") is None
+    assert sentence_id(labelled.elements[0].sentence_index) in candidate_menu(labelled)
+
