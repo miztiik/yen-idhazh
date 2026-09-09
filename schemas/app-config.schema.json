@@ -647,20 +647,6 @@
           "title": "Spot Checks Per Week",
           "type": "integer"
         },
-        "summary_words_max": {
-          "default": 250,
-          "description": "Above this it is a copy. Absolute, not a ratio.",
-          "minimum": 1,
-          "title": "Summary Words Max",
-          "type": "integer"
-        },
-        "summary_words_min": {
-          "default": 25,
-          "description": "Below this it is a headline, not a summary. Set under the lowest band in `summarize.bands`: the prompt is a request, and dropping an item for missing it by two words loses a story to a rounding error.",
-          "minimum": 1,
-          "title": "Summary Words Min",
-          "type": "integer"
-        },
         "validation_articles": {
           "default": 20,
           "description": "Golden articles a candidate must be scored on before its mean counts.",
@@ -1172,6 +1158,50 @@
       "title": "InferenceConfig",
       "type": "object"
     },
+    "LengthPolicy": {
+      "additionalProperties": false,
+      "description": "What the pipeline accepts, once the prompt has asked.\n\nThe ask lives on the band; this is the tolerance around it. Both are here\nrather than in `evaluation` because a length miss is not a quality finding -\nit is the model rounding a request - and the two were one pair of global\nintegers until 2026-09-09, which could not see which band an item was in.\n\nEvery number is a starting point rather than a measurement (Rule #10). Our\nown length figures describe a pipeline mid-repair - the prompt is being\ntuned and a fine-tune is in flight - so none of them was used to pick one.",
+      "properties": {
+        "absolute_floor_words": {
+          "default": 25,
+          "description": "Below this a reply is a failed extraction wearing a summary's clothes, and it is the one length that still fails an item. Applies only to sources longer than `floor_applies_above_source_words`, because a 40-word summary of a 60-word post is the correct answer.",
+          "minimum": 1,
+          "title": "Absolute Floor Words",
+          "type": "integer"
+        },
+        "floor_applies_above_source_words": {
+          "default": 700,
+          "description": "Sources shorter than this are exempt from `absolute_floor_words`. A brief has no length to lose.",
+          "minimum": 0,
+          "title": "Floor Applies Above Source Words",
+          "type": "integer"
+        },
+        "overshoot_ratio": {
+          "default": 0.2,
+          "description": "How far past the band's ask a reply may run and still publish untouched, as a share of `target_words_max`. Whichever of this and `overshoot_words` is larger wins, so a short band gets a usable allowance too: 20 percent of 45 words is nine, and nine words is one clause.",
+          "minimum": 0.0,
+          "title": "Overshoot Ratio",
+          "type": "number"
+        },
+        "overshoot_words": {
+          "default": 25,
+          "description": "The same allowance as a flat word count, for the bands where a ratio is too small to mean anything. The larger of the two applies.",
+          "minimum": 0,
+          "title": "Overshoot Words",
+          "type": "integer"
+        },
+        "undershoot_ratio": {
+          "default": 0.3,
+          "description": "How far under the band's ask a reply may fall and still publish, as a share of `target_words_min`. Brevity is not a fault: a short summary of a long article is a thin summary, and the reader can see that it is short. Losing the story entirely tells them nothing.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Undershoot Ratio",
+          "type": "number"
+        }
+      },
+      "title": "LengthPolicy",
+      "type": "object"
+    },
     "LogLevel": {
       "enum": [
         "DEBUG",
@@ -1458,6 +1488,15 @@
       "title": "ObservabilityConfig",
       "type": "object"
     },
+    "OverLengthAction": {
+      "description": "What to do with a reply that overshoots its band by more than the policy allows.",
+      "enum": [
+        "trim",
+        "publish"
+      ],
+      "title": "OverLengthAction",
+      "type": "string"
+    },
     "PageWeightConfig": {
       "additionalProperties": false,
       "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when somebody has priced its growth in\npublished days. `/404` and `/evals/` render no day and no ledger, so their\nweight is a function of source alone and their ceiling is the heaviest build\nplus the 64-byte noise floor. `/archive/` grows, but only by one day link a\nday since it stopped inlining the day payloads, so its ceiling carries a year\nof that growth as measured headroom. The three `/console/` routes grow with\nthe ledger their panels read, so each ceiling carries a measured few days and\nexpires by design. What a page that renders a day cannot have is a fixed\nceiling at all: the only way under one is to publish fewer items, which is\ncapping the news rather than catching a regression, so `/` and `/<date>/` are\ncounted and reported and never failed.\n\n**A surface that splits into routes takes a ceiling per route.** One number\ncovering three surfaces still fails when any of them grows, and then cannot\nsay which one did - so the operator raises the shared number and the\nregression lands under it. Sizing them separately is what makes the split\nworth having.",
@@ -1568,7 +1607,7 @@
     },
     "SummarizeConfig": {
       "additionalProperties": false,
-      "description": "What the prompt asks the model for.\n\nSeparate from `evaluation`, which is what the pipeline agrees to accept. The\ntwo ranges are deliberately different: a prompt is a request and a gate is a\nrule, and asking for a tighter range than we enforce is what stops a\ntwo-word miss from losing a story. `AppConfig` checks the invariant that\nactually matters - every ask sits inside the gate - because only there are\nboth blocks visible.\n\nEvery band and title number here is substituted into the prompt text at\nrender time, so the prompt cannot drift from the bounds the pipeline enforces\n(Rule #6). `key_point_restatement_ceiling` is the one value that is not asked\nfor: it is a post-parse check `to_summary` runs on what the model returned,\nand it lives here because the count it protects - the band's key_points_min -\ndoes too.",
+      "description": "What the prompt asks the model for, and what the pipeline accepts back.\n\nA prompt is a request and a gate is a rule. Asking for a tighter range than\nwe accept is what stops a two-word miss from losing a story, so the ask\n(`bands`) and the tolerance around it (`length_policy`) both live here,\nwhere an operator editing one can see the other.\n\nUntil 2026-09-09 the tolerance was two integers in `evaluation` that applied\nto all five rungs at once and could not see which band an item was in, and a\nreply outside them deleted the item from that day's digest with no second\nlook. Both defects are gone: the allowance is derived from the band, and no\nlength outcome except `length_policy.absolute_floor_words` drops an item.\n\nEvery band and title number here is substituted into the prompt text at\nrender time, so the prompt cannot drift from the bounds the pipeline enforces\n(Rule #6). `key_point_restatement_ceiling` is the one value that is not asked\nfor: it is a post-parse check `to_summary` runs on what the model returned,\nand it lives here because the count it protects - the band's key_points_min -\ndoes too.",
       "properties": {
         "bands": {
           "description": "One length ask per article size, ordered by min_source_words. A release note and a long read asked for the same range gives a padded summary of the first and a thin one of the second.",
@@ -1586,6 +1625,10 @@
           "maximum": 1.0,
           "title": "Key Point Restatement Ceiling",
           "type": "number"
+        },
+        "length_policy": {
+          "$ref": "#/$defs/LengthPolicy",
+          "description": "How far a reply may miss its band's ask and still publish, and what happens when it misses by more. Config rather than code so the tolerance can move with the prompt while the prompt is still being tuned."
         },
         "max_verbatim_words": {
           "default": 20,
@@ -1636,6 +1679,11 @@
           "minimum": 0,
           "title": "Min Source Words",
           "type": "integer"
+        },
+        "over_length_action": {
+          "$ref": "#/$defs/OverLengthAction",
+          "default": "trim",
+          "description": "What to do with a reply that overshoots past the policy's allowance. A short band trims at the last complete sentence that fits, because wire-shaped prose front-loads and a tail cut is safe. A long band publishes over-length instead: on a feature the qualification lands last, so cutting the tail is how a summary becomes wrong rather than merely long."
         },
         "target_words_max": {
           "description": "The longest summary the prompt asks for.",
@@ -2031,6 +2079,11 @@
       "change": "AssistConfig gains five keys: model_base_url, model_cdn_origins, model_revision, model_digests and model_fetch_deadline_ms. config/idhazh.json sets none of them, so the committed file is unchanged and every value ships as its default. The shape is shared with AppearanceConfig, so appearance-config is restamped with the same version. Additive and defaulted, so a config file written before today still validates.",
       "version": "2026-09-10T09:00",
       "why": "The encoder had exactly one origin, and a reader whose fetch of it failed had no search at all. These five name a second one and, more to the point, name what makes reaching it safe: the browser hashes every arriving file against model_digests and discards the whole set on any miss, so a second party can put no unverified byte into a reader's tab. Our own origin stays primary and keeps the committed weights - nobody pays the hub's extra 6.75 MB unless this site has already failed them. model_cdn_origins is a separate key because a browser checks a redirect target against connect-src: measured 2026-09-09 from the live Pages origin, 15 reads of 15, the four small files answer on the base host and the 23 MB of weights answers 302 to a CDN, so listing the base host alone passes the small files and blocks the model. A GitHub Release asset was measured the same day and cannot serve this at all - no Access-Control-Allow-Origin on any hop, 15 refusals in 15 attempts - which is why the second origin is the hub rather than a copy we publish."
+    },
+    {
+      "change": "evaluation.summary_words_min and evaluation.summary_words_max are removed. summarize gains length_policy (overshoot_ratio, overshoot_words, undershoot_ratio, absolute_floor_words, floor_applies_above_source_words) and each band gains over_length_action. The ladder drops to five rungs and its ceiling moves from 230 to 200: 0|30-45, 60|45-80, 700|70-130, 2000|95-160, 4000|120-200. A read-side migration drops the two old keys, and AppConfig._the_ask_sits_inside_the_gate is gone with them.",
+      "version": "2026-09-10T00:30",
+      "why": "The two removed integers were one global pair applied to all six rungs of a ladder they could not see, and a reply outside them returned LENGTH_OUT_OF_RANGE, which deletes the item from that day's digest with no second attempt. So a 251-word reply to a 230-word ask lost the story outright, and the same pair capped how much any rung could ever ask for. Length is the one property a reader can judge unaided - a summary that is too long is a summary they stop reading, and a summary that is missing is nothing at all - so it may not be the property that silently removes a story. The tolerance is now derived from the band the item landed in, and the only length that still fails an item is absolute_floor_words, which catches a failed extraction rather than a long reply. The ladder is editorial rather than measured: an informative abstract is capped near 250 words whether the source is 4,000 words or 40,000 (ANSI/NISO Z39.14), so the ask grows with the source logarithmically and then stops. 200 is the ceiling because two minutes of adult non-fiction reading is about 480 words, thirty titles spend 250 to 300 of them, and a 200-word item is already 50 seconds on one story out of thirty. The rungs at 3000 and 5000 collapse into one at 4000 because the model is handed at most 7,692 words, so every source past 4,000 arrives with much the same evidence. None of these numbers came from state/scores/: the prompt is being tuned and a fine-tune is in flight, so our own length figures describe a pipeline mid-repair (Rule #10)."
     },
     {
       "change": "finetune.sequence_length default and config/idhazh.json both move from 8192 to 16384, which is models.summarize.inference.n_ctx. No field was added, removed or retyped.",

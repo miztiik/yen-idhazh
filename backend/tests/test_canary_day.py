@@ -26,6 +26,7 @@ from idhazh.evals import writer
 from utilities import build_canary_day
 
 EVALUATION: Final = config.load().app.evaluation
+SUMMARIZE: Final = config.load().app.summarize
 BANDS: Final = config.load().app.summarize.bands
 ITEMS: Final = build_canary_day.published_items(EVALUATION, FIXTURES_DIR / "canaries")
 ROWS: Final = build_canary_day.score_rows(ITEMS, EVALUATION)
@@ -142,9 +143,10 @@ def test_every_configured_target_zone_carries_a_mark() -> None:
 
 
 def test_a_summary_stays_inside_the_axis_the_chart_draws() -> None:
-    """The y domain is zero to the longest summary, capped by the configured limit."""
+    """The y domain is zero to the longest summary the ladder can publish."""
+    ceiling = SUMMARIZE.decoder_words_max()
     for row in ROWS:
-        assert 0 < row.summary_word_count <= EVALUATION.summary_words_max
+        assert 0 < row.summary_word_count <= ceiling
 
 
 def test_the_digest_and_the_ledger_agree_on_which_items_were_cut() -> None:

@@ -36,6 +36,8 @@ from idhazh import cli, config, extract
 from idhazh.contracts.app_config import (
     EvaluationConfig,
     InferenceConfig,
+    LengthPolicy,
+    OverLengthAction,
     SummarizeConfig,
     SummaryBand,
 )
@@ -43,7 +45,7 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import (
     FLASH_FUSED,
@@ -60,6 +62,7 @@ from idhazh.summarize import (
     build_request,
     draft_model,
     fits_context,
+    length_verdict,
     output_schema,
     output_schema_text,
     parse_draft,
@@ -67,6 +70,7 @@ from idhazh.summarize import (
     split_thinking,
     system_prompt,
     to_summary,
+    trim_to_words,
     user_turn,
 )
 
@@ -537,6 +541,22 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
     assert f"{band.target_words_min} to {band.target_words_max} words" in system
 
 
+def test_a_config_naming_the_old_global_word_bounds_still_loads() -> None:
+    """The read-side migration for the two integers that used to gate every band.
+
+    `config/` is a persisted surface and these models forbid unknown keys, so a
+    file written before 2026-09-10 would be refused outright rather than read
+    (section 11). The old values are dropped rather than carried: neither has a
+    counterpart, and reinstating 250 as a ceiling would put back the cap the
+    ladder now sets for itself.
+    """
+    from idhazh.contracts.app_config import EvaluationConfig as Bounds
+
+    older = Bounds.model_validate({"summary_words_min": 25, "summary_words_max": 250})
+    assert older == Bounds()
+    assert not hasattr(older, "summary_words_max")
+
+
 def test_the_prompt_and_the_decoder_count_key_points_the_same_way() -> None:
     """Disagree, and the decoder rejects a reply that did exactly what was asked."""
     asked = SummarizeConfig(
@@ -589,7 +609,7 @@ def test_the_key_points_decode_before_the_summary() -> None:
     assert order == ["title", "key_points", "summary"]
 
 
-def test_the_decoder_rail_never_catches_a_summary_the_word_gate_would_pass() -> None:
+def test_the_decoder_rail_never_catches_a_summary_the_verdict_would_publish() -> None:
     """A publishable summary fails on "words" if it fails at all, never on shape.
 
     Checked against real English - a little under six characters a word once the
@@ -597,24 +617,29 @@ def test_the_decoder_rail_never_catches_a_summary_the_word_gate_would_pass() -> 
     generation control as well as a check, so it is deliberately close enough to
     a real summary to keep a constrained decoder writing; a string short enough
     to trip it was never publishable.
+
+    The ceiling matters more than it looks. A reply past the rail fails to parse,
+    and a reply that cannot parse never reaches the verdict that would have
+    trimmed it or published it long - so a tight rail turns every overshoot back
+    into the lost item the policy exists to prevent.
     """
-    from idhazh.contracts.app_config import EvaluationConfig
-
     typical_chars_per_word = 6
-    bounds = EvaluationConfig()
-    rail = output_schema(None, bounds)["properties"]["summary"]
-    assert rail["minLength"] == 125
-    assert rail["minLength"] < bounds.summary_words_min * typical_chars_per_word
-    assert rail["maxLength"] > bounds.summary_words_max * typical_chars_per_word
+    ask = SummarizeConfig()
+    rail = output_schema(ask)["properties"]["summary"]
+    assert rail["minLength"] < ask.decoder_words_min() * typical_chars_per_word
+    assert rail["maxLength"] > ask.decoder_words_max() * typical_chars_per_word
+    widest = max(band.target_words_max for band in ask.bands)
+    assert ask.decoder_words_max() > widest
 
 
-def test_the_decoder_rail_moves_with_the_gate_it_is_derived_from() -> None:
-    """Pinned, it would silently stop protecting a gate somebody widened."""
-    from idhazh.contracts.app_config import EvaluationConfig
-
-    wider = EvaluationConfig(summary_words_min=60, summary_words_max=400)
-    rail = output_schema(None, wider)["properties"]["summary"]
-    base = output_schema(None, EvaluationConfig())["properties"]["summary"]
+def test_the_decoder_rail_moves_with_the_ladder_it_is_derived_from() -> None:
+    """Pinned, it would silently stop protecting a ladder somebody widened."""
+    wider = SummarizeConfig(
+        bands=[SummaryBand(min_source_words=0, target_words_min=60, target_words_max=400)],
+        length_policy=LengthPolicy(absolute_floor_words=50),
+    )
+    rail = output_schema(wider)["properties"]["summary"]
+    base = output_schema(SummarizeConfig())["properties"]["summary"]
     assert rail["minLength"] > base["minLength"]
     assert rail["maxLength"] > base["maxLength"]
 
@@ -685,16 +710,15 @@ def test_every_article_length_lands_in_a_band() -> None:
 
 
 def test_no_rung_floor_ever_sits_above_the_cut_point() -> None:
-    """The top rung is the last rung there may be.
+    """A floor above the cut point asks for a summary of words nobody was given.
 
-    `extract.truncation_cap_tokens` decides how many words the model is handed.
-    A floor above that number asks for a summary of words nobody gave it, and a
-    model closes that gap by elaborating the opening - which reads as
-    completeness and is the worst thing this pipeline can publish.
+    `extract.truncation_cap_tokens` decides how many words the model is handed. A
+    model closes that gap by elaborating the opening, which reads as completeness
+    and is the worst thing this pipeline can publish.
 
     Both sides are read from `config/`, never from a literal: the cap moved from
-    2500 to 5000 on 2026-08-29 and it will move again, and a pinned number here
-    would keep passing while the relationship it guards inverted (Rule #6).
+    2500 to 5000 on 2026-08-29 and to 10000 on 2026-09-09, and a pinned number
+    here would keep passing while the relationship it guards inverted (Rule #6).
     """
     app = config.load().app
     cut_point_words = int(app.extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)
@@ -739,46 +763,36 @@ def test_no_band_asks_for_more_key_points_than_its_summary_can_carry() -> None:
     )
 
 
-def test_a_long_read_is_asked_for_more_than_a_long_feature() -> None:
-    """The fifth rung, and the reason it was added.
+def test_a_longer_article_is_never_asked_for_a_shorter_summary() -> None:
+    """The one relationship the ladder has to keep, whatever its rungs are.
 
-    At the cap of 5000 the model is handed 3,846 words. Before this rung a
-    2,000-word article and a 3,846-word article - both read whole - got the
-    identical ask, so one was compressed 10 to 1 and the other 19 to 1.
+    Both ends climb, because a rung that raised only its floor left the longest
+    articles sharing a ceiling with much shorter ones - which is how a 2,000-word
+    feature and a 7,692-word investigation came to get the identical ask.
     """
     ask = SummarizeConfig()
-    long_feature = ask.band_for(2000)
-    investigation = ask.band_for(3000)
-    assert investigation is not long_feature
-    assert investigation.target_words_min > long_feature.target_words_min
-    assert investigation.target_words_max > long_feature.target_words_max
-    assert ask.band_for(2999) is long_feature
-
-
-def test_the_longest_whole_read_is_asked_for_more_than_an_investigation() -> None:
-    """The sixth rung, and the reason it was added.
-
-    At the cap of 10000 the model is handed 7,692 words. Before this rung a
-    3,000-word article and a 7,692-word one - both read whole - got the
-    identical ask, so one was compressed 20 to 1 and the other 51 to 1.
-
-    Only the floor of the ask climbs. The ratio is taken from
-    `target_words_min`, and the ceiling cannot rise without moving
-    `evaluation.summary_words_max`, which is what the pipeline agrees to
-    publish rather than what the prompt requests. So the invariant a rung has
-    to keep is the weaker one asserted here: a longer article is never asked
-    for a shorter summary than a shorter article.
-    """
-    ask = SummarizeConfig()
-    investigation = ask.band_for(3000)
-    whole_read = ask.band_for(5000)
-    assert whole_read is not investigation
-    assert whole_read.target_words_min > investigation.target_words_min
-    assert ask.band_for(4999) is investigation
-
     for lower, upper in zip(ask.bands, ask.bands[1:], strict=False):
         assert upper.target_words_min >= lower.target_words_min
         assert upper.target_words_max >= lower.target_words_max
+
+    feature = ask.band_for(2000)
+    long_read = ask.band_for(4000)
+    assert long_read is not feature
+    assert long_read.target_words_min > feature.target_words_min
+    assert long_read.target_words_max > feature.target_words_max
+    assert ask.band_for(3999) is feature
+
+
+def test_the_ceiling_is_what_a_two_minute_read_can_afford() -> None:
+    """200 words is the number the whole ladder is built down from.
+
+    An adult reads non-fiction at about 240 words a minute, so two minutes is
+    roughly 480 words and thirty titles spend 250 to 300 of them. A 200-word item
+    is already 50 seconds on one story out of thirty; past that the digest stops
+    helping a reader decide and starts being the article.
+    """
+    ask = SummarizeConfig()
+    assert max(band.target_words_max for band in ask.bands) == 200
 
 
 def test_the_band_chosen_is_the_longest_one_the_article_reaches() -> None:
@@ -813,21 +827,18 @@ def test_bands_that_do_not_climb_are_refused() -> None:
         )
 
 
-def test_a_band_that_asks_for_more_than_the_gate_accepts_is_refused() -> None:
-    """The silent failure this stops: the model complies and the gate drops it, every run."""
-    from idhazh.contracts.app_config import AppConfig, EvaluationConfig, ModelRef, ModelsConfig
+def test_a_floor_at_or_above_the_shortest_ask_is_refused() -> None:
+    """The silent failure this stops: every note fails as a bad extraction, every run.
 
-    weights = ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M")
+    `absolute_floor_words` is the one length that still drops an item, and rung 0
+    asks for the shortest summary on the ladder. Set the floor at or above that
+    ask and the digest loses every brief it publishes, reported as a failed
+    extraction rather than as a config mistake.
+    """
     with pytest.raises(ValidationError):
-        AppConfig(
-            version=AppConfig.schema_version(),
-            models=ModelsConfig(summarize=weights, visual_planner=weights),
-            evaluation=EvaluationConfig(summary_words_min=40, summary_words_max=120),
-            summarize=SummarizeConfig(
-                bands=[
-                    SummaryBand(min_source_words=0, target_words_min=50, target_words_max=300),
-                ]
-            ),
+        SummarizeConfig(
+            bands=[SummaryBand(min_source_words=0, target_words_min=30, target_words_max=45)],
+            length_policy=LengthPolicy(absolute_floor_words=30),
         )
 
 
@@ -1284,18 +1295,119 @@ def test_a_fenced_code_block_is_still_read() -> None:
     assert draft.summary.startswith("word")
 
 
-def test_a_summary_outside_the_publishable_range_is_refused() -> None:
-    """The bounds are config, not constants - the prompt asks, config decides."""
+# --- How far a reply may miss its band's ask ---------------------------------
+#
+# Every band and policy below is BUILT rather than read from `config/`. The
+# committed ladder is a starting point that will move while the prompt is tuned,
+# and a test that reads it asserts only that the file has not changed.
+
+SHORT_BAND = SummaryBand(
+    min_source_words=0,
+    target_words_min=30,
+    target_words_max=45,
+    key_points_min=1,
+    key_points_max=1,
+)
+LONG_BAND = SummaryBand(
+    min_source_words=2000,
+    target_words_min=120,
+    target_words_max=200,
+    over_length_action=OverLengthAction.PUBLISH,
+)
+POLICY = SummarizeConfig(bands=[SHORT_BAND, LONG_BAND])
+
+
+def verdict_for(words: int, band: SummaryBand, source_words: int = 3000) -> LengthAction:
+    return length_verdict(words, band, POLICY, source_words=source_words).action
+
+
+def test_the_wider_of_the_two_overshoot_allowances_wins() -> None:
+    """The pair that will look like a bug if the "larger" is ever read as "smaller".
+
+    Twenty percent of a 45-word ask is nine words, which is one clause and no
+    allowance at all. The flat 25 words is what makes the short bands usable, so
+    70 publishes untouched and 71 does not.
+    """
+    assert POLICY.allowance(SHORT_BAND) == 25
+    assert verdict_for(54, SHORT_BAND) is LengthAction.PUBLISH
+    assert verdict_for(70, SHORT_BAND) is LengthAction.PUBLISH
+    assert verdict_for(71, SHORT_BAND) is LengthAction.TRIM
+
+    # On a 200-word ask the ratio is the larger of the two, at 40 words.
+    assert POLICY.allowance(LONG_BAND) == 40
+    assert verdict_for(240, LONG_BAND) is LengthAction.PUBLISH
+    assert verdict_for(241, LONG_BAND) is LengthAction.PUBLISH_OVER
+
+
+def test_the_band_decides_what_happens_to_a_reply_that_ran_long() -> None:
+    """A feature is published long; a note is cut. Neither is dropped."""
+    assert verdict_for(500, SHORT_BAND) is LengthAction.TRIM
+    assert verdict_for(500, LONG_BAND) is LengthAction.PUBLISH_OVER
+
+
+def test_a_short_summary_publishes_rather_than_costing_the_reader_the_story() -> None:
+    """A reader can see that a summary is thin. They cannot see one that was deleted."""
+    assert verdict_for(84, LONG_BAND) is LengthAction.PUBLISH
+    assert verdict_for(83, LONG_BAND) is LengthAction.PUBLISH
+    assert verdict_for(26, LONG_BAND) is LengthAction.PUBLISH
+
+
+def test_the_absolute_floor_is_conditional_on_the_source_having_said_something() -> None:
+    """The pair that proves the floor reads the article and not only the reply.
+
+    Twenty words from a 3,000-word source is a failed extraction wearing a
+    summary's clothes. The same twenty words from a 50-word note is the correct
+    answer, and dropping it would lose a story to arithmetic.
+    """
+    assert verdict_for(20, LONG_BAND, source_words=3000) is LengthAction.FAIL
+    assert verdict_for(20, SHORT_BAND, source_words=50) is LengthAction.PUBLISH
+
+
+def test_the_trimmer_cuts_at_a_sentence_and_never_mid_clause() -> None:
+    summary = "One two three four. Five six seven eight. Nine ten eleven twelve."
+    assert trim_to_words(summary, 8) == "One two three four. Five six seven eight."
+    assert trim_to_words(summary, 4) == "One two three four."
+
+
+def test_a_summary_with_no_sentence_end_inside_the_budget_publishes_whole() -> None:
+    """A dangling half-clause reads as a bug. An over-long paragraph reads as prose."""
+    runaway = "word " * 60
+    assert trim_to_words(runaway, 10) == runaway
+
+
+def test_a_summary_far_over_its_ask_still_reaches_the_reader() -> None:
+    """The defect this replaces: 300 words returned no item at all.
+
+    Until 2026-09-10 a reply outside one global word range was dropped, so a
+    model that ran long cost the digest the story. It is published now - trimmed
+    or over-length, depending on the band - and the payload records which.
+    """
     result = replied(body(summary="y " * 300))
-    assert result.status is SummaryStatus.FAILED
-    assert "words" in (result.failure_detail or "")
+    assert result.status is SummaryStatus.OK
+    assert result.summary is not None
+    assert result.length_action in {LengthAction.TRIM, LengthAction.PUBLISH_OVER}
 
 
-def test_the_publishable_range_comes_from_config() -> None:
-    reply = body(summary="y " * 100)
+def test_the_tolerance_comes_from_config() -> None:
+    """The floor is a knob, and a reply under it is the one length that still fails.
+
+    The summary is built from realistic words rather than a run of one letter.
+    The decoder rail counts characters and the verdict counts words, and a
+    fixture of two-character words trips the rail first - which would pass this
+    test for the wrong reason, on a failure code that is not the one under test.
+    """
+    reply = body(summary="deliberation " * 100)
     assert replied(reply).status is SummaryStatus.OK
-    tightened = EvaluationConfig(summary_words_min=150, summary_words_max=200)
-    assert replied(reply, evaluation=tightened).status is SummaryStatus.FAILED
+
+    floored = SummarizeConfig(
+        bands=[SummaryBand(min_source_words=0, target_words_min=200, target_words_max=300)],
+        length_policy=LengthPolicy(
+            absolute_floor_words=150, floor_applies_above_source_words=0
+        ),
+    )
+    refused = replied(reply, prompt_config=floored)
+    assert refused.failure_code is FailureCode.LENGTH_OUT_OF_RANGE
+    assert refused.length_action is LengthAction.FAIL
 
 
 # --- A copy is not a summary -------------------------------------------------
@@ -1336,9 +1448,13 @@ def test_the_copied_reply_failed_on_the_copying_and_on_nothing_else() -> None:
     """
     source = article("brief")
     draft = parse_draft(completion("copied-the-source").content)
-    bounds = EvaluationConfig()
+    ask = SummarizeConfig()
+    band = ask.band_for(source.band_source_words)
 
-    assert bounds.summary_words_min <= len(draft.summary.split()) <= bounds.summary_words_max
+    verdict = length_verdict(
+        len(draft.summary.split()), band, ask, source_words=source.band_source_words
+    )
+    assert verdict.action is LengthAction.PUBLISH
     assert verbatim_run(draft.summary, source.text or "") == 1.0
     assert source.brief is True
     assert source.source_word_count == 53
@@ -1438,9 +1554,17 @@ def test_the_leaked_reply_failed_on_the_address_and_on_nothing_else() -> None:
     """Every other rule passes this reply, so the address rule is the one that fired."""
     draft = parse_draft(completion("leaked-the-address").content)
     bounds = EvaluationConfig()
+    source = article()
+    ask = SummarizeConfig()
 
-    assert bounds.summary_words_min <= len(draft.summary.split()) <= bounds.summary_words_max
-    assert verbatim_run(draft.summary, article().text or "") < bounds.verbatim_reject_ceiling
+    verdict = length_verdict(
+        len(draft.summary.split()),
+        ask.band_for(source.band_source_words),
+        ask,
+        source_words=source.band_source_words,
+    )
+    assert verdict.action is LengthAction.PUBLISH
+    assert verbatim_run(draft.summary, source.text or "") < bounds.verbatim_reject_ceiling
 
 
 @pytest.mark.parametrize(

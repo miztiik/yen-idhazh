@@ -15,6 +15,7 @@
     "Throughput on commodity CPUs is 2.1x the previous release.",
     "Weights are published under a permissive licence."
   ],
+  "length_action": null,
   "model_id": "qwen3-8b-q4-k-m",
   "output_digest": "3469c80fe6cf09abdc1ad5e9dca09031d233386da57930506138f7f5318e98bf",
   "output_tokens": 214,
