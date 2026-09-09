@@ -1,50 +1,44 @@
 <script lang="ts">
 	/** A topic page: the day, filtered to one desk.
 	 *
-	 * The document carries the head of that desk and the rest arrive from
-	 * `<base>/digest/<Y>/<M>/<D>/digest.json` - the same served day the archive's
-	 * search results already read, and one file for the whole day rather than one
-	 * per topic. The filter that used to run at build time in six documents runs
-	 * once here instead.
+	 * The same shell the dated day route is served from, and the larger half of
+	 * what this row deletes - 96 of the 116 documents a build used to write were
+	 * this route. A topic is one desk of one day, so it was always a filter over
+	 * a file the browser can fetch for itself, and the build was writing five
+	 * documents a day to run that filter early.
 	 *
-	 * **`prerender` and `entries()` are untouched.** What moved is the item list,
-	 * not the document. The page keeps its own address, its own title, and a
-	 * first screen that is complete with script off.
-	 *
-	 * **Nothing became unreachable.** The set this page holds after the fetch is
-	 * the set the document used to inline, filtered the same way - and the page
-	 * asks for the day only when its own document is short of the topic's
-	 * stories, so a small desk still costs a reader no request at all.
+	 * **A topic this day did not publish is not here, and it says so.** The
+	 * payload names every desk the day had, so the page can tell a topic that ran
+	 * nothing from a day that was never published - and both get the screen a
+	 * wrong address gets rather than an empty room.
 	 */
 	import { restoreAnchor, watchDay, type DayStatus } from '$lib/assist/day';
 	import { base } from '$app/paths';
-	import { keepDrawings } from '$lib/day-shape';
 	import DigestList from '$lib/components/DigestList.svelte';
+	import NotHere from '$lib/components/NotHere.svelte';
 	import PayloadState from '$lib/components/PayloadState.svelte';
 	import { longDate } from '$lib/format';
 	import { daysHeldOffline } from '$lib/offline';
-	import type { DigestItem } from '$lib/payload/types';
+	import type { DayForPage } from '$lib/payload/types';
 	import { tick } from 'svelte';
 
 	let { data } = $props();
-	const name = $derived(
-		data.day.verticals.find((ref) => ref.id === data.vertical)?.display_name ?? data.vertical
-	);
 
-	/** The desk's whole list, once it is in hand. Null until then, and the
-	 * document's own head is what the page shows in the meantime. */
-	let arrived = $state<DigestItem[] | null>(null);
-	/** What the loader last reported, or null before it has said anything. Null
-	 * rather than an initial guess, so the prerendered document states the truth
-	 * about itself: a document short of its desk is waiting, and a complete one
-	 * is not. */
-	let reported = $state<DayStatus | null>(null);
-	/** The other days this device still holds. Asked for only when this one
-	 * failed, because it is the only state that has anything to do with it. */
+	/** The day, once it is in hand. Null until then, and after a failure. */
+	let arrived = $state<DayForPage | null>(null);
+	let reported = $state<DayStatus>('loading');
 	let held = $state<{ label: string; href: string }[]>([]);
 
-	const status = $derived(reported ?? (data.awaiting > 0 ? 'loading' : 'ready'));
-	const day = $derived(arrived === null ? data.day : { ...data.day, items: arrived });
+	const day = $derived(arrived === null ? null : { ...arrived, date: data.date });
+	const desks = $derived(arrived?.verticals ?? null);
+	/** Whether the day says it published this desk. Null until the day is in
+	 * hand, and null again for a payload that names no desk at all - absent is
+	 * unknown, and refusing a topic on a payload that did not say is a screen
+	 * that hides stories the reader can see the pills for. */
+	const ran = $derived(desks === null ? null : desks.some((ref) => ref.id === data.vertical));
+	const name = $derived(
+		desks?.find((ref) => ref.id === data.vertical)?.display_name ?? data.vertical
+	);
 
 	async function offerHeldDays(current: string) {
 		const dates = (await daysHeldOffline()).filter((date) => date !== current);
@@ -56,7 +50,7 @@
 	 * onto this page, because the served day arrives after the parameters moved. */
 	let watcher: AbortController | null = null;
 
-	function fetchRest(date: string, vertical: string, again: boolean) {
+	function fetchDay(date: string, again: boolean) {
 		watcher?.abort();
 		const controller = new AbortController();
 		watcher = controller;
@@ -68,17 +62,7 @@
 				reported = next;
 				if (next === 'unreachable') void offerHeldDays(date);
 				if (whole === null) return;
-				// The served day is every desk, so this is the filter the prerendered
-				// document used to apply at build time - same rule, same order, one
-				// copy instead of five. What the served day does not carry is the
-				// head's drawings, which the document read off disk so they could take
-				// the page's colours.
-				arrived = keepDrawings(
-					data.day?.items ?? [],
-					whole.items.filter((item) => item.vertical === vertical)
-				);
-				// A browser honours a fragment once, at load. The story a deep link
-				// names may only have arrived just now.
+				arrived = whole;
 				void tick().then(() => restoreAnchor());
 			}
 		});
@@ -86,15 +70,13 @@
 
 	// Keyed on the parameters rather than on mount: SvelteKit reuses this
 	// component when only the date or the topic moves, and a fetch that ran once
-	// would leave the previous desk's stories on the new desk's page. The cleanup
-	// aborts the in-flight watch, so a change of date or topic - or leaving the
-	// page - cannot deliver the old desk.
+	// would leave the previous desk's stories on the new desk's page.
 	$effect(() => {
-		const { date, vertical, awaiting } = data;
+		const { date } = data;
 		arrived = null;
-		reported = null;
+		reported = 'loading';
 		held = [];
-		if (awaiting > 0) fetchRest(date, vertical, false);
+		fetchDay(date, false);
 		return () => {
 			watcher?.abort();
 			watcher = null;
@@ -106,20 +88,38 @@
 	<title>{name} &mdash; {longDate(data.date)} &mdash; {data.ui.site_title}</title>
 </svelte:head>
 
-<DigestList
-	{day}
-	vertical={data.vertical}
-	datePrefix="{data.date}/"
-	settled={status === 'ready'}
-	ui={data.ui}
-/>
-
-<!-- Named for the desk rather than for the date. The reader came for one topic,
-     and "the rest of 30 August" on a page of AI stories asks them to know that
-     a topic page fetches a whole day. -->
-<PayloadState
-	{status}
-	{held}
-	day="{name} on {longDate(data.date)}"
-	onRetry={() => fetchRest(data.date, data.vertical, true)}
-/>
+{#if reported === 'missing'}
+	<NotHere
+		status={404}
+		headline="Not here"
+		detail="No digest was published for {longDate(data.date)}."
+		next="The address may be wrong, or the day it names was never published."
+	/>
+{:else if ran === false}
+	<NotHere
+		status={404}
+		headline="Not here"
+		detail="Nothing was published under {data.vertical} on {longDate(data.date)}."
+		next="The day itself is here, and every topic it did publish is on it."
+	/>
+{:else}
+	{#if day}
+		<DigestList
+			{day}
+			vertical={data.vertical}
+			datePrefix="{data.date}/"
+			settled={reported === 'ready'}
+			ui={data.ui}
+		/>
+	{/if}
+	<!-- Named for the desk rather than for the date. The reader came for one topic,
+	     and "30 August" on a page of AI stories asks them to know that a topic page
+	     fetches a whole day. -->
+	<PayloadState
+		status={reported}
+		{held}
+		holding={day !== null}
+		day="{name} on {longDate(data.date)}"
+		onRetry={() => fetchDay(data.date, true)}
+	/>
+{/if}

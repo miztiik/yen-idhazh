@@ -229,6 +229,31 @@ export interface DigestView {
 	items: DigestViewItem[];
 }
 
+/** What a page needs to draw a day, from whichever carrier brought it.
+ *
+ * `/` reads a committed `DigestDay` off disk at build time; a dated URL fetches
+ * a `DigestView`. The two agree on every name below, and this is the shape the
+ * reading components take so neither carrier has to be converted into the
+ * other.
+ *
+ * **`date` is required and the rest of the facts are not.** A page always knows
+ * its own date - it is in the address - so a component may lean on it. Every
+ * other fact can be absent, because a service worker keeps day payloads and a
+ * shell can be handed one written before those names existed. Absent is
+ * unknown: never fill one in. */
+export interface DayForPage {
+	date: string;
+	generated_at?: string | null;
+	partial?: boolean | null;
+	items_planned?: number | null;
+	items_failed?: number | null;
+	retention_window_months?: number | null;
+	runs?: DigestRunRef[] | null;
+	verticals?: DigestVerticalRef[] | null;
+	leads?: DigestLead[] | null;
+	items: DigestItem[];
+}
+
 /** One published story as the archive's list reads it, mirroring
  * `schemas/search-index.schema.json`.
  *

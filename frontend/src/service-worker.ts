@@ -90,6 +90,20 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 const SHELL_CACHE = `${SHELL_CACHE_PREFIX}${version}`;
 const KILL_URL = `${base}/${KILL_FILE}`;
 
+/** The document a static host answers an address it does not have with, and
+ * since 2026-09-09 the document every dated URL is served from.
+ *
+ * It is precached by name rather than through `svelte.config.js`'s
+ * `serviceWorker.files` predicate, because that predicate filters `static/` and
+ * this file is written by the adapter into `build/`. `$service-worker` does not
+ * name it either: it is neither a build asset nor a prerendered page.
+ *
+ * **Without it there is no offline dated reading at all.** A host answers a
+ * dated address with this file at status 404, so `fromNetworkFirst` refuses to
+ * keep it - a 404 is not a page to remember. The reader would then have a day
+ * payload on their device and no shell to draw it with. */
+const FALLBACK = `${base}/404.html`;
+
 /** Every path this build emitted, as a path rather than as a URL, so a request
  * can be looked up in it. `$service-worker` names them once, at build time, and
  * that list is the shell - which is what makes the shell cache's membership a
@@ -161,7 +175,7 @@ sw.addEventListener('install', (event) => {
 			// `files` is the shell's own assets and nothing else - `svelte.config.js`
 			// decides that, and it is the one place the decision belongs.
 			await Promise.all(
-				[...files, ...build.filter(isStylesheet)].map((path) =>
+				[FALLBACK, ...files, ...build.filter(isStylesheet)].map((path) =>
 					cache.add(path).catch((error) => {
 						console.warn(`[offline] ${path} was not kept for offline reading`, error);
 					})
@@ -336,6 +350,14 @@ async function fromNetworkFirst(request: Request, url: URL): Promise<Response> {
 	} catch (error) {
 		const held = await cache.match(request, { ignoreVary: true });
 		if (held) return held;
+		// A dated address has no document of its own since 2026-09-09, so nothing
+		// was ever kept under it - the host answers one shell at status 404 and a
+		// 404 is not a page to remember. The shell is on the device from install,
+		// and it is what draws a day this reader already has.
+		if (request.mode === 'navigate') {
+			const shell = await cache.match(FALLBACK, { ignoreVary: true });
+			if (shell) return shell;
+		}
 		throw error;
 	}
 }
