@@ -1,0 +1,178 @@
+{
+  "$defs": {
+    "PublicRunRecord": {
+      "additionalProperties": false,
+      "description": "One run of one day, from that day's `run.json`.",
+      "properties": {
+        "charts_drafted": {
+          "default": 0,
+          "description": "Items whose planner reply asked for a chart, whatever the decision became.",
+          "minimum": 0,
+          "title": "Charts Drafted",
+          "type": "integer"
+        },
+        "decided": {
+          "default": 0,
+          "description": "Items the visual planner posted to the model.",
+          "minimum": 0,
+          "title": "Decided",
+          "type": "integer"
+        },
+        "decision_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the planner spent. Null and zero are different facts: a visuals job that never ran spent no measured time, and printing that as zero minutes reads as a stage that was free rather than one that is missing.",
+          "title": "Decision Ms"
+        },
+        "failed": {
+          "minimum": 0,
+          "title": "Failed",
+          "type": "integer"
+        },
+        "n": {
+          "description": "Which run of the day this was.",
+          "minimum": 0,
+          "title": "N",
+          "type": "integer"
+        },
+        "planned": {
+          "minimum": 0,
+          "title": "Planned",
+          "type": "integer"
+        },
+        "prefiltered": {
+          "default": 0,
+          "description": "Items the planner decided without posting, because no enabled kind could survive its checks.",
+          "minimum": 0,
+          "title": "Prefiltered",
+          "type": "integer"
+        },
+        "run_id": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "skipped": {
+          "minimum": 0,
+          "title": "Skipped",
+          "type": "integer"
+        },
+        "source_list_stale": {
+          "default": false,
+          "title": "Source List Stale",
+          "type": "boolean"
+        },
+        "started_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Status",
+          "type": "string"
+        },
+        "succeeded": {
+          "minimum": 0,
+          "title": "Succeeded",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run_id",
+        "n",
+        "status",
+        "planned",
+        "succeeded",
+        "failed",
+        "skipped",
+        "started_at"
+      ],
+      "title": "PublicRunRecord",
+      "type": "object"
+    }
+  },
+  "$id": "public-run-day.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the day's run records, the site size the last run measured, the models it used, and the published item and chart counts.",
+      "version": "2026-09-09",
+      "why": "The console derived all of this at build time by opening every day's run.json and every day's digest.json, then inlined the result - so three of its ten reads had no contract, no version stamp and no changelog (Rule #3). One row a day, fetched a month at a time, also removes the read that costs the most: a day payload is hundreds of kilobytes and the console wanted two integers out of it (Rule #12)."
+    }
+  ],
+  "description": "One published day: what its runs did, and what the page ended up carrying.",
+  "properties": {
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "models": {
+      "description": "Distinct model ids the day's runs used, in first-seen order.",
+      "items": {
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "type": "string"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "published_charts": {
+      "default": 0,
+      "description": "Charts a reader can actually see: a visual of kind chart in state rendered. Counted from the day payload rather than the manifest, because the manifest records what the planner decided and this records what survived to the page.",
+      "minimum": 0,
+      "title": "Published Charts",
+      "type": "integer"
+    },
+    "published_items": {
+      "default": 0,
+      "description": "Articles the day payload carries. The denominator of the site's per-article cost, counted from the same tree site_bytes measures.",
+      "minimum": 0,
+      "title": "Published Items",
+      "type": "integer"
+    },
+    "runs": {
+      "description": "Every run of the day, in the order they ran.",
+      "items": {
+        "$ref": "#/$defs/PublicRunRecord"
+      },
+      "title": "Runs",
+      "type": "array"
+    },
+    "site_bytes": {
+      "default": 0,
+      "description": "The committed payload tree as the day's LAST run measured it. Taken from the last run rather than summed: the site is one thing measured once per run, not a new thing each run.",
+      "minimum": 0,
+      "title": "Site Bytes",
+      "type": "integer"
+    },
+    "site_files": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Site Files",
+      "type": "integer"
+    },
+    "version": {
+      "default": "2026-09-09",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date"
+  ],
+  "title": "PublicRunDay",
+  "type": "object",
+  "version": "2026-09-09"
+}
