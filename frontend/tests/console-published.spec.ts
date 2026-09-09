@@ -451,8 +451,11 @@ test('nothing above the first heading carries a count that only ever grows', asy
 	const above = await page.evaluate(() => {
 		const surface = document.querySelector('[data-surface="operator"]');
 		const heading = surface?.querySelector('h2') ?? null;
-		return [...(surface?.children ?? [])]
-			.filter((node) => node.tagName === 'P')
+		// Every paragraph on the surface, not only the ones the shell happens to
+		// hold directly: the route's panels sit one element deeper since the shell
+		// moved into `console/+layout.svelte`, and a direct-child filter would have
+		// gone through by finding nothing at all.
+		return [...(surface?.querySelectorAll('p') ?? [])]
 			.filter(
 				(node) => heading === null || node.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING
 			)
