@@ -138,7 +138,9 @@ already counted every declared key, because a grammar-constrained decoder emits 
 `backend/idhazh/visual_validator.py` reads one plan and one article's element table and returns the
 checks that did not hold. An empty answer means the plan may be drawn. Nine checks, all of them
 deterministic code over committed data - **no check calls a model, and a test reads the module's own
-imports so none can start to** (`CLAUDE.md` section 0a).
+imports so none can start to** (`CLAUDE.md` section 0a). It reads the same test against
+`visual_vocabulary.py`, or moving a table out of the validator would move it out from under the
+guard.
 
 It is a sibling module rather than part of the planner. A validator is not a contract, so it may
 import both `contracts/visual.py` and `contracts/element.py`, which a contract may not
@@ -169,11 +171,25 @@ a membership passes while three other rules are firing. Each check was also neut
 its own fixture, and all nine left the plan accepted, so every one of them is the sole cause of the
 refusal it is credited with.
 
-### Where the two tables live, and why neither is in `config/`
+### Where the vocabulary lives, and why none of it is in `config/`
 
 `visuals.min_chart_points`, `visuals.max_chart_points` and `visuals.histogram_bins` are knobs and
-are read from `config/` (Rule #6). The two tables the validator carries are not knobs and are in
-code:
+are read from `config/` (Rule #6). The tables are not knobs, and since 2026-09-09 they are not the
+validator's either: `backend/idhazh/visual_vocabulary.py` holds which roles a type may fill, which
+kinds may fill a channel, which channels are drawn on a measured axis, which units measure the same
+thing, and the two date-stamps over those tables.
+
+**Two stages read them, which is why they have a module of their own.** The validator asks whether a
+plan holds to the vocabulary; the resolver asks what a plan that already holds to it displays. Until
+the split, `derived_values.py` imported five names out of `visual_validator.py` - and that reads as
+a later stage borrowing an earlier stage's constant, when what it really was is a shared vocabulary
+with no home, sitting in whichever consumer happened to be written first. Facts about the visual
+language now sit below both stages, and `derived_values.py` no longer imports the validator at all.
+
+It is not a contract and does not sit under `contracts/`: it holds no persisted shape, it generates
+no schema, and it imports `idhazh.elements`, which a contract may not (`CLAUDE.md` section 4). The
+move changed no behaviour and moved neither stamp - **a date-stamp that changes because a file moved
+is a date-stamp that lies**, which is the same argument that keeps both of them out of `config/`.
 
 - **Which roles a type may fill** is a relation between `VisualType` and `EncodingRole`, two closed
   vocabularies that are both Python enums in `contracts/visual.py`. A JSON file cannot reference
@@ -328,8 +344,8 @@ Python enum, so a JSON copy of it would be readable in a way a copy of the role 
 
 | Stamp | Stamps | Recorded by | Where |
 | --- | --- | --- | --- |
-| `PLAN_VOCABULARY_VERSION` | which roles a type may fill | `VisualPlan.plan_version` | `visual_validator.py` |
-| `UNIT_TABLE_VERSION` | which units measure the same thing, and by what factor | a `convert` chain | `visual_validator.py` |
+| `PLAN_VOCABULARY_VERSION` | which roles a type may fill | `VisualPlan.plan_version` | `visual_vocabulary.py` |
+| `UNIT_TABLE_VERSION` | which units measure the same thing, and by what factor | a `convert` chain | `visual_vocabulary.py` |
 | `DERIVED_VALUE_VERSION` | the four functions and the binning rule | every chain | `derived_values.py` |
 
 **Row 3 shipped one stamp over two tables and it is split here, because the two answer different

@@ -26,16 +26,18 @@ from idhazh.contracts.app_config import AppConfig, VisualsConfig
 from idhazh.contracts.element import ElementKind, ElementTable
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 from idhazh.visual_validator import (
+    Rejection,
+    ValidatorCheck,
+    validate_plan,
+)
+from idhazh.visual_vocabulary import (
     PLAN_VOCABULARY_VERSION,
     ROLE_KINDS,
     TYPE_RULES,
     UNIT_DIMENSIONS,
     UNRULED_TYPES,
     VALUE_ROLES,
-    Rejection,
-    ValidatorCheck,
     commensurable,
-    validate_plan,
 )
 
 pytestmark = pytest.mark.visual
@@ -375,15 +377,18 @@ def test_an_element_whose_cell_disagrees_with_its_own_characters_is_refused() ->
 # --- The two structural guards -----------------------------------------------
 
 
-def test_no_check_can_reach_a_model() -> None:
+@pytest.mark.parametrize("module", ["visual_validator", "visual_vocabulary"])
+def test_no_check_can_reach_a_model(module: str) -> None:
     """ESCALATE trigger 1, asserted rather than promised.
 
     A judge that shares the failure modes of the thing judged is not a
     measurement (`CLAUDE.md` section 0a), so the validator is deterministic code
     over committed data. The cheapest way to keep it that way is to read its own
-    imports: nothing that can open a socket or start a server is among them.
+    imports: nothing that can open a socket or start a server is among them. The
+    vocabulary the checks read is held to the same list, or moving a table out
+    of the validator would move it out from under this guard.
     """
-    source = read_text(Path(__file__).resolve().parents[1] / "idhazh" / "visual_validator.py")
+    source = read_text(Path(__file__).resolve().parents[1] / "idhazh" / f"{module}.py")
     imported: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
@@ -401,9 +406,10 @@ def test_no_check_can_reach_a_model() -> None:
         "idhazh.contracts.element",
         "idhazh.contracts.visual",
         "idhazh.elements",
+        "idhazh.visual_vocabulary",
         "re",
         "typing",
-    }, "a new import into the validator is a new way for a check to stop being deterministic"
+    }, f"a new import into {module} is a new way for a check to stop being deterministic"
 
 
 def test_every_role_and_every_value_role_is_declared() -> None:
