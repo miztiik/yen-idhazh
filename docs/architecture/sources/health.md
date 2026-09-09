@@ -481,9 +481,8 @@ They read the same file so they can never disagree about what a feed did - and, 
 Naming only the broken feeds is the right list and half an answer. Four broken
 feeds out of eight is a collapse; four out of two hundred is a Tuesday; and the
 page drew both identically. So the console states the other half in one
-sentence above the list - **how many feeds have never failed, out of how many
-were asked, over how many runs** - and names the clean ones behind a
-disclosure.
+sentence above the list - **how many feeds did not fail, out of how many were
+asked, over how many runs** - and names the clean ones behind a disclosure.
 
 `reliability()` in `frontend/src/lib/feed-health.ts` is that rule, and it reads
 the same `failing()` the quarantine reads, so the two halves of the section
@@ -498,10 +497,15 @@ cannot disagree about what a failure is. Three facts it settles:
 - **A polite refusal is not a failure**, here as everywhere else. A source
   honouring its own `robots.txt` has not broken. It has not delivered either,
   which is the other half and the half that was missing.
-- **The span is the whole record, not the page's window.** The streak beside
-  each feed is already read that way, because the pipeline rests on the whole
-  count. Two spans in one section is the defect the shared window exists to
-  remove.
+- **The span is the shards the widest window preset reaches, and the sentence
+  says so.** The console hands `reliability()` the rows from
+  `feedResults(shardMonths(widest))`, which is five month shards at a widest
+  preset of 90 days. The streak beside each feed is read over those same rows,
+  because two spans in one section is the defect the shared window exists to
+  remove. Until 2026-09-09 the sentence said the feeds "have never failed",
+  which claims every run there has been over a read that opens a bounded set of
+  files - a growing read in different clothes (`CLAUDE.md` Rule #12, owner
+  decision 2026-09-08). It now names the run count the record holds.
 
 **A refusal used to count as an ask, and that put a source we have never read
 in the reliable column.** Measured on this developer checkout, 2026-09-03, over
@@ -514,8 +518,8 @@ article, and every one of them was counted among the sources that never failed.
 The five are named behind their own disclosure rather than counted into either
 side. Reading a committed file is deterministic, so the spread is zero.
 
-**A shallow record says so instead of printing a claim.** Two runs deep, "has
-never failed" means "did not fail twice". Under `console.min_attempts_for_rate`
+**A shallow record says so instead of printing a claim.** Two runs deep, "did
+not fail" means "did not fail twice". Under `console.min_attempts_for_rate`
 runs the sentence prints the same counts and says the record is too shallow to
 read as reliability - the same knob, and the same question, as the stage rates
 one section above.
