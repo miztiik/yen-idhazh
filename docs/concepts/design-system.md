@@ -889,10 +889,16 @@ dash under every other day would be a column of absences pretending to be a
 split.
 
 **`Too long to send` is expected to read zero, and that is the point of it.** At
-a truncation cap of 2,500 tokens no prompt can reach the window the machine
-reads with, so the count is zero by arithmetic rather than by luck. It is on the
+a truncation cap of 2,500 tokens no prompt could reach the window the machine
+read with, so the count was zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
-is already being printed.
+is already being printed. The cap has moved twice since - to 5,000 on 2026-08-29
+and to 10,000 on 2026-09-09 - and the count is still zero by arithmetic, but the
+arithmetic is tighter: the longest prompt the cap can produce is about 14,100
+tokens of a 16,384 window, where it was about 4,200 of 8,192
+([../reference/measurements.md](../reference/measurements.md)). This counter is
+now the one that would catch the next move going too far, rather than a
+formality.
 
 ### A section keeps the sentence that decides and loses the sentence that narrates
 

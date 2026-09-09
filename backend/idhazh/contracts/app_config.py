@@ -801,12 +801,18 @@ class ElementsConfig(Model):
         ge=1,
         description=(
             "Candidate elements kept per article. Sized against the truncation cap "
-            "rather than guessed: at 5000 tokens an article body holds about 3,846 "
+            "rather than guessed: at 10000 tokens an article body holds about 7,692 "
             "words, and the densest committed page fixture carries 9.2 quantities per "
-            "1000 characters, which is about 211 over a body that long (measured "
+            "1000 characters, which is about 420 over a body that long (measured "
             "2026-09-08 on tests/fixtures/pages and tests/fixtures/canaries). It is 16 "
             "times visuals.max_facts because that one is a menu a small model reads by "
-            "index and this one is a fact table nothing has to read at once."
+            "index and this one is a fact table nothing has to read at once. The cap "
+            "was above that estimate until extract.truncation_cap_tokens doubled on "
+            "2026-09-09 and now sits below it, so the densest long article keeps the "
+            "first 256 quantities in article order and ElementTable.candidates_found "
+            "says how many the pass matched. That is a bound on work behaving as one, "
+            "not a silent loss: news prose front-loads, and the planner reads at most "
+            "visuals.max_facts of the table by index."
         ),
     )
 
@@ -1841,12 +1847,17 @@ class FinetuneConfig(Model):
         default=8192,
         ge=1,
         description=(
-            "Measured worst case, rounded up to a power of two: the system prompt is 920 "
-            "tokens, a user turn carrying an article at extract.truncation_cap_tokens "
-            "(5,000) measures 5,335 with its fence and instructions, and the output "
-            "budget is 900 - so 7,155. 7168 clears that by 13 tokens, which is not a "
-            "margin. A row longer than this is truncated in training with no error, "
-            "which teaches the model to stop mid-summary."
+            "Measured worst case, rounded up to a power of two - and the cap has since "
+            "outgrown it. At extract.truncation_cap_tokens of 5,000 the system prompt "
+            "was 920 tokens, a user turn carrying an article measured 5,335 with its "
+            "fence and instructions, and the output budget is 900 - so 7,155, which "
+            "8192 cleared. The cap doubled to 10,000 on 2026-09-09 and the same sum is "
+            "about 11,900 for a typical article and about 14,100 for the longest one "
+            "the ledger has recorded, both above 8192. A row longer than this is "
+            "dropped and counted by the wrangler, never truncated, so the training set "
+            "loses its longest rows rather than teaching the model to stop mid-summary. "
+            "Raising it costs GPU memory on the machine that trains, which is not the "
+            "runner, so it is a separate decision with its own measurement."
         ),
     )
     prompt_iterations: int = Field(
@@ -2973,6 +2984,36 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T21:30",
+            change=(
+                "config/idhazh.json moves extract.truncation_cap_tokens from 5000 to "
+                "10000. No field was added, removed or retyped. elements.max_per_article "
+                "and finetune.sequence_length restate their arithmetic against the new "
+                "cap; neither value moves."
+            ),
+            why=(
+                "The cap is the largest quality lever nobody had pulled, and it was held "
+                "shut by the window rather than by a measurement: at 8,192 the doubled "
+                "cap did not fit. The window went to 16,384 earlier the same day, so it "
+                "fits now. Measured 2026-09-09 over the 4,117 published items in "
+                "state/item-health/2026-09.csv (2026-09-01 to 09, stock ubuntu-latest 4 "
+                "vCPU runners): 36 of them, 0.87 percent, were cut at 5,000 tokens, and "
+                "9 of them, 0.22 percent, would still be cut at 10,000. A cut article "
+                "gains 23 to 5,000 tokens of prefill, median 1,616, and prefill runs at "
+                "a median 9.85 tokens a second over those 4,117 rows, so the worst item "
+                "pays about 8.5 more minutes against a summarize call that costs 114.6 s "
+                "at the median and 312.7 s at the 95th. The prompt is 997 tokens plus "
+                "1.306 a word by least squares over the same rows, so the worst case is "
+                "about 14,100 tokens of a 16,384 window - 86 percent, a margin of 1.16x "
+                "where it was 1.9x. The cap is fingerprint-digested, so every stamp "
+                "moves and no summary written before today is comparable with one "
+                "written after; that is correct, because the text the model read is not "
+                "the same text. Rule #11 is untouched: extract sanitizes before it "
+                "truncates, so a longer article is more untrusted text handled on "
+                "exactly the terms the short one was."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T20:40",
             change=(
