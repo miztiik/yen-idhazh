@@ -226,6 +226,14 @@ export interface ConsoleConfig {
  * `config/appearance.json` and not declared here is dropped - and TypeScript
  * refuses the component that tries to read it. One failure is caught by the
  * compiler; the other is caught by nobody.
+ *
+ * The five `model_` keys added on 2026-09-10 are the case that keep-list was
+ * written for. They are read at BUILD time by `vite.config.ts` and
+ * `svelte.config.js`, and one of them is roughly 600 bytes of hex. Declared
+ * here they would ride in the prerendered `/archive/` document and its
+ * `__data.json` twin, twice, against a page-weight ceiling of 7,553 gzipped
+ * bytes - for a value no component reads. Undeclared, they are dropped without
+ * anybody having to remember to drop them.
  */
 export interface AssistConfig {
 	similarity_floor: number;

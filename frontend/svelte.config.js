@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assetBaseUrl, connectSources } from './asset-base.js';
+import { assetBaseUrl, connectSources, encoderOrigins } from './asset-base.js';
 import { handleUnseenRoutes } from './prerender-guard.js';
 
 /** The CSP hash of every inline script `src/app.html` carries.
@@ -104,7 +104,7 @@ export default {
 			mode: 'auto',
 			directives: {
 				'default-src': ['self'],
-				'connect-src': connectSources(assetBaseUrl()),
+				'connect-src': connectSources(assetBaseUrl(), encoderOrigins()),
 				// The encoder is WebAssembly, which needs its own compile permission.
 				// It does NOT need 'unsafe-eval'.
 				'script-src': ['self', 'wasm-unsafe-eval', ...inlineScriptHashes()],

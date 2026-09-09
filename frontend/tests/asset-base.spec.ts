@@ -21,7 +21,7 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { assetBaseUrl, connectSources } from '../asset-base.js';
+import { assetBaseUrl, connectSources, encoderOrigins, encoderSource } from '../asset-base.js';
 
 const FRONTEND = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -33,14 +33,55 @@ test.describe('the asset base URL ships shut', () => {
 		expect(assetBaseUrl()).toBe('');
 	});
 
-	test('the committed CSP admits this origin and nothing else', () => {
+	test('the committed CSP admits this origin and the encoder origins, and nothing else', () => {
 		// Read as source rather than through an import, because the config the
 		// module would read is the same one the test above just pinned - so an
-		// import would only prove the two agree, not that what is COMMITTED is
-		// `['self']`. A deploy ships the file, not the call.
+		// import would only prove the two agree, not that what is COMMITTED is the
+		// list. A deploy ships the file, not the call.
+		//
+		// The expectation is built from the config rather than written out. A
+		// literal here would have to be edited every time an origin moved, and an
+		// expectation that is edited to match the code it checks checks nothing.
+		// What is pinned instead is the SHAPE: `'self'` first, the drawings valve
+		// shut, and exactly the origins `config/idhazh.json` names for the encoder.
 		const config = readFileSync(join(FRONTEND, 'svelte.config.js'), 'utf8');
-		expect(config).toContain("'connect-src': connectSources(assetBaseUrl())");
-		expect(connectSources(assetBaseUrl())).toEqual(['self']);
+		expect(config).toContain("'connect-src': connectSources(assetBaseUrl(), encoderOrigins())");
+		expect(connectSources(assetBaseUrl(), encoderOrigins())).toEqual(['self', ...encoderOrigins()]);
+	});
+
+	test('the encoder origins are the hosts the committed config names', () => {
+		// Three sources ship: this site, the hub, and the CDN the hub redirects
+		// the 23 MB of weights to. The third is not decoration - a browser checks
+		// a redirect target against the header, so leaving it out would pass the
+		// four small files and block the model, which is the worst of both.
+		const { baseUrl, cdnOrigins } = encoderSource();
+		expect(encoderOrigins()).toEqual([new URL(baseUrl).origin, ...cdnOrigins]);
+		expect(encoderOrigins().length).toBe(2);
+	});
+
+	test('an origin the config does not name cannot reach the header', () => {
+		// The list is derived, so this is the property that matters: whatever the
+		// config says, nothing else gets in. A GitHub host in particular - the
+		// weights are mirrored to a release, and that copy is unreachable to a
+		// browser (no `Access-Control-Allow-Origin` on any hop, 15 refusals in 15
+		// attempts, measured 2026-09-09), so admitting one would widen the surface
+		// for a fetch that cannot work.
+		const shipped = connectSources(assetBaseUrl(), encoderOrigins());
+		expect(shipped.filter((source) => source.includes('github'))).toEqual([]);
+		for (const source of shipped.slice(1)) {
+			expect(new URL(source).origin).toBe(source);
+		}
+	});
+
+	test('an incomplete manifest turns the second origin off rather than half on', () => {
+		// A URL with no digests would be a permission rather than a fallback, so
+		// `encoderSource()` answers the empty block and `encoderOrigins()` answers
+		// nothing. This is the arm that keeps a config edit from widening
+		// `connect-src` without also committing what the bytes must hash to.
+		const source = encoderSource();
+		expect(Object.keys(source.digests).length).toBeGreaterThan(0);
+		expect(source.revision).toMatch(/^[0-9a-f]{40}$/);
+		expect(source.deadlineMs).toBeGreaterThan(0);
 	});
 });
 
@@ -49,11 +90,27 @@ test.describe('the asset base URL opens', () => {
 		expect(connectSources(OPEN)).toEqual(['self', 'https://raw.githubusercontent.com']);
 	});
 
+	test('the drawings valve and the encoder leg are added together, self first', () => {
+		expect(connectSources(OPEN, encoderOrigins())).toEqual([
+			'self',
+			'https://raw.githubusercontent.com',
+			...encoderOrigins()
+		]);
+	});
+
+	test('an origin named twice is listed once', () => {
+		expect(connectSources(OPEN, ['https://raw.githubusercontent.com'])).toEqual([
+			'self',
+			'https://raw.githubusercontent.com'
+		]);
+	});
+
 	test('the path in the value is a directory, not a permission', () => {
 		// CSP has no business knowing which folder the drawings sit in, and a
 		// directory in a source list is a directive that does not do what it looks
-		// like it does.
+		// like it does. The same is true of the encoder's repository prefix.
 		expect(connectSources(OPEN)[1]).not.toContain('/miztiik');
+		expect(encoderOrigins()[0]).not.toContain('/Xenova');
 	});
 
 	test('an empty value is the only thing that means this site', () => {

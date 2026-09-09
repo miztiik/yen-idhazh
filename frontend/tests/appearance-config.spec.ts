@@ -118,12 +118,16 @@ test.describe('the committed appearance file', () => {
 
 /** The knobs the `assist` block carries that no page may be handed.
  *
- * `config/` keeps eight keys under `assist` and the browser reads four. The
- * other four belong to the pipeline: `recall_min` and `eval_corpus_through` to
- * the retrieval gate, `max_tokens` and `min_readable_letter_share` to the
- * encoder. Until 2026-09-05 all eight were merged straight into the prerendered
+ * `config/` keeps thirteen keys under `assist` and the browser reads four. The
+ * other nine belong to the build and the pipeline: `recall_min` and
+ * `eval_corpus_through` to the retrieval gate, `max_tokens` and
+ * `min_readable_letter_share` to the encoder, and the five `model_` keys to
+ * `vite.config.ts` and `svelte.config.js`, which read them at BUILD time and
+ * put what a tab needs in the bundle rather than in the document. Until
+ * 2026-09-05 the whole block was merged straight into the prerendered
  * `/archive/` document - one date and three numbers about the build, shipped to
- * every reader who ever opened the archive.
+ * every reader who ever opened the archive. Nine of them now, and about 600
+ * bytes of it hex, so the keep-list matters more than it did.
  *
  * The digest block has had this discipline since it was split. This is the same
  * question asked of the block beside it, and the answer had never been checked.

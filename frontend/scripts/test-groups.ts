@@ -12,7 +12,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'appearance-config', 'archive-scope', 'asset-base', 'day-list', 'day-metrics',
 		'extraction-window', 'frame',
 		'glance-and-rank', 'item-health-day', 'model-cards', 'one-pass-reductions', 'preview-port',
-		'telemetry-hold', 'throughput-window', 'vocabulary'
+		'telemetry-hold', 'throughput-window', 'vocabulary', 'weights'
 	],
 	reader: [
 		'dated-day', 'day-states', 'filter-bar', 'footer-facts', 'item-card', 'item-meta',

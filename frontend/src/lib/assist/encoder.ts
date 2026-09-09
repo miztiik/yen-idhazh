@@ -31,9 +31,27 @@ export const ENCODER_ID = 'all-minilm-l6-v2-quantized';
  * vectors with it, and the only symptom is worse ranking.
  *
  * Moving it makes every returning searcher pay the whole download again, so it
- * moves when the weights move and at no other time.
+ * moves when the weights move and at no other time. That is also why it is a
+ * DATE and not the upstream commit below: the two say different things, and
+ * putting the commit in the path would rename the directory - and re-download
+ * 23 MB on every returning reader - the first time a revision was corrected
+ * without the bytes changing.
  */
-export const ENCODER_VERSION = '2026-08-22';
+export const ENCODER_DIRECTORY = '2026-08-22';
+
+/** The upstream commit the committed weights are the bytes of.
+ *
+ * Forty hex characters, and the same value as `assist.model_revision` in
+ * `config/idhazh.json` - `backend/tests/test_embed.py` fails when the two
+ * differ. It is what the failover leg pins its fetch to, so the second origin
+ * is asked for the bytes this manifest describes rather than for whatever was
+ * uploaded to a branch last.
+ *
+ * It does NOT identify one commit: the parent carries the same five files. It
+ * is the head of `main` on the fetch date, recorded because a fetch has to name
+ * something and a branch name names nothing repeatable.
+ */
+export const ENCODER_VERSION = '751bff37182d3f1213fa05d7196b954e230abad9';
 
 /** The directory under `assist/models/` that transformers.js loads.
  *
@@ -42,7 +60,7 @@ export const ENCODER_VERSION = '2026-08-22';
  * this as a model id, and a slash in one is ordinary - upstream ids are
  * `org/name`.
  */
-export const ENCODER_PATH = `${ENCODER_ID}/${ENCODER_VERSION}`;
+export const ENCODER_PATH = `${ENCODER_ID}/${ENCODER_DIRECTORY}`;
 
 /** The width the runner writes, so the guard can run before a query exists.
  *
