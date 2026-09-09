@@ -1,0 +1,14 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "{\"labels\": [{\"element_id\": \"quantity-149-159\", \"measure\": \"cost per million tokens\", \"dimension\": \"model\", \"entity\": \"Example Lab\", \"time_element_id\": \"\", \"attribution\": \"self_reported\", \"hedge\": false, \"salience\": \"primary\"}, {\"element_id\": \"quantity-197-201\", \"measure\": \"throughput on commodity CPUs\", \"dimension\": \"model\", \"entity\": \"Example Lab\", \"time_element_id\": \"\", \"attribution\": \"self_reported\", \"hedge\": false, \"salience\": \"supporting\"}, {\"element_id\": \"quantity-500-512\", \"measure\": \"an address no pass minted\", \"dimension\": \"\", \"entity\": \"\", \"time_element_id\": \"\", \"attribution\": \"unattributed\", \"hedge\": false, \"salience\": \"background\"}], \"proposed\": [{\"sentence_id\": \"s0\", \"surface\": \"fell by about a third\"}], \"quotes\": [], \"claims\": [{\"sentence_start_id\": \"s0\", \"sentence_end_id\": \"s0\", \"speaker\": \"Example Lab\", \"attribution\": \"self_reported\", \"hedge\": true}], \"keyphrases\": [\"inference cost\", \"throughput\"], \"lede_sentence_ids\": [\"s0\"]}",
+        "role": "assistant"
+      }
+    }
+  ],
+  "model": "qwen3.5-9b-q4-k-m",
+  "object": "chat.completion"
+}
