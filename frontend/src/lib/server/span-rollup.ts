@@ -27,7 +27,7 @@
 
 import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in the module docstring.
-import { readShards, STATE_ROOT, type CsvTable } from './payload';
+import { LEDGER_WINDOW_MONTHS, readShards, STATE_ROOT, type CsvTable } from './payload';
 
 /** The day the span record begins.
  *
@@ -188,15 +188,19 @@ export function foldRollup(table: CsvTable): SpanRun[] {
 	return built;
 }
 
-/** Every run in the committed rollup, newest first, read through `STATE_ROOT`.
+/** The newest runs in the committed rollup, newest first, read through `STATE_ROOT`.
  *
  * `STATE_ROOT` and not a literal path, so the canary suite can point it at a
  * fixture tree and a page draws the fixture rollup rather than the real one -
  * the same switch every other `state/` reader is built on. A missing directory
  * is an empty read, never a throw.
+ *
+ * `months` is the cover, and the caller wants the newest entry: the rollup is
+ * sharded by month, so reading the newest few shards answers that and reading
+ * every one of them answers it no better (`CLAUDE.md` Rule #12).
  */
-export function loadSpanRollup(): SpanRun[] {
-	return foldRollup(readShards(join(STATE_ROOT, 'span-rollup')));
+export function loadSpanRollup(months: number = LEDGER_WINDOW_MONTHS): SpanRun[] {
+	return foldRollup(readShards(join(STATE_ROOT, 'span-rollup'), months));
 }
 
 // ---------------------------------------------------------------------------

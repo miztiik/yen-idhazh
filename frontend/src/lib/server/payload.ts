@@ -80,20 +80,95 @@ export const SOURCE_HEALTH_PATH = process.env.DIGEST_ROOT
 
 const DATE_PART = /^\d{2,4}$/;
 
-/** Every published date, newest first. Read from the committed tree, not an index file. */
-export function publishedDates(root: string = DIGEST_ROOT): string[] {
+const DAY_MS = 86_400_000;
+
+/** The cover every read over the archive takes when its caller names none.
+ *
+ * 90 is the widest span the window control offers - `console.window_presets`
+ * ends there in `config/appearance.json` - so a panel cannot draw a day older
+ * than this whatever the operator does. Reading further back buys a number
+ * nothing can display (`CLAUDE.md` Rule #12).
+ *
+ * It is a constant here and not a config read because `config.ts` imports
+ * `REPO_ROOT` from this module, so importing the config reader back would close
+ * a cycle. A surface that has already worked out its own widest preset passes
+ * it - the console routes all do - and this is what a caller with no window of
+ * its own inherits.
+ */
+export const ARCHIVE_WINDOW_DAYS = 90;
+
+/** The month shards a span of days can touch, rounded up so it cannot starve.
+ *
+ * A month is at least 28 days, so a span of `windowDays` crosses at most
+ * `windowDays / 28` boundaries, and it starts inside a month it may only touch
+ * one day of. The estimate is deliberately generous: at 90 days it says five
+ * where the calendar allows four, because the three shortest consecutive months
+ * run to 89 days. One shard too many costs a file; one too few costs a panel a
+ * day it should have drawn.
+ *
+ * `-1` in, `-1` out - a cover of everything in days is a cover of everything in
+ * months.
+ */
+export function shardMonths(windowDays: number): number {
+	return unbounded(windowDays) ? -1 : Math.ceil(windowDays / 28) + 1;
+}
+
+/** The month shards that cover `ARCHIVE_WINDOW_DAYS`.
+ *
+ * Derived rather than written down, so the two covers cannot drift apart: a
+ * surface that widens its day window widens its ledger window by the same rule.
+ */
+export const LEDGER_WINDOW_MONTHS = shardMonths(ARCHIVE_WINDOW_DAYS);
+
+/** `-1` and nothing else means "every one of them" (`docs/concepts/growing-reads.md`).
+ *
+ * Not `0`, not `null`, and not a very large number - a large number is a cover
+ * that silently turns finite the day the archive outgrows it.
+ */
+function unbounded(cover: number): boolean {
+	return cover < 1;
+}
+
+/** Published dates newest first, back as far as `windowDays` from the newest one.
+ *
+ * The walk descends newest first and stops at the cutoff, so it opens the year,
+ * month and day directories the window reaches and no others. Adding another
+ * published day adds another directory this call never lists once the window has
+ * been filled (`CLAUDE.md` Rule #12). Pass `-1` to read the whole tree, and say
+ * beside the call why (`docs/concepts/growing-reads.md`).
+ *
+ * **The window is anchored on the newest day found, never on today.** Anchored
+ * on the clock, a corpus that stopped publishing three months ago would answer
+ * with nothing at all, and `latestDate` - which is this function's first entry -
+ * would take the whole site down with it. This is the same anchoring `seedCutoff`
+ * takes below and for the same reason.
+ *
+ * One listing of the root is unavoidable and it is the honest residue: it names
+ * one directory a year, and finding the newest year is what the anchor needs.
+ */
+export function publishedDates(
+	root: string = DIGEST_ROOT,
+	windowDays: number = ARCHIVE_WINDOW_DAYS
+): string[] {
 	if (!existsSync(root)) return [];
 	const found: string[] = [];
-	for (const year of dirsIn(root)) {
-		for (const month of dirsIn(join(root, year))) {
-			for (const day of dirsIn(join(root, year, month))) {
-				if (existsSync(join(root, year, month, day, 'digest.json'))) {
-					found.push(`${year}-${month}-${day}`);
+	let cutoff: string | null = null;
+	for (const year of dirsIn(root).reverse()) {
+		if (cutoff !== null && year < cutoff.slice(0, 4)) break;
+		for (const month of dirsIn(join(root, year)).reverse()) {
+			if (cutoff !== null && `${year}-${month}` < cutoff.slice(0, 7)) break;
+			for (const day of dirsIn(join(root, year, month)).reverse()) {
+				const date = `${year}-${month}-${day}`;
+				if (cutoff !== null && date < cutoff) break;
+				if (!existsSync(join(root, year, month, day, 'digest.json'))) continue;
+				found.push(date);
+				if (cutoff === null && !unbounded(windowDays)) {
+					cutoff = dayKey(new Date(toDay(date).getTime() - (windowDays - 1) * DAY_MS));
 				}
 			}
 		}
 	}
-	return found.sort().reverse();
+	return found;
 }
 
 function dirsIn(path: string): string[] {
@@ -141,8 +216,11 @@ export function loadDay(date: string, root: string = DIGEST_ROOT): DigestDay | n
 	}
 }
 
-export function latestDate(root: string = DIGEST_ROOT): string | null {
-	return publishedDates(root)[0] ?? null;
+export function latestDate(
+	root: string = DIGEST_ROOT,
+	windowDays: number = ARCHIVE_WINDOW_DAYS
+): string | null {
+	return publishedDates(root, windowDays)[0] ?? null;
 }
 
 /** A day split at the seam a reading route loads across.
@@ -347,26 +425,39 @@ export function readCsv(path: string): CsvTable {
 
 /** One row per scored item, read from the committed ledger and never recomputed.
  *
- * The ledger is a directory of month shards, so this reads them oldest first and
- * hands back one table. The concatenation is what every caller had before, and
- * a caller that only wants a window can now skip whole months instead.
+ * The ledger is a directory of month shards, so this reads the newest `months`
+ * of them oldest first and hands back one table. Pass `-1` to read every month,
+ * and say beside the call why (`docs/concepts/growing-reads.md`).
  */
-export function evalRows(): CsvTable {
-	return readShards(join(STATE_ROOT, 'scores'));
+export function evalRows(months: number = LEDGER_WINDOW_MONTHS): CsvTable {
+	return readShards(join(STATE_ROOT, 'scores'), months);
 }
 
-/** Every `<YYYY-MM>.csv` in a ledger directory, oldest first, as one table.
+/** The newest `months` `<YYYY-MM>.csv` shards of a ledger, oldest first, as one table.
  *
- * Two ledgers shard by month and both wanted this loop. The columns come from
- * the first shard that has any, so an empty month cannot blank the header.
+ * Three ledgers shard by month and all three wanted this loop. The columns come
+ * from the first shard that has any, so an empty month cannot blank the header.
+ *
+ * **This is where the bound has to sit.** It is exported, so bounding only
+ * `evalRows` and `itemHealthRows` would leave the next caller reading every
+ * month a run ever wrote. Adding another month adds a file this call does not
+ * open once the cover is filled (`CLAUDE.md` Rule #12); pass `-1` to open all of
+ * them.
+ *
+ * The listing itself still names every shard, and that is the honest residue:
+ * one directory entry a month, read to find which the newest are. Deriving the
+ * newest stem from today's date instead would answer nothing at all for a
+ * ledger whose last run was two months ago.
  */
-export function readShards(dir: string): CsvTable {
+export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): CsvTable {
 	if (!existsSync(dir)) return { rows: [], columns: [] };
+	const shards = readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.sort();
+	const kept = unbounded(months) ? shards : shards.slice(Math.max(0, shards.length - months));
 	const rows: Record<string, string>[] = [];
 	let columns: string[] = [];
-	for (const shard of readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.sort()) {
+	for (const shard of kept) {
 		const table = readCsv(join(dir, shard));
 		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
 		rows.push(...table.rows);
@@ -374,9 +465,9 @@ export function readShards(dir: string): CsvTable {
 	return { rows, columns };
 }
 
-/** One row per planned item per run, read from month shards. */
-export function itemHealthRows(): CsvTable {
-	return readShards(join(STATE_ROOT, 'item-health'));
+/** One row per planned item per run, read from the newest `months` shards. */
+export function itemHealthRows(months: number = LEDGER_WINDOW_MONTHS): CsvTable {
+	return readShards(join(STATE_ROOT, 'item-health'), months);
 }
 
 /** One published day's item-health rows, from that month's shard alone.
@@ -545,30 +636,45 @@ export function dayMetrics(
 	return found;
 }
 
-/** Public monthly telemetry shards. These are safe for a browser to fetch. */
-export function telemetryMonths(root: string = TELEMETRY_ROOT): string[] {
+/** Public monthly telemetry shards, the newest `months` of them, oldest first.
+ *
+ * These are safe for a browser to fetch, and the console hands the whole list
+ * to the browser so a reader can pan. A cover here therefore bounds two things
+ * at once: what this build reads, and how far back a pan can reach. Pass `-1`
+ * where the pan has to reach every month on record.
+ */
+export function telemetryMonths(
+	root: string = TELEMETRY_ROOT,
+	months: number = LEDGER_WINDOW_MONTHS
+): string[] {
 	if (!existsSync(root)) return [];
-	return readdirSync(root)
+	const found = readdirSync(root)
 		.filter((name) => /^\d{4}-\d{2}\.csv$/.test(name))
 		.map((name) => name.slice(0, 7))
 		.sort();
+	return unbounded(months) ? found : found.slice(Math.max(0, found.length - months));
 }
 
-/** Every month with an index on disk, newest first.
+/** The newest `months` months with an index on disk, newest first.
  *
  * The names only. The stories inside them are fetched by the browser, which is
  * what keeps the archive page a fixed size while the corpus grows.
+ *
+ * The archive page passes `-1`, because this list is every month a reader may
+ * ask for and a cover would delete the older ones from the page.
  */
-export function indexMonths(root: string = INDEX_ROOT): string[] {
+export function indexMonths(
+	root: string = INDEX_ROOT,
+	months: number = LEDGER_WINDOW_MONTHS
+): string[] {
 	if (!existsSync(root)) return [];
-	return readdirSync(root)
+	const found = readdirSync(root)
 		.filter((name) => /^\d{4}-\d{2}\.json$/.test(name))
 		.map((name) => name.slice(0, 7))
 		.sort()
 		.reverse();
+	return unbounded(months) ? found : found.slice(0, months);
 }
-
-const DAY_MS = 86_400_000;
 
 /** The oldest day the seed keeps, or null when no month holds a dated row.
  *
@@ -602,9 +708,14 @@ function seedCutoff(
  *
  * A window is a count of days, so it can straddle a month boundary. Reading is
  * still bounded: the shards are monthly, so the worst case is two of them.
+ *
+ * The month list follows the same rule. A bounded seed needs `LEDGER_WINDOW_MONTHS`
+ * shards at most, so it asks for those; an unbounded seed asks for every month,
+ * which is what "no window" means.
  */
 export function telemetryRows(root: string = TELEMETRY_ROOT, windowDays?: number): CsvTable {
-	const months = telemetryMonths(root);
+	const bounded = windowDays !== undefined && windowDays > 0;
+	const months = telemetryMonths(root, bounded ? LEDGER_WINDOW_MONTHS : -1);
 	const shards = new Map<string, CsvTable>();
 	const read = (month: string): CsvTable => {
 		let table = shards.get(month);
@@ -616,7 +727,7 @@ export function telemetryRows(root: string = TELEMETRY_ROOT, windowDays?: number
 	};
 
 	const cutoff =
-		windowDays !== undefined && windowDays > 0 ? seedCutoff(months, read, windowDays) : null;
+		bounded && windowDays !== undefined ? seedCutoff(months, read, windowDays) : null;
 	const rows: Record<string, string>[] = [];
 	let columns: string[] = [];
 	for (const month of months) {
@@ -639,10 +750,11 @@ export interface FeedResult {
 	detail: string;
 }
 
-/** Every feed result on record, one per feed per run, oldest shard first.
+/** Feed results from the newest `months` shards, one per feed per run, oldest first.
  *
  * Sharded by month under `state/feed-health/`, so this reads a directory rather
- * than a file. Absent is the ordinary state of a fresh clone: no run has
+ * than a file - through `readShards`, so the cover is the one every month-sharded
+ * ledger takes. Absent is the ordinary state of a fresh clone: no run has
  * written a record yet, and no record is exactly what an empty list says.
  *
  * Settled here, at the one read every console panel shares, rather than in each
@@ -650,26 +762,19 @@ export interface FeedResult {
  * one event, and a panel that counted both would count that run twice. Doing it
  * once is also what stops two panels disagreeing about the same feed.
  */
-export function feedResults(): FeedResult[] {
-	const dir = join(STATE_ROOT, 'feed-health');
-	if (!existsSync(dir)) return [];
-	const found: FeedResult[] = [];
-	for (const shard of readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.sort()) {
-		for (const row of readCsv(join(dir, shard)).rows) {
-			found.push({
-				runId: row.run_id ?? '',
-				date: row.date ?? '',
-				feedId: row.feed_id ?? '',
-				checkedAt: row.checked_at ?? '',
-				outcome: row.outcome ?? '',
-				status: row.status ? Number(row.status) : null,
-				items: Number(row.items ?? 0) || 0,
-				detail: row.detail ?? ''
-			});
-		}
-	}
+export function feedResults(months: number = LEDGER_WINDOW_MONTHS): FeedResult[] {
+	const found: FeedResult[] = readShards(join(STATE_ROOT, 'feed-health'), months).rows.map(
+		(row) => ({
+			runId: row.run_id ?? '',
+			date: row.date ?? '',
+			feedId: row.feed_id ?? '',
+			checkedAt: row.checked_at ?? '',
+			outcome: row.outcome ?? '',
+			status: row.status ? Number(row.status) : null,
+			items: Number(row.items ?? 0) || 0,
+			detail: row.detail ?? ''
+		})
+	);
 	return settled(found);
 }
 
@@ -775,10 +880,16 @@ export interface RunSummary {
  * top-level counts at all. The day's totals are summed across its runs, and the
  * site size is taken from the last run rather than added up - the site is one
  * thing measured once per run, not a new thing each run.
+ *
+ * One manifest open a day inside `windowDays`, and none outside it - so another
+ * published day costs this call nothing (`CLAUDE.md` Rule #12).
  */
-export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
+export function loadManifests(
+	root: string = DIGEST_ROOT,
+	windowDays: number = ARCHIVE_WINDOW_DAYS
+): RunSummary[] {
 	const found: RunSummary[] = [];
-	for (const date of publishedDates(root)) {
+	for (const date of publishedDates(root, windowDays)) {
 		const [year, month, day] = date.split('-');
 		const path = join(root, year, month, day, 'run.json');
 		if (!existsSync(path)) continue;
@@ -831,10 +942,18 @@ export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
  * bytes of one tree by somebody else's articles the first time a run planned
  * items it did not publish - which is the lesson
  * `backend/idhazh/retention.py` already wrote down about its own pairing.
+ *
+ * One day payload open a day inside `windowDays`, and none outside it. This is
+ * the most expensive of the archive reads - a day payload is hundreds of
+ * kilobytes where a manifest is two - so it is the one the cover buys the most
+ * on (`CLAUDE.md` Rule #12).
  */
-export function publishedItems(root: string = DIGEST_ROOT): Map<string, number> {
+export function publishedItems(
+	root: string = DIGEST_ROOT,
+	windowDays: number = ARCHIVE_WINDOW_DAYS
+): Map<string, number> {
 	const found = new Map<string, number>();
-	for (const date of publishedDates(root)) {
+	for (const date of publishedDates(root, windowDays)) {
 		const day = loadDay(date, root);
 		if (day === null) continue;
 		found.set(date, day.items.length);
@@ -860,10 +979,16 @@ export interface DayVisuals {
  * The item count rides along rather than costing a second pass: the arm's
  * second threshold is a share of what the day published, and the day payload is
  * already open here.
+ *
+ * Bounded the same way `publishedItems` is, and for the same reason: no console
+ * panel can draw a day older than the widest preset (`CLAUDE.md` Rule #12).
  */
-export function publishedCharts(root: string = DIGEST_ROOT): Map<string, DayVisuals> {
+export function publishedCharts(
+	root: string = DIGEST_ROOT,
+	windowDays: number = ARCHIVE_WINDOW_DAYS
+): Map<string, DayVisuals> {
 	const found = new Map<string, DayVisuals>();
-	for (const date of publishedDates(root)) {
+	for (const date of publishedDates(root, windowDays)) {
 		const day = loadDay(date, root);
 		if (day === null) continue;
 		found.set(date, {

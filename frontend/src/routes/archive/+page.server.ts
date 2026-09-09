@@ -6,7 +6,13 @@ import type { DigestDay, DigestVerticalRef } from '$lib/payload/types';
 export const prerender = true;
 
 export function load() {
-	const loaded = publishedDates()
+	// `-1` and it says so: this page IS the archive
+	// (`docs/concepts/growing-reads.md`). The calendar names every published day,
+	// the topic pills count stories across all of them, and the day count is the
+	// whole count - so a cover would delete the older half of the page rather than
+	// making it cheaper to draw. It is the most expensive read on the site and the
+	// one place the cost is the answer.
+	const loaded = publishedDates(undefined, -1)
 		.map((date) => loadDay(date))
 		.filter((day): day is DigestDay => day !== null);
 
@@ -51,8 +57,10 @@ export function load() {
 		dayCount: days.length,
 		// The months a browser may ask for, and how many stories they hold between
 		// them. Both grow per month and per day, never per story, which is what
-		// keeps this page a fixed size while the archive grows.
-		months: indexMonths(),
+		// keeps this page a fixed size while the archive grows. `-1` because a
+		// reader may ask for any of them, and a cover would hide the older months
+		// from the page (`docs/concepts/growing-reads.md`).
+		months: indexMonths(undefined, -1),
 		stories: loaded.reduce((count, day) => count + day.items.length, 0),
 		verticalNames,
 		verticals,

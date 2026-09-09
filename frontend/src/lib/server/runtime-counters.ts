@@ -32,7 +32,13 @@ import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in the module docstring.
 import { itemRead } from '../charts/machine';
 import { inferenceConfig, runConfig } from './config';
-import { itemHealthRows, readCsv, STATE_ROOT, type CsvTable } from './payload';
+import {
+	itemHealthRows,
+	LEDGER_WINDOW_MONTHS,
+	readCsv,
+	STATE_ROOT,
+	type CsvTable
+} from './payload';
 
 /** How far the two clocks may sit apart before one of them is wrong, in percent.
  *
@@ -648,7 +654,12 @@ export function machineLimits(): MachineLimits {
  *
  * The one caller a route needs. Reading happens here and nowhere else, so
  * `machineCounters` stays drivable from a fixture.
+ *
+ * `months` covers the item-health side, which is a directory of month shards.
+ * `state/runtime-counters.csv` is one file and carries its own cover: the route
+ * keeps the runs inside the open span, and every run older than the widest
+ * preset is filtered out before a panel sees it.
  */
-export function loadMachineCounters(): MachineCounters {
-	return machineCounters(runtimeCounterRows().rows, itemHealthRows().rows, machineLimits());
+export function loadMachineCounters(months: number = LEDGER_WINDOW_MONTHS): MachineCounters {
+	return machineCounters(runtimeCounterRows().rows, itemHealthRows(months).rows, machineLimits());
 }

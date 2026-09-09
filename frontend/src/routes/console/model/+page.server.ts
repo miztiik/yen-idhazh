@@ -40,7 +40,14 @@ import {
 import { stacked } from '$lib/charts/stacked';
 import { windowOfDays } from '$lib/charts/viewport';
 import { renderToSvg } from '$lib/server/chart-render';
-import { dayMetrics, evalRows, itemHealthRows, loadDay, publishedDates } from '$lib/server/payload';
+import {
+	dayMetrics,
+	evalRows,
+	itemHealthRows,
+	loadDay,
+	publishedDates,
+	shardMonths
+} from '$lib/server/payload';
 
 export const prerender = true;
 
@@ -70,13 +77,14 @@ export type { EvalDay } from '$lib/console/eval-instruments';
  * a column of `state/scores/`, which carries the inputs it was decided from, so
  * this is the only ledger on disk that can answer the question.
  *
- * Every committed day is opened. That is a build-time read of the same tree
- * `publishedItems` already walks for the Pipelines route, and nothing about it
- * reaches a browser: what ships is one count per reason per day.
+ * `windowDays` is the cover. The caller filters what comes back to the widest
+ * span the control offers, so a day older than that was opened and thrown away
+ * (`CLAUDE.md` Rule #12). Nothing about the read reaches a browser: what ships
+ * is one count per reason per day.
  */
-function doubtReasonDays(): ReasonDay[] {
+function doubtReasonDays(windowDays: number): ReasonDay[] {
 	return reasonDays(
-		publishedDates()
+		publishedDates(undefined, windowDays)
 			.map((date) => {
 				const day = loadDay(date);
 				if (day === null) return null;
@@ -110,11 +118,16 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
  * the counts printed beside it.
  */
 export async function load() {
-	const { rows } = evalRows();
-	const itemRows = itemHealthRows().rows;
+	const console = consoleConfig();
+	// The widest span the control can reach, worked out before the ledgers are
+	// read rather than after: nothing older than this can be drawn whatever the
+	// operator does, so nothing older is opened either (`CLAUDE.md` Rule #12).
+	const widestDays = Math.max(...console.window_presets);
+	const shards = shardMonths(widestDays);
+	const { rows } = evalRows(shards);
+	const itemRows = itemHealthRows(shards).rows;
 	const modelOnDate = modelByDate(rows);
 	const itemHealthByDate = byDate(itemRows);
-	const console = consoleConfig();
 	const bands = summarizeConfig().bands;
 	const today = new Date().toISOString().slice(0, 10);
 
@@ -160,7 +173,7 @@ export async function load() {
 	// same reason `runLengths` is: each day is already seven small numbers, so
 	// narrowing the window is a filter and never a re-aggregation, and a day
 	// older than the widest preset could never be drawn.
-	const reasons = reasonsWithin(doubtReasonDays(), {
+	const reasons = reasonsWithin(doubtReasonDays(widestDays), {
 		start: widest.start,
 		end: widest.end
 	});

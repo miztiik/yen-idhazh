@@ -30,6 +30,7 @@ import {
 	loadManifests,
 	publishedCharts,
 	publishedItems,
+	shardMonths,
 	sourceHealthView,
 	telemetryMonths,
 	telemetryRows,
@@ -551,13 +552,20 @@ function trouble(rows: FeedResult[], quarantineAfter: number): FeedTrouble[] {
  * and what stops today's code quietly restating yesterday's numbers.
  */
 export async function load() {
-	const { rows } = evalRows();
-	const itemRows = itemHealthRows().rows;
+	const console = consoleConfig();
+	// The widest span the control can reach. Nothing older than this can be drawn
+	// whatever the operator does, so every read below is covered by it and no
+	// panel loses a day (`CLAUDE.md` Rule #12). Read from `console.window_presets`
+	// rather than written down here, so raising the widest preset widens the
+	// reads with it (Rule #6).
+	const widest = Math.max(...console.window_presets);
+	const shards = shardMonths(widest);
+	const { rows } = evalRows(shards);
+	const itemRows = itemHealthRows(shards).rows;
 	const floorPct = runConfig().success_floor_pct;
 	const itemCeiling = runConfig().safety_ceiling_per_run;
 	const siteBudgetMb = retentionConfig().site_budget_mb;
 	const quarantineAfter = collectConfig().availability_strikes_before_rest;
-	const console = consoleConfig();
 	const summarize = summarizeConfig();
 
 	const itemHealthByDate = byDate(itemRows);
@@ -582,7 +590,7 @@ export async function load() {
 		.filter((day) => [day.fetch, day.extract, day.summarize].some((stage) => stage.timed > 0))
 		.sort((a, b) => b.date.localeCompare(a.date));
 
-	const manifests = loadManifests();
+	const manifests = loadManifests(undefined, widest);
 	const readInPartByRun = cutsByRun(itemRows);
 	// The strip is a time axis, so it reads oldest to newest. The Runs table under
 	// it still reads newest first, which is why this copies rather than reverses:
@@ -597,7 +605,7 @@ export async function load() {
 		}))
 	}));
 
-	const results = feedResults();
+	const results = feedResults(shards);
 	// The list names only the feeds that broke, which is the right list and half
 	// an answer. This is the other half, read over the whole record because the
 	// pipeline rests on the whole count and not on a windowed one.
@@ -615,7 +623,7 @@ export async function load() {
 	const publicRows = telemetryRows(TELEMETRY_ROOT, console.default_window_days).rows.map(
 		publicTelemetry
 	);
-	const charts = chartDays(manifests, publishedCharts());
+	const charts = chartDays(manifests, publishedCharts(undefined, widest));
 	const flow = chartFlow(charts);
 	// The window the page opens on, drawn here so the prerendered card and the
 	// control above it cannot disagree at first paint. The browser recomputes the
@@ -635,7 +643,6 @@ export async function load() {
 	// exactly as `Sources cut short most often` below it does. A pan asks a
 	// question about days the reduction was not taken over, and re-taking it in
 	// the browser needs the rows the seed deliberately does not carry.
-	const widest = Math.max(...console.window_presets);
 	const costRows = telemetryRows(TELEMETRY_ROOT, widest).rows;
 	const costDates = [...new Set(costRows.map((row) => row.date ?? '').filter(Boolean))].sort();
 	const itemCostByWindow: ItemCost[] = console.window_presets.map((days) => {
@@ -668,7 +675,7 @@ export async function load() {
 	// Six questions, six shapes. Each is drawn here so the console is complete
 	// before any script runs; the client rebuilds the same option to hydrate.
 	const runsDonut = runHealth(manifests);
-	const articles = publishedItems();
+	const articles = publishedItems(undefined, widest);
 	const perArticle = siteCost(manifests, articles, seed);
 	const mixDates = datesIn(publicRows);
 	const mix =
@@ -774,7 +781,13 @@ export async function load() {
 		// holds behind it (`CLAUDE.md` Rule #12).
 		extractionByWindow,
 		telemetryRows: publicRows,
-		telemetryMonths: telemetryMonths(),
+		// Every month a browser may ask for, and `-1` says so out loud
+		// (`docs/concepts/growing-reads.md`). A cover here would cap how far the
+		// operator can pan, which is a different thing from how far a panel can
+		// draw - so it is the one console read that stays uncovered. It opens no
+		// file: it is one directory listing, and what crosses is a seven-character
+		// month name, so the page grows by seven bytes a month and by nothing a day.
+		telemetryMonths: telemetryMonths(undefined, -1),
 		console,
 		// How many separate figures of one unit make an article chartable. The
 		// extraction panel prints it, and the pass it reports on reads the same knob.
