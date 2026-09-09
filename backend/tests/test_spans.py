@@ -155,6 +155,7 @@ def traced_settings() -> config.Settings:
                 )
             }
         ),
+        appearance=settings.appearance,
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         watchlist=settings.watchlist,
@@ -177,6 +178,7 @@ def untraced_settings() -> config.Settings:
                 )
             }
         ),
+        appearance=settings.appearance,
         sources=settings.sources,
         taxonomy=settings.taxonomy,
         watchlist=settings.watchlist,
