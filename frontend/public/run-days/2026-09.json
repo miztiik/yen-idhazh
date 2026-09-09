@@ -657,5 +657,48 @@
     "site_bytes": 26248252,
     "site_files": 466,
     "version": "2026-09-09"
+  },
+  {
+    "date": "2026-09-09",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 10,
+    "published_items": 142,
+    "runs": [
+      {
+        "charts_drafted": 8,
+        "decided": 73,
+        "decision_ms": 1981594,
+        "failed": 7,
+        "n": 1,
+        "planned": 80,
+        "prefiltered": 33,
+        "run_id": "2026-09-09-34323771996",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-09T07:26:00Z",
+        "status": "partial",
+        "succeeded": 73
+      },
+      {
+        "charts_drafted": 7,
+        "decided": 69,
+        "decision_ms": 1882778,
+        "failed": 11,
+        "n": 2,
+        "planned": 80,
+        "prefiltered": 34,
+        "run_id": "2026-09-09-34345739900",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-09T11:28:57Z",
+        "status": "partial",
+        "succeeded": 69
+      }
+    ],
+    "site_bytes": 26753751,
+    "site_files": 478,
+    "version": "2026-09-09"
   }
 ]
