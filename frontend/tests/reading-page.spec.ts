@@ -125,16 +125,19 @@ const SERVED_ITEMS = BUSIEST.items;
 
 /** The day's own facts.
  *
- * **Not the served file.** That carries `version` and `items` and nothing else -
- * the day's verticals, leads and runs travel in the prerendered document, which
- * is the whole point of the projection. So the leads and the desk counts are
- * read from the tree the build read.
+ * **The served file carries them since 2026-09-09.** It used to carry `version`
+ * and `items` and nothing else, with the day's verticals, leads and runs riding
+ * in the prerendered document - and deleting that document is what forced them
+ * onto the wire. They are still read from the tree the build read, because that
+ * is where the check's expectation should come from rather than from the file
+ * under test.
  */
 const SOURCE = publishedDates(COMMITTED).includes(DAY) ? COMMITTED : CANARY;
 const FACTS = loadDay(DAY, SOURCE);
 
-/** A topic of that day, taken from the tree rather than named. */
-const TOPIC = subdirectories(join(BUILD, DAY)).at(0) as string;
+/** A topic of that day, taken from the day's own desk list rather than from a
+ * directory `build/` no longer writes. */
+const TOPIC = String((FACTS?.verticals ?? [])[0]?.id ?? '');
 
 const SEED = shellSeedItems();
 /** Whether the day is longer than the document that seeds it. False on the

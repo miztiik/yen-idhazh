@@ -34,20 +34,16 @@ import { orderByTime, railRows } from '../src/lib/day-shape';
 import { railTime, type RailForm } from '../src/lib/format';
 import { loadDay } from '../src/lib/server/payload';
 import type { DigestItem } from '../src/lib/payload/types';
+import { CANARY, newestDate } from './support/published';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The tree the preview server serves, so a route here is a route that exists. */
 const BUILD = join(HERE, '..', 'build');
-/** The tree that built it. */
-const CANARY = resolve(HERE, '..', '..', 'backend', 'var', 'canary', 'digest');
 
 /** Never a date written here: a hardcoded one passes on an empty page the
- * moment the fixture moves. */
-const DAY = readdirSync(BUILD, { withFileTypes: true })
-	.filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(entry.name))
-	.map((entry) => entry.name)
-	.sort()
-	.at(-1) as string;
+ * moment the fixture moves. Read off the digest tree rather than out of
+ * `build/`, which since 2026-09-09 holds no dated directory at all. */
+const DAY = newestDate();
 
 /** The grouping the page draws at, read off the config so a knob moved there
  * moves the expectation with it. */

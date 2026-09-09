@@ -1906,6 +1906,20 @@ the variable protects the shell you remember to set it in and nothing else.
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **`[System.IO.File]` resolves a relative path against the PROCESS directory,
+  which `Set-Location` never moves.** `Set-Location` changes PowerShell's own
+  location; a .NET call knows nothing about it. So
+  `[System.IO.File]::ReadAllBytes('tests/fixtures/x.json')` after
+  `Set-Location <a worktree>` reads that path under the shell process's original
+  directory - which on this box is the shared main checkout. Observed 2026-09-09
+  normalising a fixture's line endings: the read reported 3,806 bytes where the
+  file in the worktree was 4,324, the "fix" was written back to the main
+  checkout, and the worktree's file was untouched. It was only harmless because
+  the bytes round-tripped identically. Two tells that this happened: a size that
+  matches the file before your edit, and a `git status` in the OTHER checkout.
+  Pass an absolute path to any `[System.IO.*]` call, or do the work in the
+  interpreter that already has the path - `python -c` with an absolute
+  `pathlib.Path` cannot make this mistake.
 - **A function that logs with `Write-Output` returns the log as part of its
   value.** PowerShell returns everything a function writes to the success
   stream, not just the last expression, so a helper that prints a progress line

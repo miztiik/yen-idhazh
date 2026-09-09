@@ -346,6 +346,25 @@ All nine together are +107.42 bytes an item rather than the +109.42 those nine s
 
 That is what this row spends. What it buys is the migration, and one day priced on a build of this branch says how much: **2026-08-30 is twelve prerendered documents totalling 8,822,134 bytes raw and 2,528,812 gzipped, against one served payload of 717,709 raw and 194,016 gzipped.** Twelve times the bytes, after this row grew the payload by 62 percent. The documents are the six HTML pages and their six `__data.json` twins, and every one of them carries the whole item list.
 
+### The dated documents stop being written (2026-09-09)
+
+The two rows above moved the item list out of a dated document and left the document. This row deletes the document. **116 of them**: 20 for the published days and 96 for their topics, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. `adapter-static`'s fallback, `404.html`, answers every dated address; the client router resolves the route out of the URL; the page fetches the served day.
+
+Measured on a real build, Intel Core i7-1265U, 2026-09-09, `BUILD_VERSION` pinned across both arms:
+
+| Measured | Before | After | Saved |
+| --- | ---: | ---: | ---: |
+| Files in `build/` | 796 | 572 | 224 |
+| Bytes in `build/` | 116,050,183 | 101,880,352 | 14,169,831 B, 12.2 percent |
+| Documents | 123 | 7 | 116 |
+| `__data.json` | 121 | 5 | 116 |
+
+**The oracle is the last row rather than the byte count.** A saving of 12.2 percent is a number about today's archive; what this row changes is the slope. Six documents a published day is what the tree used to charge, so the count moved every time the pipeline ran and nobody wrote a line - the shape Rule #12 is about. The count is 7 on a tree of 20 days and it is 7 on a tree of 400.
+
+**The reader pays for it on a cold dated load, and only there.** A dated URL is now the fallback, the bundle, and then the day payload - which runs to 1.9 MB on the heaviest committed day - where it used to be one document of about 30 gzipped KB. In-app navigation never asks the host for a dated address, so only a typed link, a bookmark or a shared link takes that path (owner decision, 2026-09-09). What the page does not do is wait for the day: the fetch is started by the page component rather than awaited in its `load`, so the chrome and the date are on screen while the payload comes down, and past `ui.payload_slow_ms` one sentence says so. Awaiting it in the `load` was the simpler code and a blank page.
+
+**Two entries left [../../concepts/growing-reads.md](../../concepts/growing-reads.md) and nothing replaced them.** Both dated routes' `entries()` carried a `-1` because a cover on the list of pages a build writes stops writing them past it. There is no list of pages now, so the uncovered read did not move somewhere cheaper - it stopped existing, which is the only way one of those entries is meant to leave that page.
+
 ### The topic routes spend it (2026-09-01)
 
 A topic route is the day filtered to one desk, and until 2026-09-01 the filter ran at build time in five documents a day. Each of those documents carried the **whole** day so a client-side filter could throw most of it away. Now the document carries the head of its own desk - `ui.shell_seed_items` stories - and a browser fetches the served day for the rest.

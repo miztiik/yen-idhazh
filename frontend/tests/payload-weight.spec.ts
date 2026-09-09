@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
-import { leadingStories, shellSeedItems } from '../src/lib/server/config';
 
 /**
  * No page carries a day it does not render, and no reading page carries a day
@@ -56,8 +55,6 @@ const BUILD = resolve(process.cwd(), 'build');
 const MARKER = 'key_points:';
 
 const DATED = /^\/\d{4}-\d{2}-\d{2}(\/|$)/;
-/** A topic route: a date and one desk under it. */
-const TOPIC = /^\/\d{4}-\d{2}-\d{2}\/[^/]+\/$/;
 
 interface Page {
 	route: string;
@@ -87,9 +84,11 @@ function pages(): Page[] {
 	});
 }
 
-/** A page renders a day when it is the home page or a dated route. */
+/** A page renders a day when it is the home page. A dated address is answered
+ * by the fallback shell, which carries no day at all - the browser fetches
+ * one. */
 function rendersADay(route: string): boolean {
-	return route === '/' || DATED.test(route);
+	return route === '/';
 }
 
 test('no page inlines a day it does not render', () => {
@@ -108,14 +107,14 @@ test('no page inlines a day it does not render', () => {
  * The negative case. Without it the assertion above passes the day someone
  * renames the field, and passes loudest when the site is empty.
  *
- * One page is enough, and asking for more would be wrong: a day that published
- * nothing still renders a day and still carries no item. The canary corpus has
- * nineteen such days.
+ * `/` is the one page that renders a day, and it renders the whole newest one -
+ * so a build whose home page carries no marker has either lost the field name
+ * or lost the day.
  */
 test('the marker is found where a day is rendered', () => {
 	const rendered = pages().filter((page) => rendersADay(page.route));
 
-	expect(rendered.length, 'no home page and no dated route in the build').toBeGreaterThan(0);
+	expect(rendered.length, 'no home page in the build').toBeGreaterThan(0);
 	expect(
 		rendered.filter((page) => page.markers > 0).length,
 		`no page carries "${MARKER}" - the marker is stale, not the payload`
@@ -139,49 +138,32 @@ test('the archive carries no day payload at all', () => {
 });
 
 /**
- * Every reading document carries a seed, not a day.
+ * There is no reading document left to hold to a seed.
  *
- * A topic document keeps the head of its own desk. A day document keeps the
- * head of the day UNION every story its leading block points at, because a lead
- * is chosen across the whole day and a link into a document that holds only a
- * prefix lands on nothing. So the two bounds differ by the size of the leading
- * block, and both come from config rather than from a number written here
- * (Rule #6).
- *
- * **This is the guard prerendering used to give free.** Until 2026-09-01 the
+ * **This was the guard prerendering used to give free.** Until 2026-09-01 the
  * rule above was the whole file, and a dated route was exempt from it because
- * it genuinely rendered its whole day. Left exempt after the split it would
- * have gone on passing whatever a reading page inlined, which `layout.md`
- * records as a failure shape this repository has had twice.
+ * it genuinely rendered its whole day; left exempt after the split it would have
+ * gone on passing whatever a reading page inlined, which `layout.md` records as
+ * a failure shape this repository has had twice. So a dated document was held to
+ * its own seed instead. From 2026-09-09 there is no dated document: one shell
+ * answers every dated address, so the sweep above covers everything a build
+ * writes and the exemption it needed is gone with the pages it exempted.
  *
- * `/` is deliberately not here. It keeps the whole day inline for ever: it is
- * one document per build rather than one per published day, so it contributes
- * nothing to the cap problem, and it leaves one complete, script-free digest on
- * the site.
+ * What is left to check is that it stays gone. A dated document reappearing is a
+ * route that grew a `prerender = true` back, and it would look like nothing at
+ * all - the pages would go on working and the build would go on costing six
+ * documents a published day.
+ *
+ * `/` is deliberately still exempt from the sweep. It keeps the whole day inline
+ * for ever: it is one document per build rather than one per published day, so
+ * it contributes nothing to the cap problem, and it leaves one complete,
+ * script-free digest on the site.
  */
-test('a reading document carries no more stories than its own seed', () => {
-	const seed = shellSeedItems();
-	const bounds = { topic: seed, day: seed + leadingStories() };
-	const reading = pages().filter((page) => DATED.test(page.route));
+test('no dated document is written at all', () => {
+	const dated = pages().filter((page) => DATED.test(page.route));
 
-	expect(reading.length, 'the build has no dated route, so this proves nothing').toBeGreaterThan(
-		0
-	);
-	const over = reading
-		.filter((page) => page.markers > (TOPIC.test(page.route) ? bounds.topic : bounds.day))
-		.map(
-			(page) =>
-				`${page.route} carries ${page.markers}, over the ` +
-				`${TOPIC.test(page.route) ? bounds.topic : bounds.day} it is allowed`
-		);
 	expect(
-		over,
-		`a reading document is inlining more than its seed - ${bounds.topic} stories on a ` +
-			`topic route, ${bounds.day} on a day route:\n` +
-			over.join('\n')
+		dated.map((page) => page.route),
+		'a build wrote a document for a dated address'
 	).toEqual([]);
-	expect(
-		reading.filter((page) => page.markers > 0).length,
-		'no reading document carries a story at all - the seed is empty, not small'
-	).toBeGreaterThan(0);
 });

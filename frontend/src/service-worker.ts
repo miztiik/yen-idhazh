@@ -335,7 +335,6 @@ async function evict(cache: Cache): Promise<void> {
  * holds one build's shell rather than a share of the archive.
  */
 async function fromNetworkFirst(request: Request, url: URL): Promise<Response> {
-	const cache = await caches.open(SHELL_CACHE);
 	const keep = shellKeeps({
 		pathname: url.pathname,
 		navigation: request.mode === 'navigate',
@@ -344,18 +343,22 @@ async function fromNetworkFirst(request: Request, url: URL): Promise<Response> {
 	try {
 		const answer = await fetch(request);
 		if (keep && answer.ok && answer.status === 200 && !answer.redirected) {
-			await cache.put(request, answer.clone());
+			// Opened only when there is something to store. `caches.open` CREATES
+			// the store, so opening it to read would put an empty `idhazh-` cache
+			// back on the device of a reader who has just retired the worker - the
+			// page clears the caches and cannot tell the worker it did.
+			await (await caches.open(SHELL_CACHE)).put(request, answer.clone());
 		}
 		return answer;
 	} catch (error) {
-		const held = await cache.match(request, { ignoreVary: true });
+		const held = await caches.match(request, { cacheName: SHELL_CACHE, ignoreVary: true });
 		if (held) return held;
 		// A dated address has no document of its own since 2026-09-09, so nothing
 		// was ever kept under it - the host answers one shell at status 404 and a
 		// 404 is not a page to remember. The shell is on the device from install,
 		// and it is what draws a day this reader already has.
 		if (request.mode === 'navigate') {
-			const shell = await cache.match(FALLBACK, { ignoreVary: true });
+			const shell = await caches.match(FALLBACK, { cacheName: SHELL_CACHE, ignoreVary: true });
 			if (shell) return shell;
 		}
 		throw error;
