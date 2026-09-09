@@ -98,14 +98,28 @@
 
 	// svelte-ignore state_referenced_locally
 	let windowDays = $state(data.console.default_window_days);
-	/** The window the page opens on, computed once so the seed and the first
-	 * viewport agree on how far back the seed reaches. */
+	/** Every day the pipeline published, newest last.
+	 *
+	 * The window anchors on this rather than on the telemetry, which no longer
+	 * crosses. It is the same set of days: `charts` holds one entry per published
+	 * day and already costs the page 2.5 KB, where the rows it would have been
+	 * taken from cost 3,334 KB (measured 2026-09-09, Intel Core i7-1265U).
+	 */
 	// svelte-ignore state_referenced_locally
-	const opening = defaultWindow(datesIn(data.telemetryRows), data.today, data.console);
-	/** The telemetry this session holds, as revision-owned month shards. Seeded
-	 * with the one window the server inlined and grown by month fetch. */
+	const publishedDates = data.charts.map((day) => day.date).sort();
+	/** The window the page opens on, computed once so the first viewport and the
+	 * first fetch agree on which months are wanted. */
 	// svelte-ignore state_referenced_locally
-	let hold = $state<TelemetryHold>(seedHold(data.telemetryRows, opening.start));
+	const opening = defaultWindow(publishedDates, data.today, data.console);
+	/** The telemetry this session holds, as revision-owned month shards.
+	 *
+	 * **It starts empty and every row in it arrives by fetch.** The server used
+	 * to inline one window of rows here, which was 3,334 KB of a 3,789 KB
+	 * document - 88 percent of everything an operator downloaded to open the
+	 * console, for a panel most visits never scroll to. The month fetch that
+	 * already existed for widening the window now loads the page as well.
+	 */
+	let hold = $state<TelemetryHold>(seedHold([], null));
 	/** Every held row, and the array every chart reads. Derived from the hold,
 	 * so a shard that arrives - or a correction that retracts a row - redraws
 	 * with none of the whole-cache rebuild the old merge did on every fetch. */
@@ -132,12 +146,22 @@
 	const fetching = $derived(inFlight > 0);
 
 	/** The choice is read on mount and never during prerender, so first paint is
-	 * always the window the server drew and the control always agrees with it. */
+	 * always the window the server drew and the control always agrees with it.
+	 *
+	 * The first fetch starts here too. Nothing on this page holds a telemetry row
+	 * before a browser runs it, so opening the page and widening the window are
+	 * the same act now, and the panels that need rows say so until they land.
+	 */
 	onMount(() => {
 		ready = true;
-		if (typeof localStorage === 'undefined') return;
-		const stored = Number(localStorage.getItem(WINDOW_KEY));
-		if (presets.includes(stored) && stored !== windowDays) show(stored);
+		if (typeof localStorage !== 'undefined') {
+			const stored = Number(localStorage.getItem(WINDOW_KEY));
+			if (presets.includes(stored) && stored !== windowDays) {
+				show(stored);
+				return;
+			}
+		}
+		void loadVisibleMonths();
 	});
 
 	function merge(month: string, next: TelemetryRow[]) {
@@ -146,14 +170,21 @@
 
 	/** Fetch the month files the window reaches into and does not already hold.
 	 *
-	 * Widening re-uses this path rather than reloading the page: the rows already
-	 * paid for stay in hand, and only the months past them cost anything. A month
-	 * is marked in hand only when its shard arrives, so a fetch that fails leaves
-	 * it unfetched for a later widen to fill rather than marking it done and
-	 * hiding the gap for the rest of the session.
+	 * This is how the page loads and how it widens, in one path. Opening it holds
+	 * nothing, so the first call asks for the months the default window touches -
+	 * two of them and never more, whatever the archive has grown to. Widening
+	 * re-uses the same path: the rows already paid for stay in hand and only the
+	 * months past them cost anything. A month is marked in hand only when its
+	 * shard arrives, so a fetch that fails leaves it unfetched for a later widen
+	 * to fill rather than marking it done and hiding the gap for the rest of the
+	 * session.
+	 *
+	 * The months come from the band, which the layout has already fetched. A page
+	 * cannot ask for a month until it knows which months exist, so a list of its
+	 * own would be one more wait before the first row (Carmack, 2026-09-08).
 	 */
 	async function loadVisibleMonths() {
-		const wanted = monthsToLoad(hold, viewport, data.telemetryMonths).filter(
+		const wanted = monthsToLoad(hold, viewport, data.months).filter(
 			(month) => !pending.has(month)
 		);
 		if (wanted.length === 0) return;
@@ -177,10 +208,15 @@
 	 *
 	 * The window re-anchors on the newest day rather than keeping where a pan
 	 * left it, because "the last 30 days" is the question the preset asks.
+	 *
+	 * It anchors on the published days and not on the rows in hand. Anchoring on
+	 * the rows would put the window wherever the fetch had got to, so the first
+	 * widen after opening the page would land on a different span from the same
+	 * widen a second later.
 	 */
 	function show(days: number, remember = true) {
 		windowDays = days;
-		viewport = windowOfDays(datesIn(rows), data.today, days, data.console.today_anchor);
+		viewport = windowOfDays(publishedDates, data.today, days, data.console.today_anchor);
 		if (remember && typeof localStorage !== 'undefined') {
 			localStorage.setItem(WINDOW_KEY, String(days));
 		}
@@ -196,8 +232,8 @@
 	function monthsFor(days: number): number {
 		return monthsToLoad(
 			hold,
-			windowOfDays(datesIn(rows), data.today, days, data.console.today_anchor),
-			data.telemetryMonths
+			windowOfDays(publishedDates, data.today, days, data.console.today_anchor),
+			data.months
 		).length;
 	}
 
@@ -533,9 +569,9 @@
 		return (Math.round(value / scale) * scale).toLocaleString('en-GB');
 	}
 
-	/** The same window the server drew with. Both sides derive it from the rows
-	 * rather than passing it, so the hydrated chart cannot disagree with the one
-	 * already on the page. */
+	/** The window the rows in hand cover. Derived from the rows themselves rather
+	 * than passed in, so the mix chart and the strip under it can never be drawn
+	 * over two different spans. */
 	function failureSeriesFor(rows: TelemetryRow[]) {
 		const dates = datesIn(rows);
 		if (dates.length === 0) return [];
@@ -544,8 +580,21 @@
 
 	/** The stage failure series the mix chart and its strip both read. One array,
 	 * so the band a reader hovers and the number the strip prints are the same
-	 * measurement rather than two that happen to agree today. */
-	const mixSeries = $derived(failureSeriesFor(data.telemetryRows));
+	 * measurement rather than two that happen to agree today.
+	 *
+	 * It reads the hold, so it is empty until the first month shard lands and
+	 * fills as each one does. The panel says which of those two it is in.
+	 */
+	const mixSeries = $derived(failureSeriesFor(rows));
+	/** The share of planned items that finished, drawn from the manifests the
+	 * page already carries. Built here rather than on the server: the shape is
+	 * the engine's and the numbers are two, so drawing it at build time put a
+	 * finished picture in the document to say what one sentence says. */
+	const runsChart = $derived(runHealth(data.manifests));
+	/** Where items go between the planner reaching one and a visual publishing.
+	 * One call, so the diagram and the stepped list beside it cannot report two
+	 * different flows. */
+	const flow = $derived(chartFlow(data.charts));
 	/** The server drew stacked, so the first paint matches the prerendered
 	 * document. Picking `Lines` redraws the identical values. */
 	let mixShape = $state<StackShape>('bars');
@@ -669,16 +718,19 @@
 		     the 1 GB cap and the runway, and it states them on all three routes;
 		     one page may not state one figure twice. What is left below is the
 		     windowed per-article cost, which is the rate under that runway. -->
-		{#if data.glance.healthSvg}
+		{#if !runsChart.empty}
 			<figure class="panel" data-glance-chart="runs">
 				<figcaption class="text-[0.75rem] text-text-tertiary">Runs that finished</figcaption>
 				<Chart
-					svg={data.glance.healthSvg}
-					option={runHealth(data.manifests).option}
+					svg=""
+					option={runsChart.option}
 					width={260}
 					height={200}
 					label="Share of planned items that finished, against those that failed"
 					noReadout="two shares of one total, and each share carries its own label"
+					pending="{runsChart.share === null
+						? 'No run is on record.'
+						: `${Math.round(runsChart.share * 100)}% of ${grouped(runsChart.total)} planned items finished.`} The shape is drawn once the engine loads."
 				/>
 			</figure>
 		{/if}
@@ -731,21 +783,20 @@
 						and not the least.
 					</p>
 				{/if}
-				{#if data.glance.perArticleSvg}
-					<Chart
-						svg={data.glance.perArticleSvg}
-						option={perArticle.option}
-						width={data.console.chart_width}
-						height={220}
-						label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
-						columns={costColumns}
-						readoutName="cost-per-article"
-						readoutMaxShare={data.chart.readout_max_share}
-						grid={COST_GRID}
-						restingNote=", the newest published day"
-						hint="Point at a day to read what its articles cost. Left and Right step through them, Escape returns to the newest."
-					/>
-				{/if}
+				<Chart
+					svg=""
+					option={perArticle.option}
+					width={data.console.chart_width}
+					height={220}
+					label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
+					columns={costColumns}
+					readoutName="cost-per-article"
+					readoutMaxShare={data.chart.readout_max_share}
+					grid={COST_GRID}
+					restingNote=", the newest published day"
+					hint="Point at a day to read what its articles cost. Left and Right step through them, Escape returns to the newest."
+					pending="The day-by-day shape is drawn once the engine loads. Every value is in the list below it."
+				/>
 				<!-- The values, as text. It is what a chart owes anybody who cannot
 				     see it, and it is also the only honest way to check the flags:
 				     a chart that flags by eye cannot be tested, and the browser suite
@@ -767,15 +818,24 @@
 		</Panel>
 	</div>
 
-	{#if data.glance.mixSvg}
-		<!-- No note. The heading names the subject and the strip under the chart
-		     prints every stage at the hovered day, so a sentence restating the
-		     encoding said what the shape already says - and said it wrongly the
-		     moment the switch below drew lines. It survives verbatim in the chart's
-		     accessible description, so nobody loses it. -->
-		<Panel title="What is failing, by stage">
+	<!-- No note. The heading names the subject and the strip under the chart
+	     prints every stage at the hovered day, so a sentence restating the
+	     encoding said what the shape already says - and said it wrongly the
+	     moment the switch below drew lines. It survives verbatim in the chart's
+	     accessible description, so nobody loses it. -->
+	<Panel title="What is failing, by stage">
+		{#if mixSeries.length === 0}
+			<!-- Two different nothings and the panel says which. Waiting is a state
+			     the operator can act on by waiting; a window with no failures in it
+			     is an answer. -->
+			<p class="mt-2 text-[0.8125rem] text-text-secondary" data-mix-empty={fetching ? 'fetching' : 'none'}>
+				{fetching
+					? 'Reading the months this window covers.'
+					: 'No failure is on record in the months this session has read.'}
+			</p>
+		{:else}
 			<Chart
-				svg={data.glance.mixSvg}
+				svg=""
 				option={failureMix(mixSeries, mixShape).option}
 				width={760}
 				height={220}
@@ -785,13 +845,14 @@
 				readoutMaxShare={data.chart.readout_max_share}
 				restingNote=", the newest day"
 				hint="Point at a day to read every stage at once. Left and Right step through the days, Escape returns to the newest."
+				pending="The stage mix is drawn once the engine loads. Every count is in the strip below it."
 			/>
 			<!-- Stacked answers what the mix is and how big the day got; lines answer
 			     what one stage did on its own, which a stack hides when one band
 			     halves while its neighbour doubles. Same array either way. -->
 			<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
-		</Panel>
-	{/if}
+		{/if}
+	</Panel>
 
 	<div data-windowed="run-health" data-window-days={windowDays}>
 		<Panel
@@ -1610,22 +1671,25 @@
 					</div>
 				{/if}
 			</div>
-			{#if data.flowSvg}
-				{@const flow = chartFlow(data.charts)}
+			{#if !flow.empty}
 				<!-- Two shapes, one flow. The diagram needs 700px of viewport before its
 				     labels stop overlapping (measured 2026-09-01), and a phone column
 				     cannot give it that at any font size - so below the page's own
 				     stacking breakpoint the same numbers are a stepped list, which is a
 				     shape a 360px column can hold. Both are built from one `chartFlow`
-				     call, so they cannot report two different flows. -->
+				     call, so they cannot report two different flows.
+				     The list is the one that always draws: it is markup over the same
+				     steps, so an operator with no engine still reads every stage and
+				     every drop. -->
 				<div class="panel mt-4" data-flow="chart">
 					<Chart
-						svg={data.flowSvg}
+						svg=""
 						option={flow.option}
 						width={data.console.chart_width}
 						height={FLOW_HEIGHT}
 						label="Where items go between the visual planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 						noReadout="a flow between stages, so there is no column two branches share"
+						pending="The diagram is drawn once the engine loads. Every stage and every drop is in the list below it."
 					/>
 				</div>
 				<ol class="panel flow-steps mt-4" data-flow-steps={flow.steps.length}>

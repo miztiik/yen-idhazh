@@ -47,9 +47,12 @@
 		readoutMaxShare = 0.33,
 		restingNote = ', the newest column',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
-		grid = { left: 48, right: 12 }
+		grid = { left: 48, right: 12 },
+		pending = 'This chart is drawn from rows the page fetches, so it appears once they arrive.'
 	}: {
-		/** Prerendered by `$lib/server/chart-render`. */
+		/** Prerendered by `$lib/server/chart-render`, or empty where the chart is
+		 * drawn from rows only a browser has. An empty one shows `pending` until
+		 * the engine draws over it. */
 		svg: string;
 		option: EChartsOption;
 		width: number;
@@ -71,11 +74,19 @@
 		/** The engine's own plot insets, in pixels. They decide where a column
 		 * centre falls, and they are not the same for every option this wraps. */
 		grid?: PlotGrid;
+		/** What stands in the plot's place while nothing has been drawn there.
+		 * A box that is simply empty says nothing about which of the two
+		 * nothings happened - no rows yet, or no engine ever. */
+		pending?: string;
 	} = $props();
 
 	// Bound in one of two branches, so it is state rather than a plain binding.
 	let host = $state<HTMLDivElement | null>(null);
 	let live: LiveChart | null = null;
+	/** True once something has been drawn in the host - either the server's SVG
+	 * or the engine's. It is what decides whether `pending` is on the page. */
+	// svelte-ignore state_referenced_locally
+	let drawn = $state(svg !== '');
 	/** The option the live chart is holding, so an unchanged one is not handed
 	 * over again the first time the effect runs. */
 	let handed: EChartsOption | null = null;
@@ -135,6 +146,7 @@
 			if (engine === null || cancelled) return;
 			handed = option;
 			live = engine.hydrate(node, option, { width: measured, height });
+			drawn = true;
 		})();
 
 		return () => {
@@ -180,6 +192,9 @@
 			<div bind:this={host} class="chart-host" style="height: {height}px">
 				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 				{@html svg}
+				{#if !drawn}
+					<p class="chart-pending" data-chart-pending={readoutName || undefined}>{pending}</p>
+				{/if}
 			</div>
 			{#if guide !== null}
 				<span
@@ -202,6 +217,9 @@
 		<div bind:this={host} class="chart-host" style="height: {height}px">
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			{@html svg}
+			{#if !drawn}
+				<p class="chart-pending">{pending}</p>
+			{/if}
 		</div>
 	{/if}
 </figure>
@@ -235,6 +253,22 @@
 
 	.chart-host {
 		width: 100%;
+	}
+
+	/* What stands where the plot will be until something draws there. Centred in
+	   the reserved height so the panel does not change size when the engine
+	   arrives, and quiet enough that a chart which draws immediately never reads
+	   as having flashed a warning. */
+	.chart-pending {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		margin: 0;
+		padding: 0 1rem;
+		text-align: center;
+		font-size: 0.8125rem;
+		color: var(--text-tertiary);
 	}
 
 	/* The prerendered SVG is authored at a fixed width and then asked to fill
