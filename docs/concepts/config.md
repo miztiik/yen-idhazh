@@ -141,9 +141,9 @@ With the defaults, that is `30 / 0.5 = 60`. An `AppConfig` validator refuses a
 config where the three values disagree.
 
 `config.summarize.bands` starts with the brief band `{0, 30, 45}`. The next band
-starts at 60 words. `evaluation.summary_words_min` is 25, so the decoder's
-summary floor is 125 characters. `evaluation.brief_compression_ceiling` is 0.5;
-it caps `verbatim_run` for brief items and derives the floor above.
+starts at 60 words. `summarize.length_policy.absolute_floor_words` is 25, so the
+decoder's summary floor is 125 characters. `evaluation.brief_compression_ceiling`
+is 0.5; it caps `verbatim_run` for brief items and derives the floor above.
 `evaluation.lead_coverage_min` is 0.30; a miss below it caps `high` at `medium`.
 That lets a brief stop naturally instead of padding toward the old 40-word gate.
 
@@ -171,10 +171,30 @@ band off the post-cap count is what left it empty until 2026-08-26, because at
 the cap of 2500 committed then that count stopped at `int(2500 / 1.3) = 1923`
 words and that band started at 2000
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
-The ladder gained a fifth rung at 3000 words on 2026-08-29 and a sixth at 5000
-on 2026-09-09, and no rung floor may ever sit above
-`int(truncation_cap_tokens / 1.3)` - the model is handed that many words and a
-rung above it would ask for a summary of text it never saw.
+No rung floor may ever sit above `int(truncation_cap_tokens / 1.3)` - the model
+is handed that many words and a rung above it would ask for a summary of text it
+never saw.
+
+**The ladder has five rungs, and the count has moved three times.** It gained a
+fifth rung at 3000 words on 2026-08-29 and a sixth at 5000 on 2026-09-09, and on
+2026-09-10 the two longest collapsed into one that starts at 4000 - so five
+again, at different places. The reshape was editorial rather than mechanical:
+the rungs above 700 were set by asking what an abstract is worth at each source
+length, not by dividing the cut point, and the top of the ladder came down from
+230 words to 200. Above 4000 words every article gets the same evidence anyway,
+because the cut point hands the model 7,692 words whatever the source holds
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md#design-rationale---the-ladder-is-editorial-and-200-words-governs-it)).
+
+**The same change deleted `evaluation.summary_words_min` and
+`evaluation.summary_words_max`.** They were a single global range every band's
+ask had to fit inside, so the ladder could only ever request what the widest
+global window already allowed, and a summary outside that window was thrown
+away. Length now belongs to the band that asked for it, and
+`summarize.length_policy` holds the five knobs that say what happens when a
+reply misses: `overshoot_ratio`, `overshoot_words`, `undershoot_ratio`,
+`absolute_floor_words` and `floor_applies_above_source_words`. A config still
+carrying the two old keys loads - an `EvaluationConfig` before-validator drops
+them - so a payload an earlier run wrote is still readable.
 
 **The published surface keeps a second copy of that ladder, and it drifted.**
 `SUMMARIZE_DEFAULTS` in `frontend/src/lib/server/config.ts` is the value the
@@ -183,7 +203,7 @@ draw the compression plot's target zone and set its y axis. Until 2026-08-29 it
 carried **three** rungs against the real five, and the first of them started at
 0 words asking for 50 to 90:
 
-| | `config/idhazh.json` | `SUMMARIZE_DEFAULTS` before 2026-08-29 |
+| | `config/idhazh.json` on 2026-08-29 | `SUMMARIZE_DEFAULTS` before 2026-08-29 |
 | --- | --- | --- |
 | rungs | 5 | 3 |
 | first rung | 0 words -> 30-45 | 0 words -> 50-90 |
@@ -199,8 +219,8 @@ time, which is exactly why nothing noticed.
 the row that refuses copying config into the published directory because two
 copies of one file are free to drift with nothing gating them. The copy is in
 code rather than in a published file, so no gate caught it. The rungs were
-corrected as of 2026-08-29 - there are six of them since 2026-09-09 - and the
-copy is now pinned:
+corrected as of 2026-08-29, went to six on 2026-09-09 and back to five on
+2026-09-10, and the copy is now pinned:
 `backend/tests/test_contracts.py::test_the_console_fallback_bands_match_the_committed_ladder`
 reads the committed bands and the `SUMMARIZE_DEFAULTS` literal and fails when
 they disagree, printing both ladders. The guard sits with the writer because a

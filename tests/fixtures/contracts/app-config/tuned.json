@@ -107,8 +107,6 @@
     "lead_coverage_min": 0.3,
     "qualification_pool_multiple": 6,
     "spot_checks_per_week": 15,
-    "summary_words_max": 250,
-    "summary_words_min": 25,
     "validation_articles": 20,
     "validation_drop_max": 0.1,
     "validation_switch_margin": 0.05,
@@ -276,6 +274,7 @@
         "key_points_max": 4,
         "key_points_min": 3,
         "min_source_words": 0,
+        "over_length_action": "trim",
         "target_words_max": 45,
         "target_words_min": 30
       },
@@ -283,6 +282,7 @@
         "key_points_max": 4,
         "key_points_min": 3,
         "min_source_words": 60,
+        "over_length_action": "trim",
         "target_words_max": 90,
         "target_words_min": 50
       },
@@ -290,6 +290,7 @@
         "key_points_max": 4,
         "key_points_min": 3,
         "min_source_words": 700,
+        "over_length_action": "trim",
         "target_words_max": 150,
         "target_words_min": 70
       },
@@ -297,11 +298,19 @@
         "key_points_max": 4,
         "key_points_min": 3,
         "min_source_words": 2000,
+        "over_length_action": "publish",
         "target_words_max": 200,
         "target_words_min": 110
       }
     ],
     "key_point_restatement_ceiling": 0.6,
+    "length_policy": {
+      "absolute_floor_words": 20,
+      "floor_applies_above_source_words": 500,
+      "overshoot_ratio": 0.15,
+      "overshoot_words": 30,
+      "undershoot_ratio": 0.25
+    },
     "max_verbatim_words": 15,
     "title_words_max": 12,
     "title_words_min": 5
