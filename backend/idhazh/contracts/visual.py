@@ -376,7 +376,7 @@ class VisualPlan(Contract):
                 "shape guarantees: which roles a given type may leave empty needs that "
                 "type's own rule set, which is the validator's and not the schema's. The "
                 "cost is nine keys on every reply and it is measured rather than assumed - "
-                "28 tokens on a plan that declines and 23 on an eight-bar one, about 2 "
+                "28 tokens on a plan that declines and 23 on a four-bar one, about 2 "
                 "seconds a plan and 6 to 7 percent of the planner's run budget."
             ),
         ),
