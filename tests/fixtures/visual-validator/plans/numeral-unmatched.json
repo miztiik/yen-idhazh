@@ -1,0 +1,49 @@
+{
+  "annotations": [
+    "quantity-76-84"
+  ],
+  "caption": "Capacity rose 40 percent since 2019.",
+  "confidence": 0.82,
+  "decision": "visual",
+  "element_ids": [
+    "entity-41-48",
+    "entity-68-75",
+    "entity-86-92",
+    "entity-104-111",
+    "quantity-58-66",
+    "quantity-76-84",
+    "quantity-93-99",
+    "quantity-112-120"
+  ],
+  "encodings": {
+    "bins": [],
+    "category": [
+      "entity-41-48",
+      "entity-68-75",
+      "entity-86-92",
+      "entity-104-111"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "quantity-58-66",
+      "quantity-76-84",
+      "quantity-93-99",
+      "quantity-112-120"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "labels": [
+    "quantity-58-66",
+    "entity-41-48"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "comparison",
+  "title": "Offshore wind capacity, four countries",
+  "type": "bar",
+  "version": "2026-09-09T03:11",
+  "why": "Four countries, one unit, and the lead sentence turns on which of them is largest."
+}
