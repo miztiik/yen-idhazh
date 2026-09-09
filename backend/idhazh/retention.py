@@ -639,16 +639,12 @@ def prune_row(
 def oldest_month_kept(today: date, months: int) -> str:
     """The oldest `YYYY-MM` stem that still stays at full grain.
 
-    Counted in months rather than in thirty-day steps, because the thing being
-    kept is a month file and a month is not thirty days. `months` counts the
-    month being written as one of them, so 13 on any day of August 2026 keeps
-    `2025-08` through `2026-08` - a whole year of complete months plus the
-    partial one.
+    `month_partition` owns the arithmetic, because the published tree ages by
+    the same boundary now and two copies of it is how one store deletes a month
+    the other still serves. This name stays because every prune below reads by
+    it and a rename would be a second change in the same commit.
     """
-    if months < 1:
-        raise ValueError("keeping fewer than one month would delete the month being written")
-    total = today.year * 12 + (today.month - 1) - (months - 1)
-    return f"{total // 12:04d}-{total % 12 + 1:02d}"
+    return month_partition.oldest_month_kept(today, months)
 
 
 def month_shards(directory: Path) -> list[Path]:
