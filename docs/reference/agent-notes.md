@@ -3129,6 +3129,33 @@ then click a link in. `performance.getEntriesByType('navigation').length === 1`
 proves the move was client-side; a `goto` fetches a fresh document that already
 carries the payload and proves nothing.
 
+## A check-runs poller that treats "none yet" as "all done" prints ALL GREEN on a red commit
+
+The obvious shape is wrong:
+
+```powershell
+$pending = @($checks | Where-Object { $_.status -ne 'completed' })
+if ($pending.Count -eq 0) { 'ALL GREEN' }   # also true when $checks is EMPTY
+```
+
+`repos/<owner>/<repo>/commits/<sha>/check-runs` returns an empty list for the
+half-minute between a push and the workflow registering, so the loop's first
+tick sees nothing pending and declares success. On 2026-09-09 that printed
+`--- ALL GREEN ---` for a commit whose run had not started, and the per-check
+listing under it printed nothing at all - which is the tell, and it is easy to
+read as terse output rather than as no data.
+
+Require a check to exist before you believe the absence of a failure, and print
+the count:
+
+```powershell
+if ($checks.Count -gt 0 -and $pending.Count -eq 0) { ... }
+```
+
+Polling `gh run list --json databaseId,headSha,status,conclusion` and matching
+on `headSha` is steadier still: a run either exists for your sha or it does not,
+and `status`/`conclusion` cannot both be empty and look finished.
+
 ## A pytest harness inherits CI's `$GITHUB_OUTPUT`, and the guard test goes hollow
 
 `backend/tests/test_workflows.py` runs `.github/scripts/commit-and-push.sh` in a
