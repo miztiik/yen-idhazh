@@ -24,15 +24,15 @@ import logging
 import re
 from bisect import bisect_right
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Annotated, Any, Final, Literal, get_args
+from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from idhazh.contracts.app_config import ElementsConfig, InferenceConfig, VisualsConfig
-from idhazh.contracts.article import Article
+from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.element import (
     Element,
@@ -641,6 +641,17 @@ PROPOSED_MAX: Final = 4
 RANGES_MAX: Final = 8
 KEYPHRASES_MAX: Final = 8
 LEDE_MAX: Final = 2
+#: Named things per list, and mentions per named thing. A news item names a
+#: handful of organisations and says each one a few times; a reply that wants
+#: more of either is listing the article rather than pointing into it, and every
+#: extra entry is output tokens, which is the expensive direction.
+NAMED_MAX: Final = 6
+MENTIONS_MAX: Final = 4
+#: The most elements one reply can add to a table by pointing at the article:
+#: two mention lists filled to their bound, plus a quote and a claim list filled
+#: to theirs. It is arithmetic over the bounds above rather than a knob, so it
+#: cannot drift away from what the grammar can emit.
+ANCHORED_MAX: Final = 2 * NAMED_MAX * MENTIONS_MAX + 2 * RANGES_MAX
 #: An address is `quantity-118-123` or `s7`. Nothing legitimate is longer, and a
 #: reply that pads one has written a string no lookup will find.
 ADDRESS_MAX: Final = 48
@@ -727,6 +738,33 @@ class ElementLabel(BaseModel):
     salience: Salience
 
 
+class NamedMentions(BaseModel):
+    """One named thing, and every place the item names it.
+
+    **The mentions are the thing; the name only groups them.** A page draws a
+    mention, because a mention is characters the item wrote at an offset code
+    computed. `name` is the fullest form the item gave, it is a key rather than
+    a label, and it is never searched for - an item writes "Vestas Wind Systems
+    A/S" once and "Vestas" four times, and the fullest form may appear nowhere
+    verbatim. Searching for it would confuse a location with a label.
+
+    **Field order is decode order, and the anchors come first.** `mentions` is
+    written before `name` and `salience` for the reason `ElementLabel` puts
+    `element_id` first: a judgement written before the thing it judges is a
+    prior the rest of the object then rationalises.
+
+    `name` reaches no reader. It is matched against the slugs this project
+    already tracks, and an unknown one groups nothing rather than minting a
+    group - the ledger that resolves the two is separate work.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mentions: list[Citation] = Field(max_length=MENTIONS_MAX)
+    name: Phrase
+    salience: Salience
+
+
 class SentenceRange(BaseModel):
     """A quote or a claim, as two addresses and no text.
 
@@ -747,7 +785,6 @@ class SentenceRange(BaseModel):
     attribution: Attribution
     hedge: bool
 
-
 class CallOneReply(BaseModel):
     """What the decoder is constrained to emit on call 1.
 
@@ -759,22 +796,27 @@ class CallOneReply(BaseModel):
     generated schema, which is where it can fail if somebody adds an `int`.
 
     Field order is decode order. What was found is written before what it means:
-    the labels come first, then the figure code missed, then the sentence
-    ranges, and the two article-level observations last.
+    the labels come first, then the figure code missed, then the named things
+    and the sentence ranges, and the two article-level observations last.
 
-    **It asks for no entity and no place, and that is not an omission.** A
-    prompt in this repository may not ask a model to name an entity - a page
-    choosing its own reader-facing tags steers a control, and
-    `test_tag.py::test_no_prompt_asks_a_model_for_a_tag` holds every prompt to
-    it. The two naming lists are not among the signals this call was authorised
-    to take either, so they go to the row that builds their producers and that
-    can put the collision to the person who owns the ruling.
+    **The two mention lists are named for what code takes from them.** A prompt
+    in this repository may not ask a model to pick a reader-facing tag - a page
+    choosing its own steers a control, and `backend/tests/test_tag.py` holds
+    every prompt to it. This asks for no tag. It asks where the item names an
+    organisation, a person, a product or a location, and code cuts the item's
+    own characters at each answer; the group key is matched against slugs code
+    already holds and this pass mints none. So the control is untouched and the
+    lists carry the Tier 1 word rather than the Tier 2 one, which is also the
+    truer name for them. The ruling is on
+    `docs/architecture/extraction/elements.md`.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     labels: list[ElementLabel] = Field(max_length=LABELS_MAX)
     proposed: list[Citation] = Field(max_length=PROPOSED_MAX)
+    entity_mentions: list[NamedMentions] = Field(max_length=NAMED_MAX)
+    place_mentions: list[NamedMentions] = Field(max_length=NAMED_MAX)
     quotes: list[SentenceRange] = Field(max_length=RANGES_MAX)
     claims: list[SentenceRange] = Field(max_length=RANGES_MAX)
     keyphrases: list[Phrase] = Field(max_length=KEYPHRASES_MAX)
@@ -991,6 +1033,34 @@ def apply_labels(
     return ElementTable.model_validate(table.model_dump() | {"elements": elements})
 
 
+def _locate(
+    text: str, spans: Sequence[tuple[int, int]], citation: Citation
+) -> tuple[int, int] | None:
+    """Where one citation's words are in the article, or nothing when nowhere.
+
+    **This is decision 2 and it is the only control the design has over
+    mis-pointing.** The surface is searched inside the one sentence the reply
+    named and nowhere else, and it must occur there exactly once. A surface that
+    occurs twice is a coin toss between two real spans - `text[start:end]` cuts
+    the right characters either way, so no span check downstream can tell the two
+    apart - and ambiguity is refused rather than guessed.
+
+    Four refusals answer `None`: a sentence address that names no sentence, a
+    surface the sentence does not carry, a surface it carries twice, and a
+    surface that is whitespace.
+    """
+    index = sentence_number(citation.sentence_id)
+    if index is None or index >= len(spans):
+        return None
+    first, last = spans[index]
+    sentence = text[first:last]
+    surface = citation.surface.strip()
+    if not surface or sentence.count(surface) != 1:
+        return None
+    start = first + sentence.index(surface)
+    return start, start + len(surface)
+
+
 def proposed_quantities(text: str, reply: CallOneReply) -> list[Element]:
     """The figures the pattern missed, cut out of the article's own bytes.
 
@@ -1009,6 +1079,9 @@ def proposed_quantities(text: str, reply: CallOneReply) -> list[Element]:
       in words and a relative change stay refused here, because there is nothing
       for the pattern to parse.
 
+    The first two are `_locate`, which the mention producer shares, because the
+    rule is one rule and two copies of it would drift.
+
     Stamped `Extractor.MODEL`, which is this contract's word for the path
     decision 3 spells `model_proposed`: the model proposed the location and code
     cut the characters at it. The later rows' kinds are model-pointed the same
@@ -1018,18 +1091,13 @@ def proposed_quantities(text: str, reply: CallOneReply) -> list[Element]:
     starts = sentence_starts(text)
     found: list[Element] = []
     for citation in reply.proposed:
-        index = sentence_number(citation.sentence_id)
-        if index is None or index >= len(spans):
+        located = _locate(text, spans, citation)
+        if located is None:
             continue
-        first, last = spans[index]
-        sentence = text[first:last]
-        surface = citation.surface.strip()
-        if sentence.count(surface) != 1:
-            continue
-        offset = first + sentence.index(surface)
+        offset, limit = located
         readings = [
             (match, reading)
-            for match in NUMBER.finditer(text, offset, offset + len(surface))
+            for match in NUMBER.finditer(text, offset, limit)
             if (reading := read_quantity(match)) is not None
         ]
         if len(readings) != 1:
@@ -1052,6 +1120,217 @@ def proposed_quantities(text: str, reply: CallOneReply) -> list[Element]:
     return found
 
 
+class MentionGroup(NamedTuple):
+    """One named thing, and the mentions of it that anchored to the article.
+
+    `elements` is never empty: a group whose every mention was refused is not a
+    group, it is a name nobody can point at, and it is dropped (decision 2).
+    """
+
+    name: str
+    elements: list[Element]
+
+
+def drawn_label(group: MentionGroup) -> str:
+    """What a page may show for a named thing: the longest mention it anchored.
+
+    **Never `name`.** That is invariant 2 of the extraction drawing and it is the
+    one an implementer is most likely to lose, because drawing the name is easier
+    and looks tidier. The name is model-authored words with no span; a mention is
+    the article's own characters at an offset code computed, so it is the only
+    one of the two a reader can check against the item.
+
+    The longest, because it is the most informative surviving form - an item that
+    wrote "Vestas Wind Systems A/S" once and "Vestas" four times tells a reader
+    more with the first. A tie takes the earliest, which is the order the article
+    wrote them.
+    """
+    return max(group.elements, key=lambda one: len(one.span_excerpt)).span_excerpt
+
+
+def mention_elements(
+    text: str,
+    groups: Sequence[NamedMentions],
+    *,
+    kind: ElementKind,
+    label_source: str,
+    entity_slugs: Mapping[str, str],
+) -> list[MentionGroup]:
+    """Every place the item names a thing, cut out of the item's own bytes.
+
+    **The name is never searched for** (decision 1). An item writes the fullest
+    form once and a short form four times, and the fullest form may appear
+    nowhere verbatim - so searching for it would reject the thing it was meant to
+    find. Each mention is located by `_locate` instead: inside its own named
+    sentence, exactly once, or it is refused.
+
+    Each surviving mention is one Tier 1 element carrying the article's
+    characters. The name is Tier 2 and lands only as `Element.entity`, and only
+    when it is a slug this project already tracks - an unknown name is one we do
+    not track yet, and minting a slug for it would put two spellings of one
+    organisation in two groups for ever.
+
+    Rejection is per mention and then per group, never per article (decision 5):
+    a mention that will not anchor drops itself, a group that anchored none of
+    its mentions drops itself, and the item's other elements stand.
+    """
+    spans = sentence_spans(text)
+    starts = sentence_starts(text)
+    grouped: list[MentionGroup] = []
+    for group in groups:
+        name = group.name.strip()
+        judged: dict[str, Any] = {
+            "salience": SALIENCE_SCORE[group.salience],
+            "label_source": label_source,
+            "ledger_version": LABEL_PASS_VERSION,
+        }
+        if (slug := entity_slugs.get(name.casefold())) is not None:
+            judged["entity"] = slug
+        found: list[Element] = []
+        for citation in group.mentions:
+            located = _locate(text, spans, citation)
+            if located is None:
+                continue
+            span_start, span_end = located
+            found.append(
+                Element(
+                    element_id=derive_element_id(kind, span_start, span_end),
+                    kind=kind,
+                    span_start=span_start,
+                    span_end=span_end,
+                    span_excerpt=text[span_start:span_end],
+                    value=None,
+                    unit=None,
+                    sentence_index=bisect_right(starts, span_start),
+                    extractor=Extractor.MODEL,
+                    **judged,
+                )
+            )
+        if name and found:
+            grouped.append(MentionGroup(name=name, elements=found))
+    return grouped
+
+
+def range_elements(
+    text: str,
+    ranges: Sequence[SentenceRange],
+    *,
+    kind: ElementKind,
+    label_source: str,
+    entity_slugs: Mapping[str, str],
+) -> list[Element]:
+    """The run of sentences one range names, cut whole out of the article.
+
+    **Addresses only, never text** (decision 3). An exact search for a long
+    quotation rejects a real one over a single changed word and does so silently,
+    which is worse than no check at all - so the reply names the first and last
+    sentence and code cuts everything between them. The span is trimmed of
+    surrounding whitespace by moving the offsets, never by editing the slice, so
+    the excerpt is still exactly `text[span_start:span_end]`.
+
+    Four refusals, and each drops one range and nothing else:
+
+    - either address naming no sentence,
+    - a range that ends before it starts,
+    - a run that is only whitespace,
+    - a run wider than `UNTRUSTED_LINE_MAX`, which the shape will not hold. A
+      truncated excerpt would stop being the characters its span names, so the
+      long quotation is dropped rather than cut down.
+
+    The speaker is Tier 2 and reaches no reader: it groups under a slug this
+    project already tracks, exactly as a label's name does, and mints none.
+    """
+    spans = sentence_spans(text)
+    starts = sentence_starts(text)
+    found: list[Element] = []
+    for entry in ranges:
+        first = sentence_number(entry.sentence_start_id)
+        last = sentence_number(entry.sentence_end_id)
+        if first is None or last is None or not 0 <= first <= last < len(spans):
+            continue
+        span_start, span_end = spans[first][0], spans[last][1]
+        excerpt = text[span_start:span_end]
+        trimmed = excerpt.strip()
+        if not trimmed or len(trimmed) > UNTRUSTED_LINE_MAX:
+            continue
+        span_start += len(excerpt) - len(excerpt.lstrip())
+        span_end = span_start + len(trimmed)
+        judged: dict[str, Any] = {
+            "hedge": entry.hedge,
+            "label_source": label_source,
+            "ledger_version": LABEL_PASS_VERSION,
+        }
+        if entry.attribution != UNATTRIBUTED:
+            judged["attribution"] = entry.attribution
+        if (slug := entity_slugs.get(entry.speaker.strip().casefold())) is not None:
+            judged["entity"] = slug
+        found.append(
+            Element(
+                element_id=derive_element_id(kind, span_start, span_end),
+                kind=kind,
+                span_start=span_start,
+                span_end=span_end,
+                span_excerpt=trimmed,
+                value=None,
+                unit=None,
+                sentence_index=bisect_right(starts, span_start),
+                extractor=Extractor.MODEL,
+                **judged,
+            )
+        )
+    return found
+
+
+def model_anchored(
+    text: str,
+    reply: CallOneReply,
+    *,
+    label_source: str,
+    entity_slugs: Mapping[str, str],
+) -> tuple[list[MentionGroup], list[Element]]:
+    """The four kinds only a model can find, and the groups the mentions fell into.
+
+    One call per kind, each with its own anchoring rule: a mention is searched
+    inside its named sentence, and a quote or a claim is sliced between two
+    sentence addresses. The groups are returned beside the flat list because a
+    drawn label is a property of a group and not of one element.
+    """
+    groups = [
+        *mention_elements(
+            text,
+            reply.entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source=label_source,
+            entity_slugs=entity_slugs,
+        ),
+        *mention_elements(
+            text,
+            reply.place_mentions,
+            kind=ElementKind.PLACE,
+            label_source=label_source,
+            entity_slugs=entity_slugs,
+        ),
+    ]
+    pointed = [
+        *(element for group in groups for element in group.elements),
+        *range_elements(
+            text,
+            reply.quotes,
+            kind=ElementKind.QUOTE,
+            label_source=label_source,
+            entity_slugs=entity_slugs,
+        ),
+        *range_elements(
+            text,
+            reply.claims,
+            kind=ElementKind.CLAIM,
+            label_source=label_source,
+            entity_slugs=entity_slugs,
+        ),
+    ]
+    return groups, pointed
+
+
 def anchored(
     table: ElementTable,
     text: str,
@@ -1072,19 +1351,33 @@ def anchored(
     is not a recovery; leaving it to `settle` would let the later pass take a
     span off the earlier one on nothing better than which offset came first.
 
-    **The merged table is bounded by `max_per_article` plus the proposal cap,
-    not by `max_per_article` alone.** The pattern's own bound is the thing a
-    recovery is most often needed past: a dense article keeps the first 256
-    figures in article order and the ones after that are exactly what nobody
-    can label. Spending the recovery out of the pattern's budget would make the
-    escape hatch unreachable on the articles that need it, and there are at most
-    four proposals, so the total is still a stated bound on work. Nothing is
-    ever evicted here - the merge only adds.
+    **The merged table is bounded by `max_per_article` plus the proposal cap
+    plus `ANCHORED_MAX`, not by `max_per_article` alone.** The pattern's own
+    bound is the thing a recovery is most often needed past: a dense article
+    keeps the first 256 figures in article order and the ones after that are
+    exactly what nobody can label. Spending the recovery out of the pattern's
+    budget would make the escape hatch unreachable on the articles that need it,
+    and every addition is bounded by the grammar, so the total is still a stated
+    bound on work. Nothing is ever evicted here - the merge only adds.
 
-    `candidates_found` counts every proposal that read as a figure, including
-    the ones dropped next. It is one count per pass taken before the rules that
-    remove, which is what keeps it able to say the cap bit and by how much.
+    **`settle` runs before the four model-pointed kinds are added, and it never
+    sees one.** That rule is between the two pattern passes, and it drops any
+    element sharing a character with a higher-precedence one - which is exactly
+    wrong here, because a quote carrying a quantity inside it is the shape these
+    kinds need. So the mentions and the sentence ranges are merged after it, and
+    two of them claiming one address is settled by keeping the first.
+
+    **The labels are applied before them too**, so a label can only reach a
+    candidate whose address the menu actually printed. A label naming a quote's
+    address would otherwise overwrite the judgements that quote's own producer
+    just made.
+
+    `candidates_found` counts every proposal that read as a figure and every
+    mention and range that anchored, including the ones dropped next. It is one
+    count per pass taken before the rules that remove, which is what keeps it
+    able to say the cap bit and by how much.
     """
+    slugs = entity_slugs or {}
     proposals = proposed_quantities(text, reply)
     taken = [(element.span_start, element.span_end) for element in table.elements]
     fresh = [
@@ -1103,8 +1396,28 @@ def anchored(
             "candidates_found": found,
         }
     )
-    labelled = apply_labels(merged, reply, label_source=label_source, entity_slugs=entity_slugs)
-    if (drift := labelled.span_drift(text)) is not None:
+    labelled = apply_labels(merged, reply, label_source=label_source, entity_slugs=slugs)
+
+    _, pointed = model_anchored(text, reply, label_source=label_source, entity_slugs=slugs)
+    for kind, count in Counter(element.kind for element in pointed).items():
+        found[kind] = found.get(kind, 0) + count
+    seen = {element.element_id for element in labelled.elements}
+    kept = list(labelled.elements)
+    for element in pointed:
+        if element.element_id in seen:
+            continue
+        seen.add(element.element_id)
+        kept.append(element)
+    whole = ElementTable.model_validate(
+        labelled.model_dump()
+        | {
+            "elements": sorted(kept, key=lambda one: one.span_start)[
+                : config.max_per_article + PROPOSED_MAX + ANCHORED_MAX
+            ],
+            "candidates_found": found,
+        }
+    )
+    if (drift := whole.span_drift(text)) is not None:
         raise SpanDriftError(f"call 1 cannot re-slice its own output: {drift}")
-    return labelled
+    return whole
 
