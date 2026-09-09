@@ -135,26 +135,47 @@ test('THE ORACLE: only the panel that is waiting for rows changes size', async (
 	]);
 });
 
-test('THE ORACLE: nothing in the first viewport moves when the payload lands', async ({ page }) => {
+test('THE ORACLE: nothing above the first panel moves when the payload lands', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 	await holdMonths(page);
 	await page.goto('/console/');
 	await hydrated(page);
-	const first = await panelBoxes(page);
 
-	// Everything an operator can already see. Moving one of these is the failure
-	// the reserved shape exists to prevent - it moves what somebody is reading.
-	const visible = Object.keys(first).filter((name) => first[name][3] < 900);
-	expect(visible.length, 'no panel was in the first viewport at all').toBeGreaterThan(0);
+	// Everything above the first panel is chrome an operator is looking at while
+	// the months arrive: the title, the strip, the verdict band and the window
+	// control. Moving any of it is the failure the reserved shape exists to
+	// prevent.
+	//
+	// It is measured as the first panel's own top rather than by asking which
+	// panels sit inside the first 900 px, and that is not a detail. The
+	// fold-based form passed on a laptop where the first panel began at 896 and
+	// failed on the CI runner where it began a few pixels lower - so the check
+	// was really asking how tall the runner's fonts were. A top that has not
+	// moved says nothing above it resized, at any viewport, on any machine.
+	const control = await page.locator('[data-window-control]').boundingBox();
+	const first = await panelBoxes(page);
+	const names = Object.keys(first).sort((a, b) => first[a][3] - first[b][3]);
+	expect(names.length, 'the page drew no panels at all').toBeGreaterThan(0);
+	const top = names[0] as string;
 
 	await settled(page);
 	await page.screenshot();
 	const after = await panelBoxes(page);
+	const controlAfter = await page.locator('[data-window-control]').boundingBox();
 
-	const moved = visible
-		.filter((name) => JSON.stringify(first[name]) !== JSON.stringify(after[name]))
-		.map((name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`);
-	expect(moved, `the first viewport moved under the operator:\n${moved.join('\n')}`).toEqual([]);
+	expect(
+		after[top][3],
+		`the first panel "${top}" moved from ${first[top][3]} to ${after[top][3]}, so something above it resized`
+	).toBe(first[top][3]);
+	// And the control itself, which is the piece that resized before this row:
+	// its price chips vanished as their months landed and took a line with them.
+	expect(controlAfter, 'the window control went missing').not.toBeNull();
+	expect(Math.round((controlAfter as { height: number }).height)).toBe(
+		Math.round((control as { height: number }).height)
+	);
+	expect(Math.round((controlAfter as { y: number }).y)).toBe(
+		Math.round((control as { y: number }).y)
+	);
 });
 
 test('THE ORACLE: the reserved chart box is the box the chart takes', async ({ page }) => {
