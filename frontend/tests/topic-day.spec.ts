@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { orderByTime } from '../src/lib/day-shape';
 import type { DigestItem } from '../src/lib/payload/types';
 import { publishedDates, topicsOf } from './support/published';
+import { dayReady } from './support/day-ready';
 
 /**
  * Row #25's oracle: a topic page holds the stories it used to inline.
@@ -139,10 +140,7 @@ for (const route of ROUTES) {
 			page.on('pageerror', (error) => errors.push(String(error)));
 
 			await page.goto(`/${route.date}/${route.vertical}/`);
-			await expect(
-				page.locator('[data-payload-state]'),
-				'the page never settled on a state'
-			).toHaveAttribute('data-payload-state', 'ready');
+			await dayReady(page, 'the page never settled on a state');
 
 			const held = await reachable(page);
 

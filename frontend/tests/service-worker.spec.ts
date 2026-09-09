@@ -9,6 +9,7 @@ import {
 	type OfflineBounds
 } from '../src/lib/offline';
 import { OFFLINE_BYTES_KEPT, OFFLINE_DAYS_KEPT } from '../src/lib/offline.generated';
+import { dayReady } from './support/day-ready';
 
 /**
  * The offline reader, and the way out of it.
@@ -328,6 +329,7 @@ test.describe('a day already opened', () => {
 		// serve.
 		await page.reload();
 		await controlled(page);
+		await dayReady(page, 'the day never arrived online, so there is nothing to read again');
 		const online = await page.locator('article.item[id]').count();
 		expect(online, 'the day rendered no stories, so there is nothing to read again').toBeGreaterThan(
 			0
@@ -339,13 +341,11 @@ test.describe('a day already opened', () => {
 		await context.setOffline(true);
 		await page.reload();
 
-		// The same day, the same stories, with the host unreachable.
+		// The same day, the same stories, with the host unreachable. `ready` offline
+		// can only have come off the device.
+		await dayReady(page, 'the day never arrived offline, so the reader was told the fetch failed');
 		expect(await page.locator('article.item[id]').count(), 'the day read short offline').toBe(
 			online
-		);
-		await expect(page.locator('[data-payload-state]')).not.toHaveAttribute(
-			'data-payload-state',
-			'unreachable'
 		);
 
 		// The body is read, not just the status. A resource-timing entry lands when

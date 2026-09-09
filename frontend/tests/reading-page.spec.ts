@@ -54,6 +54,7 @@ import { join, resolve } from 'node:path';
 import { deskShortfall, leadingStories, orderByTime } from '../src/lib/day-shape';
 import { shellSeedItems, uiConfig } from '../src/lib/server/config';
 import { loadDay, publishedDates } from '../src/lib/server/payload';
+import { dayReady } from './support/day-ready';
 
 /** The tree the preview server serves, so a route here is a route that exists. */
 const BUILD = resolve(process.cwd(), 'build');
@@ -223,10 +224,7 @@ async function open(page: Page, theme: string, route: string, width: number): Pr
 	await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 	const settling = page.locator('[data-payload-state]');
 	if ((await settling.count()) > 0) {
-		await expect(settling, `${route} never settled on a state`).toHaveAttribute(
-			'data-payload-state',
-			'ready'
-		);
+		await dayReady(page, `${route} never settled on a state`);
 	}
 }
 
@@ -454,10 +452,7 @@ test.describe('the count and the address', () => {
 	 */
 	async function printedCount(page: Page, route: string): Promise<number> {
 		await open(page, 'dark', route, 1536);
-		await expect(page.locator('[data-payload-state]')).toHaveAttribute(
-			'data-payload-state',
-			'ready'
-		);
+		await dayReady(page);
 		const line = ((await page.locator('p.notice-count').first().textContent()) ?? '')
 			.replace(/\s+/g, ' ')
 			.trim();
@@ -710,10 +705,7 @@ test.describe('with the offline reader installed', () => {
 		).not.toBe('no more');
 
 		await page.reload();
-		await expect(page.locator('[data-payload-state]')).toHaveAttribute(
-			'data-payload-state',
-			'ready'
-		);
+		await dayReady(page);
 		// What the worker actually answered, named by the browser rather than by
 		// the worker. A second visit that went to the network is a null result:
 		// it proves a page loads twice, which it would have done anyway.
@@ -742,11 +734,7 @@ test.describe('with the offline reader installed', () => {
 		await page.addInitScript(`localStorage.setItem('idhazh:theme', 'dark')`);
 		await page.setViewportSize({ width: 1536, height: 900 });
 		await page.goto(`/${DAY}/#${target}`);
-		await expect(page.locator('[data-payload-state]')).toHaveAttribute(
-			'data-payload-state',
-			'ready'
-		);
-
+			await dayReady(page);
 		const story = page.locator(`article.item[id="${target}"]`);
 		await expect(story, 'the lead the link named is not on the page').toHaveCount(1);
 		await expect(story, 'the deep link scrolled to a story nobody can see').toBeInViewport();

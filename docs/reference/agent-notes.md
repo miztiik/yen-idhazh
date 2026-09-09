@@ -1646,6 +1646,15 @@ naming the worker API for a test to assert on.
   2026-08-31 while writing the first-frame theme oracle; it reads exactly like
   the stylesheet not loading. Read `document.documentElement` instead, which is
   the element that actually paints.
+- **A one-shot `count()` after a reload counts the shell, not the day.** One
+  document has served every date since 2026-09-09, so the stories are drawn
+  after hydration reads the payload rather than arriving in the HTML the reload
+  returns. `service-worker.spec.ts`'s offline arm counted once and got 0 against
+  8 on `ubuntu-latest` while passing every time on this box - the runner simply
+  asked before the page had drawn. Every locator count that follows a
+  navigation is the same race: write it as
+  `await expect(locator, 'why').toHaveCount(n)`, which retries, rather than
+  `expect(await locator.count()).toBe(n)`, which does not. Seen 2026-09-09.
 - **`page.goto` to the same path with a different fragment never re-mounts the
   shell.** It is a same-document navigation, so `afterNavigate` does not fire
   and anything the root layout does on arrival does not run. A spec that reads
@@ -3266,6 +3275,59 @@ row in that ledger's history came from a `digest:` commit. Do not commit the row
 The row is appended once. A second run finds the receipt and writes nothing, so
 re-running certifies green. CI is unaffected either way: `ci.yml` calls
 `npm run test:browser` directly and never takes the fingerprint. Seen 2026-09-09.
+
+## A layout guard whose set is a pixel comparison passes here and empties on the runner
+
+`console-reserved.spec.ts` built its first-viewport set by keeping every panel
+whose document top was under 900, then failed if that set was empty. On this box
+the first panel sits at 894. Six pixels. The runner's fonts set a few pixels
+taller, the set came back empty, and the guard fired with
+`no panel was in the first viewport at all` - a test that was green locally
+every time and red on `main` every time.
+
+The lesson is not "raise the threshold". A guard that exists to stop an
+assertion passing on nothing must not itself depend on a measurement that moves
+between platforms. Two things to check whenever a spec filters by a coordinate:
+
+- **Print the margin, not the verdict.** The failure said the set was empty; it
+  did not say the nearest item missed by six pixels. One `evaluateAll` that
+  dumps every candidate's top, run once, is the difference between an hour and a
+  minute.
+- **Cut the set on something the page draws, not on a number you chose.** The
+  fix cuts at the first panel's own top, so "the chrome above the panels" holds
+  at any viewport and on any machine. A fold is a question about the runner's
+  fonts wearing the costume of a question about layout.
+
+Fonts are the usual mover, but any pixel that comes out of a browser is a
+candidate: scrollbar width, the default form-control metrics, and the rounding
+of a fractional layout all differ between a Windows dev box and
+`ubuntu-latest`. Measured 2026-09-09 at 1280x900 on an Intel Core i7-1265U
+against the canary build.
+
+## A count taken straight after `goto` or `reload` on a dated address measures the shell
+
+One document answers every dated URL, so the HTML a load returns carries no
+stories - they arrive when the day's fetch resolves, offline included, where the
+service worker answers it rather than the host. Whether a count taken at the
+`load` event finds them is therefore a property of the machine, not of the code.
+`service-worker.spec.ts` took one, passed on this box every time, and took `main`
+red on `ubuntu-latest` with `Expected: 8, Received: 0`. Measured 2026-09-09 on an
+Intel Core i7-1265U, three runs: the day was already on the page at that instant
+every time, which is exactly why the defect was invisible here.
+
+**Wait for `data-payload-state` to read `ready` and then measure.** The route
+sets the status and the day in one callback, so the attribute and the stories
+land in the same flush. Seven specs already did this; the one that did not was
+the one that broke. It is one shared helper now,
+`frontend/tests/support/day-ready.ts`, because nine longhand copies of a wait is
+how one spec came to be written without it.
+
+**A negated `toHaveAttribute` passes when the element is absent**, so it is the
+wrong shape for "the page is not in state X". Playwright special-cases only
+`toHaveCount`, `toBeVisible`, `toBeHidden`, `toBeAttached`, `toBeDetached` and
+`toBeInViewport` for a locator that resolves to nothing; everything else falls
+through to `matches = options.isNot`. The positive form on the state you do want
+is strictly stronger and fails with "element(s) not found" instead of passing.
 
 ## See also
 
