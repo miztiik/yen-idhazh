@@ -51,9 +51,7 @@ async function open(page: Page): Promise<void> {
 	await page.waitForFunction(
 		() =>
 			Number(
-				document
-					.querySelector('[data-surface="operator"]')
-					?.getAttribute('data-telemetry-rows') ?? 0
+				document.querySelector('[data-telemetry-rows]')?.getAttribute('data-telemetry-rows') ?? 0
 			) > 0,
 		undefined,
 		{ timeout: 20_000 }

@@ -1001,10 +1001,14 @@ nothing over it. Authority: Susan, 2026-08-31.
 
 The band's three facts: yesterday's verdict as a sentence with one square per
 run of that day, the one worst thing and what it costs, and site size against
-the 1 GB limit with the articles the headroom buys. It is derived once in
-[../../../frontend/src/lib/server/console-shell.ts](../../../frontend/src/lib/server/console-shell.ts)
-and read by all three routes, so they cannot disagree about which route is
-worst.
+the 1 GB limit with the articles the headroom buys. The pipeline derives it once
+and publishes it as `console/band.json`; the console fetches it once in
+[../../../frontend/src/routes/console/+layout.ts](../../../frontend/src/routes/console/+layout.ts)
+and draws it once in
+[../../../frontend/src/routes/console/+layout.svelte](../../../frontend/src/routes/console/+layout.svelte),
+above all three route panels, so they cannot disagree about which route is
+worst. It was derived in the browser build until 2026-09-09; see
+[console-payloads.md](console-payloads.md).
 
 **The band was 340px on a desktop and 586px on a phone - 69 percent of an 844px
 viewport - measured 2026-09-01 at bf37eeef.** Three changes pay for that: the
@@ -1046,9 +1050,9 @@ a figure that moved when a control on one route moved would read as three
 different sites. The runway is taken over every published day on record.
 
 The window control sits **below** the band, in a container of its own. Inside it
-it was a control in a panel it does not govern - `console-shell.ts` says twice
-that the band is deliberately not windowed - and it cost 125px of the first
-viewport on a desktop and 195px on a phone for four tiles and a sentence. Its
+it was a control in a panel it does not govern - the band is deliberately not
+windowed - and it cost 125px of the first viewport on a desktop and 195px on a
+phone for four tiles and a sentence. Its
 tiles and its status line share one row now where the column is wide enough for
 both. Each route hands its own control the same props: Pipelines prices the
 month files a wider window would fetch, and Summaries and Hardware fetch nothing
