@@ -1,0 +1,28 @@
+{
+  "date": "2026-09-09",
+  "models": [
+    "qwen3-4b"
+  ],
+  "published_charts": 7,
+  "published_items": 46,
+  "runs": [
+    {
+      "charts_drafted": 9,
+      "decided": 46,
+      "decision_ms": 184000,
+      "failed": 2,
+      "n": 3,
+      "planned": 48,
+      "prefiltered": 12,
+      "run_id": "2026-09-09-3",
+      "skipped": 0,
+      "source_list_stale": false,
+      "started_at": "2026-09-09T06:00:00Z",
+      "status": "completed",
+      "succeeded": 46
+    }
+  ],
+  "site_bytes": 214958080,
+  "site_files": 8412,
+  "version": "2026-09-09"
+}

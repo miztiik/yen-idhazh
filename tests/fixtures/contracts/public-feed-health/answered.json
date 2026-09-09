@@ -1,0 +1,15 @@
+{
+  "checked_at": "2026-09-09T06:02:11Z",
+  "date": "2026-09-09",
+  "detail": null,
+  "feed_id": "reuters-world",
+  "items": 41,
+  "outcome": "ok",
+  "robots_checked_at": "2026-09-09T06:02:09Z",
+  "robots_outcome": "allowed",
+  "robots_status": 200,
+  "run_id": "2026-09-09-3",
+  "status": 200,
+  "target_attempted": true,
+  "version": "2026-09-09"
+}

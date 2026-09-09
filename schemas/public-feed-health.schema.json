@@ -1,0 +1,162 @@
+{
+  "$defs": {
+    "FetchOutcome": {
+      "description": "Why one read of one address ended the way it did.\n\nDeliberately coarser than an HTTP status. What a later decision needs is\nwhether the address is worth asking again, and 403 and 404 answer that the\nsame way while 503 answers it differently.",
+      "enum": [
+        "ok",
+        "robots_denied",
+        "blocked",
+        "permanent",
+        "transient",
+        "skipped"
+      ],
+      "title": "FetchOutcome",
+      "type": "string"
+    },
+    "RobotsOutcome": {
+      "description": "What `robots.txt` said about this address, as a decision and never a body.\n\nThree answers because three are actionable. A host that publishes no rules\nand a host whose rules allow us are the same permission, so they are one\nmember; a refusal and a robots file we could not read are different, because\nthe first is a publisher's stated policy and the second is our own failure\nto establish one. Neither of the last two says anything about whether the\nfeed itself works, so neither is evidence about availability.",
+      "enum": [
+        "allowed",
+        "denied",
+        "unreachable"
+      ],
+      "title": "RobotsOutcome",
+      "type": "string"
+    }
+  },
+  "$id": "public-feed-health.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the feed, the run, the outcome, what it yielded and what robots said, with endpoint_key refused at import.",
+      "version": "2026-09-09",
+      "why": "The console reads state/feed-health/ at build time and inlines the result, so the ledger's shape reached a reader with no contract and no version stamp (Rule #3). Naming it before a producer exists is what stops the producer and the consumer inventing two different lists. detail is kept because it is our own sentence and the panel prints it; endpoint_key is refused because it is the address."
+    }
+  ],
+  "description": "One feed read on one run, as the console is allowed to read it.",
+  "properties": {
+    "checked_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Checked At",
+      "type": "string"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detail"
+    },
+    "feed_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Feed Id",
+      "type": "string"
+    },
+    "items": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Items",
+      "type": "integer"
+    },
+    "outcome": {
+      "$ref": "#/$defs/FetchOutcome"
+    },
+    "robots_checked_at": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Robots Checked At"
+    },
+    "robots_outcome": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RobotsOutcome"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "robots_status": {
+      "anyOf": [
+        {
+          "maximum": 599,
+          "minimum": 100,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Robots Status"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "maximum": 599,
+          "minimum": 100,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Status"
+    },
+    "target_attempted": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Attempted"
+    },
+    "version": {
+      "default": "2026-09-09",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "date",
+    "feed_id",
+    "checked_at",
+    "outcome"
+  ],
+  "title": "PublicFeedRow",
+  "type": "object",
+  "version": "2026-09-09"
+}
