@@ -1979,6 +1979,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "summarize.bands gained a sixth rung at min_source_words 5000, asking 180 to 230 words and the same 2 to 5 key points as the rung below it. No existing rung moved and evaluation.summary_words_max did not move.",
+      "version": "2026-09-09T23:00",
+      "why": "extract.truncation_cap_tokens went to 10000 earlier the same day, so the model is now handed 7,692 words rather than 3,846 and the top rung covers a span twice as wide as the one it was cut for: a 3,000-word piece and a 7,692-word piece both arrive whole and both got the identical 150-to-230-word ask, at 20 to 1 and 51 to 1. The floor is 5000 because 5,346 is the midpoint of that whole-read range and 5000 is the nearest seam the ledger reports, which is how the fifth rung's floor was derived on 2026-08-29. Measured 2026-09-09 over the 7,970 distinct scored items in state/scores/ that carry a length from before the cut: 90 reach 3,000 words and 23 reach 5,000, so the new rung takes 23 items and the rung below keeps 67 - 0.29 percent of items, about one item every three runs over the 77 runs in that ledger. Only the floor of the ask moves, because compression at a rung's floor is set by target_words_min and the ceiling cannot rise without moving evaluation.summary_words_max, which is what the pipeline agrees to publish and a separate decision. 5000 stays below the cut point of 7,692, so this is still not the rung that asks for words the model never saw. Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "config/idhazh.json moves extract.truncation_cap_tokens from 5000 to 10000. No field was added, removed or retyped. elements.max_per_article and finetune.sequence_length restate their arithmetic against the new cap; neither value moves.",
       "version": "2026-09-09T21:30",
       "why": "The cap is the largest quality lever nobody had pulled, and it was held shut by the window rather than by a measurement: at 8,192 the doubled cap did not fit. The window went to 16,384 earlier the same day, so it fits now. Measured 2026-09-09 over the 4,117 published items in state/item-health/2026-09.csv (2026-09-01 to 09, stock ubuntu-latest 4 vCPU runners): 36 of them, 0.87 percent, were cut at 5,000 tokens, and 9 of them, 0.22 percent, would still be cut at 10,000. A cut article gains 23 to 5,000 tokens of prefill, median 1,616, and prefill runs at a median 9.85 tokens a second over those 4,117 rows, so the worst item pays about 8.5 more minutes against a summarize call that costs 114.6 s at the median and 312.7 s at the 95th. The prompt is 997 tokens plus 1.306 a word by least squares over the same rows, so the worst case is about 14,100 tokens of a 16,384 window - 86 percent, a margin of 1.16x where it was 1.9x. The cap is fingerprint-digested, so every stamp moves and no summary written before today is comparable with one written after; that is correct, because the text the model read is not the same text. Rule #11 is untouched: extract sanitizes before it truncates, so a longer article is more untrusted text handled on exactly the terms the short one was."
@@ -2548,7 +2553,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-09T21:30",
+      "default": "2026-09-09T23:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2562,5 +2567,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-09T21:30"
+  "version": "2026-09-09T23:00"
 }
