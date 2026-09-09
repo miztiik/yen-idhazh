@@ -1818,30 +1818,39 @@ text. The one new run whose prompt size is readable medians 898 tokens against
 nine occupy. The nine read as the slow mode carrying a bigger prompt, not as a
 new effect.
 
-**Two instruments added to answer this question do not work.** Both were checked
-on all nine runs:
+**Two instruments added to answer this question did not work. Both are now
+explained, and only one of them was a fault.** Both were checked on all nine
+runs:
 
 - `grep -m1 'system_info' router.log` **has matched zero times in nine runs.**
   llama.cpp `b10598` writes no line containing that string, so the one line that
   names the instruction sets - AVX2 against AVX-512, the obvious way two hosts
   sharing a CPU model string could differ 3x on prefill - has never been
   captured. The other five lines under
-  [What a job log names](#what-a-job-log-names) do print.
-- The log summary's `grep -E '^(srv|slot) '` **cannot match this build's
-  output.** Every line starts with a timestamp and a level, as in
+  [What a job log names](#what-a-job-log-names) do print. **This was never a
+  grep fault**: the line is not printed at all below verbosity 4, so the pattern
+  was right and the line was not there
+  ([What llama-server reports about its own runtime settings](#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).
+- The log summary's `grep -E '^(srv|slot) '` **could not match this build's
+  output, and that one was a fault.** Every line starts with a timestamp and a
+  level, as in
   `0.02.841.335 I srv load_model: initializing, n_slots = 1`, so the anchor
-  never fires; the one line that does reach the job log matches on the
+  never fired; the one line that did reach the job log matched on the
   `n_ctx_slot` alternative instead. `slot print_timing:`, which carries
   `prompt eval time`, stopped reaching the job log when the older unanchored
-  `grep 'prompt eval time ='` was replaced. Those timings now survive only
-  inside the `router-log` artifact, which keeps them for two days.
+  `grep 'prompt eval time ='` was replaced. Measured 2026-09-09 over the four
+  committed captures: 1 line of 40 found, and the corrected anchor
+  `^[0-9.]+ [A-Z] (srv|slot) ` finds 38 of 40, the two it leaves being the
+  common-args block. Fixed in both jobs the same day, so those timings reach a
+  job log again from the next run rather than surviving only inside the
+  two-day artifact.
 
-**The unmet prerequisite, exactly.** With both greps fixed: **two `route` runs
-carrying a prefill rate on each CPU model, at least one of them in the fast
-mode.** Today that count is 1 on the EPYC 7763, 0 on the EPYC 9V74 and 0 on the
-Xeon 8573C, so it is five more observations at minimum. No date goes with that
-number - which CPU a job draws is not ours to choose, and no fast run has
-appeared in nine.
+**The unmet prerequisite, exactly.** With the anchor fixed and the verbosity
+understood: **two `route` runs carrying a prefill rate on each CPU model, at
+least one of them in the fast mode.** Today that count is 1 on the EPYC 7763, 0
+on the EPYC 9V74 and 0 on the Xeon 8573C, so it is five more observations at
+minimum. No date goes with that number - which CPU a job draws is not ours to
+choose, and no fast run has appeared in nine.
 
 ### Why a cancelled run published nothing
 
