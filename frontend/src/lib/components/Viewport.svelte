@@ -126,8 +126,15 @@
 		</p>
 
 		<!-- Shape first, rows last. The list is the only child that can outgrow
-		     the screen, so it cannot sit between two charts. -->
-		<div class="mt-6">
+		     the screen, so it cannot sit between two charts.
+
+		     These three are NOT put behind a reserved box when the window is empty,
+		     and that is deliberate. Each already says precisely what is empty about
+		     it - "No summaries in this window", what the failure list found - and
+		     three precise sentences beat one general one. What none of them can say
+		     on its own is that a month did not arrive; that is said once, above the
+		     panels, beside the control that would act on it. -->
+		<div class="mt-6" data-viewport-body>
 			<FailurePanels
 				{rows}
 				window={viewport}
