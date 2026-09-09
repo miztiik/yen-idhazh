@@ -889,6 +889,13 @@ gh api "repos/<owner>/<repo>/commits/$head/check-runs" --jq '.check_runs[]|"\(.n
 An empty result means CI has not registered the new head yet, which is a
 different answer from `pass` and the one you actually needed.
 
+**A comma-separated `--json` list is split by PowerShell into separate
+arguments.** `gh release view <tag> --json tagName, assets, url` fails with
+`accepts at most 1 arg(s), received 3`, which reads like a wrong subcommand and
+is a quoting fault. PowerShell treats `a, b, c` in a bare argument list as three
+elements. Quote the whole list: `--json 'tagName,assets,url'`. Observed
+2026-09-09.
+
 **"No checks reported" can mean CI never triggered at all, and waiting will not
 fix it.** That is a different cause from the empty check-run list above, where
 the head is new and the runner is catching up. Here the pull request was opened
@@ -1421,6 +1428,27 @@ commit) and each file's `lfs.oid`. **Its revision-scoped form does not**:
 `/api/models/<repo>/revision/<commit>?blobs=true` returns `lfs.size` with
 `lfs.oid` null, so a check written against it silently compares against
 `None`.
+
+**Two cheaper answers than the pointer file, both found 2026-09-09.** The
+**302** carries `X-Linked-ETag`, and that is the file's SHA-256 - it is only the
+final CDN response's `ETag` that is the Xet hash, so `curl -sI` without `-L`
+settles it in one call. And `/api/models/<repo>/tree/<commit>?recursive=1`
+returns every file with a git blob SHA-1 in `oid` and, for an LFS file, the
+SHA-256 in `lfs.oid` - one call for a whole revision, and it is the
+revision-scoped form that works.
+
+**A file's digests do not identify one commit.** Walking
+`Xenova/all-MiniLM-L6-v2` on 2026-09-09, the head and its parent carried the
+same five digests, because the head added other ONNX variants and left the one
+we use alone. A pin resolved by searching history for matching bytes therefore
+has more than one answer; pick the head of the branch at the fetch date and say
+that is what you picked.
+
+**A `resolve/<40-hex>/` URL redirects where `resolve/main/` does not.** At a
+pinned commit the four small files answer `307` to a relative `Location` on
+`huggingface.co` itself, and the 23 MB model answers `302` to
+`us.aws.cdn.hf.co`. A check that counts hops, or a CSP source list, has to allow
+for both.
 
 ## npm
 
@@ -3031,6 +3059,22 @@ Two traps in the harness rather than the bundle. `process.env.S06_MOD` has to be
 a `file://` URI or Node reads a Windows drive letter as a protocol. And a
 throwaway spec under `frontend/tests/` would have been picked up by the shared
 selector on the next run, which is the reason to bundle instead.
+
+## A cross-origin failure is invisible to Playwright's `response` event
+
+`page.on('response')` never fires for a response the browser refuses on the
+same-origin policy, so a chain recorded from that event alone stops at the last
+hop that passed. Writing a probe of
+[the encoder's second origin](measurements.md#whether-a-browser-can-read-the-encoder-from-a-second-origin-2026-09-09)
+on 2026-09-09, that printed "no request left the browser" for a request that had
+left, gone out and come back refused - which reads as a client-side block when
+it is the other origin's answer. Listen for `requestfailed` as well; it carries
+the URL and `net::ERR_FAILED`, and it is the only listener that names the hop
+that broke.
+
+`curl` will not tell you either. It enforces no same-origin policy, so
+`curl -sIL` on the same URL follows the redirect and prints a 200 with the right
+bytes. The browser is the instrument for this question and nothing else is.
 
 ## A pytest harness inherits CI's `$GITHUB_OUTPUT`, and the guard test goes hollow
 
