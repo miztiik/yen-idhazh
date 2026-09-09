@@ -59,7 +59,7 @@ discover. All are folded in. The five that would have cost the most:
 | 2 | The parcel carries the day, not the archive | - | A | LANDED | - | #523 | worker |
 | 4 | One verification call, and it is the one that assigns | - | A | LANDED | - | #524 | worker |
 | 5 | Stage only what changed | - | A | LANDED | - | #526 | worker |
-| 3 | Rebuild only when the push was rebased | 2 | B | PENDING | - | - | - |
+| 3 | Rebuild only when the push was rebased | 2 | B | IN-FLIGHT | yi-s03-rebuild | #534 | worker |
 | 6 | Bound the eleven archive reads | - | B | IN-FLIGHT | yi-s06-bound | #529 | worker |
 | 13 | The page carries nothing a later run can change | - | B | IN-FLIGHT | yi-s13-stamps | - | worker |
 | 15 | Publish the Release asset, pin the revision, prove it cross-origin | 1 | B | PENDING | - | - | - |
