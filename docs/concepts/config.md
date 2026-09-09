@@ -171,9 +171,10 @@ band off the post-cap count is what left it empty until 2026-08-26, because at
 the cap of 2500 committed then that count stopped at `int(2500 / 1.3) = 1923`
 words and that band started at 2000
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
-The ladder gained a fifth rung at 3000 words on 2026-08-29, and no rung floor
-may ever sit above `int(truncation_cap_tokens / 1.3)` - the model is handed that
-many words and a rung above it would ask for a summary of text it never saw.
+The ladder gained a fifth rung at 3000 words on 2026-08-29 and a sixth at 5000
+on 2026-09-09, and no rung floor may ever sit above
+`int(truncation_cap_tokens / 1.3)` - the model is handed that many words and a
+rung above it would ask for a summary of text it never saw.
 
 **The published surface keeps a second copy of that ladder, and it drifted.**
 `SUMMARIZE_DEFAULTS` in `frontend/src/lib/server/config.ts` is the value the
@@ -197,8 +198,9 @@ time, which is exactly why nothing noticed.
 **This is the drift the rejected-alternatives table below already forbids**, in
 the row that refuses copying config into the published directory because two
 copies of one file are free to drift with nothing gating them. The copy is in
-code rather than in a published file, so no gate caught it. The five rungs are
-corrected as of 2026-08-29, and the copy is now pinned:
+code rather than in a published file, so no gate caught it. The rungs were
+corrected as of 2026-08-29 - there are six of them since 2026-09-09 - and the
+copy is now pinned:
 `backend/tests/test_contracts.py::test_the_console_fallback_bands_match_the_committed_ladder`
 reads the committed bands and the `SUMMARIZE_DEFAULTS` literal and fails when
 they disagree, printing both ladders. The guard sits with the writer because a

@@ -261,12 +261,17 @@ def test_a_tier_that_falls_in_one_shard_survives_the_split() -> None:
         items=ordered,
     )
     union: list[CorpusItem] = []
+    # Enough room for a whole slice, derived rather than typed: the supply above
+    # is sized from the ladder, so a literal here shrinks against a new rung and
+    # drops a tier the union then reports as short. Crowding out is
+    # `test_the_scarce_tier_is_not_crowded_out_by_the_common_one`'s job.
+    keep = -(-len(ordered) // shards)
     for shard in range(shards):
         chosen, _, _ = cli._freeze(
             cli.shard_of(plan, shard=shard, shards=shards),
             SETTINGS,
             fetcher_for(layout),
-            keep=10,
+            keep=keep,
             share=cli.corpus_share(),
         )
         union.extend(entry.row for entry in chosen)
