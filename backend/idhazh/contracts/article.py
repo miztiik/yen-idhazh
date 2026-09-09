@@ -13,7 +13,7 @@ siblings never notice.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -33,7 +33,12 @@ from idhazh.contracts.taxonomy import EventType, LensId, SourceTier
 
 # Structural bounds on untrusted text that reaches a page or a log line. Not a
 # tunable: the extraction caps a reasonable operator would move live in config.
-UntrustedLine = Annotated[str, StringConstraints(min_length=1, max_length=500)]
+#: The width as a number, for the same reason `VALUE_MAX_LENGTH` is one: a
+#: producer that cuts a run of sentences out of an article has to refuse a slice
+#: this will not hold, and the only other way to find out is to let the shape
+#: raise part-way through an article.
+UNTRUSTED_LINE_MAX: Final = 500
+UntrustedLine = Annotated[str, StringConstraints(min_length=1, max_length=UNTRUSTED_LINE_MAX)]
 
 
 class ArticleStatus(StrEnum):
