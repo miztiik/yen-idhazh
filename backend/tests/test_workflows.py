@@ -1031,17 +1031,38 @@ def _isolated_env(tmp_path: Path) -> dict[str, str]:
 
     The script sets its own committer, so the test must not supply one: an
     inherited `user.name` would hide the day the script stopped setting it.
+
+    `GITHUB_OUTPUT` goes for a second reason. CI runs this suite inside a step
+    that has one, so an inherited value would let the script append to the gates
+    step's own outputs - and the test that the script survives without the
+    variable would only be a real test on the machines that never had it.
     """
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     return {
-        **os.environ,
+        **{name: value for name, value in os.environ.items() if name != "GITHUB_OUTPUT"},
         "HOME": str(home),
         "USERPROFILE": str(home),
         "GIT_CONFIG_GLOBAL": str(home / "gitconfig"),
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_TERMINAL_PROMPT": "0",
     }
+
+
+def _step_outputs(written: Path) -> dict[str, str]:
+    """What Actions reads back from one step's `$GITHUB_OUTPUT` file."""
+    return dict(
+        cast(tuple[str, str], tuple(line.split("=", 1)))
+        for line in written.read_text(encoding="utf-8").splitlines()
+        if line
+    )
+
+
+def _reading_its_output(tmp_path: Path, settings: dict[str, str]) -> tuple[dict[str, str], Path]:
+    """The step's own settings, plus the output file a workflow step would give it."""
+    written = tmp_path / "github-output"
+    written.write_text("", encoding="ascii")
+    return {**settings, "GITHUB_OUTPUT": written.as_posix()}, written
 
 
 def _git(repo: Path, env: dict[str, str], *args: str) -> str:
@@ -1813,6 +1834,13 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
     one. `npm ci` is deliberately not repeated with it: the lockfile moves far
     more rarely than the source, and a reinstall would delete `node_modules` on
     every run to cover the rarer of the two.
+
+    And it is conditional, because a push that landed first try left the tree
+    the first build already read. The condition has to name every commit step
+    that runs before it: `assemble` commits twice, the second stages
+    `frontend/public/telemetry`, and the console pages read that - so a
+    condition naming only the day's commit would skip the rebuild on the other
+    one and put run 33270983446 straight back.
     """
     steps = _steps(_load_workflows()[filename], job_name)
     names = [step.get("name") for step in steps]
@@ -1837,6 +1865,22 @@ def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
     assert "continue-on-error" not in steps[rebuilt[0]], (
         "a rebuild that fails quietly leaves the gate reading the stale build again"
     )
+
+    assert "if" in steps[rebuilt[0]], (
+        "an unconditional rebuild pays for the race on every run, raced or not"
+    )
+    condition = _normalize_condition(
+        steps[rebuilt[0]].get("if"), f"{filename}/{job_name} rebuild condition"
+    )
+    for index in commits:
+        # Either the step's own `id`, so the condition reads what it reported,
+        # or the condition that decides whether it commits at all - which is how
+        # a job with one commit step and a dispatch switch says the same thing.
+        named = str(steps[index].get("id") or steps[index].get("if") or "")
+        assert named and named in condition, (
+            f"{steps[index].get('name')} can rewrite the checkout, so the rebuild's "
+            "condition has to name it"
+        )
 
 
 #: Every job that builds the site, and so every job that can grow it past the cap.
@@ -2224,12 +2268,18 @@ def test_every_command_in_the_retry_loop_is_guarded() -> None:
     is either a condition, a guarded call, or an `echo`, which is what makes the
     three attempts real. The Oracle test below proves the same thing by running
     it; this one names the line when a new command arrives unguarded.
+
+    A plain assignment is allowed because `set -e` has nothing to act on: the
+    exit status is the value's, and a literal always succeeds. One whose value
+    comes from a command substitution is still a command, so it is still
+    flagged - that is where the hazard would come back.
     """
     lines = read_text(COMMIT_SCRIPT).splitlines()
     start = next(index for index, line in enumerate(lines) if line.startswith("for attempt in "))
     end = next(index for index, line in enumerate(lines) if line.startswith("done"))
     assert start < end
 
+    literal_assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=[^\s`]*$")
     unguarded = []
     for line in lines[start + 1 : end]:
         stripped = line.strip()
@@ -2239,6 +2289,7 @@ def test_every_command_in_the_retry_loop_is_guarded() -> None:
             stripped.startswith(("if ", "elif ", "fi", "else", "echo ", "["))
             or stripped in {"exit 0", "break", "continue", "then"}
             or "||" in stripped
+            or (literal_assignment.match(stripped) is not None and "$(" not in stripped)
         )
         if not guarded:
             unguarded.append(stripped)
@@ -3068,6 +3119,123 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     assert (runner / "runner-noise.txt").read_text(encoding="ascii") == "clean\n"
     assert (runner / "leftover.log").is_file()
     assert _git(runner, env, "status", "--porcelain", "--untracked-files=no").strip() == ""
+
+
+@requires_bash
+def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
+    """What the rebuild step reads. A clean push left the tree it was handed.
+
+    Written explicitly rather than left unwritten. An output nobody wrote is the
+    empty string, which is falsy and would skip the rebuild too - and which is
+    indistinguishable from the script dying before it could answer.
+    """
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    _, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
+    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
+    settings, written = _reading_its_output(tmp_path, settings)
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert "push rejected" not in result.stdout
+    assert _step_outputs(written) == {"rebased": "false"}
+
+
+@requires_bash
+def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
+    """Nothing was pushed, so there is no new tree for a later step to read."""
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    _, runner = _scripted_origin(tmp_path, env, staged_paths)
+    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
+    settings, written = _reading_its_output(tmp_path, settings)
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert settings["NOTHING_STAGED_MESSAGE"] in result.stdout
+    assert _step_outputs(written) == {"rebased": "false"}
+
+
+@requires_bash
+def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
+    """The rebase replaced the checkout, so the build made before it is stale.
+
+    This is what `digest.yml` keys the rebuild on. Run 33270983446 weighed one
+    tree's pages against another tree's ceilings and failed a day that had
+    already published; a rebase that reported nothing would do it again.
+    """
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    _, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _race(tmp_path, env, "docs/unrelated.md", "racing\n")
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
+    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
+    settings, written = _reading_its_output(tmp_path, settings)
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert "push rejected, rebasing (attempt 1)" in result.stdout
+    assert _step_outputs(written) == {"rebased": "true"}
+
+
+@requires_bash
+def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path) -> None:
+    """The guard on the write, and it is what lets one copy of the script serve both.
+
+    `set -u` ends the run on an unset variable, so an unguarded write would kill
+    every one of these tests and anybody running the script by hand. Only a
+    workflow step has `$GITHUB_OUTPUT`.
+    """
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
+    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
+
+    assert "GITHUB_OUTPUT" not in {**env, **settings}, "the harness is what removes it"
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert "GITHUB_OUTPUT" not in result.stderr, "an unset variable must not end the script"
+    assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
+
+
+def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
+    """Three exits return zero and a fixture reaches two of them.
+
+    The third - origin already holding everything a rebuild produced - needs a
+    racing run that publishes the same items, and the value it reports decides
+    whether the day's own gate reads a stale build. So the exits are checked
+    where they are written instead.
+
+    The argument-error exits above the function are deliberately out of scope.
+    They fire before anything is committed, they fail the step, and a step that
+    failed has already stopped the rebuild.
+    """
+    lines = read_text(COMMIT_SCRIPT).splitlines()
+    defined = next(
+        index for index, line in enumerate(lines) if line.startswith("report_rebased()")
+    )
+
+    exits = [
+        index
+        for index, line in enumerate(lines)
+        if line.strip() in {"exit 0", "exit 1"} and index > defined
+    ]
+    assert len(exits) == 4, "three ways out with nothing wrong, and the one that gives up"
+    for index in exits:
+        before = [
+            line.strip()
+            for line in lines[max(0, index - 3) : index]
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        assert any("report_rebased" in line for line in before), (
+            f"line {index + 1} leaves without saying whether the checkout was rewritten"
+        )
 
 
 @requires_bash
