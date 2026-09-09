@@ -1379,9 +1379,12 @@ in one row have no order to be read in. And **it does not look like it was made
 this year**: a bare link strip under a hairline is the plainest footer a page
 can have, and it is the exact "thin, cold, unloved" shape Susan exists to catch
 ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)).
-The other two pass and are unchanged by the row: the footer uses the width of
-the frame it sits in, and the top rule plus `--color-text-tertiary` still hold
-it away from the reading surface.
+Measured 2026-09-09 in Chromium at 1280x900 on the canary build, the same figure
+on all five routes that have a footer: the block is **102 px tall and holds
+three links**, against 3 blocks and 2 paragraphs before. The other two checks
+pass and are unchanged by the row: the footer uses the width of the frame it
+sits in, and the top rule plus `--color-text-tertiary` still hold it away from
+the reading surface.
 
 **What the reader loses, named rather than implied.** The build line said which
 commit produced the page, so a reader who thought something looked wrong could
