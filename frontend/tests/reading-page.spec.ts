@@ -442,63 +442,58 @@ test.describe('where two rows meet', () => {
  * now. What each one measures is in `docs/architecture/publishing/layout.md`.
  */
 test.describe('the count and the address', () => {
-	/** The story count a built document states, before a browser runs anything.
+	/** The story count the page states, once the day it names is in hand.
 	 *
-	 * Read off the file rather than off a rendered page, because the half that
-	 * was wrong is the half a reader with no script gets and never sees change.
-	 * The line is stripped of Svelte's own markers rather than matched through
-	 * them, so a change in how the compiler emits an `{#if}` cannot quietly turn
-	 * this into a test that matches nothing.
+	 * **It used to be read off the built document**, because the half that was
+	 * wrong was the half a reader with no script got and never saw change. There
+	 * is no dated document since 2026-09-09 - one shell answers every dated
+	 * address - so the number is read where a reader reads it. What the check is
+	 * about has not moved: the notice states the day's own published total, never
+	 * the length of the list in hand, so it cannot tick up while a reader is
+	 * looking at it.
 	 */
-	function printedCount(...parts: string[]): number {
-		const at = readFileSync(join(BUILD, ...parts, 'index.html'), 'utf8');
-		const opens = at.indexOf('notice-count');
-		expect(opens, `/${parts.join('/')}/ draws no story-count line at all`).toBeGreaterThan(-1);
-		const line = at
-			.slice(at.indexOf('>', opens) + 1, at.indexOf('</p>', opens))
-			.replace(/<!--.*?-->/g, '')
-			.replace(/<[^>]*>/g, '')
+	async function printedCount(page: Page, route: string): Promise<number> {
+		await open(page, 'dark', route, 1536);
+		await expect(page.locator('[data-payload-state]')).toHaveAttribute(
+			'data-payload-state',
+			'ready'
+		);
+		const line = ((await page.locator('p.notice-count').first().textContent()) ?? '')
 			.replace(/\s+/g, ' ')
 			.trim();
 		const printed = /^(\d+) stor/.exec(line);
-		expect(printed, `/${parts.join('/')}/ opens with "${line}" and states no count`).not.toBeNull();
+		expect(printed, `${route} opens with "${line}" and states no count`).not.toBeNull();
 		return Number(printed![1]);
 	}
 
-	test('the dated document says how many stories the day published', async ({ page }) => {
-		test.skip(!PAST_SEED, `${DAY} carries its whole day, so its seed IS its count`);
-
+	test('the dated page says how many stories the day published', async ({ page }) => {
 		// The day's own bounded count, which is the number the topic row prints a
 		// few lines below this sentence on the same screen.
 		const published = (FACTS?.verticals ?? []).reduce((sum, ref) => sum + ref.count, 0);
-		const before = printedCount(DAY);
-
-		await open(page, 'dark', `/${DAY}/`, 1536);
-		const settled = (await page.locator('p.notice-count').first().textContent()) ?? '';
-		const after = Number(/(\d+)\s+stor/.exec(settled.replace(/\s+/g, ' '))?.[1]);
+		const drawn = await printedCount(page, `/${DAY}/`);
+		const stories = await page.locator('article.item[id]').count();
 
 		console.log(
-			`[reading-page] /${DAY}/ counts ${before} before hydration, ${after} after, ` +
-				`on a day that published ${published}`
+			`[reading-page] /${DAY}/ counts ${drawn} on a day that published ${published}, ` +
+				`with ${stories} stories on the first screen`
 		);
 		expect(
-			before,
-			`the first line under the date claims ${before} stories on a day that published ` +
+			drawn,
+			`the first line under the date claims ${drawn} stories on a day that published ` +
 				`${published}. It counts the list in hand rather than the day's own total, so a ` +
-				`prerendered document states the seed of ${SEED} plus its leads and a reader with ` +
-				'no script never sees another number'
+				'reader pressing the pager would watch it tick'
 		).toBe(published);
-		expect(
-			after,
-			`the count ticked from ${before} to ${after} while the reader was looking at it`
-		).toBe(before);
+		// And the arm that says the number is not simply the list: the stream pages
+		// at twelve, so a count taken off what is drawn would be smaller on any day
+		// past that.
+		expect(stories, 'the page drew no story, so the count above proves nothing').toBeGreaterThan(0);
 	});
 
-	test('a topic document says how many stories that desk published', () => {
+	test('a topic page says how many stories that desk published', async ({ page }) => {
 		const desk = FACTS?.verticals.find((ref) => ref.id === TOPIC);
 		expect(desk, `${DAY} serves /${TOPIC}/ and its payload names no such desk`).toBeDefined();
 
-		const printed = printedCount(DAY, TOPIC);
+		const printed = await printedCount(page, `/${DAY}/${TOPIC}/`);
 		console.log(`[reading-page] /${DAY}/${TOPIC}/ counts ${printed} of the desk's ${desk!.count}`);
 		expect(
 			printed,

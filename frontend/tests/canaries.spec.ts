@@ -123,6 +123,13 @@ test.describe('the eight canaries, on the published surface', () => {
 		// The other half of the previous test. A surface that stripped every link
 		// would pass every absence check and destroy the thing the digest is for.
 		await page.goto('/2026-08-20/');
+		// A dated page holds nothing until its day arrives (2026-09-09), so reading
+		// the links straight after `goto` counts an empty page and passes an absence
+		// check by accident.
+		await expect(page.locator('[data-payload-state]')).toHaveAttribute(
+			'data-payload-state',
+			'ready'
+		);
 		const sources = await page.evaluate(() =>
 			[...document.querySelectorAll('main a[href]')]
 				.map((node) => node.getAttribute('href') ?? '')
