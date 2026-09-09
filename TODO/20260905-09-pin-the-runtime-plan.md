@@ -31,8 +31,68 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Six numbers the job already has and throws away | - | A | DONE #525 (three of six) | yi-h01-memory | #525 | worker |
 | 2 | A model swap can no longer inherit in silence | - | A | DONE #528 | yi-h02-inherit | #528 | worker |
-| 3 | The window doubles and flash attention pays for it | 1, 2 | B | HELD - ESCALATE 1 only (2 resolved #530) | - | - | - |
+| 3 | The window doubles and flash attention pays for it | 1, 2 | B | HELD - ESCALATE 1 stands, owner decision (2 resolved #530) | - | - | - |
 | 4 | One run prices the runtime and nothing else | 3 | C | HELD - blocked by row 3 | - | - | - |
+
+### The window does not fit, and the reading is now complete (#539)
+
+**16,384 does not fit, and the raise does not have to be priced to say so - the
+deficit exists at 8,192, before the change, and doubling the window can only add
+to the KV cache.** Every question that was open about the figure is now shut.
+
+**The recorded python is the job's, not the instrument's.** The sampler is a
+bash loop calling `awk`, `cat` and `date`, and it matches a `comm` beginning
+`python`, so none of its own processes is counted. Of the three python processes
+seen at every peak, **two are the host's** - already running at the first sample,
+taken before `python -m idhazh work` starts, holding 63,432 to 69,780 kB between
+them, about 4 percent of the recorded figure. A fourth appears in 6 of 1,261
+samples, holds under 28 MB, and is never present at a peak. **The job's own
+python is 1.49 to 1.55 GiB, in one process.** Taking the host's two out moves the
+worst shard from 0.59 GiB free to **0.66 GiB**, which is still under the 1.0 GiB
+the trigger asks for.
+
+Two readings matter more than the peak. The job's python is at about 1.2 GiB
+**within fifteen seconds** - four fifths of it is a load cost paid before the
+first article is fetched. And the two peaks coincide: llama-server's high point
+and the sum's high point are the same sample on all four shards, with python at
+76 to 88 percent of its own peak then. So the two do not cancel.
+
+**The ONNX encoder is not resident in a work shard at all** - `stage_work` never
+constructs an `Embedder`, the three callers are `stage_plan`, `stage_assemble`
+and `backfill-vectors`, and `embed.py` imports `onnxruntime` inside the functions
+that need it. **The faithfulness scorer is resident**, and is used from inside the
+summarize loop, so `torch` and `transformers` are alive at llama-server's peak by
+design. How much of the 1.5 GiB they hold is **not measured and was not guessed** -
+the shared venv has neither package, and a laptop figure for a resident set is
+not a runner figure.
+
+**No reduction was proposed, and the reason is in the readings.** llama-server
+starts before the work step, is killed at job end, and climbs from 8.68 GiB to
+its peak across the whole shard. A scoring pass moved after summarizing would
+still run beside a server holding its maximum. The concurrent peak falls only if
+the server stops first, which means moving the `/metrics` scrape ahead of it and
+reordering five steps - a pipeline-shape decision with an owner, not a worker's
+call.
+
+**The next run can answer better.** The sampler now writes `python-procs.tsv`
+beside `rss-samples.tsv`: one row per python process per sample with pid, `comm`,
+both memory marks, the executable and three argv fields - three rather than the
+whole command line, because `comm` is `python3` for every one of them and names
+nothing, while the executable plus argv 1-3 separates the job from a distribution
+daemon and stops before anything a command line might carry further along
+(section 1b). Cost: about 113 kB a shard in a two-day artifact.
+
+### The owner's choice, and nothing else is waiting on a measurement
+
+1. **Raise the window anyway** and accept a margin under 1.0 GiB on three of four
+   shards. That is overriding trigger 1, not clearing it.
+2. **Find the 1.5 GiB first.** One dispatch with `faithfulness: false` prices the
+   scorer's share on the runner with no code change. If it is most of the 1.5 GiB,
+   stopping llama-server before a separate scoring pass returns roughly that much.
+3. **Leave `n_ctx` at 8,192.** The two-call design's 8,580-token worst case is
+   105 percent of it, so this also holds plan 11.
+
+---
 
 ### What rows 1 and 2 changed under the plan
 
