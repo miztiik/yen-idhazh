@@ -1,10 +1,10 @@
 {
   "complete_dates": 16,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-09T13:04:13Z",
+  "generated_at": "2026-09-09T16:14:09Z",
   "last_date": "2026-09-08",
   "min_complete_days": 30,
-  "run_id": "2026-09-09-34345739900",
+  "run_id": "2026-09-09-34364829545",
   "sources": [
     {
       "availability": "answering",
@@ -1063,7 +1063,7 @@
       "vertical": "business-economy"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "opportunities": 1,
       "permission": "allowed",
       "publications": 0,
@@ -1171,9 +1171,9 @@
       "vertical": "india"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 39,
-      "permission": "denied",
+      "permission": "allowed",
       "publications": 39,
       "retired": false,
       "retired_on": null,
@@ -1771,7 +1771,7 @@
       "vertical": "energy"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 53,
       "permission": "allowed",
       "publications": 53,
