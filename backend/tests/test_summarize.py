@@ -332,6 +332,53 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
     assert "--no-warmup" not in argv
 
 
+def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
+    """The flag that makes the runtime's own settings readable at all.
+
+    At llama-server's default verbosity of 3 one start prints twelve lines, and
+    no line among them names the attention state, the KV buffer or the compute
+    buffer - so a check on any of those reads back the flag we passed instead of
+    the decision the runtime took (`docs/reference/measurements.md`, 2026-09-09).
+    Unset, the flag is absent and the runtime keeps its own default.
+    """
+    from idhazh.contracts.app_config import ModelRef
+
+    model = ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M")
+    quiet = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=model,
+        inference=InferenceConfig(),
+    )
+    assert "-lv" not in quiet
+
+    loud = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=model,
+        inference=InferenceConfig(log_verbosity=4),
+    )
+    assert loud[loud.index("-lv") + 1] == "4"
+
+
+def test_both_committed_roles_start_a_server_that_names_its_own_settings() -> None:
+    """The daily run prints the lines, or the check row 3 rests on has nothing to read.
+
+    Read off the committed config rather than restated, so a role that is left
+    quiet fails here rather than at 04:00 on a runner.
+    """
+    settings = config.load(CONFIG_DIR)
+    for role in ("summarize", "visual_planner"):
+        entry = getattr(settings.app.models, role)
+        argv = server_argv(
+            binary=Path("bin/llama-server"),
+            weights=Path(f"models/{entry.file}"),
+            model=entry,
+            inference=entry.inference,
+        )
+        assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
+
+
 def test_the_output_schema_is_generated_not_hand_written() -> None:
     assert output_schema() == draft_model().model_json_schema()
     assert output_schema_text() == output_schema_text(), "stable, so the stamp is stable"

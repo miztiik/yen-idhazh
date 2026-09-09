@@ -972,6 +972,20 @@
           "description": "llama-server -lm. None omits the flag and keeps the runtime default.",
           "title": "Load Mode"
         },
+        "log_verbosity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
+          "title": "Log Verbosity"
+        },
         "max_output_tokens": {
           "default": 900,
           "description": "A crash guard, not a length target. The prompt sets the length; this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want.",
@@ -1964,6 +1978,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "InferenceConfig gains log_verbosity, an optional llama-server -lv level. Null omits the flag and keeps the runtime default of 3. config/idhazh.json sets 4 on both model roles.",
+      "version": "2026-09-09T20:10",
+      "why": "The server was never asked to describe itself. At its default verbosity it prints twelve lines, and no line among them names flash attention, the KV buffer or the compute buffer - so every claim about what the runtime did with those settings was a claim about the flag we passed rather than about what happened (Rule #10). At 4 the model-loader block comes back and the log states the attention decision three ways: a named state, a compute buffer 5.1 times larger without fusion, and a graph 180 nodes longer. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, eleven server starts, three runs an arm, zero spread. It is a knob rather than a literal because an operator debugging a start wants 9 and a daily run does not (Rule #6), and it is set on both roles because both write a log nobody can read otherwise. What it costs is one job artifact growing from 1,085 bytes to about 16,011 - kept two days, committed never."
+    },
+    {
       "change": "observability gains six retention knobs, one per console payload that files by month: public_scores_keep_months, public_feed_health_keep_months, public_run_days_keep_months, public_day_metrics_keep_months, public_machine_keep_months and public_span_rollup_keep_months, each defaulting to 14. The three that project a state ledger must equal that ledger's own window, and all six are now checked by refuse_windows_shorter_than.",
       "version": "2026-09-09T18:00",
       "why": "The console is moving from inlining six committed ledgers into its document to fetching them, and a payload the pipeline appends to every run with no age is a directory that grows for ever (Rule #12). Every one is minted with a NON-NULL default in the same commit as its contract, because item_health_aggregate_keep_months and score_archive_keep_months are null today and a null that spreads stops reading as a decision. Fourteen is the number the two existing windows already carry: the console reaches 367 inclusive days and those days can fall in fourteen month shards. Adding them to full_grain_months() is what stops a knob being set narrower than a window preset can still select - a deleted shard blanks its panel silently, because a month with no file reads exactly like a month with no runs. Minted here rather than beside the producer so the producer, the consumer and the gates read one list instead of guessing at three (TODO/20260908-shell-and-fetch-plan.md row 8, Fowler and Carmack, 2026-09-08). appearance-config is NOT restamped beside this one: the only console key that row would have added, console.shimmer_after_ms, is minted in row 12 where it gets a measured value, so an entry here would record a change that did not happen."
@@ -2518,7 +2537,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-09T18:00",
+      "default": "2026-09-09T20:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2532,5 +2551,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-09T18:00"
+  "version": "2026-09-09T20:10"
 }

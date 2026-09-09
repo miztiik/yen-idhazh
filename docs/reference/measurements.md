@@ -358,6 +358,30 @@ eleven starts, and that range is page cache rather than anything about the
 flags: the first start of the session was the 34.6 and every later one was 10.1
 to 16.3.
 
+### What landed from this, and what one server start now costs
+
+**The flag is committed.** `models.summarize.inference.log_verbosity` and
+`models.visual_planner.inference.log_verbosity` are both `4` in
+`config/idhazh.json`, and `idhazh.llm.server.server_argv` emits `-lv 4` from
+them. It is a knob rather than a literal because an operator debugging a start
+wants `9` and a daily run does not (Rule #6). Null omits the flag and keeps the
+runtime's own default of 3, so a checkout with no config file starts a quiet
+server exactly as before.
+
+**The cost is one job artifact, and it is not a committed file.** A server start
+goes from 12 stderr lines and 1,085 bytes to about 206 lines and 16,011 bytes -
+roughly 15 KB per start, on the readings in the table above. Five starts a day
+across the two roles is under 80 KB, it lands in the run's own log which GitHub
+Actions retains and nothing else reads, and no byte of it reaches the 1 GB
+published site (Rule #2) or the repository. The daily workflow already uploads
+`llama-server.log` as a two-day artifact, well inside the 500 MB allowance.
+
+**`log_verbosity` is not fingerprint-digested**, and sits in
+`idhazh.fingerprint.NOT_DIGESTED` with that reason written next to it. A log
+level cannot move a logit, so digesting it would have invalidated every earlier
+work identity on the day somebody turned the logging up - which is what
+`n_threads_batch` was refused for on the other side of the same argument.
+
 ## What the encoder costs on the wire from Hugging Face, 2026-09-09
 
 **A reader who searches will pay 6.75 MB more than today, and every byte of that

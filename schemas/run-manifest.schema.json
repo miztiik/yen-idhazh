@@ -100,6 +100,20 @@
           "description": "llama-server -lm. None omits the flag and keeps the runtime default.",
           "title": "Load Mode"
         },
+        "log_verbosity": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
+          "title": "Log Verbosity"
+        },
         "max_output_tokens": {
           "default": 900,
           "description": "A crash guard, not a length target. The prompt sets the length; this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want.",
@@ -676,6 +690,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The embedded inference block gained log_verbosity, following the config contract. Additive and optional: a manifest written before today carries no key and reads as null, which is the runtime default.",
+      "version": "2026-09-09T20:10",
+      "why": "A manifest that named every runtime setting except the one that decides whether the run's own log can be read would leave the reader of a log unable to say why a line is missing from it. Stamped here as well as on app-config because run.json is a separate persisted document and its shape moved (CLAUDE.md section 11); it costs about 22 compact bytes per model use."
+    },
+    {
       "change": "The embedded ModelRef gained an inference block, because config moved the runtime settings onto the model entry. Additive and optional: a manifest written before today carries no block and reads on the contract defaults, which is what tests/fixtures/contracts/run-manifest/two-runs.json proves.",
       "version": "2026-09-09",
       "why": "One settings block served both roles, so a swap inherited numbers measured against other weights in silence. The block now belongs to the entry, and the record of a run says which runtime each model was served on rather than leaving it to be looked up. Measured 2026-09-09 on the committed tree: 433 compact bytes per model use, so 1,732 B on the 13,010 B manifest of 2026-09-08 - 13.3 percent bigger. No reader pays it. run.json is read at build time and never staged into the bundle (frontend/scripts/copy-visuals.mjs), so the 1 GB site cap is untouched and the cost is about 1.7 KB of repository weight a day."
@@ -767,7 +786,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-09",
+      "default": "2026-09-09T20:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -779,5 +798,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-09"
+  "version": "2026-09-09T20:10"
 }

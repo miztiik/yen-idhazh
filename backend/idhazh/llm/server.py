@@ -146,6 +146,12 @@ def server_argv(
         argv.extend(("--poll", str(inference.poll)))
     if inference.n_threads_batch is not None:
         argv.extend(("-tb", str(inference.n_threads_batch)))
+    # What the server says about itself. At the runtime default of 3 it prints
+    # twelve lines and none of them names the attention state, the KV buffer or
+    # the compute buffer, so a check on any of those reads the flag we passed
+    # rather than what the runtime did with it.
+    if inference.log_verbosity is not None:
+        argv.extend(("-lv", str(inference.log_verbosity)))
     # Loopback only, and only inside a CI job. It opens no surface a reader can
     # reach, and it is the only place the context high-water mark and the
     # busy-slot average are published at all.
