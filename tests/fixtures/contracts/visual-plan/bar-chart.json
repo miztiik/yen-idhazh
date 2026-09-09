@@ -1,0 +1,42 @@
+{
+  "annotations": [
+    "quantity-1184-1192"
+  ],
+  "caption": "Each bar is the figure the article states for that country.",
+  "confidence": 0.82,
+  "decision": "visual",
+  "element_ids": [
+    "entity-1170-1177",
+    "entity-1288-1295",
+    "entity-1409-1414",
+    "entity-1534-1541",
+    "quantity-1184-1192",
+    "quantity-1301-1308",
+    "quantity-1422-1430",
+    "quantity-1547-1554"
+  ],
+  "encodings": {
+    "category": [
+      "entity-1170-1177",
+      "entity-1288-1295",
+      "entity-1409-1414",
+      "entity-1534-1541"
+    ],
+    "quantity": [
+      "quantity-1184-1192",
+      "quantity-1301-1308",
+      "quantity-1422-1430",
+      "quantity-1547-1554"
+    ]
+  },
+  "labels": [
+    "quantity-1184-1192",
+    "entity-1170-1177"
+  ],
+  "plan_version": "2026-09-09",
+  "purpose": "comparison",
+  "title": "Offshore wind capacity, four countries",
+  "type": "bar",
+  "version": "2026-09-09",
+  "why": "Four countries, one unit, and the lead sentence turns on which of them is largest."
+}

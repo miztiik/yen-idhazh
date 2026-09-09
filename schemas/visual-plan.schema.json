@@ -1,0 +1,228 @@
+{
+  "$defs": {
+    "EncodingRole": {
+      "description": "What an element does in the drawing - which channel it fills.\n\nNine channels cover every type above, and no type fills more than four of\nthem. Whether a role is required, optional or illegal for a given type is\nthe validator's rule; this names the roles that exist.\n\nThere is no `label` role. What names a mark is the top-level `labels` field,\nand one fact with two homes is a fact that can disagree with itself.",
+      "enum": [
+        "category",
+        "quantity",
+        "quantity_x",
+        "time",
+        "series",
+        "size",
+        "bins",
+        "entity",
+        "event_label"
+      ],
+      "title": "EncodingRole",
+      "type": "string"
+    },
+    "PlanDecision": {
+      "description": "Whether this story wants a picture at all.\n\n`none` is the common and correct answer, and it is a decision rather than an\nabsence - a plan that declines still records why it declined and how sure it\nwas, so a refusal is legible.",
+      "enum": [
+        "visual",
+        "none"
+      ],
+      "title": "PlanDecision",
+      "type": "string"
+    },
+    "VisualPurpose": {
+      "description": "What the reader is being asked to do, coarser than the type.\n\nA downgrade may change the type and never the purpose, so this is the thing\nthat survives the ladder and the thing a cross-family move would break. Each\nmember covers one or more rows of the section 7.2 type matrix.",
+      "enum": [
+        "comparison",
+        "trend",
+        "relationship",
+        "change",
+        "composition",
+        "distribution",
+        "sequence",
+        "detail",
+        "emphasis"
+      ],
+      "title": "VisualPurpose",
+      "type": "string"
+    },
+    "VisualType": {
+      "description": "The full declarable vocabulary of forms a plan may ask for.\n\nDeclarable is not renderable. A type with no compiler template can be named\nby a plan and is deterministically downgraded to its nearest built\nneighbour, which is how the planner says which template is worth building\nnext. What may reach a reader is gated elsewhere; what may be named is here.",
+      "enum": [
+        "bar",
+        "dot",
+        "line",
+        "area",
+        "scatter",
+        "bubble",
+        "slope",
+        "stacked_bar",
+        "pie",
+        "histogram",
+        "timeline",
+        "table",
+        "flow",
+        "comparison",
+        "callout",
+        "quotecard",
+        "whowhat",
+        "keyfacts"
+      ],
+      "title": "VisualType",
+      "type": "string"
+    }
+  },
+  "$id": "visual-plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the plan a compiler draws from, carrying element references and closed vocabularies only. No geometry field, no numeric field but a 0..1 confidence, no alt_text, and labels and annotations typed as element ids rather than as strings. Every array carries a maxItems and every decoded string a maxLength.",
+      "version": "2026-09-09",
+      "why": "Contracts before logic - the planner's second call and the compiler are both written against a fixed payload (Rule #3). The prohibitions are the point of the shape rather than a note beside it: a plan that can name a pixel is a plan bound to one renderer, and a plan that can state a number turns the worst a prompt injection can do from picking the wrong bars into drawing the wrong figure. alt_text is left out because the compiler assembles it from element values it already holds, where the model writing it would be the last prose channel in the system that no validator can check. The bounds are what make the worst-case decoded reply arithmetic rather than a hope, and the arithmetic is in the module docstring so it can be re-derived when a bound moves."
+    }
+  ],
+  "description": "One item's visual plan: references and closed names, and nothing else.",
+  "properties": {
+    "annotations": {
+      "description": "The elements to mark first, so one mark lands before its siblings. A reference for the same reason a label is.",
+      "items": {
+        "maxLength": 22,
+        "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+        "type": "string"
+      },
+      "maxItems": 4,
+      "title": "Annotations",
+      "type": "array"
+    },
+    "caption": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "One sentence of framing under the picture. Optional on any plan.",
+      "title": "Caption"
+    },
+    "confidence": {
+      "description": "How sure the model was, decoded after the type so it conditions nothing. Recorded, and it gates nothing.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "decision": {
+      "$ref": "#/$defs/PlanDecision",
+      "description": "Whether this story wants a picture. Decoded first, so nothing conditions it."
+    },
+    "element_ids": {
+      "description": "Every element this plan draws from, so the validator has one list to check existence against rather than nine.",
+      "items": {
+        "maxLength": 22,
+        "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Element Ids",
+      "type": "array"
+    },
+    "encodings": {
+      "additionalProperties": {
+        "items": {
+          "maxLength": 22,
+          "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+          "type": "string"
+        },
+        "maxItems": 8,
+        "type": "array"
+      },
+      "description": "Which elements fill which channel. References only - a channel names the elements that fill it and never the values they hold.",
+      "maxProperties": 9,
+      "propertyNames": {
+        "$ref": "#/$defs/EncodingRole"
+      },
+      "title": "Encodings",
+      "type": "object"
+    },
+    "labels": {
+      "description": "The elements whose own characters name the marks and the axes. A reference and never a string: code cuts every character a reader sees, and the model points at which characters.",
+      "items": {
+        "maxLength": 22,
+        "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Labels",
+      "type": "array"
+    },
+    "plan_version": {
+      "description": "The date-stamp of the planning vocabulary this plan was made against. Stamped by code, never decoded. A later build compares it against what it now holds, which is how vocabulary drift is found rather than drawn.",
+      "maxLength": 19,
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Plan Version",
+      "type": "string"
+    },
+    "purpose": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VisualPurpose"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the reader is asked to do. Committed before the type, because a type chosen first turns the purpose into a rationalisation of it. Null on a plan that declines."
+    },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the picture is called. Null on a plan that declines.",
+      "title": "Title"
+    },
+    "type": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VisualType"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The form, from the full declarable vocabulary. Null on a plan that declines."
+    },
+    "version": {
+      "default": "2026-09-09",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "why": {
+      "description": "Why this form, or why nothing. Model prose, shown to no reader and to no reviewer - it is read when a decision is being audited and nowhere else.",
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Why",
+      "type": "string"
+    }
+  },
+  "required": [
+    "decision",
+    "purpose",
+    "type",
+    "why",
+    "title",
+    "caption",
+    "confidence",
+    "plan_version"
+  ],
+  "title": "VisualPlan",
+  "type": "object",
+  "version": "2026-09-09"
+}
