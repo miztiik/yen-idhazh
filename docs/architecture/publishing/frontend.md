@@ -828,8 +828,27 @@ deleted. Every one of them is a fact a later build or a later day can change,
 and the footer is on every page, so each rewrote the bytes of every document on
 the site whenever anything published. That is what makes an unchanged page stale
 to a browser cache and to a reader's copy: the page said the same thing and
-arrived as different bytes. `frontend/src/routes/+layout.server.ts` now returns
-the config and nothing else, and imports nothing from `$lib/server/payload`.
+arrived as different bytes. The root layout now returns the config and nothing
+else, and imports nothing from `$lib/server/payload`.
+
+**It is `frontend/src/routes/+layout.ts` rather than `+layout.server.ts`, since
+2026-09-09.** A server load is not only a read - it is a promise that a file
+called `<route>/__data.json` exists, and SvelteKit's client asks a static host
+for one whenever any node in the branch has a server load. Only a prerendered
+route has such a file. The root layout is above every route on the site, so
+keeping its `load` on the server decided that for all of them, and a route that
+ever stops being prerendered would meet the framework's error screen instead of
+its own page. The knobs travel as `__UI_CONFIG__` instead, which
+`vite.config.ts` resolves once per build out of the same `uiConfig()` the server
+reader owns - a knob a surface needs is imported into the bundle at build time
+and never fetched, which is the rule in
+[../../concepts/config.md](../../concepts/config.md). Page options went with the
+file, so `/`, `/archive/` and `/evals/` each declare `prerender = true`
+themselves; `/console/` already did. Measured on a real build, 2026-09-09, Intel
+Core i7-1265U, `BUILD_VERSION` pinned across both arms: it takes about 230
+gzipped bytes off every prerendered document - `/` 46,691 to 46,445, `/archive/`
+5,264 to 5,057, `/evals/` 2,895 to 2,669 - because the config no longer rides in
+each document as a server-load payload.
 
 What the reader loses is written down rather than implied, under "Design
 rationale" in

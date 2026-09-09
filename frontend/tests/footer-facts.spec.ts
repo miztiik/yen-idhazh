@@ -183,12 +183,17 @@ test.describe('what the layout hands every page', () => {
 	 * read off the newest day rewrites the bytes of every older page the next
 	 * time a day publishes. The import is pinned rather than the field, because
 	 * a field can be renamed and the cost comes from the read.
+	 *
+	 * **It is `+layout.ts` since 2026-09-09, not `+layout.server.ts`.** The file
+	 * moved because a server load anywhere in the branch makes a client-rendered
+	 * route ask a static host for a `__data.json` it never wrote. The rule this
+	 * asserts did not move with it: a universal load cannot import
+	 * `$lib/server/payload` at all, so the first line below is now a bound the
+	 * framework also holds, and the rest still say the layout hands every page
+	 * nothing that comes from a day.
 	 */
 	test('the root layout reads no day and no build clock', () => {
-		const layout = readFileSync(
-			resolve(process.cwd(), 'src', 'routes', '+layout.server.ts'),
-			'utf8'
-		);
+		const layout = readFileSync(resolve(process.cwd(), 'src', 'routes', '+layout.ts'), 'utf8');
 
 		expect(layout, 'the layout reads the published tree again').not.toContain('$lib/server/payload');
 		expect(layout).not.toContain('new Date');

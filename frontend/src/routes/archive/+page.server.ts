@@ -3,6 +3,8 @@ import { archiveRecentDays, archiveWindowDays, assistConfig, consoleConfig } fro
 import { archiveCalendar, type ArchiveDay } from '$lib/archive-calendar';
 import type { DigestDay, DigestVerticalRef } from '$lib/payload/types';
 
+/** Declared here rather than inherited. The root layout is a universal load and
+ * carries no `prerender`, so every route that ships a document says so itself. */
 export const prerender = true;
 
 export function load() {
