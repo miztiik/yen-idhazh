@@ -59,6 +59,13 @@ env:
   LLAMA_CPP_BUILD: b10598
   LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
   LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
+  # The one place this workflow says which port, the same declaration digest.yml
+  # and validate.yml make. The runtime job starts its own server from an inline
+  # python block rather than through `.github/scripts/start-llama-server.sh`,
+  # because it sweeps a setting and needs the process handle - but it reads the
+  # port from here, so no arm of this repository spells the number twice
+  # (Rule #6).
+  LLAMA_PORT: '8080'
 
 jobs:
   # The model refs, read once from config and published to every target that
@@ -436,7 +443,7 @@ jobs:
           THREADS_BATCH = int(os.environ["RUNTIME_THREADS_BATCH"])
           MAX_THREADS = 2 * (os.cpu_count() or 1)
           REPEATS = 3
-          SERVER_PORT = 8080
+          SERVER_PORT = int(os.environ["LLAMA_PORT"])
 
           if not 1 <= THREADS <= MAX_THREADS:
               raise SystemExit(f"runtime_threads must be in 1..{MAX_THREADS}")

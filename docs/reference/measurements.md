@@ -33,18 +33,26 @@ itself.
 
 **What is corrected, and by how little.** The runtime plan's
 [section 1a](../../TODO/20260905-09-pin-the-runtime-plan.md) sums llama-server
-and python at one instant and reads the free space off 14.90 GiB usable. Taking
-the two host processes out of that sum moves the worst shard from 0.59 GiB free
-to 0.66 GiB, and the best from 1.04 GiB to 1.10 GiB. **The trigger it informs
-asks for 1.0 GiB and three of four shards are still under it at today's
-window.** The correction is real and it changes nothing.
+and python at one instant and subtracts that sum from 14.90 GiB. Taking the two
+host processes out of the sum moves the worst shard from 0.59 GiB to 0.66 GiB,
+and the best from 1.04 GiB to 1.10 GiB.
 
-| Shard | recorded free of 14.90 GiB | free with the two host processes removed |
+| Shard | 14.90 GiB minus the recorded sum | with the two host processes removed |
 | --- | --- | --- |
 | 3 | 0.59 GiB | 0.66 GiB |
 | 2 | 0.75 GiB | 0.81 GiB |
 | 0 | 0.97 GiB | 1.03 GiB |
 | 1 | 1.04 GiB | 1.10 GiB |
+
+**Neither column is headroom, and the trigger they were read against cannot be
+tested with them. Corrected 2026-09-09.** Both were published as free memory and
+compared with a 1.0 GiB escalate trigger. The processes were measured correctly
+and the subtraction is arithmetic nobody can check: 14.90 GiB is the whole
+machine with nothing reserved for the kernel or the runner agent, and summed RSS
+includes mapped weight pages the kernel can evict plus any page two processes
+share counted twice.
+[Summed RSS reaches 14.31 GiB](#summed-rss-reaches-1431-gib-and-that-does-not-say-how-near-the-edge-the-job-came)
+carries the full retraction and what the next run captures to close it.
 
 **Hardware and method.** GitHub-hosted `ubuntu-latest`, 4 vCPU, 16 GB, four work
 shards of run `2026-08-29-3`, captured 2026-08-29 and committed as
@@ -140,19 +148,32 @@ prices it is one dispatch and no code, and it is in
 
 ### Does 16,384 fit
 
-**No, and the raise does not have to be priced to say so.** At `n_ctx` 8,192 the
-worst shard already leaves 0.66 GiB free counting only the job, against the
-1.0 GiB the plan's first escalate trigger asks for. Doubling the window can only
-add to the KV cache. The deficit exists before the change, so what the change
-costs does not decide it.
+**Unknown, and this page cannot say. Corrected 2026-09-09.** This section
+previously answered "no", on the reasoning that the worst shard already leaves
+0.66 GiB free counting only the job, against the 1.0 GiB the plan's first
+escalate trigger asks for. The reading was taken correctly; the word "free" was
+wrong. That figure is 14.90 GiB minus two processes' summed RSS, and
+[the section that retracts it](#summed-rss-reaches-1431-gib-and-that-does-not-say-how-near-the-edge-the-job-came)
+gives the three reasons it is not headroom: 14.90 GiB is the whole machine with
+nothing reserved for the kernel or the runner agent, summed RSS counts mapped
+weight pages that the kernel can evict and counts shared pages twice, and what
+the machine actually had free was never captured. A deficit computed from a
+number nobody measured is not a deficit.
 
-That is the whole ruling this page can give, and it is enough for an owner to
-choose between three things: raise the window anyway and accept a smaller
-margin; find the 1.5 GiB first; or leave the window at 8,192. **No arithmetic
-here extrapolates the doubling**, because [section 11.2 of the runtime
-plan](../../TODO/20260905-09-pin-the-runtime-plan.md) accounts for only about
-5.6 GiB of the 13.29 GiB measured, and an extrapolation off a term that explains
-two fifths of the total is a guess with a decimal point.
+What still holds is the direction: doubling the window can only add to the KV
+cache, so 16,384 needs more memory than 8,192 and not less. What is missing is
+the other side of the comparison. Until a run records `MemAvailable` beside the
+marks - which the sampler starts doing from 2026-09-09 - there is no measured
+figure to hold the increase against, and Rule #10 does not let an unmeasured one
+decide a design either way.
+
+**No arithmetic here extrapolates the doubling** either, because
+[section 11.2 of the runtime plan](../../TODO/20260905-09-pin-the-runtime-plan.md)
+accounts for only about 5.6 GiB of the 13.29 GiB measured, and an extrapolation
+off a term that explains two fifths of the total is a guess with a decimal point.
+So both sides of the comparison are open, not one. An owner choosing today is
+choosing without an instrument, and the cheap next step is one run rather than
+one argument.
 
 ## What llama-server reports about its own runtime settings, 2026-09-09
 
@@ -5318,47 +5339,99 @@ less has to be measured rather than assumed. No threshold has been agreed for
 "too near", so the console draws no tint - a colour would publish a limit nobody
 set.
 
-**Superseded 2026-09-08 by the two sections below.** That paragraph reads
-llama-server's mark as though it were the job's, and it is not. Both halves of it
-have since moved: the ledger's own worst row is now higher, and the python beside
-the server takes most of what is left.
+**Superseded 2026-09-08, and retracted further 2026-09-09, by the two sections
+below.** That paragraph reads llama-server's mark as though it were the job's,
+and it is not: the ledger's own worst row is higher, and the python beside the
+server holds over a gigabyte more. The 2026-09-09 correction goes further and
+takes the word "headroom" off all of them. Every one of these figures is a
+process mark or a subtraction from the machine's whole 16 GB, and neither says
+what the machine had free - which nothing here has ever measured.
 
-### The headroom is 0.59 GiB, not 2.8, because python is on the same 16 GB
+### Summed RSS reaches 14.31 GiB, and that does not say how near the edge the job came
 
 **Measured 2026-09-08** on this repository's four committed captures of run
 `2026-08-29-3` - `tests/fixtures/runtime/2026-08-29-3-shard-*.rss-samples.tsv`,
 291 to 383 samples a shard, taken every 15 seconds on a GitHub-hosted
-`ubuntu-latest`, 4 vCPU, 16 GB, on 2026-08-29. The runner's usable figure is
-14.90 GiB (CLAUDE.md Rule #2).
+`ubuntu-latest`, 4 vCPU, 16 GB, on 2026-08-29.
 
 `peak_rss_bytes` is llama-server's high-water mark and nothing else. The job also
 runs python - it reads the feeds, extracts the article text and scores the
 summaries - and that python sits on the same 16 GB. Adding the two at the same
-instant, sample by sample, is what the runner actually has to hold.
+instant, sample by sample, is the third column below.
 
-| Shard | llama-server alone | Both at one instant | Free of 14.90 GiB |
+| Shard | llama-server alone | Both at one instant | 14.90 GiB minus that sum |
 | --- | --- | --- | --- |
 | 3 | 13.16 GiB | **14.31 GiB (96.0%)** | **0.59 GiB** |
 | 2 | 12.94 GiB | 14.15 GiB (95.0%) | 0.75 GiB |
 | 0 | 12.57 GiB | 13.93 GiB (93.5%) | 0.97 GiB |
 | 1 | 12.65 GiB | 13.86 GiB (93.0%) | 1.04 GiB |
 
-**Read the last column, not the first.** Reading llama-server's mark as the job's
-overstates the free memory by 1.15 GiB on the worst shard - and it overstates it,
-which is the unsafe direction. Every headroom figure this project has published,
+**Read the third column, not the first.** llama-server's mark is not the job's,
+and reading it as the job's understates what the two processes held together by
+1.15 GiB on the worst shard. Every figure this project published before this date,
 including the 1.61 GiB in the pseudo-plan and the 2.8 GiB above, is llama-server
-alone.
+alone. The spread across the four shards is 0.45 GiB, and the worst is the shard
+that also holds the largest llama-server mark, so the two do not cancel.
 
-The spread across the four shards is 0.45 GiB, and the worst is the shard that
-also holds the largest llama-server mark, so the two do not cancel.
+**The fourth column was published as headroom, and it is not headroom.
+Corrected 2026-09-09.** Every reading above was taken correctly and stands. What
+was built on top of them does not, in three ways.
 
-**This is why `python_peak_rss_bytes` and `cgroup_peak_bytes` are on the row from
-2026-09-08.** Until then the second number reached a two-day artifact and the
-third reached nothing, so no committed file could be asked this question.
-`cgroup_peak_bytes` would answer it outright, because the kernel counts every
-process at once - but `/sys/fs/cgroup/memory.peak` has measured absent on every
-GitHub-hosted runner this project has read, so expect that cell empty and expect
-to add the two marks by hand.
+**One: 14.90 GiB is the whole machine.** It is 16,000,000,000 bytes written in
+GiB, which is the runner's entire advertised memory (Rule #2). Nothing in it is
+set aside for the kernel, the Actions runner agent, the two host python processes
+the section above already found, or the page cache - and all of those are running.
+So "14.90 minus the sum" is not what a process could still have obtained. It is
+larger than that by whatever the rest of the machine was holding, and that amount
+has never been measured here.
+
+**Two: summed RSS is not committed memory.**
+`config/idhazh.json` leaves `models.summarize.inference.load_mode` null, so
+`idhazh.llm.server.server_argv` passes no `-lm` flag and llama.cpp maps the weight
+file instead of reading it into anonymous memory. The weights are
+`Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes - **5.29 GiB, measured 2026-08-23**.
+Mapped pages count in `VmRSS` in full while they are resident, and they are
+file-backed: the kernel can drop them under pressure and read them back off disk,
+so they are not memory it has to find anywhere. Of the 14.31 GiB worst sum, at
+most **9.02 GiB** can be the anonymous memory that actually has to fit. Adding RSS
+across processes also counts every page two of them share twice, and this sum adds
+three python processes to one llama-server. The figure is an upper bound in two
+directions at once, which is the safe direction to be wrong in and the wrong
+direction to subtract from a total.
+
+**Three: the total has never been measured.** Nothing in this repository reads
+`/proc/meminfo`, `MemTotal`, `MemAvailable`, `Committed_AS`, `memory.current` or
+`memory.max` - **zero matches** across `backend/`, `.github/`, `frontend/src/` and
+`config/`, searched 2026-09-09. One cgroup file is read, `/sys/fs/cgroup/memory.peak`,
+and it has measured absent every time: `cgroup_peak_bytes` is empty on **all 225
+rows** of `state/runtime-counters.csv`, counted 2026-09-09. `python_peak_rss_bytes`
+is empty on all 225 too, so the ledger cannot even reproduce the sum in the table
+above - that came from the four capture files and from nowhere else.
+
+**And nothing has run out of memory.** Those 225 rows span 56 runs, 193 of them
+carrying a peak, and each row exists because the job lived long enough to write
+it. A job truly holding 96.0 percent of a 16 GB machine - with the kernel, the
+runner agent and the page cache inside the same 16 GB - would be expected to swap
+hard or be killed. The readings and the survival do not sit together, and the
+number doing the arguing is the one nobody took.
+
+**So the headroom question is open.** How large the marks are is measured, and
+every figure in the table stands. How near the edge they came is not measured,
+because the deciding number - what the machine had free while the marks were held
+- was never captured. This page does not say that 8,192 leaves 0.59 GiB of room,
+and it does not say that 16,384 fits or that it does not.
+
+**What the next run captures.** From 2026-09-09 the 15-second sampler in
+`digest.yml` writes four more columns beside the two process marks: `mem_total_kb`
+and `mem_available_kb` and `committed_as_kb` from `/proc/meminfo`, and
+`cgroup_current_bytes` from `/sys/fs/cgroup/memory.current` where the runner has
+one. `MemAvailable` is the kernel's own estimate of what a new allocation could
+get, which is the question this section could not answer. A file that does not
+exist is written as the word `absent` rather than left blank, because a blank cell
+reads as zero and zero available memory is a very different claim from no reading.
+No contract field was minted for them yet: the capture lands first, and a column
+on the ledger row is worth adding once there is a run that proves the reading
+arrives.
 
 ### The ledger's own worst row moved to 13.82 GiB
 
@@ -5372,8 +5445,15 @@ The 13.18 GiB and 82.4 percent in the section above were taken on 2026-09-01 ove
 GiB in a week without any change to the model or the window, which is itself the
 reason a headroom claim needs the whole distribution and not one run's worst.
 
-Held against the concurrent reading above, a worst row of 13.82 GiB for
-llama-server alone leaves about 1.08 GiB before python is counted at all.
+**What it does not say is how much room was left. Corrected 2026-09-09.** This
+row was previously read as leaving about 1.08 GiB before python is counted at
+all, by subtracting it from 14.90 GiB. That subtraction is the one the section
+above retracts: 14.90 GiB is the whole machine rather than a process budget, and
+a high-water mark that includes mapped weight pages is not memory the kernel had
+to find. The ledger also carries no column naming the weights, so this row cannot
+even be attributed to a model - 56 runs span both the retired 8B and the
+configured 9B. What 13.82 GiB says is how large the mark got. How near the edge
+it came is the open question above.
 
 ### llama-server prints no buffer line, so three planned fields were not added
 
