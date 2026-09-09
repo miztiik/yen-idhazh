@@ -20,21 +20,24 @@ from typing import Any, Final
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from pydantic import ValidationError
 
 from idhazh.contracts.app_config import AppConfig, VisualsConfig
 from idhazh.contracts.element import ElementKind, ElementTable
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 from idhazh.visual_validator import (
+    Rejection,
+    ValidatorCheck,
+    validate_plan,
+)
+from idhazh.visual_vocabulary import (
     PLAN_VOCABULARY_VERSION,
     ROLE_KINDS,
     TYPE_RULES,
     UNIT_DIMENSIONS,
     UNRULED_TYPES,
     VALUE_ROLES,
-    Rejection,
-    ValidatorCheck,
     commensurable,
-    validate_plan,
 )
 
 pytestmark = pytest.mark.visual
@@ -47,6 +50,15 @@ def committed_visuals() -> VisualsConfig:
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
 
 
+def tuned_visuals(**knobs: int) -> VisualsConfig:
+    """The committed knobs with one moved, through validation rather than around it.
+
+    `model_copy(update=...)` sets an attribute without running a validator, so a
+    config it produces can be one the pipeline would refuse to load.
+    """
+    return VisualsConfig.model_validate(committed_visuals().model_dump(mode="json") | knobs)
+
+
 def load_plan(stem: str) -> VisualPlan:
     return VisualPlan.from_json(read_text(VALIDATOR_FIXTURES / "plans" / f"{stem}.json"))
 
@@ -57,6 +69,23 @@ def load_table(stem: str) -> ElementTable:
 
 def refuse(plan_stem: str, table_stem: str) -> list[Rejection]:
     return validate_plan(load_plan(plan_stem), load_table(table_stem), visuals=committed_visuals())
+
+
+def histogram_over(*quantities: str) -> VisualPlan:
+    """A histogram plan citing these quantities, built because no fixture holds one.
+
+    Every committed plan is a bar, and a histogram is the one type whose channel
+    holds the values being distributed rather than the marks drawn - so the case
+    this section is about cannot be found and has to be built (section 13).
+    """
+    payload: dict[str, Any] = json.loads(read_text(VALIDATOR_FIXTURES / "plans" / "passes.json"))
+    payload["type"] = VisualType.HISTOGRAM.value
+    payload["encodings"] = {role.value: [] for role in EncodingRole}
+    payload["encodings"][EncodingRole.BINS.value] = list(quantities)
+    payload["element_ids"] = list(quantities)
+    payload["labels"] = []
+    payload["annotations"] = []
+    return VisualPlan.model_validate(payload)
 
 
 #: One fixture per check, and the check it is built to be the only cause of.
@@ -259,6 +288,40 @@ def test_enough_data_reads_the_committed_knobs_and_not_a_literal() -> None:
     ]
 
 
+def test_a_histogram_needs_a_value_for_every_bin_it_draws() -> None:
+    """A histogram's marks are its bins, and its channel holds the values, not the marks.
+
+    Counting the channel asked the wrong question. Here it admitted three values
+    against five bars: two of the five would count nothing, `derived_values`
+    refuses that drawing, and the validator had already said the plan was fine.
+    The floor is `visuals.histogram_bins` because those are the marks that have
+    to be filled, and it is a knob rather than a number chosen here (Rule #6).
+    """
+    table = load_table("wind")
+    three = histogram_over("quantity-93-99", "quantity-58-66", "quantity-112-120")
+    assert validate_plan(three, table, visuals=tuned_visuals(histogram_bins=3)) == []
+    rejections = validate_plan(three, table, visuals=tuned_visuals(histogram_bins=5))
+    assert [rejection.check for rejection in rejections] == [ValidatorCheck.ENOUGH_DATA]
+    assert "3 values" in rejections[0].detail
+    assert "5 bins" in rejections[0].detail
+
+
+def test_a_bin_count_outside_the_mark_window_never_loads() -> None:
+    """A histogram draws the same number of bars whatever the plan says, so this is asked once.
+
+    Its bins are the marks a reader counts, so they are bounded by the two knobs
+    that already say how many marks a chart may draw. Asked where the config
+    loads, a wrong knob names the operator who set it and the run never starts.
+    Asked per plan it would refuse every histogram of every run, name the
+    article, and be right about none of them.
+    """
+    visuals = committed_visuals()
+    assert visuals.min_chart_points <= visuals.histogram_bins <= visuals.max_chart_points
+    for bins in (visuals.min_chart_points - 1, visuals.max_chart_points + 1):
+        with pytest.raises(ValidationError):
+            tuned_visuals(histogram_bins=bins)
+
+
 def test_a_numeral_in_reader_facing_prose_is_matched_against_the_cited_elements() -> None:
     """The three prose channels the shape could only length-bound.
 
@@ -314,15 +377,18 @@ def test_an_element_whose_cell_disagrees_with_its_own_characters_is_refused() ->
 # --- The two structural guards -----------------------------------------------
 
 
-def test_no_check_can_reach_a_model() -> None:
+@pytest.mark.parametrize("module", ["visual_validator", "visual_vocabulary"])
+def test_no_check_can_reach_a_model(module: str) -> None:
     """ESCALATE trigger 1, asserted rather than promised.
 
     A judge that shares the failure modes of the thing judged is not a
     measurement (`CLAUDE.md` section 0a), so the validator is deterministic code
     over committed data. The cheapest way to keep it that way is to read its own
-    imports: nothing that can open a socket or start a server is among them.
+    imports: nothing that can open a socket or start a server is among them. The
+    vocabulary the checks read is held to the same list, or moving a table out
+    of the validator would move it out from under this guard.
     """
-    source = read_text(Path(__file__).resolve().parents[1] / "idhazh" / "visual_validator.py")
+    source = read_text(Path(__file__).resolve().parents[1] / "idhazh" / f"{module}.py")
     imported: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
@@ -340,9 +406,10 @@ def test_no_check_can_reach_a_model() -> None:
         "idhazh.contracts.element",
         "idhazh.contracts.visual",
         "idhazh.elements",
+        "idhazh.visual_vocabulary",
         "re",
         "typing",
-    }, "a new import into the validator is a new way for a check to stop being deterministic"
+    }, f"a new import into {module} is a new way for a check to stop being deterministic"
 
 
 def test_every_role_and_every_value_role_is_declared() -> None:
