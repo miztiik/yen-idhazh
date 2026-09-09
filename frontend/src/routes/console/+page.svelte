@@ -846,6 +846,7 @@
 				restingNote=", the newest day"
 				hint="Point at a day to read every stage at once. Left and Right step through the days, Escape returns to the newest."
 				pending="The stage mix is drawn once the engine loads. Every count is in the strip below it."
+				fetched
 			/>
 			<!-- Stacked answers what the mix is and how big the day got; lines answer
 			     what one stage did on its own, which a stack hides when one band

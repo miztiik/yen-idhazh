@@ -299,8 +299,24 @@ test.describe('the readout is the default', () => {
 			for (let index = 0; index < count; index += 1) {
 				const owner = owners.nth(index);
 				if (Number((await owner.getAttribute('data-readout-columns')) ?? 0) < 2) continue;
+				// Scroll to it first, which is what a thumb does and what the engine
+				// waits for: `hydrate` observes intersection, so a chart nine screens
+				// down has no plot until somebody goes to it. Instant rather than
+				// smooth - `scrollIntoViewIfNeeded` times out on a chart that is
+				// still animating in.
+				await owner.evaluate((node) =>
+					node.scrollIntoView({ behavior: 'instant', block: 'center' })
+				);
+				// A chart drawn from rows the page fetches may still be waiting for
+				// them. That is a state this loop walks past, not a fault - the count
+				// at the foot still requires that one chart was tappable.
+				await owner
+					.filter({ has: page.locator('svg') })
+					.waitFor({ timeout: 4000 })
+					.catch(() => {});
+				if ((await owner.getAttribute('data-chart-drawn')) !== 'yes') continue;
 				const plot = owner.locator('svg').first();
-				await plot.scrollIntoViewIfNeeded();
+				if ((await plot.count()) === 0) continue;
 				const box = await plot.boundingBox();
 				if (box === null || box.width < 40) continue;
 
@@ -325,23 +341,77 @@ test.describe('the readout is the default', () => {
 		// or an old browser still gets one column's numbers in words, which is
 		// what CLAUDE.md Rule #1 asks of every published page. The check is a raw
 		// HTTP fetch of the same address, so nothing on the page has run.
+		//
+		// Since 2026-09-09 a chart may be drawn from rows the page fetches rather
+		// than from rows the document carries, and one of those cannot have its
+		// column in the prerendered markup - the numbers are not there to print.
+		// So the promise splits in two and each half is checked here. A chart over
+		// inlined data still owes its resting column to the raw document. A chart
+		// that declares `data-readout-fetched` owes it the moment its payload
+		// lands, and owes an absence before that; the arm below proves the second
+		// half by blocking the payload, so a chart that quietly kept a prerendered
+		// column would fail this rather than pass it.
 		for (const route of ROUTES) {
 			await open(page, route);
-			const names = await page.evaluate(() =>
-				[...document.querySelectorAll('[data-readout]')].map(
-					(node) => node.getAttribute('data-readout') ?? ''
-				)
+			const named = await page.evaluate(() =>
+				[...document.querySelectorAll('[data-readout]')].map((node) => ({
+					name: node.getAttribute('data-readout') ?? '',
+					fetched: node.closest('[data-readout-fetched]') !== null
+				}))
 			);
-			expect(names.length, `${route} rendered no readout strip`).toBeGreaterThan(0);
+			expect(named.length, `${route} rendered no readout strip`).toBeGreaterThan(0);
 
 			const html = await page.request.get(route).then((res) => res.text());
-			for (const name of names) {
-				expect(html, `${route}: ${name} is not in the prerendered document`).toContain(
-					`data-readout="${name}"`
+			const inlined = named.filter((entry) => !entry.fetched);
+			expect(
+				inlined.length,
+				`${route}: every strip claims fetched rows, so nothing is left to prerender`
+			).toBeGreaterThan(0);
+			for (const entry of inlined) {
+				expect(html, `${route}: ${entry.name} is not in the prerendered document`).toContain(
+					`data-readout="${entry.name}"`
 				);
 			}
 			expect(html, `${route}: no resting column is prerendered`).toContain('data-readout-day');
 		}
+	});
+
+	test('THE ORACLE: a strip over fetched rows arrives with its payload and not before', async ({
+		page
+	}) => {
+		// The other half of the promise above, and the one that stops this pair
+		// being weakened into nothing. A chart drawn from fetched rows may print
+		// no column before the fetch lands - and it MUST print one after, or the
+		// move from the document to the network cost the reader the numbers.
+		//
+		// The service worker is unregistered and every cache dropped first. It
+		// serves the month shard from `idhazh-days` otherwise, so the blocked arm
+		// reports a page that works and proves nothing (agent-notes.md).
+		await page.goto('/console/');
+		await page.evaluate(async () => {
+			for (const reg of await navigator.serviceWorker.getRegistrations()) await reg.unregister();
+			for (const name of await caches.keys()) await caches.delete(name);
+		});
+
+		let blocked = 0;
+		await page.route('**/telemetry/*.csv', (route) => {
+			blocked += 1;
+			return route.abort();
+		});
+		await page.goto('/console/');
+		await page.waitForTimeout(1200);
+		expect(blocked, 'no month shard was requested, so the block proved nothing').toBeGreaterThan(0);
+
+		const absent = page.locator('[data-readout-fetched] [data-readout-day]');
+		expect(await absent.count(), 'a strip printed a column with no rows behind it').toBe(0);
+		await expect(page.locator('[data-mix-empty]')).toHaveCount(1);
+
+		await page.unroute('**/telemetry/*.csv');
+		await page.goto('/console/');
+		await page.waitForTimeout(1200);
+		const strip = page.locator('[data-readout-fetched] [data-readout-day]').first();
+		await expect(strip).toHaveCount(1);
+		expect((await strip.innerText()).trim().length, 'the strip arrived empty').toBeGreaterThan(0);
 	});
 });
 

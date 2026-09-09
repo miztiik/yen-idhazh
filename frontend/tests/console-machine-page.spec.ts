@@ -236,9 +236,18 @@ test.describe('with no script at all', () => {
 	test('the route is complete, and the rate control is inert rather than broken', async ({
 		browser
 	}) => {
-		// A prerendered operator page owes a reader every mark before a script
-		// runs. What a script adds here is a pointer readout and a typed rate, and
-		// neither is on the page's critical path.
+		// A prerendered operator page owes a reader every mark it can honestly
+		// draw before a script runs. On this route that is still every mark: the
+		// Hardware panels are reduced from the ledger at build time and their
+		// SVG is in the document, so nothing here waits on a fetch.
+		//
+		// It said "every mark" flatly until 2026-09-09, and owner decision D2
+		// narrowed it. `/console/` now draws four charts from rows it fetches, so
+		// a mark that needs those rows cannot be in any document - what it owes
+		// instead is a named absence first and the mark when the payload lands,
+		// and `console-readout.spec.ts` holds it to both halves. The rule this
+		// route is held to did not move, and the sentence is here rather than
+		// deleted so the next reader can see that it was weighed.
 		const context = await browser.newContext({ javaScriptEnabled: false });
 		const page = await context.newPage();
 		await page.goto('/console/machine/');

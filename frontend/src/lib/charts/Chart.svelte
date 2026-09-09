@@ -48,7 +48,8 @@
 		restingNote = ', the newest column',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
 		grid = { left: 48, right: 12 },
-		pending = 'This chart is drawn from rows the page fetches, so it appears once they arrive.'
+		pending = 'This chart is drawn from rows the page fetches, so it appears once they arrive.',
+		fetched = false
 	}: {
 		/** Prerendered by `$lib/server/chart-render`, or empty where the chart is
 		 * drawn from rows only a browser has. An empty one shows `pending` until
@@ -78,6 +79,11 @@
 		 * A box that is simply empty says nothing about which of the two
 		 * nothings happened - no rows yet, or no engine ever. */
 		pending?: string;
+		/** True where the rows behind this chart arrive by fetch rather than in
+		 * the document. It changes what the chart owes a reader with no script:
+		 * a chart over inlined data owes its resting column in the prerendered
+		 * markup, and one over fetched rows cannot have it there and says so. */
+		fetched?: boolean;
 	} = $props();
 
 	// Bound in one of two branches, so it is state rather than a plain binding.
@@ -174,6 +180,8 @@
 	aria-label={label}
 	data-readout-columns={columns.length > 0 ? columns.length : undefined}
 	data-readout-none={columns.length > 0 || noReadout === '' ? undefined : noReadout}
+	data-readout-fetched={fetched ? 'yes' : undefined}
+	data-chart-drawn={drawn ? 'yes' : 'no'}
 >
 	{#if columns.length > 0}
 		<!-- The action goes on the wrapper, never on the SVG: the engine swaps that

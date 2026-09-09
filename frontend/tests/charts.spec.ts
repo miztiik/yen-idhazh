@@ -38,9 +38,20 @@ test.describe('the prerendered chart', () => {
 		// Read as raw text on purpose. A rendered DOM cannot tell the difference
 		// between a mark the server drew and one the engine drew a moment ago,
 		// which is exactly the difference this test exists to prove.
+		//
+		// **The marks are the stepped list, not the diagram.** The server drew the
+		// sankey into this document until 2026-09-09; it is drawn in the browser
+		// now, because a diagram the operator cannot re-take is one the window
+		// control cannot move (owner decision D3). The list carries what the
+		// diagram carried - every stage, every drop, every count and share - and
+		// it is markup, so it is here whether or not a script ever runs. The
+		// promise this test guards did not move; the shape that keeps it did.
 		const html = readFileSync(join(BUILD, 'console', 'index.html'), 'utf8');
 
 		expect(html).toContain('data-flow="chart"');
+		expect(html, 'the stepped list is what carries the flow without a script').toContain(
+			'data-flow-steps'
+		);
 		for (const label of ['Reached', 'Asked the model', 'Drafted', 'Published']) {
 			expect(html).toContain(label);
 		}
@@ -48,14 +59,20 @@ test.describe('the prerendered chart', () => {
 		for (const loss of ['Answered without a visual', 'The model drew nothing']) {
 			expect(html).toContain(loss);
 		}
+		// And every one of them carries its number, so the list is the flow and
+		// not a key to a picture nothing has drawn.
+		expect(html).toContain('data-flow-step-value');
+		expect(html).toContain('data-flow-lost-value');
 	});
 
 	test('colour leaves as a token, so both themes work before any script runs', () => {
 		const html = readFileSync(join(BUILD, 'console', 'index.html'), 'utf8');
-		const flow = html.slice(html.indexOf('data-flow="chart"'));
+		const flow = html.slice(html.indexOf('data-flow-steps'));
 
 		// Each stage names a custom property rather than a hex. This is the whole
-		// reason a theme change costs nothing and does not need JavaScript.
+		// reason a theme change costs nothing and does not need JavaScript. The
+		// swatches on the stepped list carry the tokens the diagram's bands used
+		// to, so the two shapes stay one palette.
 		for (const token of ['--chart-1', '--chart-2', '--chart-3', '--chart-4']) {
 			expect(flow).toContain(`var(${token})`);
 		}
