@@ -687,10 +687,11 @@ if set(SALIENCE_SCORE) != set(get_args(Salience)):
 class Citation(BaseModel):
     """One sentence's address, and the words inside it the model means.
 
-    The only shape in the reply that carries article words, and it carries them
-    to be *found* rather than to be kept: code searches the one named sentence,
-    demands exactly one hit, and cuts the article's own bytes at it. A surface
-    that does not resolve drops that citation and nothing else.
+    The one shape whose words are *searched for* rather than kept: code reads
+    only the named sentence, demands exactly one hit, and cuts the article's own
+    bytes at it. Everything else in the reply that carries words carries them as
+    a judgement about a fact code already cut, and none of it becomes a span. A
+    surface that does not resolve drops that citation and nothing else.
     """
 
     model_config = ConfigDict(extra="forbid")
