@@ -1,0 +1,273 @@
+{
+  "$defs": {
+    "ConfidenceBand": {
+      "description": "The band, not the number, is what drives behaviour and what a reader sees.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "ConfidenceBand",
+      "type": "string"
+    }
+  },
+  "$id": "public-eval.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the score ledger's own measurements, typed, with url_key, source_url and title refused at import.",
+      "version": "2026-09-09",
+      "why": "The console reads state/scores/ at build time and serialises the result into its document, so the ledger's shape crossed to a reader as inlined JSON with no contract, no version stamp and no changelog while the telemetry projection beside it has all three (Rule #3). Naming the shape before a producer exists is what stops the producer, the consumer and the gates each inventing their own list. item_id is carried as an opaque key on the same terms PublicTelemetryRow carries it: identity is minted by the ledger writer, and a published shard has no writer left to re-mint it if that grammar moves."
+    }
+  ],
+  "description": "One scored attempt, as the console is allowed to read it.",
+  "properties": {
+    "attempt": {
+      "minimum": 1,
+      "title": "Attempt",
+      "type": "integer"
+    },
+    "band": {
+      "$ref": "#/$defs/ConfidenceBand"
+    },
+    "compression": {
+      "minimum": 0.0,
+      "title": "Compression",
+      "type": "number"
+    },
+    "coverage": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Coverage",
+      "type": "number"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "determinism_violation": {
+      "default": false,
+      "title": "Determinism Violation",
+      "type": "boolean"
+    },
+    "evidential_density": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evidential Density"
+    },
+    "extraction_suspect": {
+      "default": false,
+      "title": "Extraction Suspect",
+      "type": "boolean"
+    },
+    "extractiveness": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Extractiveness",
+      "type": "number"
+    },
+    "hedge_dropped": {
+      "default": false,
+      "title": "Hedge Dropped",
+      "type": "boolean"
+    },
+    "hhem": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Hhem",
+      "type": "number"
+    },
+    "hhem_delta": {
+      "title": "Hhem Delta",
+      "type": "number"
+    },
+    "hhem_full": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Hhem Full",
+      "type": "number"
+    },
+    "item_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Item Id",
+      "type": "string"
+    },
+    "model_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "new_fact_rate": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "New Fact Rate"
+    },
+    "output_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Digest",
+      "type": "string"
+    },
+    "pipeline_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "score_ms": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Score Ms",
+      "type": "integer"
+    },
+    "scored_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Scored At",
+      "type": "string"
+    },
+    "scorer_version": {
+      "minLength": 1,
+      "title": "Scorer Version",
+      "type": "string"
+    },
+    "self_repetition": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Self Repetition"
+    },
+    "source_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Digest"
+    },
+    "source_seen_word_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Source Seen Word Count",
+      "type": "integer"
+    },
+    "source_word_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Word Count"
+    },
+    "speculative_density": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Speculative Density"
+    },
+    "summary_word_count": {
+      "minimum": 0,
+      "title": "Summary Word Count",
+      "type": "integer"
+    },
+    "truncation_flagged": {
+      "title": "Truncation Flagged",
+      "type": "boolean"
+    },
+    "unsupported_numbers": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Unsupported Numbers",
+      "type": "integer"
+    },
+    "verbatim_run": {
+      "default": 0.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Verbatim Run",
+      "type": "number"
+    },
+    "version": {
+      "default": "2026-09-09",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Vertical",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "item_id",
+    "vertical",
+    "model_id",
+    "attempt",
+    "hhem",
+    "hhem_full",
+    "hhem_delta",
+    "truncation_flagged",
+    "coverage",
+    "compression",
+    "extractiveness",
+    "band",
+    "summary_word_count",
+    "pipeline_fingerprint",
+    "output_digest",
+    "scorer_version",
+    "scored_at"
+  ],
+  "title": "PublicEvalRow",
+  "type": "object",
+  "version": "2026-09-09"
+}
