@@ -16,6 +16,189 @@ Two rules govern this page:
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
 
+## What llama-server reports about its own runtime settings, 2026-09-09
+
+**Flash attention is observable, and only in the log, and only at verbosity 4 or
+higher.** `/props` and `/metrics` say nothing about it: both come back
+byte-identical whether the server was started with `-fa on` or `-fa off`. The
+log at `-lv 4` says it three ways - a named state, a compute buffer that is
+5.1 times larger without it, and a graph 180 nodes longer - and the log at the
+default verbosity of 3 says none of them, because it prints twelve lines and the
+whole model-loader block is missing.
+
+So a check that flash attention is ACTIVE, rather than that a flag was accepted,
+is writable today. It costs one flag on the server and about 15 KB of log per
+server start. This is the instrument
+[row 3 of the runtime plan](../../TODO/20260905-09-pin-the-runtime-plan.md) was
+held on - its section 1a reads "the instrument does not exist" - and the same
+flag hands row 4 the KV-buffer and compute-buffer lines it needs. The hold
+itself is not lifted by this page: the row's other trigger is memory, which this
+page has nothing to say about, and the build tested here is not the pinned one.
+
+**Hardware and method.** 12th Gen Intel Core i7-1265U, 12 logical CPUs,
+32,592 MiB of host memory as the binary itself reports it, Windows 11. Taken
+2026-09-09 between 01:42 and 01:50 local. Eleven server starts: one at the
+default verbosity, one at `-lv 9`, and three each at `-lv 4` with no flag, with
+`-fa on` and with `-fa off`. The argv is built by
+`idhazh.llm.server.server_argv` from the committed `models.summarize` block, the
+way `.github/scripts/start-llama-server.sh` builds it, so what ran is the
+process the pipeline starts and not a hand-written command line. Absolute paths
+below are rewritten to their repository-relative form.
+
+**Two things this is not, and both matter before any number here is quoted.**
+The build is llama.cpp `b10444`, commit `5f754ea0e`, and `digest.yml` pins
+`b10598` - 154 builds away, so a line this build prints is evidence about a
+neighbour of the pinned build rather than about the pinned build itself. And the
+weights are `Qwen3-8B-Q4_K_M.gguf`, 5,027,783,488 bytes: the 8B, where
+`config/idhazh.json` names a 9B for `models.summarize`. The 9B is not on this
+machine. Every megabyte below is therefore the 8B's and none of them may be
+quoted as the 9B's. What does carry across is which lines the binary prints and
+what those lines are called, because that is a property of the binary - and the
+committed captures from the pinned build agree with this one line for line on
+the part both of them print, which is the next section.
+
+### A default start prints twelve lines, and the one row 3 wants is not among them
+
+Verbatim, from `-lv` unset:
+
+```text
+0.00.167.722 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.179.336 W srv  llama_server: -----------------
+0.00.179.357 W srv  llama_server: CORS is set to allow all origins ('*') and no API key is set
+0.00.179.358 W srv  llama_server: this can be a security risk (cross-origin attacks)
+0.00.179.359 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
+0.00.179.360 W srv  llama_server: -----------------
+0.00.192.023 I srv    load_model: loading model 'backend/models/Qwen3-8B-Q4_K_M.gguf'
+0.01.350.960 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.25.539.158 I cmn          init: llama threadpool init, n_threads = 4
+0.33.179.385 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'
+0.33.279.911 I srv  llama_server: model loaded
+0.33.280.340 I srv  llama_server: listening on http://127.0.0.1:38911
+```
+
+Absent at verbosity 3: `llama_model_loader:`, `print_info:`, `load_tensors:`,
+`system_info`, `llama_kv_cache:`, `sched_reserve:`, and any line naming flash
+attention. Present at verbosity 3: the window one sequence gets,
+`n_ctx_slot = 8192`.
+
+**The four committed CI captures under `tests/fixtures/runtime/` say the same
+thing on the pinned build**, which is what makes a laptop reading worth having
+here. `2026-08-29-3-shard-0.server-head.txt` is `b10598` on a GitHub-hosted
+runner against the 9B, and it opens with the same `verbosity = 3` line, the same
+CORS block, the same `load_model: loading model`, the same
+`init: llama threadpool init, n_threads = 4`, the same
+`load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'`,
+`model loaded` and `listening on` - eleven lines in common, in the same order,
+before the first request. It differs by two lines and neither is a loader line:
+`b10598` adds a notice that the default port will change, and this build adds a
+warning about one token in the 8B's vocabulary. **So the startup grammar is the
+same across the 154 builds and across the two machines**, and the missing block
+was never a CI artefact or a build difference. It was the verbosity, on both,
+all along. Every line goes to stderr, not stdout; CI's `> "${NAME}.log" 2>&1`
+catches both and a redirect of stdout alone would catch nothing.
+
+### Raising the verbosity brings all of it back
+
+| `-lv` | stderr lines | stderr bytes | what appears |
+| --- | --- | --- | --- |
+| 3, the default | 12 | 1,085 | nothing new |
+| 4 | 206 to 208 | 16,011 | the loader block, `system_info`, the KV and compute buffers, the flash-attention state |
+| 9 | 3,036 | 210,079 | `graph_reserve` per node, and a second copy of the fit pass |
+
+Line counts across nine `-lv 4` runs spanned 206 to 208; the two-line variation
+is the memory-fit pass, which reports differently on a cold and a warm page
+cache. Byte figures are from one representative run of each level.
+
+### `-fa on` versus `-fa off`: three observables, all of them in the log
+
+Three runs of each arm. **Every figure below was identical in all three, so the
+spread is zero.**
+
+| Reading, at `-lv 4` | no `-fa` flag, as committed | `-fa on` | `-fa off` |
+| --- | --- | --- | --- |
+| `llama_context: flash_attn` | `auto` | `enabled` | `disabled` |
+| `resolve_fused_ops: Flash Attention enabled` | present | absent | absent |
+| `sched_reserve: CPU compute buffer size` | 112.01 MiB | 112.01 MiB | 572.01 MiB |
+| `sched_reserve: graph nodes` | 1266 | 1266 | 1446 |
+| `llama_kv_cache: CPU KV buffer size` | 1152.00 MiB | 1152.00 MiB | 1152.00 MiB |
+| `/props`, whole document | identical | identical | identical |
+| `/metrics`, whole document | identical | identical | identical |
+
+**Read the first two rows together or the answer is wrong.**
+`llama_context: flash_attn` prints what was ASKED for, not what happened - with
+no flag it says `auto`, which is the state row 3 exists to refuse to accept as
+an answer. `resolve_fused_ops: Flash Attention enabled` is the decision, and it
+appears only when there was a decision to make, so it is absent from both
+explicit arms. The two together cover all three cases and nothing else does.
+
+**The committed config resolves to flash attention ON.** `flash_attention` is
+`null` in `config/idhazh.json`, so `server_argv` passes no `-fa` at all, so the
+binary defaults to `auto`, and `auto` resolved to enabled on all four runs here.
+The compute buffer says so independently: 112.01 MiB, the same as `-fa on`, and
+460 MiB below `-fa off`. Whether it also resolves that way on a runner's
+processor is untested and is not a question a laptop can answer.
+
+### The check this makes writable
+
+Against `llama-server.log`, after the server is healthy and with `-lv 4` passed:
+
+```text
+active  = the log holds "llama_context: flash_attn            = enabled"
+          OR it holds both "flash_attn            = auto"
+             and "resolve_fused_ops: Flash Attention enabled"
+refused = the log holds "llama_context: flash_attn            = disabled"
+absent  = neither - which means the verbosity was not raised, and is a
+          failure of the check rather than a report about attention
+```
+
+Three states, not two. **The third one is the one worth writing**, because a
+check that reads a missing line as "off" turns a forgotten `-lv 4` into a
+finding about attention. Corroborate with `sched_reserve: CPU compute buffer
+size`, which is a physical consequence rather than a restatement: on this model
+at `n_ctx` 8192 it is 112.01 MiB with attention fused and 572.01 MiB without.
+Corroboration is worth the line because the log grammar is llama.cpp's and moves
+between builds, while the buffer difference is arithmetic and does not.
+
+### `/props` settles the build and the window, and cannot settle flash attention
+
+`/props` is the right instrument for three questions and the wrong one for this
+one. It carries no key matching `flash`, `attn`, `kv` or `buf` anywhere in the
+document, and the five arms are byte-identical once the per-process
+`media_marker` nonce is normalised out.
+
+| `/props` field | Value on this run | What it settles |
+| --- | --- | --- |
+| `default_generation_settings.n_ctx` | 8192 | the effective window, at any verbosity |
+| `build_info` | `b10444-5f754ea0e` | which build is actually running |
+| `model_path`, `model_alias`, `model_ftype` | the file, `qwen3-5-9b-q4-k-m`, `Q4_K - Medium` | which bytes were opened, and under which alias |
+| `total_slots`, `endpoint_metrics` | 1, `true` | the slot count and whether `/metrics` will answer |
+
+The alias reads `qwen3-5-9b-q4-k-m` while `model_path` ends in
+`Qwen3-8B-Q4_K_M.gguf`, because `--alias` comes from config and the weights came
+from the environment. That disagreement is the reason `digest.yml` already
+checks the PATH against the expected filename rather than trusting the alias.
+
+**`build_info` is worth taking.** It is the running process answering, where
+`llama-server --version` is a second process that need not be the one serving.
+
+### `/metrics` answers neither question
+
+Fifteen series, and the whole document has the same SHA-256 at the default
+verbosity, with `-fa on` and with `-fa off`. It counts prompts, tokens,
+requests, slots and speculative decoding. It has no memory series and no
+attention series, so it can say nothing about flash attention or about a buffer
+size.
+
+### What this does not measure
+
+One machine, one build, and the 8B rather than the 9B. And no throughput at all
+- not one token was decoded across the eleven starts, so nothing here says
+whether flash attention is faster on a 4 vCPU runner, only that the runtime will
+state whether it is on. Seconds to first health ranged 10.1 to 34.6 s over the
+eleven starts, and that range is page cache rather than anything about the
+flags: the first start of the session was the 34.6 and every later one was 10.1
+to 16.3.
+
 ## What the encoder costs on the wire from Hugging Face, 2026-09-09
 
 **A reader who searches will pay 6.75 MB more than today, and every byte of that
@@ -5173,7 +5356,7 @@ to justify a design decision.
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two arms of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
 | **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs on an i7-1265U ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). A laptop measures the laptop, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
-| **What makes a visuals host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Exactly one run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. Then: **two runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
+| **What makes a visuals host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Exactly one run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. **The first of those two is explained and is not a grep fault**: `system_info` is not printed at all below verbosity 4, so the pattern was always right and the line was never there to find ([What llama-server reports about its own runtime settings](#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)). Then: **two runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
 | **Which CPU the visuals job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). The `visuals` job runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give it a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
