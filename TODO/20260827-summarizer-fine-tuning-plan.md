@@ -245,6 +245,16 @@ reference set exists to prevent. The three real options were: raise the length
 will not fit a free T4), or accept the silent truncation. The third is what was
 happening.
 
+**It happened a second time, and 8,192 is no longer the value.** The cap doubled
+to 10,000 tokens on 2026-09-09, which put the worst row at 14,088 and back over
+the window - so the same defect returned in under two weeks, from a change in
+another subsystem, exactly as it had the first time. The fix on 2026-09-09 was
+to stop deriving this number separately: `sequence_length` is now
+`models.summarize.inference.n_ctx`, which is 16,384, and
+`test_the_training_window_covers_the_longest_row_the_cap_allows` fails on any
+later pair that does not fit. Gate 3 above reads `8192` because that was its
+state on 2026-08-29; it is still cleared, at the newer value.
+
 
 ### What the reference set cost, measured rather than estimated
 
