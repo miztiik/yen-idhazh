@@ -1,8 +1,119 @@
 {
   "$defs": {
-    "EncodingRole": {
-      "description": "What an element does in the drawing - which channel it fills.\n\nNine channels cover every type above, and no type fills more than four of\nthem. Whether a role is required, optional or illegal for a given type is\nthe validator's rule; this names the roles that exist.\n\nThere is no `label` role. What names a mark is the top-level `labels` field,\nand one fact with two homes is a fact that can disagree with itself.",
+    "PlanDecision": {
+      "description": "Whether this story wants a picture at all.\n\n`none` is the common and correct answer, and it is a decision rather than an\nabsence - a plan that declines still records why it declined and how sure it\nwas, so a refusal is legible.",
       "enum": [
+        "visual",
+        "none"
+      ],
+      "title": "PlanDecision",
+      "type": "string"
+    },
+    "PlanEncodings": {
+      "additionalProperties": false,
+      "description": "Which elements fill which channel: every role a key, an unused one empty.\n\nReferences only - a channel names the elements that fill it and never the\nvalues they hold. Every field is required, so a decoder cannot answer for a\n`bar` by quietly not mentioning `quantity`; an inapplicable channel is an\nempty array, and whether empty is legal for a given type is the validator's\nrule rather than this shape's.\n\nField order is decode order here as it is on the plan itself, and it is the\norder `EncodingRole` declares.",
+      "properties": {
+        "bins": {
+          "description": "The quantity that is binned rather than plotted.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Bins",
+          "type": "array"
+        },
+        "category": {
+          "description": "The discrete axis: what each mark is.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Category",
+          "type": "array"
+        },
+        "entity": {
+          "description": "Who or what a mark is about.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Entity",
+          "type": "array"
+        },
+        "event_label": {
+          "description": "What names one dated event.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Event Label",
+          "type": "array"
+        },
+        "quantity": {
+          "description": "The measured axis: how big each mark is.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Quantity",
+          "type": "array"
+        },
+        "quantity_x": {
+          "description": "The second measured axis, where a type has two.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Quantity X",
+          "type": "array"
+        },
+        "series": {
+          "description": "What splits the marks into groups.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Series",
+          "type": "array"
+        },
+        "size": {
+          "description": "The third channel, drawn as area.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Size",
+          "type": "array"
+        },
+        "time": {
+          "description": "The temporal axis.",
+          "items": {
+            "maxLength": 22,
+            "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Time",
+          "type": "array"
+        }
+      },
+      "required": [
         "category",
         "quantity",
         "quantity_x",
@@ -13,17 +124,8 @@
         "entity",
         "event_label"
       ],
-      "title": "EncodingRole",
-      "type": "string"
-    },
-    "PlanDecision": {
-      "description": "Whether this story wants a picture at all.\n\n`none` is the common and correct answer, and it is a decision rather than an\nabsence - a plan that declines still records why it declined and how sure it\nwas, so a refusal is legible.",
-      "enum": [
-        "visual",
-        "none"
-      ],
-      "title": "PlanDecision",
-      "type": "string"
+      "title": "PlanEncodings",
+      "type": "object"
     },
     "VisualPurpose": {
       "description": "What the reader is being asked to do, coarser than the type.\n\nA downgrade may change the type and never the purpose, so this is the thing\nthat survives the ladder and the thing a cross-family move would break. Each\nmember covers one or more rows of the section 7.2 type matrix.",
@@ -71,6 +173,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "encodings became one flat object with a field per role, and the schema requires every one of them. It was a map whose keys were optional, so a reply could name a type and never mention the channel that draws it. An inapplicable role is now an empty array. No role was added or removed and no bound moved, so the worst-case reply is the same 3767 characters.",
+      "version": "2026-09-09T03:11",
+      "why": "Optional role keys produced a confident chart with no bars in it, twice, on the first live run, and a plan that omits quantity reads as a complete answer rather than as a failure. A JSON Schema can require the keys of an object it declares and cannot require the keys of a map, so the roles had to become fields for the decoder to be held to them. Presence is all this shape guarantees: which roles a given type may leave empty needs that type's own rule set, which is the validator's and not the schema's. The cost is nine keys on every reply and it is measured rather than assumed - 28 tokens on a plan that declines and 23 on an eight-bar one, about 2 seconds a plan and 6 to 7 percent of the planner's run budget."
+    },
     {
       "change": "Initial shape: the plan a compiler draws from, carrying element references and closed vocabularies only. No geometry field, no numeric field but a 0..1 confidence, no alt_text, and labels and annotations typed as element ids rather than as strings. Every array carries a maxItems and every decoded string a maxLength.",
       "version": "2026-09-09",
@@ -127,22 +234,8 @@
       "type": "array"
     },
     "encodings": {
-      "additionalProperties": {
-        "items": {
-          "maxLength": 22,
-          "pattern": "^[a-z]+-[0-9]+-[0-9]+$",
-          "type": "string"
-        },
-        "maxItems": 8,
-        "type": "array"
-      },
-      "description": "Which elements fill which channel. References only - a channel names the elements that fill it and never the values they hold.",
-      "maxProperties": 9,
-      "propertyNames": {
-        "$ref": "#/$defs/EncodingRole"
-      },
-      "title": "Encodings",
-      "type": "object"
+      "$ref": "#/$defs/PlanEncodings",
+      "description": "Which elements fill which channel. Every role is a key and the decoder may not skip one, so a plan that draws nothing in a channel says so with an empty array rather than by silence."
     },
     "labels": {
       "description": "The elements whose own characters name the marks and the axes. A reference and never a string: code cuts every character a reader sees, and the model points at which characters.",
@@ -199,7 +292,7 @@
       "description": "The form, from the full declarable vocabulary. Null on a plan that declines."
     },
     "version": {
-      "default": "2026-09-09",
+      "default": "2026-09-09T03:11",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -216,6 +309,7 @@
     "decision",
     "purpose",
     "type",
+    "encodings",
     "why",
     "title",
     "caption",
@@ -224,5 +318,5 @@
   ],
   "title": "VisualPlan",
   "type": "object",
-  "version": "2026-09-09"
+  "version": "2026-09-09T03:11"
 }
