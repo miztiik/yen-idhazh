@@ -41,10 +41,19 @@ from `config/` (Rule #6). The two tables below are not knobs and are here:
 - **Which units measure the same thing** is arithmetic. A kilotonne is a
   thousand tonnes whatever anybody configures. `MAGNITUDE` in `idhazh.elements`
   is the precedent: a magnitude word's multiplier lives in code beside the
-  pattern that reads it.
+  pattern that reads it. The same argument is why its date-stamp is here rather
+  than in `config/` as `visuals.unit_table_version`: a stamp an operator can
+  edit without editing the table it stamps is a stamp that lies, and every
+  derived value that recorded it lies with it.
 
-`PLAN_VOCABULARY_VERSION` is the date-stamp of both tables, and
-`plan_version_current` is what makes drift visible rather than drawn.
+**Two stamps, one per table, because they answer different questions.**
+`PLAN_VOCABULARY_VERSION` is the role table's, and `plan_version_current`
+compares a plan against it - so moving it re-plans every item that carries an
+older one, which is a model call apiece. `UNIT_TABLE_VERSION` is the conversion
+table's, and it is what a derived value's chain records. Folded into one, adding
+a unit spelling would cost a re-plan of every in-flight plan, and a reader
+auditing a drawn `4.2` would get a stamp that also moves when a bar gains a
+legal role.
 """
 
 from __future__ import annotations
@@ -60,10 +69,11 @@ from idhazh.contracts.element import Element, ElementKind, ElementTable
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 from idhazh.elements import normalise_unit, read_value
 
-#: The date-stamp of the two tables below - which roles a type may fill, and
-#: which units measure the same thing. It is not the plan contract's `version`,
-#: which says when the *shape* last moved. A plan carries the vocabulary it was
-#: planned against, and `plan_version_current` compares the two.
+#: The date-stamp of the role table below - which roles a type may fill. It is
+#: not the plan contract's `version`, which says when the *shape* last moved,
+#: and it is not `UNIT_TABLE_VERSION`, which stamps the other table. A plan
+#: carries the vocabulary it was planned against, and `plan_version_current`
+#: compares the two.
 PLAN_VOCABULARY_VERSION: Final = "2026-09-09"
 
 
@@ -181,6 +191,11 @@ ROLE_KINDS: Final[dict[EncodingRole, frozenset[ElementKind]]] = {
 VALUE_ROLES: Final[frozenset[EncodingRole]] = frozenset(
     {_R.QUANTITY, _R.QUANTITY_X, _R.SIZE, _R.BINS}
 )
+
+#: The date-stamp of the conversion table below. Separate from
+#: `PLAN_VOCABULARY_VERSION` for the reason in the module docstring, and in code
+#: rather than in `config/` for the reason beside the table.
+UNIT_TABLE_VERSION: Final = "2026-09-09"
 
 _KILO: Final = Decimal(1_000)
 _MEGA: Final = Decimal(1_000_000)
@@ -332,12 +347,12 @@ def _units_convertible(drawn: Mapping[EncodingRole, list[Element]]) -> Rejection
     headcount, and an axis labelled from the first bar would state that as a
     comparison. `tests/fixtures/visual-validator/` keeps that case.
 
-    **The seam to the derived-value work.** A channel mixing commensurable units
-    passes here and is not drawable until something converts it, because drawing
-    4,200 beside 4.2 on one axis is worse than refusing both. The conversion is
-    the fourth allow-list function and it lands with the provenance chain that
-    records it; this check answers whether a conversion is *possible*, never
-    what it produces.
+    **This check answers whether a conversion is possible, never what it
+    produces.** A channel mixing commensurable units passes here and is not
+    drawable until something converts it, because drawing 4,200 beside 4.2 on one
+    axis is worse than refusing both. `idhazh.derived_values.resolve_displayed_values`
+    is what converts it, and it records a chain naming the source unit, the target
+    unit and `UNIT_TABLE_VERSION`.
     """
     for role, elements in sorted(drawn.items(), key=lambda pair: pair[0].value):
         if role not in VALUE_ROLES or not elements:
@@ -445,12 +460,14 @@ def _no_invented_values(cited: Sequence[Element]) -> Rejection | None:
     is a reading of those characters. So the consumer about to draw the figure
     re-reads it with the producer's own reader.
 
-    **The seam to the derived-value work.** The rule this serves is that every
-    displayed value resolves either to a Tier 1 element or to a derived value
-    with a complete provenance chain. Today there are no derived values, so the
-    first leg is the whole check. When the second leg exists, a figure carrying
-    a chain is resolved through the chain instead - the question stays "does
-    this figure resolve", which is why it is not spelled "is this an element".
+    **This is the first leg of a two-leg rule, and it is asked here because it
+    is asked of the plan.** Every displayed value resolves either to a Tier 1
+    element or to a derived value with a complete provenance chain. A plan cites
+    elements and nothing else, so what this check can ask is whether each cited
+    element still reads as its own characters. The second leg is asked of the
+    resolved set rather than of the plan, by
+    `idhazh.derived_values.trusted_data_ratio`, because a derived value does not
+    exist until something resolves the plan into figures.
     """
     for element in cited:
         read = read_value(element.kind, element.span_excerpt)

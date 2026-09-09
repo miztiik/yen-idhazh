@@ -77,7 +77,7 @@ is `"<name>":[]` and a comma, so the nine role names cost 114 characters on a
 plan that fills none and the seven a `bar` leaves empty cost 87. Tokenized with
 the Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`,
 2026-09-09; Qwen3-4B, the configured planner, is the same tokenizer) that is
-**28 tokens** on the declining plan and **23** on the eight-bar one, about 3.1
+**28 tokens** on the declining plan and **23** on the four-bar one, about 3.1
 tokens an empty role. At the 13.00 tok/s the 4B decodes at (`ubuntu-latest`,
 2026-08-22) that is 2.2 s and 1.8 s a plan; at the 6.01 tok/s the configured
 summarizer decodes at (`ubuntu-latest`, 2026-08-23) it is 4.7 s and 3.8 s. Over
@@ -121,10 +121,10 @@ every declared key, because a grammar-constrained decoder emits them all; what
 changed is that the count is now true of an ordinary plan as well as of the
 worst one.
 
-The two committed fixtures measure **838 characters** for an eight-bar plan and
-**368** for one that declines - between a fifth and a tenth of the ceiling,
-because at most two of the nine roles are filled and the prose fields are
-nowhere near their caps.
+The two committed fixtures measure **838 characters** for a four-bar plan citing
+eight elements and **368** for one that declines - between a fifth and a tenth
+of the ceiling, because at most two of the nine roles are filled and the prose
+fields are nowhere near their caps.
 
 `encodings` is 51 percent of the ceiling and `element_ids` a further 22 percent,
 so the two element-reference fields are five sixths of it. No type in the

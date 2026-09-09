@@ -77,10 +77,10 @@ its own hedge back as evidence. Last but one it records what the model thought a
 **Every array has a `maxItems` and every decoded string a `maxLength`, so the worst-case reply length
 is arithmetic.** At the bounds the contract declares, the longest plan the decoder can produce is
 **3,767 characters** - and a token spans at least one character, so that is also a ceiling of 3,767
-tokens. The two committed fixtures measure 838 characters for an eight-bar plan and 368 for one that
-declines, between a fifth and a tenth of the ceiling. The derivation is field by field in the module
-docstring, it is recomputed from the generated schema, and the module refuses to import if a bound
-moves without the ceiling moving with it.
+tokens. The two committed fixtures measure 838 characters for a four-bar plan citing eight elements
+and 368 for one that declines, between a fifth and a tenth of the ceiling. The derivation is field
+by field in the module docstring, it is recomputed from the generated schema, and the module refuses
+to import if a bound moves without the ceiling moving with it.
 
 The ceiling is loose by construction and the arithmetic says where: `encodings` is 51 percent of it
 and `element_ids` a further 22 percent, because the schema can bound each channel at eight elements
@@ -191,7 +191,7 @@ set would be waved through by both per-type checks and drawn with nothing having
 Refusing them is also correct rather than a stopgap - declarable is not renderable, `enabled_kinds`
 is `["chart"]`, and a downgrade ladder re-enters this same validator with a nearer neighbour.
 
-`PLAN_VOCABULARY_VERSION` is the date-stamp of both tables, and it is not the plan contract's
+`PLAN_VOCABULARY_VERSION` is the date-stamp of the role table, and it is not the plan contract's
 `version`, which says when the *shape* last moved. `plan_version_current` compares the two
 date-stamps rather than matching them, because the two directions are different faults: a plan
 behind the vocabulary is re-planned, and a plan ahead of it came from a build this one cannot read.
@@ -217,7 +217,119 @@ joining two of them needs an exchange rate, which is a number no article wrote.
 **What is not settled here is the conversion itself.** A channel mixing commensurable units passes
 this check and is not drawable until something converts it, because drawing 4,200 beside 4.2 on one
 axis is worse than refusing both. This check answers whether a conversion is *possible*; what it
-produces, and the provenance chain that records it, belong to the derived-value contract.
+produces, and the provenance chain that records it, are the derived-value contract below.
+
+## A number the article did not write, and the four ways code may reach one
+
+Every figure a reader reads off an axis resolves one of two ways. It is a **Tier 1 element** - the
+characters the article itself wrote, cut at a span anybody can re-slice - or it is a **derived
+value**, arithmetic code performed over Tier 1 elements, carrying a chain back to every one of them.
+There is no third way, and `DisplayedValue` in `backend/idhazh/contracts/derived.py` is that sentence
+written as a shape: exactly one of the two, never both, never neither. A figure that resolves to
+nothing does not load, so the walk over a plan proves the resolver never reaches for the exception
+rather than proving nobody happened to write one.
+
+**Four functions, and the list is closed.** Its shortness is the guarantee rather than a starting
+point: the model picks the type and points at elements, and it cannot name a function, cannot supply
+an operand, and has no numeric field anywhere in its schema - `contracts/visual.py` refuses to import
+if it grows one. So the worst a prompt injection can do stays "pick the wrong elements". A fifth
+function is an owner decision and `contracts/derived.py` raises at import if one appears, which is
+why the argument for the list being short is written beside the constant rather than only here.
+
+| Function | Reads | Produces | What its chain records beyond function, version and inputs |
+| --- | --- | --- | --- |
+| `count` | the elements in one bin | how many there are, unitless | the bin's floor and ceiling |
+| `sum` | two or more elements stating one unit | their total, in that unit | nothing |
+| `share_of_declared_whole` | the part first, then the parts that make the whole | a percentage | nothing |
+| `convert` | one element | the same quantity against another unit of its dimension | the source unit and the unit table's date-stamp |
+
+`inputs` holds Tier 1 element ids and never another derived value. A chain that nests can be
+complete at each hop and still name no element at the bottom, and "every input element" is what the
+rule asks for. `share_of_declared_whole` totals its whole internally for the same reason: the share
+names every element it read, and there is no intermediate a later reader has to chase.
+
+### `convert` is a derived value; formatting is not
+
+`2000000` drawn as `2M` moves no quantity - same number, different glyphs, nothing to record.
+`4200 tonnes` drawn as `4.2 kt` is a different number against a different unit, so it carries the
+full chain. Where that line falls decides what needs provenance, and running the two acts together is
+how a formatting rule becomes permission to state a figure the article never gave.
+
+The line is drawn on **scale, not spelling**. `tonne` and `t` are two names for one unit, so a
+channel holding both draws them unchanged and the axis label picks a spelling - that is formatting.
+`kt` beside them is a thousand-fold difference, and moving it earns a chain. On the committed
+`units-convert` plan, which passes all nine validator checks and was not drawable before this, that
+is one converted mark out of three.
+
+Nothing is lost, which is what makes conversion safe here. An element's Tier 1 `span_excerpt` is the
+article's own characters and is never overwritten, so a reader who wants the figure the article
+printed can always be given it.
+
+**The target unit is code's choice, never the plan's.** Taking the first entry's unit would hand the
+choice to the model, which orders the channel. So the target is the smallest scale present, and among
+units sharing that scale the one that sorts first. Two properties fall out and both are load-bearing:
+it is a fact about the channel's contents rather than about the plan's order, and converting to the
+smallest present unit only ever multiplies, so no value is divided into a repeating decimal and no
+rounding decision is hidden inside a mark. A ratio that will not state exactly is refused rather than
+rounded - the table holds no such pair today, so that fails closed on a table that grows.
+
+### Binning is versioned config, and where the edges fall is not
+
+A histogram's bars are counts rather than figures the article wrote, so something has to say how many
+bins its values fall into. `visuals.histogram_bins` says, and the model is the one thing that may not.
+Where the edges fall - equal width over the range the values cover, half-open except the last bin,
+which is closed so the widest value has somewhere to go - is arithmetic and lives in
+`idhazh.derived_values`, stamped by `DERIVED_VALUE_VERSION`.
+
+A bin nothing falls into refuses the drawing. Its chain would name no element, and a mark that
+resolves to nothing is the one thing this contract exists to keep off a page. The item degrades and
+publishes no picture, which is the honest answer when a knob asks for more bins than the channel has
+spread to fill. The default is `min_chart_points` rather than a textbook rule for a sample size this
+stage never sees: the channel holds between three and eight values, so a count above three asks for
+bins nothing can reach.
+
+### Three stamps, and none of them is a config key
+
+The plan's file list proposed `visuals.unit_table_version`. It is refused. A stamp an operator can
+edit without editing the table it stamps is a stamp that lies, and every derived value that recorded
+it lies with it. Which units measure the same thing is arithmetic - a kilotonne is a thousand tonnes
+whatever anybody configures - so the table and its date-stamp stay in code, for the second of the two
+reasons the role table stays there. The first reason does not carry over: the unit table references no
+Python enum, so a JSON copy of it would be readable in a way a copy of the role table is not.
+
+| Stamp | Stamps | Recorded by | Where |
+| --- | --- | --- | --- |
+| `PLAN_VOCABULARY_VERSION` | which roles a type may fill | `VisualPlan.plan_version` | `visual_validator.py` |
+| `UNIT_TABLE_VERSION` | which units measure the same thing, and by what factor | a `convert` chain | `visual_validator.py` |
+| `DERIVED_VALUE_VERSION` | the four functions and the binning rule | every chain | `derived_values.py` |
+
+**Row 3 shipped one stamp over two tables and it is split here, because the two answer different
+questions to different readers.** `plan_version_current` compares a plan against
+`PLAN_VOCABULARY_VERSION`, and a plan behind it is re-planned - a model call per item. Folded
+together, adding a unit spelling would cost a re-plan of every in-flight plan for a reason the model
+had no part in. And a reader auditing a drawn `4.2` would get a stamp that also moves when a bar
+gains a legal role, which is a stamp that says less than it appears to.
+
+### The two rates, and why both
+
+`derived_value_rate` is the **narrowness** alarm: what share of the figures on a page code computed
+rather than the article wrote. `trusted_data_ratio` is the **correctness** alarm: what share resolves
+at all, against the table it claims to come from. A build can move either without moving the other,
+which is why both are reported. The closed allow-list and the separate rate are the only two things
+keeping this contract narrow, and skipping either loses the guarantee unnoticed.
+
+Both are `None` over an empty set rather than zero. A rate over nothing is not zero, and a day whose
+planner drew no charts reads as a perfect score under the other convention.
+
+**Neither is wired to a surface, and that is a named seam rather than an oversight.** Nothing resolves
+a plan into figures on the daily path yet, because the compiler that would is plan 12's. They ship as
+functions over a resolved set with bounded tests; the run manifest is where a per-run rate belongs,
+beside `charts_drafted` and `items_prefiltered`, and it gains the two columns on the day the compiler
+produces resolved sets. A field nobody writes is worse than a seam somebody named.
+
+`sum` is the one function the resolver does not reach today: no type in the vocabulary draws a total.
+It is here, tested and complete, because shipping the list four short of its own definition would be
+the widening this contract exists to prevent, arriving as an omission.
 
 ### The two provenance invariants, ruled
 
