@@ -99,6 +99,18 @@ from idhazh.contracts.sources import Sources
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
+from idhazh.contracts.visual import (
+    CODE_STAMPED_FIELDS,
+    FORBIDDEN_FIELDS,
+    NUMERIC_FIELDS,
+    WORST_CASE_REPLY_CHARACTERS,
+    PlanDecision,
+    VisualPlan,
+    VisualType,
+    numeric_leaves,
+    unbounded_leaves,
+    worst_case_reply_characters,
+)
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.fingerprint import text_digest
@@ -604,6 +616,146 @@ def test_the_re_slice_added_no_field_to_the_persisted_shape() -> None:
     assert callable(ElementTable.span_drift)
     assert "span_drift" not in ElementTable.model_fields
     assert "text" not in ElementTable.model_fields
+
+
+# --- The visual plan: four prohibitions, each asserted on its own -----------
+#
+# One combined test passes while three of the four are unenforced, so each gets
+# its own arm and each arm names the thing it refuses. Every payload here is a
+# committed fixture with one field changed (Rule #7, Rule #12) - nothing walks a
+# collection a run appends to.
+
+
+def _plan_payload(name: str = "bar-chart") -> dict[str, Any]:
+    payload: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-plan" / f"{name}.json")
+    )
+    return payload
+
+
+def test_a_plan_of_references_and_closed_names_loads() -> None:
+    """The happy path, without which the four refusals below prove nothing."""
+    plan = VisualPlan.model_validate(_plan_payload())
+    assert plan.decision is PlanDecision.VISUAL
+    assert plan.type is VisualType.BAR
+    drawn = set(plan.labels) | set(plan.annotations) | {i for r in plan.encodings.values() for i in r}
+    assert drawn <= set(plan.element_ids), "everything drawn is an element the plan declared"
+
+
+def test_a_plan_carrying_geometry_does_not_load() -> None:
+    """Prohibition 1. A pixel binds the plan to one renderer, so there is nowhere
+    to put one: geometry is a number, and the schema admits exactly one number."""
+    for pixel in ("canvas_width", "x", "y", "width", "font_size", "axis_max"):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            VisualPlan.model_validate(_plan_payload() | {pixel: 800})
+    assert numeric_leaves() == NUMERIC_FIELDS == {"confidence"}
+
+
+def test_a_plan_carrying_a_literal_number_does_not_load() -> None:
+    """Prohibition 2. A bar height is reached by citing an element, so the worst
+    an injection can do is pick the wrong bars rather than draw the wrong figure.
+
+    Two arms, because the ways in differ: a new field is refused as an unknown
+    key, and a number pushed into a reference field is refused by its type.
+    """
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        VisualPlan.model_validate(_plan_payload() | {"values": [4200, 3100]})
+    with pytest.raises(ValidationError, match="element_ids"):
+        VisualPlan.model_validate(_plan_payload() | {"element_ids": [4200, 3100]})
+    assert VisualPlan.model_fields["confidence"].metadata, "the one number is bounded to 0..1"
+    with pytest.raises(ValidationError, match="less than or equal to 1"):
+        VisualPlan.model_validate(_plan_payload() | {"confidence": 4200.0})
+
+
+def test_a_plan_carrying_authored_text_does_not_load() -> None:
+    """Prohibition 3, the half the shape can carry. Code cuts every character a
+    reader sees off a chart, so what names a mark is an element reference and a
+    typed string is refused by grammar rather than caught by a check."""
+    payload = _plan_payload()
+    with pytest.raises(ValidationError, match="labels"):
+        VisualPlan.model_validate(payload | {"labels": ["Wind capacity, MW"]})
+    with pytest.raises(ValidationError, match="annotations"):
+        VisualPlan.model_validate(payload | {"annotations": ["the tallest bar"]})
+    encodings = payload["encodings"] | {"category": ["Denmark", "Germany"]}
+    with pytest.raises(ValidationError, match="encodings"):
+        VisualPlan.model_validate(payload | {"encodings": encodings})
+
+
+def test_a_plan_carrying_alt_text_does_not_load() -> None:
+    """Prohibition 4. The compiler assembles alt text out of the element values
+    it already holds; the model writing it would be one prose channel restating
+    the chart's own data, which no validator can read."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        VisualPlan.model_validate(_plan_payload() | {"alt_text": "A bar chart of wind capacity."})
+    assert FORBIDDEN_FIELDS == {"alt_text"}
+    assert FORBIDDEN_FIELDS.isdisjoint(VisualPlan.model_fields), (
+        "the field is named rather than merely absent, so a later widening does not start"
+    )
+
+
+def test_every_decoded_array_and_string_in_the_plan_is_bounded() -> None:
+    """A bound with no total is half a decision, so this is what makes the
+    worst-case arithmetic in the module docstring true rather than intended.
+
+    `version` is the one exception and it is not decoded: the base contract
+    stamps it on read, so no reply spends a character on it.
+    """
+    assert unbounded_leaves() == {"version"}
+    with pytest.raises(ValidationError, match="element_ids"):
+        VisualPlan.model_validate(
+            _plan_payload() | {"element_ids": [f"quantity-{n}-{n + 4}" for n in range(99)]}
+        )
+
+
+def test_confidence_decodes_after_the_type() -> None:
+    """Field order is decode order. Second in the list a confidence conditions
+    every field after it, and the model reads its own hedge back as evidence."""
+    order = list(VisualPlan.model_fields)
+    assert order.index("confidence") > order.index("type")
+    assert order.index("purpose") < order.index("type"), "the form is chosen for a reason"
+
+
+def test_a_plan_that_declines_draws_nothing() -> None:
+    """`none` is the common and correct answer, and it is a decision rather than
+    an absence - a refusal that carries half a chart is two answers to one
+    question."""
+    declined = VisualPlan.model_validate(_plan_payload("declined"))
+    assert declined.decision is PlanDecision.NONE
+    assert declined.why, "a refusal still says why"
+    with pytest.raises(ValidationError, match="declines carries no type"):
+        VisualPlan.model_validate(_plan_payload("declined") | {"type": "bar"})
+    with pytest.raises(ValidationError, match="proposes a visual states its title"):
+        VisualPlan.model_validate(_plan_payload() | {"title": None})
+
+
+def test_a_plan_may_not_draw_an_element_it_never_declared() -> None:
+    """The cheap half of "every element exists", asked of the payload alone: a
+    role citing an id the plan did not list is the plan disagreeing with itself.
+    Whether the id names a real element is the validator's question."""
+    payload = _plan_payload()
+    with pytest.raises(ValidationError, match="did not declare"):
+        VisualPlan.model_validate(payload | {"labels": ["quantity-9001-9008"]})
+
+
+def test_the_worst_case_reply_length_is_arithmetic_and_the_fixtures_are_a_fraction_of_it() -> None:
+    """Row 14's bounds buy one number, and this is the number.
+
+    The ceiling is recomputed from the generated schema, so a bound that moves
+    without the docstring's table moving with it fails at import. The two
+    committed plans are measured beside it, because a ceiling nothing is
+    compared against says nothing about what a reply actually costs.
+    """
+    assert worst_case_reply_characters() == WORST_CASE_REPLY_CHARACTERS == 3767
+    measured = {}
+    for stem in ("bar-chart", "declined"):
+        decoded = {
+            name: value
+            for name, value in _plan_payload(stem).items()
+            if name not in CODE_STAMPED_FIELDS
+        }
+        measured[stem] = len(json.dumps(decoded, separators=(",", ":"), sort_keys=True))
+    assert measured == {"bar-chart": 751, "declined": 254}
+    assert max(measured.values()) < WORST_CASE_REPLY_CHARACTERS // 4
 
 
 # --- The drift gate --------------------------------------------------------

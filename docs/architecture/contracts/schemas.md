@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-09
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -47,6 +47,7 @@ The shapes, and where each one lives once written:
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
+| `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Rule #3), and what a plan may not carry is as much of it as what it holds ([../publishing/visuals.md](../publishing/visuals.md)) |
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Rule #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
 | `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
