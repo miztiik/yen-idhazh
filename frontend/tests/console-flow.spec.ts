@@ -150,6 +150,15 @@ test('THE ORACLE: at 390 the flow is a list, and it carries what the diagram dre
 	// The numbers the diagram draws at a width that can hold it.
 	await page.setViewportSize(DESKTOP);
 	await page.goto('/console/');
+	// Scroll to it before reading it. The server drew this diagram into the
+	// document until 2026-09-09; the browser draws it now (owner decision D3),
+	// and `hydrate` waits for intersection - so a diagram nine screens down has
+	// no labels to read until somebody goes to it. Instant rather than smooth:
+	// waiting on a chart that is still animating in times out.
+	await page.locator('[data-flow="chart"]').evaluate((node) => {
+		node.scrollIntoView({ behavior: 'instant', block: 'center' });
+	});
+	await page.locator('[data-flow="chart"] svg').waitFor({ state: 'attached', timeout: 15_000 });
 	await page.waitForTimeout(1200);
 
 	const wide = await flowLabels(page);

@@ -589,6 +589,30 @@ execFileSync(
 	}
 );
 
+// The payloads the console fetches, written here and not in `build_canary_day.py`
+// because every source they read is written above: the item-health rows, the
+// counters, the span rollup and the telemetry projection all land in this file.
+// A band derived before them names one month where the telemetry holds two, and
+// the console would then never ask for the older shard the widest-window spec
+// fetches.
+execFileSync(
+	process.env.IDHAZH_PYTHON || 'python',
+	[
+		'backend/utilities/build_canary_day.py',
+		'--console-payloads-only',
+		'--out',
+		ROOT,
+		'--state',
+		STATE
+	],
+	{
+		stdio: 'inherit',
+		shell: false,
+		cwd: resolve(process.cwd(), '..'),
+		env: { ...process.env, PYTHONPATH: resolve(process.cwd(), '..', 'backend') }
+	}
+);
+
 console.log(`building the site from ${ROOT}`);
 execFileSync('npm', ['run', 'build'], {
 	stdio: 'inherit',

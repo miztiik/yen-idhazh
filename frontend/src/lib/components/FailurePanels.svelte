@@ -24,6 +24,13 @@
 	 * rate at all, and its line breaks rather than drawing a share nobody
 	 * measured. The same knob decides the source-cut table's share, so two
 	 * shares on one page cannot disagree about when a denominator is too thin.
+	 *
+	 * **The rows behind it arrive by fetch, and the figure says so.** Since
+	 * 2026-09-09 `/console/` holds no telemetry row until a month shard lands,
+	 * so this chart and its strip cannot be in the prerendered document - the
+	 * numbers are not there to print. `data-readout-fetched` is how
+	 * `console-readout.spec.ts` tells this panel from one drawn over inlined
+	 * data, and holds each to the promise it can actually keep.
 	 */
 	import {
 		chartWidth,
@@ -332,6 +339,7 @@
 		<figure
 			class="mt-4"
 			data-readout-columns={columns.length}
+			data-readout-fetched="yes"
 			use:observeWidth={(value) => (measured = value)}
 		>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->

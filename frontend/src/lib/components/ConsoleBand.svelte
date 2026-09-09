@@ -15,7 +15,7 @@
 	 */
 	import { base } from '$app/paths';
 	import { PAGES_CAP_BYTES } from '$lib/charts/glance';
-	import type { ConsoleBandFacts, Health } from '$lib/server/console-shell';
+	import type { ConsoleBandFacts, Health } from '$lib/console/band';
 
 	let { band }: { band: ConsoleBandFacts } = $props();
 

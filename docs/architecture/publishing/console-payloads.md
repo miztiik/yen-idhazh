@@ -186,6 +186,65 @@ of to draw. The other four have no state ledger of their own: `run-days` reduces
 the committed day payloads, `day-metrics` and `span-rollup` have no age on the
 state side, and `machine` is where the month boundary is first drawn at all.
 
+## What the console actually fetches, and what it still carries
+
+Row 10 landed on 2026-09-09 and it did not move all twelve. It moved the two
+that were bytes and the one the chain needed, and it left the rest inlined on
+purpose.
+
+| What | Where it comes from now | Why |
+| --- | --- | --- |
+| The band, the strip and the three carries | `console/band.json`, fetched by `console/+layout.ts` | The derivation had a second home in `frontend/src/lib/server/console-shell.ts`, over the ledger under `state/`. Two derivations of one verdict is two verdicts |
+| The months list | the same payload | A page cannot ask for a month until it knows which months exist. On its own it would be a fifth serial hop before the first row (Carmack, 2026-09-08) |
+| Telemetry rows | `telemetry/<YYYY-MM>.csv`, fetched on mount and on every widen | 3,414,043 of the document's 3,880,361 bytes, for panels most visits never scroll to |
+| The other 28 payload keys | still inlined in the document | Together 97 KB. A fetch each breaks the four-hop cold-load ceiling for a twentieth of what one key cost |
+
+**Measured 2026-09-09**, Intel Core i7-1265U / Windows 11 / node 24, one build
+per arm on the real digest, `stat` on the built file:
+
+| file | before | after |
+| --- | ---: | ---: |
+| `build/console/index.html` | 3,880,361 B | 302,681 B |
+
+That is 92.2 percent off, and 106,919 bytes under the 400 KB the plan asked
+for. It is an uncompressed measure and it does not replace the gzip
+`page_weight` ceiling.
+
+**The band's load is universal, not server-only, and the routes stay
+prerendered.** At build time SvelteKit resolves the fetch against the staged
+payload, so the band is real markup in all three documents and an operator on a
+dead connection reads the verdict; in a browser the same code runs again on a
+move between routes. `export const prerender = true` moved from
+`+layout.server.ts` to `+layout.ts` and did not change.
+
+**Four charts on `/console/` moved to the browser** - the run donut, the
+per-article cost, the failure mix and the flow diagram. They were 143 KB of
+finished SVG, which is what stood between the document and the bar after the
+rows left. Each keeps a text form beside it, so a reader with no script loses
+the picture and none of the numbers: the cost days are a list, the flow is a
+stepped list with every count and share, the mix is its strip, and the donut is
+its own sentence. `Chart` takes a `pending` line for the gap before anything
+draws, because a box that is simply empty says nothing about which of the two
+nothings happened.
+
+**The band's months list is the union across all seven fetched series**, not the
+run-day months alone. The field promised "every month a payload shard exists
+for" and delivered one series' worth. They can differ: each series is pruned by
+its own `observability.public_*_keep_months`, and the canary projects telemetry
+over a wider span than its run-days. Measured on the canary the day it was
+found, run-days held `2026-08` where the union holds `2026-07`, `2026-08` and
+`2026-09` - two months of the page that would never have filled. Seven
+directory listings and no file opened, each directory bounded by its own knob,
+so it costs the same on any size of archive (Rule #12).
+
+**The canary writes these payloads too, and it has to write them late.**
+`build_canary_day.py --console-payloads-only` runs the same six producers
+`idhazh publish` runs, called from `frontend/scripts/build-canary.mjs` straight
+after it projects the telemetry. Earlier than that and the item-health rows, the
+counters, the span rollup and the telemetry do not exist yet. Before this the
+canary served no band at all, and every console route in the browser suite drew
+the named absence while the suite reported a page that works.
+
 ## Design rationale
 
 **The inventory is a page and a module, not a paragraph inside the producer.**
@@ -212,12 +271,24 @@ which is what rejected alternative 2 refuses for telemetry. The refusal is the
 same either way and it is written down either way; what changes is whether a
 committed shard has one shape to validate against or two.
 
+**Row 10 measured before it moved anything, and the measurement changed the
+order of the work.** The plan read the 32 inline SVGs as "139 KB of 3,726 KB, so
+this is not where the bytes are". That is true of the total and wrong about the
+margin: dropping the telemetry rows alone leaves 466,318 bytes, which is still
+over the 400 KB bar, and the drawn charts are the only 143 KB left to take. The
+plan's own ordering would have landed a change that missed its oracle by 56 KB
+and looked finished. The same measurement is why 28 payload keys were left
+inlined - 97 KB spread over four more serial hops buys nothing and breaks
+decision 2's cold-load ceiling. Measured 2026-09-09.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
 | --- | --- |
 | One payload per console read, twelve files | Three of the reads answer off one day and two off one census. Splitting them costs three fetches to answer one question and puts the same integer in two files |
 | Leave the nine `state/` reads prerendered and fetch only telemetry | That makes the window control decorative on every panel but one, and it is a special case where the plan says there are none |
+| Fetch all twelve datasets in row 10 | The remaining 28 payload keys are 97 KB between them. Four more serial hops for a twentieth of what one key cost, and past the four-hop cold-load ceiling (Carmack, 2026-09-08) |
+| Keep the band a server load and read `band.json` from disk at build time | It would meet the oracle - the band is 1,392 bytes - and leave the console a page only a finished build can produce. The point of the payload is that a shell can ask for it |
 | Fork a telemetry schema for `itemHealthRows` | Two schemas for one row, and the committed shards validate against the existing one |
 | Publish the state contracts unchanged and skip the forbidden-cell lists | The lists are the trust boundary. `PublicTelemetryRow` exists because a projection spelled as strings gains a cell by a one-word edit and nothing refuses it |
 
