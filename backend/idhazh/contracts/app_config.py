@@ -1812,6 +1812,18 @@ class VisualsConfig(Model):
         description="Below this a chart says less than the sentence it sits under.",
     )
     max_chart_points: int = Field(default=8, ge=2)
+    histogram_bins: int = Field(
+        default=3,
+        ge=2,
+        description=(
+            "How many equal-width bins a histogram's values fall into. Binning is config "
+            "and never the model's - it has no numeric field that could say. The channel "
+            "holds between min_chart_points and max_chart_points values, so a count above "
+            "that floor asks for bins nothing can fall into and the item draws no picture; "
+            "the default is the floor rather than a textbook rule for a sample size this "
+            "stage never sees."
+        ),
+    )
     min_diagram_steps: int = Field(default=3, ge=2)
     max_diagram_steps: int = Field(default=6, ge=2)
     canvas_width: int = Field(
@@ -2829,6 +2841,26 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T05:00",
+            change=(
+                "Added visuals.histogram_bins with a default of 3. Additive - a config "
+                "written before this still validates and reads the default."
+            ),
+            why=(
+                "A histogram's bars are counts rather than figures the article wrote, so "
+                "something has to say how many bins its values fall into, and the model is "
+                "the one thing that may not: it has no numeric field anywhere in its "
+                "schema and the derived-value contract is what keeps it that way. Config "
+                "rather than code because how coarse a distribution should be is a "
+                "judgement an operator may hold a different view of, unlike where the "
+                "edges fall, which is arithmetic and stays in idhazh.derived_values. The "
+                "unit table's date-stamp was proposed for this block in the same pass and "
+                "was refused - a stamp an operator can edit without editing the table it "
+                "stamps is a stamp that lies, and every derived value that recorded it "
+                "lies with it."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09",
             change=(

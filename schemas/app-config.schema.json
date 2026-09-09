@@ -1852,6 +1852,13 @@
           "title": "Enabled Kinds",
           "type": "array"
         },
+        "histogram_bins": {
+          "default": 3,
+          "description": "How many equal-width bins a histogram's values fall into. Binning is config and never the model's - it has no numeric field that could say. The channel holds between min_chart_points and max_chart_points values, so a count above that floor asks for bins nothing can fall into and the item draws no picture; the default is the floor rather than a textbook rule for a sample size this stage never sees.",
+          "minimum": 2,
+          "title": "Histogram Bins",
+          "type": "integer"
+        },
         "lead_words": {
           "default": 150,
           "description": "How much of the article's own opening the router reads beside the summary. This is most of each request's prefill, and prefill is most of the stage's wall-clock, so it is a measured lever rather than a literal (Rule #6).",
@@ -1914,6 +1921,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added visuals.histogram_bins with a default of 3. Additive - a config written before this still validates and reads the default.",
+      "version": "2026-09-09T05:00",
+      "why": "A histogram's bars are counts rather than figures the article wrote, so something has to say how many bins its values fall into, and the model is the one thing that may not: it has no numeric field anywhere in its schema and the derived-value contract is what keeps it that way. Config rather than code because how coarse a distribution should be is a judgement an operator may hold a different view of, unlike where the edges fall, which is arithmetic and stays in idhazh.derived_values. The unit table's date-stamp was proposed for this block in the same pass and was refused - a stamp an operator can edit without editing the table it stamps is a stamp that lies, and every derived value that recorded it lies with it."
+    },
     {
       "change": "Removed models.inference. Every models.<role> entry now carries its own inference block, and that block carries declared_for - the sha256 of the entry it is set for. A block whose declared_for is not the entry's sha256 is refused, and a config still spelling models.inference is refused by name.",
       "version": "2026-09-09",
@@ -2454,7 +2466,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-09",
+      "default": "2026-09-09T05:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2468,5 +2480,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-09"
+  "version": "2026-09-09T05:00"
 }
