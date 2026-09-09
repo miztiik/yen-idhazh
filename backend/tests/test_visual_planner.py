@@ -30,12 +30,14 @@ from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualS
 from idhazh.elements import SpanDriftError, element_table
 from idhazh.llm.server import Completion, post
 from idhazh.visual_planner import (
+    ANCHORED_MAX,
     LABEL_PASS_VERSION,
     LABELS_MAX,
     PROPOSED_MAX,
     SALIENCE_SCORE,
     CallOneReply,
     ChartPoint,
+    MentionGroup,
     VisualDraft,
     anchored,
     apply_labels,
@@ -48,13 +50,17 @@ from idhazh.visual_planner import (
     chart_spec,
     common_unit,
     decided_without_the_model,
+    drawn_label,
     fact_menu,
+    mention_elements,
+    model_anchored,
     numbered_sentences,
     numeric_facts,
     output_schema,
     parse_call_one,
     parse_draft,
     proposed_quantities,
+    range_elements,
     reachable_kinds,
     same_unit_bars,
     sentence_id,
@@ -967,6 +973,8 @@ def a_reply(**named: object) -> CallOneReply:
     body: dict[str, object] = {
         "labels": [],
         "proposed": [],
+        "entity_mentions": [],
+        "place_mentions": [],
         "quotes": [],
         "claims": [],
         "keyphrases": [],
@@ -974,6 +982,29 @@ def a_reply(**named: object) -> CallOneReply:
     }
     body.update(named)
     return CallOneReply.model_validate(body)
+
+
+def a_group(
+    name: str, *surfaces: tuple[str, str], salience: str = "supporting"
+) -> dict[str, object]:
+    """One named thing and the sentences it is named in, as `(sentence_id, surface)`."""
+    return {
+        "mentions": [{"sentence_id": where, "surface": words} for where, words in surfaces],
+        "name": name,
+        "salience": salience,
+    }
+
+
+def a_range(first: str, last: str, **named: object) -> dict[str, object]:
+    body: dict[str, object] = {
+        "sentence_start_id": first,
+        "sentence_end_id": last,
+        "speaker": "",
+        "attribution": "unattributed",
+        "hedge": False,
+    }
+    body.update(named)
+    return body
 
 
 def a_label(element_id: str, **named: object) -> dict[str, object]:
@@ -1057,22 +1088,41 @@ class TestCallOneShape:
         assert set(call_one_schema()["required"]) == {
             "labels",
             "proposed",
+            "entity_mentions",
+            "place_mentions",
             "quotes",
             "claims",
             "keyphrases",
             "lede_sentence_ids",
         }
 
-    def test_the_reply_cannot_ask_the_model_to_name_an_entity(self) -> None:
-        """Andre's ruling on tags binds every prompt, and it binds this shape too.
+    def test_the_mention_lists_do_not_reach_the_tag_control(self) -> None:
+        """Andre's ruling on tags binds this shape, and this is where it was settled.
 
-        A page choosing its own reader-facing tags steers a control, so no prompt
-        in this repository asks a model to name one. The two naming lists the
-        pseudo-plan sketches are not among the signals this call was authorised to
-        take either, so they belong to the row that builds their producers.
+        What that control protects is the reader-facing tag vocabulary: a page
+        choosing its own tags steers it, so no prompt here asks a model to pick
+        one. A mention list is not that. The model points at characters code
+        cuts, the group key is matched against slugs code already holds, and
+        this pass mints nothing - so the control is untouched and the two lists
+        are named for the Tier 1 thing code takes from them rather than for the
+        Tier 2 key, which is also the truer name.
+
+        It is checked over the schema as well as the prompt, which is one more
+        surface than `test_tag.py` reads: the schema is handed to the decoder in
+        `response_format`, so a class docstring is prompt text too.
         """
-        assert "entities" not in call_one_schema()["properties"]
-        assert "entities" not in call_one_system_prompt().lower()
+        schema = json.dumps(call_one_schema()).lower()
+        prompt = call_one_system_prompt().lower()
+        for banned in ("lens", "event type", "entities"):
+            assert banned not in prompt, banned
+            assert banned not in schema, banned
+        assert "entity_mentions" in call_one_schema()["properties"]
+        assert "place_mentions" in call_one_schema()["properties"]
+
+    def test_a_mention_is_written_before_the_name_that_groups_it(self) -> None:
+        """Field order is decode order (row 12): the anchor first, the judgement last."""
+        group = list(call_one_schema()["$defs"]["NamedMentions"]["properties"])
+        assert group == ["mentions", "name", "salience"]
 
     def test_what_was_found_decodes_before_what_it_means(self) -> None:
         """Field order is decode order (row 12): the anchor first, the judgement last."""
@@ -1374,6 +1424,420 @@ class TestProposals:
         assert len(merged.elements) <= 2 + PROPOSED_MAX
 
 
+# --- The four kinds only a model can find ------------------------------------
+#
+# The oracle for this row is two sentences. For every surviving element of every
+# kind, `article.text[span_start:span_end] == span_excerpt`. And no element's
+# drawn label is ever its Tier 2 `name` - the label is one of the mentions that
+# anchored. Both halves carry a bite proof below, because a passing check that
+# cannot fail is not a check.
+
+#: One item carrying all four model-pointed kinds. The name a page must never
+#: draw - "Vestas Wind Systems A/S" - appears nowhere in it, which is decision
+#: 1's case: the canonical name may be written nowhere verbatim.
+POINTED_TEXT = (
+    "Vestas said its plants ran at full output through March. "
+    "Vestas expects the same in April, an official in Aarhus said. "
+    "The company has not published the figures."
+)
+
+#: The whole reply for that item, as the four lists a producer reads.
+POINTED_REPLY: dict[str, object] = {
+    "entity_mentions": [a_group("Vestas Wind Systems A/S", ("s0", "Vestas"), ("s1", "Vestas"))],
+    "place_mentions": [a_group("Aarhus", ("s1", "Aarhus"))],
+    "quotes": [a_range("s1", "s1", speaker="an official", attribution="anonymous")],
+    "claims": [a_range("s2", "s2")],
+}
+
+
+def kinds_of(table: ElementTable) -> set[ElementKind]:
+    return {element.kind for element in table.elements}
+
+
+class TestTheFourKindsOracle:
+    def test_every_surviving_element_of_every_kind_cuts_its_own_excerpt(
+        self, article_ok: Article
+    ) -> None:
+        """Half one of the oracle, done by the test rather than by the contract.
+
+        The four kinds are asserted present first. A re-slice check over an empty
+        set passes and means nothing, and this row's whole subject is the set.
+        """
+        table = a_table(article_ok, POINTED_TEXT)
+
+        whole = anchored(
+            table, POINTED_TEXT, a_reply(**POINTED_REPLY), config=ElementsConfig(), label_source="m"
+        )
+
+        assert {
+            ElementKind.ENTITY,
+            ElementKind.PLACE,
+            ElementKind.QUOTE,
+            ElementKind.CLAIM,
+        } <= kinds_of(whole)
+        for element in whole.elements:
+            assert POINTED_TEXT[element.span_start : element.span_end] == element.span_excerpt
+
+    def test_the_same_check_goes_red_when_the_text_moves_under_the_spans(
+        self, article_ok: Article
+    ) -> None:
+        """The bite proof for half one: one inserted character and it fails.
+
+        Half one already held for `quantity` and `date` before this row, so on
+        its own it is not a measurement of anything new. This is what shows it
+        can still fail - the spans are real offsets into one string and nothing
+        else.
+        """
+        table = a_table(article_ok, POINTED_TEXT)
+        whole = anchored(
+            table, POINTED_TEXT, a_reply(**POINTED_REPLY), config=ElementsConfig(), label_source="m"
+        )
+        moved = " " + POINTED_TEXT
+
+        assert whole.span_drift(POINTED_TEXT) is None
+        assert whole.span_drift(moved) is not None
+        assert any(
+            moved[element.span_start : element.span_end] != element.span_excerpt
+            for element in whole.elements
+        )
+
+    def test_a_drawn_label_is_one_of_the_mentions_that_anchored(self) -> None:
+        """Half two: the mention draws and the name never does.
+
+        The item writes "Vestas" twice and never writes the canonical name, so a
+        page that drew `name` would show a string the item does not contain.
+        """
+        groups, _ = model_anchored(
+            POINTED_TEXT, a_reply(**POINTED_REPLY), label_source="m", entity_slugs={}
+        )
+        group = next(one for one in groups if one.elements[0].kind is ElementKind.ENTITY)
+
+        assert drawn_label(group) in {one.span_excerpt for one in group.elements}
+        assert drawn_label(group) == "Vestas"
+        assert group.name == "Vestas Wind Systems A/S"
+
+    def test_the_same_check_goes_red_on_a_label_taken_from_the_name(self) -> None:
+        """The bite proof for half two: the shape invariant 2 forbids, checked.
+
+        `named_label` is the easier and tidier implementation the drawing warns
+        about. It is written here so the assertion above is known to be able to
+        go red, rather than passing because both sides say the same thing.
+        """
+        groups, _ = model_anchored(
+            POINTED_TEXT, a_reply(**POINTED_REPLY), label_source="m", entity_slugs={}
+        )
+        group = next(one for one in groups if one.elements[0].kind is ElementKind.ENTITY)
+
+        def named_label(one: MentionGroup) -> str:
+            return one.name
+
+        assert named_label(group) not in {one.span_excerpt for one in group.elements}
+        assert named_label(group) not in POINTED_TEXT
+
+
+class TestMentions:
+    def test_a_name_the_item_never_wrote_still_anchors_its_mentions(self) -> None:
+        """Decision 1. The name is a grouping key and is never searched for."""
+        groups = mention_elements(
+            POINTED_TEXT,
+            a_reply(**POINTED_REPLY).entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert [one.span_excerpt for one in groups[0].elements] == ["Vestas", "Vestas"]
+        assert [one.sentence_index for one in groups[0].elements] == [0, 1]
+
+    def test_a_surface_that_occurs_twice_in_its_sentence_is_refused(self) -> None:
+        """Decision 2, and the only control the design has over mis-pointing."""
+        text = "Vestas told Vestas staff nothing. The plant is quiet."
+        groups = mention_elements(
+            text,
+            a_reply(entity_mentions=[a_group("Vestas", ("s0", "Vestas"))]).entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert groups == []
+
+    def test_a_surface_from_another_sentence_is_refused(self) -> None:
+        """Only the named sentence is searched, so a real word in the wrong place misses."""
+        groups = mention_elements(
+            POINTED_TEXT,
+            a_reply(entity_mentions=[a_group("Aarhus", ("s0", "Aarhus"))]).entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert groups == []
+
+    def test_one_refused_mention_leaves_its_siblings_standing(self) -> None:
+        """Decision 5: a rejection is per element, never per article."""
+        groups = mention_elements(
+            POINTED_TEXT,
+            a_reply(
+                entity_mentions=[
+                    a_group("Vestas", ("s0", "Vestas"), ("s9", "Vestas"), ("s1", "Vestas"))
+                ]
+            ).entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert len(groups[0].elements) == 2
+
+    def test_a_group_that_anchors_nothing_is_dropped(self) -> None:
+        """Zero surviving mentions is a name nobody can point at."""
+        groups = mention_elements(
+            POINTED_TEXT,
+            a_reply(entity_mentions=[a_group("Orsted", ("s0", "Orsted"))]).entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert groups == []
+
+    def test_a_whitespace_surface_is_refused_rather_than_cutting_nothing(self) -> None:
+        """A zero-width span is a payload the contract will not hold."""
+        groups = mention_elements(
+            POINTED_TEXT,
+            a_reply(entity_mentions=[a_group("Vestas", ("s0", " "))]).entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert groups == []
+
+    def test_a_tracked_name_groups_under_the_slug_and_an_unknown_one_mints_none(self) -> None:
+        """The alias ledger is separate work, so this pass never invents a group."""
+        reply = a_reply(**POINTED_REPLY)
+
+        tracked = mention_elements(
+            POINTED_TEXT,
+            reply.entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source="m",
+            entity_slugs={"vestas wind systems a/s": "vestas"},
+        )
+        unknown = mention_elements(
+            POINTED_TEXT,
+            reply.entity_mentions,
+            kind=ElementKind.ENTITY,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert all(one.entity == "vestas" for one in tracked[0].elements)
+        assert all(one.entity is None for one in unknown[0].elements)
+
+    def test_a_mention_is_tier_one_and_says_who_judged_the_rest(self) -> None:
+        """The span is code's; the salience is the model's, and it is attributed."""
+        element = mention_elements(
+            POINTED_TEXT,
+            a_reply(**POINTED_REPLY).place_mentions,
+            kind=ElementKind.PLACE,
+            label_source="qwen",
+            entity_slugs={},
+        )[0].elements[0]
+
+        assert element.kind is ElementKind.PLACE
+        assert element.extractor is Extractor.MODEL
+        assert element.value is None and element.unit is None
+        assert element.salience == SALIENCE_SCORE["supporting"]
+        assert element.label_source == "qwen"
+        assert element.ledger_version == LABEL_PASS_VERSION
+
+
+class TestSentenceRanges:
+    def test_a_quote_is_the_sentences_between_two_addresses(self) -> None:
+        """Decision 3: addresses only. Code slices; the reply carries no text."""
+        element = range_elements(
+            POINTED_TEXT,
+            a_reply(**POINTED_REPLY).quotes,
+            kind=ElementKind.QUOTE,
+            label_source="m",
+            entity_slugs={},
+        )[0]
+
+        assert element.span_excerpt == (
+            "Vestas expects the same in April, an official in Aarhus said."
+        )
+        assert POINTED_TEXT[element.span_start : element.span_end] == element.span_excerpt
+        assert element.attribution == "anonymous"
+
+    def test_a_range_over_several_sentences_carries_all_of_them(self) -> None:
+        element = range_elements(
+            POINTED_TEXT,
+            a_reply(claims=[a_range("s0", "s2")]).claims,
+            kind=ElementKind.CLAIM,
+            label_source="m",
+            entity_slugs={},
+        )[0]
+
+        assert element.span_excerpt == POINTED_TEXT.strip()
+
+    def test_a_run_the_shape_will_not_hold_is_dropped_rather_than_cut_down(self) -> None:
+        """A truncated excerpt stops being the characters its span names."""
+        long_text = " ".join(f"Sentence {index} runs on and on and on." for index in range(40))
+
+        found = range_elements(
+            long_text,
+            a_reply(quotes=[a_range("s0", "s39")]).quotes,
+            kind=ElementKind.QUOTE,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert len(long_text) > 500
+        assert found == []
+
+    def test_an_address_that_names_no_sentence_is_dropped(self) -> None:
+        found = range_elements(
+            POINTED_TEXT,
+            a_reply(quotes=[a_range("s0", "s99"), a_range("later", "s1")]).quotes,
+            kind=ElementKind.QUOTE,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert found == []
+
+    def test_a_range_that_ends_before_it_starts_is_dropped(self) -> None:
+        found = range_elements(
+            POINTED_TEXT,
+            a_reply(claims=[a_range("s2", "s0")]).claims,
+            kind=ElementKind.CLAIM,
+            label_source="m",
+            entity_slugs={},
+        )
+
+        assert found == []
+
+    def test_an_item_speaking_in_its_own_voice_records_no_attribution(self) -> None:
+        element = range_elements(
+            POINTED_TEXT,
+            a_reply(**POINTED_REPLY).claims,
+            kind=ElementKind.CLAIM,
+            label_source="m",
+            entity_slugs={},
+        )[0]
+
+        assert element.attribution is None
+        assert element.hedge is False
+        assert element.label_source == "m"
+
+
+class TestMergingTheFourKinds:
+    def test_a_quote_carrying_a_quantity_keeps_both(self, article_ok: Article) -> None:
+        """`settle` is the rule between the two pattern passes and never sees these.
+
+        A quote is a run of sentences, so it holds every figure inside it. Under
+        the settle rule one of the two would drop the other, and that is exactly
+        what these kinds must not do.
+        """
+        table = a_table(article_ok, DENSE_TEXT)
+        reply = a_reply(quotes=[a_range("s0", "s0")])
+
+        whole = anchored(table, DENSE_TEXT, reply, config=ElementsConfig(), label_source="m")
+
+        quote = next(one for one in whole.elements if one.kind is ElementKind.QUOTE)
+        inside = [
+            one
+            for one in whole.elements
+            if one.kind is ElementKind.QUANTITY
+            and quote.span_start <= one.span_start
+            and one.span_end <= quote.span_end
+        ]
+        assert inside, "the fixture sentence has to carry a figure for this to mean anything"
+        assert {one.element_id for one in table.elements} <= {
+            one.element_id for one in whole.elements
+        }
+
+    def test_two_groups_claiming_one_address_keep_one_element(self, article_ok: Article) -> None:
+        """A kind and a span identify one fact, so the second citation adds nothing."""
+        table = a_table(article_ok, POINTED_TEXT)
+        reply = a_reply(
+            entity_mentions=[
+                a_group("Vestas Wind Systems A/S", ("s0", "Vestas")),
+                a_group("Vestas A/S", ("s0", "Vestas")),
+            ]
+        )
+
+        whole = anchored(table, POINTED_TEXT, reply, config=ElementsConfig(), label_source="m")
+
+        assert len([one for one in whole.elements if one.kind is ElementKind.ENTITY]) == 1
+
+    def test_the_count_of_what_was_found_covers_every_new_kind(
+        self, article_ok: Article
+    ) -> None:
+        table = a_table(article_ok, POINTED_TEXT)
+
+        whole = anchored(
+            table, POINTED_TEXT, a_reply(**POINTED_REPLY), config=ElementsConfig(), label_source="m"
+        )
+
+        for kind in (ElementKind.ENTITY, ElementKind.PLACE, ElementKind.QUOTE, ElementKind.CLAIM):
+            kept = len([one for one in whole.elements if one.kind is kind])
+            assert whole.candidates_found[kind] >= kept > 0
+
+    def test_the_merge_stays_inside_the_bound_the_grammar_states(
+        self, article_ok: Article
+    ) -> None:
+        """Every addition is bounded by the reply shape, so the total is stated."""
+        table = a_table(article_ok, POINTED_TEXT, cap=2)
+
+        whole = anchored(
+            table,
+            POINTED_TEXT,
+            a_reply(**POINTED_REPLY),
+            config=ElementsConfig(max_per_article=2),
+            label_source="m",
+        )
+
+        assert len(whole.elements) <= 2 + PROPOSED_MAX + ANCHORED_MAX
+        lists = call_one_schema()["properties"]
+        per_group = call_one_schema()["$defs"]["NamedMentions"]["properties"]["mentions"]
+        assert ANCHORED_MAX == (
+            (lists["entity_mentions"]["maxItems"] + lists["place_mentions"]["maxItems"])
+            * per_group["maxItems"]
+            + lists["quotes"]["maxItems"]
+            + lists["claims"]["maxItems"]
+        ), "the bound is read off the grammar the decoder is handed, so it cannot drift from it"
+
+    def test_a_label_cannot_reach_a_quote_the_menu_never_printed(
+        self, article_ok: Article
+    ) -> None:
+        """A label names a candidate. A quote's own producer owns its judgements."""
+        table = a_table(article_ok, POINTED_TEXT)
+        first = a_reply(quotes=[a_range("s0", "s0", attribution="named")])
+        quote = anchored(table, POINTED_TEXT, first, config=ElementsConfig(), label_source="m")
+        address = next(
+            one.element_id for one in quote.elements if one.kind is ElementKind.QUOTE
+        )
+
+        whole = anchored(
+            table,
+            POINTED_TEXT,
+            a_reply(
+                labels=[a_label(address, measure="a label aimed at a quote")],
+                quotes=[a_range("s0", "s0", attribution="named")],
+            ),
+            config=ElementsConfig(),
+            label_source="m",
+        )
+
+        assert all(one.measure is None for one in whole.elements)
+        assert next(
+            one.attribution for one in whole.elements if one.kind is ElementKind.QUOTE
+        ) == "named"
+
+
 def test_a_recorded_call_one_reply_labels_the_table_over_a_loopback_socket(
     article_ok: Article,
 ) -> None:
@@ -1409,9 +1873,20 @@ def test_a_recorded_call_one_reply_labels_the_table_over_a_loopback_socket(
         "quantity-149-159": "cost per million tokens",
         "quantity-197-201": "throughput on commodity CPUs",
     }
-    assert all(one.extractor is Extractor.REGEX for one in labelled.elements), (
-        "the one proposal in the reply is 'about a third', which no pattern can read"
-    )
+    assert all(
+        one.extractor is Extractor.REGEX
+        for one in labelled.elements
+        if one.kind is ElementKind.QUANTITY
+    ), "the one proposal in the reply is 'about a third', which no pattern can read"
+    assert kinds_of(labelled) == {
+        ElementKind.QUANTITY,
+        ElementKind.ENTITY,
+        ElementKind.QUOTE,
+        ElementKind.CLAIM,
+    }, "the reply's one place is 'Denmark', which the item never names"
+    assert [
+        one.span_excerpt for one in labelled.elements if one.kind is ElementKind.ENTITY
+    ] == ["Example Lab"]
     assert labelled.span_drift(article_ok.text or "") is None
     assert sentence_id(labelled.elements[0].sentence_index) in candidate_menu(labelled)
 
