@@ -322,6 +322,7 @@
     "enabled_kinds": [
       "chart"
     ],
+    "histogram_bins": 3,
     "max_chart_points": 8,
     "max_diagram_steps": 6,
     "max_facts": 16,

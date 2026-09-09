@@ -706,7 +706,7 @@ def test_a_plan_that_omits_a_role_does_not_load() -> None:
 def test_a_role_the_type_cannot_use_is_present_and_empty() -> None:
     """The other half: an inapplicable role loads as `[]` rather than failing.
 
-    A bar has no bins, no size and no second measured axis, so the eight-bar
+    A bar has no bins, no size and no second measured axis, so the four-bar
     fixture carries seven empty channels beside its two filled ones. The shape
     accepts every combination it can spell, including one no type would ever
     draw, because ruling which roles a `bar` may fill needs the type's own rule
