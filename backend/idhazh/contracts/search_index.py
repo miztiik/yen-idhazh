@@ -88,6 +88,25 @@ class SearchIndex(Contract):
     __schema_stem__: ClassVar[str] = "search-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-10T09:00",
+            change=(
+                "model_id keeps its type and its writer and gains the sentence that "
+                "says what a mismatch now means. No field was added, removed or "
+                "retyped, so every committed shard still validates."
+            ),
+            why=(
+                "The browser may now fetch the encoder from a second origin when this "
+                "site cannot serve it, so the encoder a tab is running is no longer "
+                "guaranteed to be the one this site published. That makes the guard "
+                "in frontend/src/lib/assist/search.ts a check against something that "
+                "can really differ rather than a check that could only ever pass: a "
+                "shard whose model_id is not the browser's own is browsable and not "
+                "searchable, and the scope the page prints collapses to the months "
+                "that match. Stamped in the commit that changes what the field means, "
+                "rather than left to be inferred from the frontend."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-26",
             change=(
                 "Initial shape: one month of published items in published order, each "
@@ -107,7 +126,10 @@ class SearchIndex(Contract):
     model_id: Slug = Field(
         description="The encoder that wrote every vector in the sibling file. One index, "
         "one encoder: two encoders in one space score as plausible nonsense rather "
-        "than failing."
+        "than failing. Since 2026-09-10 the browser may load its encoder from a "
+        "second origin when this site cannot serve it, so this is a comparison "
+        "between two things that can differ: a shard the reader's encoder does not "
+        "name keeps its items browsable and drops them from the search scope."
     )
     dimensions: int = Field(
         ge=1,

@@ -44,6 +44,18 @@
  * archive. Never the encoder's model and runtime, 43.2 MB together, which keep
  * their own store. Never the switch itself.
  *
+ * **The encoder's second origin never touches this file, and that is one line
+ * of code rather than a promise.** Since 2026-09-10 a browser may fetch the
+ * weights from somewhere other than this site when this site has failed to hand
+ * them over. Every such request is off-origin, and the origin check below
+ * refuses an off-origin request before it looks at anything else - so a worker
+ * that is running while a reader takes that path sees the request, declines it,
+ * and lets the network answer. Nothing off-origin is ever written into a cache
+ * this file owns, so the only copy of a fetched-elsewhere encoder is the one
+ * `assist/loader.ts` put in the library's own store AFTER hashing it against
+ * the committed manifest. A worker that cached it would be a second copy nobody
+ * verified, keyed by a URL nobody checked.
+ *
  * **Both caches have a rule, and neither of them is "whatever a page asked
  * for".** The kept days are bounded twice - by `ui.offline_days_kept` and by
  * `ui.offline_bytes_kept` - because one day payload runs from 11,547 to

@@ -1,7 +1,7 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
-import { assetBaseUrl } from './asset-base.js';
+import { assetBaseUrl, encoderSource } from './asset-base.js';
 import { uiConfig } from './src/lib/server/config';
 
 export default defineConfig({
@@ -27,6 +27,19 @@ export default defineConfig({
 		// This is `uiConfig()` itself rather than a second merge written here, so
 		// the three layers, the defaults and the build-only keys it strips all stay
 		// in the one module that owns them (Rule #6).
-		__UI_CONFIG__: JSON.stringify(uiConfig())
+		__UI_CONFIG__: JSON.stringify(uiConfig()),
+		// Where the encoder comes from when our own origin cannot serve it, and the
+		// SHA-256 of every file the browser will accept.
+		//
+		// A build-time constant for the same reason as the two above, and for one
+		// more that is specific to this value: a manifest a page FETCHED could be
+		// answered by whoever answered the fetch, which is the thing it exists to
+		// guard against. Baked into the bundle, it is as trustworthy as the bundle.
+		//
+		// It rides in the `/archive/` route's chunk rather than the prerendered
+		// document, because only `assist/loader.ts` reads it. That keeps roughly 600
+		// bytes of hex out of the page-weight ceiling the archive document is
+		// measured against, and out of its `__data.json` twin.
+		__ENCODER_SOURCE__: JSON.stringify(encoderSource())
 	}
 });

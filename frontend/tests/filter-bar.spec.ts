@@ -238,9 +238,29 @@ test('the all-topics page and the archive draw no shortfall sentence', async ({ 
 /** Every request the page made, kept whole so a count can be printed. */
 class Watched {
 	readonly urls: string[] = [];
+	/** Anything the page asked of somebody other than the site under test.
+	 *
+	 * The encoder gained a second origin on 2026-09-10, reached only after our
+	 * own origin has failed a reader. That must never happen here: this build
+	 * serves the weights, so a request leaving the origin means the local load
+	 * broke and the failover covered for it - and a browser test that quietly
+	 * downloads 50 MB from a third party is a network test (Rule #7), which is
+	 * exactly what a passing count would hide. */
+	readonly offOrigin: string[] = [];
 
 	take(request: Request): void {
-		this.urls.push(new URL(request.url()).pathname);
+		const url = new URL(request.url());
+		this.urls.push(url.pathname);
+		this.origins.push(url.origin);
+	}
+
+	/** Every origin asked, so the assertion can name the one that is allowed. */
+	readonly origins: string[] = [];
+
+	/** Origins other than the page's own. Empty is the only passing answer. */
+	strangers(page: Page): string[] {
+		const mine = new URL(page.url()).origin;
+		return [...new Set(this.origins.filter((origin) => origin !== mine))];
 	}
 
 	count(pattern: RegExp): number {
@@ -318,6 +338,15 @@ test('typing filters the archive and downloads nothing; the button downloads onc
 		1
 	);
 	expect(asked.distinct(WEIGHTS), 'the encoder was fetched from more than one address').toBe(1);
+
+	// The encoder arrived, and it arrived from us. This build serves the weights,
+	// so the second origin added on 2026-09-10 must never be reached here - and
+	// the two counts above cannot tell the difference on their own, because a
+	// failover that worked would satisfy both while quietly making this a network
+	// test (Rule #7). This is the assertion that says which origin answered.
+	expect(asked.strangers(page), 'the page fetched from an origin that is not this site').toEqual(
+		[]
+	);
 });
 
 test('a topic pill narrows the archive and downloads nothing', async ({ page }) => {
