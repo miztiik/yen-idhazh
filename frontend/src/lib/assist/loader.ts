@@ -21,6 +21,7 @@
 
 import { base } from '$app/paths';
 import { ENCODER_ID, ENCODER_PATH } from './encoder';
+import { fetchVerifiedWeights, injectedSource, type WeightsRefusal } from './weights';
 
 /** What a reader is told before a single byte moves.
  *
@@ -40,6 +41,19 @@ import { ENCODER_ID, ENCODER_PATH } from './encoder';
  * WASM-only path again.
  */
 export const DOWNLOAD_MB = 43;
+
+/** The same three files from the second origin, which does not compress them.
+ *
+ * 50 MB rather than 43. Our origin serves `model_quantized.onnx` gzipped at
+ * 16.22 MB (measured 2026-09-08 on a laptop against CloudFront AMS58-P3, n=3,
+ * spread 0) where the hub serves its 22,972,370 bytes as they are, so the same
+ * encoder costs about 6.75 MB more when this site could not hand it over.
+ *
+ * It is a second constant and not a correction to the first because almost
+ * nobody pays it: the failover runs only after our own origin has already
+ * failed that reader. Printing 50 to everyone would overstate the cost for the
+ * whole audience to be accurate for the few. */
+export const DOWNLOAD_MB_ELSEWHERE = 50;
 
 /** The token cap the runner truncates at, repeated here because it is not shared yet.
  *
@@ -140,6 +154,66 @@ function watch(report: (progress: EncoderProgress) => void) {
 	};
 }
 
+/** Why the last failover attempt refused, or `null` if it never ran. */
+let refusal: WeightsRefusal | null = null;
+
+/** What the second origin did on the last attempt. For a sentence, not a branch. */
+export function lastRefusal(): WeightsRefusal | null {
+	return refusal;
+}
+
+/**
+ * Fetch the encoder from the second origin, verify it, and put it where the
+ * library is already looking. `true` only when every file verified.
+ *
+ * The cache keys are the same-origin URLs `localModelPath` resolves to, which
+ * is the same store and the same keys transformers.js writes itself and
+ * `cachedEncoder()` reads. A reader who takes this path is indistinguishable
+ * afterwards from one who never needed it - including on their next visit.
+ *
+ * **Nothing is written until every digest has matched.** The loop below runs
+ * only on a set `fetchVerifiedWeights` has already checked whole, so a set with
+ * one bad file leaves no trace: there is no half-seeded cache to recover from
+ * and no way for a later load to read a file this build did not vouch for.
+ */
+async function seedSecondOrigin(
+	onProgress?: (progress: EncoderProgress) => void
+): Promise<boolean> {
+	const source = injectedSource();
+	if (!source.baseUrl || typeof caches === 'undefined') {
+		refusal = 'off';
+		return false;
+	}
+
+	const outcome = await fetchVerifiedWeights(source, {
+		onBytes: (loaded) => onProgress?.({ loaded, landed: false })
+	});
+	if (!outcome.ok) {
+		refusal = outcome.reason;
+		return false;
+	}
+
+	try {
+		const cache = await caches.open(MODEL_CACHE);
+		for (const [path, bytes] of outcome.files) {
+			await cache.put(
+				`${base}/assist/models/${ENCODER_PATH}/${path}`,
+				new Response(bytes, { headers: { 'content-length': String(bytes.byteLength) } })
+			);
+		}
+	} catch {
+		// A full or blocked cache. The bytes verified, so nothing unsafe happened -
+		// there is just nowhere to put them, and the retry would read our origin
+		// again and fail again. Say so rather than loop.
+		refusal = 'unreachable';
+		return false;
+	}
+
+	refusal = null;
+	onProgress?.({ loaded: 0, landed: true });
+	return true;
+}
+
 /** Load the encoder. Idempotent, and safe to call twice from an impatient click. */
 export async function load(onProgress?: (progress: EncoderProgress) => void): Promise<Extractor> {
 	if (extractor) return extractor;
@@ -152,6 +226,16 @@ export async function load(onProgress?: (progress: EncoderProgress) => void): Pr
 
 		// Contract, not configuration. There is no knob for these, because a knob
 		// is a way for the same-origin promise to be turned off by accident.
+		//
+		// **These three are unchanged by the second origin, and that is the
+		// design rather than an omission.** `allowRemoteModels = false` is what
+		// makes our own copy primary: the library resolves every file against
+		// `localModelPath`, so "local first" is literally what happens with no
+		// ordering code to get wrong. Setting it true would also hand the library
+		// the fetch, and a file the library fetched is a file nothing hashed - the
+		// manifest would then bound nothing at all. The failover below fetches,
+		// verifies, and only then puts the bytes where the library was already
+		// looking, so every byte is checked before transformers.js sees one.
 		transformers.env.allowRemoteModels = false;
 		transformers.env.allowLocalModels = true;
 		transformers.env.localModelPath = `${base}/assist/models/`;
@@ -163,18 +247,37 @@ export async function load(onProgress?: (progress: EncoderProgress) => void): Pr
 			transformers.env.backends.onnx.wasm.numThreads = 1;
 		}
 
-		const pipe = await transformers.pipeline('feature-extraction', ENCODER_PATH, {
-			dtype: 'q8',
-			progress_callback: onProgress ? watch(onProgress) : undefined,
-			// WASM, not WebGPU. WebGPU is not the baseline.
-			//
-			// This does not pick the binary. The only runtime committed under
-			// `static/assist/wasm/` is `ort-wasm-simd-threaded.jsep.wasm` - the
-			// WebGPU-capable build, 21,596,019 bytes measured 2026-08-26 - and the
-			// header comment above says why the lighter one is not there. This line
-			// used to claim it stopped that 10 MB reaching a reader. It never did.
-			device: 'wasm'
-		});
+		const start = () =>
+			transformers.pipeline('feature-extraction', ENCODER_PATH, {
+				dtype: 'q8',
+				progress_callback: onProgress ? watch(onProgress) : undefined,
+				// WASM, not WebGPU. WebGPU is not the baseline.
+				//
+				// This does not pick the binary. The only runtime committed under
+				// `static/assist/wasm/` is `ort-wasm-simd-threaded.jsep.wasm` - the
+				// WebGPU-capable build, 21,596,019 bytes measured 2026-08-26 - and the
+				// header comment above says why the lighter one is not there. This line
+				// used to claim it stopped that 10 MB reaching a reader. It never did.
+				device: 'wasm'
+			});
+
+		// Our own origin, then - only if it failed this reader - the second one.
+		//
+		// The ordering is the library's own resolution rather than code of ours:
+		// with `allowRemoteModels = false` the first call can only read our copy,
+		// so a reader whose first call works never learns a second origin exists
+		// and never pays the extra 6.75 MB. `seedSecondOrigin` verifies every
+		// file against the committed manifest and puts the bytes into the cache
+		// the library was already looking in, so the retry is an ordinary local
+		// load. If seeding refuses for any reason, the ORIGINAL failure is thrown -
+		// the reader is told our download did not work, which is what happened.
+		let pipe;
+		try {
+			pipe = await start();
+		} catch (ourOrigin) {
+			if (!(await seedSecondOrigin(onProgress))) throw ourOrigin;
+			pipe = await start();
+		}
 		// The feature-extraction pipeline hardcodes `truncation: true` and passes
 		// no length, so the cap comes from the tokenizer config. Setting it here
 		// is the only place the browser's cap can be named.

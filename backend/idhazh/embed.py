@@ -40,8 +40,15 @@ EMBEDDER_ID: Final = "all-minilm-l6-v2-quantized"
 # cached copy of the old encoder can never answer vectors the new one wrote.
 # Moving it costs every returning searcher the whole download again, so it moves
 # when the weights move and at no other time. The browser's copy is
-# `ENCODER_VERSION` in `frontend/src/lib/assist/encoder.ts`.
-ENCODER_VERSION: Final = "2026-08-22"
+# `ENCODER_DIRECTORY` in `frontend/src/lib/assist/encoder.ts`.
+#
+# A DATE and not the upstream commit, which the browser now also carries as
+# `ENCODER_VERSION` and `config/idhazh.json` carries as `assist.model_revision`.
+# The two say different things: this one names a directory on disk, that one
+# names the bytes a second origin is asked for. Putting the commit in the path
+# would rename the directory - and re-download 23 MB on every returning reader -
+# the first time a revision was corrected without the bytes changing.
+ENCODER_DIRECTORY: Final = "2026-08-22"
 
 # Relative to the repository root, and the same directory the published page
 # fetches. `frontend/static/` rather than `frontend/public/`: the latter is where
@@ -50,7 +57,7 @@ ENCODER_VERSION: Final = "2026-08-22"
 # asset a browser fetches at runtime has to live there. Built from the two
 # constants above so the path cannot disagree with the identifier it serves.
 # POSIX and digest-free, per CLAUDE.md section 2.
-MODEL_RELDIR: Final = f"frontend/static/assist/models/{EMBEDDER_ID}/{ENCODER_VERSION}"
+MODEL_RELDIR: Final = f"frontend/static/assist/models/{EMBEDDER_ID}/{ENCODER_DIRECTORY}"
 ONNX_RELPATH: Final = f"{MODEL_RELDIR}/onnx/model_quantized.onnx"
 TOKENIZER_RELPATH: Final = f"{MODEL_RELDIR}/tokenizer.json"
 
