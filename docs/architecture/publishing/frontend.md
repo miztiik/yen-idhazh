@@ -1273,8 +1273,14 @@ asserts the aggregate is the maximum and is not the total. Authority: Carmack,
 to the same track so their lengths compare. Measured 2026-09-01 over the 11
 committed runs that carry the cell, the high-water mark is **14,155,517,952 B -
 13.18 GiB, 82 percent of the runner** - on shard 1 of run
-`2026-08-31-33448379177`. That figure is why the panel exists: it is the number
-that decides whether a bigger model can be served at all.
+`2026-08-31-33448379177`. **That is llama-server's resident-set high-water mark,
+and it is neither the job's total nor the memory the machine had free.** The
+python beside the server is not in it, and a resident-set mark counts mapped
+weight pages the kernel can evict. So the panel says which shard ran nearest the
+track, and nothing more. What decides whether a bigger model fits is free
+memory, and the run of 2026-09-09 is the first to measure it: `MemAvailable`
+bottomed out at 6.84 GiB
+([MemAvailable went up by 1.21 GiB](../../reference/measurements.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
 
 **No tint and no band.** Nobody has agreed how near 16 GB is too near, and a
 colour would publish a threshold that does not exist. Authority: Susan.
