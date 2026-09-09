@@ -16,6 +16,144 @@ Two rules govern this page:
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
 
+## What the 1.6 GiB of python beside the model actually is, 2026-09-09
+
+**Three python processes, and only one of them is ours.** A work shard records
+1.56 to 1.62 GiB of python at its peak, in a job whose work is one `idhazh`
+command talking to a local HTTP server. The count is three at every peak on
+every shard - and two of those three are already running at the first sample,
+which is taken before the shard's own python starts. Those two hold 63,432 to
+69,780 kB. So about 4 percent of the recorded python figure belongs to
+something the job did not launch, and the job's own python is 1.49 to 1.55 GiB.
+
+**The sampler is not in the count.** It is a bash loop calling `awk`, `cat` and
+`date`, and it matches on a `comm` beginning `python`. None of its own
+processes is a python process, so nothing here is the instrument measuring
+itself.
+
+**What is corrected, and by how little.** The runtime plan's
+[section 1a](../../TODO/20260905-09-pin-the-runtime-plan.md) sums llama-server
+and python at one instant and reads the free space off 14.90 GiB usable. Taking
+the two host processes out of that sum moves the worst shard from 0.59 GiB free
+to 0.66 GiB, and the best from 1.04 GiB to 1.10 GiB. **The trigger it informs
+asks for 1.0 GiB and three of four shards are still under it at today's
+window.** The correction is real and it changes nothing.
+
+| Shard | recorded free of 14.90 GiB | free with the two host processes removed |
+| --- | --- | --- |
+| 3 | 0.59 GiB | 0.66 GiB |
+| 2 | 0.75 GiB | 0.81 GiB |
+| 0 | 0.97 GiB | 1.03 GiB |
+| 1 | 1.04 GiB | 1.10 GiB |
+
+**Hardware and method.** GitHub-hosted `ubuntu-latest`, 4 vCPU, 16 GB, four work
+shards of run `2026-08-29-3`, captured 2026-08-29 and committed as
+`tests/fixtures/runtime/2026-08-29-3-shard-*.rss-samples.tsv`. 291, 291, 296 and
+383 samples a shard, 15 s apart, 1,261 in total. Read 2026-09-09. Every figure
+below is off those four files; the arithmetic was run on a Windows box and the
+readings are the runner's.
+
+### What the four captures can prove
+
+| Reading | Shard 0 | Shard 1 | Shard 2 | Shard 3 |
+| --- | --- | --- | --- | --- |
+| python at the first sample, before the job's own | 68,148 kB | 68,840 kB | 69,204 kB | 63,432 kB |
+| processes then | 2 | 2 | 2 | 2 |
+| the job's python, 15 s later | 1.24 GiB | 1.20 GiB | 1.19 GiB | 1.18 GiB |
+| the job's python at its own peak | 1.55 GiB | 1.54 GiB | 1.49 GiB | 1.49 GiB |
+| growth over the shard | 0.31 GiB | 0.35 GiB | 0.30 GiB | 0.31 GiB |
+| processes at the peak | 3 | 3 | 3 | 3 |
+
+Two readings matter more than the peak itself.
+
+**The job's python is at about 1.2 GiB within fifteen seconds of starting, and
+grows 0.30 to 0.35 GiB over the rest of the shard.** Four fifths of it is a load
+cost paid before the first article is fetched, not a working set that scales
+with the items.
+
+**The two peaks do not coincide.** llama-server's high point and the sum's high
+point are the same sample on all four shards, and python is below its own peak
+at that moment - 1.36, 1.28, 1.27 and 1.17 GiB against peaks of 1.55, 1.54, 1.49
+and 1.49. So the worst instant is set by llama-server, and python contributes
+76 to 88 percent of its own worst case to it.
+
+**A fourth process appears six times in 1,261 samples**, holding 15,952 to
+27,652 kB, and is gone by the next sample fifteen seconds later. It is never
+present at a peak. It is a python that starts and exits inside one sampling
+interval; what it is, the capture cannot say.
+
+### What the captures cannot say, and what now will
+
+A count and a sum cannot name a process. Nothing on the row, in the artifact or
+in the job log said which three pythons those were, so the 4 percent above is
+the most the committed data can attribute and the remaining 1.5 GiB is one
+opaque process.
+
+From 2026-09-09 the sampler writes `python-procs.tsv` beside `rss-samples.tsv`:
+one row per python process per sample, carrying the process id, `comm`, both
+memory marks, the executable path and three fields of the command line. The work
+job prints a per-process roll-call in **What memory this shard used** and
+uploads the file with the rest of the runtime artifact. Three argv fields rather
+than the whole line, because `comm` is `python3` for every one of them and names
+nothing, while the executable plus argv 1 to 3 separates a hosted-tool-cache
+`python -m idhazh work` from a distribution `/usr/bin/python3 -u /usr/sbin/...`
+and stops well before anything a command line might carry further along
+(`CLAUDE.md` section 1b).
+
+Cost: three more short-lived commands per python process per 15-second sample,
+and about 113 kB a shard in a two-day artifact. The next scheduled run answers
+the question.
+
+### Two candidates, settled differently, and neither by a measurement
+
+**The ONNX encoder is not resident in a work shard at all.** `stage_work` never
+constructs an `Embedder`; the three callers are `stage_plan`, `stage_assemble`
+and `backfill-vectors`, and none of them runs in the `work` job. `embed.py`
+imports `onnxruntime` inside the two functions that need it, so importing
+`idhazh.cli` does not load it either. It costs the shard nothing.
+
+**The faithfulness scorer is resident, and it is in use throughout.** `main`
+builds it before `stage_work` runs, and `stage_work` scores each item
+immediately after summarizing it, from the same loop. So `torch` and
+`transformers` are alive at llama-server's peak by design, not by accident.
+**How much of the 1.5 GiB they hold is not measured, and this page will not
+guess** - the shared virtual environment has neither package installed, and a
+laptop figure for a resident set is not a runner figure.
+
+### Why no reduction is proposed here
+
+The obvious move - load the scorer later, or in its own process - buys nothing,
+and the reason is in the readings above. llama-server is started before the work
+step and killed at the end of the job, and its resident set climbs from 8.68 GiB
+to its peak across the whole shard. A scoring pass moved after the summarize
+pass would still run beside a server holding its maximum. The concurrent peak
+only falls if llama-server stops first, which means moving the `/metrics` scrape
+ahead of it and changing the order of five steps - a pipeline-shape decision
+with an owner, not a worker's call.
+
+What is genuinely available is stated rather than done: if the scorer turns out
+to hold most of the 1.5 GiB, running it in a second process **after llama-server
+is stopped** would return roughly that much to the worst instant, at the cost of
+a second python start a shard and a step-order change. The measurement that
+prices it is one dispatch and no code, and it is in
+[Still unmeasured](#still-unmeasured).
+
+### Does 16,384 fit
+
+**No, and the raise does not have to be priced to say so.** At `n_ctx` 8,192 the
+worst shard already leaves 0.66 GiB free counting only the job, against the
+1.0 GiB the plan's first escalate trigger asks for. Doubling the window can only
+add to the KV cache. The deficit exists before the change, so what the change
+costs does not decide it.
+
+That is the whole ruling this page can give, and it is enough for an owner to
+choose between three things: raise the window anyway and accept a smaller
+margin; find the 1.5 GiB first; or leave the window at 8,192. **No arithmetic
+here extrapolates the doubling**, because [section 11.2 of the runtime
+plan](../../TODO/20260905-09-pin-the-runtime-plan.md) accounts for only about
+5.6 GiB of the 13.29 GiB measured, and an extrapolation off a term that explains
+two fifths of the total is a guess with a decimal point.
+
 ## What llama-server reports about its own runtime settings, 2026-09-09
 
 **Flash attention is observable, and only in the log, and only at verbosity 4 or
@@ -1680,30 +1818,39 @@ text. The one new run whose prompt size is readable medians 898 tokens against
 nine occupy. The nine read as the slow mode carrying a bigger prompt, not as a
 new effect.
 
-**Two instruments added to answer this question do not work.** Both were checked
-on all nine runs:
+**Two instruments added to answer this question did not work. Both are now
+explained, and only one of them was a fault.** Both were checked on all nine
+runs:
 
 - `grep -m1 'system_info' router.log` **has matched zero times in nine runs.**
   llama.cpp `b10598` writes no line containing that string, so the one line that
   names the instruction sets - AVX2 against AVX-512, the obvious way two hosts
   sharing a CPU model string could differ 3x on prefill - has never been
   captured. The other five lines under
-  [What a job log names](#what-a-job-log-names) do print.
-- The log summary's `grep -E '^(srv|slot) '` **cannot match this build's
-  output.** Every line starts with a timestamp and a level, as in
+  [What a job log names](#what-a-job-log-names) do print. **This was never a
+  grep fault**: the line is not printed at all below verbosity 4, so the pattern
+  was right and the line was not there
+  ([What llama-server reports about its own runtime settings](#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).
+- The log summary's `grep -E '^(srv|slot) '` **could not match this build's
+  output, and that one was a fault.** Every line starts with a timestamp and a
+  level, as in
   `0.02.841.335 I srv load_model: initializing, n_slots = 1`, so the anchor
-  never fires; the one line that does reach the job log matches on the
+  never fired; the one line that did reach the job log matched on the
   `n_ctx_slot` alternative instead. `slot print_timing:`, which carries
   `prompt eval time`, stopped reaching the job log when the older unanchored
-  `grep 'prompt eval time ='` was replaced. Those timings now survive only
-  inside the `router-log` artifact, which keeps them for two days.
+  `grep 'prompt eval time ='` was replaced. Measured 2026-09-09 over the four
+  committed captures: 1 line of 40 found, and the corrected anchor
+  `^[0-9.]+ [A-Z] (srv|slot) ` finds 38 of 40, the two it leaves being the
+  common-args block. Fixed in both jobs the same day, so those timings reach a
+  job log again from the next run rather than surviving only inside the
+  two-day artifact.
 
-**The unmet prerequisite, exactly.** With both greps fixed: **two `route` runs
-carrying a prefill rate on each CPU model, at least one of them in the fast
-mode.** Today that count is 1 on the EPYC 7763, 0 on the EPYC 9V74 and 0 on the
-Xeon 8573C, so it is five more observations at minimum. No date goes with that
-number - which CPU a job draws is not ours to choose, and no fast run has
-appeared in nine.
+**The unmet prerequisite, exactly.** With the anchor fixed and the verbosity
+understood: **two `route` runs carrying a prefill rate on each CPU model, at
+least one of them in the fast mode.** Today that count is 1 on the EPYC 7763, 0
+on the EPYC 9V74 and 0 on the Xeon 8573C, so it is five more observations at
+minimum. No date goes with that number - which CPU a job draws is not ours to
+choose, and no fast run has appeared in nine.
 
 ### Why a cancelled run published nothing
 
@@ -5356,7 +5503,8 @@ to justify a design decision.
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two arms of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
 | **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs on an i7-1265U ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). A laptop measures the laptop, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
-| **What makes a visuals host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Exactly one run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. **The first of those two is explained and is not a grep fault**: `system_info` is not printed at all below verbosity 4, so the pattern was always right and the line was never there to find ([What llama-server reports about its own runtime settings](#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)). Then: **two runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
+| **What holds the 1.5 GiB a work shard's own python holds** | **bounded, not attributed: 1.49 to 1.55 GiB over four captured shards, in one process nothing names** | two dispatches of `.github/workflows/digest.yml`, no code. The first with `faithfulness: false`: the install step then takes `.` instead of `.[faithfulness]` and `_scorer` returns nothing, so the difference in `python_peak_rss_bytes` between that run and a scored one **is** the scorer's resident share, on the runner. The second at the default, to read the new per-process roll-call in **What memory this shard used** and confirm what the other two pythons are ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). Do the second one first - it costs nothing extra and it says whether the 4 percent attributed to the host is really the host. |
+| **What makes a visuals host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and one instrument was broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Exactly one run carries both a CPU and a prefill rate. **Both greps are now explained and neither needs fixing again.** `system_info` was never a grep fault: it is not printed at all below verbosity 4, so the pattern was always right and the line was never there to find ([What llama-server reports about its own runtime settings](#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)). The log summary's `^(srv|slot) ` anchor was a real fault - it matched 1 line of 40 in every committed capture and none of them by the anchor - and it was corrected on 2026-09-09 to read the timestamp and level letter the tag sits behind, which finds 38 of 40. So `prompt eval time` reaches a job log again from the next run. Then: **two runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
 | **Which CPU the visuals job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). The `visuals` job runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give it a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
@@ -5365,7 +5513,7 @@ to justify a design decision.
 | HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
 | Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
-| A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). It is a resident set and not a demand, which is the honest bound: 13.16 GiB at the worst of four shards against 16 GB. |
+| A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). It is a resident set and not a demand, which is the honest bound: 13.16 GiB at the worst of four shards against 16 GB. **That cell is llama-server alone**; the job also holds 1.49 to 1.55 GiB of its own python at the same time, and the two together leave 0.66 GiB free at the worst captured shard ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). |
 | **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize()` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary arm alone against the configured 9B - five calls, no corpus freeze, no repeats. |
 | Whether the configured summarizer is better or worse than the retired Qwen3-8B-Q4_K_M | **no comparison was ever run** | a cache-safe replay of one frozen corpus through both models, at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread, and a pre-registered blind human selector. The 0.7149 mean hhem above is one model on one corpus and is not a delta. |
 
