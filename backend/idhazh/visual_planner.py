@@ -626,8 +626,17 @@ LABEL_PASS_VERSION: Final = "2026-09-09"
 #: it bounds the reply before a byte of it is written rather than after. These
 #: are not the tunables Rule #6 sends to `config/` - moving one changes what the
 #: decoder can emit at all, which is a contract change and not an operator's
-#: dial. The per-article proposal cap decision 3 asks for is `PROPOSED_MAX`.
-LABELS_MAX: Final = 32
+#: dial, and a grammar is fixed before a request is built. The per-article
+#: proposal cap decision 3 asks for is `PROPOSED_MAX`.
+#:
+#: `LABELS_MAX` is the count `visuals.max_facts` already names, for the reason
+#: that knob gives: a long indexed menu is lost-in-the-middle for a model
+#: picking by address. It is not the size of the table - a dense article can
+#: hold 256 candidates and the labels are for choosing between them, not for
+#: covering them, so twice a full chart's width is enough to choose with. What
+#: a maximal reply costs in output tokens, and what budget it needs, is derived
+#: with call 2's own bounds in the row that adds the second call.
+LABELS_MAX: Final = 16
 PROPOSED_MAX: Final = 4
 NAMES_MAX: Final = 12
 MENTIONS_MAX: Final = 6

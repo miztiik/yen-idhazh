@@ -31,6 +31,7 @@ from idhazh.elements import SpanDriftError, element_table
 from idhazh.llm.server import Completion, post
 from idhazh.visual_planner import (
     LABEL_PASS_VERSION,
+    LABELS_MAX,
     PROPOSED_MAX,
     SALIENCE_SCORE,
     CallOneReply,
@@ -1076,6 +1077,10 @@ class TestCallOneShape:
         with pytest.raises(ValidationError):
             CallOneReply.model_validate({"labels": [], "tool_call": {"name": "rm"}})
 
+    def test_the_label_bound_is_the_menu_size_the_planner_already_reads(self) -> None:
+        """The bound has a reason, so the reason is checked rather than written down."""
+        assert LABELS_MAX == VisualsConfig().max_facts
+
     def test_a_reply_missing_a_field_is_a_shape_failure(self) -> None:
         with pytest.raises(ValidationError):
             parse_call_one('{"labels":[],"proposed":[]}')
@@ -1305,8 +1310,8 @@ class TestProposals:
 
     def test_an_address_that_names_no_sentence_is_refused(self) -> None:
         text = "Costs fell 12 percent."
-        for address in ("s9", "twelve", ""):
-            reply = a_reply(proposed=[{"sentence_id": address or "x", "surface": "12 percent"}])
+        for address in ("s9", "twelve", "x"):
+            reply = a_reply(proposed=[{"sentence_id": address, "surface": "12 percent"}])
             assert proposed_quantities(text, reply) == [], address
 
     def test_a_number_spelled_out_in_words_stays_refused(self) -> None:
