@@ -151,7 +151,7 @@ is the module being replaced.
 | `semantically_compatible` | Each element's kind fits the channel it fills. | A quote drawn as a bar height; a number used as an axis tick's name. |
 | `units_convertible` | Within one measured channel, every unit is convertible or identical. | Three megawatt bars and a headcount on one axis. |
 | `roles_valid_for_type` | The filled roles are the ones the type declares. | A `bar` carrying `bins`; a `bar` with an empty `quantity`. |
-| `enough_data` | The marks sit between `visuals.min_chart_points` and `visuals.max_chart_points`. | Two bars, which is a sentence rather than a comparison. |
+| `enough_data` | The marks sit between `visuals.min_chart_points` and `visuals.max_chart_points` - and a histogram, whose marks are its bins, cites a value for every bin. | Two bars, which is a sentence rather than a comparison; three values asked to fill five bars. |
 | `no_duplicate_in_role` | No element fills one channel twice. | One number drawn three times under three names. |
 | `no_invented_values` | Every figure reads out of the characters its element names. | A table cell that disagrees with its own excerpt. |
 | `numerals_matched` | Every numeral in `title`, `caption` and `why` is one a cited element states. | A caption that converted a figure, or reached one from nowhere. |
@@ -171,8 +171,9 @@ refusal it is credited with.
 
 ### Where the two tables live, and why neither is in `config/`
 
-`visuals.min_chart_points` and `visuals.max_chart_points` are knobs and are read from `config/`
-(Rule #6). The two tables the validator carries are not knobs and are in code:
+`visuals.min_chart_points`, `visuals.max_chart_points` and `visuals.histogram_bins` are knobs and
+are read from `config/` (Rule #6). The two tables the validator carries are not knobs and are in
+code:
 
 - **Which roles a type may fill** is a relation between `VisualType` and `EncodingRole`, two closed
   vocabularies that are both Python enums in `contracts/visual.py`. A JSON file cannot reference
@@ -273,6 +274,33 @@ smallest present unit only ever multiplies, so no value is divided into a repeat
 rounding decision is hidden inside a mark. A ratio that will not state exactly is refused rather than
 rounded - the table holds no such pair today, so that fails closed on a table that grows.
 
+### A histogram's marks are its bins, and the check counted its inputs
+
+Every other type draws one mark per element in the channel `TypeRules` names, so counting that
+channel counts the marks. A histogram does not: its `bins` channel holds the values being
+distributed, and the bars a reader counts are `visuals.histogram_bins` of them. Until 2026-09-09
+`enough_data` counted the channel for every type, so a histogram was admitted or refused on a
+quantity it does not draw. Nothing collided at the committed value - `histogram_bins` is 3 and
+`min_chart_points` is 3 - but the two readings were wrong in opposite directions: raise
+`histogram_bins` to 12 and the validator admitted every plan asking for more bars than the ceiling
+allows, while three values with twelve bins read as too few marks when what it had was too many
+bars.
+
+**"Enough data" is one check, because the second question is not about a plan.** How many bars a
+histogram draws is the same for every histogram in the run, so a per-plan check would answer it
+identically for every item and blame the article each time. It is asked once, where the config
+loads: `VisualsConfig` holds `visuals.histogram_bins` inside the same `min_chart_points` to
+`max_chart_points` window every other type's mark count sits in, and a value outside it fails the
+build naming the operator who set it. What is left for `enough_data` to ask of a plan is whether the
+article gave enough values to fill those bars - a floor of `visuals.histogram_bins` on the cited
+values, because fewer values than bins leaves a bin empty whatever their spread.
+
+A tenth check was weighed and refused. It would have fired on every histogram of every run for one
+config edit, and the reader loses nothing by its absence: the same fault is caught earlier and
+stated once. The three bounds are all `config/` knobs and none is a number chosen in code (Rule #6);
+no new knob was needed, because `min_chart_points` and `max_chart_points` already mean "how many
+marks a chart may draw" and a histogram's bars are marks.
+
 ### Binning is versioned config, and where the edges fall is not
 
 A histogram's bars are counts rather than figures the article wrote, so something has to say how many
@@ -285,8 +313,9 @@ A bin nothing falls into refuses the drawing. Its chain would name no element, a
 resolves to nothing is the one thing this contract exists to keep off a page. The item degrades and
 publishes no picture, which is the honest answer when a knob asks for more bins than the channel has
 spread to fill. The default is `min_chart_points` rather than a textbook rule for a sample size this
-stage never sees: the channel holds between three and eight values, so a count above three asks for
-bins nothing can reach.
+stage never sees. **What reaches that refusal is a lack of spread and nothing else**, now that
+`enough_data` refuses a plan citing fewer values than bins: a count shortfall is a plan fault the
+validator names, and only values that crowd into one end of their own range get this far.
 
 ### Three stamps, and none of them is a config key
 

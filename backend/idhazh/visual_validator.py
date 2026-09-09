@@ -29,8 +29,9 @@ carries that ruling and why it is the exception.
 
 ## What is in code here, and what is in `config/`
 
-`visuals.min_chart_points` and `visuals.max_chart_points` are knobs and are read
-from `config/` (Rule #6). The two tables below are not knobs and are here:
+`visuals.min_chart_points`, `visuals.max_chart_points` and
+`visuals.histogram_bins` are knobs and are read from `config/` (Rule #6). The
+two tables below are not knobs and are here:
 
 - **Which roles a type may fill** is a relation between two closed vocabularies,
   `VisualType` and `EncodingRole`, both of which are Python enums in
@@ -94,7 +95,8 @@ class ValidatorCheck(StrEnum):
     UNITS_CONVERTIBLE = "units_convertible"
     #: The filled roles are the ones this type declares.
     ROLES_VALID_FOR_TYPE = "roles_valid_for_type"
-    #: The marks fit between the two committed chart-point knobs.
+    #: The marks fit between the two committed chart-point knobs - and for a
+    #: histogram, whose marks are its bins, there is a value for every bin.
     ENOUGH_DATA = "enough_data"
     #: No element fills one channel twice.
     NO_DUPLICATE_IN_ROLE = "no_duplicate_in_role"
@@ -409,23 +411,41 @@ def _enough_data(
     Both bounds are `config/` knobs and neither is a number chosen here
     (Rule #6). Below the floor a chart says less than the sentence it sits
     under; above the ceiling it is a table drawn badly.
+
+    **A histogram is the one type whose channel does not hold its marks.** Its
+    `bins` channel holds the values being distributed, and the marks are the
+    bars - `visuals.histogram_bins` of them, the same number for every histogram
+    in the run. So whether that many bars is readable is a question about the
+    config rather than about a plan, and `VisualsConfig` answers it once at load
+    by holding the knob inside this same floor and ceiling. What is left to ask
+    of a plan is whether the article gave enough values to fill those bars:
+    fewer values than bins leaves a bin empty, `idhazh.derived_values` refuses
+    that drawing, and a plan the validator passed should never reach it.
     """
     rules = TYPE_RULES.get(visual_type)
     if rules is None or rules.marks not in filled:
         # A type with no rule, or a required channel left empty, belongs to
         # `roles_valid_for_type`. There is nothing here to count.
         return None
-    marks = len(filled[rules.marks])
-    if marks < visuals.min_chart_points:
+    cited = len(filled[rules.marks])
+    if visual_type is VisualType.HISTOGRAM:
+        if cited < visuals.histogram_bins:
+            return Rejection(
+                ValidatorCheck.ENOUGH_DATA,
+                f"{cited} values in the {rules.marks.value} channel, against the "
+                f"{visuals.histogram_bins} bins they have to fill",
+            )
+        return None
+    if cited < visuals.min_chart_points:
         return Rejection(
             ValidatorCheck.ENOUGH_DATA,
-            f"{marks} marks in the {rules.marks.value} channel, against a floor of "
+            f"{cited} marks in the {rules.marks.value} channel, against a floor of "
             f"{visuals.min_chart_points}",
         )
-    if marks > visuals.max_chart_points:
+    if cited > visuals.max_chart_points:
         return Rejection(
             ValidatorCheck.ENOUGH_DATA,
-            f"{marks} marks in the {rules.marks.value} channel, against a ceiling of "
+            f"{cited} marks in the {rules.marks.value} channel, against a ceiling of "
             f"{visuals.max_chart_points}",
         )
     return None
