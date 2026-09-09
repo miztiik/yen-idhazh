@@ -520,6 +520,32 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-09T23:30",
+            change=(
+                "console gains shimmer_after_ms, defaulting to 400 and bounded at 0 "
+                "and 5000. config/appearance.json sets it to 400. `ConsoleConfig` is "
+                "defined in `app_config.py` and imported here, so app-config is "
+                "restamped with the same version. Additive and defaulted, so an "
+                "appearance file written before today still validates."
+            ),
+            why=(
+                "The console started fetching its months on 2026-09-09, so for the "
+                "first time a panel on this site has a wait to draw. A reserved block "
+                "that animates the moment it appears turns a 90 ms fetch into a "
+                "flicker, so the shimmer waits and a fetch that lands first never "
+                "animates at all. It is a knob rather than a literal because the right "
+                "value is a property of the payloads and the network, not of the "
+                "stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a "
+                "measurement: no median payload arrival has been taken since the "
+                "fetches landed, and Rule #10 refuses an unmeasured number the right "
+                "to justify a design, so this one justifies nothing - it is the value "
+                "the surface ships on until row 19 of "
+                "TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured "
+                "median. Ruled by Fowler, 2026-09-08: a user-interface row is not a "
+                "measurement harness."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-06T14:00",
             change=(
                 "digest.read_mark_days moves from 7 to 14, and its meaning moves from "

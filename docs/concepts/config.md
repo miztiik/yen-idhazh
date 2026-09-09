@@ -171,9 +171,10 @@ band off the post-cap count is what left it empty until 2026-08-26, because at
 the cap of 2500 committed then that count stopped at `int(2500 / 1.3) = 1923`
 words and that band started at 2000
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
-The ladder gained a fifth rung at 3000 words on 2026-08-29, and no rung floor
-may ever sit above `int(truncation_cap_tokens / 1.3)` - the model is handed that
-many words and a rung above it would ask for a summary of text it never saw.
+The ladder gained a fifth rung at 3000 words on 2026-08-29 and a sixth at 5000
+on 2026-09-09, and no rung floor may ever sit above
+`int(truncation_cap_tokens / 1.3)` - the model is handed that many words and a
+rung above it would ask for a summary of text it never saw.
 
 **The published surface keeps a second copy of that ladder, and it drifted.**
 `SUMMARIZE_DEFAULTS` in `frontend/src/lib/server/config.ts` is the value the
@@ -197,8 +198,9 @@ time, which is exactly why nothing noticed.
 **This is the drift the rejected-alternatives table below already forbids**, in
 the row that refuses copying config into the published directory because two
 copies of one file are free to drift with nothing gating them. The copy is in
-code rather than in a published file, so no gate caught it. The five rungs are
-corrected as of 2026-08-29, and the copy is now pinned:
+code rather than in a published file, so no gate caught it. The rungs were
+corrected as of 2026-08-29 - there are six of them since 2026-09-09 - and the
+copy is now pinned:
 `backend/tests/test_contracts.py::test_the_console_fallback_bands_match_the_committed_ladder`
 reads the committed bands and the `SUMMARIZE_DEFAULTS` literal and fails when
 they disagree, printing both ladders. The guard sits with the writer because a
@@ -405,7 +407,7 @@ provenance here, and it is not the same for the two:
 
 | Entry | `declared_for` | Where the numbers came from |
 | --- | --- | --- |
-| `models.summarize` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | Derived against the retired `qwen3-8b-q4-k-m` on a GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74, 4 vCPU, 15 GB) through 2026-08-25 and 2026-08-26, then carried onto the 9B when the summarizer was swapped on **2026-08-27** (#146). Nothing has re-derived them since. |
+| `models.summarize` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | Derived against the retired `qwen3-8b-q4-k-m` on a GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74, 4 vCPU, 15 GB) through 2026-08-25 and 2026-08-26, then carried onto the 9B when the summarizer was swapped on **2026-08-27** (#146). **Two of them have since been re-derived on a runner, and only two.** Run `2026-09-09-34379502244` priced `n_ctx` at 16,384 and `flash_attention` at `on` against the configured 9B, and read both back from the server's own log at `log_verbosity: 4`. `n_batch`, `n_ubatch`, `n_threads`, `temperature`, `top_p` and every other value in the block were untouched by that run and still stand on the 8B numbers. |
 | `models.visual_planner` (`qwen3-4b-q4-k-m`) | `7485fe6f...fdf5` | The same numbers again. They were never measured against a 4B; the entry ran on them because one block served both roles. |
 
 Both rows say the same uncomfortable thing, which is the point of writing them
@@ -414,11 +416,25 @@ is named for what a person can honestly assert - that these numbers are set for
 these bytes - rather than `derived_against`, which for the visual planner would
 be a measurement claim nobody made.
 
-The two window figures already on record still read against the summarizer's
-block: the widest qualification request was 3,775 prompt tokens plus a 900-token
-output budget against an `n_ctx` of 8,192, and the configured summarizer peaks at
-82 percent of the runner's memory at that window
-([../reference/measurements.md](../reference/measurements.md)).
+The two window figures that used to sit here are both superseded, and by one run:
+`2026-09-09-34379502244`, taken 2026-09-09 on a stock GitHub-hosted
+`ubuntu-latest`, 4 vCPU, no GPU.
+
+**The widest request is no longer 3,775 prompt tokens against an `n_ctx` of
+8,192.** One item on that run reached **8,741 input tokens**, which the old 8,192
+window would have refused outright, and the busiest request held 9,082 of the
+16,384 cells - **55 percent of the window in use, 45 percent spare**
+([The window raise was load-bearing on the first run](../reference/measurements.md#the-window-raise-was-load-bearing-on-the-first-run-and-nothing-predicted-that)).
+
+**And the summarizer does not peak at 82 percent of the runner's memory.** That
+figure is llama-server's own resident-set high-water mark read as though it were
+the whole job's, and a resident-set mark counts mapped weight pages the kernel
+can evict. It never said what the machine had free, in either direction, and it
+is withdrawn. The same run measured free memory directly instead.
+`MemAvailable` never fell below **6.84 GiB**, with per-shard lows of 6.84, 7.36,
+7.44 and 7.46 GiB over 846 samples. The escalation trigger asks for 1.0 GiB, so
+the run finished with 6.8 times the bar
+([MemAvailable went up by 1.21 GiB](../reference/measurements.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
 
 ### A model swap can no longer inherit settings nothing declared for it
 

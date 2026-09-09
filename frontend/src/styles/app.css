@@ -54,6 +54,11 @@
 	--color-tint-bad: var(--tint-bad);
 	--color-tint-neutral: var(--tint-neutral);
 
+	/* The lit band that crosses a reserved block while its payload is in the
+	   air. Mirrored like every other colour so a utility and the token cannot
+	   drift apart. */
+	--color-shimmer-band: var(--shimmer-band);
+
 	/* The type scale, each step carrying the leading it was paired with in
 	   tokens.css. Without the `--line-height` half, `text-sm` takes the utility
 	   framework's own default leading and the pair silently comes apart - which
@@ -363,6 +368,48 @@ body {
 	background: var(--color-surface);
 }
 
+/* Which of the three settled nothings the fetched panels are holding, said once
+   for the whole page and beside the control that governs the window. Neutral by
+   default, because an empty window and a real gap are answers rather than
+   faults - a page that tints an answer like a fault teaches its operator to stop
+   reading the tint. Only a failed fetch takes a hue. */
+.console-standing {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-3);
+	margin-top: var(--space-4);
+	padding: var(--space-3) var(--space-4);
+	border: 1px solid var(--color-rule);
+	border-radius: var(--radius-md);
+	background: var(--tint-neutral);
+	font-size: var(--text-sm);
+	line-height: var(--leading-sm);
+	color: var(--color-text-secondary);
+}
+
+.console-standing[data-tone='warn'] {
+	background: var(--tint-warn);
+}
+
+/* Scoped to the months that failed. Nothing else on the page moves when it is
+   pressed, and it names its own subject so it is still true read out of the
+   sentence beside it. */
+.console-standing .standing-retry {
+	min-block-size: 2.75rem;
+	padding: 0 var(--space-4);
+	border: 1px solid var(--color-rule-strong);
+	border-radius: var(--radius-full);
+	background: var(--color-surface);
+	font-size: var(--text-sm);
+	color: var(--color-text);
+	cursor: pointer;
+}
+
+.console-standing .standing-retry:hover {
+	border-color: var(--color-accent);
+}
+
 /* One sentence pointing at the panel another route owns. Not a chart and not a
    card: it is a signpost, and a signpost that looks like a figure gets read as
    one. */
@@ -386,6 +433,52 @@ body {
 	outline: 2px solid var(--color-focus);
 	outline-offset: 2px;
 	border-radius: var(--radius-sm);
+}
+
+/* --- The reserved block ------------------------------------------------
+   `loading` is one of the five state classes design-system.md names, and this
+   is where it lives. A block wearing it is holding a place: it is in the
+   document from the first frame, it is exactly the size of the thing it
+   reserves, and it never changes that size. Nothing under it moves when the
+   payload lands.
+
+   `--color-rule-strong` rather than the sunken surface, and that was measured
+   rather than picked. On a panel the sunken surface reads 1.06:1 in dark and
+   1.13:1 in light - a block nobody can see is not a block, and in light it was
+   gone until the sweep crossed it. Rule-strong reads 1.61:1 and 1.48:1: plainly
+   there, and still well under the weight of a drawn mark, which is what a
+   placeholder owes. Every ratio here is arithmetic over the committed token
+   values, so the spread is zero by construction; taken 2026-09-09. */
+.loading {
+	background-color: var(--color-rule-strong);
+	border-radius: var(--radius-sm);
+}
+
+/* ONE timeline for every reserved block on the surface, and hanging the switch
+   on an ancestor is the whole reason it is one. A dozen blocks each starting
+   its own sweep at the moment it happened to mount reads as a dozen broken
+   things; a dozen starting in the same frame reads as one page waiting.
+   The switch also arrives late - `console.shimmer_after_ms` - so a fetch that
+   lands first never animates at all. */
+[data-shimmer='on'] .loading {
+	background-image: linear-gradient(
+		90deg,
+		transparent 0%,
+		var(--shimmer-band) 50%,
+		transparent 100%
+	);
+	background-size: 200% 100%;
+	background-repeat: no-repeat;
+	animation: shimmer var(--dur-shimmer) linear infinite;
+}
+
+@keyframes shimmer {
+	from {
+		background-position: -100% 0;
+	}
+	to {
+		background-position: 100% 0;
+	}
 }
 
 /* A reading surface that animates is a reading surface that interrupts. This
@@ -414,5 +507,17 @@ body {
 		:active
 	) {
 		transform: none !important;
+	}
+
+	/* The blanket rule two blocks up does NOT stop a moving gradient - it
+	   freezes one mid-sweep, and a frozen sweep is a bright band across the
+	   block that nobody chose and that says nothing. So a reserved block loses
+	   the gradient outright here and stays a flat tint. It still says "this is
+	   holding a place"; what it stops saying is "and it is moving".
+	   This wins on specificity, not on order: (0,2,0) against the blanket's
+	   (0,0,0), with both marked important. */
+	[data-shimmer='on'] .loading {
+		background-image: none !important;
+		animation: none !important;
 	}
 }

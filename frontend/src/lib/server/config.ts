@@ -178,6 +178,10 @@ export interface ConsoleConfig {
 	 * re-measures the container. Declared once, in `config/appearance.json`. */
 	chart_height: number;
 	chart_width: number;
+	/** How long a reserved console block stays still before it shimmers, in
+	 * milliseconds. A fetch that lands inside it never animates at all. 400 is a
+	 * declared estimate and not a measurement - see `design-system.md`. */
+	shimmer_after_ms: number;
 	failure_list_max: number;
 	/** How many sources the failure section ranks by articles lost, before the
 	 * tail sentence. */
@@ -353,7 +357,8 @@ const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 		{ min_source_words: 60, target_words_min: 50, target_words_max: 90, key_points_min: 1, key_points_max: 2 },
 		{ min_source_words: 700, target_words_min: 70, target_words_max: 150, key_points_min: 2, key_points_max: 3 },
 		{ min_source_words: 2000, target_words_min: 110, target_words_max: 200, key_points_min: 2, key_points_max: 4 },
-		{ min_source_words: 3000, target_words_min: 150, target_words_max: 230, key_points_min: 2, key_points_max: 5 }
+		{ min_source_words: 3000, target_words_min: 150, target_words_max: 230, key_points_min: 2, key_points_max: 5 },
+		{ min_source_words: 5000, target_words_min: 180, target_words_max: 230, key_points_min: 2, key_points_max: 5 }
 	]
 };
 const CONSOLE_DEFAULTS: ConsoleConfig = {
@@ -367,6 +372,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_attempts_for_rate: 5,
 	chart_height: 220,
 	chart_width: 760,
+	shimmer_after_ms: 400,
 	failure_list_max: 25,
 	source_rows: 10,
 	feed_rows: 10,

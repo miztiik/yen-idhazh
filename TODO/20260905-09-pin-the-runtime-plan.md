@@ -32,7 +32,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | Six numbers the job already has and throws away | - | A | DONE #525 (three of six) | yi-h01-memory | #525 | worker |
 | 2 | A model swap can no longer inherit in silence | - | A | DONE #528 | yi-h02-inherit | #528 | worker |
 | 3 | The window doubles and flash attention pays for it | 1, 2 | B | DONE #547 - trigger 1 CLEARED by measurement | yi-h06-window | #547 | worker |
-| 4 | One run prices the runtime and nothing else | 3 | C | IN-FLIGHT - run `34379502244`, dispatched 2026-09-09 16:53Z on `0d49b61f` | - | - | orchestrator |
+| 4 | One run prices the runtime and nothing else | 3 | C | DONE - run `34379502244` read out; trigger 1 clears at 6.84 GiB | yi-h08-readout | - | orchestrator |
 | 5 | The article cap doubles to 10,000 tokens | 3 | B2 | DONE #548 | yi-h07-cap | #548 | worker |
 
 ### Trigger 1 is CLEARED. The window fits, and here is the reading that settles it
@@ -127,8 +127,9 @@ was impossible until #547 landed, which is what the dependency was for.
 
 **An article can overrun the budget its own cap gave it.** `truncate_to_tokens`
 spends the cap as `int(cap / 1.3)` **words**, so prose that tokenizes harder than
-1.3 tokens a word comes back over. The worst one overran by 16.8 percent, and
-that is the whole difference between 11,943 and 14,089.
+1.3 tokens a word comes back over. The worst one overran by **21.9 percent** -
+this said 16.8 percent until row 4 re-derived it, and the working is at the end
+of section 5 - and that is the whole difference between 11,943 and 14,089.
 
 **The number plan 11 must be sized against.** On a typical article the two-call
 worst case is 13,580 tokens, 83 percent, margin 1.21 times - the estimate holds.
@@ -529,6 +530,121 @@ decision 3 already refused that claim for a different reason.
 
 Every number written from this run carries the model entry, the runner, the date
 and the spread (Rule #10), and lands in `docs/reference/measurements.md`.
+
+### The six readings, against the six predictions above (2026-09-09)
+
+Full working, hardware and spread in
+[`../docs/reference/measurements.md`](../docs/reference/measurements.md), section
+"What the doubled window and the doubled cap cost". Five predictions held. One
+was wrong, and it is named as wrong below.
+
+| # | Reading | Prediction | What came back |
+| --- | --- | --- | --- |
+| 6 | `pipeline_fingerprint` | must have moved | **MOVED.** `22f44b21...` replaced `30d96862...` at 16:59:26Z, for exactly the three settings dispatched |
+| 1 | KV buffer | 512 MiB or 2,304 MiB | **512.00 MiB, all four shards, no spread.** 32 KiB a token, exact |
+| 2 | flash attention | `resolve_fused_ops` line present or absent | **Enabled** - but on `llama_context`, not `resolve_fused_ops`. **The prediction named the wrong line** |
+| 3 | `MemAvailable` low | against 5.63 GiB; under 1.0 GiB escalates | **6.84 GiB**, 1.21 GiB HIGHER. Trigger 1 does not fire |
+| 4 | `peak_rss_bytes` | second instrument | **12.16 GiB against 12.68**, i.e. it fell. The instrument cannot resolve 0.25 GiB |
+| 5 | prefill on cut items | 8.5 min a cut item, about one a day | **Zero items cut.** The rate behind the prediction is re-confirmed at 9.86 tok/s |
+
+**Reading 1 settles the plan's most valuable question and the answer is exact.**
+All four shards printed `llama_kv_cache: size = 512.00 MiB ( 16384 cells, 8
+layers, 1/1 seqs), K (f16): 256.00 MiB, V (f16): 256.00 MiB`, and
+`n_embd_head_k_all = 256` confirms the head dimension the projection was built
+on. 512 MiB over 16,384 cells is 32 KiB a token, which is the projected number
+to the byte. **The window raise cost 0.25 GiB and the 1.1 GiB alternative is
+dead.**
+
+**Reading 2's prediction was wrong, in those words.** It said the absence of
+`resolve_fused_ops: Flash Attention enabled` would mean the verbosity did not
+take. The verbosity took - `resolve_fused_ops` printed nine lines for other
+fused ops - and that string does not exist in build 10598. Flash attention
+reports on `llama_context: flash_attn = enabled` instead, on all four shards, so
+`on` was honoured on a runner's processor. The check passed; the plan looked in
+the wrong place. **What `log_verbosity: 4` actually bought is reading 1**: the
+baseline at verbosity 3 wrote 342 to 404 log lines with no KV line among them,
+and the priced run wrote 1,306.
+
+**Reading 3 went the other way and the reason is the runner, not the window.**
+The baseline's tight 5.63 GiB came from its two Intel Xeon 8573C shards, which
+committed about 2 GiB more than the same job on EPYC; the priced run drew no
+Intel shard. Matched on the same processor the window's cost does appear and it
+is the projected size: `Committed_AS` peak on EPYC 9V74 went 10.52 to 10.84 GiB,
+**+0.32 GiB against +0.25 projected**, the rest being the longer prompts the cap
+admits. **Not measured: the doubled window on an Intel shard.** The KV buffer is
+512 MiB whatever the processor, so 5.63 - 0.25 = 5.38 GiB carries the arithmetic,
+but no run has observed it.
+
+**Reading 5 could not be taken, because the event did not happen.** Zero of 75
+items ran past the 7,692-word cut point. At about 0.22 percent of items and
+roughly six runs a day, a single 70-item run expects 0.17 cut items - so zero is
+what the prediction implies rather than a contradiction of it. The 8.5-minute
+figure stands unexercised. Its ingredient is re-confirmed and did not move:
+prefill ran at a median 9.86 tokens a second at 16,384 against 9.97 at 8,192 on
+the same processor, down 1.1 percent.
+
+**What nothing predicted, and it is the most useful finding here.** One item on
+this run reached **8,741 input tokens** - the largest prompt in the whole
+4,187-row month shard, and the only one ever over 8,192. It was not cut. **Under
+the old 8,192 window it would not have fitted, and under the old 5,000-token cap
+it would have been cut before it could grow that large.** The window raise and
+the cap raise are load-bearing as a pair and were exercised on the day they
+landed, not at some later margin. Largest KV occupancy was 9,082 cells, 55
+percent of the window.
+
+**The wall clock did not pay.** 1h42m43s against 1h45m05s - 142 seconds faster,
+2.3 percent - and the slowest shard 18 seconds slower, 0.5 percent. Different
+article sets, so neither attributes cleanly; jointly they rule out a large
+regression. **A second thing the pair did not predict:** the processor a shard
+draws sorts its prefill rate 4.2 times harder than any setting in `config/`
+does - Intel Xeon 8573C ran at 41.00 tokens a second against 9.86 on EPYC 9V74.
+
+### What plan 11 inherits, now that the KV reading is in
+
+**The margin is unchanged, because the reading confirmed rather than moved the
+projection.** [Plan 11](20260905-11-two-call-planner-plan.md)'s two-call worst
+case at the current cap is still **15,889 tokens, 97 percent of 16,384, a margin
+of 1.03x**. Reading 1 came back at the confirming end, so nothing about that
+arithmetic changes.
+
+**What did change is that a wider window is now cheap on evidence rather than on
+a guess.** At a measured 32 KiB a token, `n_ctx` 32,768 costs 1,024 MiB of KV -
+512 MiB more than today - and the measured low-water mark is 6.84 GiB, so the
+further doubling would still leave about 6.3 GiB, 6.3 times the trigger's bar.
+**If plan 11 decides its second call needs more window, memory is not what stops
+it.** The standing objection to 32,768 was always that nothing needed it; that
+is now the only objection left, and plan 11 is the plan that may retire it.
+
+**One caution plan 11 must carry:** a real 8,741-token prompt now exists in the
+ledger, so the worst case it sizes against is no longer a paper number waiting
+for an article to justify it. The largest prompt seen has gone 7,093 to 8,741 in
+one run, and the 14,089-token worst article is what the cap permits rather than
+what has yet arrived. Plan 11 sizes against 15,889, as row 5 already ruled.
+
+### The 16.8 percent figure in row 5's findings is corrected to 21.9 percent
+
+Row 5's write-up above, and the section it landed in
+`docs/reference/measurements.md`, said `truncate_to_tokens` overran "by 16.8
+percent" on the worst article. **That figure is not reproducible from the
+numbers beside it and has been corrected.** The working:
+
+- `truncate_to_tokens` spends the cap as `int(cap / 1.3)` words. At 5,000 that
+  is 3,846 words, and all 36 cut rows sit exactly on it.
+- Their `input_tokens` ran 5,582 to 7,093. The section's own least-squares
+  intercept for the constant prompt is **997 tokens**, corroborated by 3-word
+  items measuring 980 to 985.
+- So the article alone measured 4,585 to 6,096 tokens: **1.192 to 1.585 tokens a
+  word**. The cap asked for 5,000 and the worst article delivered 6,096.
+- `(6096 - 5000) / 5000` = **21.9 percent**, and the same 1.585 at the
+  10,000-token cap gives 7,692 x 1.585 = 12,192, over by the same 21.9 percent.
+
+**16.8 percent comes from subtracting 1,255 instead of 997**, which lowers the
+worst ratio to 1.518. The section used 1,255 for the overrun sentence and 997
+for the worst-case table two paragraphs down - **one section, two constants, two
+worst-case ratios.** 997 is the one the evidence supports, so **21.9 percent is
+correct and the 14,089-token worst case the table already carried was right all
+along.** Nothing downstream moves: 14,089, the 1.16x margin and plan 11's 15,889
+were all computed at 1.585.
 
 ---
 

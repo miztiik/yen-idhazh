@@ -400,6 +400,14 @@
           "title": "Pan Days",
           "type": "integer"
         },
+        "shimmer_after_ms": {
+          "default": 400,
+          "description": "How long a reserved console block stays still before it starts to shimmer, in milliseconds. The block is drawn the moment the document is, so this knob decides nothing about the shape of the page - only whether a wait short enough to be over already gets animated on its way past. Four hundred is a DECLARED ESTIMATE and not a measurement (CLAUDE.md Rule #10): the console started fetching its months on 2026-09-09 and no median arrival time has been taken yet. The plan row that takes it re-derives this number from the measured median payload arrival (TODO/20260908-shell-and-fetch-plan.md row 19). `config/appearance.json` owns the value, as `console.shimmer_after_ms`.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Shimmer After Ms",
+          "type": "integer"
+        },
         "source_rows": {
           "default": 10,
           "description": "How many sources the console ranks by the articles their failures cost, before it states the tail in one sentence. Measured 2026-09-01 over the committed projection, a thirty-day window holds 60 sources with a loss, which is a list nobody reads to the end. Ten, matching the source-cut list above it.",
@@ -1980,8 +1988,18 @@
   "changelog": [
     {
       "change": "finetune.sequence_length default and config/idhazh.json both move from 8192 to 16384, which is models.summarize.inference.n_ctx. No field was added, removed or retyped.",
-      "version": "2026-09-09T23:30",
+      "version": "2026-09-09T23:45",
       "why": "The other half of the cap raise earlier the same day, which the entry below deferred. The cap went to 10,000 tokens and the window to 16,384, so the longest article the pipeline now reads makes a 14,088-token sequence - 997 of prompt overhead, 12,191 of article, 900 of answer, measured over the 4,117 published items in state/item-health/2026-09.csv (2026-09-01 to 09, stock ubuntu-latest 4 vCPU runners). At 8,192 the wrangler and the notebook DROPPED that row and counted it, so the training set quietly lost every article past about 5,500 words while production kept summarizing them: the model would have been tuned on the short half of the work it does. Dropping is the right refusal - a truncated target teaches the model to stop mid-summary - so the fix is to stop making rows that have to be refused. 16384 is n_ctx rather than a second derivation, because a training row is a prompt the pipeline could have sent and an answer it could have returned; one number now covers both, and test_the_training_window_covers_the_longest_row_the_cap_allows fails on any later pair that does not fit. The cost is GPU memory on the machine that trains, quadratically in attention. That machine is not the runner, so Rule #2's budget does not price it, and no number here is a measurement of a card - nothing has trained yet (Rule #10). The escape hatch is per-session and already existed: SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb lowers it for a card that cannot hold the row, and prints how many rows that dropped."
+    },
+    {
+      "change": "ConsoleConfig gains shimmer_after_ms, defaulting to 400 and bounded at 0 and 5000. config/appearance.json sets it to 400. The shape is shared with AppearanceConfig, so appearance-config is restamped with the same version. Additive and defaulted, so a config file written before today still validates.",
+      "version": "2026-09-09T23:30",
+      "why": "The console started fetching its months on 2026-09-09, so for the first time a panel on this site has a wait to draw. A reserved block that animates the moment it appears turns a 90 ms fetch into a flicker, so the shimmer waits and a fetch that lands first never animates at all. It is a knob rather than a literal because the right value is a property of the payloads and the network, not of the stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a measurement: no median payload arrival has been taken since the fetches landed, and Rule #10 refuses an unmeasured number the right to justify a design, so this one justifies nothing - it is the value the surface ships on until row 19 of TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured median. Ruled by Fowler, 2026-09-08: a user-interface row is not a measurement harness."
+    },
+    {
+      "change": "summarize.bands gained a sixth rung at min_source_words 5000, asking 180 to 230 words and the same 2 to 5 key points as the rung below it. No existing rung moved and evaluation.summary_words_max did not move.",
+      "version": "2026-09-09T23:00",
+      "why": "extract.truncation_cap_tokens went to 10000 earlier the same day, so the model is now handed 7,692 words rather than 3,846 and the top rung covers a span twice as wide as the one it was cut for: a 3,000-word piece and a 7,692-word piece both arrive whole and both got the identical 150-to-230-word ask, at 20 to 1 and 51 to 1. The floor is 5000 because 5,346 is the midpoint of that whole-read range and 5000 is the nearest seam the ledger reports, which is how the fifth rung's floor was derived on 2026-08-29. Measured 2026-09-09 over the 7,970 distinct scored items in state/scores/ that carry a length from before the cut: 90 reach 3,000 words and 23 reach 5,000, so the new rung takes 23 items and the rung below keeps 67 - 0.29 percent of items, about one item every three runs over the 77 runs in that ledger. Only the floor of the ask moves, because compression at a rung's floor is set by target_words_min and the ceiling cannot rise without moving evaluation.summary_words_max, which is what the pipeline agrees to publish and a separate decision. 5000 stays below the cut point of 7,692, so this is still not the rung that asks for words the model never saw. Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
     },
     {
       "change": "config/idhazh.json moves extract.truncation_cap_tokens from 5000 to 10000. No field was added, removed or retyped. elements.max_per_article and finetune.sequence_length restate their arithmetic against the new cap; neither value moves.",
@@ -2553,7 +2571,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-09T23:30",
+      "default": "2026-09-09T23:45",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2567,5 +2585,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-09T23:30"
+  "version": "2026-09-09T23:45"
 }
