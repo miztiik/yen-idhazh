@@ -520,6 +520,26 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-10T09:00",
+            change=(
+                "assist gains model_base_url, model_cdn_origins, model_revision, "
+                "model_digests and model_fetch_deadline_ms. `AssistConfig` is defined "
+                "in `app_config.py` and imported here, so app-config is restamped with "
+                "the same version. config/appearance.json sets none of them. Additive "
+                "and defaulted, so an appearance file written before today still "
+                "validates."
+            ),
+            why=(
+                "See the app-config entry of the same version: the encoder gains a "
+                "second origin to fetch from when our own fails a reader, and a "
+                "committed SHA-256 manifest the browser checks every arriving file "
+                "against. Restamped here because the shape is shared, not because an "
+                "appearance surface reads any of the five - none of them is a "
+                "look-and-feel knob, and the frontend reads them at build time from "
+                "config/idhazh.json rather than through the appearance file."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-09T23:30",
             change=(
                 "console gains shimmer_after_ms, defaulting to 400 and bounded at 0 "

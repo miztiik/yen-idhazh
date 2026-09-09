@@ -884,12 +884,24 @@ def build_search_index(month: str, days: Sequence[DigestDay]) -> tuple[SearchInd
     month of payloads per assemble run, which is measured in
     `docs/reference/measurements.md`.
 
-    **One index names one encoder.** The header is taken from the newest day
-    that carries vectors. A day whose block names another model, width or dtype
-    keeps its items in the index with no vector at all - browsable, not
-    searchable - because two encoders in one space produce scores that look like
-    scores and mean nothing. That is the rule `merge_embeddings` already applies
-    inside a day, applied across the days of a month.
+    **One index names one encoder, and it names the one that WROTE the vectors.**
+    The header is taken from the newest day that carries vectors. A day whose
+    block names another model, width or dtype keeps its items in the index with
+    no vector at all - browsable, not searchable - because two encoders in one
+    space produce scores that look like scores and mean nothing. That is the rule
+    `merge_embeddings` already applies inside a day, applied across the days of a
+    month.
+
+    **A month with no vectors at all names this build's encoder, and that is a
+    placeholder rather than a claim.** Every entry in such a month carries no
+    offset, so there is nothing for the header to be right or wrong about, and
+    the browser's guard has nothing to admit either way. The field is a `Slug`
+    and cannot be empty, so something has to go there; `EMBEDDER_ID` is the
+    least surprising thing, and it is reachable only when the answer does not
+    matter. It matters more than it did - since 2026-09-10 a reader our own
+    origin failed can load the encoder from a second origin, so `model_id` is a
+    comparison between two things that can really differ - which is why this is
+    written down rather than left to be inferred from the assignment.
     """
     ordered = sorted(days, key=lambda day: day.date)
 
