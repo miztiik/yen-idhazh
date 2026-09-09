@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final
 from urllib import request
@@ -54,6 +56,48 @@ def is_context_exceeded(body: str) -> bool:
     if not isinstance(error, dict):
         return False
     return bool(error.get("type") == CONTEXT_EXCEEDED_TYPE)
+
+
+class FlashAttention(StrEnum):
+    """What the server's own log says happened to attention. Three states, not two."""
+
+    ACTIVE = "active"
+    REFUSED = "refused"
+    #: The log does not settle it - almost always because `log_verbosity` was
+    #: left null, so the model-loader block was never printed. It is a failure
+    #: of the check, never a report that attention was off.
+    UNREADABLE = "unreadable"
+
+
+#: What llama-server was ASKED for, which is not what it did. With no `-fa` flag
+#: it prints `auto`, and `auto` is the non-answer this reader exists to refuse.
+FLASH_ASKED: Final = re.compile(r"flash_attn\s*=\s*(\w+)")
+
+#: The decision itself, printed only when `auto` left one to make - so it is
+#: absent from both explicit arms and present in neither of their logs.
+FLASH_FUSED: Final = "resolve_fused_ops: Flash Attention enabled"
+
+
+def flash_attention_state(server_log: str) -> FlashAttention:
+    """Read the attention state off the server, not off the flag we handed it.
+
+    Both lines print at `-lv 4` and neither prints at the runtime default of 3,
+    so a log taken from a quiet server answers `UNREADABLE` rather than
+    `REFUSED`. That distinction is the whole point: a reader that took a missing
+    line for "off" would turn a forgotten verbosity into a finding about
+    attention. Measured 2026-09-09, three runs an arm and zero spread -
+    `docs/reference/measurements.md`.
+    """
+    asked = FLASH_ASKED.search(server_log)
+    if asked is None:
+        return FlashAttention.UNREADABLE
+    if asked.group(1) == "enabled":
+        return FlashAttention.ACTIVE
+    if asked.group(1) == "disabled":
+        return FlashAttention.REFUSED
+    if asked.group(1) == "auto" and FLASH_FUSED in server_log:
+        return FlashAttention.ACTIVE
+    return FlashAttention.UNREADABLE
 
 
 @dataclass(frozen=True, slots=True)

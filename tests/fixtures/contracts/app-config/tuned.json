@@ -165,7 +165,7 @@
         "cache_type_k": null,
         "cache_type_v": null,
         "declared_for": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
-        "flash_attention": null,
+        "flash_attention": "off",
         "load_mode": null,
         "log_verbosity": 9,
         "max_output_tokens": 320,

@@ -175,6 +175,54 @@ So both sides of the comparison are open, not one. An owner choosing today is
 choosing without an instrument, and the cheap next step is one run rather than
 one argument.
 
+### The run arrived, and 16,384 is now committed - what it is projected to cost
+
+**Answered on one reading, and the reading is the kernel's own.** Run
+`2026-09-09-34323771996` is the first this project has taken with
+`MemAvailable` beside the process marks: 4 shards, 601 samples, `n_ctx` 8,192,
+on GitHub-hosted `ubuntu-latest`. `MemTotal` 15.61 GiB. At the tightest instant
+of the whole run the kernel still reported **5.63 GiB available**, and the four
+shards' lows were 5.63, 5.95, 7.64 and 7.84 GiB. llama-server's worst `VmHWM`
+was 12.68 GiB and python's 1.76 GiB, which is the same shape as the earlier
+readings and is exactly why the two do not subtract to anything: the 5.29 GiB
+model file is memory-mapped, so it sits inside llama's figure as pages the
+kernel can drop, and the whole 8.33 GiB difference between 13.96 GiB resident
+and 5.63 GiB available is that file.
+
+**What the raise costs is KV cache and nothing else, and it is arithmetic.** On
+`Qwen3.5-9B-Q4_K_M` the card gives 4 KV heads, a head dimension of 256, and 8
+attention layers: 4 x 256 x 2 (K and V) x 2 bytes is 4 KiB a token a layer, so
+32 KiB a token across the eight - **0.25 GiB at 8,192 and 0.50 GiB at 16,384**.
+The raise is +0.25 GiB. Read two ways, it clears the plan's 1.0 GiB bar both
+times: on the kernel's own reading 5.63 - 0.25 leaves **5.38 GiB, 5.4 times the
+bar**; on the harsher machine-minus-llama-peak framing, 15.61 - 12.68 - 0.25
+leaves **2.68 GiB, 2.7 times it**. The answer does not turn on which framing
+is accepted.
+
+**This is a projection until row 4 dispatches, and it is labelled one.** No run
+has yet started a server at 16,384, so the KV figure above is arithmetic off a
+model card rather than a reading. The one cross-check this repository holds is
+about other weights and agrees with the method rather than with the number: the
+8B prints `llama_kv_cache: CPU KV buffer size = 1152.00 MiB` at `n_ctx` 8,192,
+which is 144 KiB a token - 4.5 times the 9B's, because the 8B carries 36
+attention layers of 8 KV heads at head dimension 128 and the 9B carries 8 of 4
+at 256. Same arithmetic, different architecture. **What row 4 confirms** is the
+KV buffer line the server now prints at `-lv 4`, read off the first run at
+16,384: if `CPU KV buffer size` comes back near 512 MiB the projection holds, and
+if it comes back near 2,304 MiB the model card was read wrong and the raise costs
+1.1 GiB rather than 0.25. Row 4 also reads `MemAvailable` at the new window,
+which is the only figure that settles fit rather than predicting it.
+
+**32,768 was refused, and not on memory.** Its memory objection died with this
+reading. The one that stands is that it buys nothing: the widest two-call
+request this pipeline can build is about 8,580 tokens, so 16,384 is 1.9 times
+that and 32,768 is 3.8 times. Doubling again pays 0.5 GiB more for headroom over
+headroom.
+
+**The cache types stay `f16`.** `q8_0` on K or V changes how the partial sums
+accumulate, which changes the words. That is a separate measurement against the
+scorers, not a memory knob to reach for while raising a window.
+
 ## What llama-server reports about its own runtime settings, 2026-09-09
 
 **Flash attention is observable, and only in the log, and only at verbosity 4 or
@@ -317,6 +365,17 @@ size`, which is a physical consequence rather than a restatement: on this model
 at `n_ctx` 8192 it is 112.01 MiB with attention fused and 572.01 MiB without.
 Corroboration is worth the line because the log grammar is llama.cpp's and moves
 between builds, while the buffer difference is arithmetic and does not.
+
+**Written, 2026-09-09.** `idhazh.llm.server.flash_attention_state` is that
+reader and returns those three states by those names. Its four arms are driven
+from committed fixtures and never from a live server (Rule #7): the three
+`tests/fixtures/runtime/2026-09-09-lv4-*.readings.txt` excerpts carry the
+readings above, and the `UNREADABLE` arm is driven by the four real
+`2026-08-29-3-shard-*.server-head.txt` captures, which are runner logs taken
+before the verbosity knob existed and therefore hold no attention line at all.
+A fifth case removes the `resolve_fused_ops` line from the recorded `auto` arm
+and asserts the verdict falls back to `UNREADABLE`, which is what stops `auto`
+being read as a yes.
 
 ### `/props` settles the build and the window, and cannot settle flash attention
 

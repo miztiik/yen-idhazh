@@ -135,6 +135,7 @@
         },
         "n_ctx": {
           "default": 8192,
+          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 16384 and models.visual_planner does not, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, so 0.25 GiB at 8192 and 0.50 at 16384. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/measurements.md.",
           "minimum": 512,
           "title": "N Ctx",
           "type": "integer"

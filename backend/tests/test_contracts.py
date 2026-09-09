@@ -41,6 +41,7 @@ from idhazh.contracts.app_config import (
     CollectConfig,
     ConsoleConfig,
     EvaluationConfig,
+    InferenceConfig,
     ModelsConfig,
     ObservabilityConfig,
     PageWeightConfig,
@@ -122,7 +123,7 @@ from idhazh.contracts.visual import (
 )
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
-from idhazh.fingerprint import text_digest
+from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields, text_digest
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
 from idhazh.retention import oldest_month_kept
 from utilities import build_canary_day
@@ -1006,9 +1007,9 @@ def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
 def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
     """A run that did not count is a run that cannot say how close it came.
 
-    `n_ctx` is 8192 and llama-server publishes the high watermark only under
-    `--metrics`. Off by default would mean the number exists on the runs nobody
-    thought to switch it on for, which is every ordinary day.
+    llama-server publishes the context high watermark only under `--metrics`.
+    Off by default would mean the number exists on the runs nobody thought to
+    switch it on for, which is every ordinary day.
 
     The fresh-clone arm drops the settings block and the weights digest
     together. Those two move as a pair now: an entry that names measured bytes
@@ -1023,6 +1024,42 @@ def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
 
     assert fresh.models.summarize.inference.metrics is True, "a fresh clone must count"
     assert committed.models.summarize.inference.metrics is True, "the committed config must count"
+
+
+def test_the_wider_window_is_the_summarizers_alone() -> None:
+    """Row 3 raised one role, because one role is what was measured.
+
+    The visual planner is different weights with its own settings block, and
+    nothing has put a 16,384 window in front of them - so it keeps 8,192. That
+    is the whole reason the block sits on the entry rather than on `models`:
+    a number measured against one model may not be inherited by another.
+
+    Attention is pinned in the same file. `auto` is a runtime autodetect that
+    may resolve differently on other silicon, and a run that cannot name the
+    kernel it used cannot be compared with one that can (Rule #10).
+    """
+    models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models
+
+    assert models.summarize.inference.n_ctx == 16384
+    assert models.summarize.inference.flash_attention == "on"
+    assert models.visual_planner.inference.n_ctx == 8192
+    assert InferenceConfig().n_ctx == 8192, (
+        "the default is the conservative window for weights nobody has measured"
+    )
+
+
+def test_a_wider_window_moves_the_stamp_and_the_verbosity_does_not() -> None:
+    """The two halves of row 3's digest decision, in one place.
+
+    `n_ctx` is digested, so raising it stamps the work apart from every summary
+    written at 8,192 - which is correct, because the prompt those summaries were
+    written under could not have carried as much. `log_verbosity` is not, because
+    a log level cannot move a logit and digesting it would have invalidated every
+    earlier identity the day somebody turned the logging up.
+    """
+    assert "n_ctx" in digested_inference_fields()
+    assert "log_verbosity" in NOT_DIGESTED
+    assert NOT_DIGESTED["log_verbosity"].moves_logits is False
 
 
 def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:
