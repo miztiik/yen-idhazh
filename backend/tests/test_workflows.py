@@ -284,10 +284,10 @@ RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
 SERVER_LOG_FILE: Final = "llama-server.log"
 MEMORY_PEAK_FILE: Final = "memory-peak.txt"
 CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
-# The three steps of the work job that write and read those files, in the order
-# the job runs them.
+# The two steps of the work job that write and read those files. The third,
+# which writes `memory-peak.txt` and hands it to the stage, is `COUNTERS_STEP`
+# below.
 SAMPLE_MEMORY_STEP: Final = "Sample memory"
-COUNTERS_STEP: Final = "What the server counted"
 MEMORY_SUMMARY_STEP: Final = "What memory this shard used"
 # Which `rss-samples.tsv` column the operator print reads at each `awk` field
 # number. It reads by position, so this mapping is the whole agreement between
