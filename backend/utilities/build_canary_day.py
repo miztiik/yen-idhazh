@@ -33,7 +33,17 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import config, publish_day_metrics, publish_source_health
+from idhazh import (
+    config,
+    publish_console_band,
+    publish_day_metrics,
+    publish_feed_health,
+    publish_machine,
+    publish_run_days,
+    publish_scores,
+    publish_source_health,
+    publish_span_rollup,
+)
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
@@ -922,6 +932,87 @@ def source_health(target: Path) -> int:
     return len(view.sources)
 
 
+def console_payloads(*, state_root: Path, digest_root: Path) -> int:
+    """Write every payload the console fetches, through the pipeline's producers.
+
+    The same six calls in the same order as `idhazh publish`, so the canary's
+    console reads a tree built by the code that builds the real one rather than
+    by a fixture writer that can drift from it. The band is last because it
+    reads the run-day shards the call above it writes, and because its months
+    list is the union across every series - so each of them has to be on disk
+    before it is taken.
+
+    **It is a separate step from building the day, and it has to be.** The
+    item-health rows, the runtime counters, the span rollup and the telemetry
+    projection are written by `frontend/scripts/build-canary.mjs`, which runs
+    after this file's `main`. A band derived before them names one month where
+    the telemetry holds two, and the console would then never ask for the older
+    shard the widest-window spec fetches.
+
+    Every month is kept rather than pruned to `observability.public_*_keep_months`:
+    the canary is a fixed twenty-odd days by construction, so it can never grow,
+    and pruning it would drop the quiet days the run strip needs a time axis for.
+
+    Returns how many files changed, which is every one of them on a fresh tree.
+    """
+    settings = config.load()
+    today = calendar_date.fromisoformat(DATE)
+    months = {month_of(date) for date in [*earlier_days(), DATE]}
+    keep = len(months) + 1
+    # Where `build-canary.mjs` puts the projection, which is not where the real
+    # tree puts it: the canary keeps telemetry under `state/` and the six other
+    # series beside the digest. The band needs it by name because its months
+    # list is the union across all seven.
+    telemetry_root = state_root / "telemetry"
+    written = 0
+    for producer in (
+        publish_scores,
+        publish_feed_health,
+        publish_machine,
+        publish_span_rollup,
+    ):
+        written += len(
+            producer.publish(
+                state_root=state_root,
+                digest_root=digest_root,
+                keep_months=keep,
+                today=today,
+                months=months,
+                ensure_month=month_of(DATE),
+            )
+        )
+    written += len(
+        publish_day_metrics.publish_public(
+            state_root=state_root,
+            digest_root=digest_root,
+            keep_months=keep,
+            today=today,
+            months=months,
+            ensure_month=month_of(DATE),
+        )
+    )
+    written += len(
+        publish_run_days.publish(
+            digest_root=digest_root,
+            keep_months=keep,
+            today=today,
+            months=months,
+            ensure_month=month_of(DATE),
+        )
+    )
+    band = publish_console_band.publish(
+        state_root=state_root,
+        digest_root=digest_root,
+        generated_at=f"{DATE}T06:20:00Z",
+        today=today,
+        console=settings.appearance.console,
+        run=settings.app.run,
+        collect=settings.app.collect,
+        telemetry_root=telemetry_root,
+    )
+    return written + (1 if band is not None else 0)
+
+
 def _scorer_version(evaluation: EvaluationConfig) -> str:
     """Spelled by the function the pipeline spells it with, and named `canary`.
 
@@ -1015,7 +1106,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path("backend/var/canary/digest"))
     parser.add_argument("--state", type=Path, default=Path("backend/var/canary/state"))
+    parser.add_argument(
+        "--console-payloads-only",
+        action="store_true",
+        help=(
+            "Write only the payloads the console fetches, over a state tree that "
+            "already exists. `build-canary.mjs` calls this after it has written the "
+            "item-health, the counters and the span rollup and projected the "
+            "telemetry, because none of those exists when the day itself is built."
+        ),
+    )
     args = parser.parse_args()
+    if args.console_payloads_only:
+        written = console_payloads(state_root=args.state, digest_root=args.out)
+        print(f"wrote {written} console payload file(s) the browser suite fetches")
+        return 0
     # The ledgers under `--state` are append-only, so a second local run stacks
     # another copy of every row on the first. `canary-gone` is written once on
     # purpose - one permanent failure, well under the quarantine count - and by

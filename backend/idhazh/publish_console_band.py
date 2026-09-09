@@ -45,7 +45,18 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import discover, ledger, publish_console, publish_day_metrics, publish_run_days
+from idhazh import (
+    discover,
+    ledger,
+    publish_console,
+    publish_day_metrics,
+    publish_feed_health,
+    publish_machine,
+    publish_run_days,
+    publish_scores,
+    publish_span_rollup,
+    publish_telemetry,
+)
 from idhazh.contracts.app_config import (
     CollectConfig,
     ConsoleConfig,
@@ -65,6 +76,7 @@ from idhazh.contracts.console_band import (
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
+from idhazh.month_partition import month_files
 
 #: The 1 GB Pages ceiling (`CLAUDE.md` Rule #2). A constant and not a knob, for
 #: the reason `retention.py` gives for its own copy: it is a property of the
@@ -971,6 +983,7 @@ def publish(
     console: ConsoleConfig,
     run: RunConfig,
     collect: CollectConfig,
+    telemetry_root: Path | None = None,
 ) -> Path | None:
     """Read the covered span, derive the band and write it if its bytes moved.
 
@@ -1021,7 +1034,7 @@ def publish(
         health_rows=health_rows,
         record=record,
         counters=counters,
-        months=available,
+        months=fetchable_months(digest_root, telemetry_root),
         run=run,
         collect=collect,
     )
@@ -1035,6 +1048,53 @@ def _within(day: str, anchor: str, window_days: int) -> bool:
     return (
         date.fromisoformat(anchor) - date.fromisoformat(day)
     ).days < window_days and day <= anchor
+
+
+#: Every month series the console asks for by name, as (directory, suffix).
+#:
+#: Telemetry is not here. It predates `publish_console` and owns its own root,
+#: which the canary keeps under `state/` rather than beside these six - so it is
+#: a parameter of `fetchable_months` instead of a row of this table.
+FETCHED_SERIES: Final[tuple[tuple[str, str], ...]] = (
+    (publish_scores.DIRNAME, publish_scores.SUFFIX),
+    (publish_feed_health.DIRNAME, publish_feed_health.SUFFIX),
+    (publish_run_days.DIRNAME, publish_run_days.SUFFIX),
+    (publish_day_metrics.PUBLIC_DIRNAME, publish_day_metrics.PUBLIC_SUFFIX),
+    (publish_machine.DIRNAME, publish_machine.SUFFIX),
+    (publish_span_rollup.DIRNAME, publish_span_rollup.SUFFIX),
+)
+
+
+def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> list[str]:
+    """Every month a shard the console fetches exists for, oldest first.
+
+    The union across all seven series and not the run-day months alone. A
+    console that took one series for the list would never ask for a month the
+    others hold on their own - and they can differ, because each is pruned by
+    its own `observability.public_*_keep_months` and the canary's telemetry is
+    projected over a wider span than its run-days.
+
+    Telemetry is the one that matters most: the console holds no row until a
+    telemetry shard lands, so a month missing from this list is a month of the
+    page that never fills. It is a parameter because it predates
+    `publish_console` and owns its own root - the canary keeps it under
+    `state/`. Unnamed, it is looked for beside the digest root like the other
+    six, which is where the real tree has it. It is never taken from
+    `publish_telemetry`'s module default: a tree under test would then answer
+    with the repository's own months.
+
+    Seven directory listings and no file opened, and each directory is bounded
+    by its own retention knob, so this costs the same on any size of archive
+    (`CLAUDE.md` Rule #12).
+    """
+    found: set[str] = set()
+    for dirname, suffix in FETCHED_SERIES:
+        found.update(publish_console.published_months(digest_root, dirname, suffix))
+    shards = telemetry_root or publish_console.series_root(
+        digest_root, publish_telemetry.PUBLIC_TELEMETRY_DIRNAME
+    )
+    found.update(path.stem for path in month_files(shards, ".csv"))
+    return sorted(found)
 
 
 def _counter_rows(

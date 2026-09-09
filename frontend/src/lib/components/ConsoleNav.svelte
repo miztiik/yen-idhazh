@@ -15,7 +15,7 @@
 	 * whether it was worth opening.
 	 */
 	import { base } from '$app/paths';
-	import type { ConsoleRoute, RouteId } from '$lib/server/console-shell';
+	import type { ConsoleRoute, RouteId } from '$lib/console/band';
 
 	let { routes, active }: { routes: ConsoleRoute[]; active: RouteId } = $props();
 </script>

@@ -224,8 +224,15 @@ for (const route of ROUTES) {
 			const strip = strips.nth(at);
 			// The measured defect was a readout box taking 40 to 55 percent of the
 			// chart it explained. The cap is a share, so it holds at every width.
+			//
+			// Either spelling of the same share. The server writes `33.00%` and
+			// Svelte's client-side setter normalises it to `33%`, so since
+			// 2026-09-09 - when the console started drawing charts from rows it
+			// fetches, and their strips are created in the browser - one page
+			// carries both. The number is what this checks; the line below is
+			// where the cap is actually proved.
 			const style = await strip.getAttribute('style');
-			expect(style, 'the strip carries its own cap').toMatch(/max-width: \d+\.\d\d%/);
+			expect(style, 'the strip carries its own cap').toMatch(/max-width: \d+(\.\d+)?%/);
 			const share = Number((style ?? '').replace(/[^\d.]/g, ''));
 			expect(share).toBeLessThanOrEqual(33);
 
