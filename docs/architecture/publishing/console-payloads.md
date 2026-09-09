@@ -217,6 +217,74 @@ dead connection reads the verdict; in a browser the same code runs again on a
 move between routes. `export const prerender = true` moved from
 `+layout.server.ts` to `+layout.ts` and did not change.
 
+### The band is drawn once, in `console/+layout.svelte`
+
+The title, the strip and the band are the console shell and they live in one
+component beside the load that fetches them. Each route renders its control and
+its panels inside it. Three routes each drawing their own band is three copies
+of one verdict, and the day two of them disagreed about which route is worst
+there would be no way to say which was right.
+
+The order on the page is title, strip, band, control, content, and it did not
+move: the shell holds the operator surface and each route's panels sit one
+element inside it, so `[data-surface="operator"]` still means the whole page.
+Which tab is lit is read off the route rather than passed in by each page.
+
+### How big the band is, and what makes it grow
+
+The ceiling is **8 KB over the wire**, measured as
+`gzipSync(readFileSync(path), { level: 5 }).length` and asserted in
+`console-band.spec.ts`. Measured 2026-09-09, node 24, on the committed payload:
+**791 gzipped bytes from 2,043 raw - 9.7 percent of the ceiling.**
+
+Every fact on the payload but one is fixed: a set of sentences and counts about
+one day. The one term that moves with the archive is the months list, at one
+`YYYY-MM` string a month, and a list of dates with a shared prefix is what gzip
+is best at. Modelled on the committed payload the same day:
+
+| months | raw | gzip -5 | of the ceiling |
+| ---: | ---: | ---: | ---: |
+| 2 (today) | 1,559 | 736 | 9.0 percent |
+| 12 (a year) | 1,659 | 763 | 9.3 percent |
+| 120 (a decade) | 2,739 | 994 | 12.1 percent |
+| 1,200 (a century) | 13,539 | 3,247 | 39.6 percent |
+
+A century of publishing leaves the payload at two fifths of its ceiling, so the
+months list needs no window of its own.
+
+### The band is the second payload, not the first, and the reason is not ours
+
+Row 11's oracle asked for the band to be the first request the console issues
+after the document and the entry bundle. It is not, and the measurement says
+why. Two entries behave differently:
+
+- **A cold document carries the band already.** The route is prerendered and the
+  load is universal, so SvelteKit resolves the fetch at build time and writes the
+  answer into the HTML. Nothing is requested. Measured 2026-09-09 on the canary
+  build: the payload requests on a cold `/console/` are the document, then
+  `telemetry/2026-07.csv` and `telemetry/2026-08.csv`, and no `band.json` at all.
+- **A move into the console from another page fetches it, second.** Measured the
+  same day: `console/__data.json`, `console/band.json`, `telemetry/2026-07.csv`,
+  `telemetry/2026-08.csv`.
+
+`console/__data.json` is SvelteKit's own file for the route, holding what the
+three `+page.server.ts` loads return. The client router **awaits** it before it
+runs a single universal load
+(`@sveltejs/kit/src/runtime/client/client.js`, `server_data = await load_data(...)`
+ahead of the branch loaders), so the band's fetch does not start until that file
+has fully arrived. It is 31,354 bytes, 6,520 gzipped, against the band's 1,904
+and 779. The verdict is therefore a second round trip on that entry, not the
+first, which is short of what row 11 decision 2 promised.
+
+**Nothing in row 11 can move it.** The file exists because the console routes
+have server loads; it goes when they go, which is the rest of
+[../../../TODO/20260908-shell-and-fetch-plan.md](../../../TODO/20260908-shell-and-fetch-plan.md).
+So the oracle asserts what is true and pins the gap rather than hiding it: the
+band is ahead of every payload the page draws a panel from, and the only request
+allowed in front of it is that one named file. Anything else of ours in front
+turns the test red, and so does one more request of any kind. When the server
+loads go the band becomes index 0 and both lines still hold.
+
 **Four charts on `/console/` moved to the browser** - the run donut, the
 per-article cost, the failure mix and the flow diagram. They were 143 KB of
 finished SVG, which is what stood between the document and the bar after the

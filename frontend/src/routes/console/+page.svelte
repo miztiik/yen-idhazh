@@ -50,8 +50,6 @@
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import TimeHistogram from '$lib/components/TimeHistogram.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
-	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
-	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
@@ -616,26 +614,20 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<!-- `data-telemetry-rows` is how anything outside this page knows whether the
+<!-- The title, the strip and the band are the shell and live in `+layout.svelte`.
+     What is left here is the route's own panels, and the control that governs
+     them - it is last of the chrome because a control read before any fact asks
+     the operator to configure a page he has been told nothing about.
+
+     `data-telemetry-rows` is how anything outside this page knows whether the
      rows it draws from have landed. The page holds none at first paint and
      fills by fetch, so a check that read a panel the moment the document
      arrived would be reading the empty state and calling it the answer. -->
-<section
-	class="py-6"
-	data-surface="operator"
-	data-console-route="pipelines"
+<div
+	data-console-panels="pipelines"
 	data-telemetry-rows={rows.length}
 	data-telemetry-fetching={fetching ? 'yes' : 'no'}
 >
-	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
-
-	<!-- Strip, band, control, in that order. Chrome above content is the one
-	     ordering a reader never has to learn, and the band's worst fact links
-	     into the strip. The control is last of the three because a control read
-	     before any fact asks the operator to configure a page he has been told
-	     nothing about - and it governs everything below it and nothing above. -->
-	<ConsoleNav routes={data.routes} active="pipelines" />
-	<ConsoleBand band={data.band} />
 	<WindowControl days={windowDays} {presets} {monthsFor} busy={fetching} {ready} onChange={show} />
 
 	<!-- One sentence, no chart. It is what stops this route hiding the panel on
@@ -1879,7 +1871,7 @@
 			</p>
 		</Panel>
 	</div>
-</section>
+</div>
 
 <style>
 /* Route-specific only. The shapes every console route shares - the h2, the

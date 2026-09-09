@@ -49,8 +49,6 @@
 	} from '$lib/console/eval-instruments';
 	import { buildCardTrends, type CardTrend } from '$lib/console/model-cards';
 	import Chart from '$lib/charts/Chart.svelte';
-	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
-	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import RankedList from '$lib/components/RankedList.svelte';
 	import RunLengths from '$lib/components/RunLengths.svelte';
@@ -477,11 +475,10 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<section class="py-6" data-surface="operator" data-console-route="model">
-	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
-
-	<ConsoleNav routes={data.routes} active="model" />
-	<ConsoleBand band={data.band} />
+<!-- The title, the strip and the band are the shell and live in
+     `../+layout.svelte`. The control stays here because it governs this route's
+     panels and nothing above them. -->
+<div data-console-panels="model">
 	<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 
 	<!-- One sentence, no chart. A route that never points at another is a route
@@ -1225,7 +1222,7 @@
 			</div>
 		{/if}
 	{/if}
-</section>
+</div>
 
 <style>
 	/* The three signals behind a doubt, in the ranked list's trend column. They
