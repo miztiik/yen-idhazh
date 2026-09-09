@@ -309,12 +309,21 @@ test.describe('the readout is the default', () => {
 				);
 				// A chart drawn from rows the page fetches may still be waiting for
 				// them. That is a state this loop walks past, not a fault - the count
-				// at the foot still requires that one chart was tappable.
-				await owner
-					.filter({ has: page.locator('svg') })
-					.waitFor({ timeout: 4000 })
-					.catch(() => {});
-				if ((await owner.getAttribute('data-chart-drawn')) !== 'yes') continue;
+				// at the foot still requires that one chart was tappable. Only a
+				// chart that SAYS it has not drawn is skipped: a hand-written one
+				// carries no such attribute and its marks are always there, so
+				// skipping on a missing attribute would skip every chart on
+				// `/console/model/` and pass nothing.
+				if ((await owner.getAttribute('data-chart-drawn')) === 'no') {
+					// It may be drawing right now - the scroll above is what the
+					// engine was waiting for. Give it a moment before walking past.
+					await owner
+						.filter({ has: page.locator('svg') })
+						.first()
+						.waitFor({ timeout: 6000 })
+						.catch(() => {});
+					if ((await owner.getAttribute('data-chart-drawn')) === 'no') continue;
+				}
 				const plot = owner.locator('svg').first();
 				if ((await plot.count()) === 0) continue;
 				const box = await plot.boundingBox();
