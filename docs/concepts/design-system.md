@@ -753,6 +753,37 @@ count appears in no assertion** - that is what proves the sentence stopped
 scaling with the series
 ([../../frontend/tests/console-timings.spec.ts](../../frontend/tests/console-timings.spec.ts)).
 
+## A figure on a chart is the article's or it is ours, and it never has to be guessed
+
+Every number a reader reads off an axis is one of two things and no third. It is
+the article's own characters, cut at a span anybody can re-slice; or it is
+arithmetic we performed over those characters, carrying a chain back to every one
+of them. `docs/architecture/publishing/visuals.md` holds the contract that makes
+that true. What binds a surface is the consequence of it.
+
+- **A converted figure is drawn in its converted form and never redrawn over the
+  original.** `4.2 kt` and `4,200 t` are one quantity, and putting both on one
+  page is two answers to one question. The axis carries the form the chart is
+  drawn against.
+- **The accessible description carries what the article printed, where the two
+  differ.** Nothing is lost by a conversion - the element still holds the
+  characters - so the description is where a reader who wants the source figure
+  is given it, rather than a second visible label competing with the first.
+- **A figure we computed is never presented as a figure the article stated.** A
+  percentage that is a share of the slices, or a bar that is a count of values in
+  a range, is what the caption says it is. This is the same rule as
+  [a console figure says what it counts, in words](#a-console-figure-says-what-it-counts-in-words),
+  read from the reader's side.
+- **A chart with nothing to draw draws nothing.** A mark whose figure resolves to
+  neither of the two ways is not softened, greyed or labelled "unavailable" - the
+  item publishes with no picture, which reads exactly like the nine items in ten
+  that never earned one.
+
+Shortening a number is a separate act and is not on this list: `2,000,000` drawn
+as `2M` is the same quantity in fewer glyphs. It is bound by the legibility floor
+like any other drawn label, and making a number shorter is not a licence to set it
+smaller.
+
 ## A console figure says what it counts, in words
 
 The console is read by the developer and the operator, not by a digest reader.
