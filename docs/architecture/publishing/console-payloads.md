@@ -7,6 +7,12 @@ which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Rule #11). This page is the list. The machine-readable copy is
 `backend/idhazh/contracts/console_payloads.py`, and it is the one a build reads.
 
+Every one of them has a producer now. **Nothing reads them yet** - the console
+still derives the same numbers at build time, and row 10 of
+[../../../TODO/20260908-shell-and-fetch-plan.md](../../../TODO/20260908-shell-and-fetch-plan.md)
+is where it stops. The producer landing first is deliberate: a consumer written
+against a payload nobody has written is a consumer written against a guess.
+
 ## The twelve
 
 Every path below is under `frontend/public/`. Every schema is under `schemas/`.
@@ -59,6 +65,97 @@ that is deliberate. On `ItemHealthRow` it can quote article text. On
 Never the response body", capped at 200 characters, and the console prints it
 beside a failing feed - a failure a reader can see but not read is a bar with no
 label.
+
+## Retention
+
+## The producers
+
+Seven modules under `backend/idhazh/`, one dataset each, all called from
+`cli.stage_assemble` at the publication step. None of them spells a path, a
+write rule or a prune of its own: `publish_console.py` owns those and every
+producer obeys the same three rules from the same place.
+
+| Producer | Writes | Reads |
+| --- | --- | --- |
+| `publish_console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, the counters file |
+| `publish_scores.py` | `scores/<YYYY-MM>.csv` | `state/scores/<YYYY-MM>.csv` |
+| `publish_feed_health.py` | `feed-health/<YYYY-MM>.csv` | `state/feed-health/<YYYY-MM>.csv` |
+| `publish_run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
+| `publish_day_metrics.py` `publish_public()` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
+| `publish_machine.py` | `machine/<YYYY-MM>.csv` | `state/runtime-counters.csv` |
+| `publish_span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY-MM>.csv` |
+
+`publish_telemetry.py` is the eighth and it predates this page. It keeps its own
+path helper because `retention.prune_telemetry` deletes a shard through the same
+function that writes one, and two spellings of `<month>.csv` would delete a
+month nobody published and leave the published one behind.
+
+### The three rules
+
+**One month per run.** The run knows which month it appended to, so the daily
+caller names that one and every other month is skipped without being read
+(Rule #12). A month whose published file is **missing** is read anyway, which is
+what makes a fresh clone, a deleted file and a first backfill all land.
+
+**Only on a byte difference.** A re-derived month whose bytes match what is on
+disk is not rewritten. Content, never a timestamp: a rebuild can carry identical
+bytes and a new mtime, and a fresh checkout can carry a new mtime and identical
+bytes, so a timestamp answers wrongly in both directions.
+
+**Nothing outlives its knob**, and the two rules above have to agree about the
+boundary. A month below `oldest_month_kept` is not resurrected by the
+missing-file rule - without that clause the prune deletes a month, the next run
+finds it missing and writes it, and the prune deletes it again, every run, for a
+month no console window can reach. The oracle for this row caught exactly that:
+six months of a twenty-month fixture were rewritten and re-deleted on the second
+pass.
+
+### The band is a reduction of the payloads beside it
+
+`console-shell.ts` derives the band at build time from six committed ledgers and
+inlines it into three prerendered documents. `publish_console_band.py` is the
+same derivation, ported sentence for sentence, and row 10 deletes the
+TypeScript one. Two things about where it reads from:
+
+- **The runs, the site size and the article counts come from the run-day shards
+  this run just wrote**, not from the day payloads. Re-reducing five months of
+  day payloads is the walk those shards exist to remove, and reading them makes
+  the band and the console arithmetically identical rather than merely intended
+  to be.
+- **The feed trouble comes from `state/feed-health/` through `discover.settled`,
+  `discover.streak` and `discover.resting`** - the reducers the pipeline itself
+  rested a feed by. A page running its own copy is how a console starts
+  contradicting the run that produced it.
+
+The window is `max(console.window_presets)`, which is the furthest back any
+panel on any route can draw, and it is **anchored on the newest day found rather
+than on today**: a clock anchor answers with nothing at all for a corpus that
+stopped publishing three months ago.
+
+### The allow-list has two copies and they are asserted equal
+
+`REFRESH_PATHS` on the `Commit the day` step names what a rebuild owns after a
+lost push race, and `COMMIT_REFRESH_PATHS['assemble']` in
+`backend/tests/test_workflows.py` mirrors it and is asserted by exact list
+equality. A payload absent from either builds locally and never reaches the
+site. Both moved in the commit that added the producers, and so did the staged
+path list on the same step.
+
+**Every new payload root ships with a committed file.**
+`.github/scripts/commit-and-push.sh` runs `git add "$@"` under
+`set -euo pipefail`, so a path that does not exist aborts the whole commit step
+and takes every sibling ledger staged in the same call with it.
+`test_every_path_the_day_stages_exists_in_a_fresh_checkout` asks the working
+tree for each one.
+
+### What checks them
+
+`idhazh validate-days` reads every payload back through the shape that wrote it,
+for the months the run touched - and for every month on disk when it is asked
+for the whole tree, which is the sweep `ci.yml` takes on a change that can move
+a contract. Data hygiene belongs there and not in pytest (`CLAUDE.md`
+section 13): it is the producer's own gate on what it just wrote, running where
+the payload is.
 
 ## Retention
 

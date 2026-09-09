@@ -24,7 +24,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, llama_server_flags, read_text
 
-from idhazh import ledger, publish_telemetry
+from idhazh import ledger, publish_console, publish_telemetry
 from idhazh.contracts import runtime_counters
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
@@ -423,6 +423,13 @@ COMMIT_STAGED_PATHS: Final = {
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
+        "frontend/public/console",
+        "frontend/public/scores",
+        "frontend/public/feed-health",
+        "frontend/public/run-days",
+        "frontend/public/day-metrics",
+        "frontend/public/machine",
+        "frontend/public/span-rollup",
         "state",
         "corpus",
     ],
@@ -465,6 +472,16 @@ HARVEST_COMMAND: Final = "python -m idhazh harvest"
 # runs `git add "$@"` under `set -euo pipefail` - a staged path that does not
 # exist yet aborts the whole commit step and costs the ledgers staged beside it.
 CORPUS_SEED: Final = ("corpus/corpus.jsonl", "corpus/corpus.meta.json", "corpus/holdout.txt")
+# One committed file per console payload root, read off the working tree rather
+# than listed here: the roots are named in `publish_console` and every one of
+# them ships with whatever its producer wrote, so a second list would be a
+# second thing to keep in step. Seven directory listings, once a session.
+CONSOLE_SEED: Final = tuple(
+    f"frontend/public/{dirname}/{path.name}"
+    for dirname in publish_console.PUBLISHED_ROOTS
+    for path in sorted((REPO_ROOT / "frontend" / "public" / dirname).glob("*"))
+    if path.is_file()
+)
 # The third ledger the same commit step stages: what llama-server itself counted
 # for this shard. It has to sit between the other two, because the row it writes
 # is committed by the step after it.
@@ -521,6 +538,13 @@ COMMIT_REFRESH_PATHS: Final = {
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "frontend/public/source-health.json",
+        "frontend/public/console",
+        "frontend/public/scores",
+        "frontend/public/feed-health",
+        "frontend/public/run-days",
+        "frontend/public/day-metrics",
+        "frontend/public/machine",
+        "frontend/public/span-rollup",
         "state/published",
         "state/scores",
         "state/score-index",
@@ -1297,6 +1321,11 @@ def _seed_digest_origin(root: Path, date: str) -> None:
     # The corpus seed, exactly as a real checkout carries it. Without it
     # `git add corpus` aborts the commit step and takes the day's ledgers with it.
     for relative in CORPUS_SEED:
+        _write(seed / relative, read_text(REPO_ROOT / relative))
+    # The console payload roots, for the same reason and copied the same way.
+    # They are named in the commit step and in the refresh set, so a clone
+    # without them fails at `git add` rather than at the payload.
+    for relative in CONSOLE_SEED:
         _write(seed / relative, read_text(REPO_ROOT / relative))
     _rebuild(seed, env, date, ["item-a", "item-b"])
     _git(seed, env, "add", ".gitattributes", "docs", *COMMIT_STAGED_PATHS["assemble"])
@@ -2612,9 +2641,28 @@ def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
     A staged path that only appears once its producer succeeded therefore aborts
     the whole commit step, and takes every sibling ledger staged in the same call
     with it. The seed is what makes the corpus path safe to name.
+
+    Every path the step names is asked of the working tree, so a root added to
+    the list without a committed file in it fails here rather than on the runner.
+    The console payload roots are the seven that gained a producer on
+    2026-09-09: each ships with the shard the producer wrote, which is the same
+    pattern `state/feed-retirements.csv` takes.
     """
     for relative in CORPUS_SEED:
         assert (REPO_ROOT / relative).is_file(), f"{relative} must be committed, even when empty"
+    for relative in COMMIT_STAGED_PATHS["assemble"]:
+        assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
+    for dirname in publish_console.PUBLISHED_ROOTS:
+        root = REPO_ROOT / "frontend" / "public" / dirname
+        assert root.is_dir(), f"frontend/public/{dirname} must be in a fresh checkout"
+        committed = subprocess.run(
+            ["git", "ls-files", f"frontend/public/{dirname}"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        assert committed, f"frontend/public/{dirname} must hold at least one committed file"
     tracked = subprocess.run(
         ["git", "ls-files", "--error-unmatch", *CORPUS_SEED],
         cwd=REPO_ROOT,

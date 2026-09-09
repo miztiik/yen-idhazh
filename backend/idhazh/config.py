@@ -40,6 +40,7 @@ class Settings:
     """Every tunable the run will consult, already validated."""
 
     app: AppConfig
+    appearance: AppearanceConfig
     sources: Sources
     taxonomy: Taxonomy
     watchlist: Watchlist
@@ -59,6 +60,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     )
     return Settings(
         app=app,
+        appearance=appearance,
         sources=Sources.from_json(read["sources.json"]),
         taxonomy=Taxonomy.from_json(read["taxonomy.json"]),
         watchlist=Watchlist.from_json(read["watchlist.json"]),

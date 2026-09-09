@@ -30,7 +30,7 @@ to hold things that are not the partitioned tree at all.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Final
 
@@ -68,3 +68,22 @@ def month_files(directory: Path, suffix: str) -> list[Path]:
         return []
     found = [path for path in directory.glob(f"*{suffix}") if is_month_stem(path.stem)]
     return sorted(found, key=lambda path: path.stem)
+
+
+def oldest_month_kept(today: date, months: int) -> str:
+    """The oldest `YYYY-MM` stem an age of `months` still keeps.
+
+    Counted in months rather than in thirty-day steps, because the thing being
+    kept is a month file and a month is not thirty days. `months` counts the
+    month being written as one of them, so 13 on any day of August 2026 keeps
+    `2025-08` through `2026-08` - a whole year of complete months plus the
+    partial one.
+
+    It lives here rather than inside one prune because the state ledgers and the
+    published tree now age by the same arithmetic, and a boundary computed twice
+    is how one store deletes a month the other still serves.
+    """
+    if months < 1:
+        raise ValueError("keeping fewer than one month would delete the month being written")
+    total = today.year * 12 + (today.month - 1) - (months - 1)
+    return f"{total // 12:04d}-{total % 12 + 1:02d}"

@@ -192,6 +192,55 @@ function stageIndexes() {
 
 stageIndexes();
 
+// The console's own payloads, staged the way the month index is: derived from
+// the digest root so a canary build stages the canary's tree, written only on a
+// byte difference, and swept by `reconcile` so a month the producer pruned
+// leaves the bundle with it.
+//
+// Nothing fetches these yet - row 10 of TODO/20260908-shell-and-fetch-plan.md is
+// where the console stops inlining and starts asking. They are staged now
+// because a payload written but never served is the half of the change that
+// cannot be tested, and because the staging rule is the same one the day
+// payloads already take.
+const CONSOLE_SERIES = [
+	// The band is one file, not a month series, and it is named rather than
+	// pattern-matched: it is the first thing the console asks for, so a typo in
+	// a pattern would leave the page with no verdict and no error.
+	{ dirname: 'console', keep: (name) => name === 'band.json' },
+	{ dirname: 'scores', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) },
+	{ dirname: 'feed-health', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) },
+	{ dirname: 'run-days', keep: (name) => /^\d{4}-\d{2}\.json$/.test(name) },
+	{ dirname: 'day-metrics', keep: (name) => /^\d{4}-\d{2}\.json$/.test(name) },
+	{ dirname: 'machine', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) },
+	{ dirname: 'span-rollup', keep: (name) => /^\d{4}-\d{2}\.csv$/.test(name) }
+];
+
+function stageConsolePayloads() {
+	for (const series of CONSOLE_SERIES) {
+		const from = resolve(source, '..', series.dirname);
+		const into = join('static', series.dirname);
+		if (!existsSync(from)) {
+			console.log(`${series.dirname}: no payload tree at ${from}, nothing to stage.`);
+			rmSync(into, { recursive: true, force: true });
+			continue;
+		}
+		const wanted = new Set();
+		let staged = 0;
+		for (const name of readdirSync(from)) {
+			if (!series.keep(name)) continue;
+			wanted.add(name);
+			if (stage(readFileSync(join(from, name)), join(into, name))) staged += 1;
+		}
+		const stale = reconcile(into, wanted);
+		console.log(
+			`${series.dirname}: staged ${staged} file(s) into static/${series.dirname}, ` +
+				`${wanted.size - staged} already current, ${stale} stale removed.`
+		);
+	}
+}
+
+stageConsolePayloads();
+
 if (!existsSync(source)) {
 	console.log(`rendered visuals: no payload tree at ${source}, nothing to stage.`);
 	// Both trees, because this exit skips the telemetry pass at the foot of the

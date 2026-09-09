@@ -1,0 +1,75 @@
+{
+  "generated_at": "2026-09-09T07:35:05Z",
+  "months": [
+    "2026-08",
+    "2026-09"
+  ],
+  "routes": [
+    {
+      "carries": "The model spent 10 h 29 m of this.",
+      "description": "Did the runs work, which feeds broke, and what each stage cost.",
+      "href": "/console/",
+      "id": "pipelines",
+      "label": "Pipelines",
+      "severity": 3,
+      "worst": "18 feeds resting"
+    },
+    {
+      "carries": "This day ran in 4 runs, 1.21x apart on read speed.",
+      "description": "What the model wrote, how long it took, and what it got wrong.",
+      "href": "/console/model/",
+      "id": "model",
+      "label": "Summaries",
+      "severity": 3,
+      "worst": "38 items failed"
+    },
+    {
+      "carries": "282 articles on this day.",
+      "description": "The hardware the model ran on, and how much it varied between runs.",
+      "href": "/console/machine/",
+      "id": "machine",
+      "label": "Hardware",
+      "severity": 1,
+      "worst": "shards read 4.20x apart"
+    }
+  ],
+  "size": {
+    "articles_to_cap": 306712,
+    "bytes": 26248252,
+    "cap_fraction": 0.024445589631795883,
+    "left_mb": 998.967716217041,
+    "measured_days": 18,
+    "sentence": "25.0 MB of the 1 GB limit - room for about 307,000 more articles."
+  },
+  "verdict": {
+    "date": "2026-09-08",
+    "health": "amber",
+    "more_runs": 0,
+    "runs": [
+      {
+        "health": "amber",
+        "label": "Run 1 is worth a look"
+      },
+      {
+        "health": "amber",
+        "label": "Run 2 is worth a look"
+      },
+      {
+        "health": "amber",
+        "label": "Run 3 is worth a look"
+      },
+      {
+        "health": "amber",
+        "label": "Run 4 is worth a look"
+      }
+    ],
+    "sentence": "2026-09-08 ran 4 runs and published 282 of 320 planned items. 38 items failed."
+  },
+  "version": "2026-09-09",
+  "worst": {
+    "href": "/console/",
+    "id": "pipelines",
+    "label": "Pipelines",
+    "sentence": "18 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
+  }
+}
