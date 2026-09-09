@@ -257,6 +257,22 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-09T20:10",
+            change=(
+                "The embedded inference block gained log_verbosity, following the "
+                "config contract. Additive and optional: a manifest written before "
+                "today carries no key and reads as null, which is the runtime default."
+            ),
+            why=(
+                "A manifest that named every runtime setting except the one that "
+                "decides whether the run's own log can be read would leave the reader "
+                "of a log unable to say why a line is missing from it. Stamped here as "
+                "well as on app-config because run.json is a separate persisted "
+                "document and its shape moved (CLAUDE.md section 11); it costs about "
+                "22 compact bytes per model use."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-09",
             change=(
                 "The embedded ModelRef gained an inference block, because config moved "

@@ -323,6 +323,12 @@ const RUN_DEFAULTS: RunConfig = {
 	shard_timeout_minutes: 200
 };
 const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
+// The CONTRACT default, not the committed window. `config/idhazh.json` pins
+// `models.summarize.inference.n_ctx` at 16384 from 2026-09-09 and every real
+// page reads that; this only fires for a checkout with no config file, and such
+// a checkout runs the summarizer on `InferenceConfig`'s own default of 8192.
+// Moving it to 16384 would have the console name a window the unconfigured
+// pipeline does not use.
 const INFERENCE_DEFAULTS: InferenceConfig = { n_ctx: 8192 };
 const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
 // The same three values `ObservabilityConfig` declares in the contract, so a
