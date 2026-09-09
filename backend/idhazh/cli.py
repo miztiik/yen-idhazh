@@ -49,8 +49,15 @@ from idhazh import (
     extract,
     fetch,
     ledger,
+    publish_console,
+    publish_console_band,
     publish_day_metrics,
+    publish_feed_health,
+    publish_machine,
+    publish_run_days,
+    publish_scores,
     publish_source_health,
+    publish_span_rollup,
     publish_telemetry,
     rank,
     retention,
@@ -3233,6 +3240,73 @@ def stage_assemble(
         day=day,
         manifest=manifest,
     )
+    # The console's own payloads, in dependency order and never before it. Each
+    # writes the one month this run appended to and prunes its directory to its
+    # own `observability.public_*_keep_months`, so none of them grows with the
+    # archive (Rule #12). The band is last because it reads the run-day shards
+    # the line above it wrote - deriving it from the day payloads instead would
+    # be the walk those shards exist to remove.
+    month = assemble.month_of(plan.date)
+    # The day this run publishes, not the wall clock. A run that crosses midnight
+    # UTC would otherwise prune against one month and write into another.
+    today = date_type.fromisoformat(plan.date)
+    observability = settings.app.observability
+    publish_scores.publish(
+        state_root=STATE_ROOT,
+        digest_root=PUBLIC_ROOT,
+        keep_months=observability.public_scores_keep_months,
+        today=today,
+        months={month},
+        ensure_month=month,
+    )
+    publish_feed_health.publish(
+        state_root=STATE_ROOT,
+        digest_root=PUBLIC_ROOT,
+        keep_months=observability.public_feed_health_keep_months,
+        today=today,
+        months={month},
+        ensure_month=month,
+    )
+    publish_machine.publish(
+        state_root=STATE_ROOT,
+        digest_root=PUBLIC_ROOT,
+        keep_months=observability.public_machine_keep_months,
+        today=today,
+        months={month},
+        ensure_month=month,
+    )
+    publish_span_rollup.publish(
+        state_root=STATE_ROOT,
+        digest_root=PUBLIC_ROOT,
+        keep_months=observability.public_span_rollup_keep_months,
+        today=today,
+        months={month},
+        ensure_month=month,
+    )
+    publish_day_metrics.publish_public(
+        state_root=STATE_ROOT,
+        digest_root=PUBLIC_ROOT,
+        keep_months=observability.public_day_metrics_keep_months,
+        today=today,
+        months={month},
+        ensure_month=month,
+    )
+    publish_run_days.publish(
+        digest_root=PUBLIC_ROOT,
+        keep_months=observability.public_run_days_keep_months,
+        today=today,
+        months={month},
+        ensure_month=month,
+    )
+    publish_console_band.publish(
+        state_root=STATE_ROOT,
+        digest_root=PUBLIC_ROOT,
+        generated_at=generated_at,
+        today=today,
+        console=settings.appearance.console,
+        run=settings.app.run,
+        collect=settings.app.collect,
+    )
     yield_alarm = publish_source_health.yield_alarm(
         source_health,
         alarm_point=settings.app.collect.source_yield_alarm_point,
@@ -3911,6 +3985,18 @@ def stage_validate_days(
         )
         return 1
 
+    touched = {_day_of(path)[:7] for path in days} if only else None
+    console_faults = _console_payload_faults(root, touched)
+    for fault in console_faults:
+        LOG.error("validate-days %s", fault)
+    if console_faults:
+        LOG.error(
+            "validate-days: %s console payload(s) do not match the schema the console "
+            "fetches them under",
+            len(console_faults),
+        )
+        return 1
+
     if state_dir is not None:
         LOG.info("validate-days: recorded %s receipts", _record_receipts(state_dir, earned))
     LOG.info(
@@ -3919,6 +4005,61 @@ def stage_validate_days(
         len(days) - skipped,
     )
     return 0
+
+
+def _console_payload_faults(root: Path, months: set[str] | None) -> list[str]:
+    """The console's own payloads, read back through the shapes that wrote them.
+
+    Data hygiene belongs here and not in pytest (`CLAUDE.md` section 13): this
+    is the producer's own gate on what it just wrote, and it runs where the
+    payload is - in CI, against the committed tree.
+
+    `months` names the months this run touched, which is what the day workflow
+    passes. None means every month still on disk, which is the sweep `ci.yml`
+    takes on a change that can move a contract. Either way the read is bounded:
+    a payload directory holds at most its own `public_*_keep_months` files.
+
+    The band is checked every time whatever `months` says. It is one small file
+    and it is the first thing the console asks for, so a band that will not load
+    is a console with no verdict at all.
+    """
+    faults: list[str] = []
+    readers: tuple[tuple[str, str, Callable[[Path], object]], ...] = (
+        (publish_scores.DIRNAME, publish_scores.SUFFIX, publish_scores.read_shard),
+        (publish_feed_health.DIRNAME, publish_feed_health.SUFFIX, publish_feed_health.read_shard),
+        (publish_machine.DIRNAME, publish_machine.SUFFIX, publish_machine.read_shard),
+        (publish_span_rollup.DIRNAME, publish_span_rollup.SUFFIX, publish_span_rollup.read_shard),
+        (
+            publish_day_metrics.PUBLIC_DIRNAME,
+            publish_day_metrics.PUBLIC_SUFFIX,
+            publish_day_metrics.read_public_shard,
+        ),
+        (publish_run_days.DIRNAME, publish_run_days.SUFFIX, publish_run_days.read_shard),
+    )
+    for dirname, suffix, read in readers:
+        for month in publish_console.published_months(root, dirname, suffix):
+            if months is not None and month not in months:
+                continue
+            path = publish_console.month_path(root, dirname, month, suffix)
+            try:
+                read(path)
+            except (ValueError, ValidationError, OSError) as fault:
+                faults.append(f"{publish_console.relpath(dirname, path.name)}: {fault}")
+    band = publish_console_band.band_path(root)
+    if band.is_file():
+        try:
+            publish_console_band.read_band(band)
+        except (ValueError, ValidationError, OSError) as fault:
+            faults.append(f"{publish_console_band.BAND_RELPATH}: {fault}")
+    elif band.parent.is_dir():
+        # A console directory with no band in it is a producer that ran and
+        # wrote nothing, which is a fault. No console directory at all is a tree
+        # no producer has ever run over - a fixture, or a checkout mid-migration -
+        # and this gate cannot tell that from broken, so it says nothing. What
+        # guarantees the real tree has one is the committed seed, which
+        # `test_every_path_the_day_stages_exists_in_a_fresh_checkout` asks for.
+        faults.append(f"{publish_console_band.BAND_RELPATH} is missing")
+    return faults
 
 
 def _day_of(path: Path) -> str:
