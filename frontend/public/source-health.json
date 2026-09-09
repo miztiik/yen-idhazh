@@ -1,10 +1,10 @@
 {
   "complete_dates": 16,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-09T18:35:17Z",
+  "generated_at": "2026-09-09T22:16:22Z",
   "last_date": "2026-09-08",
   "min_complete_days": 30,
-  "run_id": "2026-09-09-34379502244",
+  "run_id": "2026-09-09-34404348820",
   "sources": [
     {
       "availability": "answering",
@@ -184,6 +184,18 @@
       "source_failures": 0,
       "source_id": "bank-of-england",
       "title": "Bank of England",
+      "vertical": "business-economy"
+    },
+    {
+      "availability": "answering",
+      "opportunities": 0,
+      "permission": "allowed",
+      "publications": 0,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 0,
+      "source_id": "bank-underground",
+      "title": "Bank Underground",
       "vertical": "business-economy"
     },
     {
@@ -452,6 +464,18 @@
     },
     {
       "availability": "answering",
+      "opportunities": 0,
+      "permission": "allowed",
+      "publications": 0,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 0,
+      "source_id": "damodaran",
+      "title": "Aswath Damodaran - Musings on Markets",
+      "vertical": "business-economy"
+    },
+    {
+      "availability": "answering",
       "opportunities": 43,
       "permission": "allowed",
       "publications": 43,
@@ -689,6 +713,30 @@
       "source_id": "fed-speeches",
       "title": "Federal Reserve speeches",
       "vertical": "business-economy"
+    },
+    {
+      "availability": "answering",
+      "opportunities": 0,
+      "permission": "allowed",
+      "publications": 0,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 0,
+      "source_id": "finshots-daily",
+      "title": "Finshots Daily",
+      "vertical": "india"
+    },
+    {
+      "availability": "answering",
+      "opportunities": 0,
+      "permission": "allowed",
+      "publications": 0,
+      "retired": false,
+      "retired_on": null,
+      "source_failures": 0,
+      "source_id": "finshots-markets",
+      "title": "Finshots Markets",
+      "vertical": "india"
     },
     {
       "availability": "answering",
@@ -1063,7 +1111,7 @@
       "vertical": "business-economy"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "opportunities": 1,
       "permission": "allowed",
       "publications": 0,
@@ -1243,7 +1291,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 42,
       "permission": "allowed",
       "publications": 41,
@@ -1255,7 +1303,7 @@
       "vertical": "business-economy"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 94,
       "permission": "allowed",
       "publications": 93,
@@ -1424,18 +1472,6 @@
     },
     {
       "availability": "answering",
-      "opportunities": 115,
-      "permission": "allowed",
-      "publications": 33,
-      "retired": false,
-      "retired_on": null,
-      "source_failures": 80,
-      "source_id": "seekingalpha",
-      "title": "Seeking Alpha",
-      "vertical": "business-economy"
-    },
-    {
-      "availability": "answering",
       "opportunities": 64,
       "permission": "allowed",
       "publications": 64,
@@ -1495,7 +1531,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 4,
       "permission": "allowed",
       "publications": 4,
