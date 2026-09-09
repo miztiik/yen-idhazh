@@ -688,8 +688,13 @@ export function leadHeadline(days: readonly EvalDay[], windowDays: number): stri
 /** What falling under the floor costs a summary, said once, in the panel it governs.
  *
  * The floor is a cap and not a bar: falling under it holds a summary at "fairly
- * sure" and has never on its own marked one "not sure". A panel that drew it as
- * a failure line would be reporting a verdict the checker does not reach.
+ * sure" and cannot on its own mark one "not sure". A panel that drew it as a
+ * failure line would be reporting a verdict the checker does not reach.
+ *
+ * Stated as the rule rather than as a record. "has never marked one" says the
+ * same thing over every day there has ever been, which is a span this panel
+ * reads none of - and it is the weaker sentence anyway, because it reports a
+ * run of luck where the arithmetic gives a guarantee.
  */
 export function leadFloorNote(
 	days: readonly EvalDay[],
@@ -698,7 +703,7 @@ export function leadFloorNote(
 ): string | null {
 	const totals = evalTotals(days);
 	if (totals.led === 0) return null;
-	return `${grouped(totals.leadUnder)} of ${grouped(totals.led)} summaries in these ${windowDays} days kept under ${pct(leadFloor)} percent. That holds a summary at "fairly sure" and has never on its own marked one "not sure".`;
+	return `${grouped(totals.leadUnder)} of ${grouped(totals.led)} summaries in these ${windowDays} days kept under ${pct(leadFloor)} percent. That holds a summary at "fairly sure" and cannot on its own mark one "not sure".`;
 }
 
 /** One recorded instrument over the window. */

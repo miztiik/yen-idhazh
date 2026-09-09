@@ -596,13 +596,13 @@ test('the date axis labels the same columns the squares sit in', async ({ page }
 	expect(drawnAxis).toEqual(expected.map(({ column, text }) => ({ column, text })));
 });
 
-/** Feeds the pipeline has never actually read, computed here from scratch.
+/** Feeds the pipeline did not read, computed here from scratch.
  *
  * A rest and a robots answer are both absent from an ask, and for one reason:
  * neither asked the feed whether it still works. That is `preserves`, the same
  * predicate the strike rule runs on.
  */
-function neverReadByHand(rows: LedgerRow[]): string[] {
+function unreadByHand(rows: LedgerRow[]): string[] {
 	const seen = new Set<string>();
 	const read = new Set<string>();
 	for (const row of settled(rows)) {
@@ -612,18 +612,18 @@ function neverReadByHand(rows: LedgerRow[]): string[] {
 	return [...seen].filter((feedId) => !read.has(feedId)).sort((a, b) => a.localeCompare(b));
 }
 
-test('THE ORACLE: a source we have only ever been refused by is in neither count', async ({
+test('THE ORACLE: a source we were only ever refused by is in neither count', async ({
 	page
 }) => {
 	const rows = ledger();
-	const never = neverReadByHand(rows);
+	const unread = unreadByHand(rows);
 	// The claim only means something if the fixture holds one. It does: a feed
 	// whose every result is a robots answer, and one the run only ever rested.
-	expect(never.length, 'the canary has no feed the pipeline never read').toBeGreaterThan(0);
+	expect(unread.length, 'the canary has no feed the pipeline left unread').toBeGreaterThan(0);
 
 	await page.goto('/console/');
 	const headline = page.locator('[data-feed-reliability]');
-	await expect(headline).toHaveAttribute('data-feed-ineligible', String(never.length));
+	await expect(headline).toHaveAttribute('data-feed-ineligible', String(unread.length));
 
 	// Named, and named exactly. A count with no names is a number an operator
 	// cannot act on, and a name in the wrong list is worse than no list.
@@ -632,11 +632,11 @@ test('THE ORACLE: a source we have only ever been refused by is in neither count
 		.evaluateAll((nodes) =>
 			nodes.map((node) => node.getAttribute('data-feed-ineligible-name') ?? '')
 		);
-	expect(named).toEqual(never);
+	expect(named).toEqual(unread);
 
 	// And it is in neither of the other two. This is the defect: until
 	// 2026-09-03 every one of these sat in the clean count, so the page reported
-	// a source that has never given us an article as one that never failed.
+	// a source that gave us no article at all as one that did not fail.
 	const clean = await page
 		.locator('[data-feed-clean-name]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-clean-name') ?? ''));
@@ -653,17 +653,17 @@ test('the two counts still add up to the denominator beside them', async ({ page
 	const attribute = async (name: string) => Number(await headline.getAttribute(name));
 	const clean = await attribute('data-feed-clean');
 	const checked = await attribute('data-feed-checked');
-	const never = await attribute('data-feed-ineligible');
+	const unread = await attribute('data-feed-ineligible');
 
 	const listed = await page.locator('[data-feed]').count();
 	const hidden = Number(
 		await page.locator('[data-feeds="table"]').getAttribute('data-feeds-hidden')
 	);
 	// Clean plus broken is the denominator, always - and the feeds the pipeline
-	// never read are outside it rather than quietly inside one of the two.
+	// did not read are outside it rather than quietly inside one of the two.
 	expect(clean + listed + hidden).toBe(checked);
-	expect(never).toBeGreaterThan(0);
-	expect(clean + listed + hidden + never).toBe(
+	expect(unread).toBeGreaterThan(0);
+	expect(clean + listed + hidden + unread).toBe(
 		new Set(ledger().map((row) => row.feedId)).size
 	);
 });
