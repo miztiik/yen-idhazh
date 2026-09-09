@@ -71,6 +71,7 @@
     "min_attempts_for_rate": 3,
     "min_window_days": 7,
     "pan_days": 3,
+    "shimmer_after_ms": 400,
     "source_rows": 4,
     "today_anchor": "centre",
     "window_presets": [
