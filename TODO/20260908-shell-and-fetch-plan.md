@@ -63,16 +63,16 @@ discover. All are folded in. The five that would have cost the most:
 | 6 | Bound the eleven archive reads | - | B | LANDED | - | #529 | worker |
 | 13 | The page carries nothing a later run can change | - | B | LANDED | - | #531 | worker |
 | 15 | Publish the Release asset, pin the revision, prove it cross-origin | 1 | B | ESCALATED | yi-s15-origin | #536 | worker |
-| 7 | The console stops claiming "never" | 6 | C | PENDING | - | - | - |
-| 8 | Inventory and mint every console payload contract | 6 | C | PENDING | - | - | - |
-| 9 | The producer writes the console its payloads | 8 | D | PENDING | - | - | - |
-| 10 | The console fetches instead of inlining | 9 | E | PENDING | - | - | - |
+| 7 | The console stops claiming "never" | 6 | C | LANDED | - | #540 | worker |
+| 8 | Inventory and mint every console payload contract | 6 | C | LANDED | - | #542 | worker |
+| 9 | The producer writes the console its payloads | 8 | D | LANDED | - | #543 | worker |
+| 10 | The console fetches instead of inlining | 9 | E | IN-FLIGHT | yi-s10-fetch | - | worker |
 | 16 | Two origins, a digest manifest, and one guard that still works | 8, 15 | E | PENDING | - | - | - |
 | 11 | The verdict band arrives first and alone | 10 | F | PENDING | - | - | - |
 | 12 | The console surface: reserved shape and three states | 10, 11 | G | PENDING | - | - | - |
 | 14 | One document serves every date | 13 | G | PENDING | - | - | - |
-| 17 | Delete the committed weights | 16 | G | PENDING | - | - | - |
-| 18 | The gates measure a shell, not a document | 12, 14, 17 | H | PENDING | - | - | - |
+| 17 | Delete the committed weights | 16 | G | DESCOPED | - | - | owner, 2026-09-09 |
+| 18 | The gates measure a shell, not a document | 12, 14 | H | PENDING | - | - | - |
 | 19 | Record what was decided and what it cost | 1-18 | I | PENDING | - | - | - |
 
 ## 1a. Dispatch map
@@ -698,6 +698,41 @@ Verified against the working tree on 2026-09-08. A worker uses these and does no
 
 ## 18. Row #16 - Two origins, a digest manifest, and one guard that still works
 
+> **AMENDED 2026-09-09 by owner ruling, after row 15 fired ESCALATE trigger 2.**
+> A GitHub Release asset carries no `Access-Control-Allow-Origin` on any hop, so a
+> browser cannot read one cross-origin. Measured 15 refusals in 15 attempts from
+> the live Pages origin. `github.com` and `release-assets.githubusercontent.com`
+> are therefore not usable origins and are listed nowhere.
+>
+> The owner ruled **option B: our own origin stays primary and keeps the
+> committed weights; Hugging Face is the second origin.** What that changes here:
+>
+> - `assist.model_fallback_url` is **not minted**. There is no third origin.
+> - `connect-src` becomes exactly `'self' https://huggingface.co https://us.aws.cdn.hf.co`.
+>   Three sources, not the four to six decision 2 guessed at. Decision 2's
+>   substance stands: listing `huggingface.co` alone passes the four small JSON
+>   files and blocks the 23 MB model, which comes from `us.aws.cdn.hf.co`.
+> - The failover direction inverts. Decision 5 already describes what ships:
+>   transformers.js tries **local first, then remote**, so the committed weights
+>   serve every reader and Hugging Face is reached only when our copy fails. No
+>   custom ordering code is needed, and no reader pays the 6.75 MB the hub costs
+>   unless our origin has already failed them.
+> - Decision 1 - the committed SHA-256 manifest verified in the browser - is
+>   **unchanged and is now the main thing this row ships.** It is what makes a
+>   second origin safe to reach at all.
+> - `assist.model_revision` is `751bff37182d3f1213fa05d7196b954e230abad9`,
+>   resolved and verified by row 15 two ways.
+> - Decision 8's `DOWNLOAD_MB` split still applies, but the split is now
+>   same-origin-normally against hub-on-failure. Say that.
+> - Decision 9's privacy clause applies **conditionally**: the reader's IP,
+>   User-Agent and Origin reach a third party only when our origin failed.
+>   Word it that way; a sentence that says it always happens is false.
+>
+> The tag `encoder-2026-08-22` and its release assets are now unused. They cost
+> one thing worth recording: the tag holds that commit's whole tree, `corpus/`
+> included, reachable for ever, and `prune.yml` pushes no tags. Row 19 records
+> that, or the tag is deleted - the owner's call.
+
 - **Scope:** The browser fetches the weights from Hugging Face, verifies them, falls back to our asset, and the `model_id` guard keeps meaning something.
 - **Files touched:**
   - `config/idhazh.json` - `assist.model_base_url`, `assist.model_revision`, `assist.model_fallback_url`, `assist.model_digests`, `assist.model_fetch_deadline_ms`. **Minted here, not in row 8**, because row 15 resolves the revision this row consumes
@@ -749,6 +784,16 @@ Verified against the working tree on 2026-09-08. A worker uses these and does no
 ---
 
 ## 19. Row #17 - Delete the committed weights
+
+> **DESCOPED 2026-09-09 by the same owner ruling.** Option B keeps the committed
+> weights, so nothing is deleted. The 22.59 MiB stays, and the 20.2 percent
+> artifact saving arm 1 measured is forfeited deliberately - it was only ever
+> available by making a second origin the primary, and no second origin a browser
+> can read exists. `site-weight` on the migrated tree measured 777 published days
+> of runway to the 800 MB alarm point, so the cap is not close and the saving was
+> not urgent.
+>
+> Nothing in this row ships. Rows 12 and 18 lose their dependency on it.
 
 - **Scope:** The five weight files leave git, once the fetch that replaces them is proven in production.
 - **Files touched:**
