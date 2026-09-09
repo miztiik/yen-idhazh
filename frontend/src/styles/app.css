@@ -54,6 +54,11 @@
 	--color-tint-bad: var(--tint-bad);
 	--color-tint-neutral: var(--tint-neutral);
 
+	/* The lit band that crosses a reserved block while its payload is in the
+	   air. Mirrored like every other colour so a utility and the token cannot
+	   drift apart. */
+	--color-shimmer-band: var(--shimmer-band);
+
 	/* The type scale, each step carrying the leading it was paired with in
 	   tokens.css. Without the `--line-height` half, `text-sm` takes the utility
 	   framework's own default leading and the pair silently comes apart - which
