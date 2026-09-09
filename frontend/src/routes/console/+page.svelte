@@ -616,7 +616,17 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<section class="py-6" data-surface="operator" data-console-route="pipelines">
+<!-- `data-telemetry-rows` is how anything outside this page knows whether the
+     rows it draws from have landed. The page holds none at first paint and
+     fills by fetch, so a check that read a panel the moment the document
+     arrived would be reading the empty state and calling it the answer. -->
+<section
+	class="py-6"
+	data-surface="operator"
+	data-console-route="pipelines"
+	data-telemetry-rows={rows.length}
+	data-telemetry-fetching={fetching ? 'yes' : 'no'}
+>
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
 
 	<!-- Strip, band, control, in that order. Chrome above content is the one
