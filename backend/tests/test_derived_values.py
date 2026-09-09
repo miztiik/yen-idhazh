@@ -44,7 +44,8 @@ from idhazh.derived_values import (
     sum_of,
     trusted_data_ratio,
 )
-from idhazh.visual_validator import UNIT_DIMENSIONS, UNIT_TABLE_VERSION, validate_plan
+from idhazh.visual_validator import validate_plan
+from idhazh.visual_vocabulary import UNIT_DIMENSIONS, UNIT_TABLE_VERSION
 
 pytestmark = pytest.mark.visual
 

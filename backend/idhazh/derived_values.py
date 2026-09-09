@@ -63,7 +63,7 @@ from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.derived import DerivedFunction, DerivedValue, DisplayedValue
 from idhazh.contracts.element import Element, ElementTable
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
-from idhazh.visual_validator import (
+from idhazh.visual_vocabulary import (
     TYPE_RULES,
     UNIT_DIMENSIONS,
     UNIT_TABLE_VERSION,
