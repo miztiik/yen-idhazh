@@ -40,9 +40,9 @@ shape rather than a hope about the prompt, and the test asserts it directly.
 
 `VisualPlan` in [`backend/idhazh/contracts/visual.py`](../../../backend/idhazh/contracts/visual.py)
 is the shape a planner decodes into and the only thing a compiler is allowed to read. It carries
-element references and closed vocabularies: a decision, a purpose, a type, the map of which element
-fills which channel, the elements it draws from, which of them name the marks and which one lands
-first, one sentence of reasoning, a title, a caption, a confidence and the vocabulary date-stamp it
+element references and closed vocabularies: a decision, a purpose, a type, one channel per encoding
+role, the elements it draws from, which of them name the marks and which one lands first, one
+sentence of reasoning, a title, a caption, a confidence and the vocabulary date-stamp it
 was planned against. It lands ahead of its producers, so nothing writes one yet (Rule #3).
 
 What it may not carry is as much of the contract as what it holds.
@@ -77,8 +77,8 @@ its own hedge back as evidence. Last but one it records what the model thought a
 **Every array has a `maxItems` and every decoded string a `maxLength`, so the worst-case reply length
 is arithmetic.** At the bounds the contract declares, the longest plan the decoder can produce is
 **3,767 characters** - and a token spans at least one character, so that is also a ceiling of 3,767
-tokens. The two committed fixtures measure 751 characters for an eight-bar plan and 254 for one that
-declines, a fifth and a fifteenth of the ceiling. The derivation is field by field in the module
+tokens. The two committed fixtures measure 838 characters for an eight-bar plan and 368 for one that
+declines, between a fifth and a tenth of the ceiling. The derivation is field by field in the module
 docstring, it is recomputed from the generated schema, and the module refuses to import if a bound
 moves without the ceiling moving with it.
 
@@ -86,6 +86,52 @@ The ceiling is loose by construction and the arithmetic says where: `encodings` 
 and `element_ids` a further 22 percent, because the schema can bound each channel at eight elements
 and cannot say that no type fills more than four channels. That last sentence is a validator rule,
 and a validator runs after the tokens are already spent.
+
+## Every encoding role is a key, and an unused one is empty
+
+`encodings` is one object with a field per role, and the schema requires all nine. A `bar` fills
+`category` and `quantity` and emits `"bins": []`, `"size": []` and five more empty arrays beside
+them.
+
+**Presence is what the shape guarantees; what may be empty is the validator's.** Left optional, a
+role is a role the model can simply not mention - and a plan that names `bar` and omits `quantity`
+reads as a complete answer rather than as a failure. That is "a confident chart with no bars in it",
+which happened twice on the first live run. Required, the same reply is a decode failure at the key.
+Which roles a given type may leave empty needs that type's own rule set, and a JSON Schema cannot say
+"at most four roles for a `bar`", so the per-type ruling belongs to the validator and this shape only
+guarantees the validator has something to rule on.
+
+The roles are fields rather than a map because a schema can require the keys of an object it
+declares and cannot require the keys of a map. An eighteen-branch union, one per type, would have
+reached the same place and was refused: the decoder would have to pick a branch before it has picked
+a type.
+
+**There is no `label` role, and `labels` is why.** `labels` is the one naming channel - the elements
+whose own characters name the marks and the axes, capped at eight marks and two axes. A `label` role
+would ask the model the same question a second time inside `encodings`, and a model that answers it
+twice can answer it two ways with nothing to settle which. So naming stays one field and `encodings`
+answers a different question: which elements are drawn, and by which channel. `event_label` is not
+the exception it looks like - a timeline's `time` channel places a dot and nothing else, so the event
+text is the mark rather than a name for one.
+
+**What that costs, measured.** An empty role is `"<name>":[]` and a comma. The nine role names cost
+114 characters on a plan that declines and the seven a `bar` leaves empty cost 87. Tokenized with the
+Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`, 2026-09-09; Qwen3-4B, the
+configured planner, uses the same tokenizer) that is 28 tokens and 23 tokens, about 3.1 tokens an
+empty role.
+
+| At | Declining plan, 9 empty | Eight-bar plan, 7 empty | Over 80 items |
+| --- | --- | --- | --- |
+| 13.00 tok/s, Qwen3-4B, `ubuntu-latest`, 2026-08-22 | 2.2 s | 1.8 s | 2.4 to 2.9 min |
+| 6.01 tok/s, the configured summarizer, `ubuntu-latest`, 2026-08-23 | 4.7 s | 3.8 s | 5.1 to 6.2 min |
+
+Eighty is `run.safety_ceiling_per_run` and is the most items a run plans for, so the run figure is an
+upper bound - an item the reachability predicate refuses never reaches the model at all. On the 4B it
+is 6 to 7 percent of the 40-minute `run.visual_planner_budget_minutes`, and 8 to 10 percent on top of
+the 21.0 s an item this stage measured on `ubuntu-latest`, 2026-08-24 over 148 items. `digest.yml`
+fires five scheduled runs a day, so the day's ceiling is 400 plans: 12 to 14 minutes of runner
+wall-clock on the 4B, 26 to 31 on the summarizer. The worst-case reply ceiling did not move: it
+already counted every declared key, because a grammar-constrained decoder emits them all.
 
 ## What the extractor drops, and why
 
