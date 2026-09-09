@@ -192,15 +192,18 @@ function worstOf(candidates: Candidate[]): Candidate | null {
 	return ranked[0] ?? null;
 }
 
-/** How many feeds are resting, how many are failing without resting yet, and
- * how many the pipeline has never actually read.
+/** How many feeds are resting, how many are failing without resting yet, how
+ * many the pipeline did not read, and over how many runs.
  *
  * `results` is already one row per feed per run: `feedResults` settles the
- * ledger once, so nothing here can count a re-run twice.
+ * ledger once, so nothing here can count a re-run twice. It is also already
+ * bounded to the shards the widest window preset reaches, which is why the run
+ * count leaves with the other three - the band names that span rather than
+ * claiming every run there has been.
  *
  * The third number is the one that was missing. A feed whose every row is a
- * robots answer has never been read at all, so it is neither working nor
- * broken - and until 2026-09-03 it was counted as a feed that had never failed.
+ * robots answer was not read at all, so it is neither working nor broken - and
+ * until 2026-09-03 it was counted as a feed that did not fail.
  */
 function feedTrouble(results: FeedResult[], quarantineAfter: number) {
 	const byFeed = new Map<string, FeedResult[]>();
@@ -211,7 +214,7 @@ function feedTrouble(results: FeedResult[], quarantineAfter: number) {
 	let failed = 0;
 	for (const group of byFeed.values()) {
 		const ordered = chronological(group);
-		// A skipped feed was never asked, so it can neither pass nor fail. It
+		// A skipped feed was not asked, so it can neither pass nor fail. It
 		// still counts toward the rest, which is why `resting` reads the whole
 		// ordered list rather than the asked ones.
 		if (resting(ordered, quarantineAfter)) {
@@ -220,7 +223,8 @@ function feedTrouble(results: FeedResult[], quarantineAfter: number) {
 		}
 		if (ordered.filter((row) => !skipped(row)).some(failing)) failed += 1;
 	}
-	return { rested, failed, unread: reliability(results).ineligible.length };
+	const record = reliability(results);
+	return { rested, failed, unread: record.ineligible.length, runs: record.runs };
 }
 
 /** What is wrong on Pipelines, loudest kind first.
@@ -232,7 +236,7 @@ function feedTrouble(results: FeedResult[], quarantineAfter: number) {
  */
 function pipelinesCandidates(
 	newest: { date: string; records: RunRecord[] } | null,
-	feeds: { rested: number; failed: number; unread: number },
+	feeds: { rested: number; failed: number; unread: number; runs: number },
 	quarantineAfter: number
 ): Candidate[] {
 	const found: Candidate[] = [];
@@ -280,12 +284,15 @@ function pipelinesCandidates(
 		// The lowest rank on purpose. Nobody can act on a publisher's own rules,
 		// so this must never outrank a run that failed - but a desk short of a
 		// source is worth knowing, and the page said the opposite until
-		// 2026-09-03: a source that has never given us an article was counted
-		// among the ones that had never failed.
+		// 2026-09-03: a source that gave us no article at all was counted among
+		// the ones that did not fail.
+		//
+		// The run count is in the sentence because the ledger read behind it is
+		// bounded: "has never been read" would claim a span nothing here opened.
 		const n = feeds.unread;
 		found.push({
-			text: `${plural(n, 'feed', 'feeds')} never read`,
-			sentence: `${plural(n, 'feed', 'feeds')} ${n === 1 ? 'has' : 'have'} never been read - a rest or the site's own rules held ${n === 1 ? 'it' : 'them'} back on every run - so the digest has never carried anything from ${n === 1 ? 'it' : 'them'}.`,
+			text: `${plural(n, 'feed', 'feeds')} unread`,
+			sentence: `${plural(n, 'feed', 'feeds')} ${n === 1 ? 'was' : 'were'} not read in the last ${plural(feeds.runs, 'run', 'runs')} - a rest or the site's own rules held ${n === 1 ? 'it' : 'them'} back on every one - so the digest carried nothing from ${n === 1 ? 'it' : 'them'}.`,
 			severity: WORTH_KNOWING
 		});
 	}
@@ -385,7 +392,7 @@ function modelCandidates(day: BandModel | null): Candidate[] {
 		const n = day.refusedForLength;
 		found.push({
 			text: `${plural(n, 'item', 'items')} too long to send`,
-			sentence: `${plural(n, 'item', 'items')} ${n === 1 ? 'was' : 'were'} too long to send, so the model never saw ${n === 1 ? 'it' : 'them'} and the truncation cap is past what fits.`,
+			sentence: `${plural(n, 'item', 'items')} ${n === 1 ? 'was' : 'were'} too long to send, so the model did not see ${n === 1 ? 'it' : 'them'} and the truncation cap is past what fits.`,
 			severity: WORTH_A_LOOK
 		});
 	}

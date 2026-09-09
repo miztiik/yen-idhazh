@@ -2282,6 +2282,22 @@ $p = Start-Process pwsh -ArgumentList '-NoProfile','-File',$waiter -WindowStyle 
   `@playwright/test` and pointing at the same preview server. Run it from
   `frontend/`, not from a scratch directory - node resolves `@playwright/test`
   from the script's own folder and reports `Cannot find package` otherwise.
+- **"waiting for element to be stable" does not mean the element is moving, and
+  measuring it is two lines.** The console's screenshot failed three times -
+  through `page.screenshot`, through `locator.screenshot` and through the
+  harness's own screenshot tool - each reporting the stability wait, which reads
+  as a page that will not settle. Sampling the box six times 400 ms apart on
+  2026-09-09 gave an identical `top`, `height` and `width` every time and
+  `document.getAnimations()` reported zero running. The page was still; the
+  browser was not painting. Take the sample before you go looking for the
+  animation, then reach for the headless run above:
+
+  ```js
+  await page.evaluate(() => {
+    const r = document.querySelector(SELECTOR).getBoundingClientRect();
+    return { top: r.top, h: r.height, running: document.getAnimations().length };
+  });
+  ```
 - **`locator.scrollIntoViewIfNeeded()` times out on a page that keeps relaying
   out.** Use `page.evaluate` with `scrollIntoView` instead.
 - **`locator.click()` cannot succeed here at all**, for the same reason: layout

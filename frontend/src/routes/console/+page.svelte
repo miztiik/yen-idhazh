@@ -372,7 +372,7 @@
 		)
 	);
 
-	/** Is the record deep enough for "never failed" to mean anything?
+	/** Is the record deep enough for "did not fail" to mean anything?
 	 *
 	 * Two runs deep it means "did not fail twice". The bar is the same knob the
 	 * failure chart above prints a stage rate on, because there is one question
@@ -604,7 +604,7 @@
 			height={SKYLINE.height}
 			viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
 			role="img"
-			aria-label="{noun} each day over {windowDays} days, {grouped(strip.total)} in all, {grouped(
+			aria-label="{noun} each day over {windowDays} days, {grouped(strip.total)} over the window, {grouped(
 				strip.busiest
 			)} on the busiest day"
 			data-published-measure={measure}
@@ -982,10 +982,10 @@
 			good, and what it has published. A single score across the four would tell you something is
 			wrong and nothing about what to do. The run decides all four from the private record and
 			publishes them here, so this section renders a decision rather than making a second one.
-			None of it follows the window control above - permission, answering and retirement are read
-			over the whole record, and the publishing record has a fixed span of its own. This counts
-			only the addresses a curator has left active, so it is a smaller list than the feeds below,
-			which read every feed the ledger has ever carried.
+			None of it follows the window control above - permission, answering and retirement come from
+			the run's own reading of the ledger, and the publishing record has a fixed span of its own.
+			This counts only the addresses a curator has left active, so it is a smaller list than the
+			feeds below, which read every feed the ledger carried in the runs they report.
 		</p>
 
 		<div class="console-table mt-3" data-source-health="states">
@@ -1130,20 +1130,21 @@
 			data-feed-runs={data.feedRecord.runs}
 		>
 			{#if feedRecordReadable}
-				{data.feedRecord.clean.length} of {data.feedRecord.checked} feeds have never failed a read,
-				across {data.feedRecord.runs}
+				{data.feedRecord.clean.length} of {data.feedRecord.checked} feeds did not fail a read in these
+				{data.feedRecord.runs}
 				{data.feedRecord.runs === 1 ? 'run' : 'runs'}.
 			{:else}
-				{data.feedRecord.clean.length} of {data.feedRecord.checked} feeds have not failed a read.
+				{data.feedRecord.clean.length} of {data.feedRecord.checked} feeds did not fail a read.
 				The record is {data.feedRecord.runs}
 				{data.feedRecord.runs === 1 ? 'run' : 'runs'} deep, under the {data.console
 					.min_attempts_for_rate} this page prints a rate on, so it is too early to read that as reliability.
 			{/if}
 			{#if data.feedRecord.ineligible.length > 0}
 				{data.feedRecord.ineligible.length} more {data.feedRecord.ineligible.length === 1
-					? 'feed has'
-					: 'feeds have'} never been read at all - a rest or the site's own rules held
-				{data.feedRecord.ineligible.length === 1 ? 'it' : 'them'} back on every run - so
+					? 'feed was'
+					: 'feeds were'} not read in these {data.feedRecord.runs}
+				{data.feedRecord.runs === 1 ? 'run' : 'runs'} - a rest or the site's own rules held
+				{data.feedRecord.ineligible.length === 1 ? 'it' : 'them'} back on every one - so
 				{data.feedRecord.ineligible.length === 1 ? 'it is' : 'they are'} in neither count.
 			{/if}
 		</p>
@@ -1151,12 +1152,12 @@
 		{#if data.feedRecord.ineligible.length > 0}
 			<details class="console-disclosure mt-2" data-feed-ineligible-list>
 				<summary class="console-summary" data-feed-ineligible-toggle>
-					Name the {data.feedRecord.ineligible.length} the pipeline has never read
+					Name the {data.feedRecord.ineligible.length} the pipeline did not read
 				</summary>
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-feed-ineligible-note>
 					A source honouring its own <code>robots.txt</code> has not failed, and neither has one the
 					pipeline was resting. Neither has delivered anything either, so counting them among the
-					feeds that never failed reported a source we have never read as a reliable one.
+					feeds that did not fail reported a source we did not read as a reliable one.
 				</p>
 				<ul class="feed-clean-names" data-feed-ineligible-names>
 					{#each data.feedRecord.ineligible as feedId (feedId)}
@@ -1169,7 +1170,7 @@
 		{#if data.feedRecord.clean.length > 0}
 			<details class="console-disclosure mt-2" data-feed-clean-list>
 				<summary class="console-summary" data-feed-clean-toggle>
-					Name the {data.feedRecord.clean.length} that never failed
+					Name the {data.feedRecord.clean.length} that did not fail
 				</summary>
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-feed-clean-note>
 					Alphabetical, because there is no order here: a feed is read once a run, so every clean
@@ -1187,9 +1188,10 @@
 
 	<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-window-exempt="feeds">
 		The pipeline rests a feed after {data.quarantineAfter} failures in a row. The count beside
-		each feed is that run of failures, read over every run on record - it does not follow the
-		window above, because the pipeline rested on the whole count and not on a windowed one. The
-		count above it is read over the same whole record, for the same reason. The strip of days
+		each feed is that run of failures, read over these {data.feedRecord.runs}
+		{data.feedRecord.runs === 1 ? 'run' : 'runs'} - it does not follow the window above, because
+		the pipeline rests on an unbroken run of failures and not on a windowed count. The count
+		above it is read over those same runs, for the same reason. The strip of days
 		beside each feed does follow the window. A feed that answered with nothing counts as a
 		failure: an empty answer costs the digest the same articles a refusal does. A source whose
 		<code>robots.txt</code> says no does not, and a feed nobody has asked is in neither count.
