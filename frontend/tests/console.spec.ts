@@ -697,10 +697,10 @@ function feedLedger(root: string): FeedRecord[] {
 /** The clean count, the denominator and the span, computed here from scratch.
  *
  * A read is a row that asked the feed. A rest and a robots answer are neither -
- * neither one asked whether the feed still works - so a source the pipeline has
- * only ever been refused by is in neither count. Until 2026-09-03 a refusal was
- * counted as an ask, which reported a source we have never read as one that had
- * never failed.
+ * neither one asked whether the feed still works - so a source the pipeline was
+ * only ever refused by is in neither count. Until 2026-09-03 a refusal was
+ * counted as an ask, which reported a source we did not read as one that did
+ * not fail.
  */
 function recordByHand(rows: FeedRecord[]) {
 	const read = new Map<string, FeedRecord[]>();
@@ -756,7 +756,7 @@ test('THE ORACLE: the feed headline carries its own denominator and span', async
 	);
 });
 
-test('THE ORACLE: the disclosed names are exactly the feeds that never failed', async ({
+test('THE ORACLE: the disclosed names are exactly the feeds that did not fail', async ({
 	page
 }) => {
 	await page.goto('/console/');
@@ -804,8 +804,8 @@ test('THE ORACLE: the failure list is capped and its tail counts the remainder',
 
 test('a record too shallow for a rate says so instead of printing one', () => {
 	// The canary is deep enough, so the third state is driven here rather than
-	// left to a sentence that never prints. Two runs deep, "has never failed"
-	// means "did not fail twice", and the page has to say which it means.
+	// left to a sentence that never prints. Two runs deep, "did not fail" means
+	// "did not fail twice", and the page has to say which it means.
 	const shallow: FeedRecord[] = [
 		{ feedId: 'a-wire', date: '2026-08-01', runId: '2026-08-01-1', outcome: 'ok', items: 9 },
 		{ feedId: 'a-wire', date: '2026-08-02', runId: '2026-08-02-1', outcome: 'ok', items: 9 },
@@ -828,7 +828,7 @@ test('a record too shallow for a rate says so instead of printing one', () => {
 	const withRest = reliability(rested);
 	expect(withRest.checked).toBe(2);
 	expect(withRest.clean).toEqual(['a-wire']);
-	// The run count is every run on record, rest or no rest.
+	// The run count is every run the rows hold, rest or no rest.
 	expect(withRest.runs).toBe(2);
 	// And the partition holds, always.
 	expect(withRest.clean.length + withRest.failed).toBe(withRest.checked);

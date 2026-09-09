@@ -190,8 +190,8 @@ const AVAILABILITY_FACTS: { id: string; label: string; withheld: string | null }
 	},
 	{
 		id: 'never_asked',
-		label: 'never read',
-		withheld: 'nothing from it has ever reached the digest'
+		label: 'unread in this record',
+		withheld: 'nothing from it is reaching the digest'
 	}
 ];
 
@@ -607,8 +607,9 @@ export async function load() {
 
 	const results = feedResults(shards);
 	// The list names only the feeds that broke, which is the right list and half
-	// an answer. This is the other half, read over the whole record because the
-	// pipeline rests on the whole count and not on a windowed one.
+	// an answer. This is the other half, read over the same shards, so the
+	// sentence it prints names those runs rather than claiming every run there
+	// has ever been.
 	const feedRecord = reliability(results);
 	const troubled = trouble(results, quarantineAfter);
 	// Capped here rather than in the browser: this list is inlined into the
@@ -744,8 +745,8 @@ export async function load() {
 		// top and its tail is a number, never another page of rows.
 		feedsHidden: hidden.length,
 		feedsHiddenFailures: hidden.reduce((total, feed) => total + feed.failures, 0),
-		// How many feeds have never failed, out of how many were asked, over how
-		// many runs. A count with no denominator is not a reliability record.
+		// How many feeds did not fail, out of how many were asked, over how many
+		// runs. A count with no denominator is not a reliability record.
 		feedRecord,
 		// Permission, availability, retirement and the publishing record, read from
 		// the projection the pipeline published rather than re-derived here. Null
