@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Final
 
 import pytest
 from conftest import (
@@ -44,7 +46,10 @@ from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import (
+    FLASH_FUSED,
     Completion,
+    FlashAttention,
+    flash_attention_state,
     is_context_exceeded,
     parse_completion,
     request_payload,
@@ -330,6 +335,129 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
         "--metrics",
     ]
     assert "--no-warmup" not in argv
+
+
+def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
+    """The flag that makes the runtime's own settings readable at all.
+
+    At llama-server's default verbosity of 3 one start prints twelve lines, and
+    no line among them names the attention state, the KV buffer or the compute
+    buffer - so a check on any of those reads back the flag we passed instead of
+    the decision the runtime took (`docs/reference/measurements.md`, 2026-09-09).
+    Unset, the flag is absent and the runtime keeps its own default.
+    """
+    from idhazh.contracts.app_config import ModelRef
+
+    model = ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M")
+    quiet = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=model,
+        inference=InferenceConfig(),
+    )
+    assert "-lv" not in quiet
+
+    loud = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=model,
+        inference=InferenceConfig(log_verbosity=4),
+    )
+    assert loud[loud.index("-lv") + 1] == "4"
+
+
+def test_both_committed_roles_start_a_server_that_names_its_own_settings() -> None:
+    """The daily run prints the lines, or the check row 3 rests on has nothing to read.
+
+    Read off the committed config rather than restated, so a role that is left
+    quiet fails here rather than at 04:00 on a runner.
+    """
+    settings = config.load(CONFIG_DIR)
+    for role in ("summarize", "visual_planner"):
+        entry = getattr(settings.app.models, role)
+        argv = server_argv(
+            binary=Path("bin/llama-server"),
+            weights=Path(f"models/{entry.file}"),
+            model=entry,
+            inference=entry.inference,
+        )
+        assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
+
+
+# --- Row 3's oracle: attention is read off the server, not off our flag -----
+
+#: The three arms of the 2026-09-09 reading, and what each one settles. Excerpts
+#: rather than whole captures - the provenance is in each file's own header.
+FLASH_ARMS: Final = {
+    "2026-09-09-lv4-fa-on.readings.txt": FlashAttention.ACTIVE,
+    "2026-09-09-lv4-no-fa-flag.readings.txt": FlashAttention.ACTIVE,
+    "2026-09-09-lv4-fa-off.readings.txt": FlashAttention.REFUSED,
+}
+
+#: Real runner captures, at the runtime default verbosity. They are the fourth
+#: arm and the one that matters: a log with no attention line in it.
+QUIET_CAPTURES: Final = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt"))
+
+
+@pytest.mark.parametrize(("capture", "expected"), sorted(FLASH_ARMS.items()))
+def test_the_attention_state_is_read_off_the_servers_own_line(
+    capture: str, expected: FlashAttention
+) -> None:
+    """Whether attention fused, from the runtime rather than from the flag we sent.
+
+    The committed config pins `-fa on`, and a check that only asserted the flag
+    was passed would pass on a build that ignored it. These three readings are
+    the ones llama-server printed at `-lv 4` on 2026-09-09, three runs an arm
+    and zero spread across the three.
+    """
+    assert flash_attention_state(read_text(FIXTURES_DIR / "runtime" / capture)) is expected
+
+
+@pytest.mark.parametrize("path", QUIET_CAPTURES, ids=lambda p: p.name)
+def test_a_quiet_server_log_fails_the_check_instead_of_answering_it(path: Path) -> None:
+    """The third state, and the one worth writing. Driven by real runner captures.
+
+    These four are `b10598` on GitHub-hosted runners, taken before the verbosity
+    knob existed, so they carry no attention line at all. A reader that took a
+    missing line for "off" would turn a forgotten `-lv 4` into a finding about
+    attention - which is a wrong answer with a citation.
+    """
+    assert flash_attention_state(read_text(path)) is FlashAttention.UNREADABLE
+
+
+def test_auto_with_no_decision_beside_it_is_not_an_answer() -> None:
+    """`flash_attn = auto` states what was asked for. It settles nothing on its own.
+
+    Built by removing one line from the arm that recorded it, so the edit is the
+    whole difference between the two verdicts rather than two files that might
+    differ somewhere else.
+    """
+    recorded = read_text(FIXTURES_DIR / "runtime" / "2026-09-09-lv4-no-fa-flag.readings.txt")
+    assert flash_attention_state(recorded) is FlashAttention.ACTIVE
+
+    undecided = "\n".join(line for line in recorded.splitlines() if FLASH_FUSED not in line)
+    assert "flash_attn" in undecided, "the asked-for line has to survive, or this proves nothing"
+    assert flash_attention_state(undecided) is FlashAttention.UNREADABLE
+
+
+def test_the_verdict_agrees_with_the_compute_buffer_it_implies() -> None:
+    """A physical consequence, not a restatement of the same grep.
+
+    The log grammar is llama.cpp's and moves between builds; the buffer size is
+    arithmetic and does not. On these weights at `n_ctx` 8192 it is 112.01 MiB
+    fused and 572.01 MiB not - so every arm this reader calls ACTIVE must carry
+    the small one and the REFUSED arm the large one.
+    """
+    buffers: dict[FlashAttention, set[float]] = {}
+    for capture, expected in FLASH_ARMS.items():
+        text = read_text(FIXTURES_DIR / "runtime" / capture)
+        found = re.search(r"CPU compute buffer size\s*=\s*([\d.]+) MiB", text)
+        assert found, f"{capture} records no compute buffer to corroborate with"
+        buffers.setdefault(expected, set()).add(float(found.group(1)))
+
+    fused = buffers[FlashAttention.ACTIVE]
+    assert len(fused) == 1, f"two ACTIVE arms disagree about the buffer: {sorted(fused)}"
+    assert min(buffers[FlashAttention.REFUSED]) > 4 * max(fused)
 
 
 def test_the_output_schema_is_generated_not_hand_written() -> None:

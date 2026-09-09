@@ -55,6 +55,7 @@ def llama_server_flags() -> frozenset[str]:
             priority=2,
             poll=50,
             n_threads_batch=4,
+            log_verbosity=4,
             startup_warmup=False,
         ),
     )

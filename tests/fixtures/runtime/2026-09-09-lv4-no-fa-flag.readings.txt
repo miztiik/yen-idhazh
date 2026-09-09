@@ -1,0 +1,13 @@
+# What a -lv 4 start prints about attention and the buffers, recorded verbatim
+# on 2026-09-09: 12th Gen Intel Core i7-1265U, llama.cpp b10444 (5f754ea0e),
+# Qwen3-8B-Q4_K_M, three runs of this arm, zero spread across the three.
+# An excerpt of the reading, not a whole 206-line capture. Provenance and the
+# full table are in docs/reference/measurements.md, section "What llama-server
+# reports about its own runtime settings, 2026-09-09".
+# This arm passed no attention flag at all, which is what config/idhazh.json
+# spelled until 2026-09-09, so the runtime chose for itself and said so.
+llama_context: flash_attn            = auto
+resolve_fused_ops: Flash Attention enabled
+llama_kv_cache:  CPU KV buffer size =  1152.00 MiB
+sched_reserve:  CPU compute buffer size =   112.01 MiB
+sched_reserve: graph nodes  = 1266
