@@ -253,6 +253,17 @@ PIPELINE_OWNED = {
     "eval_corpus_through",
     "max_tokens",
     "min_readable_letter_share",
+    # Build-owned rather than pipeline-owned, and on this list for the same
+    # reason: the published surface does not draw any of them, so
+    # `config/appearance.json` has nothing to say about them. `vite.config.ts`
+    # and `svelte.config.js` read them from `config/idhazh.json` at build time
+    # and put what a tab needs into the bundle, so they never reach an
+    # appearance file or a prerendered document at all.
+    "model_base_url",
+    "model_cdn_origins",
+    "model_digests",
+    "model_fetch_deadline_ms",
+    "model_revision",
 }
 
 

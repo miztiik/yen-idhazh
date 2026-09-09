@@ -1994,20 +1994,25 @@ class FinetuneConfig(Model):
     )
     epochs: int = Field(default=2, ge=1)
     sequence_length: int = Field(
-        default=8192,
+        default=16384,
         ge=1,
         description=(
-            "Measured worst case, rounded up to a power of two - and the cap has since "
-            "outgrown it. At extract.truncation_cap_tokens of 5,000 the system prompt "
-            "was 920 tokens, a user turn carrying an article measured 5,335 with its "
-            "fence and instructions, and the output budget is 900 - so 7,155, which "
-            "8192 cleared. The cap doubled to 10,000 on 2026-09-09 and the same sum is "
-            "about 11,900 for a typical article and about 14,100 for the longest one "
-            "the ledger has recorded, both above 8192. A row longer than this is "
-            "dropped and counted by the wrangler, never truncated, so the training set "
-            "loses its longest rows rather than teaching the model to stop mid-summary. "
-            "Raising it costs GPU memory on the machine that trains, which is not the "
-            "runner, so it is a separate decision with its own measurement."
+            "How long a training row is allowed to be, and it is the same sequence "
+            "models.<teacher>.inference.n_ctx serves: a training row is a prompt the "
+            "pipeline could have sent and an answer it could have returned. So this "
+            "tracks that window rather than being derived on its own. At "
+            "extract.truncation_cap_tokens of 10,000 the worst case is 997 tokens of "
+            "prompt overhead, 12,191 for the longest and hardest-tokenizing article the "
+            "cap lets through, and 900 of answer - 14,088 of 16,384, which is 86 "
+            "percent. A row longer than this is dropped and counted by the wrangler and "
+            "by the notebook, never truncated, because a truncated target teaches the "
+            "model to stop mid-summary; at this value nothing is over, where at the "
+            "8,192 this replaced on 2026-09-09 the training set silently lost every "
+            "article past about 5,500 words. What it costs is GPU memory on the machine "
+            "that trains, quadratically in attention - that machine is not the runner "
+            "(Rule #2 does not reach it), and a card that cannot hold the row lowers "
+            "SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb, which drops the long "
+            "rows for that session only and says how many it dropped."
         ),
     )
     prompt_iterations: int = Field(
@@ -2373,6 +2378,23 @@ class ConsoleConfig(Model):
             "390 (measured 2026-09-01). 760 is the same number `chart.width_px` "
             "carries, so a console page has one answer to how wide a chart starts. "
             "`config/appearance.json` owns the value, as `console.chart_width`."
+        ),
+    )
+    shimmer_after_ms: int = Field(
+        default=400,
+        ge=0,
+        le=5000,
+        description=(
+            "How long a reserved console block stays still before it starts to "
+            "shimmer, in milliseconds. The block is drawn the moment the document "
+            "is, so this knob decides nothing about the shape of the page - only "
+            "whether a wait short enough to be over already gets animated on its "
+            "way past. Four hundred is a DECLARED ESTIMATE and not a measurement "
+            "(CLAUDE.md Rule #10): the console started fetching its months on "
+            "2026-09-09 and no median arrival time has been taken yet. The plan row "
+            "that takes it re-derives this number from the measured median payload "
+            "arrival (TODO/20260908-shell-and-fetch-plan.md row 19). "
+            "`config/appearance.json` owns the value, as `console.shimmer_after_ms`."
         ),
     )
     failure_list_max: int = Field(
@@ -2962,12 +2984,19 @@ class PageWeightConfig(Model):
 
 
 class AssistConfig(Model):
-    """On-device archive search: what the encoder reads, and what the list shows.
+    """On-device archive search: what the encoder reads, where it comes from, what shows.
 
     Every value here was a literal with no override path (Rule #6). The first two
-    describe how much of an item the encoder is allowed to read; the rest describe
-    what the reader's list keeps. All five are set from measurement rather than
-    from taste.
+    describe how much of an item the encoder is allowed to read; the five `model_`
+    keys describe where a browser may fetch the encoder and how it proves the bytes
+    are ours; the rest describe what the reader's list keeps. All of them are set
+    from measurement rather than from taste.
+
+    **Our own origin is primary and the committed weights stay.** The `model_` keys
+    are a failover, reached only when this site cannot serve a reader the weights it
+    committed. A second origin without `model_digests` would be a permission rather
+    than a fallback, so the manifest is the load-bearing half and the URL is the
+    convenience.
     """
 
     max_tokens: int = Field(
@@ -2999,6 +3028,104 @@ class AssistConfig(Model):
             "band: measured 2026-08-26 over the six committed days, 3 of 1889 items "
             "score 0.0 and the next lowest scores 0.9975, so every threshold between "
             "0.01 and 0.99 selects the same three items."
+        ),
+    )
+    model_base_url: str = Field(
+        default="https://huggingface.co/Xenova/all-MiniLM-L6-v2",
+        pattern=r"^https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?:/[A-Za-z0-9._-]+)*$",
+        description=(
+            "The SECOND origin a browser may fetch the encoder from, and only after "
+            "our own copy has failed that reader. Our origin stays primary: the "
+            "weights are committed under frontend/static/assist/models/ and every "
+            "reader gets them from us. This is the failover, and it is a repository "
+            "prefix rather than a bare host so the fetch is built from one value - "
+            "the path in it is a directory on that host, not a permission, and "
+            "frontend/asset-base.js takes only the ORIGIN into connect-src. A GitHub "
+            "Release asset was measured on 2026-09-09 and cannot serve this: it "
+            "carries no Access-Control-Allow-Origin on any hop, so a browser refused "
+            "all 15 attempts. Nothing here reaches the encoder as text (Rule #11), "
+            "and no payload field, model output or fetched string builds this URL."
+        ),
+    )
+    model_cdn_origins: tuple[str, ...] = Field(
+        default=("https://us.aws.cdn.hf.co",),
+        description=(
+            "The origins model_base_url redirects a large file to, listed because a "
+            "browser checks the redirect target against connect-src and would "
+            "otherwise refuse it. Measured 2026-09-09 from the live Pages origin, 15 "
+            "reads of 15: the four small files answer 307 then 200 on the base host, "
+            "and onnx/model_quantized.onnx answers 302 to this CDN and 200 there. "
+            "Listing the base host alone passes the four small files and blocks the "
+            "23 MB of weights, which is the worst of both - the reader waits, and "
+            "then gets nothing. Kept a separate knob from model_base_url because it "
+            "is the other party's delivery network rather than our fetch address, "
+            "and it moves when they move it."
+        ),
+    )
+    model_revision: str = Field(
+        default="751bff37182d3f1213fa05d7196b954e230abad9",
+        pattern=r"^[0-9a-f]{40}$",
+        description=(
+            "The upstream commit the committed weights are the bytes of, as a full "
+            "40-hex SHA-1. A branch name is refused by the pattern, because a branch "
+            "hands back whatever was uploaded last and a fetch built on one describes "
+            "bytes nobody can fetch again (Rule #10). Verified two ways on 2026-09-09: "
+            "the file tree at this commit returns a git blob SHA-1 for each small file "
+            "and an LFS SHA-256 for the model, all five equal to model_digests below, "
+            "and every response at this revision returns it as X-Repo-Commit. It does "
+            "NOT identify one commit - the parent carries the same five files - so it "
+            "is the head of main on the fetch date rather than something derived from "
+            "the bytes. ENCODER_VERSION in frontend/src/lib/assist/encoder.ts is the "
+            "browser's copy and backend/tests/test_embed.py fails when the two differ."
+        ),
+    )
+    model_digests: dict[str, str] = Field(
+        default_factory=lambda: {
+            "config.json": (
+                "7135149f7cffa1a573466c6e4d8423ed73b62fd2332c575bf738a0d033f70df7"
+            ),
+            "onnx/model_quantized.onnx": (
+                "afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1"
+            ),
+            "special_tokens_map.json": (
+                "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+            ),
+            "tokenizer.json": (
+                "da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0"
+            ),
+            "tokenizer_config.json": (
+                "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+            ),
+        },
+        description=(
+            "SHA-256 of every encoder file, keyed by its path under the model "
+            "directory. This is what makes reaching a second origin safe at all: the "
+            "browser hashes what arrived and discards the WHOLE set on any miss - a "
+            "non-200, a truncation, a timeout or a wrong digest - so provenance is "
+            "never mixed across files. Without it, model_base_url would be a "
+            "permission for a second party to put bytes into a reader's tab. "
+            "Re-derived from the committed files on 2026-09-09 and equal to what the "
+            "upstream tree reports at model_revision; "
+            "backend/tests/test_embed.py hashes the committed files against this map, "
+            "so a manifest that drifts from the weights fails the build rather than "
+            "failing closed on every reader."
+        ),
+    )
+    model_fetch_deadline_ms: int = Field(
+        default=120_000,
+        ge=1_000,
+        le=600_000,
+        description=(
+            "How long the whole second-origin fetch may take before the browser gives "
+            "up and tells the reader the download did not finish. It covers all five "
+            "files together rather than each one, because a reader is waiting on the "
+            "set and a per-file deadline lets four slow files add up to a wait nobody "
+            "bounded. Two minutes is the download this failover exists to complete: "
+            "the hub serves onnx/model_quantized.onnx uncompressed at 22,972,370 "
+            "bytes where our origin gzips it to 16.22 MB (measured 2026-09-08 on a "
+            "laptop against CloudFront AMS58-P3, n=3, spread 0), which is about 18 "
+            "seconds on a 10 Mbit line and about 100 on a 2 Mbit one. A reader on "
+            "less than that is better served by the sentence than by a spinner."
         ),
     )
     similarity_floor: float = Field(
@@ -3135,6 +3262,36 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-10T09:00",
+            change=(
+                "AssistConfig gains five keys: model_base_url, model_cdn_origins, "
+                "model_revision, model_digests and model_fetch_deadline_ms. "
+                "config/idhazh.json sets none of them, so the committed file is "
+                "unchanged and every value ships as its default. The shape is shared "
+                "with AppearanceConfig, so appearance-config is restamped with the "
+                "same version. Additive and defaulted, so a config file written "
+                "before today still validates."
+            ),
+            why=(
+                "The encoder had exactly one origin, and a reader whose fetch of it "
+                "failed had no search at all. These five name a second one and, more "
+                "to the point, name what makes reaching it safe: the browser hashes "
+                "every arriving file against model_digests and discards the whole set "
+                "on any miss, so a second party can put no unverified byte into a "
+                "reader's tab. Our own origin stays primary and keeps the committed "
+                "weights - nobody pays the hub's extra 6.75 MB unless this site has "
+                "already failed them. model_cdn_origins is a separate key because a "
+                "browser checks a redirect target against connect-src: measured "
+                "2026-09-09 from the live Pages origin, 15 reads of 15, the four "
+                "small files answer on the base host and the 23 MB of weights answers "
+                "302 to a CDN, so listing the base host alone passes the small files "
+                "and blocks the model. A GitHub Release asset was measured the same "
+                "day and cannot serve this at all - no Access-Control-Allow-Origin on "
+                "any hop, 15 refusals in 15 attempts - which is why the second origin "
+                "is the hub rather than a copy we publish."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-10T00:30",
             change=(
                 "evaluation.summary_words_min and evaluation.summary_words_max are "
@@ -3170,6 +3327,64 @@ class AppConfig(Contract):
                 "numbers came from state/scores/: the prompt is being tuned and a "
                 "fine-tune is in flight, so our own length figures describe a pipeline "
                 "mid-repair (Rule #10)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-09T23:45",
+            change=(
+                "finetune.sequence_length default and config/idhazh.json both move from "
+                "8192 to 16384, which is models.summarize.inference.n_ctx. No field was "
+                "added, removed or retyped."
+            ),
+            why=(
+                "The other half of the cap raise earlier the same day, which the entry "
+                "below deferred. The cap went to 10,000 tokens and the window to 16,384, "
+                "so the longest article the pipeline now reads makes a 14,088-token "
+                "sequence - 997 of prompt overhead, 12,191 of article, 900 of answer, "
+                "measured over the 4,117 published items in state/item-health/2026-09.csv "
+                "(2026-09-01 to 09, stock ubuntu-latest 4 vCPU runners). At 8,192 the "
+                "wrangler and the notebook DROPPED that row and counted it, so the "
+                "training set quietly lost every article past about 5,500 words while "
+                "production kept summarizing them: the model would have been tuned on "
+                "the short half of the work it does. Dropping is the right refusal - a "
+                "truncated target teaches the model to stop mid-summary - so the fix is "
+                "to stop making rows that have to be refused. 16384 is n_ctx rather than "
+                "a second derivation, because a training row is a prompt the pipeline "
+                "could have sent and an answer it could have returned; one number now "
+                "covers both, and test_the_training_window_covers_the_longest_row_the_cap_"
+                "allows fails on any later pair that does not fit. The cost is GPU memory "
+                "on the machine that trains, quadratically in attention. That machine is "
+                "not the runner, so Rule #2's budget does not price it, and no number "
+                "here is a measurement of a card - nothing has trained yet (Rule #10). "
+                "The escape hatch is per-session and already existed: "
+                "SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb lowers it for a "
+                "card that cannot hold the row, and prints how many rows that dropped."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-09T23:30",
+            change=(
+                "ConsoleConfig gains shimmer_after_ms, defaulting to 400 and bounded "
+                "at 0 and 5000. config/appearance.json sets it to 400. The shape is "
+                "shared with AppearanceConfig, so appearance-config is restamped with "
+                "the same version. Additive and defaulted, so a config file written "
+                "before today still validates."
+            ),
+            why=(
+                "The console started fetching its months on 2026-09-09, so for the "
+                "first time a panel on this site has a wait to draw. A reserved block "
+                "that animates the moment it appears turns a 90 ms fetch into a "
+                "flicker, so the shimmer waits and a fetch that lands first never "
+                "animates at all. It is a knob rather than a literal because the right "
+                "value is a property of the payloads and the network, not of the "
+                "stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a "
+                "measurement: no median payload arrival has been taken since the "
+                "fetches landed, and Rule #10 refuses an unmeasured number the right "
+                "to justify a design, so this one justifies nothing - it is the value "
+                "the surface ships on until row 19 of "
+                "TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured "
+                "median. Ruled by Fowler, 2026-09-08: a user-interface row is not a "
+                "measurement harness."
             ),
         ),
         ChangelogEntry(

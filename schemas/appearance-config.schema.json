@@ -2,7 +2,7 @@
   "$defs": {
     "AssistConfig": {
       "additionalProperties": false,
-      "description": "On-device archive search: what the encoder reads, and what the list shows.\n\nEvery value here was a literal with no override path (Rule #6). The first two\ndescribe how much of an item the encoder is allowed to read; the rest describe\nwhat the reader's list keeps. All five are set from measurement rather than\nfrom taste.",
+      "description": "On-device archive search: what the encoder reads, where it comes from, what shows.\n\nEvery value here was a literal with no override path (Rule #6). The first two\ndescribe how much of an item the encoder is allowed to read; the five `model_`\nkeys describe where a browser may fetch the encoder and how it proves the bytes\nare ours; the rest describe what the reader's list keeps. All of them are set\nfrom measurement rather than from taste.\n\n**Our own origin is primary and the committed weights stay.** The `model_` keys\nare a failover, reached only when this site cannot serve a reader the weights it\ncommitted. A second origin without `model_digests` would be a permission rather\nthan a fallback, so the manifest is the load-bearing half and the URL is the\nconvenience.",
       "properties": {
         "eval_corpus_through": {
           "anyOf": [
@@ -33,6 +33,47 @@
           "minimum": 0.0,
           "title": "Min Readable Letter Share",
           "type": "number"
+        },
+        "model_base_url": {
+          "default": "https://huggingface.co/Xenova/all-MiniLM-L6-v2",
+          "description": "The SECOND origin a browser may fetch the encoder from, and only after our own copy has failed that reader. Our origin stays primary: the weights are committed under frontend/static/assist/models/ and every reader gets them from us. This is the failover, and it is a repository prefix rather than a bare host so the fetch is built from one value - the path in it is a directory on that host, not a permission, and frontend/asset-base.js takes only the ORIGIN into connect-src. A GitHub Release asset was measured on 2026-09-09 and cannot serve this: it carries no Access-Control-Allow-Origin on any hop, so a browser refused all 15 attempts. Nothing here reaches the encoder as text (Rule #11), and no payload field, model output or fetched string builds this URL.",
+          "pattern": "^https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?:/[A-Za-z0-9._-]+)*$",
+          "title": "Model Base Url",
+          "type": "string"
+        },
+        "model_cdn_origins": {
+          "default": [
+            "https://us.aws.cdn.hf.co"
+          ],
+          "description": "The origins model_base_url redirects a large file to, listed because a browser checks the redirect target against connect-src and would otherwise refuse it. Measured 2026-09-09 from the live Pages origin, 15 reads of 15: the four small files answer 307 then 200 on the base host, and onnx/model_quantized.onnx answers 302 to this CDN and 200 there. Listing the base host alone passes the four small files and blocks the 23 MB of weights, which is the worst of both - the reader waits, and then gets nothing. Kept a separate knob from model_base_url because it is the other party's delivery network rather than our fetch address, and it moves when they move it.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Model Cdn Origins",
+          "type": "array"
+        },
+        "model_digests": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "SHA-256 of every encoder file, keyed by its path under the model directory. This is what makes reaching a second origin safe at all: the browser hashes what arrived and discards the WHOLE set on any miss - a non-200, a truncation, a timeout or a wrong digest - so provenance is never mixed across files. Without it, model_base_url would be a permission for a second party to put bytes into a reader's tab. Re-derived from the committed files on 2026-09-09 and equal to what the upstream tree reports at model_revision; backend/tests/test_embed.py hashes the committed files against this map, so a manifest that drifts from the weights fails the build rather than failing closed on every reader.",
+          "title": "Model Digests",
+          "type": "object"
+        },
+        "model_fetch_deadline_ms": {
+          "default": 120000,
+          "description": "How long the whole second-origin fetch may take before the browser gives up and tells the reader the download did not finish. It covers all five files together rather than each one, because a reader is waiting on the set and a per-file deadline lets four slow files add up to a wait nobody bounded. Two minutes is the download this failover exists to complete: the hub serves onnx/model_quantized.onnx uncompressed at 22,972,370 bytes where our origin gzips it to 16.22 MB (measured 2026-09-08 on a laptop against CloudFront AMS58-P3, n=3, spread 0), which is about 18 seconds on a 10 Mbit line and about 100 on a 2 Mbit one. A reader on less than that is better served by the sentence than by a spinner.",
+          "maximum": 600000,
+          "minimum": 1000,
+          "title": "Model Fetch Deadline Ms",
+          "type": "integer"
+        },
+        "model_revision": {
+          "default": "751bff37182d3f1213fa05d7196b954e230abad9",
+          "description": "The upstream commit the committed weights are the bytes of, as a full 40-hex SHA-1. A branch name is refused by the pattern, because a branch hands back whatever was uploaded last and a fetch built on one describes bytes nobody can fetch again (Rule #10). Verified two ways on 2026-09-09: the file tree at this commit returns a git blob SHA-1 for each small file and an LFS SHA-256 for the model, all five equal to model_digests below, and every response at this revision returns it as X-Repo-Commit. It does NOT identify one commit - the parent carries the same five files - so it is the head of main on the fetch date rather than something derived from the bytes. ENCODER_VERSION in frontend/src/lib/assist/encoder.ts is the browser's copy and backend/tests/test_embed.py fails when the two differ.",
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Model Revision",
+          "type": "string"
         },
         "recall_min": {
           "default": 0.68,
@@ -254,6 +295,14 @@
           "description": "Days moved by one arrow-key pan.",
           "minimum": 1,
           "title": "Pan Days",
+          "type": "integer"
+        },
+        "shimmer_after_ms": {
+          "default": 400,
+          "description": "How long a reserved console block stays still before it starts to shimmer, in milliseconds. The block is drawn the moment the document is, so this knob decides nothing about the shape of the page - only whether a wait short enough to be over already gets animated on its way past. Four hundred is a DECLARED ESTIMATE and not a measurement (CLAUDE.md Rule #10): the console started fetching its months on 2026-09-09 and no median arrival time has been taken yet. The plan row that takes it re-derives this number from the measured median payload arrival (TODO/20260908-shell-and-fetch-plan.md row 19). `config/appearance.json` owns the value, as `console.shimmer_after_ms`.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Shimmer After Ms",
           "type": "integer"
         },
         "source_rows": {
@@ -747,6 +796,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "assist gains model_base_url, model_cdn_origins, model_revision, model_digests and model_fetch_deadline_ms. `AssistConfig` is defined in `app_config.py` and imported here, so app-config is restamped with the same version. config/appearance.json sets none of them. Additive and defaulted, so an appearance file written before today still validates.",
+      "version": "2026-09-10T09:00",
+      "why": "See the app-config entry of the same version: the encoder gains a second origin to fetch from when our own fails a reader, and a committed SHA-256 manifest the browser checks every arriving file against. Restamped here because the shape is shared, not because an appearance surface reads any of the five - none of them is a look-and-feel knob, and the frontend reads them at build time from config/idhazh.json rather than through the appearance file."
+    },
+    {
+      "change": "console gains shimmer_after_ms, defaulting to 400 and bounded at 0 and 5000. config/appearance.json sets it to 400. `ConsoleConfig` is defined in `app_config.py` and imported here, so app-config is restamped with the same version. Additive and defaulted, so an appearance file written before today still validates.",
+      "version": "2026-09-09T23:30",
+      "why": "The console started fetching its months on 2026-09-09, so for the first time a panel on this site has a wait to draw. A reserved block that animates the moment it appears turns a 90 ms fetch into a flicker, so the shimmer waits and a fetch that lands first never animates at all. It is a knob rather than a literal because the right value is a property of the payloads and the network, not of the stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a measurement: no median payload arrival has been taken since the fetches landed, and Rule #10 refuses an unmeasured number the right to justify a design, so this one justifies nothing - it is the value the surface ships on until row 19 of TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured median. Ruled by Fowler, 2026-09-08: a user-interface row is not a measurement harness."
+    },
+    {
       "change": "digest.read_mark_days moves from 7 to 14, and its meaning moves from 'the newest 7 dates the store holds' to '14 calendar days back from today'. digest.archive_recent_days moves from 7 to 14. console.window_presets gains a 1-day span and is now [1, 7, 14, 30, 90]; console.min_window_days moves from 7 to 1 so the new preset satisfies the existing range check. console.max_window_days keeps 366 and gains a description. Two fields are added: digest.offline_bytes_kept, defaulting to 20,000,000 and bounded at 2,000,000 and 100,000,000, and digest.archive_window_days, defaulting to 30 and refused unless it names one of console.window_presets. The shapes are `UiConfig` and `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together. Every value legal before today is legal now and both new fields carry defaults, so an appearance file written before today still validates.",
       "version": "2026-09-06T14:00",
       "why": "This file owns everything the published surface is drawn from (docs/concepts/config.md), and all four moved knobs are drawn here: the read marks on a day page, the day rows on the archive, and the console's window control. Read marks used to expire by position - the newest 7 dates the store happened to hold - which needs no clock but bounds the store by how often a reader comes back rather than by how long ago they read. A reader who opens one day a month kept marks from seven different months and each greyed out an article last seen most of a year ago. Fourteen calendar days trusts the device clock, which the old rule deliberately did not, and the field says so. archive_recent_days follows it because a row in that block invites a reader back to a day, and a day whose marks were already dropped comes back looking unread. The presets gain one day because every span is a distinct fetch cost and there was no way to ask for the cheapest read of all - the run that has just finished - and min_window_days drops to 1 to admit it. max_window_days is unchanged: it is a retention floor rather than a viewport clamp, so lowering it would make no page cheaper and would authorise deleting month shards the console can still ask for. offline_bytes_kept exists because a day count cannot bound bytes - measured 2026-09-02 over the 12 served days, one day payload runs 8,231 to 1,373,593 bytes, a factor of 167. archive_window_days names a span out of console.window_presets rather than declaring a second list, so this file holds exactly one list of spans. Neither new knob has a reader yet; rows 8 and 25 of TODO/20260906-constant-cost-reads-plan.md are the readers, and the knobs land in one commit so no later row edits the config contract."
@@ -902,7 +961,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-06T14:00",
+      "default": "2026-09-10T09:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -910,5 +969,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-06T14:00"
+  "version": "2026-09-10T09:00"
 }

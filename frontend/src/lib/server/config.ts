@@ -178,6 +178,10 @@ export interface ConsoleConfig {
 	 * re-measures the container. Declared once, in `config/appearance.json`. */
 	chart_height: number;
 	chart_width: number;
+	/** How long a reserved console block stays still before it shimmers, in
+	 * milliseconds. A fetch that lands inside it never animates at all. 400 is a
+	 * declared estimate and not a measurement - see `design-system.md`. */
+	shimmer_after_ms: number;
 	failure_list_max: number;
 	/** How many sources the failure section ranks by articles lost, before the
 	 * tail sentence. */
@@ -222,6 +226,14 @@ export interface ConsoleConfig {
  * `config/appearance.json` and not declared here is dropped - and TypeScript
  * refuses the component that tries to read it. One failure is caught by the
  * compiler; the other is caught by nobody.
+ *
+ * The five `model_` keys added on 2026-09-10 are the case that keep-list was
+ * written for. They are read at BUILD time by `vite.config.ts` and
+ * `svelte.config.js`, and one of them is roughly 600 bytes of hex. Declared
+ * here they would ride in the prerendered `/archive/` document and its
+ * `__data.json` twin, twice, against a page-weight ceiling of 7,553 gzipped
+ * bytes - for a value no component reads. Undeclared, they are dropped without
+ * anybody having to remember to drop them.
  */
 export interface AssistConfig {
 	similarity_floor: number;
@@ -367,6 +379,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_attempts_for_rate: 5,
 	chart_height: 220,
 	chart_width: 760,
+	shimmer_after_ms: 400,
 	failure_list_max: 25,
 	source_rows: 10,
 	feed_rows: 10,

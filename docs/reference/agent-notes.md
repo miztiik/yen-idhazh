@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -466,6 +466,41 @@ gate reports a diff in a file whose content never changed.
 
 ## Gate commands
 
+**`service-worker.spec.ts` "a day already opened reads again with no network at
+all" is flaky in CI, and it reads exactly like a regression in whatever you just
+changed.** It fails `expect(received).toBe(expected) // Expected: 8, Received:
+0` with the message `the day read short offline` - the dated page rendered no
+stories, so the worker appears not to have kept the payload. Nothing about the
+message suggests timing. Seen on 2026-09-09 at `81edf049`, a commit on `main`
+that touched none of the offline path, and again the same evening on the
+unrelated encoder-origin branch; both passed on a rerun, and the same test
+passed locally on the same tree. Two things to check before you spend an hour on
+it: whether the same signature appears in a recent `browser` job on `main`
+(`gh api repos/<o>/<r>/commits/<sha>/check-runs --jq '.check_runs[] |
+select(.conclusion=="failure") | .name'`, then `gh run view --log-failed --job
+<id>`), and whether the test passes in your own `test:changed` run. If both say
+yes it is the flake. `gh run rerun <run-id> --failed` is the whole fix. The
+`offline` group runs alone and installs a real service worker, so its
+install-then-activate window is the timing-sensitive part; the flake has not
+been traced further than that.
+
+**`npm run test:changed --python <interpreter>` does NOT reach the canary
+build, so the selector fails at a step you already proved green.** The `--python`
+flag goes to the checks runner and is what pytest and the schema export use.
+`frontend/scripts/build-canary.mjs` resolves its own interpreter separately, as
+`$IDHAZH_PYTHON` and then a bare `python`, and it shells out to
+`build_canary_day.py --console-payloads-only`. In a worktree borrowing a
+sibling's venv the bare `python` has no `idhazh` on it, so the step prints
+`wrote 0 console payload file(s)` and the build then dies with a bare Node
+`Error: Command failed` and a `status: 1` object - no Python traceback anywhere,
+because the child's streams were not inherited. It reads as a build regression
+and it is an interpreter that was never named. Set BOTH:
+
+```powershell
+$env:IDHAZH_PYTHON = '<the shared venv>\Scripts\python.exe'
+npm run test:changed -- --fresh --python '<the shared venv>\Scripts\python.exe'
+```
+
 **A Playwright spec that runs a backend command needs `IDHAZH_PYTHON` in a
 worktree.** `frontend/tests/malformed-day.spec.ts` runs `python -m idhazh
 validate-days` as a process, because half its oracle is the CI step refusing a
@@ -538,14 +573,17 @@ to add.
 
 **The opposite rule holds for the fixtures under `tests/fixtures/contracts/`,
 and one new field breaks four of them at once.** A knob added to `UiConfig`
-fails `test_fixture_round_trips_byte_identically` on `app-config/tuned`,
+fails `test_fixture_round_trips_byte_identically` on
+`app-config/every-knob-differs-from-the-committed-config`,
 `appearance-config/committed` and `appearance-config/defaults` together, because
 that gate demands the file bytes equal `to_json()` - so there the model IS the
 right writer. Hand-editing is the trap: the serializer sorts keys, and a field
 on a nested model appears in every fixture carrying that model. Re-serialise
 each failing fixture through `BY_STEM[<folder>].from_json(text).to_json()`, then
 read the diff. Observed 2026-09-02, when a fourth fixture, `digest-day/two-runs`,
-failed in the same run for an unrelated field on the same commit.
+failed in the same run for an unrelated field on the same commit. The test id is
+the folder plus the file stem, so the `app-config` one was `app-config/tuned`
+until 2026-09-09.
 
 **A test's `print()` never reaches you on the default `pytest` run, and `-s`
 does not bring it back.** `addopts` is `-q -n auto`, so every run is distributed

@@ -44,6 +44,7 @@
 	import {
 		cachedEncoder,
 		DOWNLOAD_MB,
+		DOWNLOAD_MB_ELSEWHERE,
 		embedQuery,
 		supported,
 		type CachedEncoder,
@@ -152,6 +153,28 @@
 		return (bytes / 1024 / 1024).toFixed(1);
 	}
 
+	/** What a search costs a reader's privacy, said before the download starts.
+	 *
+	 * The query clause is unconditional and stays first, because it is the thing
+	 * a reader is actually worried about: what they type is matched on their own
+	 * device against vectors this site committed, and it goes nowhere whatever
+	 * happens to the download.
+	 *
+	 * The second clause is conditional and says so. Since 2026-09-10 the encoder
+	 * has a second origin, reached only after this site has failed to hand a
+	 * reader the weights - and a fetch to anyone is a fetch that shows them an IP
+	 * address, a browser string and where the request came from. Almost nobody
+	 * pays that, so the sentence does not open with it; but a reader deciding
+	 * whether to press the button is told before they press it, not after.
+	 *
+	 * `DOWNLOAD_MB_ELSEWHERE` rather than `DOWNLOAD_MB` in that clause: the
+	 * second origin serves the weights uncompressed, so the same encoder costs
+	 * about 7 MB more when it comes from there. */
+	const PRIVACY =
+		'Nothing you type leaves your browser. If this site cannot serve the ' +
+		`files, your browser asks Hugging Face for them instead - about ` +
+		`${DOWNLOAD_MB_ELSEWHERE} MB, and they would see your request.`;
+
 	const stateSentence = $derived.by(() => {
 		if (phase.name === 'blocked') {
 			return `Search is unavailable here - ${phase.reason}. Everything above still works.`;
@@ -168,9 +191,15 @@
 			return 'Search runs on your device. Nothing you type leaves your browser. The download is done.';
 		}
 		if (cached === 'stale') {
-			return `The search files changed since your last visit. The next search downloads ${DOWNLOAD_MB} MB again, once. Nothing you type leaves your browser.`;
+			return (
+				`The search files changed since your last visit. The next search downloads ` +
+				`${DOWNLOAD_MB} MB from this site again, once. ${PRIVACY}`
+			);
 		}
-		return `Search runs on your device. The first search downloads ${DOWNLOAD_MB} MB, once. Nothing you type leaves your browser.`;
+		return (
+			`Search runs on your device. The first search downloads ${DOWNLOAD_MB} MB from ` +
+			`this site, once. ${PRIVACY}`
+		);
 	});
 
 	onMount(async () => {

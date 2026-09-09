@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -74,7 +74,9 @@ Two contract defaults moved with them: `console.chart_height` 180 -> 220 and `co
 
 `assist` went the other way because the block holds two kinds of knob. Four of them - `similarity_floor`, `result_limit`, `search_months`, `search_min_days` - are read in the browser, and the appearance file declares those. Two - `recall_min` and `eval_corpus_through` - are the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py` and drawn by nothing, so the pipeline file declares those and the appearance file declares neither. The 0.61 that sat here had no reader at all: it was the bar's value before it was re-derived against the pinned corpus on 2026-09-04 ([evaluation.md](evaluation.md)), 0.07 below the live 0.68, which is 10.3 percent of the bar - worth nothing while nothing read it, and a wrong gate the day something did.
 
-**Two more of the eight are the pipeline's, and only the pipeline file declares them now.** `max_tokens` and `min_readable_letter_share` are the encoder's, read by `backend/idhazh/embed.py`. They sat in the appearance file as well as the pipeline one, with the same values, which the gate below tolerates - and the tolerance was correct while the page received them, because the appearance file was the last merge layer. It stopped being correct the moment the keep-list landed: from then on the browser was handed neither, so the appearance copies were read by nothing, which is where `assist.recall_min` had been an hour earlier. Both were deleted on 2026-09-05 for that reason. Until that keep-list all four of the pipeline's knobs were merged straight into the prerendered `/archive/` document, because `assistConfig()` returned the raw merge. It now keeps exactly what `AssistConfig` declares. A keep-list rather than a strip-list: a strip-list has to be extended every time a knob lands in the block and ships it to readers in silence when somebody forgets, while a keep-list's own failure - a browser knob added to the file and not to the interface - is refused by the compiler at the component that reads it. Measured on a real build, 2026-09-05: `frontend/build/archive/index.html` went from 18,659 to 18,567 bytes, so the four knobs were 92 bytes on every load of that page.
+**Two more of the block are the pipeline's, and only the pipeline file declares them now.** `max_tokens` and `min_readable_letter_share` are the encoder's, read by `backend/idhazh/embed.py`. They sat in the appearance file as well as the pipeline one, with the same values, which the gate below tolerates - and the tolerance was correct while the page received them, because the appearance file was the last merge layer. It stopped being correct the moment the keep-list landed: from then on the browser was handed neither, so the appearance copies were read by nothing, which is where `assist.recall_min` had been an hour earlier. Both were deleted on 2026-09-05 for that reason. Until that keep-list all four of the pipeline's knobs were merged straight into the prerendered `/archive/` document, because `assistConfig()` returned the raw merge. It now keeps exactly what `AssistConfig` declares. A keep-list rather than a strip-list: a strip-list has to be extended every time a knob lands in the block and ships it to readers in silence when somebody forgets, while a keep-list's own failure - a browser knob added to the file and not to the interface - is refused by the compiler at the component that reads it. Measured on a real build, 2026-09-05: `frontend/build/archive/index.html` went from 18,659 to 18,567 bytes, so the four knobs were 92 bytes on every load of that page.
+
+**Five more are the build's, and neither file's readers are in a tab.** `model_base_url`, `model_cdn_origins`, `model_revision`, `model_digests` and `model_fetch_deadline_ms` are the encoder's failover leg, read by `vite.config.ts` and `svelte.config.js` through `frontend/asset-base.js`. The pipeline file declares them and the appearance file declares none of them, for the same reason as the two above: nothing the published surface is drawn from reads any of them. One of them is roughly 600 bytes of hex, so the keep-list matters more than it did - declared in `AssistConfig` on the frontend they would ride in the prerendered `/archive/` document and its `__data.json` twin, against a ceiling of 7,553 gzipped bytes, for a value no component reads.
 
 **A mirror pinned to the default is only right where a fallback is what it pins.** The browser needs a token cap of its own and holds a hardcoded 256 in `frontend/src/lib/assist/loader.ts`. That copy stays, because `loader.ts` runs in a tab and cannot open `config/idhazh.json`; putting the cap back on the page would undo the 92 bytes the keep-list just took off it. What changed on 2026-09-05 is what the gate compares it against. `test_the_browser_reads_a_query_exactly_as_far_as_the_runner_read_the_items` in `backend/tests/test_embed.py` compared the literal against `AssistConfig().max_tokens` - the contract default - while `Embedder` truncates at `self._assist.max_tokens`, the committed knob. Set `assist.max_tokens` to 384 in `config/idhazh.json` and leave `loader.ts` alone and the old assertion was still `256 == 256`: green, with the runner reading 384 tokens of every item and a tab reading 256 of the query. Nothing else would have caught it - no error, no 404, just worse search results.
 
@@ -427,7 +429,7 @@ provenance here, and it is not the same for the two:
 
 | Entry | `declared_for` | Where the numbers came from |
 | --- | --- | --- |
-| `models.summarize` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | Derived against the retired `qwen3-8b-q4-k-m` on a GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74, 4 vCPU, 15 GB) through 2026-08-25 and 2026-08-26, then carried onto the 9B when the summarizer was swapped on **2026-08-27** (#146). Nothing has re-derived them since. |
+| `models.summarize` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | Derived against the retired `qwen3-8b-q4-k-m` on a GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74, 4 vCPU, 15 GB) through 2026-08-25 and 2026-08-26, then carried onto the 9B when the summarizer was swapped on **2026-08-27** (#146). **Two of them have since been re-derived on a runner, and only two.** Run `2026-09-09-34379502244` priced `n_ctx` at 16,384 and `flash_attention` at `on` against the configured 9B, and read both back from the server's own log at `log_verbosity: 4`. `n_batch`, `n_ubatch`, `n_threads`, `temperature`, `top_p` and every other value in the block were untouched by that run and still stand on the 8B numbers. |
 | `models.visual_planner` (`qwen3-4b-q4-k-m`) | `7485fe6f...fdf5` | The same numbers again. They were never measured against a 4B; the entry ran on them because one block served both roles. |
 
 Both rows say the same uncomfortable thing, which is the point of writing them
@@ -436,11 +438,25 @@ is named for what a person can honestly assert - that these numbers are set for
 these bytes - rather than `derived_against`, which for the visual planner would
 be a measurement claim nobody made.
 
-The two window figures already on record still read against the summarizer's
-block: the widest qualification request was 3,775 prompt tokens plus a 900-token
-output budget against an `n_ctx` of 8,192, and the configured summarizer peaks at
-82 percent of the runner's memory at that window
-([../reference/measurements.md](../reference/measurements.md)).
+The two window figures that used to sit here are both superseded, and by one run:
+`2026-09-09-34379502244`, taken 2026-09-09 on a stock GitHub-hosted
+`ubuntu-latest`, 4 vCPU, no GPU.
+
+**The widest request is no longer 3,775 prompt tokens against an `n_ctx` of
+8,192.** One item on that run reached **8,741 input tokens**, which the old 8,192
+window would have refused outright, and the busiest request held 9,082 of the
+16,384 cells - **55 percent of the window in use, 45 percent spare**
+([The window raise was load-bearing on the first run](../reference/measurements.md#the-window-raise-was-load-bearing-on-the-first-run-and-nothing-predicted-that)).
+
+**And the summarizer does not peak at 82 percent of the runner's memory.** That
+figure is llama-server's own resident-set high-water mark read as though it were
+the whole job's, and a resident-set mark counts mapped weight pages the kernel
+can evict. It never said what the machine had free, in either direction, and it
+is withdrawn. The same run measured free memory directly instead.
+`MemAvailable` never fell below **6.84 GiB**, with per-shard lows of 6.84, 7.36,
+7.44 and 7.46 GiB over 846 samples. The escalation trigger asks for 1.0 GiB, so
+the run finished with 6.8 times the bar
+([MemAvailable went up by 1.21 GiB](../reference/measurements.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
 
 ### A model swap can no longer inherit settings nothing declared for it
 
@@ -949,9 +965,10 @@ is exactly why the number is a knob and not a constant.
 
 The `assist` block is on-device search. The runner embeds the day and commits
 the vectors; a reader's tab embeds only the query. The first two knobs say how
-much of an item the encoder is allowed to read, and the last two say how much of
-the archive a search reads at all. All four are set from what was measured
-rather than from taste.
+much of an item the encoder is allowed to read, the last two say how much of
+the archive a search reads at all, and the five `model_` knobs say where the
+browser may fetch the encoder from and what it must prove about the bytes. All
+of them are set from what was measured rather than from taste.
 
 - `assist.max_tokens` (256) is how far into an item's text the encoder reads
   before it truncates. 512 is a hard ceiling because that is the encoder's
@@ -1004,6 +1021,43 @@ The browser keeps its own copy of the token cap in
 a query read further than the items it is matched against is a different
 question asked silently. A backend test compares the two and fails when they
 separate.
+
+**The five `model_` knobs are the encoder's failover leg, and they are read at
+build time rather than by a reader's tab.** Our own origin is primary and the
+committed weights stay; these are reached only when this site has already
+failed to hand a reader the encoder. `vite.config.ts` and `svelte.config.js`
+read them through `frontend/asset-base.js`, so the address the browser fetches
+from and the `connect-src` that permits it come from one value and cannot
+disagree. None of them reaches the prerendered `/archive/` document.
+
+- `assist.model_base_url` (`https://huggingface.co/Xenova/all-MiniLM-L6-v2`) is
+  the second origin. A repository prefix rather than a bare host, so the fetch is
+  built from one value; the path in it is a directory on that host and only the
+  ORIGIN reaches the CSP.
+- `assist.model_cdn_origins` (`https://us.aws.cdn.hf.co`) are the origins that
+  base redirects a large file to. Listed because a browser checks a redirect
+  target: measured 2026-09-09 from the live Pages origin, 15 reads of 15, the
+  four small files answer on the base host and the 23 MB of weights answers 302
+  to this CDN. Listing the base host alone would pass the small files and block
+  the model, which is the worst of both - the reader waits, then gets nothing.
+- `assist.model_revision` (`751bff37...`) is the upstream commit the committed
+  weights are the bytes of. The contract refuses anything that is not a full
+  40-hex SHA-1, because a branch hands back whatever was uploaded last and makes
+  every digest below a coin flip.
+- `assist.model_digests` is the SHA-256 of all five encoder files. **This is what
+  makes a second origin safe at all**: the browser hashes what arrives and
+  discards the WHOLE set on any miss - a non-200, a truncation, a timeout or a
+  wrong digest - so provenance is never mixed across files. Without it the URL
+  above would be a permission rather than a fallback. A backend test hashes the
+  committed weights against this map, so a manifest that drifts fails the build
+  rather than failing closed on every reader.
+- `assist.model_fetch_deadline_ms` (120000) bounds the whole set rather than
+  each file, because a reader is waiting on the set and a per-file deadline lets
+  four slow files add up to a wait nobody bounded. Two minutes is the download it
+  exists to complete: the hub serves the weights uncompressed at 22,972,370 bytes
+  where our origin gzips them to 16.22 MB (measured 2026-09-08 on a laptop
+  against CloudFront AMS58-P3, n=3, spread 0), about 18 seconds on a 10 Mbit line
+  and about 100 on a 2 Mbit one.
 
 ## What is NOT a knob
 

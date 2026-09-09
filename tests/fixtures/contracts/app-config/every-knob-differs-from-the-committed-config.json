@@ -6,6 +6,15 @@
     "eval_corpus_through": "2026-08-26",
     "max_tokens": 320,
     "min_readable_letter_share": 0.6,
+    "model_base_url": "https://hf.example.test/other/encoder",
+    "model_cdn_origins": [
+      "https://cdn.example.test"
+    ],
+    "model_digests": {
+      "weights.bin": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "model_fetch_deadline_ms": 90000,
+    "model_revision": "0123456789abcdef0123456789abcdef01234567",
     "recall_min": 0.9,
     "result_limit": 8,
     "search_min_days": 14,
@@ -71,6 +80,7 @@
     "min_attempts_for_rate": 3,
     "min_window_days": 7,
     "pan_days": 3,
+    "shimmer_after_ms": 400,
     "source_rows": 4,
     "today_anchor": "centre",
     "window_presets": [
