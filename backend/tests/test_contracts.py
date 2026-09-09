@@ -4031,6 +4031,35 @@ def test_the_block_this_projection_exists_to_drop_can_never_be_served() -> None:
     assert forbidden.isdisjoint(kept), f"served and forbidden at once: {sorted(forbidden & kept)}"
 
 
+def test_a_served_day_written_before_the_day_facts_still_reads() -> None:
+    """The widening of 2026-09-09 is additive, and this is what says so.
+
+    A service worker keeps day payloads, so a shell built today can be handed a
+    file written under `2026-09-01T09:00` - which carries the items and nothing
+    else. It has to validate, and every name added since has to read as unknown
+    rather than as a value. A default here would be a false claim about a day:
+    `false` for `partial` says the run lost nothing, `0` for `items_failed` says
+    the same, and an empty `verticals` says the day had no desk.
+
+    Built here rather than read off a committed day, because the archive is
+    re-staged on every build and carries no payload at the older stamp any more
+    (`CLAUDE.md` section 13).
+    """
+    day = DigestView.project(
+        json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    )
+    older = {"version": "2026-09-01T09:00", "items": json.loads(day.to_json())["items"]}
+
+    read = DigestView.model_validate(older)
+
+    assert read.version == "2026-09-01T09:00"
+    assert read.items, "an older payload still carries its stories"
+    unknown = {name for name in DigestView.model_fields if name not in {"version", "items"}}
+    assert unknown, "the day facts are what this test is about"
+    for name in sorted(unknown):
+        assert getattr(read, name) is None, f"{name} must read as unknown on an older payload"
+
+
 def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
     """A field means one thing, whichever file it is in.
 

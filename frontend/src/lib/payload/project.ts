@@ -41,7 +41,7 @@ type Json = Record<string, unknown>;
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-09-01T09:00';
+export const VIEW_VERSION = '2026-09-09';
 
 // The fields a page renders, and no others. Traced along the render path rather
 // than guessed: `DigestList` scopes and filters the list, and `DigestItem` with
@@ -129,7 +129,35 @@ export const VISUAL_FIELDS: readonly string[] = ['state', 'path', 'alt'];
 // other key on a staged day and it is minted rather than copied - the committed
 // file's own `version` stamps `DigestDay`, which is a different contract with a
 // different changelog.
-export const DAY_FIELDS: readonly string[] = ['items'];
+//
+// Nine of them joined `items` on 2026-09-09, and each has a named renderer:
+// `date`, `verticals` and `leads` are what `DigestList` draws its heading, its
+// topic pills and its leading block from, `runs`, `partial`, `items_planned`,
+// `items_failed` and `retention_window_months` are the day notice and the
+// footer's promise, and `generated_at` is the revision key `$lib/assist/day.ts`
+// has always read and never found. They are here because a dated URL is served
+// by one shell that no build wrote a day into, so this file is the only source
+// the browser has for any of them.
+//
+// Measured 2026-09-09 on Intel Core i7-1265U / Windows 11 over the 20 committed
+// days and 7,967 items, `gzip -9` over the compact projection: 322 bytes a day
+// on average and 478 on the worst day, against 3,657,996 bytes of served days,
+// which is 0.18 percent. They cost per DAY where an item field costs per item,
+// which is why nine names here are cheaper than one name on the item list.
+//
+// `items` stays last so the facts land before the array a reader waits on.
+export const DAY_FIELDS: readonly string[] = [
+	'date',
+	'generated_at',
+	'partial',
+	'items_planned',
+	'items_failed',
+	'retention_window_months',
+	'runs',
+	'verticals',
+	'leads',
+	'items'
+];
 
 // Names that may never reach a staged copy, whoever widens the lists above.
 // `embeddings` is why this projection exists: it is the vector block, its only
@@ -162,19 +190,28 @@ export function projectItem(item: Json): Json {
 	return projected;
 }
 
-/** The day, narrowed to its items and stamped with the shape it is.
+/** The day, narrowed to its facts and its items and stamped with the shape it is.
  *
  * Compact, where the committed payload is pretty-printed. That indent is worth
  * paying for a file whose diff a person reviews by eye, and not for one a
  * reader downloads.
  *
  * `version` is written first so a file truncated in transit still says what it
- * was meant to be.
+ * was meant to be, and the day's facts come before its items so a reader that
+ * has the head of the response already has the date, the desks and the notice.
  */
 export function projectDay(text: string): string {
 	const day = JSON.parse(text) as Json;
 	const items = (day.items ?? []) as Json[];
-	return JSON.stringify({ version: VIEW_VERSION, items: items.map((item) => projectItem(item)) });
+	const facts = pick(
+		day,
+		DAY_FIELDS.filter((name) => name !== 'items')
+	);
+	return JSON.stringify({
+		version: VIEW_VERSION,
+		...facts,
+		items: items.map((item) => projectItem(item))
+	});
 }
 
 /** The committed day with its vector block removed.
