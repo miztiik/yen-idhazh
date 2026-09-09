@@ -3092,6 +3092,70 @@ that broke.
 `curl -sIL` on the same URL follows the redirect and prints a 200 with the right
 bytes. The browser is the instrument for this question and nothing else is.
 
+## `page.route` cannot block what the service worker answers, and unregistering from inside the page does not help
+
+Blocking `console/band.json` with `page.route` reported `blocked: 0` while the
+request listener recorded the exact URL going out - so the interception pattern
+looked wrong when it was right. The worker served the response, and Playwright's
+request interception never sees one. Unregistering from inside the page first
+does not fix it: a controlled page keeps its worker until it is reloaded, and
+two `goto`s were not enough on 2026-09-09.
+
+The fix is one option at context creation, and it belongs in every "the payload
+is absent" arm:
+
+```js
+const context = await browser.newContext({ serviceWorkers: 'block' });
+await context.route((url) => url.pathname.endsWith('band.json'), (r) => r.abort());
+```
+
+`context.route` rather than `page.route`, so a page opened later is covered too.
+**Always count the aborts and assert the count is above zero.** An arm that
+blocks nothing renders a working page and reports a pass, which is the failure
+this whole note is about.
+
+## A payload a cold document already carries is never fetched, so blocking it on load proves nothing
+
+The console's band is read by a universal `load`. At build time SvelteKit
+resolves that fetch against the staged payload and the result is in the markup,
+so a full page load never asks for the file - and neither does a move between
+two routes under the same layout, because SvelteKit reuses layout data whose
+dependencies did not change. Both arms reported `blocked: 0` and a page that
+worked, twice, which reads as a broken block.
+
+The one moment a browser really fetches it is when the layout is **entered**
+from outside it. Start on a page under a different layout, install the block,
+then click a link in. `performance.getEntriesByType('navigation').length === 1`
+proves the move was client-side; a `goto` fetches a fresh document that already
+carries the payload and proves nothing.
+
+## A check-runs poller that treats "none yet" as "all done" prints ALL GREEN on a red commit
+
+The obvious shape is wrong:
+
+```powershell
+$pending = @($checks | Where-Object { $_.status -ne 'completed' })
+if ($pending.Count -eq 0) { 'ALL GREEN' }   # also true when $checks is EMPTY
+```
+
+`repos/<owner>/<repo>/commits/<sha>/check-runs` returns an empty list for the
+half-minute between a push and the workflow registering, so the loop's first
+tick sees nothing pending and declares success. On 2026-09-09 that printed
+`--- ALL GREEN ---` for a commit whose run had not started, and the per-check
+listing under it printed nothing at all - which is the tell, and it is easy to
+read as terse output rather than as no data.
+
+Require a check to exist before you believe the absence of a failure, and print
+the count:
+
+```powershell
+if ($checks.Count -gt 0 -and $pending.Count -eq 0) { ... }
+```
+
+Polling `gh run list --json databaseId,headSha,status,conclusion` and matching
+on `headSha` is steadier still: a run either exists for your sha or it does not,
+and `status`/`conclusion` cannot both be empty and look finished.
+
 ## A pytest harness inherits CI's `$GITHUB_OUTPUT`, and the guard test goes hollow
 
 `backend/tests/test_workflows.py` runs `.github/scripts/commit-and-push.sh` in a
