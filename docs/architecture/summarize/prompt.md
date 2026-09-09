@@ -98,22 +98,32 @@ moves a threshold to make a corpus pass - which Row #10 decision 3 forbids.
 ### Design rationale - the ladder tops out at the cut point
 
 **The rung exists because two articles read whole were asked for the same
-summary.** At `extract.truncation_cap_tokens` of 5000 the model is handed 3,846
-words. A 2,000-word article and a 3,846-word article both arrive whole, and
-before this rung both got the identical 110-to-200-word ask: one compressed 10
-to 1, the other 19 to 1, for the same 155-word midpoint. The floor is 3000
-because 2,923 is the midpoint of that whole-read range and 3000 is the nearest
-seam the ledger actually reports.
+summary.** At the `extract.truncation_cap_tokens` of 5000 committed when the
+rung was added, the model was handed 3,846 words. A 2,000-word article and a
+3,846-word article both arrived whole, and before this rung both got the
+identical 110-to-200-word ask: one compressed 10 to 1, the other 19 to 1, for
+the same 155-word midpoint. The floor is 3000 because 2,923 is the midpoint of
+that whole-read range and 3000 is the nearest seam the ledger actually reports.
 
-**Rung 4 is the last rung, and no later rung may sit above the cut point.** An
-8,442-word piece and a 3,846-word piece are handed the same 3,846 words, so they
+**Rung 4 is the last rung, and no later rung may sit above the cut point.** At
+the cap of 10000 committed now the model is handed 7,692 words, so a
+16,000-word piece and a 7,692-word piece are handed the same 7,692 words: they
 get the same ask and they should. A sixth rung asking 280 words of the
-8,442-word piece would pay for text that is not in the fenced block, and the
+16,000-word piece would pay for text that is not in the fenced block, and the
 model would close the gap by elaborating the opening - which reads as
 completeness. This is the rule the ladder has to keep, not the number 3000: the
-cap moved from 2500 to 5000 on 2026-08-29 and it will move again, so the
-assertion reads both sides from `config/` (Rule #6). A test that only checks the
-rungs climb passes either way and proves nothing.
+cap moved from 2500 to 5000 on 2026-08-29 and from 5000 to 10000 on 2026-09-09,
+and it will move again, so the assertion reads both sides from `config/`
+(Rule #6). A test that only checks the rungs climb passes either way and proves
+nothing.
+
+**The ladder was derived at the cap of 5000 and has not been re-derived.** Every
+rung floor still sits below the cut point, so nothing is broken and no rung asks
+for words the model never saw. What changed is that the whole-read range now
+runs to 7,692 words rather than 3,846, so the top rung covers a span twice as
+wide as the one it was cut for: a 3,000-word piece and a 7,692-word piece now
+share an ask, at 20 to 1 and 51 to 1. Whether that earns a sixth rung is an
+editorial call about compression rather than a contract break, and it is open.
 
 **Honesty about a partial read is a sentence, and never a word count.** The
 tempting alternative is to ask for *fewer* words when the article was cut. It
