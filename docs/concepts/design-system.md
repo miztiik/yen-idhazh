@@ -1392,8 +1392,9 @@ to say it is unsure, and Reader
 ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md))
 argued to keep it beside the day. The retention promise is now stated on
 `/archive/` alone, so a reader on a dated page is told nothing about what may
-later be deleted. On an empty dated page the panel also loses its "Latest day"
-link and offers only "All days"
+later be deleted. On an empty dated page the panel keeps its two ways on but
+loses the one that named a date: "Latest day - 8 September 2026" is now
+"Today's digest", the same destination under an address no later run can change
 ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
 
 **Why it ships anyway, and why the fix is not a smaller version of the same

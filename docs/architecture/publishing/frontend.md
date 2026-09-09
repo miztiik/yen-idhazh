@@ -837,7 +837,13 @@ rationale" in
 The short version: the commit was the site's own provenance and there is now no
 way to tell which build a page came from, the verification sentence was the only
 place that told a stranger why an item is allowed to say it is unsure, and the
-retention promise is stated on `/archive/` alone. **No replacement surface was
+retention promise is stated on `/archive/` alone. The quiet-day panel keeps its
+two ways on and loses the one that named a date: "Latest day - 8 September 2026"
+is now "Today's digest", the same destination under an address no later run can
+change, and
+[frontend/tests/day-states.spec.ts](../../../frontend/tests/day-states.spec.ts)
+is what forced a second link rather than one - a screen with nothing to do on it
+reads as a dead site. **No replacement surface was
 built.** A manifest a page fetches to print a commit was considered and refused -
 the commit is not worth a file, a schema, a request and a cleanup story
 (owner, 2026-09-08).
@@ -882,12 +888,12 @@ the answer. Publishing one more day into the digest root and rebuilding:
 | Tree | Before the day | After the day | Same bytes? |
 | --- | --- | --- | --- |
 | `main` | 32,014 raw, 7,256 gz, `02dcbc7b` | 32,014 raw, 7,258 gz, `63f8594a` | **no** |
-| this row | 31,493 raw, 7,068 gz, `29726241` | 31,493 raw, 7,068 gz, `29726241` | **yes** |
+| this row | 31,493 raw, 7,069 gz, `facd4cf1` | 31,493 raw, 7,069 gz, `facd4cf1` | **yes** |
 
 `build/2026-08-21/index.html` in every cell, `gzip -9`, SHA-256 truncated to
 eight characters. **The raw size did not move on `main` either** - `2026-09-08`
 and `2026-09-30` are the same length - so no size gate could ever have caught
-this and only a hash can. The row also takes **521 raw bytes and 188 gzipped
+this and only a hash can. The row also takes **521 raw bytes and 187 gzipped
 bytes off every page that has a footer**, but that is the small half of it. The
 point is that a page for 21 August now depends on 21 August and on nothing else.
 

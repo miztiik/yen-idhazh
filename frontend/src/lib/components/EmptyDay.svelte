@@ -8,8 +8,8 @@
 	 * So it is the card an item is: `--color-surface`, the item's hairline and
 	 * the item's radius. A quiet day and a busy day are then visibly the same
 	 * site. What it does not take is the item's hover lift - the panel is not a
-	 * target, and the link inside it answers the pointer and the keyboard
-	 * itself.
+	 * target, and the two links inside it answer the pointer and the keyboard
+	 * themselves.
 	 */
 	import { base } from '$app/paths';
 	import { longDate } from '$lib/format';
@@ -29,6 +29,13 @@
 	{/if}
 	<p class="empty-note">That can mean there was no news, or the run did not finish.</p>
 	<nav class="empty-nav" aria-label="Other days">
+		{#if date}
+			<!-- The address, never the date. This link used to name the newest day,
+			     which is read off the published tree - so it rewrote every page
+			     carrying this panel each time a day published. `/` is the same
+			     destination under a name no later run can change. -->
+			<a href="{base}/" class="empty-link">Today's digest</a>
+		{/if}
 		<a href="{base}/archive/" class="empty-link">All days</a>
 	</nav>
 </section>
@@ -81,9 +88,9 @@
 		margin-block-start: var(--space-2);
 	}
 
-	/* A thumb needs a target, and this link is the only thing on the screen to
-	   press. The height is a step on the space scale, not a number chosen
-	   here. */
+	/* A thumb needs a target, and these two links are the only thing on the
+	   screen to press. The height is a step on the space scale, not a number
+	   chosen here. */
 	.empty-link {
 		display: inline-flex;
 		align-items: center;

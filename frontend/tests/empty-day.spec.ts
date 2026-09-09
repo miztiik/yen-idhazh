@@ -71,10 +71,12 @@ test('the root empty state offers a way out that no later run can move', () => {
 	// It used to name the newest day and link straight to it. That name is read
 	// off the newest day on disk and the root layout handed it to every page,
 	// so publishing rewrote the bytes of every older page carrying this panel.
-	// `/archive/` is the same way out and it says the same thing every day.
+	// `/` is the same destination under a name no later run can change, and
+	// `day-states.spec.ts` holds the panel to two ways on.
 	expect(page).not.toContain('data.latest');
 	expect(copy).not.toContain('run notice above');
 	expect(copy).not.toContain('Latest day -');
+	expect(copy).toContain("Today's digest");
 	expect(copy).toContain('All days');
 });
 
