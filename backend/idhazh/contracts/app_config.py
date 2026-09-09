@@ -73,7 +73,20 @@ class LogLevel(StrEnum):
 class InferenceConfig(Model):
     """Decoding is pinned here so a change of output is a reviewable diff."""
 
-    n_ctx: int = Field(default=8192, ge=512)
+    n_ctx: int = Field(
+        default=8192,
+        ge=512,
+        description=(
+            "The window one sequence gets. The default stays 8192 because it is the "
+            "conservative window for weights nobody has put in front of a runner; "
+            "models.summarize pins 16384 and models.visual_planner does not, and the "
+            "measurement that earns the raise is about the 9B on a GitHub-hosted "
+            "runner rather than about this field. Doubling buys nothing but KV cache: "
+            "32 KiB a token on those weights, so 0.25 GiB at 8192 and 0.50 at 16384. "
+            "Whether that fits is decided by what the machine had free and never by "
+            "what the processes held - docs/reference/measurements.md."
+        ),
+    )
     n_threads: int = Field(default=4, ge=1)
     n_batch: int = Field(default=512, ge=1)
     n_ubatch: int = Field(default=512, ge=1)
@@ -125,6 +138,22 @@ class InferenceConfig(Model):
         default=None,
         ge=0,
         description="llama-server --poll. None omits the flag and keeps the runtime default.",
+    )
+    log_verbosity: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "llama-server -lv. None omits the flag and keeps the runtime default of 3, "
+            "which prints twelve lines and none of them names flash attention, the KV "
+            "buffer or the compute buffer. At 4 the whole model-loader block comes back, "
+            "which is what lets a check read the attention state off the server's own "
+            "line instead of off the flag we passed it. Measured 2026-09-09 on a 12th "
+            "Gen Intel Core i7-1265U against llama.cpp b10444, three runs an arm and "
+            "zero spread: one server start goes from 12 lines and 1,085 bytes to about "
+            "206 lines and 16,011 bytes. That is a job artifact kept for two days, never "
+            "a committed file. It changes what the server says about itself and nothing "
+            "about what it decodes, so idhazh.fingerprint leaves it out of the stamp."
+        ),
     )
     temperature: float = Field(default=0.0, ge=0.0)
     top_p: float = Field(default=1.0, gt=0.0, le=1.0)
@@ -2944,6 +2973,57 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T20:40",
+            change=(
+                "InferenceConfig.n_ctx now states what the window is and why the "
+                "default stays 8192. No field was added, removed or retyped. "
+                "config/idhazh.json moves models.summarize to n_ctx 16384 with "
+                "flash_attention pinned on; models.visual_planner is unchanged."
+            ),
+            why=(
+                "The field carried no description at all, so the one number in this "
+                "block that decides whether a prompt fits was the only one with no "
+                "reason beside it. The raise is the summarizer's alone: the visual "
+                "planner is different weights with its own settings block since the "
+                "roles were split, and nothing has measured a 16,384 window against "
+                "it. Doubling buys nothing but KV cache - 32 KiB a token on those "
+                "weights, so 0.25 GiB more - and run 2026-09-09-34323771996 read "
+                "MemAvailable at 5.63 GiB at the tightest of 601 samples on a 15.61 "
+                "GiB runner, which clears the 1.0 GiB bar 5.4 times over after the "
+                "raise is paid. flash_attention is pinned in the same commit rather "
+                "than a later one because n_ctx is fingerprint-digested and moves the "
+                "stamp anyway, so pinning the flag beside it costs no second break in "
+                "comparability. Pinning still earns its place: auto is a runtime "
+                "autodetect that may resolve differently on other silicon, and a run "
+                "that cannot say which kernel it used cannot be compared with one that "
+                "can (Rule #10)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-09T20:10",
+            change=(
+                "InferenceConfig gains log_verbosity, an optional llama-server -lv "
+                "level. Null omits the flag and keeps the runtime default of 3. "
+                "config/idhazh.json sets 4 on both model roles."
+            ),
+            why=(
+                "The server was never asked to describe itself. At its default verbosity "
+                "it prints twelve lines, and no line among them names flash attention, "
+                "the KV buffer or the compute buffer - so every claim about what the "
+                "runtime did with those settings was a claim about the flag we passed "
+                "rather than about what happened (Rule #10). At 4 the model-loader block "
+                "comes back and the log states the attention decision three ways: a "
+                "named state, a compute buffer 5.1 times larger without fusion, and a "
+                "graph 180 nodes longer. Measured 2026-09-09 on a 12th Gen Intel Core "
+                "i7-1265U against llama.cpp b10444, eleven server starts, three runs an "
+                "arm, zero spread. It is a knob rather than a literal because an "
+                "operator debugging a start wants 9 and a daily run does not (Rule #6), "
+                "and it is set on both roles because both write a log nobody can read "
+                "otherwise. What it costs is one job artifact growing from 1,085 bytes "
+                "to about 16,011 - kept two days, committed never."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T18:00",
             change=(

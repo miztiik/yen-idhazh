@@ -175,6 +175,62 @@ So both sides of the comparison are open, not one. An owner choosing today is
 choosing without an instrument, and the cheap next step is one run rather than
 one argument.
 
+### The run arrived, and 16,384 is now committed - what it is projected to cost
+
+**Answered on one reading, and the reading is the kernel's own.** Run
+`2026-09-09-34323771996` is the first this project has taken with
+`MemAvailable` beside the process marks: 4 shards, 601 samples, `n_ctx` 8,192,
+on GitHub-hosted `ubuntu-latest`. `MemTotal` 15.61 GiB. At the tightest instant
+of the whole run the kernel still reported **5.63 GiB available**, and the four
+shards' lows were 5.63, 5.95, 7.64 and 7.84 GiB. llama-server's worst `VmHWM`
+was 12.68 GiB and python's 1.76 GiB.
+
+**Those two readings disagree, and the disagreement is the point.** The process
+marks sum to 14.44 GiB, while the kernel says only 9.98 GiB of the machine was
+unavailable - a gap of 4.46 GiB in the direction the earlier sections predicted.
+`load_mode` is null, so llama.cpp maps the 5.29 GiB weight file rather than
+reading it into anonymous memory: those pages count in `VmRSS` in full and the
+kernel can drop them, so a sum of resident sets overstates what has to fit. The
+two figures cannot be reconciled to the byte from what this run recorded - a
+`VmHWM` is a peak and `MemAvailable` is an instant, and nothing pairs them - but
+they do not need to be. **`MemAvailable` is the only one of the two that answers
+the question**, because it is the kernel's own estimate of what a new allocation
+could get.
+
+**What the raise costs is KV cache and nothing else, and it is arithmetic.** On
+`Qwen3.5-9B-Q4_K_M` the card gives 4 KV heads, a head dimension of 256, and 8
+attention layers: 4 x 256 x 2 (K and V) x 2 bytes is 4 KiB a token a layer, so
+32 KiB a token across the eight - **0.25 GiB at 8,192 and 0.50 GiB at 16,384**.
+The raise is +0.25 GiB. Read two ways, it clears the plan's 1.0 GiB bar both
+times: on the kernel's own reading 5.63 - 0.25 leaves **5.38 GiB, 5.4 times the
+bar**; on the harsher machine-minus-llama-peak framing, 15.61 - 12.68 - 0.25
+leaves **2.68 GiB, 2.7 times it**. The answer does not turn on which framing
+is accepted.
+
+**This is a projection until row 4 dispatches, and it is labelled one.** No run
+has yet started a server at 16,384, so the KV figure above is arithmetic off a
+model card rather than a reading. The one cross-check this repository holds is
+about other weights and agrees with the method rather than with the number: the
+8B prints `llama_kv_cache: CPU KV buffer size = 1152.00 MiB` at `n_ctx` 8,192,
+which is 144 KiB a token - 4.5 times the 9B's, because the 8B carries 36
+attention layers of 8 KV heads at head dimension 128 and the 9B carries 8 of 4
+at 256. Same arithmetic, different architecture. **What row 4 confirms** is the
+KV buffer line the server now prints at `-lv 4`, read off the first run at
+16,384: if `CPU KV buffer size` comes back near 512 MiB the projection holds, and
+if it comes back near 2,304 MiB the model card was read wrong and the raise costs
+1.1 GiB rather than 0.25. Row 4 also reads `MemAvailable` at the new window,
+which is the only figure that settles fit rather than predicting it.
+
+**32,768 was refused, and not on memory.** Its memory objection died with this
+reading. The one that stands is that it buys nothing: the widest two-call
+request this pipeline can build is about 8,580 tokens, so 16,384 is 1.9 times
+that and 32,768 is 3.8 times. Doubling again pays 0.5 GiB more for headroom over
+headroom.
+
+**The cache types stay `f16`.** `q8_0` on K or V changes how the partial sums
+accumulate, which changes the words. That is a separate measurement against the
+scorers, not a memory knob to reach for while raising a window.
+
 ## What llama-server reports about its own runtime settings, 2026-09-09
 
 **Flash attention is observable, and only in the log, and only at verbosity 4 or
@@ -318,6 +374,17 @@ at `n_ctx` 8192 it is 112.01 MiB with attention fused and 572.01 MiB without.
 Corroboration is worth the line because the log grammar is llama.cpp's and moves
 between builds, while the buffer difference is arithmetic and does not.
 
+**Written, 2026-09-09.** `idhazh.llm.server.flash_attention_state` is that
+reader and returns those three states by those names. Its four arms are driven
+from committed fixtures and never from a live server (Rule #7): the three
+`tests/fixtures/runtime/2026-09-09-lv4-*.readings.txt` excerpts carry the
+readings above, and the `UNREADABLE` arm is driven by the four real
+`2026-08-29-3-shard-*.server-head.txt` captures, which are runner logs taken
+before the verbosity knob existed and therefore hold no attention line at all.
+A fifth case removes the `resolve_fused_ops` line from the recorded `auto` arm
+and asserts the verdict falls back to `UNREADABLE`, which is what stops `auto`
+being read as a yes.
+
 ### `/props` settles the build and the window, and cannot settle flash attention
 
 `/props` is the right instrument for three questions and the wrong one for this
@@ -357,6 +424,31 @@ state whether it is on. Seconds to first health ranged 10.1 to 34.6 s over the
 eleven starts, and that range is page cache rather than anything about the
 flags: the first start of the session was the 34.6 and every later one was 10.1
 to 16.3.
+
+### What landed from this, and what one server start now costs
+
+**The flag is committed.** `models.summarize.inference.log_verbosity` and
+`models.visual_planner.inference.log_verbosity` are both `4` in
+`config/idhazh.json`, and `idhazh.llm.server.server_argv` emits `-lv 4` from
+them. It is a knob rather than a literal because an operator debugging a start
+wants `9` and a daily run does not (Rule #6). Null omits the flag and keeps the
+runtime's own default of 3, so a checkout with no config file starts a quiet
+server exactly as before.
+
+**The cost is one job artifact, and it is not a committed file.** A server start
+goes from 12 stderr lines and 1,085 bytes to about 206 lines and 16,011 bytes -
+roughly 15 KB per start, on the readings in the table above. A daily run makes
+five starts across the two roles, four work shards and the visual planner, so
+about 78 KiB a day. It lands in the run's own log, which GitHub Actions retains
+and nothing else reads, and no byte of it reaches the 1 GB published site
+(Rule #2) or the repository. The daily workflow already uploads
+`llama-server.log` as a two-day artifact, well inside the 500 MB allowance.
+
+**`log_verbosity` is not fingerprint-digested**, and sits in
+`idhazh.fingerprint.NOT_DIGESTED` with that reason written next to it. A log
+level cannot move a logit, so digesting it would have invalidated every earlier
+work identity on the day somebody turned the logging up - which is what
+`n_threads_batch` was refused for on the other side of the same argument.
 
 ## What the encoder costs on the wire from Hugging Face, 2026-09-09
 
