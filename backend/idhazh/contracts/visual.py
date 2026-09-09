@@ -41,6 +41,51 @@ is when this shape last moved; `plan_version` is which planning vocabulary the
 plan was made against, and a later build comparing the two is how contract drift
 is found rather than drawn.
 
+## Every role is a key, and an unused one is empty
+
+`encodings` is one flat object with a field per role, and the schema requires
+every one of them. A `bar` therefore emits `"bins": []` and `"size": []`
+alongside the two channels it fills.
+
+**Presence is the guarantee; what may be empty is the validator's.** Left
+optional, a role is a role the model can simply not mention, and a plan that
+names `bar` and omits `quantity` reads as a complete answer - "a confident chart
+with no bars in it", which happened twice on the first live run. Required, that
+plan is a decode failure at the key rather than a chart with nothing in it.
+Which roles a given type may leave empty needs the type's own rule set, and a
+schema cannot say "at most four roles for a `bar`", so that ruling belongs to
+the validator and this shape only guarantees it has something to rule on.
+
+The one-per-role object is why the roles are fields rather than a map. A JSON
+Schema can require the keys of an object it declares; it cannot require the keys
+of a map. An eighteen-branch union, one per type, was the other way to reach the
+same place, and it was refused: the decoder would have to pick a branch before
+it has picked a type.
+
+**There is no `label` role, and the top-level `labels` field is why.** `labels`
+is the elements whose own characters name the marks and the axes - one naming
+channel for the whole picture, capped at eight marks and two axes. A `label`
+role would ask the same question a second time inside `encodings`, and a model
+that answers it twice can answer it two ways, with no fact to settle which. So
+naming stays one field, and `encodings` stays the answer to a different question:
+which elements are *drawn*, and by which channel. `event_label` is not the
+exception it looks like - a timeline's `time` channel places a dot and nothing
+else, so the event text is the mark rather than a name for one.
+
+**What required-but-empty costs, measured rather than assumed.** An empty role
+is `"<name>":[]` and a comma, so the nine role names cost 114 characters on a
+plan that fills none and the seven a `bar` leaves empty cost 87. Tokenized with
+the Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`,
+2026-09-09; Qwen3-4B, the configured planner, is the same tokenizer) that is
+**28 tokens** on the declining plan and **23** on the eight-bar one, about 3.1
+tokens an empty role. At the 13.00 tok/s the 4B decodes at (`ubuntu-latest`,
+2026-08-22) that is 2.2 s and 1.8 s a plan; at the 6.01 tok/s the configured
+summarizer decodes at (`ubuntu-latest`, 2026-08-23) it is 4.7 s and 3.8 s. Over
+`run.safety_ceiling_per_run` (80) items it is 2.4 to 2.9 minutes of the 4B's
+`run.visual_planner_budget_minutes` (40), which is 6 to 7 percent of that budget
+and 8 to 10 percent on top of the 21.0 s an item the stage measured on
+2026-08-24.
+
 ## The worst-case decoded reply, in characters
 
 Every array here has a `maxItems` and every decoded string a `maxLength`
@@ -56,7 +101,7 @@ quotes. An array of `n` of them costs `25n + 1`.
 | `decision` | 11 | `"visual"` | 19 |
 | `purpose` | 10 | `"distribution"` | 24 |
 | `type` | 7 | `"stacked_bar"` | 20 |
-| `encodings` | 12 | 9 role keys (88) + 9 arrays of 8 (1809) + 8 commas + 2 braces | 1919 |
+| `encodings` | 12 | 9 required role keys (88) + 9 arrays of 8 (1809) + 8 commas + 2 braces | 1919 |
 | `element_ids` | 14 | 32 ids | 815 |
 | `labels` | 9 | 10 ids | 260 |
 | `annotations` | 14 | 4 ids | 115 |
@@ -71,10 +116,15 @@ recomputes that from the generated schema and this module refuses to import if i
 and `WORST_CASE_REPLY_CHARACTERS` disagree, so a bound cannot move without the
 ceiling moving with it.
 
-The two committed fixtures measure **751 characters** for an eight-bar plan and
-**254** for one that declines - a fifth and a fifteenth of the ceiling, because
-seven of the nine roles are empty and the prose fields are nowhere near their
-caps.
+Making every role required moved none of that. The worst case already counted
+every declared key, because a grammar-constrained decoder emits them all; what
+changed is that the count is now true of an ordinary plan as well as of the
+worst one.
+
+The two committed fixtures measure **838 characters** for an eight-bar plan and
+**368** for one that declines - between a fifth and a tenth of the ceiling,
+because at most two of the nine roles are filled and the prose fields are
+nowhere near their caps.
 
 `encodings` is 51 percent of the ceiling and `element_ids` a further 22 percent,
 so the two element-reference fields are five sixths of it. No type in the
@@ -95,7 +145,7 @@ from typing import Annotated, Any, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, SchemaVersion
+from idhazh.contracts.base import ChangelogEntry, Contract, Model, SchemaVersion
 from idhazh.contracts.element import ELEMENT_ID_PATTERN, ElementId
 
 #: The field this contract may never grow, and the reason it is spelled as a
@@ -243,28 +293,64 @@ class EncodingRole(StrEnum):
     them. Whether a role is required, optional or illegal for a given type is
     the validator's rule; this names the roles that exist.
 
+    What each channel is for is the description on the field of the same name
+    in `PlanEncodings`, which is the copy that reaches the generated schema and
+    so the only copy a decoder is shown. The member order is the decode order of
+    that object, and the two may not drift: this module refuses to import unless
+    the names and the order match.
+
     There is no `label` role. What names a mark is the top-level `labels` field,
     and one fact with two homes is a fact that can disagree with itself.
     """
 
-    #: The discrete axis: what each mark is.
     CATEGORY = "category"
-    #: The measured axis: how big each mark is.
     QUANTITY = "quantity"
-    #: The second measured axis, where a type has two.
     QUANTITY_X = "quantity_x"
-    #: The temporal axis.
     TIME = "time"
-    #: What splits the marks into groups.
     SERIES = "series"
-    #: The third channel, drawn as area.
     SIZE = "size"
-    #: The quantity that is binned rather than plotted.
     BINS = "bins"
-    #: Who or what a mark is about.
     ENTITY = "entity"
-    #: What names one dated event.
     EVENT_LABEL = "event_label"
+
+
+class PlanEncodings(Model):
+    """Which elements fill which channel: every role a key, an unused one empty.
+
+    References only - a channel names the elements that fill it and never the
+    values they hold. Every field is required, so a decoder cannot answer for a
+    `bar` by quietly not mentioning `quantity`; an inapplicable channel is an
+    empty array, and whether empty is legal for a given type is the validator's
+    rule rather than this shape's.
+
+    Field order is decode order here as it is on the plan itself, and it is the
+    order `EncodingRole` declares.
+    """
+
+    category: _RoleIds = Field(description="The discrete axis: what each mark is.")
+    quantity: _RoleIds = Field(description="The measured axis: how big each mark is.")
+    quantity_x: _RoleIds = Field(description="The second measured axis, where a type has two.")
+    time: _RoleIds = Field(description="The temporal axis.")
+    series: _RoleIds = Field(description="What splits the marks into groups.")
+    size: _RoleIds = Field(description="The third channel, drawn as area.")
+    bins: _RoleIds = Field(description="The quantity that is binned rather than plotted.")
+    entity: _RoleIds = Field(description="Who or what a mark is about.")
+    event_label: _RoleIds = Field(description="What names one dated event.")
+
+    def filled(self) -> dict[EncodingRole, list[ElementId]]:
+        """The channels this plan actually drew with, by role.
+
+        Every role is present, so "which roles does this plan use" is a question
+        about which are non-empty rather than about which are there. Both the
+        validators below ask it, and so does anything that has to reason about a
+        plan by role rather than by field.
+        """
+        drawn: dict[EncodingRole, list[ElementId]] = {}
+        for role in EncodingRole:
+            ids: list[ElementId] = getattr(self, role.value)
+            if ids:
+                drawn[role] = ids
+        return drawn
 
 
 class VisualPlan(Contract):
@@ -272,6 +358,28 @@ class VisualPlan(Contract):
 
     __schema_stem__: ClassVar[str] = "visual-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-09T03:11",
+            change=(
+                "encodings became one flat object with a field per role, and the schema "
+                "requires every one of them. It was a map whose keys were optional, so a "
+                "reply could name a type and never mention the channel that draws it. An "
+                "inapplicable role is now an empty array. No role was added or removed "
+                "and no bound moved, so the worst-case reply is the same 3767 characters."
+            ),
+            why=(
+                "Optional role keys produced a confident chart with no bars in it, twice, "
+                "on the first live run, and a plan that omits quantity reads as a complete "
+                "answer rather than as a failure. A JSON Schema can require the keys of an "
+                "object it declares and cannot require the keys of a map, so the roles had "
+                "to become fields for the decoder to be held to them. Presence is all this "
+                "shape guarantees: which roles a given type may leave empty needs that "
+                "type's own rule set, which is the validator's and not the schema's. The "
+                "cost is nine keys on every reply and it is measured rather than assumed - "
+                "28 tokens on a plan that declines and 23 on an eight-bar one, about 2 "
+                "seconds a plan and 6 to 7 percent of the planner's run budget."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09",
             change=(
@@ -312,13 +420,12 @@ class VisualPlan(Contract):
             "The form, from the full declarable vocabulary. Null on a plan that declines."
         )
     )
-    encodings: dict[EncodingRole, _RoleIds] = Field(
-        default_factory=dict,
-        max_length=len(EncodingRole),
+    encodings: PlanEncodings = Field(
         description=(
-            "Which elements fill which channel. References only - a channel names the "
-            "elements that fill it and never the values they hold."
-        ),
+            "Which elements fill which channel. Every role is a key and the decoder may "
+            "not skip one, so a plan that draws nothing in a channel says so with an "
+            "empty array rather than by silence."
+        )
     )
     element_ids: list[_PlanElementId] = Field(
         default_factory=list,
@@ -391,7 +498,7 @@ class VisualPlan(Contract):
                 if value is not None:
                     raise ValueError(f"a plan that declines carries no {name}")
             for name, cited in (
-                ("encodings", self.encodings),
+                ("encodings", self.encodings.filled()),
                 ("element_ids", self.element_ids),
                 ("labels", self.labels),
                 ("annotations", self.annotations),
@@ -420,7 +527,7 @@ class VisualPlan(Contract):
             "labels": set(self.labels),
             "annotations": set(self.annotations),
         }
-        for role, role_ids in self.encodings.items():
+        for role, role_ids in self.encodings.filled().items():
             cited[f"encodings.{role.value}"] = set(role_ids)
         for where, ids in cited.items():
             unknown = sorted(ids - declared)
@@ -554,6 +661,15 @@ if not _declared.isdisjoint(FORBIDDEN_FIELDS):
         "the compiler writes alt text from the element values it already holds; a plan "
         f"field named one of {sorted(FORBIDDEN_FIELDS)} is a prose channel no validator "
         "can check (12.8 X6)"
+    )
+#: The role vocabulary and the object that carries it are two spellings of one
+#: list, and the validator reads the first while the decoder is held to the
+#: second. Order as well as names, because field order is decode order.
+if tuple(PlanEncodings.model_fields) != tuple(role.value for role in EncodingRole):
+    raise TypeError(
+        "every role is a channel and every channel is a role, in one order - "
+        f"EncodingRole says {[role.value for role in EncodingRole]} and PlanEncodings "
+        f"says {list(PlanEncodings.model_fields)}"
     )
 if numeric_leaves() != NUMERIC_FIELDS:
     raise TypeError(

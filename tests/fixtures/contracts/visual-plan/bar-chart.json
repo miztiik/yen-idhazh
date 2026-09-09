@@ -16,18 +16,25 @@
     "quantity-1547-1554"
   ],
   "encodings": {
+    "bins": [],
     "category": [
       "entity-1170-1177",
       "entity-1288-1295",
       "entity-1409-1414",
       "entity-1534-1541"
     ],
+    "entity": [],
+    "event_label": [],
     "quantity": [
       "quantity-1184-1192",
       "quantity-1301-1308",
       "quantity-1422-1430",
       "quantity-1547-1554"
-    ]
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
   },
   "labels": [
     "quantity-1184-1192",
@@ -37,6 +44,6 @@
   "purpose": "comparison",
   "title": "Offshore wind capacity, four countries",
   "type": "bar",
-  "version": "2026-09-09",
+  "version": "2026-09-09T03:11",
   "why": "Four countries, one unit, and the lead sentence turns on which of them is largest."
 }

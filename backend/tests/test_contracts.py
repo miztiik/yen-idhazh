@@ -102,9 +102,12 @@ from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.contracts.visual import (
     CODE_STAMPED_FIELDS,
     FORBIDDEN_FIELDS,
+    MAX_LABELS,
     NUMERIC_FIELDS,
     WORST_CASE_REPLY_CHARACTERS,
+    EncodingRole,
     PlanDecision,
+    PlanEncodings,
     VisualPlan,
     VisualType,
     numeric_leaves,
@@ -638,7 +641,8 @@ def test_a_plan_of_references_and_closed_names_loads() -> None:
     plan = VisualPlan.model_validate(_plan_payload())
     assert plan.decision is PlanDecision.VISUAL
     assert plan.type is VisualType.BAR
-    drawn = set(plan.labels) | set(plan.annotations) | {i for r in plan.encodings.values() for i in r}
+    drawn = set(plan.labels) | set(plan.annotations)
+    drawn |= {i for ids in plan.encodings.filled().values() for i in ids}
     assert drawn <= set(plan.element_ids), "everything drawn is an element the plan declared"
 
 
@@ -679,6 +683,98 @@ def test_a_plan_carrying_authored_text_does_not_load() -> None:
     encodings = payload["encodings"] | {"category": ["Denmark", "Germany"]}
     with pytest.raises(ValidationError, match="encodings"):
         VisualPlan.model_validate(payload | {"encodings": encodings})
+
+
+def test_a_plan_that_omits_a_role_does_not_load() -> None:
+    """Every role name is a key and the decoder may not skip one.
+
+    Optional arrays produced "a confident chart with no bars in it", twice, on
+    the first live run - a plan that names `bar` and simply leaves `quantity`
+    out reads as a complete answer. Presence is the whole guarantee this shape
+    makes: what a `bar` may leave empty is the validator's rule, and a validator
+    cannot rule on a key it never received.
+    """
+    payload = _plan_payload()
+    for role in EncodingRole:
+        short = {name: ids for name, ids in payload["encodings"].items() if name != role.value}
+        with pytest.raises(ValidationError, match=rf"encodings\.{role.value}\b"):
+            VisualPlan.model_validate(payload | {"encodings": short})
+    with pytest.raises(ValidationError, match="encodings"):
+        VisualPlan.model_validate({k: v for k, v in payload.items() if k != "encodings"})
+
+
+def test_a_role_the_type_cannot_use_is_present_and_empty() -> None:
+    """The other half: an inapplicable role loads as `[]` rather than failing.
+
+    A bar has no bins, no size and no second measured axis, so the eight-bar
+    fixture carries seven empty channels beside its two filled ones. The shape
+    accepts every combination it can spell, including one no type would ever
+    draw, because ruling which roles a `bar` may fill needs the type's own rule
+    set - and that is the validator's, not the schema's.
+    """
+    payload = _plan_payload()
+    assert set(payload["encodings"]) == {role.value for role in EncodingRole}
+    plan = VisualPlan.model_validate(payload)
+    assert set(plan.encodings.filled()) == {EncodingRole.CATEGORY, EncodingRole.QUANTITY}
+    assert plan.encodings.bins == [] and plan.encodings.size == []
+    absurd = payload["encodings"] | {"bins": payload["encodings"]["quantity"]}
+    assert VisualPlan.model_validate(payload | {"encodings": absurd}).encodings.bins, (
+        "a bar with bins in it is a plan the validator refuses and the shape spells"
+    )
+
+
+def test_the_role_vocabulary_and_the_channels_are_one_list_in_one_order() -> None:
+    """Two spellings of one list, and the decoder is held to the second.
+
+    The validator reads roles as data off the enum; the model is held to the
+    object's fields. Order as well as names, because field order is decode order
+    here as it is on the plan itself.
+    """
+    assert tuple(PlanEncodings.model_fields) == tuple(role.value for role in EncodingRole)
+    channels = VisualPlan.json_schema()["$defs"]["PlanEncodings"]
+    # `canonical_json` sorts keys, so `required` is the only place in the committed
+    # document where the declared order - and so the decode order - survives.
+    assert channels["required"] == [role.value for role in EncodingRole]
+    assert channels["additionalProperties"] is False, "a role the vocabulary lacks is not a role"
+
+
+def test_naming_a_mark_has_one_home_and_it_is_not_a_role() -> None:
+    """There is no `label` role, and section 12.8 X2 lists one - so this is the
+    assertion that keeps the call made rather than re-opened.
+
+    `labels` is the one naming channel: the elements whose own characters name
+    the marks and the axes, eight marks and two axes. A `label` role would ask a
+    model the same question a second time inside `encodings`, and a model that
+    answers twice can answer two ways with no fact to settle which. `event_label`
+    is not the same thing - a timeline's `time` channel places a dot and nothing
+    else, so the event text is the mark rather than a name for one.
+    """
+    assert "label" not in PlanEncodings.model_fields
+    assert "label" not in {role.value for role in EncodingRole}
+    assert "labels" in VisualPlan.model_fields
+    assert MAX_LABELS == 10, "eight marks and two axes, which is what naming a mark is for"
+
+
+def test_required_but_empty_roles_cost_what_the_module_says_they_cost() -> None:
+    """Every role being a key is paid for on every reply, so the price is checked.
+
+    Characters are the half a test can hold, and they are exact. The token
+    figure beside them in the module docstring came from `llama-tokenize` against
+    the Qwen3 vocabulary, which needs weights this repository does not commit
+    (Rule #2), so it is recorded there with its hardware and date instead.
+    """
+    cost = {}
+    for stem in ("bar-chart", "declined"):
+        body = {
+            name: value
+            for name, value in _plan_payload(stem).items()
+            if name not in CODE_STAMPED_FIELDS
+        }
+        lean = body | {"encodings": {r: ids for r, ids in body["encodings"].items() if ids}}
+        dumped = (json.dumps(b, separators=(",", ":"), sort_keys=True) for b in (body, lean))
+        whole, without = (len(text) for text in dumped)
+        cost[stem] = whole - without
+    assert cost == {"bar-chart": 87, "declined": 114}
 
 
 def test_a_plan_carrying_alt_text_does_not_load() -> None:
@@ -754,7 +850,7 @@ def test_the_worst_case_reply_length_is_arithmetic_and_the_fixtures_are_a_fracti
             if name not in CODE_STAMPED_FIELDS
         }
         measured[stem] = len(json.dumps(decoded, separators=(",", ":"), sort_keys=True))
-    assert measured == {"bar-chart": 751, "declined": 254}
+    assert measured == {"bar-chart": 838, "declined": 368}
     assert max(measured.values()) < WORST_CASE_REPLY_CHARACTERS // 4
 
 
