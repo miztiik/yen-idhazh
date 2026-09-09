@@ -27,10 +27,198 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | What a plan is, and the four things it may not carry | - | A | PENDING | - | - | - |
-| 2 | Every role is a key, and an unused one is empty | 1 | B | PENDING | - | - | - |
-| 3 | The validator refuses | 2 | C | PENDING | - | - | - |
-| 4 | A number the article did not write, and the four ways code may reach one | 3 | D | PENDING | - | - | - |
+| 1 | What a plan is, and the four things it may not carry | - | A | DONE #532 | yi-j01-plan | #532 | worker |
+| 2 | Every role is a key, and an unused one is empty | 1 | B | DONE #533 | yi-j02-roles | #533 | worker |
+| 3 | The validator refuses | 2 | C | DONE #535 | yi-j03-validator | #535 | worker |
+| 4 | A number the article did not write, and the four ways code may reach one | 3 | D | DONE #537 | yi-j04-derived | #537 | worker |
+
+**Every row is closed. The substance is distilled into
+[`docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md)
+and [`docs/concepts/design-system.md`](../docs/concepts/design-system.md), which
+are the pages that own it.** Two follow-ups below need a home before this
+plan-doc is deleted.
+
+### Row 4 - the four functions, and the stamp that became three
+
+Every chain carries `function`, `version` and `inputs` - Tier 1 element ids,
+ordered, and never another derived value. `inputs` is flat by design: a nesting
+chain can be complete at every hop and still name no element at the bottom, and
+"every input element" is what the oracle asks for.
+
+| Function | Reads | Produces | Adds to the chain |
+| --- | --- | --- | --- |
+| `count` | the elements in one bin | how many, unitless | the bin's floor and ceiling |
+| `sum` | two or more elements stating one unit | their total, in that unit | nothing |
+| `share_of_declared_whole` | the part, then the parts making the whole | a percentage | nothing |
+| `convert` | one element | the same quantity against another unit of its dimension | the source unit and `UNIT_TABLE_VERSION` |
+
+**Row 3's single stamp split into three, and `visuals.unit_table_version` was
+refused.** Row 3 kept its role table in code for two reasons and only the second
+carries over: a JSON file cannot reference two Python enums, which the unit
+table does not need - but which units measure the same thing is arithmetic, so a
+stamp an operator can edit without editing the table it stamps is a stamp that
+lies, and every derived value recording it lies with it. The three are
+`PLAN_VOCABULARY_VERSION` (which roles a type may fill), `UNIT_TABLE_VERSION`
+(which units measure the same thing, and by what factor) and
+`DERIVED_VALUE_VERSION` (the four functions and the binning rule). They are
+separate because `plan_version_current` re-plans a plan behind the first, at one
+model call an item - folded together, adding one unit spelling would re-plan
+every in-flight plan for a reason the model had no part in.
+
+**A mixed-but-commensurable value channel is now drawable**, which it was not
+when row 3 closed. The target unit is the smallest scale present, tie-broken
+alphabetically - a fact about the channel's contents rather than the plan's
+order, so the model does not choose it, and converting to the smallest present
+unit only ever multiplies, so no rounding decision hides inside a mark. The line
+is scale, not spelling: `tonne` to `t` moves no number and is formatting; `kt`
+to `t` is a different number and carries the chain.
+
+**`derived_value_rate` and `trusted_data_ratio` ship as computations with
+bounded tests and are deliberately not wired.** Nothing resolves a plan into
+figures on the daily path until plan 12's compiler exists, so the run manifest
+is named as their home rather than given two columns nobody writes. Both are
+needed and they measure different things: the first is the narrowness alarm -
+what share of a page's figures code computed - and the second is the correctness
+alarm - what share resolves at all. Both return nothing over an empty set,
+because a day whose planner drew no charts is not a perfect score.
+
+ESCALATE trigger 2 is now mechanical rather than a paragraph:
+`backend/idhazh/contracts/derived.py` raises at import if `DerivedFunction` and
+the allow-list disagree, and the message says a fifth is an owner decision.
+
+### Two follow-ups this plan created and did not close
+
+1. **`_enough_data` counts the wrong thing for a histogram.** It counts elements
+   in the `bins` channel against `min_chart_points` and `max_chart_points`, but
+   a histogram's drawn marks are bins rather than input values. It is row 3's
+   check and row 4 correctly left it. With `visuals.histogram_bins` at 3 and a
+   channel of 3 to 8 values the two happen not to collide, so nothing is broken
+   today - but a raised bin count can ask for more bins than the floor admits.
+2. **`derived_values` imports `visual_validator`, which reads as a backwards
+   arrow and is not one** - the resolver runs after validation, so a later stage
+   imports an earlier stage's vocabulary. `UNIT_DIMENSIONS` was left where row 3
+   put it rather than moved to a neutral module, because moving it would edit
+   row 3's test imports for no behaviour change. If a reviewer prefers the move
+   it is a two-line import change plus the guard.
+
+### One process note worth carrying
+
+Row 4's worker read the persona files **after** implementing rather than before,
+then checked each ruling against them. None of the three contradicted a ruling,
+but the order was wrong and the ratification is worth less for it. A persona is
+an input to the action (`docs/how-to/execute-a-plan.md`), and read afterwards it
+is a review instead.
+
+---
+
+### Row 3's two rulings on the provenance invariants (decision 5, 12.9 G13)
+
+- **`derived_provenance_complete` degrades the item.** A plan whose drawn
+  figure resolves neither to a Tier 1 element nor to a derived value with a
+  complete chain is refused, the item publishes with no picture, and the
+  refusing check is recorded - because taking a whole day's digest off the air
+  to punish one story is the trade `CLAUDE.md` section 1a already refuses.
+- **`span_integrity_pass` breaks the build on its write side and degrades the
+  item on its read side**, which is what `ElementTable.span_drift` already does
+  and what plan 08 row 4 shipped as three parts rather than one gate.
+- **Why span is the exception, and it is not because span drift is graver.** It
+  is the only one of the two asked on both sides of a boundary. A producer cut
+  every excerpt out of the string it hashed moments earlier, so a mismatch there
+  is this run's own arithmetic being wrong and every article in the run has it -
+  failing the build states what is true. Every other invariant here is asked
+  only of a payload the asker did not build, where the worst case is one item's
+  problem. **Degrading is the rule; the exception turns on the side of the
+  boundary, not on the invariant.**
+
+Neither ruling changes what a corpus build does, so ESCALATE trigger 3 did not
+fire.
+
+### Where the per-type role table went, and the seven types with no rule
+
+**Code, not `config/`, and decision 3's premise had already moved** - there is no
+type vocabulary in `config/idhazh.json` today, so the check guards the table
+where it actually lives. The relation is between `VisualType` and
+`EncodingRole`, two closed enums, and a JSON file can reference neither; a copy
+there is a second spelling that drifts from both. And "a bar has no bins" is
+what a bar is rather than a tunable. The knobs that ARE knobs -
+`min_chart_points` and `max_chart_points` - are read from `config/` (Rule #6),
+and a test asserts they are read rather than typed.
+
+**Eleven of the eighteen types have a rule. The other seven** - `table`, `flow`,
+`comparison`, `callout`, `quotecard`, `whowhat`, `keyfacts` - **are named as
+unruled and refused by name**, because a type in neither set would be waved
+through by both per-type checks and drawn with nothing having ruled on it.
+`enabled_kinds` is `["chart"]` and the downgrade ladder re-enters the same
+validator with a nearer neighbour, so refusing is correct rather than a stopgap.
+
+### The check that nearly could not be separated, and why the answer matters
+
+`no_invented_values` read as "a value channel holds an element with no value" is
+**unreachable** once `semantically_compatible` has passed - a value channel then
+holds only `quantity` or `date` elements, and the `Element` contract forces both
+to carry a value. That reading is a restatement, not a check. The separable
+check is the one the subsystem needs: `Element` holds `span_excerpt` to the
+width of its span and cannot hold it to the `value` beside it, because the value
+is a READING of those characters and the shape does no reading.
+`no_invented_values` re-reads it with the producer's own reader.
+
+Separation was proved twice: the oracle asserts an equality on the returned
+check list rather than a membership - a membership passes while three other
+rules are firing - and then each check was neutered in turn against its own
+fixture, with all nine leaving the plan accepted.
+
+---
+
+### Three judgement calls row 1 left open, and how row 2 closed the first
+
+1. **There is no `label` role, and row 2 settled it rather than deferring it a
+   third time.** Section 12.8 X2 lists one. Row 2 declined, and the reason is
+   now held by a test: a `label` role asks the model the same question a second
+   time inside `encodings`, and a model that answers twice can answer two ways
+   with nothing in the payload to say which is right. So `labels` is the one
+   naming channel - the elements whose own characters name the marks and the
+   axes, ten of them for eight marks plus two axes. `event_label` is not the
+   exception it looks like: a timeline's `time` channel places a dot and nothing
+   else, so the event text is the mark rather than a name for one.
+2. **`purpose` is nine members and `type` is eighteen.** `purpose` has to be
+   coarser than `type` or it is a second name for it. The eighteen types are the
+   pseudo-plan section 7.2 matrix verbatim.
+3. **`plan_version` is code-stamped rather than decoded**, so row 3's "is
+   current" comparison fires at read time, which is when it can find drift.
+
+### What rows 1 and 2 settled, and the numbers that moved
+
+The worst-case decoded reply is **3,767 characters, and therefore at most 3,767
+tokens**, computed from the bounds rather than asserted.
+`worst_case_reply_characters()` recomputes it from the generated schema and the
+module refuses to import if that and the constant disagree. **Row 2 did not move
+it by one character**, because a grammar-constrained decoder emits every
+declared key either way - what changed is that the count is now true of an
+ordinary plan as well as the worst one.
+
+**Required-but-empty roles cost 87 to 114 characters a plan, which is 23 to 28
+tokens** (measured with `llama-tokenize` against the committed tokenizer,
+2026-09-09; a token count is deterministic, so the host does not matter). At the
+visual planner's 13.00 tokens a second that is 1.8 to 2.2 seconds a plan, and
+**12 to 14 minutes of runner wall-clock across a day** of five runs at the
+80-item safety ceiling - 6 to 7 percent of `run.visual_planner_budget_minutes`.
+
+**The decode rate the pseudo-plan quotes is the wrong model's.** Section 12.8 X2
+prices the empty arrays at 6.01 tokens a second, which is the configured
+summarizer's rate (`ubuntu-latest`, 2026-08-23). `config/idhazh.json` names
+Qwen3-4B for `models.visual_planner`, measured at 13.00 tokens a second
+(`ubuntu-latest`, 2026-08-22) - **2.16 times faster**. The pseudo-plan's figure
+becomes the right one only after ruling O17 retires the 4B, so both are on
+record. On the summarizer the same arrays cost 26 to 31 minutes a day.
+
+`visuals.max_output_tokens` is **400** today, well under the 3,767-character
+ceiling. Deriving that budget is plan 11's, from this arithmetic.
+
+All four prohibitions are enforced in the shape except one half: `title`,
+`caption` and `why` are prose the shape only length-bounds, because deciding
+whether a numeral in them is matched by a cited element needs the article's
+element table, which the plan deliberately does not carry. That is row 3's
+"numerals matched" check, and nothing else was deferred.
 
 ---
 
