@@ -179,6 +179,14 @@ def paragraph_after(text: str, lead: str) -> str:
     return rest.split("\n\n", 2)[1]
 
 
+# The one `app-config` fixture. Its name is its invariant: every knob in it holds
+# a value the committed `config/idhazh.json` does not, so a reader that ignored
+# the file and fell back to a default would fail rather than pass.
+APP_CONFIG_EVERY_KNOB_DIFFERS: Final = (
+    CONTRACT_FIXTURES_DIR / "app-config" / "every-knob-differs-from-the-committed-config.json"
+)
+
+
 def fixture_paths() -> list[Path]:
     return sorted(CONTRACT_FIXTURES_DIR.glob("*/*.json"))
 
@@ -1005,7 +1013,7 @@ def test_the_config_takes_a_pages_cap_below_the_platforms_own() -> None:
     raw["retention"]["pages_hard_cap_mb"] = 512
     assert AppConfig.model_validate(raw).retention.pages_hard_cap_mb == 512
 
-    tuned = AppConfig.from_json(read_text(CONTRACT_FIXTURES_DIR / "app-config" / "tuned.json"))
+    tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS))
     assert tuned.retention.pages_hard_cap_mb == 900
 
 
@@ -1022,9 +1030,7 @@ def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
     assert committed.pages_hard_cap_mb == PAGES_HARD_CAP_MB
     assert committed.site_budget_mb < committed.pages_hard_cap_mb
 
-    tuned = AppConfig.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "app-config" / "tuned.json")
-    ).retention
+    tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)).retention
     assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
 
 
@@ -1835,9 +1841,7 @@ def test_the_rest_rule_reads_the_knob_the_committed_config_spells() -> None:
     behaviour.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).collect
-    tuned = AppConfig.from_json(
-        read_text(CONTRACT_FIXTURES_DIR / "app-config" / "tuned.json")
-    ).collect
+    tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)).collect
     assert committed.availability_strikes_before_rest == 5
     assert tuned.availability_strikes_before_rest == 3
 
