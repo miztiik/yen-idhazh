@@ -454,7 +454,8 @@ puts `static/assist/` back and `build/assist` reappears.
 | `'HHEMv2ForSequenceClassification' has no attribute 'all_tied_weights_keys'` | transformers is too new. The pin is `<5`; check what actually resolved. |
 | The reply "did not hold its shape" | Usually the output budget, not the model. `models.summarize.inference.max_output_tokens` is 900 - a crash guard, not a length control. At 250 it ran out mid-object and failed as a shape error, which named the wrong cause. |
 | An item degrades with "page furniture is short" | Extraction found under `extract.min_source_words` (60). That floor is derived, not chosen: `brief_target_words_min / brief_compression_ceiling`, or 30 / 0.5. A short release note no longer trips it - it publishes as a brief and the census row carries `not_prose`. |
-| A summary is dropped for word count | `evaluation.summary_words_min/max`, currently 25 and 250. |
+| A summary is dropped for word count | Only one length does that now: under `summarize.length_policy.absolute_floor_words` (25) from a source above `floor_applies_above_source_words` (700). Every other miss publishes, trims or publishes over-length. |
+| A summary comes back `bad_shape` and looks the right length | The decoder rail counts **characters**, not words, and it fires while parsing - before any word count is read. Its bounds are derived from the ladder plus the overshoot allowance ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md#what-happens-when-a-reply-misses-the-ask)). |
 
 ## See also
 

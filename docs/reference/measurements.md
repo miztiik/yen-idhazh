@@ -2800,9 +2800,11 @@ clause and carries one new fact beside it counts as an addition.
 
 An item is eligible when its eval row's `source_word_count` - the article length
 before the truncation cap, which is the count that picks the band - is 2,000
-words or more, and it has at least one key point. That is `summarize.bands[3]`
-and `bands[4]` in `config/idhazh.json`, which ask for 110 to 200 and 150 to 230
-words.
+words or more, and it has at least one key point. That was `summarize.bands[3]`
+and `bands[4]` in `config/idhazh.json` on the day of the draw, asking for 110 to
+200 and 150 to 230 words. The ladder was reshaped on 2026-09-10 and those two
+rungs are now one, so re-running this draw against today's config selects the
+same articles but reads a different ask against them.
 
 | Quantity | Value |
 | --- | --- |
@@ -2863,6 +2865,13 @@ defect and not an argument for a second list under every item.
 That defect is not rare. Across the 110 eligible items, **20 summaries, 18.2
 percent, are shorter than their own band's floor**, and 13 of those 20 are band
 4 items that came back under 150 words.
+
+This is one hand count on one day, taken while the summariser prompt was being
+tuned, and no eval column tracks it - so it cannot be re-read without repeating
+the draw by hand. On 2026-09-10 the length policy ruled that a summary under its
+band's floor publishes rather than failing
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md#what-happens-when-a-reply-misses-the-ask)),
+which changes what happens to these items and measures nothing new about them.
 
 ### The mechanical cross-check
 

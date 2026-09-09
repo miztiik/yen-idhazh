@@ -349,7 +349,7 @@ def target_is_shaped_right(
     except json.JSONDecodeError as error:
         return None, f"assistant is not JSON: {error.msg}"
 
-    shape = summarize.draft_model(settings.app.summarize, settings.app.evaluation)
+    shape = summarize.draft_model(settings.app.summarize)
     try:
         draft = shape(**drafted)
     except (ValidationError, TypeError) as error:
