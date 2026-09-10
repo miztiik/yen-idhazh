@@ -54,6 +54,24 @@ Everywhere else restates this section rather than inventing its own style rule (
 
 **The number clause exists because the rest of the section cannot fail.** "Write in plain language" is advice, and advice catches nothing. "Say what the number means, next to the number" is a check a reader applies to a sentence and gets a yes or a no.
 
+## 0c. Decision Requests and Tables
+
+**Write every answer in plain, simple English.** A person outside this project understands it on one read. No subsystem terms, no invented jargon, no vendor name used as vocabulary. Where a term is unavoidable, define it in the same sentence. This is section 0b applied, and it is the clause agents break most.
+
+When you need the user to choose, ask in one message, in this order, and put nothing before it:
+
+1. **Situation.** What is true now.
+2. **Problem.** What is wrong or undecided, in one or two sentences.
+3. **Impact.** What it touches and what it costs to leave alone - the files, the subsystems, the published surfaces, the runs.
+4. **Options.** Every option worth taking, each with its cost and what it gives up. An option with no cost named is not an option.
+5. **Recommendation.** One option, named by its row id, and the reason in one sentence.
+
+**Every table in every answer is lettered, and every row carries an id.** Tables are `Table A`, `Table B` and so on, in the order they appear. A row's id is that letter plus its number - `A1`, `A2`, `B1` - and it is the first column. No id repeats in one message, so the user answers `A3`, or `A2 and B1`, and quotes nothing back.
+
+A message with no options is a status update, not a decision request, and does not use the five-part shape.
+
+[`docs/agents/guardrails.md`](docs/agents/guardrails.md) and [`AGENTS.md`](AGENTS.md) restate this section; they do not extend it (Rule #4).
+
 ## 1. Rules (Read First, Every Session)
 
 1. **Static-first publication.** What ships to a reader is a static bundle on GitHub Pages. No production backend, no server we run, no runtime call to a model provider, no runtime telemetry, analytics, error-tracking SDKs, ads, accounts, or push notifications. The pipeline runs in CI and commits its output; the site only renders what is already committed. **Every computation happens in the reader's browser or in CI - never on a server we operate.** Fetching static assets is allowed, including from a third party: a font, a stylesheet, an icon set, a charting library. Fetching our own committed files at runtime is likewise allowed and is how an interactive view reads its data. What is forbidden is a *service* - anything that executes our logic off the reader's device, anything that reports a reader's behaviour anywhere, and any third-party script that phones home. A third-party asset is judged on its bytes, its licence and its privacy behaviour (section 8), not on its hostname; prefer self-hosting when the asset is small enough that a request is the larger cost.
