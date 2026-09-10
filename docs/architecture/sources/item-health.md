@@ -38,7 +38,7 @@ this checkout on 2026-09-02, the earliest a live run would touch this ledger is
 The 30-day window on this page is a read-side parameter and is unrelated to that
 age. Monthly shards follow `state/seen/` and `state/feed-health/`. What the fold
 keeps, what it costs and why fourteen is
-[../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
+[../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
 ## The structure
 

@@ -497,7 +497,7 @@ Both halves of that are now closed on the writer's side, and this reader is kept
 anyway. A run id carries the identity of the execution that made it, so two
 workflow runs can no longer compute one; and `ledger.drop_repeated_rows` settles
 the file after the merge, where the frozen dedup cannot see. See
-[../sources/item-health.md](../sources/item-health.md#the-shape-of-a-row). What
+[../sources/item-health.md](../sources/item-health.md#the-structure). What
 remains is that a reader of a committed file cannot assume the run that wrote it
 was made by today's pipeline, so refusing an inconsistent run stays correct and
 costs nothing.

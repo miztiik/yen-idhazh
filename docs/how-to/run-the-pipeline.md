@@ -121,7 +121,7 @@ two more guards of its own: `retention.dry_run` is `true` and
 `retention.image_months` is `-1`, so with the flag gone it still reports and
 still deletes nothing. Switching it on is a separate change with its own
 conditions
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-cleanup-says-what-it-did-not-clear-2026-09-06)).
+([../architecture/publishing/retention.md](../architecture/publishing/retention.md#the-cleanup-says-what-it-did-not-clear-2026-09-06)).
 
 Two consequences to know before step 5. The published copy goes with its private
 source, so `/console/`'s per-item detail stops reaching back past the window. And

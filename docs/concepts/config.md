@@ -810,7 +810,7 @@ scoreable again as if it were new. **Measured 2026-09-03 over both committed
 shards: 4,266,655 bytes of shard become 557,290 bytes of archive, 13.1 percent,
 and three reads gave byte-identical results so the spread is zero.** What that
 buys, in years, is in
-[../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree).
+[../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree).
 
 **Feed health is deleted and never summarised.** Its rows are per-feed-per-run
 evidence, the quarantine reads 31 days, and the console reaches at most 366 - so
