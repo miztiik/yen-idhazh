@@ -3257,22 +3257,6 @@ generalises: a harness that inherits `os.environ` to run a workflow script
 inherits every `GITHUB_*` variable the runner set, and each one is a fact the
 script can read that the developer machine never had.
 
-## In `state/item-health/`, the `publish` row is the whole record and the `summarize` row is the degrade path
-
-A measurement over the September shard filtered on `stage == "summarize"` and
-found 42 rows over nine days, which reads as "this pipeline summarized 42
-articles". It summarized 4,117. The row a successful item leaves is stamped
-`publish`; a `summarize` row is what a **failed** or degraded summarize call
-leaves behind. So the honest filter for per-item timings, token counts and
-lengths is `stage == "publish"`, and the count of `summarize` rows is a failure
-count.
-
-The tell is the column coverage, and it is cheap to check before trusting a
-filter: over `state/item-health/2026-09.csv`, `input_tokens` is present on 4,117
-rows and every one of them is `publish`. A stage that carries none of the
-columns you are measuring is not the stage that did the work. Measured
-2026-09-09 while raising the truncation cap.
-
 ## `test:changed` exits 1 with every test green when the browser suite writes a validation receipt
 
 `malformed-day.spec.ts` runs `idhazh validate-days` as a real subprocess with
