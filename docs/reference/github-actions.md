@@ -26,9 +26,8 @@ documents and the committed encoder weights left it. **Its second arm deleted
 the weights and did not delete the dated directories**, so the number it
 reported describes a tree nobody built; the real figure was taken off the
 ordinary `site` job instead, because the site as it ships is the migrated tree
-([measurements.md](measurements.md)). Row #19 of
-[the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md) deleted
-the file: a measurement harness nobody runs is upkeep with no reader.
+([measurements.md](measurements.md)). The shell-and-fetch migration deleted
+the file on closing: a measurement harness nobody runs is upkeep with no reader.
 
 ## The schedule asks for five runs a day and gets fewer
 

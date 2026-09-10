@@ -634,9 +634,11 @@ measurement.** Rule #10 refuses an unmeasured number the right to justify a
 design, so this one justifies nothing: nothing about the shape of the console
 depends on it, and the knob decides only whether a wait short enough to be over
 already gets animated on its way past. The console started fetching its months
-on 2026-09-09, so no median payload arrival exists yet to derive it from. Row 19
-of [../../TODO/20260908-shell-and-fetch-plan.md](../../TODO/20260908-shell-and-fetch-plan.md)
-takes that measurement. Taking it inside the user-interface row was refused: a
+on 2026-09-09, so no median payload arrival exists yet to derive it from. The
+shell-and-fetch migration was meant to take that measurement and could not:
+the number is a reader's wait, and a reader-facing timing measurement was
+ruled out of that plan's scope (owner, 2026-09-08). What would settle it is
+in [../reference/measurements.md](../reference/measurements.md). Taking it inside the user-interface row was refused: a
 user-interface row is not a measurement harness, and a number measured on a
 laptop's loopback would be the wrong number twice over. Fowler, 2026-09-08.
 
