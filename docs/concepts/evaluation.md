@@ -1214,7 +1214,7 @@ percent**. Three reads gave byte-identical archives, so the spread is zero -
 reading a committed file is deterministic. Two thirds of the archive is the digest
 index, which is the price of keeping the dedupe exact. What the ratio buys in
 years is in
-[../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree).
+[../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree).
 
 **It ships in dry run.** `.github/workflows/prune.yml` force-pushes `main` on a
 schedule, so a shard deleted here stops being recoverable once that prune passes
