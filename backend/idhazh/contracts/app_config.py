@@ -1115,6 +1115,24 @@ class SummarizeConfig(Model):
             "answer."
         ),
     )
+    key_point_words_max: int = Field(
+        default=80,
+        ge=1,
+        description=(
+            "Longest key point the decoder will emit, spent as a character rail at 12 "
+            "characters a word the same way the title and the summary are. There was no "
+            "rail here at all until the two-call planner needed one: with an unbounded "
+            "string in the reply shape, the worst-case reply length is not arithmetic, "
+            "and a budget derived from bounds that do not exist is a guess with a table "
+            "next to it. Deliberately above anything observed rather than tight to it - "
+            "a maxLength is a hard grammar stop that truncates mid-word, so a rail set "
+            "at the observed maximum turns a slightly long key point into a parse "
+            "failure for the whole item. Measured 2026-09-10 over the 32,353 key points "
+            "in the committed digest days: the longest is 66 words and 418 characters "
+            "and the mean is 16.7 words, so this sits at 1.2 times the longest one the "
+            "pipeline has ever published and its character rail at 2.3 times."
+        ),
+    )
     key_point_restatement_ceiling: float = Field(
         default=0.5,
         gt=0.0,
@@ -3375,6 +3393,30 @@ class AppConfig(Contract):
                 "57,488 (5), /evals/ 3,227 (3). Each new value is twice the heaviest, "
                 "rounded up to a number a person can read, which lands them 2.02 to 2.08 "
                 "times the page."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-10T14:00",
+            change=(
+                "summarize gains key_point_words_max, the first length rail a key "
+                "point has ever had. config/idhazh.json does not set it, so the "
+                "committed file is unchanged and the value ships as its default of 80 "
+                "words. Additive and defaulted, so a config file written before today "
+                "still validates; the decoder rail it produces is looser than anything "
+                "the pipeline has emitted, so no reply that parsed yesterday stops "
+                "parsing."
+            ),
+            why=(
+                "The planner's second call decodes the summary and the visual plan "
+                "through one output budget, and that budget is derived from the reply "
+                "shape's own bounds rather than picked. Every other field in the shape "
+                "carried a maxItems or a maxLength; a key point was a bare string, so "
+                "the arithmetic had a term in it with no upper end and the derivation "
+                "was not a derivation. The rail is deliberately loose: measured "
+                "2026-09-10 over the 32,353 key points in the committed digest days, "
+                "the longest is 66 words and 418 characters against a mean of 16.7 "
+                "words, and a maxLength is a hard grammar stop, so a tight rail would "
+                "convert an occasional long key point into a failed item."
             ),
         ),
         ChangelogEntry(

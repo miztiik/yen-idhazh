@@ -1641,6 +1641,13 @@
           "title": "Key Point Restatement Ceiling",
           "type": "number"
         },
+        "key_point_words_max": {
+          "default": 80,
+          "description": "Longest key point the decoder will emit, spent as a character rail at 12 characters a word the same way the title and the summary are. There was no rail here at all until the two-call planner needed one: with an unbounded string in the reply shape, the worst-case reply length is not arithmetic, and a budget derived from bounds that do not exist is a guess with a table next to it. Deliberately above anything observed rather than tight to it - a maxLength is a hard grammar stop that truncates mid-word, so a rail set at the observed maximum turns a slightly long key point into a parse failure for the whole item. Measured 2026-09-10 over the 32,353 key points in the committed digest days: the longest is 66 words and 418 characters and the mean is 16.7 words, so this sits at 1.2 times the longest one the pipeline has ever published and its character rail at 2.3 times.",
+          "minimum": 1,
+          "title": "Key Point Words Max",
+          "type": "integer"
+        },
         "length_policy": {
           "$ref": "#/$defs/LengthPolicy",
           "description": "How far a reply may miss its band's ask and still publish, and what happens when it misses by more. Config rather than code so the tolerance can move with the prompt while the prompt is still being tuned."
@@ -2094,6 +2101,11 @@
       "change": "Every page_weight number is a guardrail rather than a budget, and the six committed route values were raised to twice the heaviest of five builds: /404 2,400 -> 4,400, /archive/ 6,400 -> 12,000, /console/ 52,000 -> 96,000, /console/machine/ 50,000 -> 92,000, /console/model/ 63,000 -> 116,000, /evals/ 3,600 -> 6,600. No key was added, removed or retyped, and no committed config becomes invalid. page_weight.payload_ceilings_bytes and cold_console_load_bytes were already 2.5 and 6.8 times what they bound, so neither value moved; only the words describing them did.",
       "version": "2026-09-10T20:00",
       "why": "Owner ruling, 2026-09-10: 'any ceiling is a guideline not a rule - increase with twice the buffer and document it is a guard rail.' The six route numbers sat 6 to 14 percent above the pages they bound, which is a budget: an ordinary content day reaches it, somebody raises the number, and the gate teaches an operator that raising numbers is what a red gate asks for. At twice the page only a change of a different order fires it - a layout inlining a day payload, a panel that stops fetching and starts embedding - so a fired guardrail is a question about the bytes rather than about the number. Measured 2026-09-10 at c40eda91, gzip -5, node 24.12.0, five builds of the shipping tree, heaviest of the five with the spread over them in brackets: /404 2,154 (7), /archive/ 5,761 (8), /console/ 47,077 (8), /console/machine/ 45,254 (3), /console/model/ 57,488 (5), /evals/ 3,227 (3). Each new value is twice the heaviest, rounded up to a number a person can read, which lands them 2.02 to 2.08 times the page."
+    },
+    {
+      "change": "summarize gains key_point_words_max, the first length rail a key point has ever had. config/idhazh.json does not set it, so the committed file is unchanged and the value ships as its default of 80 words. Additive and defaulted, so a config file written before today still validates; the decoder rail it produces is looser than anything the pipeline has emitted, so no reply that parsed yesterday stops parsing.",
+      "version": "2026-09-10T14:00",
+      "why": "The planner's second call decodes the summary and the visual plan through one output budget, and that budget is derived from the reply shape's own bounds rather than picked. Every other field in the shape carried a maxItems or a maxLength; a key point was a bare string, so the arithmetic had a term in it with no upper end and the derivation was not a derivation. The rail is deliberately loose: measured 2026-09-10 over the 32,353 key points in the committed digest days, the longest is 66 words and 418 characters against a mean of 16.7 words, and a maxLength is a hard grammar stop, so a tight rail would convert an occasional long key point into a failed item."
     },
     {
       "change": "PageWeightConfig gains payload_ceilings_bytes and cold_console_load_bytes, both empty by default so a config written before today still validates. page_weight.ceilings_bytes is now read as gzip -5 rather than gzip -9, and all six committed values were re-measured at that level in the same commit: /404 2,200 -> 2,400, /archive/ 7,553 -> 6,400, /console/ 335,051 -> 52,000, /console/machine/ 44,706 -> 50,000, /console/model/ 56,385 -> 63,000, /evals/ 3,279 -> 3,600. No key was removed and no type changed.",

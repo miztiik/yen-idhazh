@@ -15,22 +15,31 @@ import threading
 from collections.abc import Mapping
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import BaseModel, ValidationError
 
-from idhazh import assemble, cli, config
-from idhazh.contracts.app_config import ElementsConfig, VisualsConfig
+from idhazh import assemble, cli, config, summarize
+from idhazh.contracts.app_config import ElementsConfig, SummarizeConfig, VisualsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable, Extractor
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.visual import (
+    CODE_STAMPED_FIELDS,
+    VisualPlan,
+    widest_json_characters,
+)
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.elements import SpanDriftError, element_table
+from idhazh.extract import approx_tokens
 from idhazh.llm.server import Completion, post
 from idhazh.visual_planner import (
     ANCHORED_MAX,
+    CALL_TWO_BUDGET_TOKENS,
+    CHARS_PER_WORD,
     LABEL_PASS_VERSION,
     LABELS_MAX,
     PROPOSED_MAX,
@@ -42,9 +51,14 @@ from idhazh.visual_planner import (
     anchored,
     apply_labels,
     build_call_one_request,
+    build_call_two_request,
     call_one_schema,
     call_one_system_prompt,
     call_one_user_turn,
+    call_two_output_tokens,
+    call_two_prose_words,
+    call_two_schema,
+    call_two_user_turn,
     candidate_menu,
     chart_is_reachable,
     chart_spec,
@@ -58,10 +72,13 @@ from idhazh.visual_planner import (
     numeric_facts,
     output_schema,
     parse_call_one,
+    parse_call_two,
     parse_draft,
+    plan_lost_to_the_budget,
     proposed_quantities,
     range_elements,
     reachable_kinds,
+    recovered_completion,
     same_unit_bars,
     sentence_id,
     system_prompt,
@@ -1889,4 +1906,312 @@ def test_a_recorded_call_one_reply_labels_the_table_over_a_loopback_socket(
     ] == ["Example Lab"]
     assert labelled.span_drift(article_ok.text or "") is None
     assert sentence_id(labelled.elements[0].sentence_index) in candidate_menu(labelled)
+
+
+# --- Call 2: the summary and the plan, over the prefix call 1 already paid for
+#
+# Two oracles, because the two halves fail for different reasons. The floor is
+# that call 2's prompt opens with call 1's, byte for byte - so the article
+# prefills once, or the prompt was built wrong. The target is whether call 1's
+# own generated reply caches too, and that is a number off a running server
+# rather than an assertion: `docs/architecture/summarize/prompt.md` records it.
+
+CALL_TWO_REPLIES = FIXTURES_DIR / "completions" / "call-two"
+
+
+def call_one_payload(article: Article) -> dict[str, Any]:
+    return build_call_one_request(
+        article,
+        a_table(article),
+        model_id="m",
+        inference=config.load(CONFIG_DIR).app.models.summarize.inference,
+    )
+
+
+def call_two_payload(article: Article, reply: str = "{}") -> dict[str, Any]:
+    return build_call_two_request(
+        call_one_payload(article), reply, source_words=article.band_source_words
+    )
+
+
+def bounded(schema: object, path: str = "") -> set[str]:
+    """Every place in a generated schema a decoder may write without a bound."""
+    loose: set[str] = set()
+    if isinstance(schema, dict):
+        kind = schema.get("type")
+        if kind == "string" and "maxLength" not in schema and "enum" not in schema:
+            loose.add(path)
+        if kind == "array" and "maxItems" not in schema:
+            loose.add(path)
+        for key, value in schema.items():
+            loose |= bounded(value, f"{path}.{key}" if path else str(key))
+    if isinstance(schema, list):
+        for index, value in enumerate(schema):
+            loose |= bounded(value, f"{path}[{index}]")
+    return loose
+
+
+class TestTheCallTwoOracle:
+    def test_call_two_opens_with_call_ones_prompt_byte_for_byte(self, dense: Article) -> None:
+        """The floor. One re-rendered character in front of the article re-prefills it.
+
+        A prefix cache reuses the longest common prefix of the tokenised prompt,
+        so this is the property the cache hit is made of. It is asserted on the
+        bytes rather than on a `prefill_ms` ratio, which would confound cache
+        reuse with how long the new turn is and read as partial success when the
+        prompt was built in the wrong order.
+        """
+        first = call_one_payload(dense)
+
+        assert call_two_payload(dense)["messages"][:2] == first["messages"]
+
+    def test_the_same_check_fails_on_a_prompt_that_was_re_rendered(
+        self, dense: Article, article_ok: Article
+    ) -> None:
+        """The bite proof: an oracle that cannot fail is not an oracle."""
+        other = call_one_payload(article_ok)
+
+        assert call_two_payload(dense)["messages"][:2] != other["messages"]
+
+    def test_the_summary_is_decoded_before_the_plan(self) -> None:
+        """Decision 5, asserted where the decoder meets it rather than in the class.
+
+        Field order is decode order, and this order is what makes a cut reply
+        recoverable: the summary closes before the plan starts.
+        """
+        assert list(call_two_schema()["properties"]) == ["summary", "visual"]
+
+
+class TestCallTwoShape:
+    def test_call_ones_reply_is_replayed_as_the_assistant_turn(self, dense: Article) -> None:
+        turns = call_two_payload(dense, '{"labels": []}')["messages"]
+
+        assert [turn["role"] for turn in turns] == ["system", "user", "assistant", "user"]
+        assert turns[2]["content"] == '{"labels": []}'
+
+    def test_the_second_question_asks_for_both_halves_in_order(self) -> None:
+        turn = call_two_user_turn()
+
+        assert turn.index('"summary"') < turn.index('"visual"')
+
+    def test_the_second_question_carries_no_article(self, dense: Article) -> None:
+        """The article is in the first user turn and is still there.
+
+        A second copy would spend prefill on bytes the server already holds, and
+        would put the same untrusted text in front of the model twice.
+        """
+        assert (dense.text or "") not in call_two_payload(dense)["messages"][3]["content"]
+
+    def test_the_ask_and_the_decoder_hold_the_same_band(self, dense: Article) -> None:
+        """A prompt that asks for more key points than the decoder allows loses the item."""
+        ask = config.load(CONFIG_DIR).app.summarize
+        band = ask.band_for(dense.band_source_words)
+        turn = call_two_user_turn(ask, source_words=dense.band_source_words)
+        schema = call_two_schema(ask, source_words=dense.band_source_words)
+        points = schema["$defs"]["SummaryDraft"]["properties"]["key_points"]
+
+        assert f"{band.key_points_min} to {band.key_points_max} of them" in turn
+        assert (points["minItems"], points["maxItems"]) == (
+            band.key_points_min,
+            band.key_points_max,
+        )
+
+    def test_they_still_agree_when_no_article_names_a_band(self) -> None:
+        """The union rail, and the prompt has to state it too.
+
+        With no article named the decoder holds the envelope every band fits
+        inside. A prompt reading the shortest band's numbers off `band_for(0)`
+        would ask for one key point where the grammar admits five.
+        """
+        ask = SummarizeConfig()
+        points = call_two_schema(ask)["$defs"]["SummaryDraft"]["properties"]["key_points"]
+        floor, ceiling = summarize.key_point_rail(ask, None, False)
+
+        assert (points["minItems"], points["maxItems"]) == (floor, ceiling)
+        assert f"{floor} to {ceiling} of them" in call_two_user_turn(ask)
+
+    def test_the_plan_the_decoder_sees_carries_neither_field_code_stamps(self) -> None:
+        """`version` and `plan_version` are facts code holds, not questions for a model."""
+        plan = call_two_schema()["$defs"]["VisualPlanDraft"]["properties"]
+
+        assert set(plan) & CODE_STAMPED_FIELDS == set()
+        assert set(plan) | CODE_STAMPED_FIELDS == set(VisualPlan.model_fields)
+
+    def test_no_string_and_no_array_in_the_reply_is_unbounded(self) -> None:
+        """The precondition of the budget arithmetic, asserted rather than assumed."""
+        assert bounded(call_two_schema()) == set()
+
+    def test_a_reply_the_shape_forbids_is_refused(self) -> None:
+        """Closed to unknown keys, so a planted tool call fails here."""
+        body = json.loads(read_text(CALL_TWO_REPLIES / "summary-and-plan.json"))
+        decoded = json.loads(body["choices"][0]["message"]["content"])
+        decoded["visual"]["alt_text"] = "a picture of anything at all"
+
+        with pytest.raises(ValidationError):
+            parse_call_two(json.dumps(decoded), source_words=1320)
+
+
+class TestTheDerivedBudget:
+    def test_the_budget_is_the_arithmetic_and_not_a_number_somebody_chose(self) -> None:
+        """Prose at 1.3 tokens a word, structure at one token a character."""
+        ask = SummarizeConfig()
+        words = call_two_prose_words(ask)
+        whole = widest_json_characters(call_two_schema(ask))
+
+        assert call_two_output_tokens(ask) == approx_tokens(words) + (
+            whole - words * CHARS_PER_WORD
+        )
+        assert call_two_output_tokens(ask) == CALL_TWO_BUDGET_TOKENS
+
+    def test_a_bound_that_moves_moves_the_budget_with_it(self) -> None:
+        """Re-derived, not restated. This is what "derived" has to mean to be worth saying."""
+        ask = SummarizeConfig()
+        wider = ask.model_copy(update={"key_point_words_max": ask.key_point_words_max * 2})
+
+        assert call_two_output_tokens(wider) > call_two_output_tokens(ask)
+
+    def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
+        payload = call_two_payload(dense)
+
+        assert payload["max_tokens"] == call_two_output_tokens()
+        assert payload["response_format"]["json_schema"]["schema"] == call_two_schema(
+            source_words=dense.band_source_words
+        )
+
+    def test_the_second_call_decodes_nothing_the_first_call_settled(self, dense: Article) -> None:
+        """Determinism is set in one place, and call 2 does not become a second one."""
+        first = call_one_payload(dense)
+        second = call_two_payload(dense)
+
+        assert [second[key] for key in ("temperature", "top_p", "seed", "stream")] == [
+            first[key] for key in ("temperature", "top_p", "seed", "stream")
+        ]
+        assert second["chat_template_kwargs"] == first["chat_template_kwargs"]
+
+
+class TestARepliedCutByTheBudget:
+    def test_a_reply_cut_in_the_plan_still_carries_its_summary(self) -> None:
+        """E5. The bytes come back on an ordinary 200 and used to be thrown away unread."""
+        body = json.loads(read_text(CALL_TWO_REPLIES / "cut-in-the-plan.json"))
+        cut = Completion(
+            content=body["choices"][0]["message"]["content"], finish_reason="length"
+        )
+
+        recovered = recovered_completion(cut)
+
+        assert recovered is not None
+        assert recovered.finish_reason == "stop"
+        assert json.loads(recovered.content)["title"].startswith("Example Lab")
+
+    def test_a_reply_cut_inside_the_summary_recovers_nothing(self) -> None:
+        """The one case where there is genuinely nothing to publish."""
+        body = json.loads(read_text(CALL_TWO_REPLIES / "cut-in-the-plan.json"))
+        content = body["choices"][0]["message"]["content"]
+        early = content[: content.index('"key_points"')]
+
+        assert recovered_completion(Completion(content=early, finish_reason="length")) is None
+
+    def test_a_reply_that_finished_is_never_recovered(self) -> None:
+        """Recovery is for a cut reply. Anything else parses whole or fails as a shape."""
+        body = json.loads(read_text(CALL_TWO_REPLIES / "summary-and-plan.json"))
+
+        assert recovered_completion(Completion(content=body["choices"][0]["message"]["content"])) is None
+
+    def test_a_recovered_reply_publishes_through_every_check_the_summarizer_runs(
+        self, article_ok: Article
+    ) -> None:
+        """The recovery hands back a single-call reply, so nothing downstream is relaxed.
+
+        The length verdict, the copied-source reject, the address reject and the
+        restatement drop all read the recovered words the same way they read any
+        others. Recovery stops an item being thrown away unread; it decides
+        nothing about whether it may publish.
+        """
+        body = json.loads(read_text(CALL_TWO_REPLIES / "cut-in-the-plan.json"))
+        cut = Completion(
+            content=body["choices"][0]["message"]["content"], finish_reason="length"
+        )
+        recovered = recovered_completion(cut)
+        assert recovered is not None
+
+        summary = summarize.to_summary(
+            article_ok,
+            recovered,
+            model_id="m",
+            pipeline_fingerprint="0" * 64,
+            generated_at="2026-09-10T00:00:00Z",
+            prompt_config=config.load(CONFIG_DIR).app.summarize,
+        )
+
+        assert summary.status is SummaryStatus.OK
+        assert summary.summary and "34 percent" in summary.summary
+        assert summary.key_points
+
+    def test_the_same_bytes_uncut_still_fail_the_way_they_always_did(
+        self, article_ok: Article
+    ) -> None:
+        """The bite proof for the recovery: `to_summary` alone cannot read a cut reply."""
+        body = json.loads(read_text(CALL_TWO_REPLIES / "cut-in-the-plan.json"))
+        cut = Completion(
+            content=body["choices"][0]["message"]["content"], finish_reason="length"
+        )
+
+        summary = summarize.to_summary(
+            article_ok,
+            cut,
+            model_id="m",
+            pipeline_fingerprint="0" * 64,
+            generated_at="2026-09-10T00:00:00Z",
+        )
+
+        assert summary.status is SummaryStatus.FAILED
+
+    def test_the_item_still_gets_a_decision_and_it_is_nothing(self, summary_ok: Summary) -> None:
+        """`decision = none`, and never a failure code: the item publishes without a picture."""
+        decision = plan_lost_to_the_budget(
+            summary_ok, model_id="m", decided_at="2026-09-10T00:00:00Z", version="2026-08-21"
+        )
+
+        assert decision.kind is VisualKind.NONE
+        assert decision.rationale and "output budget" in decision.rationale
+
+
+def test_a_recorded_call_two_reply_parses_over_a_loopback_socket(article_ok: Article) -> None:
+    """The row end to end, with no network and nothing mocked.
+
+    The reply is played back by a real HTTP server on loopback and read through
+    the transport every stage uses. The envelope is a llama-server envelope; the
+    content is written by hand rather than captured, because no stage dispatches
+    call 2 yet - the gate in front of it and the picture it leads to are later
+    rows. It carries no `usage` block for the same reason: a token count nobody
+    measured is not a token count (Rule #10).
+
+    The plan's own `element_ids` are checked against the article's table here,
+    which is the point of decision 3 - the plan sources the article, and the
+    summary above it in the same reply only conditions it. Whether that table
+    holds every id is the validator's rule and a later row's.
+    """
+    payload = call_two_payload(article_ok, read_text(FIXTURES_DIR / "completions" / "call-one" / "labelled.json"))
+    body = (CALL_TWO_REPLIES / "summary-and-plan.json").read_bytes()
+
+    with RecordedEndpoint(200, body) as server:
+        completion = post(payload, endpoint=server.endpoint, timeout=10.0)
+
+    reply = parse_call_two(completion.content, source_words=article_ok.band_source_words)
+    table = element_table(article_ok, config=ElementsConfig())
+    labelled = anchored(
+        table,
+        article_ok.text or "",
+        parse_call_one(
+            json.loads(read_text(FIXTURES_DIR / "completions" / "call-one" / "labelled.json"))[
+                "choices"
+            ][0]["message"]["content"]
+        ),
+        config=ElementsConfig(),
+        label_source="m",
+    )
+
+    assert reply.summary.title.startswith("Example Lab")
+    assert reply.visual.decision == "visual"
+    assert set(reply.visual.element_ids) <= {one.element_id for one in labelled.elements}
 

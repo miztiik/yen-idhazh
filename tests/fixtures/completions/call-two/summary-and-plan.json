@@ -1,0 +1,14 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "{\"summary\": {\"title\": \"Example Lab reports lower inference cost for its new smaller model\", \"key_points\": [\"No outside benchmark is named for either claim.\", \"The announcement never says which processors produced that second result.\"], \"summary\": \"Example Lab has published a smaller model and says it costs less to run than the one it replaces. According to the company, inference cost fell by about a third, and the post gives two figures behind that claim: a 34 percent reduction in cost per million tokens, and a 2.1x throughput gain on commodity processors. Both figures are the laboratory's own, stated in its release post rather than confirmed by an outside party. The post does not describe how either was measured, and it cites no independent benchmark beside them.\"}, \"visual\": {\"decision\": \"visual\", \"purpose\": \"comparison\", \"type\": \"bar\", \"encodings\": {\"category\": [\"entity-0-11\"], \"quantity\": [\"quantity-149-159\", \"quantity-197-201\"], \"quantity_x\": [], \"time\": [], \"series\": [], \"size\": [], \"bins\": [], \"entity\": [], \"event_label\": []}, \"element_ids\": [\"entity-0-11\", \"quantity-149-159\", \"quantity-197-201\"], \"labels\": [\"quantity-149-159\", \"quantity-197-201\"], \"annotations\": [\"quantity-149-159\"], \"why\": \"Two figures the post states about one release, side by side.\", \"title\": \"What the smaller model changed\", \"caption\": \"Both figures are the laboratory's own.\", \"confidence\": 0.6}}",
+        "role": "assistant"
+      }
+    }
+  ],
+  "model": "qwen3.5-9b-q4-k-m",
+  "object": "chat.completion"
+}
