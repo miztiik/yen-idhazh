@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -174,6 +174,49 @@ knob is needed.
 At 30 and 60 the history holds 9 to 13 weekly harvests: 25 MB to 38 MB, flat
 forever. Set both to 90 for "prune quarterly, keep a quarter"; the mechanism does
 not change.
+
+### A tag is a hole in all of that, so each one is a decision
+
+`prune.yml` force-pushes `main` and **pushes no tags**. A tag is a ref, and a ref
+keeps every commit it reaches alive whatever happens to the branch - so a tag on
+a commit inside the range the prune will rewrite quietly undoes, for that commit,
+the thing section 8 grants the prune its exception to achieve. Nothing fails when
+it happens and no gate can see it, which is why the rule is written here rather
+than enforced.
+
+**So a tag on this repository is a deliberate anchor, named with what it holds
+and why, or it is deleted.** Two existed on 2026-09-10 and both were unchosen -
+nobody had decided either way, and neither had been written down.
+
+**`encoder-2026-08-22` was deleted**, with its GitHub Release. It pinned the tree
+of a commit whose `corpus/` held article text, for a browser failover the
+measurement of 2026-09-09 had already killed - `github.com` serves a release
+asset with no `Access-Control-Allow-Origin`, refused 15 of 15. Nothing referenced
+it. Measured before deleting, `git rev-list 5f1eaf60 --not origin/main` was
+empty, so the cost had not arrived yet; it would have arrived the day the next
+prune reached that range, which is when nobody would be looking. The reasoning
+and what the deletion cost are in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
+
+**`pre-msg-rewrite-2026-08-29` is kept, and this paragraph is the record that
+makes it a choice.** It anchors `f07c4169`, the commit before the repository-wide
+commit-message rewrite of that day, and it is the only remaining copy of the 22
+commits that range held - the prune has already rewritten past them, so deleting
+the tag deletes them for good. Measured 2026-09-10: 22 commits, **494,718 bytes
+of objects nothing else reaches**, spanning 2026-08-20 to 2026-08-29. **It carries
+no article text**: `corpus/corpus.jsonl` and `corpus/holdout.txt` are both the
+empty blob in that tree, because the harvest that filled them is the commit the
+tag sits on. So the hazard the exception exists for - corpus bytes reachable for
+ever in a public repository - is absent, and what it costs is half a megabyte to
+keep a history the rewrite would otherwise have made unreadable. It has no expiry
+and needs none; delete it when somebody wants the half megabyte more than the
+history, and say so here.
+
+**Before adding a tag, answer two questions in the commit that adds it.** What
+does it hold that nothing else holds, and does the tree under it carry article
+text? A tag that cannot answer the first is a bookmark and belongs in a link. A
+tag that answers yes to the second needs an owner decision, because it is a
+standing exception to section 8.
 
 ## Looking at the corpus
 

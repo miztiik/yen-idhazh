@@ -32,6 +32,7 @@
 		day,
 		onRetry,
 		holding = false,
+		shortfall = undefined,
 		held = []
 	}: {
 		status: DayStatus;
@@ -46,6 +47,13 @@
 		 * is holding nothing must not say "the rest" - and it must not tell a reader
 		 * the stories above are all here when there are none above. */
 		holding?: boolean;
+		/** What the reader has against what the day published, in the day's own
+		 * units, when the page can count both.
+		 *
+		 * A page that is holding a seed says "the stories above are all here" while
+		 * its own header says 387, and a reader can see the two disagree. This file
+		 * formats nothing, so the caller writes the sentence and passes it. */
+		shortfall?: string;
 		/** The days this device still holds, newest first, already named and
 		 * addressed by the caller. Empty on a first visit, in a browser that keeps
 		 * nothing, and whenever the day that failed is the only one kept. */
@@ -65,7 +73,7 @@
 				{holding ? `The rest of ${day} did not arrive.` : `${day} did not arrive.`}
 			</p>
 			{#if holding}
-				<p class="failed-note">The stories above are all here.</p>
+				<p class="failed-note">{shortfall ?? 'The stories above are all here.'}</p>
 			{/if}
 			<button type="button" class="failed-retry" onclick={onRetry}>Try again</button>
 			{#if held.length > 0}

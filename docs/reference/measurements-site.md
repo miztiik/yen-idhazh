@@ -125,11 +125,14 @@ week is what settled the argument: a check that cannot tell correct from
 far-too-loose is not a check, whatever value it holds.
 
 **`/` reads 43,737 B here against 180,086 B measured earlier the same day, and
-neither is wrong.** `/` inlines the newest committed day, and the newest day
+neither is wrong.** `/` inlined the newest committed day, and the newest day
 changed between the two: `2026-09-10` holds 72 items where the mature days behind
-it hold 282 to 627. So a `/` weight is a statement about one day's item count and
-not about the page, which is exactly why no route that renders a day carries a
-number. Anybody quoting a `/` figure says which day it inlined.
+it hold 282 to 627. So a `/` weight was a statement about one day's item count
+and not about the page, which is exactly why no route that renders a day carries
+a number. **Both figures are history since later that day**, when `/` stopped
+inlining the day - see
+[What the home page shell saved, and what it did not cost](#what-the-home-page-shell-saved-and-what-it-did-not-cost-2026-09-10).
+Anybody quoting a `/` figure from before it says which day it inlined.
 
 There are **no dated ceilings and there never were**. `page_weight.ceilings_bytes`
 has never named `/` or any `/<date>/` route, so row 14 removing every dated
@@ -163,6 +166,59 @@ and every other route moves less than the spread between two plain builds. The
 document CI measures is the document the reader is served, which is why
 `bundle-gate` is not added to the deploy job
 ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
+The `/` row is a document that inlined a whole day, which it stopped doing later
+the same day; the conclusion does not rest on it.
+
+## What the home page shell saved, and what it did not cost, 2026-09-10
+
+Toolchain: node 24.12.0. Date: 2026-09-10.
+Method: one production `npm run build` either side of the change, with
+`frontend/build` and `frontend/.svelte-kit/output` deleted between them and no
+`BUILD_VERSION` set. The newest committed day was `2026-09-10`, holding 72
+stories. "Readable with no script" is the document with every `<script>` element
+removed, which is what a stripping proxy, a text browser or a failed asset
+leaves.
+
+| | Inlining the whole day | Seed plus fetch | Change |
+| --- | ---: | ---: | ---: |
+| Document, raw | 176,622 B | 96,757 B | **-45.2 pct** |
+| Document, `gzip -5` | 43,606 B | 22,838 B | **-47.6 pct** |
+| Readable with no script, raw | 63,763 B | 63,850 B | +87 B |
+| Script share of the raw document | 63.9 pct | 34.0 pct | - |
+| Stories a script-free reader can read | 17 of 72 | 17 of 72 | none |
+
+**What it means.** The page halved on the wire and the script-free reader lost
+nothing, because the 80 KB that went was never readable without script. It was
+55 stories behind a pager that needs a click handler - downloaded by everyone,
+openable by anyone with script, and inert for anyone without. The 87 bytes added
+are the `PayloadState` live region, which is present on every state so that a
+change in it announces.
+
+**The second reading is the one that matters, and it arrived by accident.** A
+digest published while this change was being merged, so the same build ran again
+against a day holding 148 stories instead of 72:
+
+| Newest day | Stories | `/` document, `gzip -5` | Drawn without script |
+| --- | ---: | ---: | ---: |
+| 2026-09-10, first run | 72 | 22,838 B | 17 |
+| 2026-09-10, after the next publish | 148 | 23,737 B | 16 |
+
+**Seventy-six more stories cost 899 bytes**, which is 3.9 percent. Before the
+change the document carried every story, so its weight was a straight line
+through the day's item count - 43,606 B at 72 stories, and the 180,086 B
+recorded earlier on a mature day. That line is what the shell removed: what `/`
+weighs is now the seed and the day's facts, and the seed is a constant.
+
+**The claim this replaced was that `/` "stays readable with no script at all",
+and it was the whole case for exempting `/` from ruling D2.** What a script-free
+reader actually got was 17 stories under a header saying 72, above a button
+offering 55 more that did nothing when pressed. The header was honest - it counts
+the day's desk totals - and that is what made the page contradict itself on
+screen. On a mature day the header says 360 or 627 and the seed is still about
+17.
+
+The pager is now hidden without script and replaced by a line saying how many
+stories need it, so the page no longer draws a control it cannot honour.
 
 ## What a cold console load costs and how deep its chain is, 2026-09-10
 
