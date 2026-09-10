@@ -525,28 +525,28 @@ page drew both identically. So the console states the other half in one
 sentence above the list - **how many feeds did not fail, out of how many were
 asked, over how many runs** - and names the clean ones behind a disclosure.
 
-`reliability()` in `frontend/src/lib/feed-health.ts` is that rule, and it reads
-the same `failing()` the quarantine reads, so the two halves of the section
+`reliability` in `frontend/src/lib/feed-health.ts` is that rule, and it reads
+the same `failing` the quarantine reads, so the two halves of the section
 cannot disagree about what a failure is. Three facts it settles:
 
 - **A feed nobody has read is in neither count.** A record of nothing but
-  `skipped` rows is a rest, and a record of nothing but robots answers is a
-  refusal - neither one asked the feed whether it still works, so neither can
-  make it clean or broken. The predicate is `preserves`, the same one the
-  strike rule runs on, so an ask means one thing on this page and in the
-  quarantine.
+ `skipped` rows is a rest, and a record of nothing but robots answers is a
+ refusal - neither one asked the feed whether it still works, so neither can
+ make it clean or broken. The predicate is `preserves`, the same one the
+ strike rule runs on, so an ask means one thing on this page and in the
+ quarantine.
 - **A polite refusal is not a failure**, here as everywhere else. A source
-  honouring its own `robots.txt` has not broken. It has not delivered either,
-  which is the other half and the half that was missing.
+ honouring its own `robots.txt` has not broken. It has not delivered either,
+ which is the other half and the half that was missing.
 - **The span is the shards the widest window preset reaches, and the sentence
-  says so.** The console hands `reliability()` the rows from
-  `feedResults(shardMonths(widest))`, which is five month shards at a widest
-  preset of 90 days. The streak beside each feed is read over those same rows,
-  because two spans in one section is the defect the shared window exists to
-  remove. Until 2026-09-09 the sentence said the feeds "have never failed",
-  which claims every run there has been over a read that opens a bounded set of
-  files - a growing read in different clothes (`CLAUDE.md` Rule #12, owner
-  decision 2026-09-08). It now names the run count the record holds.
+ says so.** The console hands `reliability` the rows from
+ `feedResults(shardMonths(widest))`, which is five month shards at a widest
+ preset of 90 days. The streak beside each feed is read over those same rows,
+ because two spans in one section is the defect the shared window exists to
+ remove. Until 2026-09-09 the sentence said the feeds "have never failed",
+ which claims every run there has been over a read that opens a bounded set of
+ files - a growing read in different clothes (`CLAUDE.md` Rule #12, owner
+ decision 2026-09-08). It now names the run count the record holds.
 
 **A refusal used to count as an ask, and that put a source we have never read
 in the reliable column.** Measured on this developer checkout, 2026-09-03, over

@@ -11,40 +11,40 @@ Two halves that never call each other. They meet only through committed files.
 
 ```mermaid
 flowchart LR
-    subgraph src["Sources"]
-        F1["~138 curated feeds<br/>config/sources.json"]
-    end
+ subgraph src["Sources"]
+ F1["~138 curated feeds<br/>config/sources.json"]
+ end
 
-    subgraph ci["backend/ - Content refresh, four UTC runs daily"]
-        direction TB
-        P["plan<br/><i>rank and dedupe</i>"]
-        W["work x4 shards<br/><i>fetch, extract, summarize, score</i>"]
-        R["visuals<br/><i>chart, diagram or none</i>"]
-        AS["assemble<br/><i>build the day payload</i>"]
-        P --> W --> R --> AS
-    end
+ subgraph ci["backend/ - Content refresh, four UTC runs daily"]
+ direction TB
+ P["plan<br/><i>rank and dedupe</i>"]
+ W["work x4 shards<br/><i>fetch, extract, summarize, score</i>"]
+ R["visuals<br/><i>chart, diagram or none</i>"]
+ AS["assemble<br/><i>build the day payload</i>"]
+ P --> W --> R --> AS
+ end
 
-    subgraph repo["The repository - the only interface"]
-        direction TB
-        D1["frontend/public/digest/&lt;Y&gt;/&lt;M&gt;/&lt;D&gt;/digest.json"]
-        D2["...&lt;vertical&gt;-&lt;NN&gt;.svg"]
-        D3["state/scores.csv"]
-    end
+ subgraph repo["The repository - the only interface"]
+ direction TB
+ D1["frontend/public/digest/&lt;Y&gt;/&lt;M&gt;/&lt;D&gt;/digest.json"]
+ D2["...&lt;vertical&gt;-&lt;NN&gt;.svg"]
+ D3["state/scores.csv"]
+ end
 
-    subgraph fe["frontend/ - GitHub Pages"]
-        direction TB
-        B["prerender at build time"]
-        S["static pages<br/><i>digest, archive, scores</i>"]
-        B --> S
-    end
+ subgraph fe["frontend/ - GitHub Pages"]
+ direction TB
+ B["prerender at build time"]
+ S["static pages<br/><i>digest, archive, scores</i>"]
+ B --> S
+ end
 
-    F1 --> P
-    AS --> D1 & D2 & D3
-    D1 & D2 & D3 --> B
+ F1 --> P
+ AS --> D1 & D2 & D3
+ D1 & D2 & D3 --> B
 
-    style ci fill:#eef2ff,stroke:#4c6ef5
-    style fe fill:#f0fdf4,stroke:#16a34a
-    style repo fill:#fefce8,stroke:#ca8a04
+ style ci fill:#eef2ff,stroke:#4c6ef5
+ style fe fill:#f0fdf4,stroke:#16a34a
+ style repo fill:#fefce8,stroke:#ca8a04
 ```
 
 **`backend/` never runs at read time. `frontend/` never calls `backend/`.** The
@@ -67,15 +67,15 @@ could only run inside the whole pipeline could not be tested.
 
 ```mermaid
 flowchart TD
-    W["a stranger's web page"] -->|"untrusted"| S["sanitize<br/><i>strip invisibles, chat tokens,<br/>HTML comments, URLs</i>"]
-    S --> FENCE["fenced in the user turn<br/><i>never the system prompt</i>"]
-    FENCE --> M["the model"]
-    M --> SCHEMA["constrained decoding<br/><i>the shape is the control</i>"]
-    SCHEMA --> PAY["a validated payload"]
-    PAY --> PAGE["the page, as inert text"]
+ W["a stranger's web page"] -->|"untrusted"| S["sanitize<br/><i>strip invisibles, chat tokens,<br/>HTML comments, URLs</i>"]
+ S --> FENCE["fenced in the user turn<br/><i>never the system prompt</i>"]
+ FENCE --> M["the model"]
+ M --> SCHEMA["constrained decoding<br/><i>the shape is the control</i>"]
+ SCHEMA --> PAY["a validated payload"]
+ PAY --> PAGE["the page, as inert text"]
 
-    style W fill:#fef2f2,stroke:#dc2626
-    style PAGE fill:#f0fdf4,stroke:#16a34a
+ style W fill:#fef2f2,stroke:#dc2626
+ style PAGE fill:#f0fdf4,stroke:#16a34a
 ```
 
 Text fetched from the open web is **data, never instruction**. It crosses the
@@ -90,13 +90,13 @@ See [`sources/trust-boundary.md`](sources/trust-boundary.md).
 
 ```mermaid
 flowchart LR
-    PY["backend/idhazh/contracts/*.py<br/><b>Pydantic models</b><br/><i>hand-written</i>"]
-    JS["schemas/*.schema.json<br/><i>generated</i>"]
-    TS["frontend/src/lib/payload/types.ts<br/><i>the page reads these</i>"]
-    PY -->|"python -m idhazh.contracts.export"| JS
-    JS -.->|"mirrored by hand, drift-gated"| TS
+ PY["backend/idhazh/contracts/*.py<br/><b>Pydantic models</b><br/><i>hand-written</i>"]
+ JS["schemas/*.schema.json<br/><i>generated</i>"]
+ TS["frontend/src/lib/payload/types.ts<br/><i>the page reads these</i>"]
+ PY -->|"python -m idhazh.contracts.export"| JS
+ JS -.->|"mirrored by hand, drift-gated"| TS
 
-    style PY fill:#eef2ff,stroke:#4c6ef5
+ style PY fill:#eef2ff,stroke:#4c6ef5
 ```
 
 Every persisted shape is a Pydantic model first. The JSON Schema is generated

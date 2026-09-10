@@ -164,7 +164,7 @@ The title, not the article text, and the asymmetry is deliberate. A plan runs be
 
 **All thirty are standing organisations, and on 2026-08-31 the registry gained room for something else.** `EntityDef.kind` is `organisation` or `subject`, it defaults to `organisation`, and no committed entry is a subject yet. The reason for the widening is a gap: a company is in the news most weeks, so the time between our own mentions of it is near zero, and a running story goes quiet between instalments. Only the second kind of entry has a gap worth measuring. Nothing reads `kind` yet - it exists so a pandemic or a tournament can enter the vocabulary at all, which an organisation-only registry could not allow. A subject carries no SEC filer id and the contract refuses one.
 
-**Nothing fades a subject's score across days, and one shape of that idea is refused rather than deferred.** What was asked for was a decay, and three different features answer to that word. Keeping a running story visible on a quiet day is the one worth building, and it waits on a registry entry that actually goes quiet - our silence about a name we track runs zero days at the median and three at the worst observed, so a fade rate set anywhere in that range fires on every name every day ([../../reference/measurements.md](../../reference/measurements.md#what-this-settles)). A **running total that a subject adds to every day and a rate then shrinks is refused outright**: it grows for as long as the subject runs, so a two-year story eventually outranks every fresh story permanently, and on a day the subject did produce coverage the shared-subject term above has already counted it. Stopping one subject from leading five days running is a third thing again, and its control is the per-subject cap below rather than a rate - a rate doing that job would have to penalise a subject still producing coverage, which is exactly the case the request was protecting. Authority: Editor, 2026-08-31.
+**Nothing fades a subject's score across days, and one shape of that idea is refused rather than deferred.** What was asked for was a decay, and three different features answer to that word. Keeping a running story visible on a quiet day is the one worth building, and it waits on a registry entry that actually goes quiet - our silence about a name we track runs zero days at the median and three at the worst observed, so a fade rate set anywhere in that range fires on every name every day ([../../reference/measurements.md](../../archive/measurements-2026-08.md#what-this-settles)). A **running total that a subject adds to every day and a rate then shrinks is refused outright**: it grows for as long as the subject runs, so a two-year story eventually outranks every fresh story permanently, and on a day the subject did produce coverage the shared-subject term above has already counted it. Stopping one subject from leading five days running is a third thing again, and its control is the per-subject cap below rather than a rate - a rate doing that job would have to penalise a subject still producing coverage, which is exactly the case the request was protecting. Authority: Editor, 2026-08-31.
 
 ## Sources are tiered, and the tier is scaled by the feed's own weight
 
@@ -228,12 +228,12 @@ enter the pool.
 Two rules keep it from becoming a censorship surface:
 
 - **The entries live in `config/`, and the default is empty** (Rule #6). The knob
-  is the shape; the list is a source-curation decision like the feed list beside
-  it.
+ is the shape; the list is a source-curation decision like the feed list beside
+ it.
 - **The feed's health row still counts what the feed offered.** What we accept is
-  the pool's business, not the feed's. A source that syndicated a promo is not a
-  source that failed, and folding the two counts together would quarantine a
-  working feed.
+ the pool's business, not the feed's. A source that syndicated a promo is not a
+ source that failed, and folding the two counts together would quarantine a
+ working feed.
 
 The marker is the narrowest thing that was measured. `fool.com/the-ascent/` is
 the publisher's affiliate arm; `fool.com/investing/` is not blocked, because no
@@ -245,9 +245,9 @@ The day is decided before any model loads, by a score with five terms:
 
 ```
 (tier weight * feed weight) * (1 + repetition_weight * (carriers - 1))
-  + watchlist_bonus
-  + front_page_bonus
-  + recency_bonus
+ + watchlist_bonus
+ + front_page_bonus
+ + recency_bonus
 ```
 
 The authority of the source, scaled by that feed's own weight, multiplied by how widely the story is carried, plus a bonus for naming a watchlist entity, plus a bonus for an aggregator vote, plus a bonus for being recent. A story three independent sources carried today is the day's story.
@@ -309,10 +309,10 @@ may not justify a design (Rule #10).
 A subject qualifies when both hold:
 
 - **`ui.lead_cluster_floor` distinct sources name the same registry entity in
-  their published titles**, counting one story per source per entity, so a
-  newsroom that filed four pieces is one source and not four.
+ their published titles**, counting one story per source per entity, so a
+ newsroom that filed four pieces is one source and not four.
 - **The cluster holds at least one `reporting` story.** A cluster of
-  announcements about one company is a press schedule, not a story.
+ announcements about one company is a press schedule, not a story.
 
 The title, never the body and never fetched text: the matcher reads words we
 wrote and may only emit a slug the committed registry already holds, so a
@@ -474,19 +474,19 @@ The utility is a minimum access check, not an editorial acceptance gate. Its
 current limits matter when reading a green exit code:
 
 - `--articles` defaults to one. A larger value samples the first entries in
-  feed order, not a representative selection across dates or content types.
+ feed order, not a representative selection across dates or content types.
 - **Any one readable article passes the feed.** Asking for three records all
-  three results, but does not stop one free article hiding two blocked ones in
-  the headline verdict. Review the per-article results, not only `passed`.
+ three results, but does not stop one free article hiding two blocked ones in
+ the headline verdict. Review the per-article results, not only `passed`.
 - A parser warning is recorded as `malformed` but does not fail the verdict.
-  An undated feed can also pass, with `no_dated_entries` beside it.
+ An undated feed can also pass, with `no_dated_entries` beside it.
 - It does not apply the production freshness limit or decide whether the page
-  is a single useful story. An article's successful status can carry a shape
-  warning that the probe's verdict does not expose; see
-  [item-health.md](item-health.md#stages-and-outcomes).
+ is a single useful story. An article's successful status can carry a shape
+ warning that the probe's verdict does not expose; see
+ [item-health.md](item-health.md#stages-and-outcomes).
 - A local pass establishes access from that machine on that date. It does
-  not establish access from the GitHub runner or permission to reuse text for
-  training. Publisher restrictions still apply.
+ not establish access from the GitHub runner or permission to reuse text for
+ training. Publisher restrictions still apply.
 
 Sample several articles and keep the report for review, for example:
 
@@ -539,7 +539,7 @@ yield judgement before the configured 30-day requirement. The entry moves from
 `feeds` to `retired`, keeps `id: seekingalpha` and its descriptive fields, and
 sets `retired_on: 2026-09-09`. Future plans stop selecting it. Historical
 health rows and published items stay unchanged and can still resolve its name
-through `Sources.known_feeds()`. No source or feed-health schema changes: this
+through `Sources.known_feeds`. No source or feed-health schema changes: this
 uses the existing lifecycle fields. A run already holding a plan is not
 rewritten by a later curation edit.
 

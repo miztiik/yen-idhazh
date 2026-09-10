@@ -96,12 +96,12 @@ tokens written match to the token on both sides. The full figures are under
 Two things follow for anyone reading a number off this page:
 
 - **The ledger was never the suspect.** The premise this work started from was
-  "we cannot tell", not "the ledger is wrong", and the reconciliation says the
-  ledger is right.
+ "we cannot tell", not "the ledger is wrong", and the reconciliation says the
+ ledger is right.
 - **A run figure is a sum over a sum.** Each shard has its own row, and the run
-  rate is the total tokens over the total seconds. A mean of the four shard
-  rates would weigh a shard that read 23,411 tokens the same as one that read
-  30,538.
+ rate is the total tokens over the total seconds. A mean of the four shard
+ rates would weigh a shard that read 23,411 tokens the same as one that read
+ 30,538.
 
 One run is an observation, not a property. Re-run the utility after a few more
 days, and especially after a day where a shard died mid-item.
@@ -141,11 +141,11 @@ carrying a bigger prompt and is asked for a longer summary, and both make
 writing slower per token:
 
 - **A bigger prompt.** Every generated token attends over everything already in
-  the context. A 2700-token context costs more per generated token than an
-  1100-token one, within that one request.
+ the context. A 2700-token context costs more per generated token than an
+ 1100-token one, within that one request.
 - **A longer summary.** The cost per token climbs as the reply grows, for the
-  same reason, so a 300-token summary has a lower average rate than a 170-token
-  one even at identical prompt length.
+ same reason, so a 300-token summary has a lower average rate than a 170-token
+ one even at identical prompt length.
 
 Both are per-request effects. Run the same articles in the opposite order and
 the drift reverses.
@@ -208,16 +208,16 @@ read about four times faster than its sibling in the same run.
 Three things follow for anyone reading a rate off this page or the console:
 
 - **A rate that moved between two runs is not evidence of a change we made**
-  until both runs are known to have drawn the same processor. `cpu_model` is a
-  committed per-shard cell on `state/runtime-counters.csv`, so that check costs
-  a column read.
+ until both runs are known to have drawn the same processor. `cpu_model` is a
+ committed per-shard cell on `state/runtime-counters.csv`, so that check costs
+ a column read.
 - **Compare within a processor, never across one.** Every paired figure in
-  [../../reference/measurements.md](../../reference/measurements.md) that prices a
-  runtime setting is matched on EPYC 9V74 for this reason. Doubling `n_ctx` moved
-  read by about 1 percent; the processor moves it by 4.2 times.
+ [../../reference/measurements.md](../../reference/measurements.md) that prices a
+ runtime setting is matched on EPYC 9V74 for this reason. Doubling `n_ctx` moved
+ read by about 1 percent; the processor moves it by 4.2 times.
 - **A whole-run median hides it.** The month figure of 9.85 tokens a second runs
-  from 8.25 to 44.71, and a 5.4x spread in one column is not measurement noise.
-  The table above is what is in it.
+ from 8.25 to 44.71, and a 5.4x spread in one column is not measurement noise.
+ The table above is what is in it.
 
 **This is not a lever we can pull**, which is why it sits beside the levers
 rather than among them. It is on this page because it is the largest single term
@@ -228,25 +228,25 @@ the biggest mover teaches the wrong model of the machine
 ## What this means when reading the chart
 
 - **A wide candle is normal.** The spread inside a day is the article mix,
-  because the day contains both release notes and long reads.
+ because the day contains both release notes and long reads.
 - **Compare like with like.** A day's median moves with what the news was that
-  day. The whole-day figure under the chart - total tokens over total
-  milliseconds - is the one weighted by work actually done.
+ day. The whole-day figure under the chart - total tokens over total
+ milliseconds - is the one weighted by work actually done.
 - **A model swap should move the whole candle,** both ends together. A change in
-  one end only is more likely a change in the article mix.
+ one end only is more likely a change in the article mix.
 - **The axis starts at the slowest rate drawn, not at zero,** and both ends are
-  printed. What a reader compares on this chart is a distance between two
-  candles, so the axis carries only the range the run actually reached.
+ printed. What a reader compares on this chart is a distance between two
+ candles, so the axis carries only the range the run actually reached.
 - **Check prompt reuse before blaming the model.** The read rate is computed
-  over the tokens the machine actually read. If prompt reuse jumps, the read
-  rate moves without the model changing at all. The figure is in the legend
-  under `prompt tokens reused`; it is a cache statistic and is not drawn.
+ over the tokens the machine actually read. If prompt reuse jumps, the read
+ rate moves without the model changing at all. The figure is in the legend
+ under `prompt tokens reused`; it is a cache statistic and is not drawn.
 - **Check the host before blaming anything.** The runner host moves the read
-  rate further than any knob we set. Measured 2026-08-24 across eight `work`
-  jobs, the read rate clustered at about 11, 14 and 37 tok/s - a 3.4x span with
-  one model, one set of settings and one day's articles. Nothing records which
-  host a job drew, so two days are comparable only if their host mix matched,
-  and today nothing proves it did.
+ rate further than any knob we set. Measured 2026-08-24 across eight `work`
+ jobs, the read rate clustered at about 11, 14 and 37 tok/s - a 3.4x span with
+ one model, one set of settings and one day's articles. Nothing records which
+ host a job drew, so two days are comparable only if their host mix matched,
+ and today nothing proves it did.
 
 **The write rate moves the opposite way from the read rate when the host
 changes.** In the same eight jobs the two fastest-reading jobs were the two
@@ -269,7 +269,7 @@ column cannot carry, and prints the date as one label instead.
 **A model-swap mark is not built, and the thing that blocked it has now
 happened.** The rule above tells a reader to attribute a whole-candle move to a
 swap, but the chart does not say where a swap happened - so the reader has to
-know. `loadManifests()` already returns each day's model ids, so the join is
+know. `loadManifests` already returns each day's model ids, so the join is
 small. What was missing was a way to prove it: every published day up to
 2026-08-27 ran `qwen3-8b-q4-k-m` and nothing else, so the mark could not fire
 and the browser suite could not see it. `qwen3-5-9b-q4-k-m` became the
@@ -312,7 +312,7 @@ encodes by position, so what a reader reads off it is the distance between two
 candles, and an anchor nothing ran near spends the plot on empty space. Measured
 on the published console the same day: zero-anchored, the read whisker occupied
 17.5% of the plot height and the interquartile box 3.7%. The domain is now the
-drawn extent rounded outward by `.nice()`, and both ends are printed so the
+drawn extent rounded outward by `.nice`, and both ends are printed so the
 reader can still place a number. Authority: Jony.
 
 **Why the prompt-reuse line was deleted (2026-08-25).** It was drawn against a

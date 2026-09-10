@@ -72,7 +72,7 @@ Mint one and the console can call an article chartable while the planner refuses
 to draw it, and the rate then measures two knobs drifting apart rather than
 measuring the planner.
 
-**Where the three cells go.** `elements.extraction_health(article, ...)` is the
+**Where the three cells go.** `elements.extraction_health(article,...)` is the
 one caller in the run: it is called from `telemetry.classify_item`, which builds
 the item-health census row, and it writes `span_integrity`, `elements_found` and
 `element_class` on that row. It lands there rather than beside the visual
@@ -146,15 +146,15 @@ pass.
 The split is enforced three ways, not described:
 
 - Every Tier 1 field is **required** and every Tier 2 field is **optional**, so
-  the generated schema's `required` list is exactly the nine Tier 1 names. An
-  element carrying a judgement and no anchor does not load.
+ the generated schema's `required` list is exactly the nine Tier 1 names. An
+ element carrying a judgement and no anchor does not load.
 - `TIER_ONE_FIELDS` and `TIER_TWO_FIELDS` are declared in the module, and it
-  raises at **import** if a field belongs to neither. A field added without a
-  tier is a field with no trust story, and the failure arrives when the module
-  is first read rather than when a payload is first written.
+ raises at **import** if a field belongs to neither. A field added without a
+ tier is a field with no trust story, and the failure arrives when the module
+ is first read rather than when a payload is first written.
 - A judged field carries `label_source` and `ledger_version`; the pair with
-  nothing judged is refused too. A claim with no author cannot be measured
-  later, and an author with no claim is a record of nothing.
+ nothing judged is refused too. A claim with no author cannot be measured
+ later, and an author with no claim is a record of nothing.
 
 `extractor` is the field that lets the two paths be measured apart. Without it,
 a fall in the quantity count reads the same whether a pattern stopped matching
@@ -196,7 +196,7 @@ four are pure functions over one payload: nothing is committed, and the passes
 are proved by re-slicing their own output.
 
 **The offsets are not new work.** `visual_planner.numeric_facts` has always
-computed `match.start()` and `match.end()`, and has always thrown them away.
+computed `match.start` and `match.end`, and has always thrown them away.
 This pass keeps them and cuts `span_excerpt` at them.
 
 **What the pass keeps that the planner drops.** `numeric_facts` picks a few bars
@@ -237,17 +237,17 @@ Everything else is refused, and each refusal is the same rule: a date the
 article did not write is not a date it stated.
 
 - **A relative date.** "Three years ago" resolves against a publication date the
-  article never wrote (decision 4). The contract's value grammar refuses it too,
-  so no producer can write one by accident.
+ article never wrote (decision 4). The contract's value grammar refuses it too,
+ so no producer can write one by accident.
 - **A slash date.** `03/04/2026` is 3 April in one country and 4 March in
-  another. Neither reading is stated, so neither is taken - the year is
-  unambiguous and it is still claimed.
+ another. Neither reading is stated, so neither is taken - the year is
+ unambiguous and it is still claimed.
 - **A day the calendar does not have.** `February 31, 2026` is refused outright
-  rather than rounded to a day that exists, and the digits stay available to the
-  number pattern.
+ rather than rounded to a day that exists, and the digits stay available to the
+ number pattern.
 - **A four-digit run that is not a year.** A price (`$2026`), a decimal
-  (`2026.5`), a thousands separator (`1,200`) and a year either side of
-  1900-2100 are all numbers.
+ (`2026.5`), a thousands separator (`1,200`) and a year either side of
+ 1900-2100 are all numbers.
 
 `YEAR_MIN` and `YEAR_MAX` are the bounds, and they are one definition rather
 than two: they moved off `visual_planner` in this row so the pass that claims a
@@ -263,7 +263,7 @@ rationale below.
 
 The check is every pair of candidates against every other, which is quadratic in
 one article and bounded by `elements.max_per_article` - it cannot grow with the
-archive (Rule #12). Measured 2026-09-08 on a 12th Gen Intel Core i7-1265U with
+archive (Rule #12). Measured 2026-09-08 on a a developer machine with
 Python 3.14.2: on the densest bounded fixture, 11 candidates settle to 7 in a
 median 0.0116 ms, spread 0.0111-0.0167 ms over 9 runs of 200. At the ceiling -
 256 from each pass - 512 candidates settle to 384 in a median 12.37 ms, spread
@@ -282,9 +282,9 @@ follow a number with a 600-character hyphenated word, or state a 200-digit
 serial number. Two bounds keep that from raising in the middle of an article:
 
 - A value too wide to write is not a quantity. It is not emitted and it is not
-  counted, because it never was one.
+ counted, because it never was one.
 - A word too wide to be a unit is read as no unit. The element still lands with
-  its span; only the unit reading is refused.
+ its span; only the unit reading is refused.
 
 The bounds are the contract's own, exported as `VALUE_MAX_LENGTH` and
 `UNIT_MAX_LENGTH`, so the producer refuses what the shape would refuse rather
@@ -387,12 +387,12 @@ Four refusals, and each is ambiguity rather than a near miss:
 
 - **A sentence address that names no sentence.** Nothing to search.
 - **A surface that occurs twice in its sentence, or not at all.** This is the
-  mis-pointing failure no span check can see - the span would be real, just the
-  wrong one - so ambiguity is refused rather than guessed.
+ mis-pointing failure no span check can see - the span would be real, just the
+ wrong one - so ambiguity is refused rather than guessed.
 - **A surface holding two figures, or none.** Same rule, one level down.
 - **A number spelled out in words, and a relative change.** "About a third" and
-  "doubled" have nothing for the pattern to parse, and a figure worked out from
-  them is a derived value rather than a found one.
+ "doubled" have nothing for the pattern to parse, and a figure worked out from
+ them is a derived value rather than a found one.
 
 **A proposal over characters the pass already read is dropped before anything is
 settled.** A second reading of a stretch of characters code already read is not
@@ -511,9 +511,9 @@ callers want opposite dispositions out of one answer.
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| Write time | `element_table()` | Raises `SpanDriftError`. The pass cut every excerpt out of the string it hashed moments earlier, so a mismatch is its own arithmetic being wrong and every article in the run has it |
+| Write time | `element_table` | Raises `SpanDriftError`. The pass cut every excerpt out of the string it hashed moments earlier, so a mismatch is its own arithmetic being wrong and every article in the run has it |
 | Read time | a consumer holding a table it did not build | Records the reason against that item and moves to the next. No sibling changes |
-| Census | `elements.extraction_health()`, through `telemetry.classify_item` | Catches `SpanDriftError` and writes `span_integrity=false` on that item's row. The item degrades, the run continues, and `span_integrity_rate` is what makes the refusal visible |
+| Census | `elements.extraction_health`, through `telemetry.classify_item` | Catches `SpanDriftError` and writes `span_integrity=false` on that item's row. The item degrades, the run continues, and `span_integrity_rate` is what makes the refusal visible |
 | CI | `backend/tests/test_elements.py`, `backend/tests/test_contracts.py` | The nine bounded fixtures re-slice against their own text; a built run of five items with one text moved by a character degrades exactly one |
 
 The write-time half is what makes the one-hash-per-article decision mechanical:
@@ -545,7 +545,7 @@ a rate that swallowed it would report the run as healthy.
 the measurement is the reason.** The hash covers the whole article and the
 excerpts cover a few dozen characters of it, so the cheap-looking short-circuit
 is the more expensive half. Measured 2026-09-08 on a 12th Gen Intel Core
-i7-1265U with Python 3.14.2: on the densest captured page - 7 elements over
+a developer machine with Python 3.14.2: on the densest captured page - 7 elements over
 1,337 characters - the re-slice takes a median 1.15 us against 1.78 us to hash
 the text, spread 1.12-1.33 and 1.77-1.87 over 9 runs of 2,000. At the ceiling of
 256 spans over 60,000 characters it is 41.30 us against 44.35 us, spread

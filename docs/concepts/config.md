@@ -24,12 +24,12 @@ Knobs, by the surface they tune:
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
 - **Retention** - the image age window, the dry-run switch, the deletion fuse, the published-site alarm point and the published-site cap ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). `retention.site_budget_mb` and `retention.pages_hard_cap_mb` are read by `idhazh site-weight`, which runs after the site is built and measures the built bundle - never the committed payload tree, which is a different tree eighteen times smaller. The alarm point warns; the cap fails the job.
 - **Drift** - the window and per-domain sample floors and the length/copying
-  alert thresholds. The workflow owns the schedule and its date-window inputs
-  ([evaluation.md](evaluation.md#comparable-domain-samples)).
+ alert thresholds. The workflow owns the schedule and its date-window inputs
+ ([evaluation.md](evaluation.md#comparable-domain-samples)).
 - **Logging** - the level, and nothing else ([telemetry.md](telemetry.md)).
 - **Observability** - which instruments run, how often the scorer runs, and how long a ledger stays at full grain ([telemetry.md](telemetry.md)).
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
-  zoom factor, minimum denominator for rate bars, and chart height.
+ zoom factor, minimum denominator for rate bars, and chart height.
 
 These are the *surfaces*, not a field list. The field-level truth is `schemas/app-config.schema.json`, generated from the model - read it there rather than restating it here, because a list copied into prose is a list that goes stale.
 
@@ -74,11 +74,11 @@ Two contract defaults moved with them: `console.chart_height` 180 -> 220 and `co
 
 `assist` went the other way because the block holds two kinds of knob. Four of them - `similarity_floor`, `result_limit`, `search_months`, `search_min_days` - are read in the browser, and the appearance file declares those. Two - `recall_min` and `eval_corpus_through` - are the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py` and drawn by nothing, so the pipeline file declares those and the appearance file declares neither. The 0.61 that sat here had no reader at all: it was the bar's value before it was re-derived against the pinned corpus on 2026-09-04 ([evaluation.md](evaluation.md)), 0.07 below the live 0.68, which is 10.3 percent of the bar - worth nothing while nothing read it, and a wrong gate the day something did.
 
-**Two more of the block are the pipeline's, and only the pipeline file declares them now.** `max_tokens` and `min_readable_letter_share` are the encoder's, read by `backend/idhazh/embed.py`. They sat in the appearance file as well as the pipeline one, with the same values, which the gate below tolerates - and the tolerance was correct while the page received them, because the appearance file was the last merge layer. It stopped being correct the moment the keep-list landed: from then on the browser was handed neither, so the appearance copies were read by nothing, which is where `assist.recall_min` had been an hour earlier. Both were deleted on 2026-09-05 for that reason. Until that keep-list all four of the pipeline's knobs were merged straight into the prerendered `/archive/` document, because `assistConfig()` returned the raw merge. It now keeps exactly what `AssistConfig` declares. A keep-list rather than a strip-list: a strip-list has to be extended every time a knob lands in the block and ships it to readers in silence when somebody forgets, while a keep-list's own failure - a browser knob added to the file and not to the interface - is refused by the compiler at the component that reads it. Measured on a real build, 2026-09-05: `frontend/build/archive/index.html` went from 18,659 to 18,567 bytes, so the four knobs were 92 bytes on every load of that page.
+**Two more of the block are the pipeline's, and only the pipeline file declares them now.** `max_tokens` and `min_readable_letter_share` are the encoder's, read by `backend/idhazh/embed.py`. They sat in the appearance file as well as the pipeline one, with the same values, which the gate below tolerates - and the tolerance was correct while the page received them, because the appearance file was the last merge layer. It stopped being correct the moment the keep-list landed: from then on the browser was handed neither, so the appearance copies were read by nothing, which is where `assist.recall_min` had been an hour earlier. Both were deleted on 2026-09-05 for that reason. Until that keep-list all four of the pipeline's knobs were merged straight into the prerendered `/archive/` document, because `assistConfig` returned the raw merge. It now keeps exactly what `AssistConfig` declares. A keep-list rather than a strip-list: a strip-list has to be extended every time a knob lands in the block and ships it to readers in silence when somebody forgets, while a keep-list's own failure - a browser knob added to the file and not to the interface - is refused by the compiler at the component that reads it. Measured on a real build, 2026-09-05: `frontend/build/archive/index.html` went from 18,659 to 18,567 bytes, so the four knobs were 92 bytes on every load of that page.
 
 **Five more are the build's, and neither file's readers are in a tab.** `model_base_url`, `model_cdn_origins`, `model_revision`, `model_digests` and `model_fetch_deadline_ms` are the encoder's failover leg, read by `vite.config.ts` and `svelte.config.js` through `frontend/asset-base.js`. The pipeline file declares them and the appearance file declares none of them, for the same reason as the two above: nothing the published surface is drawn from reads any of them. One of them is roughly 600 bytes of hex, so the keep-list matters more than it did - declared in `AssistConfig` on the frontend they would ride in the prerendered `/archive/` document and its `__data.json` twin, against a ceiling of 7,553 gzipped bytes, for a value no component reads.
 
-**A mirror pinned to the default is only right where a fallback is what it pins.** The browser needs a token cap of its own and holds a hardcoded 256 in `frontend/src/lib/assist/loader.ts`. That copy stays, because `loader.ts` runs in a tab and cannot open `config/idhazh.json`; putting the cap back on the page would undo the 92 bytes the keep-list just took off it. What changed on 2026-09-05 is what the gate compares it against. `test_the_browser_reads_a_query_exactly_as_far_as_the_runner_read_the_items` in `backend/tests/test_embed.py` compared the literal against `AssistConfig().max_tokens` - the contract default - while `Embedder` truncates at `self._assist.max_tokens`, the committed knob. Set `assist.max_tokens` to 384 in `config/idhazh.json` and leave `loader.ts` alone and the old assertion was still `256 == 256`: green, with the runner reading 384 tokens of every item and a tab reading 256 of the query. Nothing else would have caught it - no error, no 404, just worse search results.
+**A mirror pinned to the default is only right where a fallback is what it pins.** The browser needs a token cap of its own and holds a hardcoded 256 in `frontend/src/lib/assist/loader.ts`. That copy stays, because `loader.ts` runs in a tab and cannot open `config/idhazh.json`; putting the cap back on the page would undo the 92 bytes the keep-list just took off it. What changed on 2026-09-05 is what the gate compares it against. `test_the_browser_reads_a_query_exactly_as_far_as_the_runner_read_the_items` in `backend/tests/test_embed.py` compared the literal against `AssistConfig.max_tokens` - the contract default - while `Embedder` truncates at `self._assist.max_tokens`, the committed knob. Set `assist.max_tokens` to 384 in `config/idhazh.json` and leave `loader.ts` alone and the old assertion was still `256 == 256`: green, with the runner reading 384 tokens of every item and a tab reading 256 of the query. Nothing else would have caught it - no error, no 404, just worse search results.
 
 The rule the two shapes of mirror follow:
 
@@ -125,12 +125,12 @@ scheduled run.
 Extraction has three shape and access control groups:
 
 - `extract.prose_sentence_min`, `extract.prose_sentence_words_min`,
-  `extract.prose_line_count_min` and `extract.prose_line_ratio_min` decide when
-  text carries `not_prose`.
+ `extract.prose_line_count_min` and `extract.prose_line_ratio_min` decide when
+ text carries `not_prose`.
 - `extract.boilerplate_ratio_max` decides when sibling-shared lines carry
-  `boilerplate`.
+ `boilerplate`.
 - `extract.paywall_markers` is the fallback when JSON-LD does not declare a
-  paywall.
+ paywall.
 
 Two enforcement switches default to false: `extract.reject_not_prose` and
 `extract.reject_boilerplate`. False means record the signal and publish. True
@@ -232,7 +232,7 @@ runtime - it reads `node:fs`.
 **Whether the fallback should exist at all is still open.** Section 1a of
 `CLAUDE.md` says a fresh clone runs on the defaults, so it stays. One question
 settles it: does any build ever run with `config/idhazh.json` unreadable? If the
-answer is no, `summarizeConfig()` should throw rather than guess, and the
+answer is no, `summarizeConfig` should throw rather than guess, and the
 defaults go with it - a value pinned to the file it stands in for is a
 consolation prize next to not needing the copy.
 
@@ -326,18 +326,18 @@ swapping the summarizer is still one block.
 Two pairs of knobs look like one knob each and are not:
 
 - **`corpus_rows` is the window; `train_rows` is the sample.** They price
-  differently. The window costs storage and git history, measured 2026-08-27 at
-  2.9 KB compressed per row. The sample costs wall-clock on somebody's GPU. So
-  window 2000 with sample 1000 is strictly better than window 1000 with sample
-  1000: the same training time, twice the pool to draw a diverse 1000 from.
-  `train_rows` is a ceiling rather than a demand, because a 600-row corpus
-  satisfies `min_rows: 500` and cannot satisfy `train_rows: 1000`, and a session
-  that silently trained on 600 while every note said 1000 produces a result
-  nobody can attribute.
+ differently. The window costs storage and git history, measured 2026-08-27 at
+ 2.9 KB compressed per row. The sample costs wall-clock on somebody's GPU. So
+ window 2000 with sample 1000 is strictly better than window 1000 with sample
+ 1000: the same training time, twice the pool to draw a diverse 1000 from.
+ `train_rows` is a ceiling rather than a demand, because a 600-row corpus
+ satisfies `min_rows: 500` and cannot satisfy `train_rows: 1000`, and a session
+ that silently trained on 600 while every note said 1000 produces a result
+ nobody can attribute.
 - **`prune_every_days` is how often the prune fires; `prune_keep_days` is how far
-  back it keeps.** "Prune quarterly" names neither on its own. The first costs one
-  force-push each time; the second costs storage, and it is also how far
-  `git blame` reaches afterwards.
+ back it keeps.** "Prune quarterly" names neither on its own. The first costs one
+ force-push each time; the second costs storage, and it is also how far
+ `git blame` reaches afterwards.
 
 `harvest_every_days`, `prune_every_days` and `prune_keep_days` are the clearest
 case in this project of a knob that **cannot** be workflow syntax.
@@ -473,11 +473,11 @@ The block therefore sits on the entry, and carries `declared_for`. Two rules,
 and between them they cover both shapes the swap takes:
 
 - An entry with no block of its own does not fall back to one. Its default block
-  declares nothing, the entry names measured weights, and the mismatch is
-  refused by name.
+ declares nothing, the entry names measured weights, and the mismatch is
+ refused by name.
 - An entry edited in place keeps its block, and the block still names the old
-  digest. That is the shape a real swap takes, and it is the one a per-entry
-  block alone would not have caught.
+ digest. That is the shape a real swap takes, and it is the one a per-entry
+ block alone would not have caught.
 
 Both digests absent is legal and means an entry nobody has measured yet. Nothing
 runs on one: `idhazh.fingerprint.build_inputs` already refuses to stamp a run
@@ -955,8 +955,8 @@ does not carry, which
 
 The bounds are 250 ms and 30 s. Under 250 the sentence fires on a fetch that was
 never slow, which teaches a reader to ignore it; over 30 s they have already
-decided the page is broken. Measured 2026-09-01 on Intel Core i7-1265U /
-Windows 11 / node 24.12.0, Chromium against a local preview server: a
+decided the page is broken. Measured 2026-09-01 on a developer machine /
+ / node 24.12.0, Chromium against a local preview server: a
 9,731-byte served day answered in 10.2 to 22.3 ms over 12 probes, median 13 - so
 the default sits about 90 times above that median and cannot fire on a healthy
 fetch here. That is a server on the same machine, not a reader's connection, and
@@ -971,50 +971,50 @@ browser may fetch the encoder from and what it must prove about the bytes. All
 of them are set from what was measured rather than from taste.
 
 - `assist.max_tokens` (256) is how far into an item's text the encoder reads
-  before it truncates. 512 is a hard ceiling because that is the encoder's
-  position table, and 256 is the default because that is what the model was
-  trained at. This is the one knob here that was moved out of code, and the
-  move came with the measurement that says where to leave it: over the 1886
-  embedded items of the six committed days, p95 is 217 tokens, p99 is 243 and
-  the longest is 280, so 256 reads 99.95 percent of every token published. The
-  0.58 percent of items that do run over lose a mean of 13 tokens off the end.
-  Raising it would buy that 0.05 percent and re-date every committed vector, so
-  it stays. `backend/utilities/token_budget.py` reproduces the sweep, and a test
-  fails if a future day's p95 ever climbs above the cap.
+ before it truncates. 512 is a hard ceiling because that is the encoder's
+ position table, and 256 is the default because that is what the model was
+ trained at. This is the one knob here that was moved out of code, and the
+ move came with the measurement that says where to leave it: over the 1886
+ embedded items of the six committed days, p95 is 217 tokens, p99 is 243 and
+ the longest is 280, so 256 reads 99.95 percent of every token published. The
+ 0.58 percent of items that do run over lose a mean of 13 tokens off the end.
+ Raising it would buy that 0.05 percent and re-date every committed vector, so
+ it stays. `backend/utilities/token_budget.py` reproduces the sweep, and a test
+ fails if a future day's p95 ever climbs above the cap.
 - `assist.min_readable_letter_share` (0.5) is how much of an item's alphabet the
-  encoder has to know before the item gets a vector at all. The committed
-  weights carry an English uncased vocabulary. An item in another script still
-  gets a vector out of that encoder - a confident, well-formed one, about which
-  characters appeared rather than about the story, which no query a reader types
-  will retrieve. Below this share the item gets no vector and the run logs why;
-  the item still publishes and still reads normally. Half is a plain reading of
-  "mostly not in our alphabet", and the corpus says the exact number does not
-  matter: 3 of 1889 items score 0.0 and the next lowest scores 0.9975, so every
-  threshold between 0.01 and 0.99 picks the same three items.
+ encoder has to know before the item gets a vector at all. The committed
+ weights carry an English uncased vocabulary. An item in another script still
+ gets a vector out of that encoder - a confident, well-formed one, about which
+ characters appeared rather than about the story, which no query a reader types
+ will retrieve. Below this share the item gets no vector and the run logs why;
+ the item still publishes and still reads normally. Half is a plain reading of
+ "mostly not in our alphabet", and the corpus says the exact number does not
+ matter: 3 of 1889 items score 0.0 and the next lowest scores 0.9975, so every
+ threshold between 0.01 and 0.99 picks the same three items.
 - `assist.search_months` (1) is how many month shards a search always reads,
-  newest first. The reader waits on the download and never on the arithmetic: one
-  month is a 2.53 MB vector file beside a 518 KB browse index, about 2.1 seconds
-  on a 10 Mbit line at the rate the committed days ran, against 74 to 159
-  milliseconds of ranking. The fetch is 9 to 30 times the ranking at every scope,
-  so this knob buys download seconds and never compute seconds, and three months
-  is a 14.4 second wait before the first result. One month is the only scope
-  whose first search starts inside about five seconds.
+ newest first. The reader waits on the download and never on the arithmetic: one
+ month is a 2.53 MB vector file beside a 518 KB browse index, about 2.1 seconds
+ on a 10 Mbit line at the rate the committed days ran, against 74 to 159
+ milliseconds of ranking. The fetch is 9 to 30 times the ranking at every scope,
+ so this knob buys download seconds and never compute seconds, and three months
+ is a 14.4 second wait before the first result. One month is the only scope
+ whose first search starts inside about five seconds.
 - `assist.search_min_days` (7) is the fewest days of published stories a search
-  tries to reach, and it is what stops a calendar shard being mistaken for a
-  window. On 31 August the newest shard held 31 days; on 1 September it held one,
-  so the same search reached 31 times less for a reason no reader could see, and
-  finding nothing looked exactly like a story we never published. Below this
-  floor a search reads one more shard, and one more only, so the cost is bounded
-  at a single extra fetch. Seven days, and it is now this knob's own number
-  rather than a borrowed one: it used to be justified as the week
-  `ui.read_mark_days` and `console.min_window_days` also kept, and on 2026-09-06
-  those moved to fourteen calendar days and to one day. The measurement is what
-  still holds. The
-  extra fetch fires on the first 6 days of a month, 20 percent of them, and only
-  when the shard already being read is small, so the bytes a search moves are
-  levelled across the month rather than doubled. Widening either knob is visible
-  to a reader rather than silent: the page prints the days it searched under the
-  box.
+ tries to reach, and it is what stops a calendar shard being mistaken for a
+ window. On 31 August the newest shard held 31 days; on 1 September it held one,
+ so the same search reached 31 times less for a reason no reader could see, and
+ finding nothing looked exactly like a story we never published. Below this
+ floor a search reads one more shard, and one more only, so the cost is bounded
+ at a single extra fetch. Seven days, and it is now this knob's own number
+ rather than a borrowed one: it used to be justified as the week
+ `ui.read_mark_days` and `console.min_window_days` also kept, and on 2026-09-06
+ those moved to fourteen calendar days and to one day. The measurement is what
+ still holds. The
+ extra fetch fires on the first 6 days of a month, 20 percent of them, and only
+ when the shard already being read is small, so the bytes a search moves are
+ levelled across the month rather than doubled. Widening either knob is visible
+ to a reader rather than silent: the page prints the days it searched under the
+ box.
 
 The browser keeps its own copy of the token cap in
 `frontend/src/lib/assist/loader.ts`, because the config reader is server-only and
@@ -1031,33 +1031,33 @@ from and the `connect-src` that permits it come from one value and cannot
 disagree. None of them reaches the prerendered `/archive/` document.
 
 - `assist.model_base_url` (`https://huggingface.co/Xenova/all-MiniLM-L6-v2`) is
-  the second origin. A repository prefix rather than a bare host, so the fetch is
-  built from one value; the path in it is a directory on that host and only the
-  ORIGIN reaches the CSP.
+ the second origin. A repository prefix rather than a bare host, so the fetch is
+ built from one value; the path in it is a directory on that host and only the
+ ORIGIN reaches the CSP.
 - `assist.model_cdn_origins` (`https://us.aws.cdn.hf.co`) are the origins that
-  base redirects a large file to. Listed because a browser checks a redirect
-  target: measured 2026-09-09 from the live Pages origin, 15 reads of 15, the
-  four small files answer on the base host and the 23 MB of weights answers 302
-  to this CDN. Listing the base host alone would pass the small files and block
-  the model, which is the worst of both - the reader waits, then gets nothing.
+ base redirects a large file to. Listed because a browser checks a redirect
+ target: measured 2026-09-09 from the live Pages origin, 15 reads of 15, the
+ four small files answer on the base host and the 23 MB of weights answers 302
+ to this CDN. Listing the base host alone would pass the small files and block
+ the model, which is the worst of both - the reader waits, then gets nothing.
 - `assist.model_revision` (`751bff37...`) is the upstream commit the committed
-  weights are the bytes of. The contract refuses anything that is not a full
-  40-hex SHA-1, because a branch hands back whatever was uploaded last and makes
-  every digest below a coin flip.
+ weights are the bytes of. The contract refuses anything that is not a full
+ 40-hex SHA-1, because a branch hands back whatever was uploaded last and makes
+ every digest below a coin flip.
 - `assist.model_digests` is the SHA-256 of all five encoder files. **This is what
-  makes a second origin safe at all**: the browser hashes what arrives and
-  discards the WHOLE set on any miss - a non-200, a truncation, a timeout or a
-  wrong digest - so provenance is never mixed across files. Without it the URL
-  above would be a permission rather than a fallback. A backend test hashes the
-  committed weights against this map, so a manifest that drifts fails the build
-  rather than failing closed on every reader.
+ makes a second origin safe at all**: the browser hashes what arrives and
+ discards the WHOLE set on any miss - a non-200, a truncation, a timeout or a
+ wrong digest - so provenance is never mixed across files. Without it the URL
+ above would be a permission rather than a fallback. A backend test hashes the
+ committed weights against this map, so a manifest that drifts fails the build
+ rather than failing closed on every reader.
 - `assist.model_fetch_deadline_ms` (120000) bounds the whole set rather than
-  each file, because a reader is waiting on the set and a per-file deadline lets
-  four slow files add up to a wait nobody bounded. Two minutes is the download it
-  exists to complete: the hub serves the weights uncompressed at 22,972,370 bytes
-  where our origin gzips them to 16.22 MB (measured 2026-09-08 on a laptop
-  against CloudFront AMS58-P3, n=3, spread 0), about 18 seconds on a 10 Mbit line
-  and about 100 on a 2 Mbit one.
+ each file, because a reader is waiting on the set and a per-file deadline lets
+ four slow files add up to a wait nobody bounded. Two minutes is the download it
+ exists to complete: the hub serves the weights uncompressed at 22,972,370 bytes
+ where our origin gzips them to 16.22 MB (measured 2026-09-08 on a laptop
+ against CloudFront AMS58-P3, n=3, spread 0), about 18 seconds on a 10 Mbit line
+ and about 100 on a 2 Mbit one.
 
 ## What is NOT a knob
 
@@ -1078,9 +1078,9 @@ Some numbers in `config/` are not there to be tuned. They are there to stop a bu
 - `run.shard_timeout_minutes` (200) is a **job backstop**, and it is the outer bound the previous line hands off to. The `work` job reads it, so this is the only place the number is written. It is not a budget: the stage has no clock of its own, and a worker killed here uploads nothing, so the run loses every item that worker held rather than the tail it could not reach. It rose to 200 from 150 as headroom for the coming two-call summariser change, not because a worker got slower: at the 80-item ceiling a worker draws 20 items, half of the 40 it drew before, so the base work roughly halves and 150 alone would now be slack. The room is banked before that change lands, because a second model call an item takes the worst shard past 150 and a killed worker uploads nothing. It is sized from the worst measured shard, not the median - 135.4 minutes of the old 150 over 80 shard rows on 2026-09-02, against a 78.5-minute median ([../reference/measurements.md](../reference/measurements.md#what-a-work-shard-costs)) - and 200 is 56 percent of the six-hour platform ceiling. A worker that runs long is still answered by lowering `run.safety_ceiling_per_run`, never by raising this (Rule #2).
 - `collect.settled_failure_codes` is a **memory**, not a guard. It names the failure codes that will not change before tomorrow, and an address that failed today with one of them is not planned again today. Absent from it - and therefore retried - are the codes that can change within a day: a rate limit, a network error, a server error, an unreachable model. Measured over 2026-08-24 to 2026-08-29, 403 same-day repeats of a settled failure bought 2 items ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). An empty list restores the old behaviour exactly.
 - `run.visual_planner_budget_minutes` (40) is a **stage budget**, and it is the one number here that a person is meant to move. It says how long the visual planner may spend before it stops asking the model and leaves the rest of the day undecided. It is sized *below* the `visuals` job's 50-minute timeout on purpose: a job killed at its timeout skips its upload step, so the run loses every decision it had already made rather than the tail it could not reach. The 10 minutes between the two are the fixed cost the stage clock never sees. Measured 2026-08-24/25, the per-item cost is 20.7 s on a fast runner host and 40.3 s on a slow one, so what fits inside the budget changes run to run - which is exactly why the bound is a clock rather than an item count ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
-- `retention.site_budget_mb` (800) is an **alarm**, which is weaker than a guard because it stops nothing. Above it a run logs a warning naming the headroom left, and that is the whole effect: no build fails, and no byte is deleted. The warning rides the run log CI already keeps (section 1b); promoting it to a GitHub issue is a workflow step not yet built. It sits 224 MB below the platform's own 1 GB Pages ceiling, and the size of that gap is the entire design - 224 MB is 26 days of warning at the fastest growth this project has measured, against a 14-day target. The target is a judgement about one maintainer reading one issue, not a measurement, and it is labelled as one where it is derived. The arithmetic, the growth rates it rests on, and why the number is neither 900 nor 600 are in [../reference/measurements.md](../reference/measurements.md#where-the-alarm-fires-and-what-it-buys). Deleting anything is a different knob and ships off: `retention.image_months` is -1 and `retention.dry_run` is true ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
+- `retention.site_budget_mb` (800) is an **alarm**, which is weaker than a guard because it stops nothing. Above it a run logs a warning naming the headroom left, and that is the whole effect: no build fails, and no byte is deleted. The warning rides the run log CI already keeps (section 1b); promoting it to a GitHub issue is a workflow step not yet built. It sits 224 MB below the platform's own 1 GB Pages ceiling, and the size of that gap is the entire design - 224 MB is 26 days of warning at the fastest growth this project has measured, against a 14-day target. The target is a judgement about one maintainer reading one issue, not a measurement, and it is labelled as one where it is derived. The arithmetic, the growth rates it rests on, and why the number is neither 900 nor 600 are in [../reference/measurements.md](../reference/measurements-site.md#where-the-alarm-fires-and-what-it-buys). Deleting anything is a different knob and ships off: `retention.image_months` is -1 and `retention.dry_run` is true ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 - `retention.pages_hard_cap_mb` (1024) is a **limit**, and the only one here that can be tightened and never loosened. Above it `idhazh site-weight` fails the job, because past it the bytes cannot be published at all. It was a `Final` in `backend/idhazh/retention.py` until 2026-09-06 - not editable, and so not readable out of config either, which meant the one number that stops a deploy could not be tightened without a source edit. It is now bounded `le=1024` in the schema: a config naming a smaller cap loads, and one naming a larger cap fails validation with a message naming the bound. That is Rule #2's "the budget is the platform, not a preference" held by the schema rather than by trusting nobody to edit a constant. Lowering it is the whole use - it buys an earlier and louder failure while there is still headroom to act in - and no value buys more room, because the 1 GB is GitHub's and not ours. It stays a separate number from the alarm above it: one reports and one stops, and a single number cannot do both jobs ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
-- `page_weight.ceilings_bytes` is a **limit**, and the other one on this list. It says how heavy each named prerendered page may be on the wire, gzipped, and `frontend/scripts/bundle-gate.mjs` fails the build above it. The unit is `gzip -5` since 2026-09-10 and was `gzip -9` before it, because `-9` is a level no origin serves - measured that day, the live Pages origin served `/console/` in 46,917 bytes against 46,787 at `-5` and 45,077 at `-9`. The object is the single source - the `PageWeightConfig` default in the contract is empty, so a number lives here and nowhere else (Rule #6). A route earns a ceiling when somebody has priced its growth, not when it has none. `/404` and `/evals/` move only when the source does, so each one is the heaviest of five builds plus a tenth. `/archive/` grows by one day link a published day since it stopped inlining the day payloads, so its ceiling is the heaviest build plus a measured year of that growth - headroom that shrinks about 8 bytes on every publish since the day list folded into month disclosures on 2026-09-01, down from 12 to 17 before it, and expires by design, so the gate gets stricter on its own and the answer when it finally fires is to re-measure rather than add a digit. `/console/` earned its ceiling on 2026-08-29, sized against the regression it has to catch rather than in days of headroom, and it stopped being a page that grows with the ledger on the same day - the compression plot now reads one window of the published telemetry shards instead of every row ever scored, so the page settles once the window fills. Since 2026-08-30 there are **three console keys**, one per prerendered route, because one key over three surfaces still fails when any of them grows and then cannot say which one did - so the operator raises the shared number and the next regression lands under it. That is also the decisive argument for splitting the console into routes rather than tabs. A day page is still out, and for the reason both used to be out: a fixed ceiling on a page whose weight is whatever the day published fails on an ordinary publish rather than catching a regression, which is what happened to `/archive/` when it carried the corpus - the ceiling fired on every publish and was raised twice in a day before it was removed ([../reference/measurements.md](../reference/measurements.md#the-prerendered-page-on-the-wire)). The gate reports a route the object does not name without failing it, and the class those data-driven routes belong to is covered by the marker count in `frontend/tests/payload-weight.spec.ts`.
+- `page_weight.ceilings_bytes` is a **limit**, and the other one on this list. It says how heavy each named prerendered page may be on the wire, gzipped, and `frontend/scripts/bundle-gate.mjs` fails the build above it. The unit is `gzip -5` since 2026-09-10 and was `gzip -9` before it, because `-9` is a level no origin serves - measured that day, the live Pages origin served `/console/` in 46,917 bytes against 46,787 at `-5` and 45,077 at `-9`. The object is the single source - the `PageWeightConfig` default in the contract is empty, so a number lives here and nowhere else (Rule #6). A route earns a ceiling when somebody has priced its growth, not when it has none. `/404` and `/evals/` move only when the source does, so each one is the heaviest of five builds plus a tenth. `/archive/` grows by one day link a published day since it stopped inlining the day payloads, so its ceiling is the heaviest build plus a measured year of that growth - headroom that shrinks about 8 bytes on every publish since the day list folded into month disclosures on 2026-09-01, down from 12 to 17 before it, and expires by design, so the gate gets stricter on its own and the answer when it finally fires is to re-measure rather than add a digit. `/console/` earned its ceiling on 2026-08-29, sized against the regression it has to catch rather than in days of headroom, and it stopped being a page that grows with the ledger on the same day - the compression plot now reads one window of the published telemetry shards instead of every row ever scored, so the page settles once the window fills. Since 2026-08-30 there are **three console keys**, one per prerendered route, because one key over three surfaces still fails when any of them grows and then cannot say which one did - so the operator raises the shared number and the next regression lands under it. That is also the decisive argument for splitting the console into routes rather than tabs. A day page is still out, and for the reason both used to be out: a fixed ceiling on a page whose weight is whatever the day published fails on an ordinary publish rather than catching a regression, which is what happened to `/archive/` when it carried the corpus - the ceiling fired on every publish and was raised twice in a day before it was removed ([../reference/measurements.md](../reference/measurements-site.md#the-prerendered-page-on-the-wire)). The gate reports a route the object does not name without failing it, and the class those data-driven routes belong to is covered by the marker count in `frontend/tests/payload-weight.spec.ts`.
 - `page_weight.payload_ceilings_bytes` is the same limit aimed at a file rather than a page, and it exists because the page ceilings stopped being able to see the bytes. The console stopped inlining its telemetry on 2026-09-09: 3.4 MB left a document a ceiling watched and landed in files nothing watched, and a reader still waits for them. A key is a build-relative POSIX path, and its shape says what it bounds - a key naming a file bounds that file, a key ending in `/` bounds every file under it, each on its own, so a month series takes one number rather than one a month. A key matching nothing fails the gate, because a bound over nothing still reads as a bound somebody checked. Two are named today, and they are the two a browser actually asks for: `console/band.json`, whose growth is bounded by `observability.public_telemetry_keep_months` on one side and the cron slots on the other, and `telemetry/`, whose ceiling is a full 31-day month at the heaviest daily rate ever run rather than at today's size - both committed months are partial, so a ceiling set from what they weigh now would go red in October for no reason anybody chose.
 - `page_weight.cold_console_load_bytes` bounds the **design** and not the data: the per-file ceilings say how heavy one shard may be, this says how many of them one cold opening of the console is allowed to want. What it catches is a widened `console.default_window_days`, because each extra month is a whole shard and one more serial round trip. The gate reads the window from `console.default_window_days` and works out the worst case arithmetically - a run of N consecutive days lands in at most `1 + ceil((N - 1) / 28)` calendar months, because February is the shortest month there is, so the default 30 days is three and not the two a reader sees for all but two days of the year. Its partner is `frontend/tests/console-cold-load.spec.ts`, which counts the round trips instead of the bytes.
 

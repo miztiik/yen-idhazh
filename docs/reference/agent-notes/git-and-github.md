@@ -7,7 +7,7 @@ Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 
 ## Worktrees
 
-**More than one agent shares this checkout, so a listing from earlier in the session is fiction.** Worktrees appear and disappear mid-task. Read `git worktree list` immediately before you stage, and never `git add .` in a checkout you did not create - it sweeps another branch's work into your commit.
+**More than one agent shares this checkout, so a listing from earlier in the session is fiction.** Worktrees appear and disappear mid-task. Read `git worktree list` immediately before you stage, and never `git add.` in a checkout you did not create - it sweeps another branch's work into your commit.
 
 **`git checkout -b` in the shared checkout branches off whatever `HEAD` happens to be.** A parallel agent moves `HEAD` between your commands; on 2026-08-25 a branch was cut while `HEAD` sat on a sibling's work and carried its unmerged commit as the parent. Always name the start-point and take your own worktree:
 
@@ -15,7 +15,7 @@ Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 git worktree add <repo>.worktrees/<name> -b <branch> origin/main
 ```
 
-**Every worktree goes in that one container, never beside the checkout.** They accumulate - 38 on one box by 2026-09-02 - and scattered siblings bury the repository among directories that are copies of it. It may not go inside the checkout either: `ruff check .` and `mypy` walk gitignored paths, `git grep` and the site-weight gate glob the tree, and each worktree carries its own `frontend/node_modules`. Name it for the row it serves, `<plan letter><row number>`.
+**Every worktree goes in that one container, never beside the checkout.** They accumulate - 38 on one box by 2026-09-02 - and scattered siblings bury the repository among directories that are copies of it. It may not go inside the checkout either: `ruff check.` and `mypy` walk gitignored paths, `git grep` and the site-weight gate glob the tree, and each worktree carries its own `frontend/node_modules`. Name it for the row it serves, `<plan letter><row number>`.
 
 **Branch before the first edit, not after the work is done.** A 35-file change built uncommitted in the shared checkout on 2026-08-28 survived only by luck: the owner committed underneath it, `origin/main` gained 22 commits, and an earlier `git add` had been undone by another process. `git switch -c <branch>` carries an uncommitted tree onto a new branch, so the recovery is cheap - but it defers the merge to the worst moment.
 
@@ -27,7 +27,7 @@ Remove-Item -LiteralPath <path> -Recurse -Force; git worktree prune; git branch 
 
 Check `Test-Path <path>\.git` afterwards; progress lines reaching 100 percent do not mean the `.git` file was written.
 
-**`git worktree remove` can deregister a worktree and still fail to delete it.** On Windows it stops at the first locked path and reports `failed to delete ...: Invalid argument` with the administrative entry already gone. Read the exit as "partly done", find the holder, then re-run the filesystem delete - not `git worktree remove`, which has nothing left to deregister.
+**`git worktree remove` can deregister a worktree and still fail to delete it.** On Windows it stops at the first locked path and reports `failed to delete...: Invalid argument` with the administrative entry already gone. Read the exit as "partly done", find the holder, then re-run the filesystem delete - not `git worktree remove`, which has nothing left to deregister.
 
 ```powershell
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<worktree>*' }
@@ -36,8 +36,8 @@ Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<worktree>
 **Nothing removes a finished worktree on its own, and `git worktree prune` is not that thing** - it only clears the entry for a directory that has already gone. Measured 2026-09-02: 38 abandoned sibling directories holding 156,482 files, every one a row whose pull request had merged days earlier, because the closing step is the one a worker killed mid-row never reaches. Sweep them, and read the report before removing, because a sibling creates a worktree between any two commands:
 
 ```powershell
-python backend/utilities/sweep_worktrees.py            # report, change nothing
-python backend/utilities/sweep_worktrees.py --remove   # remove what it named
+python backend/utilities/sweep_worktrees.py # report, change nothing
+python backend/utilities/sweep_worktrees.py --remove # remove what it named
 ```
 
 It keeps a tree unless the pull request is `MERGED`, the branch is gone from the remote, and the tree is clean. All three are needed: a squash merge leaves the branch a non-ancestor, so ancestry cannot say whether the row landed, and a branch with no pull request is pending work rather than stale work.
@@ -69,8 +69,8 @@ If it names your sha the push is done; `git fetch origin <branch>` then `git bra
 **Neither `git status` nor the commit output reveals a contaminated parent**, because it is in the branch's history, not in the index. Three checks do:
 
 ```powershell
-git log --oneline origin/main..<branch>          # more commits than you made
-git diff --stat origin/main..HEAD                # more files than you touched
+git log --oneline origin/main..<branch> # more commits than you made
+git diff --stat origin/main..HEAD # more files than you touched
 gh pr view <n> --repo <owner/repo> --json files --jq '[.files[].path]'
 ```
 
@@ -81,25 +81,25 @@ Run the `gh pr view` one before every merge. To recover without a force push (`C
 ```powershell
 git diff --output=.tmp_mine.patch -- <only your paths>
 git worktree add <repo>.worktrees/<name> -b <branch> origin/main
-git apply --3way .tmp_mine.patch
+git apply --3way.tmp_mine.patch
 ```
 
 **A dirty checkout can be a restored checkpoint, not unfinished work.** The agent host commits the whole tree to `refs/agents/<session>/checkpoints/turn/<n>`; a tree restored from one reads as ordinary uncommitted work. The tell is the direction of the diff - on 2026-08-28 the shared checkout added 132 lines and removed 5,240, un-writing a contract field, its validator, its changelog entry and its fixture. Confirm by matching blobs, not by reading the diff:
 
 ```powershell
 git for-each-ref --sort=-committerdate --format='%(committerdate:iso) %(refname)' refs/agents/
-git diff <checkpoint-sha> -- .      # empty across tracked paths means the tree IS that checkpoint
-git hash-object <path>              # untracked files, which the line above ignores
+git diff <checkpoint-sha> --. # empty across tracked paths means the tree IS that checkpoint
+git hash-object <path> # untracked files, which the line above ignores
 ```
 
-Restore by explicit path; never `git restore .` (section 8). Discarding costs nothing, because the checkpoint ref holds every byte.
+Restore by explicit path; never `git restore.` (section 8). Discarding costs nothing, because the checkpoint ref holds every byte.
 
 **Reconciling an abandoned dirty checkout, the sequence that loses nothing.** Classify first (`git diff origin/main -- <paths>`; most "conflicting" files turn out byte-identical to upstream), snapshot onto `wip/snapshot-<date>`, let `git merge origin/main` resolve the disjoint hunks, verify by symbol rather than by eye, curate onto a fresh branch off current `origin/main` one themed commit at a time, then prove zero loss with an empty `git diff wip/snapshot-<date> HEAD -- <changed paths>`.
 
 **A file you can see in the editor may not be in the repository at all.** `TODO/` in the shared checkout collects untracked plan-docs, and in a worktree cut from `origin/main` every git question answers as though the file never existed - which reads exactly like "somebody already distilled and deleted this".
 
 ```powershell
-git ls-files --error-unmatch <path>          # "did you forget to git add" = untracked
+git ls-files --error-unmatch <path> # "did you forget to git add" = untracked
 ```
 
 **Before deleting a leftover branch**, all three legs must hold: the pull request reads `MERGED` from a live `gh pr view`, its `mergeCommit` is an ancestor of `origin/main`, and the residual diff is stale content only. A branch tip beyond its `headRefOid` is usually a rebase under a new sha - find it by subject with `git log origin/main --oneline --diff-filter=A -- <file the commit created>`. GitHub keeps `refs/pull/<n>/head` for a merged pull request for ever.
@@ -169,7 +169,7 @@ gh api "repos/<owner>/<repo>/commits/<sha>/check-runs" --jq '.check_runs[]|.name
 
 ```powershell
 $runs = gh run list --repo <owner/repo> --branch <branch> --limit 10 --json name,status,conclusion,headSha |
-  ConvertFrom-Json | Where-Object { $_.headSha -eq $head }
+ ConvertFrom-Json | Where-Object { $_.headSha -eq $head }
 ```
 
 **A `workflow_dispatch` cannot reach a workflow that is not on the default branch.** `gh workflow run <file> --ref <my-branch>` answers `HTTP 404: workflow <file> not found on the default branch` even when the file is committed and pushed on that branch, because GitHub resolves the workflow id from `main` first. So a row that ships a new dispatch-only workflow cannot use it before the merge - plan the row around it.
@@ -206,7 +206,7 @@ gh api "repos/<owner>/<repo>/actions/runs/<id>/artifacts" --jq '[.artifacts[].na
 **A check-runs poller that treats "none yet" as "all done" prints ALL GREEN on a red commit.** The endpoint returns an empty list for the half-minute after a push, so the first tick sees nothing pending and declares success - with the per-check listing printing nothing at all, which is easy to read as terse output. Require a check to exist:
 
 ```powershell
-if ($checks.Count -gt 0 -and $pending.Count -eq 0) { ... }
+if ($checks.Count -gt 0 -and $pending.Count -eq 0) {... }
 ```
 
 **"The evidence expired" is usually wrong - check the artifact AND the job log.** A short `retention-days` is not the same as gone: `runtime-log-*` keeps two days, so yesterday's run still hands over the raw bodies, and the job log keeps far longer than any artifact. Get job ids from `gh api "repos/<owner>/<repo>/actions/runs/<run-id>/jobs?per_page=100"`. Used on 2026-08-27 to recover four real `/metrics` bodies, which is why `tests/fixtures/runtime/` holds captures rather than something plausible somebody typed.

@@ -21,8 +21,8 @@ There are four models in this project and they are tested differently:
 ## Before anything
 
 ```bash
-python -m venv .venv
-.venv/bin/pip install -e ".[dev,faithfulness]"   # .venv/Scripts/pip on Windows
+python -m venv.venv
+.venv/bin/pip install -e ".[dev,faithfulness]" #.venv/Scripts/pip on Windows
 ```
 
 `faithfulness` pulls torch and transformers - several hundred megabytes. Without
@@ -62,9 +62,9 @@ here, because there they are the values the pipeline itself fetches.
 
 ```bash
 curl -L -o backend/models/Qwen3.5-9B-Q4_K_M.gguf \
-  "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf?download=true"
+ "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf?download=true"
 curl -L -o backend/models/Qwen3-4B-Q4_K_M.gguf \
-  "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf?download=true"
+ "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf?download=true"
 ```
 
 5.29 GiB and 2.4 GB. The summarizer took 118 s to download on `ubuntu-latest` on
@@ -79,11 +79,11 @@ replay a canary against it - which is the one open question the adoption left
 ([evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md)):
 
 ```bash
-RETIRED_REPO=Qwen/Qwen3-8B-GGUF     # retired incumbent, historical record
-RETIRED_FILE=Qwen3-8B-Q4_K_M.gguf   # retired incumbent, historical record
+RETIRED_REPO=Qwen/Qwen3-8B-GGUF # retired incumbent, historical record
+RETIRED_FILE=Qwen3-8B-Q4_K_M.gguf # retired incumbent, historical record
 RETIRED_REV=7c41481f57cb95916b40956ab2f0b139b296d974
 curl -L -o "backend/models/$RETIRED_FILE" \
-  "https://huggingface.co/$RETIRED_REPO/resolve/$RETIRED_REV/$RETIRED_FILE?download=true"
+ "https://huggingface.co/$RETIRED_REPO/resolve/$RETIRED_REV/$RETIRED_FILE?download=true"
 ```
 
 4.7 GB, 180 s to download on a runner on 2026-08-22.
@@ -95,7 +95,7 @@ you delete them. List them on Windows:
 
 ```powershell
 Get-ChildItem backend\models -Filter *.gguf |
-  Select-Object Name, @{Name = "GiB"; Expression = {[math]::Round($_.Length / 1GB, 2)}}
+ Select-Object Name, @{Name = "GiB"; Expression = {[math]::Round($_.Length / 1GB, 2)}}
 ```
 
 On Linux:
@@ -139,10 +139,10 @@ from idhazh.llm.server import server_argv
 settings = config.load(Path("config"))
 model = settings.app.models.summarize
 print(" ".join(server_argv(
-    binary=Path("backend/bin/llama-server"),
-    weights=Path("backend/models") / model.file,
-    model=model,
-    inference=settings.app.models.summarize.inference,
+ binary=Path("backend/bin/llama-server"),
+ weights=Path("backend/models") / model.file,
+ model=model,
+ inference=settings.app.models.summarize.inference,
 )))
 PY
 ```
@@ -184,9 +184,9 @@ curl -sf http://127.0.0.1:8080/health
 ## Run one day
 
 ```bash
-python -m idhazh plan     --date 2026-08-22
-python -m idhazh work     --date 2026-08-22 --shard 0 --shards 1
-python -m idhazh visuals  --date 2026-08-22   # restart the server on the 4B first
+python -m idhazh plan --date 2026-08-22
+python -m idhazh work --date 2026-08-22 --shard 0 --shards 1
+python -m idhazh visuals --date 2026-08-22 # restart the server on the 4B first
 python -m idhazh assemble --date 2026-08-22
 ```
 
@@ -196,12 +196,12 @@ ledger stays empty and every item is banded by the counterweights.
 What you get:
 
 ```
-backend/var/run/2026-08-22/items/*.article.json    what was fetched
-backend/var/run/2026-08-22/items/*.summary.json    what the model wrote
-backend/var/run/2026-08-22/items/*.eval.json       what it scored
-frontend/public/digest/2026/08/22/digest.json      the published day
-frontend/public/digest/2026/08/22/*.svg            any rendered visual
-state/scores.csv                                   one row per scored item
+backend/var/run/2026-08-22/items/*.article.json what was fetched
+backend/var/run/2026-08-22/items/*.summary.json what the model wrote
+backend/var/run/2026-08-22/items/*.eval.json what it scored
+frontend/public/digest/2026/08/22/digest.json the published day
+frontend/public/digest/2026/08/22/*.svg any rendered visual
+state/scores.csv one row per scored item
 ```
 
 ## Read the timings
@@ -246,7 +246,7 @@ Other current limitations:
 - `.github/workflows/validate.yml` hardcodes the incumbent and server flags;
 - it caches incumbent, challenger and runtime together;
 - its cache key names the challenger filename and the runtime build, but omits
-  repository revision and GGUF SHA;
+ repository revision and GGUF SHA;
 - it can plan far more work than the job can finish; and
 - the decision reads scored count and mean HHEM, not failures or counterweights.
 
@@ -265,11 +265,11 @@ payloads, not a permanent URL list.
 The legacy HHEM screen, in full:
 
 - The incumbent measuring more than **0.10** below its published score means the
-  ranking was not describing your pipeline. Score the others too.
+ ranking was not describing your pipeline. Score the others too.
 - A challenger ahead by at least **0.05** returns `switch_and_pause`; it does not
-  select the model.
+ select the model.
 - Fewer than **20** scored articles on either side means it refuses to judge
-  rather than judging on thin evidence.
+ rather than judging on thin evidence.
 
 Both thresholds are in `config/idhazh.json` under `evaluation`.
 
@@ -298,11 +298,11 @@ Speed, separately from quality:
 
 ```bash
 LD_LIBRARY_PATH=backend/bin backend/bin/llama-bench \
-  -m backend/models/Qwen3.5-9B-Q4_K_M.gguf \
-  -p 730,1800,4850 -n 250 -t 4 -r 3 -o json > backend/var/llm.json
+ -m backend/models/Qwen3.5-9B-Q4_K_M.gguf \
+ -p 730,1800,4850 -n 250 -t 4 -r 3 -o json > backend/var/llm.json
 
 python backend/utilities/summarise_bench.py backend/var/llm.json \
-  --system-prompt-tokens 879 --truncation-cap-tokens 2500 --parallel 4
+ --system-prompt-tokens 879 --truncation-cap-tokens 2500 --parallel 4
 ```
 
 `730 / 1800 / 4850` are the token counts a short, medium and long article
@@ -333,8 +333,8 @@ paths and prints one result per model and thread count:
 
 ```bash
 python backend/utilities/measure_llm.py \
-  --models "unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf,<challenger-repo>@<commit>:<challenger-file>.gguf" \
-  --threads "1,2,4,8"
+ --models "unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf,<challenger-repo>@<commit>:<challenger-file>.gguf" \
+ --threads "1,2,4,8"
 ```
 
 The first reference is the configured summarizer, at the revision
@@ -360,7 +360,7 @@ Check the local topology before interpreting the result:
 
 ```powershell
 Get-CimInstance Win32_Processor |
-  Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
+ Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
 [Environment]::ProcessorCount
 ```
 
@@ -377,9 +377,9 @@ Run the hosted sweep after this workflow version is on the default branch:
 
 ```bash
 gh workflow run measure.yml \
-  -f target=llm \
-  -f models='unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf' \
-  -f threads='4,8'
+ -f target=llm \
+ -f models='unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf' \
+ -f threads='4,8'
 ```
 
 Leave `models` out and the job measures both models `config/idhazh.json` names,
@@ -399,9 +399,9 @@ unless a future runner topology or model changes the screen:
 
 ```bash
 gh workflow run measure.yml \
-  -f target=runtime \
-  -f runtime_candidate=threads \
-  -f runtime_threads=8
+ -f target=runtime \
+ -f runtime_candidate=threads \
+ -f runtime_threads=8
 ```
 
 That job runs the current four-thread baseline and the eight-thread candidate
@@ -429,10 +429,10 @@ a historical number into a gate.
 To prove the digest does not depend on it at all:
 
 ```bash
-mv static/assist ../assist-parked && npm run build
+mv static/assist../assist-parked && npm run build
 test ! -d build/assist && grep -q Archive build/archive/index.html
 test -d build/index
-mv ../assist-parked static/assist
+mv../assist-parked static/assist
 ```
 
 The digest must render complete with the model directory gone. CI runs exactly

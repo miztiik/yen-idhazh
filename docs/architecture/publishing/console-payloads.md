@@ -19,18 +19,18 @@ Every path below is under `frontend/public/`. Every schema is under `schemas/`.
 
 | Dataset | Reader it replaces | Published to | Schema |
 | --- | --- | --- | --- |
-| Verdict band | `console-shell.ts` `consoleShell()` | `console/band.json` | `console-band` |
-| Telemetry rows | `payload.ts` `telemetryRows()` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
-| Item health | `payload.ts` `itemHealthRows()`, `itemHealthForDay()` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
-| Eval rows | `payload.ts` `evalRows()` | `scores/<YYYY-MM>.csv` | `public-eval` |
-| Feed results | `payload.ts` `feedResults()` | `feed-health/<YYYY-MM>.csv` | `public-feed-health` |
-| Run manifests | `payload.ts` `loadManifests()` | `run-days/<YYYY-MM>.json` | `public-run-day` |
-| Published items | `payload.ts` `publishedItems()` | `run-days/<YYYY-MM>.json` | `public-run-day` |
-| Published charts | `payload.ts` `publishedCharts()` | `run-days/<YYYY-MM>.json` | `public-run-day` |
-| Day metrics | `payload.ts` `dayMetrics()` | `day-metrics/<YYYY-MM>.json` | `day-metrics` |
-| Machine counters | `runtime-counters.ts` `loadMachineCounters()` | `machine/<YYYY-MM>.csv` | `runtime-counters-row` |
-| Span rollup | `span-rollup.ts` `loadSpanRollup()` | `span-rollup/<YYYY-MM>.csv` | `span-rollup-row` |
-| Source health | `payload.ts` `sourceHealthView()` | `source-health.json` | `source-health-view` |
+| Verdict band | `console-shell.ts` `consoleShell` | `console/band.json` | `console-band` |
+| Telemetry rows | `payload.ts` `telemetryRows` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
+| Item health | `payload.ts` `itemHealthRows`, `itemHealthForDay` | `telemetry/<YYYY-MM>.csv` | `public-telemetry` |
+| Eval rows | `payload.ts` `evalRows` | `scores/<YYYY-MM>.csv` | `public-eval` |
+| Feed results | `payload.ts` `feedResults` | `feed-health/<YYYY-MM>.csv` | `public-feed-health` |
+| Run manifests | `payload.ts` `loadManifests` | `run-days/<YYYY-MM>.json` | `public-run-day` |
+| Published items | `payload.ts` `publishedItems` | `run-days/<YYYY-MM>.json` | `public-run-day` |
+| Published charts | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
+| Day metrics | `payload.ts` `dayMetrics` | `day-metrics/<YYYY-MM>.json` | `day-metrics` |
+| Machine counters | `runtime-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `runtime-counters-row` |
+| Span rollup | `span-rollup.ts` `loadSpanRollup` | `span-rollup/<YYYY-MM>.csv` | `span-rollup-row` |
+| Source health | `payload.ts` `sourceHealthView` | `source-health.json` | `source-health-view` |
 
 **Twelve datasets, nine schemas.** Three console reads answer off the run-day
 row and two off the telemetry shard. That is not a shortcut: `loadManifests`,
@@ -81,7 +81,7 @@ producer obeys the same three rules from the same place.
 | `publish_scores.py` | `scores/<YYYY-MM>.csv` | `state/scores/<YYYY-MM>.csv` |
 | `publish_feed_health.py` | `feed-health/<YYYY-MM>.csv` | `state/feed-health/<YYYY-MM>.csv` |
 | `publish_run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
-| `publish_day_metrics.py` `publish_public()` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
+| `publish_day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `publish_machine.py` | `machine/<YYYY-MM>.csv` | `state/runtime-counters.csv` |
 | `publish_span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY-MM>.csv` |
 
@@ -118,14 +118,14 @@ same derivation, ported sentence for sentence, and row 10 deletes the
 TypeScript one. Two things about where it reads from:
 
 - **The runs, the site size and the article counts come from the run-day shards
-  this run just wrote**, not from the day payloads. Re-reducing five months of
-  day payloads is the walk those shards exist to remove, and reading them makes
-  the band and the console arithmetically identical rather than merely intended
-  to be.
+ this run just wrote**, not from the day payloads. Re-reducing five months of
+ day payloads is the walk those shards exist to remove, and reading them makes
+ the band and the console arithmetically identical rather than merely intended
+ to be.
 - **The feed trouble comes from `state/feed-health/` through `discover.settled`,
-  `discover.streak` and `discover.resting`** - the reducers the pipeline itself
-  rested a feed by. A page running its own copy is how a console starts
-  contradicting the run that produced it.
+ `discover.streak` and `discover.resting`** - the reducers the pipeline itself
+ rested a feed by. A page running its own copy is how a console starts
+ contradicting the run that produced it.
 
 The window is `max(console.window_presets)`, which is the furthest back any
 panel on any route can draw, and it is **anchored on the newest day found rather
@@ -199,7 +199,7 @@ purpose.
 | Telemetry rows | `telemetry/<YYYY-MM>.csv`, fetched on mount and on every widen | 3,414,043 of the document's 3,880,361 bytes, for panels most visits never scroll to |
 | The other 28 payload keys | still inlined in the document | Together 97 KB. A fetch each breaks the four-hop cold-load ceiling for a twentieth of what one key cost |
 
-**Measured 2026-09-09**, Intel Core i7-1265U / Windows 11 / node 24, one build
+**Measured 2026-09-09**, a developer machine / / node 24, one build
 per arm on the real digest, `stat` on the built file:
 
 | file | before | after |
@@ -219,7 +219,7 @@ move between routes. `export const prerender = true` moved from
 
 **Which means the band costs a cold load no round trip at all, and that was
 checked in a browser rather than reasoned from the code.** Measured 2026-09-10
-on Intel Core i7-1265U / Windows 11, Chromium via Playwright against the real
+on a developer machine / Chromium via Playwright against the real
 build: a cold `/console/` makes 47 requests over 737,467 bytes, of which the
 payloads are two telemetry shards and 303,306 bytes, and `console/band.json` is
 not among them. **The chain is three round trips against the four-hop ceiling:
@@ -292,13 +292,13 @@ after the document and the entry bundle. It is not, and the measurement says
 why. Two entries behave differently:
 
 - **A cold document carries the band already.** The route is prerendered and the
-  load is universal, so SvelteKit resolves the fetch at build time and writes the
-  answer into the HTML. Nothing is requested. Measured 2026-09-09 on the canary
-  build: the payload requests on a cold `/console/` are the document, then
-  `telemetry/2026-07.csv` and `telemetry/2026-08.csv`, and no `band.json` at all.
+ load is universal, so SvelteKit resolves the fetch at build time and writes the
+ answer into the HTML. Nothing is requested. Measured 2026-09-09 on the canary
+ build: the payload requests on a cold `/console/` are the document, then
+ `telemetry/2026-07.csv` and `telemetry/2026-08.csv`, and no `band.json` at all.
 - **A move into the console from another page fetches it, second.** Measured the
-  same day: `console/__data.json`, `console/band.json`, `telemetry/2026-07.csv`,
-  `telemetry/2026-08.csv`.
+ same day: `console/__data.json`, `console/band.json`, `telemetry/2026-07.csv`,
+ `telemetry/2026-08.csv`.
 
 `console/__data.json` is SvelteKit's own file for the route, holding what the
 three `+page.server.ts` loads return. The client router **awaits** it before it
@@ -396,10 +396,10 @@ decision 2's cold-load ceiling. Measured 2026-09-09.
 ## See also
 
 - [telemetry-series.md](telemetry-series.md) - the one projection that already
-  existed, and how its shards are frozen.
+ existed, and how its shards are frozen.
 - [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - what
-  closes a month, and what a late arrival does to a closed one.
+ closes a month, and what a late arrival does to a closed one.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - the
-  property behind every window on this page.
+ property behind every window on this page.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #11 for the trust boundary,
-  Rule #12 for the ages, section 11 for the stamps.
+ Rule #12 for the ages, section 11 for the stamps.

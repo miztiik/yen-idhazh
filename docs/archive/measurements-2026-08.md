@@ -42,7 +42,7 @@ that request has not been tokenized end to end.
 The run does **not** settle whether the prompt prefix was reused. The grep
 emitted no `kv cache rm [p0, end)` line. The only emitted instrument was
 `prompt eval time = X ms / N tokens`, and `N` varies with article length and
-band. Because `band_for()` changes the rendered prompt, only the roughly
+band. Because `band_for` changes the rendered prompt, only the roughly
 315-token head is invariant across all bands. A same-band hit could reuse more,
 but the log did not print the band or article token count beside each timing
 line.
@@ -105,9 +105,9 @@ reading of the workflow's summary step, not of the log. The step greps for
 artifact carries the line that settles it:
 
 ```text
-slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
-slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 0.923 (> 0.100 thold), f_keep = 0.811
-slot print_timing: id  3 | task 172 | prompt eval time = 7119.70 ms / 75 tokens
+slot get_availabl: id 3 | task -1 | selected slot by LRU, t_last = -1
+slot get_availabl: id 3 | task -1 | selected slot by LCP similarity, f_sim_best = 0.923 (> 0.100 thold), f_keep = 0.811
+slot print_timing: id 3 | task 172 | prompt eval time = 7119.70 ms / 75 tokens
 ```
 
 `f_sim_best` is the longest common prefix divided by the incoming prompt, and
@@ -161,7 +161,7 @@ The first row is the finding. If one string is a cut of the other, the seen
 count cannot be the larger one, so 610 rows read in a direction that is
 arithmetically impossible. The cause was not truncation: `source_word_count` was
 `len(_WORD.findall(article.text))` and `source_seen_word_count` was
-`len(article.text.split())` - two counters over one post-cap string. The gap
+`len(article.text.split)` - two counters over one post-cap string. The gap
 between them was tokenisation noise.
 
 **The fix is visible as a natural experiment in this same file.** 2,346 rows
@@ -198,13 +198,13 @@ it, which is what the committed file is.
 
 **Measured 2026-08-23** on `state/scores.csv` at commit `6c332c7`, n=156.
 Method: Python `csv.DictReader` over the committed ledger, with today's
-`EvaluationConfig` and `backend/idhazh/evals/score.py::band()`. This is
+`EvaluationConfig` and `backend/idhazh/evals/score.py::band`. This is
 deterministic ledger arithmetic, so hardware and spread are not applicable.
 
 The recorded `band` column predates the counterweight caps. It is the scorer's
 time-of-write output, not the current distribution.
 
-| Band | Recorded | Re-banded with today's `band()` |
+| Band | Recorded | Re-banded with today's `band` |
 | --- | --- | --- |
 | high | 112 (71.8%) | 85 (54.5%) |
 | medium | 19 (12.2%) | 46 (29.5%) |
@@ -232,7 +232,7 @@ move is 0.595: the Google biomarker article moved from 0.9578 (`high`) to 0.3626
 
 **Re-measured 2026-08-24** on the same ledger at n=447, same method.
 
-| Band | Recorded | Re-banded with today's `band()` |
+| Band | Recorded | Re-banded with today's `band` |
 | --- | --- | --- |
 | high | 285 (63.8%) | 258 (57.7%) |
 | medium | 81 (18.1%) | 108 (24.2%) |
@@ -428,8 +428,8 @@ so a matrix would compare hardware and report it as batching.
 
 ```text
 llama-batched-bench -c 8192 -b 512 -ub 512 -t 4 \
-  -npp 900 -ntg 300 -npl 1,2,4 \
-  -m backend/models/Qwen3-8B-Q4_K_M.gguf   # the retired incumbent; historical record
+ -npp 900 -ntg 300 -npl 1,2,4 \
+ -m backend/models/Qwen3-8B-Q4_K_M.gguf # the retired incumbent; historical record
 ```
 
 `-c`, `-b`, `-ub` and `-t` are read from `config/idhazh.json`
@@ -443,20 +443,20 @@ prompt p50 877 and generated p50 279 over their 293 requests (145 + 148),
 2026-08-24. Read them with two cautions:
 
 - The generated figure agrees with what is recorded elsewhere: summary-token
-  medians of 233 to 316 across the four workers of run `32742672105`.
+ medians of 233 to 316 across the four workers of run `32742672105`.
 - **The prompt figure is not the whole context a request carries.** That
-  measured 1612 to 2694 tokens on the same run. 877 is the shorter quantity -
-  what prefill evaluates once the shared system prompt is cached. A bench at the
-  full context would leave decode attending over roughly twice the KV, so this
-  arm reads the ratio at the light end. It is an operating point, not a
-  measurement of the ratio's sensitivity to prompt length.
+ measured 1612 to 2694 tokens on the same run. 877 is the shorter quantity -
+ what prefill evaluates once the shared system prompt is cached. A bench at the
+ full context would leave decode attending over roughly twice the KV, so this
+ arm reads the ratio at the light end. It is an operating point, not a
+ measurement of the ratio's sensitivity to prompt length.
 
 ### Which two numbers a reader divides
 
 The bench prints one row per parallel level:
 
 ```text
-|    PP |     TG |    B |   N_KV |   T_PP s | S_PP t/s |   T_TG s | S_TG t/s |      T s |    S t/s |
+| PP | TG | B | N_KV | T_PP s | S_PP t/s | T_TG s | S_TG t/s | T s | S t/s |
 ```
 
 `B` is the parallel level. `S_TG t/s` is **aggregate** decode throughput,
@@ -490,19 +490,19 @@ That table was written before the dispatch. The measurement came in at
 ### What this bench does not settle
 
 - **Not prefill.** `--ubatch-size 512` already hands a 512-column GEMM to 4
-  threads, and two concurrent prefills share those same 4 threads. There is no
-  headroom to win. `S_PP t/s` is recorded for completeness and is not an
-  argument for anything.
+ threads, and two concurrent prefills share those same 4 threads. There is no
+ headroom to win. `S_PP t/s` is recorded for completeness and is not an
+ argument for anything.
 - **Not a second mechanism.** "One request decodes while another prefills" is
-  the same shared weight pass as batched decode. Counting continuous batching
-  separately would count this gain twice.
+ the same shared weight pass as batched decode. Counting continuous batching
+ separately would count this gain twice.
 - **`B = 4` is a read, not a target.** The bench gives it away free. Four
-  sequences at `--threads 4` oversubscribe 4 vCPU, so that row describes the
-  shape of the curve rather than a setting worth adopting.
+ sequences at `--threads 4` oversubscribe 4 vCPU, so that row describes the
+ shape of the curve rather than a setting worth adopting.
 - **Not the ratio at any other prompt length.** The bench runs one operating
-  point: 900 prefill tokens and 300 generated. The direction of that untested
-  sensitivity is known even though its magnitude is not - reading 5 under
-  [Result](#result) states it.
+ point: 900 prefill tokens and 300 generated. The direction of that untested
+ sensitivity is known even though its magnitude is not - reading 5 under
+ [Result](#result) states it.
 
 ### Result
 
@@ -573,7 +573,7 @@ not, and it strengthens the ruling.
 **What is cancelled - not deferred.**
 
 - The `np2_inflight` candidate in
-  [llama-server runtime sweep](#llama-server-runtime-sweep).
+ [llama-server runtime sweep](#llama-server-runtime-sweep).
 - Rewriting the worker to keep two requests in flight.
 - A paired A-B-A production measurement of `-np 2`.
 
@@ -591,7 +591,7 @@ gate.
 
 ## The site, page by page, after the payload narrowing (2026-08-27)
 
-Everything in this section was measured on an **Intel Core i7-1265U, Windows 11,
+Everything in this section was measured on an **,
 node 24.12.0, CPython 3.12.12, on 2026-08-27**, over the six committed days and
 2,237 items, against `origin/main` before and after PR #171. Two full builds per
 arm plus the restore is three builds; the page figures are the **heaviest of
@@ -662,7 +662,7 @@ No row has addressed it. It is recorded as a follow-up in
 Four numbers the archive plan needs before it can choose a shape. All four were
 estimates. These replace them, and two of them change what the plan assumed.
 
-Hardware: Intel Core i7-1265U, Windows 11, 12 logical CPUs, CPython 3.12.12,
+Toolchain: CPython 3.12.12,
 node 24.12.0. Date: 2026-08-26. Method: `backend/utilities/index_sizing.py`,
 which reads every committed day under `frontend/public/digest/`, plus one
 `curl` pass against the live Pages origin for the compression question. Corpus:
@@ -870,7 +870,7 @@ why 64 bytes was the noise floor; nothing reads it now. See
 [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
 
 
-Hardware: Intel Core i7-1265U, Windows. Date: 2026-08-25. Method: `npm run
+Date: 2026-08-25. Method: `npm run
 build`, then `frontend/scripts/bundle-gate.mjs` gzips each module a route
 declares `rel="modulepreload"` at level 9 and sums them - per file, never over a
 concatenation. A concatenation is order-sensitive, so the number would move when
@@ -889,7 +889,7 @@ input bytes: the CPU is irrelevant and the Node major is not.
 | --- | --- | --- |
 | Build-to-build spread, route `/` | **12 B** | Four builds of byte-identical source, 2026-08-25, this repo: 49,193 / 49,198 / 49,198 / 49,205 B. SvelteKit stamps the app version into the entry chunk, so two builds of one tree are never quite the same bytes. A difference smaller than this is not a result. |
 | Gate tolerance, every route, both directions | **64 B** | **Derived, not measured**: 5.3x the observed range. Four samples underestimate a true range, so the multiple is the margin. A build that ever fails inside 64 B re-derives this from more builds and more routes rather than nudging it. |
-| Node 22 against Node 24, same build | **0 B on all seven routes** | Measured 2026-08-25 on one build, i7-1265U, Windows. Node 22.23.2 (zlib `1.3.1-e00f703`) and Node 24.12.0 (zlib `1.3.1-470d3a2`) summed identically to the byte on every route class. The zlib build hashes differ and the output does not, so a baseline taken on a developer machine reproduces on the CI runner. This is two Node majors, not a proof about a third. |
+| Node 22 against Node 24, same build | **0 B on all seven routes** | Measured 2026-08-25 on one build, a developer machine, Windows. Node 22.23.2 (zlib `1.3.1-e00f703`) and Node 24.12.0 (zlib `1.3.1-470d3a2`) summed identically to the byte on every route class. The zlib build hashes differ and the output does not, so a baseline taken on a developer machine reproduces on the CI runner. This is two Node majors, not a proof about a third. |
 
 The whole build is 133.8 MB against the 1 GB Pages ceiling (Rule #2).
 
@@ -1004,7 +1004,7 @@ instrument rather than in the model.
 ## What a job log names
 
 Every `work` shard and the `route` job print six identifying lines before the
-stage starts, under `if: always()` so a job that was cancelled or that failed
+stage starts, under `if: always` so a job that was cancelled or that failed
 still names the machine it drew. Until 2026-08-25 `work` printed none of them
 and `route` printed the first three, which is why several tables above have to
 say the job log did not name the CPU model or the build.
@@ -1109,12 +1109,12 @@ one row per shard per run, and `job_seconds` is that shard job's clock:
 import csv
 
 rows = [r for r in csv.DictReader(open("state/runtime-counters.csv", encoding="utf-8"))
-        if r["run_id"] == "<the run>"]
+ if r["run_id"] == "<the run>"]
 clocked = [r for r in rows if r["job_seconds"]]
 
 print("shards:", len(rows), "clocked:", len(clocked))
 for row in sorted(clocked, key=lambda r: -int(r["job_seconds"])):
-    print(row["shard"], "%.1f min" % (int(row["job_seconds"]) / 60), row["cpu_model"])
+ print(row["shard"], "%.1f min" % (int(row["job_seconds"]) / 60), row["cpu_model"])
 ```
 
 **`job_seconds` is a floor on the job's wall-clock, and the gap is 13 to 17
@@ -1134,15 +1134,15 @@ the clock became a committed cell. Find the runs, then read one run's jobs:
 
 ```
 gh run list --repo miztiik/yen-idhazh --workflow digest.yml --branch main \
-  --event schedule --limit 5 --json databaseId,createdAt,conclusion
+ --event schedule --limit 5 --json databaseId,createdAt,conclusion
 
 gh api "repos/miztiik/yen-idhazh/actions/runs/<id>/jobs?per_page=100" \
-  --jq '.jobs[]
-        | select(.name | startswith("work"))
-        | [.name, .conclusion,
-           ((.completed_at | fromdateiso8601)
-            - (.started_at | fromdateiso8601)) / 60]
-        | @tsv'
+ --jq '.jobs[]
+ | select(.name | startswith("work"))
+ | [.name,.conclusion,
+ ((.completed_at | fromdateiso8601)
+ - (.started_at | fromdateiso8601)) / 60]
+ | @tsv'
 ```
 
 Wall-clock is `completed_at - started_at` for the job, so no queue time is
@@ -1164,7 +1164,7 @@ lost = [r for r in rows if r["code"] == "context_exceeded"]
 print("read past the old cap:", len(past_old_cap))
 print("context_exceeded:", len(lost))
 for row in lost:
-    print(row["date"], row["run_id"], row["item_id"], row["source_id"], row["source_words"])
+ print(row["date"], row["run_id"], row["item_id"], row["source_id"], row["source_words"])
 ```
 
 Both triggers read those two numbers, and the first one is what stops a run that
@@ -1210,7 +1210,7 @@ conditions, or the run is not evidence and the count does not advance:
 | --- | --- | --- |
 | `items_planned` is 160 | `runs[].items_planned` in `frontend/public/digest/<Y>/<M>/<D>/run.json` | A smaller day hands a worker fewer than 40 items, so its clock is short for a reason that is not the cap. |
 | exactly four `work` jobs | `shards` in `state/runtime-counters.csv`, one row per shard | An eight-shard dispatch carries 20 items a worker and halves the clock on its own ([Eight work shards, paired](#eight-work-shards-paired-2026-08-27)). |
-| every `work` job concluded `success` | the jobs query above | A job that was cancelled, or that hit its bound, has a clock that means nothing. The counters row is written under `always()`, so it exists either way and cannot answer this. |
+| every `work` job concluded `success` | the jobs query above | A job that was cancelled, or that hit its bound, has a clock that means nothing. The counters row is written under `always`, so it exists either way and cannot answer this. |
 | `read past the old cap` is 1 or more | the ledger query above | A run that read nothing longer than 1,923 words never exercised the new cap, so its clock is a cap-2500 clock. |
 
 **That last table is the whole reason this trigger is checkable.** Without it a
@@ -1407,7 +1407,7 @@ the new cap was read**:
 import csv, statistics
 
 rows = [r for r in csv.DictReader(open("state/item-health/2026-09.csv", encoding="utf-8"))
-        if r["run_id"] == "<the run>"]
+ if r["run_id"] == "<the run>"]
 sized = [r for r in rows if r["source_words"]]
 at_cap = [r for r in sized if int(r["source_words"]) == 3846]
 
@@ -1419,7 +1419,7 @@ read = sum(int(r["input_tokens"]) - int(r["cached_tokens"] or 0) for r in rows i
 secs = sum(int(r["prefill_ms"]) for r in rows if r["prefill_ms"]) / 1000
 print("read tok/s: %.2f" % (read / secs))
 print("output tokens at cap, median:",
-      statistics.median([int(r["output_tokens"]) for r in at_cap if r["output_tokens"]]))
+ statistics.median([int(r["output_tokens"]) for r in at_cap if r["output_tokens"]]))
 ```
 
 **Server-side totals** come from `state/runtime-counters.csv`, one row per shard.
@@ -1772,16 +1772,16 @@ Read 1.92x as consistent with the prediction, never as proof of it. Four things
 differ between the two runs besides the shard count:
 
 - **Different days, different articles.** 2026-08-24 against 2026-08-25.
-  Neither run chose its own corpus.
+ Neither run chose its own corpus.
 - **Different hosts.** The eight shards drew four CPU models and their prefill
-  rates span 3.5x within the one run - 10.65 tok/s on the slowest shard against
-  37.71 on the fastest. This page already records that the host alone moves
-  prefill 3.4x. A two-run comparison sits inside that spread.
+ rates span 3.5x within the one run - 10.65 tok/s on the slowest shard against
+ 37.71 on the fastest. This page already records that the host alone moves
+ prefill 3.4x. A two-run comparison sits inside that spread.
 - **Different server configuration.** The baseline ran four slots with
-  `kv_unified = 'true'`; this run ran one slot with `kv_unified = 'false'`.
+ `kv_unified = 'true'`; this run ran one slot with `kv_unified = 'false'`.
 - **Different instruments.** The baseline's tok/s came from parsing per-request
-  lines out of the server log. This run's came from llama-server's `/metrics`
-  counters, which the baseline did not publish.
+ lines out of the server log. This run's came from llama-server's `/metrics`
+ counters, which the baseline did not publish.
 
 What *is* close between the two runs is the size of the job the model was asked
 to do: **41,192 tokens written here against 41,098 in the baseline, and 149,444
@@ -1898,22 +1898,22 @@ Three things had to hold before `run.max_parallel` could move, and all three are
 now answered:
 
 1. **A day at eight shards has to publish.** **Met.** Run `33114410534`
-   published the 2026-08-27 day with every chart it names present. Run
-   `32869125768` had lost its day at the commit step to an asset-name conflict,
-   and that cause was removed the same day: a rendered chart is filed under its
-   item's own id, so two runs cannot pick one path for two stories
-   ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
+ published the 2026-08-27 day with every chart it names present. Run
+ `32869125768` had lost its day at the commit step to an asset-name conflict,
+ and that cause was removed the same day: a rendered chart is filed under its
+ item's own id, so two runs cannot pick one path for two stories
+ ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
 2. **A second run at eight, on a different day, that reaches `assemble`.**
-   **Met, and better than asked.** The same date and the same model as its
-   four-worker baseline, which removes the confound this condition was written
-   to avoid rather than merely repeating the observation.
+ **Met, and better than asked.** The same date and the same model as its
+ four-worker baseline, which removes the confound this condition was written
+ to avoid rather than merely repeating the observation.
 3. **`route` gets an answer.** **Answered, and the answer is that the question
-   was mis-scoped.** It assumed the fan-out and the router were coupled. They are
-   not: `route` is one unsharded job that starts after every worker finishes and
-   cannot observe the worker count. What the eleven runs on record show is a
-   stage bounded by a clock that usually runs out, independent of anything the
-   workers do
-   ([The route stage's per-item cost](#the-route-stages-per-item-cost-over-every-run)).
+ was mis-scoped.** It assumed the fan-out and the router were coupled. They are
+ not: `route` is one unsharded job that starts after every worker finishes and
+ cannot observe the worker count. What the eleven runs on record show is a
+ stage bounded by a clock that usually runs out, independent of anything the
+ workers do
+ ([The route stage's per-item cost](#the-route-stages-per-item-cost-over-every-run)).
 
 What is left is a decision rather than a measurement, and it is written up under
 [What is left to decide](#what-is-left-to-decide).
@@ -1927,7 +1927,7 @@ the 2026-08-25 pair above could not offer:
 
 - Run `33073809079`, scheduled, four `work` jobs, 40 items each.
 - Run `33114410534`, a `Content refresh` dispatch at `shards = 8` and
-  `faithfulness = true`, commit `ad630f7`, eight `work` jobs, 20 items each.
+ `faithfulness = true`, commit `ad630f7`, eight `work` jobs, 20 items each.
 
 Both on GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB), `Qwen3.5-9B-Q4_K_M.gguf`
 summarizing through `llama-server`, `Qwen3-4B-Q4_K_M.gguf` routing, llama.cpp
@@ -2047,8 +2047,8 @@ built.
 
 ## Which way the grader's length bias runs
 
-**Measured 2026-08-29** on an i7-1265U laptop (10 cores, 12 logical, 31.8 GB
-RAM, Windows 11, Python 3.14.2, torch 2.13.0 CPU, transformers 4.57.6), over the
+**Measured 2026-08-29** on an a developer machine laptop (10 cores, 12 logical, 31.8 GB
+RAM, Python 3.14.2, torch 2.13.0 CPU, transformers 4.57.6), over the
 **117** (premise, summary) pairs the production run of 2026-08-28 actually
 scored - run `33179908136`, all four `evidence-*` artifacts. Taken by
 `backend/utilities/grader_length_bias.py`.
@@ -2132,7 +2132,7 @@ noise in the clock.
 tokenizer prints `Token indices sequence length is longer than the specified
 maximum sequence length for this model (893 > 512)` and the model returns a
 score anyway, at 893 tokens for a 900-word window and roughly 2,500 for a
-1,923-word one. The 512 in the config is vestigial; `predict()` never passes
+1,923-word one. The 512 in the config is vestigial; `predict` never passes
 `truncation=True`. This is what makes the wide arm of the comparison possible at
 all.
 
@@ -2164,7 +2164,7 @@ measured the truncation gap). Running it needs the `faithfulness` extra and abou
 1 GB of model download; the scoring itself took 95 minutes for 234 passes on the
 laptop above.
 
-**One confound was ruled out rather than assumed.** `chunks()` re-joins a
+**One confound was ruled out rather than assumed.** `chunks` re-joins a
 window's words on single spaces while the whole-article pass reads the premise as
 it stands, so the two arms differ in whitespace on multi-window items, and the
 1-slice control cannot see that. Scoring 5 at-cap premises raw and
@@ -2214,7 +2214,7 @@ person does not re-derive it to reach the same answer.
 position.
 
 Measured 2026-08-29 over the committed `state/scores.csv`. `ThroughputTrend`'s
-`caption()` appends one median per run of the day, and the day's run count is
+`caption` appends one median per run of the day, and the day's run count is
 what drives the length:
 
 | Quantity | Value |
@@ -2484,14 +2484,14 @@ counts as running at the configured cap if either instrument says so, and where
 both apply they agree:
 
 - **The eval ledger.** `state/scores.csv` carries `pipeline_fingerprint`, and
-  the cap is a field of the payload that stamp is taken over, so the stamp moved
-  when the cap moved. Live means the stamp on the newest committed row, the same
-  rule `label_queue.py` uses for `scorer_version`. It admits `2026-08-29-2` and
-  `2026-08-29-3`.
+ the cap is a field of the payload that stamp is taken over, so the stamp moved
+ when the cap moved. Live means the stamp on the newest committed row, the same
+ rule `label_queue.py` uses for `scorer_version`. It admits `2026-08-29-2` and
+ `2026-08-29-3`.
 - **The item ledger itself.** `source_words` is post-cap and cannot exceed
-  `int(5000 / 1.3) = 3846`, so a row sitting exactly on 3,846 with a larger
-  `source_words_before_cap` is physical proof the configured cap did the
-  cutting. It admits `2026-08-29-3` and `2026-08-29-4`.
+ `int(5000 / 1.3) = 3846`, so a row sitting exactly on 3,846 with a larger
+ `source_words_before_cap` is physical proof the configured cap did the
+ cutting. It admits `2026-08-29-3` and `2026-08-29-4`.
 
 Neither alone is enough, and that is the point. Run `2026-08-29-4` has no eval
 rows committed at all, so it has no stamp; run `2026-08-29-2` never had an
@@ -2517,16 +2517,16 @@ whole reason this is a regression.
 [What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record).**
 
 1. That row reads **1.387 tokens an article word, intercept 951, residual spread
-   119, over 104 items**. Re-derived here it reproduces exactly - for run
-   `2026-08-29-2` alone, which is what it measured. That run's longest article
-   was 2,772 words; the two runs after it reached 3,846, and the widest point is
-   what sets a slope. Over all three runs the slope is **1.2999**, 6.3 percent
-   below the one-run figure, and 413 rows is the better estimate.
+ 119, over 104 items**. Re-derived here it reproduces exactly - for run
+ `2026-08-29-2` alone, which is what it measured. That run's longest article
+ was 2,772 words; the two runs after it reached 3,846, and the widest point is
+ what sets a slope. Over all three runs the slope is **1.2999**, 6.3 percent
+ below the one-run figure, and 413 rows is the better estimate.
 2. That row checks the result against "1.35 to 1.44 measured on this project's
-   prose". **1.2999 sits below that band**, so the band is superseded rather
-   than confirmed. What survives unchanged is the conclusion it was there to
-   support: 1.59 tokens a word is what it takes to overflow the window, and
-   1.2999 is **18.2 percent under it**.
+ prose". **1.2999 sits below that band**, so the band is superseded rather
+ than confirmed. What survives unchanged is the conclusion it was there to
+ support: 1.59 tokens a word is what it takes to overflow the window, and
+ 1.2999 is **18.2 percent under it**.
 
 **And the population rows 6 and 7 of that sheet could not find has arrived.**
 The one at-cap article was summarised three times, at 296, 353 and 353 output
@@ -2684,7 +2684,7 @@ ones that cannot change within a day: `http_client_error` (112), `paywalled`
 
 ### Probing the 40 non-producing sources
 
-**Measured 2026-08-29** on a developer machine (i7-1265U, Windows) by fetching
+**Measured 2026-08-29** on a developer machine by fetching
 each configured feed URL and one article behind it, with the pipeline's own user
 agent. n=1 per feed.
 
@@ -2826,27 +2826,27 @@ explained, and only one of them was a fault.** Both were checked on all nine
 runs:
 
 - `grep -m1 'system_info' router.log` **has matched zero times in nine runs.**
-  llama.cpp `b10598` writes no line containing that string, so the one line that
-  names the instruction sets - AVX2 against AVX-512, the obvious way two hosts
-  sharing a CPU model string could differ 3x on prefill - has never been
-  captured. The other five lines under
-  [What a job log names](../archive/measurements-2026-08.md#what-a-job-log-names) do print. **This was never a
-  grep fault**: the line is not printed at all below verbosity 4, so the pattern
-  was right and the line was not there
-  ([What llama-server reports about its own runtime settings](../reference/measurements.md#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).
+ llama.cpp `b10598` writes no line containing that string, so the one line that
+ names the instruction sets - AVX2 against AVX-512, the obvious way two hosts
+ sharing a CPU model string could differ 3x on prefill - has never been
+ captured. The other five lines under
+ [What a job log names](../archive/measurements-2026-08.md#what-a-job-log-names) do print. **This was never a
+ grep fault**: the line is not printed at all below verbosity 4, so the pattern
+ was right and the line was not there
+ ([What llama-server reports about its own runtime settings](../reference/measurements.md#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).
 - The log summary's `grep -E '^(srv|slot) '` **could not match this build's
-  output, and that one was a fault.** Every line starts with a timestamp and a
-  level, as in
-  `0.02.841.335 I srv load_model: initializing, n_slots = 1`, so the anchor
-  never fired; the one line that did reach the job log matched on the
-  `n_ctx_slot` alternative instead. `slot print_timing:`, which carries
-  `prompt eval time`, stopped reaching the job log when the older unanchored
-  `grep 'prompt eval time ='` was replaced. Measured 2026-09-09 over the four
-  committed captures: 1 line of 40 found, and the corrected anchor
-  `^[0-9.]+ [A-Z] (srv|slot) ` finds 38 of 40, the two it leaves being the
-  common-args block. Fixed in both jobs the same day, so those timings reach a
-  job log again from the next run rather than surviving only inside the
-  two-day artifact.
+ output, and that one was a fault.** Every line starts with a timestamp and a
+ level, as in
+ `0.02.841.335 I srv load_model: initializing, n_slots = 1`, so the anchor
+ never fired; the one line that did reach the job log matched on the
+ `n_ctx_slot` alternative instead. `slot print_timing:`, which carries
+ `prompt eval time`, stopped reaching the job log when the older unanchored
+ `grep 'prompt eval time ='` was replaced. Measured 2026-09-09 over the four
+ committed captures: 1 line of 40 found, and the corrected anchor
+ `^[0-9.]+ [A-Z] (srv|slot) ` finds 38 of 40, the two it leaves being the
+ common-args block. Fixed in both jobs the same day, so those timings reach a
+ job log again from the next run rather than surviving only inside the
+ two-day artifact.
 
 **The unmet prerequisite, exactly.** With the anchor fixed and the verbosity
 understood: **two `route` runs carrying a prefill rate on each CPU model, at
@@ -2876,24 +2876,24 @@ the mean of per-item rates. Prompt and reply are medians.
 Four candidate causes die here and one survives:
 
 - **Not the article mix.** The median prompt is 622-700 tokens on every run and
-  the median reply is 38-39. The work per item did not change.
+ the median reply is 38-39. The work per item did not change.
 - **Not `n_slots`.** Four-slot runs appear at both 62.9 and 20.2 tok/s, and
-  one-slot runs at both 31.5 and 21.3. The `-np 1` production trial is not what
-  moved this.
+ one-slot runs at both 31.5 and 21.3. The `-np 1` production trial is not what
+ moved this.
 - **Not decode, and not a generally slower machine.** Decode moves the *other
-  way*: 5.5 tok/s on the fast runs against 8.7-9.3 on the slow ones. A slower
-  host would slow both.
+ way*: 5.5 tok/s on the fast runs against 8.7-9.3 on the slow ones. A slower
+ host would slow both.
 - **Not a truncated request.** `visuals.request_timeout_minutes` is 2.0 and the
-  slowest item measured 79.5 s.
+ slowest item measured 79.5 s.
 - **It is the prefill rate, and only the prefill rate.** It swings 3.1x, and
-  because prefill is 56% to 86% of a request, the whole per-item figure follows
-  it. What differs between hosts to produce a 3x prompt-eval swing alongside a
-  *faster* decode is not recorded, because nothing logged the CPU. The `route`
-  job began printing `/proc/cpuinfo` model name, `nproc` and llama-server's
-  `system_info` line on 2026-08-25, after all six of these runs. The nine runs
-  that do name their CPU are read in
-  [The CPU model does not sort the per-item cost of the visuals job](../archive/measurements-2026-08.md#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job),
-  and they rule the CPU model out rather than confirming it.
+ because prefill is 56% to 86% of a request, the whole per-item figure follows
+ it. What differs between hosts to produce a 3x prompt-eval swing alongside a
+ *faster* decode is not recorded, because nothing logged the CPU. The `route`
+ job began printing `/proc/cpuinfo` model name, `nproc` and llama-server's
+ `system_info` line on 2026-08-25, after all six of these runs. The nine runs
+ that do name their CPU are read in
+ [The CPU model does not sort the per-item cost of the visuals job](../archive/measurements-2026-08.md#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job),
+ and they rule the CPU model out rather than confirming it.
 
 The lever this points at is the prompt, not the runtime: `visuals.lead_words`
 (150) is most of each request's prefill, and prefill is most of the stage. It has
@@ -2959,7 +2959,7 @@ run a production day, so its worst worker is still unmeasured
 
 ### The vector backfill, and the one raise the archive plan cannot absorb
 
-Hardware: Intel Core i7-1265U, Windows, node 24.12.0, onnxruntime 1.29.0. Date:
+Toolchain: node 24.12.0, onnxruntime 1.29.0. Date:
 2026-08-26. Method: as above, three builds of one tree.
 
 The backfill filled every closed day's vectors, and 1,175 new vectors are bytes
@@ -3022,7 +3022,7 @@ page was heavy AND could not find them.
 
 Every figure above was worked out by hand on this page, three times, and got the
 wrong answer twice. `idhazh site-weight` now prints it from the tree it just
-measured. Hardware: Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+measured. Toolchain: node v24.12.0. Date:
 2026-08-30, `origin/main` at `76cdc72`, nine published days, 3,054 items.
 Method: `npm run build` then `python -m idhazh site-weight --site-tree build`.
 n=1; a byte count over a fixed tree has no spread to report.
@@ -3030,9 +3030,9 @@ n=1; a byte count over a fixed tree has no spread to report.
 ```text
 site-weight build: 141.1 MB in 311 files, 883 MB left to the 1024 MB Pages cap
 site-weight by directory: assist 43.2 MB, _app 22.3 MB, 2026-08-24 15.6 MB,
-                          2026-08-25 15.5 MB, 2026-08-26 13.4 MB, 2026-08-29 7.4 MB
+ 2026-08-25 15.5 MB, 2026-08-26 13.4 MB, 2026-08-29 7.4 MB
 site-weight rate: 48457 B per published item over 3054 items,
-                  so 7.39 MB a published day at the 160 item ceiling
+ so 7.39 MB a published day at the 160 item ceiling
 site-weight runway: 89 published days to the 800 MB alarm point, 119 to the 1024 MB Pages cap
 ```
 
@@ -3074,7 +3074,7 @@ date.
 
 ### The day grain, and the two numbers that argued against it
 
-**Measured 2026-09-07** on an Intel Core i7-1265U, over this checkout. Every
+**Measured 2026-09-07** on a developer machine, over this checkout. Every
 figure above this heading was taken over the flat `state/published.csv`, which
 `backend/utilities/split_published_ledger.py` moved into
 `state/published/YYYY/MM/DD.csv` on 2026-09-08.
@@ -3174,7 +3174,7 @@ size a bound against than a tokens-a-second figure.
 
 ## Three console routes, three ceilings, and a day priced on each (2026-08-31)
 
-Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+Toolchain: node v24.12.0. Date:
 2026-08-31. Tree: `feat/the-console-becomes-three-routes` merged up to
 `origin/main` at `fb67faf`, ten published days, 3,544 scored rows, 4,632
 telemetry rows. Method: `npm run build` then
@@ -3224,9 +3224,9 @@ five builds, plus seven mature published days, plus the 64-byte build noise
 floor:
 
 ```text
-/console/          115,829 + 7 x 19,250 + 64 = 250,643
-/console/model/     13,508 + 7 x    730 + 64 =  18,682
-/console/machine/    5,329 + 3 x    502 + 64 =   6,899
+/console/ 115,829 + 7 x 19,250 + 64 = 250,643
+/console/model/ 13,508 + 7 x 730 + 64 = 18,682
+/console/machine/ 5,329 + 3 x 502 + 64 = 6,899
 ```
 
 **Machine's allowance is not days, because a day costs it nothing.** What varies
@@ -3259,3 +3259,502 @@ gzipped bytes, byte for byte what it measured before the split, against the
 200,000 escalate trigger. No new echarts type was registered and none was needed.
 The one larger lazy chunk in the build is the assist encoder at 901,929 raw and
 234,135 gzipped, which is a different artifact and carries no chart trigger.
+
+## Moved here on 2026-09-10
+
+Five finished readings from [../reference/measurements.md](../reference/measurements.md).
+Each records a completed experiment, a level something later superseded, or a
+guard whose value has since moved. Nothing in `config/`, a test or a live doc
+reads any of them.
+
+## Drift review and source extraction, 2026-09-08
+
+**One length warning remains from issue 438; the other flagged domains lack
+enough comparable evidence.** This is a correction to the comparison, not
+proof that every source is healthy. Rules and limits live in
+[evaluation.md](../concepts/evaluation.md#comparable-domain-samples).
+
+**Method.** build
+26200, CPython 3.14.2. Read the August and September score shards from commit
+`2dd5f7bfb8acd7b17a03b2a8517762a4ce5bc0c4`, the input to
+[run 34031948924](https://github.com/miztiik/yen-idhazh/actions/runs/34031948924).
+No model ran and no score was recomputed. Two deterministic reassessments of
+the completed-day windows produced identical results: zero replay spread.
+This does not measure a false-positive rate or calibrate the sample floor.
+
+The original review included September 6's partial day. It compared 3,078
+baseline rows with 4,010 recent rows. The baseline mixed two models, five scorer
+versions and seven pipeline identities. The recent side used one of each.
+Eight of the ten flagged domains had four or fewer scored rows on at least
+one side. All 141 unknown article lengths belong to August 22-27; those lost
+pre-cap measurements remain unknown.
+
+The corrected windows are August 30 through September 5 and August 2 through
+August 29. Recorded baseline rows begin on August 22. The corrected recent
+window has 3,888 rows. The review completes 35 domain/metric comparisons and
+reports 300 comparisons as lacking sufficient evidence or identity.
+
+Length samples for the domains named by
+[issue 438](https://github.com/miztiik/yen-idhazh/issues/438): repeated articles
+count once and unknown lengths do not count toward the length floor.
+
+| Domain | Baseline articles with length | Recent articles with length | Length result |
+| --- | --- | --- | --- |
+| econbrowser.com | 1 | 15 | Insufficient evidence |
+| france24.com | 43 | 64 | Median 391 -> 161 words; inspect extraction |
+| microsoft.com | 7 | 1 | Insufficient evidence |
+| newslaundry.com | 13 | 21 | Insufficient evidence |
+| qz.com | 2 | 44 | Insufficient evidence |
+| research.ibm.com | 18 | 1 | Insufficient evidence |
+| scmp.com | 3 | 1 | Insufficient evidence |
+| scroll.in | 2 | 68 | Insufficient evidence |
+| semafor.com | 2 | 53 | Insufficient evidence |
+| the-decoder.com | 2 | 21 | Insufficient evidence |
+
+Keeping the original date membership while applying only the evidence rules
+also leaves France24 as the sole warning, at 391 -> 154 words over 43 baseline
+and 68 recent articles. Thus excluding the partial day does not explain the
+other warnings disappearing. Microsoft's copying warning compared one 9B
+summary with ten 8B summaries and is not a like-for-like model comparison.
+
+### Saved source-page replay
+
+The production fetcher sampled both feeds on September 8 at 07:10 UTC from this
+developer machine. Both robots checks allowed access. These captures do not
+establish what a GitHub runner would receive. Replaying each saved response
+twice gave identical extracted text: zero replay spread. No source list or
+publication threshold changed.
+
+| Captured page | Original words | Cleaned words | Result |
+| --- | --- | --- | --- |
+| France24, Nepal hydropower report | 511 | 470 | Two player notices removed |
+| France24, live-update page | 1,382 | 1,382 | Unchanged |
+| France24, sports-video introduction | 81 | 40 | Two player notices removed; short article kept |
+| Newslaundry, March 2019 article | 1,002 | 1,002 | Unchanged |
+
+The reduced player fixture comes from
+[the sports-video page](https://france24.com/en/tv-shows/sports/20260908-before-champions-league-kylian-mbapp%C3%A9-campaigns-for-ballon-d-or).
+It retains the relevant DOM wrappers and a short text excerpt, with non-ASCII
+characters encoded as HTML entities. Running the original extraction call on
+that fixture includes both notices; the corrected call excludes both and keeps
+the article. This is a bounded offline code regression, not a scan of published
+content. The other France24 captures were
+[the Nepal report](https://france24.com/en/asia-pacific/20260908-nepal-rescuers-race-to-free-dozens-trapped-in-hydropower-tunnels)
+and [the live-update page](https://france24.com/en/europe/20260908-live-russia-resumes-strikes-on-kyiv-after-three-day-halt).
+
+The Newslaundry feed returned only
+[one article from 2019](https://newslaundry.com/2019/03/01/welcome-back-abhinandan-varthaman).
+Its text extracted, but that does not make the feed fresh. This is a separate
+source finding, not an extraction fix. A historical 465-word score row exists
+for September 2, but the downloaded evidence shard inspected for this work did
+not contain that article. No claim about that historical article's completeness
+is made. The source needs a fresh-feed check before any replacement or retirement.
+
+## How long we go quiet about a registry name, 2026-08-31
+
+**We never go quiet. The longest silence about any of the 30 registry names, in
+the whole committed record, is three days - and it happened twice in 163
+chances.** A per-subject fade rate needs silence to act on, so on today's
+registry it has nothing to act on.
+
+Taken by `python backend/utilities/entity_gap.py` at commit `e0d6724`, over the
+11 published days from 2026-08-21 to 2026-08-31 and the 3,596 items in
+`frontend/public/digest/`. a developer machine,
+Python 3.14.2, 2026-08-31. **No spread, because there is nothing to vary.** The
+report is a pure function of the committed tree, so two runs at one commit print
+the same bytes - checked by SHA-256 in `backend/tests/test_entity_gap.py`. Any
+machine at `e0d6724` gets these figures; the hardware is here because Rule #10
+asks, not because it moved anything.
+
+### Two arms, because the record disagrees with itself
+
+Both arms use one matcher - `tag.tags` against `Watchlist.entity_terms`, the
+same function and the same terms the pipeline tags an item with. They differ
+only in which words they read.
+
+| Arm | Reads | Live on |
+| --- | --- | --- |
+| **As published** | the `entities` list each run wrote, over the article's title and whole body | 5 of 11 days, 2026-08-27 to 2026-08-31 |
+| **Re-matched** | the same matcher over the title, the summary and the key points | 10 of 11 days, 2026-08-22 to 2026-08-31 |
+
+The published field was declared on day one and read nowhere until 2026-08-26,
+so it is empty on the first six days. **A zero there is an instrument that was
+switched off, not a subject nobody mentioned**, which is why the second arm
+exists. The second arm reads far less text, and the price of that is measured
+rather than claimed: over the five days both are live, of 952 item-entity pairs
+the run wrote, the summary carries 514 and drops **438 - 46.0 percent**. Four
+more pairs go the other way, where the summary names a company the capped body
+did not. **A dropped mention lengthens a gap, so the re-matched arm reports the
+longer of the two readings, never the shorter.** Both arms still say the same
+thing.
+
+### Every gap, pooled
+
+A gap of 1 day means we mentioned the name on consecutive days - no silence at
+all. Days of silence is the gap minus one.
+
+| Gap | Days of silence | As published | Re-matched |
+| --- | --- | --- | --- |
+| 1 day | 0 | 72 of 84 (85.7%) | 137 of 163 (84.0%) |
+| 2 days | 1 | 12 of 84 (14.3%) | 23 of 163 (14.1%) |
+| 3 days | 2 | 0 | 1 of 163 (0.6%) |
+| 4 days | 3 | 0 | 2 of 163 (1.2%) |
+
+**The pipeline's own field never recorded a silence longer than one day.**
+
+### Every entry, by its own median gap
+
+`n` mentions give `n - 1` gaps, so the denominators are not the same. On the
+published arm, 28 of 30 entries were mentioned twice or more and have a gap at
+all; `adani` and `asml` were mentioned once each and have none. On the
+re-matched arm all 30 have a gap.
+
+| Median gap | Days of silence | As published | Re-matched |
+| --- | --- | --- | --- |
+| 1.0 days | 0 | 20 of 30 | 18 of 30 |
+| 1.5 days | 0 or 1 | 5 of 30 | 6 of 30 |
+| 2.0 days | 1 | 3 of 30 | 3 of 30 |
+| 2.5 days | 1 or 2 | 0 | 1 of 30 (`ecb`) |
+| 3.0 days | 2 | 0 | 2 of 30 (`adani`, `ftc`) |
+| no gap | - | 2 of 30 | 0 |
+
+**24 of 30 entries sit at 1.5 days or less. Not one reaches four.** The three
+slowest - `adani` at 2 mentions, `ftc` at 3, `ecb` at 3 - are also the three
+with the fewest mentions, so their medians rest on one, two and two gaps. The
+utility prints the full per-entry table; it is not repeated here because it
+re-derives from any checkout at this commit.
+
+### What bounds all of it
+
+**891 of 3,596 items carry a registry name - 24.8 percent.** Three items in four
+mention nothing the registry holds, and a subject in that 75.2 percent cannot
+appear in any figure above. Per day the share runs 15.5 percent (2026-08-30) to
+42.8 percent (2026-08-27), with one day at zero (2026-08-21, 4 items).
+
+Two further limits, stated rather than implied:
+
+- **The record is 11 days, so the longest gap it can express is 10.** A fade
+ rate longer than that is unsupported by this record whatever a table says. A
+ subject that goes quiet for a month cannot be observed here at all.
+- **The complementary question cannot be answered, only bounded.** "Is there a
+ subject with a long enough gap that the registry does not name?" needs an
+ entity recogniser this repository does not have. What is measured is the size
+ of the blind spot: 75.2 percent of items, and every one of them unlabelled.
+
+### What this settles
+
+A half-life is the number of days our silence about a subject may last before a
+new story on it stops reading as the next instalment. Our silence about a
+registry name lasts **zero days at the median and three days at the worst
+observed**. A rate set anywhere in that range fires on every name every day,
+which is the same as not having one; a rate set above it never fires. **The
+registry has to hold a subject that goes quiet before a fade rate does anything
+at all**, and today it holds 30 standing organisations - 25 companies and 5
+institutions - and no subjects.
+
+Re-run `python backend/utilities/entity_gap.py` after the registry gains its
+first subject, and read the gap for that entry alone. Thirty companies cannot
+answer the question, and averaging them with a subject would hide it.
+
+## Whether an item's key points repeat its own summary, 2026-09-02
+
+Toolchain: Python 3.14.2. Date: 2026-09-02.
+Method: read every `frontend/public/digest/**/digest.json` and every
+`state/scores/*.csv`, keep the items the eval ledger puts in the top two summary
+bands, draw twenty of them, and read all ninety of their key points against
+their own summaries.
+
+**Spread is two different things here and they must not be reported as one.**
+The population counts are committed bytes and a join, so they repeat exactly.
+The ninety verdicts are one person's reading against a rule written down before
+the sample was drawn; another reader would not land on the same ninety. The
+mechanical word overlap at the end is the part that does repeat, and it is
+reported as a cross-check rather than as the answer.
+
+This measurement was taken before any feature code was written, and the answer
+is what stopped the feature: key points on long items were dropped rather than
+built
+([../concepts/digest.md](../concepts/digest.md#the-key-points-stay-off-the-item-and-the-count-is-why)).
+
+### The rule, written before the sample was drawn
+
+- **Restates** - the point's main claim, meaning its subject plus what is said
+ about it and any figure, name or date the claim turns on, is already in the
+ summary in some wording. A different order, a shorter form and a longer form
+ all still restate.
+- **Adds** - the main claim is absent from the summary. A reader who read only
+ the summary would not know it.
+- **Borderline** - counted in neither column and reported separately. Three
+ shapes qualify: the summary carries the point's subject but not the specific
+ thing said about it; the claim is there only by implication; or the point
+ makes no checkable claim at all.
+
+Two clarifications, both fixed before counting. An attribution is not a claim,
+so a point that names the outlet a figure came from, where the summary already
+carries the figure, still restates. A fact is, so a point that repeats a summary
+clause and carries one new fact beside it counts as an addition.
+
+### The population and the sample
+
+An item is eligible when its eval row's `source_word_count` - the article length
+before the truncation cap, which is the count that picks the band - is 2,000
+words or more, and it has at least one key point. That was `summarize.bands[3]`
+and `bands[4]` in `config/idhazh.json` on the day of the draw, asking for 110 to
+200 and 150 to 230 words. The ladder was reshaped on 2026-09-10 and those two
+rungs are now one, so re-running this draw against today's config selects the
+same articles but reads a different ask against them.
+
+| Quantity | Value |
+| --- | --- |
+| items in the 12 committed days | 4,713 |
+| eligible | **110** |
+|... band 3, source 2,000 to 2,999 words | 66 |
+|... band 4, source 3,000 words and over | 44 |
+| eligible summary length | median 154 words, 34 to 223 |
+| sampled | 20 items, 90 key points |
+
+The sample is the eligible list sorted by `item_id` - a content hash, so that
+order is arbitrary with respect to day, source and length - taking the twenty
+evenly spaced positions `round(i * 109 / 19)`. No seed and no hand-picking, so a
+re-run draws the same twenty.
+
+### Seven points in eight restate: 78 of 89
+
+| Verdict | Points | Share |
+| --- | --- | --- |
+| **Restates** | **78** | **87.6 percent of the 89 clear verdicts** |
+| Adds | 11 | 12.4 percent of the 89 |
+|... a claim the summary does not carry at all | 6 | 6.7 percent of all 90 points |
+|... a summary claim carrying one new fact | 5 | - |
+| Borderline | 1 | counted in neither column |
+
+**Thirteen of the twenty items add nothing at all.** Every point on them is a
+sentence the reader has already read one paragraph higher. Four of the twenty
+carry a claim a summary-only reader would not have, and six points out of ninety
+is the whole of what those four items are worth.
+
+On all thirteen the points are a strict subset: the summary carries facts the
+points drop, and never the other way round. One is worth naming. Its summary
+reports a pilot emissions market that cut factory pollution by 20 to 30 percent,
+and not one of its four key points mentions it - so a reader given only the
+points would be worse informed than one given only the summary.
+
+### The summary's own length does not predict it
+
+This is the finding that kills the row's premise, which was that a long article
+compressed hard leaves things the points have to carry.
+
+| Group | Items | Median summary |
+| --- | --- | --- |
+| carries at least one addition | 7 | 154 words |
+| carries none | 13 | 146 words |
+
+Eight words apart on a sample of twenty. The longest summary drawn, at 210
+words, produced one addition and it was a restated claim with one fact beside
+it.
+
+**The one item where the points did real work has the shortest summary in the
+sample, not the longest.** It is a 3,195-word source in band 4, which asks for
+150 to 230 words, and its summary is **49 words** - a third of the floor. Three
+of its four points carry claims the summary never made. The points were doing
+the summary's job because the summary did not do it, which is a summarizer
+defect and not an argument for a second list under every item.
+
+That defect is not rare. Across the 110 eligible items, **20 summaries, 18.2
+percent, are shorter than their own band's floor**, and 13 of those 20 are band
+4 items that came back under 150 words.
+
+This is one hand count on one day, taken while the summariser prompt was being
+tuned, and no eval column tracks it - so it cannot be re-read without repeating
+the draw by hand. On 2026-09-10 the length policy ruled that a summary under its
+band's floor publishes rather than failing
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md#what-happens-when-a-reply-misses-the-ask)),
+which changes what happens to these items and measures nothing new about them.
+
+### The mechanical cross-check
+
+Word overlap between a point and its summary, stop words removed, as a share of
+the point's own words. It is not the verdict - every point was read - but it
+separates the two columns cleanly enough to say the reading was not arbitrary:
+
+| Ruled | Mean | Median | Min | Max |
+| --- | --- | --- | --- | --- |
+| Restates | 0.77 | 0.79 | 0.29 | 1.00 |
+| Adds | 0.36 | 0.36 | 0.08 | 0.69 |
+
+Thirteen of the ninety points score 1.00, meaning every word of the point that
+is not a stop word is already in the summary. Every one of the thirteen was
+ruled a restatement.
+
+## The safety ceiling fires on every run
+
+**Measured 2026-08-25** by reading `items_planned` out of every run record in
+the five committed `run.json` files under `frontend/public/digest/2026/08/`.
+Deterministic; no spread.
+
+| Digest day | Runs | `items_planned` per run |
+| --- | --- | --- |
+| 2026-08-21 | 2 | 5, 5 |
+| 2026-08-22 | 1 | 17 |
+| 2026-08-23 | 3 | 17, 17, **200** |
+| 2026-08-24 | 5 | **200, 200, 200, 200, 200** |
+| 2026-08-25 | 4 | **200, 200, 200, 200** |
+
+`run.safety_ceiling_per_run` moved from 17 to 200 on 2026-08-23. **Every one of
+the ten runs since has planned exactly 200**, which is the ceiling value.
+`cli._within_ceiling` drops the lowest-scoring stories across every vertical
+when the pool is larger, so a plan that lands on the ceiling ten times running
+is a plan that was cut ten times running. The job log's
+`safety ceiling reached planned=N ceiling=200` line names the pool size directly
+and is the reading to take next.
+
+**This is a fact about the guard, not a proposal about the number.** What it
+costs the reader, and whether 200 should move, is a `config/` question that this
+page does not answer - see
+[../concepts/config.md](../concepts/config.md) on why a guard sitting in the
+working range stops being a guard.
+
+## All three console ceilings, re-derived on the backfill's tree (2026-09-06)
+
+Toolchain: node 24.12.0. Date:
+2026-09-06. Method: `frontend/scripts/bundle-gate.mjs`, which is `gzip -9` over
+each prerendered `index.html` in `frontend/build`, heaviest page per route class.
+One tree at `76c2d27c`, sixteen published days, eight builds. Another agent ran
+the backend suite in a sibling worktree for part of the run, which moved one
+build from 47 s to 255 s and moved no byte: gzip over the same input is the same
+output whatever else the box is doing.
+
+**Two of the three had spent their runway and the third had not.** Nothing had
+fired. The pages read 222,819, 44,956 and 35,822 against committed ceilings of
+277,195, 56,385 and 39,743, so every route was under. But a ceiling here is the
+page plus seven published days of growth, and at the rates measured below the
+slack on `/console/` was **3.39 publishes** and on `/console/machine/` **3.12**.
+`/console/model/` was at **6.99**, because it was derived one commit earlier by
+this same method on this same tree, so it is left alone.
+
+**Five builds of one tree, heaviest per route, never a mean.** A mean fires on
+half of all builds:
+
+| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 222,812 | 222,819 | 222,817 | 222,818 | 222,816 | **222,819** | 7 |
+| `/console/model/` | 44,945 | 44,956 | 44,953 | 44,951 | 44,950 | **44,956** | 11 |
+| `/console/machine/` | 35,821 | 35,819 | 35,819 | 35,822 | 35,816 | **35,822** | 6 |
+
+**The control arm says the copied payload roots build the same site.** Both
+removal arms read their ledgers through `STATE_ROOT`, `TELEMETRY_ROOT` and
+`DIGEST_ROOT` off a copy in the temp directory, so a copy that built a different
+site would price a day against nothing. A sixth build off that copy with **no day
+removed** read 222,810, 44,945 and 35,813 - 2, 0 and 3 bytes below the bottom of
+the five-build range, so the honest spread is 9, 11 and 9 bytes on pages of 222.8,
+45.0 and 35.8 KB. All three are inside the 64-byte build noise floor. The three
+capped routes no arm can reach moved the same way: `/404` spanned 1,593 to 1,598
+and `/evals/` 3,103 to 3,107 across the five, with the control inside both.
+
+**Two removal arms, and each one prices all three routes.** A published day is
+priced by removing a real one, never by cloning one: a clone reads about 18
+percent cheap because gzip sees a near-copy of a block it already holds. Both
+arms drop a mature day - neither the newest nor the oldest, so the 30-day window
+anchor never moves - from the published ledger, `state/scores/`,
+`state/item-health/`, `state/feed-health/`, `state/runtime-counters.csv`,
+`frontend/public/telemetry/` and the day's own directory under
+`frontend/public/digest/`. `frontend/public/assist/` and `source-health.json` are
+copied beside `digest/` in each arm, because `INDEX_ROOT` and
+`SOURCE_HEALTH_PATH` are derived from `DIGEST_ROOT` and have no switch of their
+own. Both are paired against the control, the same source and the same command.
+
+| Arm | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
+| --- | --- | ---: | ---: | ---: |
+| sixteen days (control) | - | 222,810 | 44,945 | 35,813 |
+| A: without 2026-08-31 | 601 published, 601 scored, 639 item-health, 710 feed-health, 639 telemetry rows, **20 counter rows over 5 runs** | 208,413 | 43,320 | 34,653 |
+| **cost of that day** | | 14,397 | 1,625 | 1,160, so 232 a run |
+| B: without 2026-09-01 | 627 published, 627 scored, 676 item-health, 710 feed-health, 676 telemetry rows, **20 counter rows over 5 runs** | 206,786 | 43,311 | 34,554 |
+| **cost of that day** | | **16,024** | **1,634** | **1,259, so 252 a run** |
+
+**Both arms carry counters, which the last pair could not manage, so the run rate
+and the day rate come off the same tree.** On 2026-08-31 the heavy day predated
+the counters entirely and a second, lighter day had to be dropped to get a
+per-run figure at all. Every mature day now runs three to five times, so both
+arms price all three routes and the larger of the two readings is taken on each -
+arm B on all three. Arm A's day is the one row #4 priced on 2026-09-06, and it
+returns 1,625 bytes against the 1,624 recorded there, which is the method
+reproducing itself to one byte.
+
+The ceilings follow the method that owns them - heaviest build, plus seven
+publishes, plus the 64-byte build noise floor - with Machine priced per run at
+the observed maximum of five runs a day:
+
+```text
+ 222,819 + 7 x 16,024 + 64 = 335,051 /console/
+ 44,956 + 7 x 1,634 + 64 = 56,458 /console/model/, NOT taken
+ 35,822 + 7 x 5 x 252 + 64 = 44,706 /console/machine/
+```
+
+**`/console/model/` is left at 56,385 and that is a result, not an omission.**
+The re-derivation lands 73 bytes above the committed number, which is 0.13
+percent of a 56 KB ceiling and one byte a day of rate. The committed ceiling
+already carries 11,429 bytes of slack, which is **6.99 publishes** at the
+conservative rate - the seven this method asks for. Row #4 derived it one commit
+ago, on this tree, by this method. Moving it 73 bytes would buy 0.04 of a publish
+and would be a number raised for symmetry with its two siblings.
+
+**The raise decomposes exactly into a page term and a rate term, on both routes
+that moved.** The totals are +57,856 and +4,963 bytes, and the two halves sum to
+each:
+
+| Route | page since its ceiling was set | a day, or a run, since then | seven publishes of that | total |
+| --- | ---: | ---: | ---: | ---: |
+| `/console/` | 163,472 -> 222,819, **+59,347** | 16,237 -> 16,024 a day, **-213** | -1,491 | **+57,856** |
+| `/console/machine/` | 29,599 -> 35,822, **+6,223** | 288 -> 252 a run, **-36** | -1,260 | **+4,963** |
+
+**Both rates FELL and both raises are entirely page.** `/console/`'s day rate is
+213 bytes cheaper than the 16,237 the 2026-09-03 derivation used, and that is
+partly a change of method rather than a change of page: 16,237 was 9.38 bytes a
+ledger row extrapolated to the heaviest day on record, where 16,024 is a heavy
+mature day removed and measured. A measured day replaces an extrapolated one
+(Rule #10). `/console/machine/`'s run rate fell 36 bytes because the counter
+strip now reads one row per run where it read several.
+
+**Seven publishes, when the recorded rule would allow nine.** The horizon rule in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)
+is the largest whole number of measured publishes that keeps the 313,300-byte
+regression above 2x the slack. At today's rate that is nine on `/console/`:
+
+| Publishes | slack | regression / slack | slack as a share of the page |
+| ---: | ---: | ---: | ---: |
+| 7 | 112,232 | 2.79x | 50 percent |
+| 8 | 128,256 | 2.44x | 58 percent |
+| 9 | 144,280 | 2.17x | 65 percent |
+| 10 | 160,304 | 1.95x | 72 percent |
+
+Seven is taken instead. Nine publishes is 144,216 bytes on a 222,819-byte page,
+so the gate would stay silent while the page grew by two thirds - and the
+regression it exists to catch is one day payload, which is 313,300. A tripwire
+that lets a page absorb nearly half of one before it speaks is not a tripwire.
+Seven also keeps one horizon over all three routes, so "the runway expired" stays
+a single statement about the console rather than three.
+
+**What the three slacks are worth against that regression.** 112,232 on
+`/console/`, 11,429 on `/console/model/` and 8,884 on `/console/machine/`, so the
+313,300 is 2.79x, 27.4x and 35.3x each. The tightest is `/console/`, at 2.79x
+against 2.32x when it was last derived.
+
+**The 16,024 is not a rate for ever, and the fourteenth publish from here is
+where it stops.** `console.default_window_days` is 30 and sixteen days are
+committed, so a new day is still added to the seed rather than pushed through it.
+Once the ledger passes the window a new day drops the oldest out of the document
+and the marginal cost falls toward zero. Two more re-derivations at this rate and
+the third one should read a much smaller number - a ceiling raised at the
+un-windowed rate expires sooner rather than later, which is the safe direction
+and is what a ratchet is for.
+
+**The contract test's bound moved with them.**
+`test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
+every console ceiling under a constant that stands in for the page it cannot see:
+the heaviest console document plus the 313,300. That was 433,000 while the
+document was 119,700; the document is 222,819 now, so the constant is 536,000. At
+433,000 the next ordinary re-derivation of `/console/` would have crossed it -
+the page after seven publishes is about 335,000 and its ceiling about 447,000 -
+which is a contract test with a countdown in it. It is re-derived in the commit
+that re-derives the ceilings, for the same reason and on the same cadence.
+
