@@ -8,6 +8,7 @@ import { projectDay } from '../src/lib/payload/project';
 import { whenNear } from '../src/lib/reveal';
 import { dayShell, publishedDates } from '../src/lib/server/payload';
 import type { DigestItem, SeededVisual } from '../src/lib/payload/types';
+import { dayReady } from './support/day-ready';
 
 /**
  * A published drawing has to read the page it is printed on.
@@ -108,10 +109,7 @@ test.describe('the drawing is in the document', () => {
 	 */
 	const drawn = async (page: Page, route: string) => {
 		await page.goto(route);
-		await expect(page.locator('[data-payload-state]')).toHaveAttribute(
-			'data-payload-state',
-			'ready'
-		);
+		await dayReady(page);
 	};
 
 	test('a seeded story carries one svg and no image', async ({ page }) => {

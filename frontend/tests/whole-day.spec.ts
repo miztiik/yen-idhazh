@@ -59,6 +59,7 @@ import { fileURLToPath } from 'node:url';
 import { orderByTime } from '../src/lib/day-shape';
 import { shellSeedItems } from '../src/lib/server/config';
 import { publishedDates } from '../src/lib/server/payload';
+import { dayReady } from './support/day-ready';
 import type { DigestDay, DigestItem } from '../src/lib/payload/types';
 
 /** This file's own directory, never `process.cwd()`: the answer has to be the
@@ -346,10 +347,10 @@ async function stepDown(page: Page): Promise<number> {
 async function openTheWholeDay(page: Page, width: number): Promise<void> {
 	await page.setViewportSize({ width, height: 900 });
 	await page.goto(`/${DAY}/#${LAST}`);
-	await expect(
-		page.locator('[data-payload-state]'),
+	await dayReady(
+		page,
 		`${DAY} never finished arriving, so the page a reader is left with is a seed`
-	).toHaveAttribute('data-payload-state', 'ready');
+	);
 	await expect(
 		page.locator('article.item'),
 		`the page drew a different number of stories than the ${ITEMS.length} ${DAY} published`
