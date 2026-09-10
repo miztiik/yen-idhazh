@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -200,6 +200,87 @@ The priced run wrote 5 summarize failures against the baseline's 2, out of about
 `copied_source`. **The article sets differ and no claim is made here.** It is
 written down so that a later run at this fingerprint has something to compare
 against.
+
+## What the shell migration saved, and the run that got it wrong, 2026-09-10
+
+**The site ships at 98.7 MB in 581 files, and it has 727 published days of
+runway to the 800 MB alarm point.** That is 13.3 MB and 182 files less than the
+same tree carried on 2026-09-08, and 126 more days of runway.
+
+Hardware: the stock GitHub-hosted `ubuntu-latest`. Method: `python -m idhazh
+site-weight --site-tree build` in the `site` job of `ci.yml`, which builds the
+tree the deploy uploads and measures that. n=4, across three commits on `main`
+plus one merge candidate, read off runs `34413270718`, `34414162819`,
+`34416869407` and `34445729013` between 2026-09-09T22:40Z and
+2026-09-10T06:34Z. **All four printed the same four lines to the byte and to the
+day, so the spread is zero** - a byte count over a fixed tree has none, and the
+three trees differed only in source, which the site does not carry.
+
+| | Before, 2026-09-08 | Shipping, 2026-09-10 | Change |
+| --- | ---: | ---: | ---: |
+| Built site | 112.0 MB | **98.7 MB** | -13.3 MB |
+| Files | 763 | **581** | -182 |
+| Bytes a published item | 15,013 | **12,644** | -15.8 pct |
+| Slope at the 80-item ceiling | 1.15 MB a day | **0.96 MB a day** | -16.5 pct |
+| Days to the 800 MB alarm | 601 | **727** | **+126 days** |
+| Days to the 1024 MB cap | 796 | **959** | +163 days |
+
+By directory today: `assist` 43.2 MB, `_app` 22.6, `digest` 19.0, `scores` 4.4,
+`index` 4.3, `console` 1.3. The `assist` line is the committed encoder weights,
+which stayed - row #17 of
+[the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md) was
+descoped when a GitHub Release asset turned out not to be readable
+cross-origin, so the 22.59 MiB was forfeited deliberately.
+
+### The run that was supposed to answer this measured something else
+
+`.github/workflows/measure-migrated-tree.yml`, dispatched 2026-09-08 on
+`ubuntu-latest` as run `34287508030`, ran two arms on one commit: the tree as it
+shipped, and a "migrated" tree with the encoder weights removed and the dated
+directories deleted. It reported **112.0 MB in 763 files and 601 days** for the
+first and **89.4 MB in 757 files and 777 days** for the second, twice, 121 bytes
+apart.
+
+**The second arm did not delete the dated directories, and its own output says
+so.** The file count moved by six, which is exactly the six files under
+`frontend/static/assist/models/`. The `by directory` line moved `assist` from
+43.2 MB to 20.6 MB and left `digest` at 18.2 MB and `console` at 7.9 MB
+untouched. The `find frontend/build -maxdepth 1 -type d -regex` step that was
+meant to remove them matched nothing.
+
+**So 777 days is the runway of a tree nobody built and nobody will**: weights
+gone and dated documents kept, which is the exact inverse of what shipped. It
+may not be quoted for the site, and the plan's headline claim rested on it. The
+727 above replaces it, and it needed no harness - the site as it ships **is** the
+migrated tree, so the ordinary `site` job answers the question.
+
+**What the fake arm did measure, and it is still worth having:** removing the
+encoder weights alone is worth 22.6 MB and 176 published days of runway. That is
+the price of keeping them, and the owner paid it on 2026-09-09 knowing the cap is
+not close.
+
+## What the browser CI job costs against its bound, 2026-09-10
+
+**The `browser` job runs 310 to 384 s against a 25-minute timeout - 20.7 to 25.6
+percent of it.** ESCALATE trigger 4 of the shell-and-fetch plan fires at 70
+percent and does not fire.
+
+Hardware: the stock GitHub-hosted `ubuntu-latest`. Method: job start and end
+times off the Actions API, `ci.yml` `browser`, whose `timeout-minutes` is 25.
+n=4.
+
+| Run | Commit | Seconds | Of the bound |
+| --- | --- | ---: | ---: |
+| `34413270718` | `766c540d` | 310 | 20.7 pct |
+| `34414162819` | `d9636753` | 363 | 24.2 pct |
+| `34416869407` | `15335fab` | 369 | 24.6 pct |
+| `34445729013` | `4ae0228b` | 384 | 25.6 pct |
+
+The last row is the merge candidate for row #18, so it is the only one carrying
+that row's added network-trace spec. The plan measured 460 to 554 s on
+2026-09-08 and predicted six rows of new specs would press on the bound; the job
+got **faster** across the same period, because row #14 deleted 116 dated
+documents the prerender step used to write before any spec ran.
 
 ## How often the truncation cap actually bites, 2026-09-09
 
@@ -6166,7 +6247,8 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
-| **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **arithmetic, not a measurement: 110.65 - 9.54 - 22.59 = about 78.5 MB, and a 1.19 MB slope a published day** | dispatch `.github/workflows/measure-migrated-tree.yml` from `main`. It builds the site as it ships, measures it, then rebuilds with `frontend/static/assist/models` deleted, removes the prerendered dated directories from the tree, and measures again - both arms on one commit, because the archive grows 1.69 MB a published day underneath a before-and-after taken on two days. It runs the migrated arm twice, so the figures come with a spread instead of an assertion. **The dispatch is owed**: `workflow_dispatch` only fires from the default branch, so this could not run while the workflow was on a branch. Read `site-weight <tree>: N MB in N files` and `site-weight runway: N published days to the 800 MB alarm point` off the job log for each arm. The claim the plan needs is the difference between the two runway lines, in days - a percentage of a number that keeps growing is not a result (Carmack, 2026-09-08). Taken on the runner and not a laptop because the dominant term is per-file syscall cost, which is the term differing most between the two machines. |
+| **How long a reader waits for a console panel's payload** | **`console.shimmer_after_ms` ships at 400, a declared estimate and not a measurement** | row #19 of [the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md) was meant to settle this and **cannot, for a reason that is a ruling rather than an omission.** The knob decides when a reserved box starts to shimmer, so the number it needs is the median time a payload takes to reach a **reader** - and the same plan scopes out a reader-facing timing measurement (owner, 2026-09-08). Everything measured instead is localhost: row #18 counted 3 serial round trips and 303,306 payload bytes on a cold `/console/` over `vite preview`, where arrival is a few milliseconds and any threshold derived from it would be a threshold nobody ever crosses. Two things settle it, and both need the owner to reopen that scope-out: throttle a Playwright context to a named profile and read the median arrival over the default window, which measures a chosen network rather than a reader's; or accept a reader-facing timing measurement and take it on the live origin. Until one of them, 400 stays and stays labelled. |
+| **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **answered 2026-09-10, and half the question is void** | the site ships at 98.7 MB in 581 files with 727 published days of runway, measured four times on the runner with zero spread ([What the shell migration saved](#what-the-shell-migration-saved-and-the-run-that-got-it-wrong-2026-09-10)). The encoder weights never left, so there is no second arm to measure - row #17 was descoped on 2026-09-09. The harness this row used to prescribe measured a tree that was never built and is deleted. |
 | **Whether a subject the registry does not name goes quiet for long enough to matter** | **bounded, not measured: 75.2 percent of published items carry no registry name** | the 30 registry names are all covered near-daily, so nothing in the record supports a fade rate ([How long we go quiet about a registry name](#how-long-we-go-quiet-about-a-registry-name-2026-08-31)). Whether a quiet subject exists in the other three items in four cannot be read from a closed vocabulary, and this repository has no entity recogniser. Two things settle it, in order: put one real subject in `config/watchlist.json` and re-run `python backend/utilities/entity_gap.py` for that entry alone; or, if the question is ever worth a model, score the model on the gap as well as the coverage, because a recogniser that splits one subject across three names raises coverage and shortens every gap. |
 | **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Unaccounted job wall-clock per SHARD** | **the instrument landed 2026-08-30 and has no population: 0 of 4,167 committed item rows carry a `shard`** | `shard` is now a column on `ItemHealthRow`, and a column is null on every row written before it existed, so the finest grain the committed data supports is still the whole run ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). The read rate spreads 2.30x between shards inside one run, so a per-run figure averages away exactly what an operator needs to see. Re-run `python backend/utilities/measure_ledgers.py` after the next scheduled run - it splits per shard on its own once a run's rows carry the cell. |

@@ -3387,6 +3387,36 @@ has to stay under the character ceiling, or it proves the rail works rather than
 the rule. Seen 2026-09-10, in
 `backend/tests/test_summarize.py::test_the_tolerance_comes_from_config`.
 
+## `[System.IO.File]::ReadAllText('a/relative/path')` reads the main checkout, from inside a worktree
+
+`Set-Location` moves PowerShell's location. It does not always move the **process**
+current directory that .NET resolves a relative path against, and in a worktree
+those two are different trees holding files with the same names. So a
+`[System.IO.File]::ReadAllText('docs/reference/measurements.md')` run from a
+worktree silently opens the main checkout's copy: no error, plausible content,
+the wrong file. Every `System.IO` and `System.Text` call is affected -
+`ReadAllLines`, `WriteAllText`, `File.Exists`, `Directory.GetFiles`.
+
+**The symptom is that your edit did not apply.** You write a section, read the
+file back to verify, and the section is not there - so you write it again, or you
+start looking for a tool that dropped the write. It cost 20 minutes on
+2026-09-10.
+
+Pass an absolute path built from PowerShell's own location:
+`[System.IO.File]::ReadAllText((Join-Path $PWD.Path 'docs/reference/measurements.md'))`,
+or `(Resolve-Path 'docs/...').Path`. **PowerShell's own cmdlets are unaffected** -
+`Get-Content`, `Set-Content`, `Select-String -Path` and `Test-Path` all resolve
+against the location, so a relative path is safe with them and unsafe the moment
+a `[System.IO.*]` call is reached for.
+
+This is the general shape rather than one API's quirk: **in a worktree, any tool
+that resolves a relative path against something other than your shell's location
+reads the wrong tree and says nothing.** A workspace-scoped code search does the
+same thing - given a path pattern it cannot match inside the worktree, it happily
+matches the main checkout instead and hands back that tree's stale text. When a
+read disagrees with an edit you just made, check which tree answered before you
+check the edit.
+
 ## See also
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands these traps interfere with.

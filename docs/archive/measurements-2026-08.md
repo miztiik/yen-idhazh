@@ -1,6 +1,6 @@
 # Retired measurements, August 2026
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-10
 
 Moved out of [../reference/measurements.md](../reference/measurements.md) on
 2026-08-30. Every number here was true when it was taken, on the hardware and
@@ -339,7 +339,7 @@ that explains a divergence, and digesting it would hide the divergence instead
 line and no CPU line appears in any of the eight artifacts. Do not assert that
 the two runs shared a binary, and do not assert that they did not. The workflow
 cache makes this harder rather than easier, and that trap is recorded in
-[agent-notes.md](agent-notes.md).
+[../reference/agent-notes.md](../reference/agent-notes.md).
 
 The consequence for the sweep table below is that `np1` stays pending. A flag
 whose measured effect is smaller than the noise floor of the comparison has not
@@ -679,6 +679,18 @@ HTTP/1.1. Deterministic bytes, so no spread; n=1 per row.
 | `tokenizer.json` | `application/json` | 711,661 | 209,932 | `gzip` | 70.5% |
 | **`model_quantized.onnx`** | **`application/octet-stream`** | **22,972,370** | **16,222,259** | **`gzip`** | **29.4%** |
 | `ort-wasm-simd-threaded.jsep.wasm` | `application/wasm` | 21,596,019 | 5,179,184 | `gzip` | 76.0% |
+| Hugging Face, `model_quantized.onnx` | `application/octet-stream` | 22,972,370 | 22,972,370 | **none** | **0%** |
+| Hugging Face, `tokenizer.json` | `application/json` | 711,661 | 212,991 | `gzip` | 70.1% |
+
+**The two Hugging Face rows were added on 2026-09-10 so the origins read against
+each other**, and they are the reason the encoder stayed here. They were measured
+on 2026-09-09 by the same method against
+`https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/`, n=3 per file,
+spread zero ([../reference/measurements.md](../reference/measurements.md), "What
+the encoder costs on the wire from Hugging Face"). **The hub compresses the
+tokenizer to within 3,059 bytes of what this origin does and does not compress
+the weights at all**, so a first search from the hub costs 28.4 MB against 21.6
+MB here - the 6.75 MB is exactly the 29.4 percent the row above it saves.
 
 **Brotli is never served.** `Accept-Encoding: br` on its own returned all
 711,661 bytes with no `Content-Encoding` header at all; `br, gzip` returned

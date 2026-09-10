@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 One question, asked of every read:
 
@@ -405,6 +405,57 @@ and the same 53,328,670 bytes read - equal to the byte**. Every count the reads
 return is identical too: 90 dates, 20,550 score rows, 26,135 item-health rows, 90
 manifests, 90 day payloads, 5 telemetry months. That is what Rule #12 asks for,
 and it is why the answer is a count of files rather than a stopwatch.
+
+## The developer loop reads the built tree, 2026-09-10
+
+The three reads below are neither `backend/`'s nor the site's. Two belong to
+`frontend/scripts/build-state.ts`, which decides whether a test result may
+certify a tree, and they are here because **the shell-and-fetch plan left them
+growing and said so rather than fixing them** (Carmack, 2026-09-08). A plan that
+bounded nineteen reads and left two of its own is worth recording exactly that
+way.
+
+| Read | What it opens | Why no cover |
+| --- | --- | --- |
+| `build-state.outputFingerprint` | every file under `frontend/build` and `frontend/.svelte-kit/output` | a fingerprint that skipped a file cannot say the tree did not change, which is the only thing it is for |
+| `build-state.inputFingerprint` | every tracked and untracked file `git ls-files` names, minus the test-only paths | the same, from the other side: an input it did not hash is an input that can move under a green result |
+
+**Both still grow with the archive after the migration, and the reason is the
+part of the tree the migration did not touch.** Row #14 deleted 116 dated
+documents, so `frontend/build` no longer gains an HTML file and a `__data.json`
+per published day - but `frontend/public/digest/` gains a day payload and its
+rendered pictures every run, `copy-visuals.mjs` stages them into the build, and
+both hashed trees carry them. Measured 2026-09-08 on an Intel Core i7-1265U:
+`assertBuild` costs 16.2 s, of which 3.23 s hashes 66.55 MB of inputs and 12.93 s
+hashes 222.4 MB across 1,589 output files. **The dominant term is per-file, not
+per-byte**: sha256 on that class of CPU runs at 1 to 2 GB/s, so the bytes are
+about 0.2 s and the other 98 percent is syscalls, and `hashFiles` opens each path
+twice.
+
+**The cost of leaving it, stated rather than hidden.** It is a developer-loop
+cost and zero in CI, which runs each check once in its own job and never
+re-certifies a tree. It rises by whatever a published day adds to
+`frontend/public/digest/` - about 0.96 MB and its share of the files, at the
+slope measured on 2026-09-10
+([../reference/measurements.md](../reference/measurements.md)). Nothing here is a
+per-reader or per-run pipeline cost.
+
+**Why no cover was written, and what it would take.** The honest cover is not a
+window: it is hashing a manifest the build already writes instead of walking the
+tree it produced. That is a new persisted artefact and a new agreement about what
+"the same tree" means, so it is a person's decision rather than a tidy-up. Until
+somebody takes it, these two are the escape hatch in use.
+
+**The re-encode migration is the third, and it is a person running it once.** A
+later encoder swap re-embeds every published day, so its cost is the whole
+archive by construction (row #17 decision 3 of the shell-and-fetch plan, Andre,
+2026-09-08). It is legal here for the reason the hatch exists: a human runs it,
+once, on a swap, and it is never a per-run cost. **It degrades progressively
+rather than atomically** - `build_search_index` takes its header from the newest
+day carrying vectors and demotes every day that disagrees to
+browsable-but-not-searchable, on one log warning. So a half-finished re-encode
+leaves the archive readable and the search scope short, rather than leaving it
+broken.
 
 ## Two rows did not land what was asked, and the page is more useful for saying so
 

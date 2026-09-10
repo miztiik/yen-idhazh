@@ -1,13 +1,13 @@
 # UI Shell
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-10
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
 ## The shell is deliberately thin
 
-The whole site is a small number of static pages rendering committed payloads. There is no router-driven application, no session, no client state worth persisting, and nothing to fetch beyond same-origin files that shipped in the same commit (Rule #1).
+The whole site is a small number of static pages rendering committed payloads. There is no router-driven application, no session and no client state worth persisting. Everything a page draws is a same-origin file that shipped in the same commit, with one exception a reader has to ask for twice: the search encoder falls back to Hugging Face when this origin cannot serve the weights, behind a committed digest manifest ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Nothing else reaches off this origin, and nothing at all reports a reader anywhere (Rule #1).
 
-That means the shell's job is small and worth stating plainly: **load a payload, render it, and be honest when it is missing.** Since 2026-09-01 a reading page loads its day in two halves - the head of it at build time, the rest from a same-origin file the browser asks for - so "be honest when it is missing" gained a second half too: be honest when the rest of it has not arrived yet, and when it never will.
+That means the shell's job is small and worth stating plainly: **load a payload, render it, and be honest when it is missing.** Since 2026-09-01 a reading page has fetched the day it draws, so "be honest when it is missing" gained a second half too: be honest when it has not arrived yet, and when it never will. From 2026-09-09 a dated page fetches the whole day rather than the tail of one - there is no head in the document any more, because there is no document per date any more. `/` is the one page that still holds its day inline.
 
 ## The surfaces
 
@@ -43,7 +43,7 @@ These are designed, not discovered:
 1. **Loaded** - the normal case.
 2. **Empty** - the payload exists and has nothing in it. A run can legitimately produce zero items. The page says so.
 3. **Missing** - there is no payload for that date, because the day has not run, the address is wrong, or the deploy raced. The page says so and offers the archive.
-4. **Waiting** - the page has asked for its day and it has not arrived. It is a dated-route state only, and it stays silent until `ui.payload_slow_ms`, because a spinner fills a wait that may still turn out to be nothing. Past that it is **one sentence**, never a spinner, a skeleton or a bar.
+4. **Waiting** - the page has asked for something and it has not arrived. It reads two ways on two kinds of page, and both are designed. **A reading page says one sentence**: it stays silent until `ui.payload_slow_ms` and then names the wait, never a spinner, a skeleton or a bar. **The console draws the shape it is waiting for**: every panel's box is on the page from the first frame at the size the numbers will need, still until `console.shimmer_after_ms` and shimmering after that, so nothing moves when the payload lands (owner decision D3, 2026-09-08). It stopped being a dated-route state on 2026-09-09, when the console began fetching its months.
 5. **Unreachable** - the fetch for the day failed for any reason that is not the host saying it has no such day. Whatever is already on screen stays exactly as it is, the page names the day that did not arrive, it offers a retry, and it lists the days this device can still read with no network.
 6. **Degraded** - the payload loaded but individual items are marked low-confidence, truncated, or without a visual. This is the *common* case, not an exception, and it is rendered inline rather than as an error ([digest.md](digest.md)).
 
@@ -85,7 +85,7 @@ The zone is named once, in one line above the stream: `Times shown in UTC.` Not 
 ## What the shell must never do
 
 - Run anything off the reader's device, report a reader's behaviour anywhere, or load a third-party script that phones home (Rule #1). A static asset is judged on bytes, licence and privacy behaviour, never on hostname - and this project self-hosts its font because the request is the larger cost, not because the origin is forbidden.
-- Show a spinner. One reading page in the site waits on anything at all, it waits on a file this site publishes, and the frame the reader already has is readable - so there is nothing for a spinner to fill. Past `ui.payload_slow_ms` the page says one sentence. If a wait is long enough to need more than that, the payload is too big and that is a build-time problem.
+- Show a spinner. **The ban survives, on narrower ground than the one it was written on.** Its old reason was that the frame a reader already has is readable, so there is nothing for a spinner to fill - and since 2026-09-09 that is false on the pages that wait. A dated URL loaded cold is served the fallback document, whose body is a boot script and nothing else, and the console draws reserved boxes rather than content. **What still holds is the other half, and it was always the load-bearing half: a spinner measures nothing.** It spins at the same rate on a 200-millisecond wait and a dead connection, so it tells the reader only that the page has not given up, which is the one thing they can already see. What replaces it says something: a reading page names the wait in one sentence past `ui.payload_slow_ms`, and the console shows the shape and the size of what is coming. If a wait is long enough to need more than that, the payload is too big and that is a build-time problem.
 - Ask the reader for anything - no cookie banner, no signup, no notification permission, no rating widget. Every interruption is a reason to close the tab.
 - Recompute a score, re-rank items, or derive anything the pipeline already decided. The page renders; it does not think.
 - Hide a low-confidence item to make the page look better.
@@ -143,7 +143,7 @@ The console is the one surface added since, and it was added for a named person 
 | --- | --- | --- |
 | A client-side router with per-item pages | Multiplies the surface for a reader who skims one page in two minutes, and every generated page is bytes committed forever. | Jony |
 | Fetching the payload per component | Three inconsistent empty states and no single place to validate at the boundary. | Fowler |
-| A loading spinner while the payload parses | The frame a reader already has is readable, so a spinner would fill nothing. What survives of this ruling after a reading page began fetching is one sentence past `ui.payload_slow_ms`, which is a fact rather than an animation. | Carmack |
+| A loading spinner while the payload parses | The frame a reader already has is readable, so a spinner would fill nothing. **That reason expired on 2026-09-09** and the ruling did not: a cold dated URL and a cold console both start with no content at all, so there is now a frame to fill - and a spinner still may not fill it, because it reports the same thing on a short wait and a dead connection. What survives is one sentence past `ui.payload_slow_ms` on a reading page, and a reserved box that shimmers past `console.shimmer_after_ms` on the console. Both say something a spinner cannot. | Carmack |
 | Client-side filtering or search over the ledger | Moves computation to read time for a surface whose whole premise is that nothing computes at read time. | Carmack |
 | Run health shown on the digest page | The reader is not the operator. A grid of squares above the news answers a question they did not ask. | owner |
 | A cookie for the read mark | Sent on every request, so it would put a reading history into the host's access logs. | Reader |

@@ -1,6 +1,6 @@
 # Shell And Fetch - one document, every panel fetched, nothing that grows with the archive
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-10
 **Level**: 5 (core design, persisted contracts, and the trust boundary). Design consultation is
 complete; section 0a records the eleven owner rulings and no row re-opens one.
 
@@ -62,18 +62,27 @@ discover. All are folded in. The five that would have cost the most:
 | 3 | Rebuild only when the push was rebased | 2 | B | LANDED | - | #534 | worker |
 | 6 | Bound the eleven archive reads | - | B | LANDED | - | #529 | worker |
 | 13 | The page carries nothing a later run can change | - | B | LANDED | - | #531 | worker |
-| 15 | Publish the Release asset, pin the revision, prove it cross-origin | 1 | B | ESCALATED | yi-s15-origin | #536 | worker |
+| 15 | Publish the Release asset, pin the revision, prove it cross-origin | 1 | B | LANDED (escalated, resolved) | - | #536 | worker |
 | 7 | The console stops claiming "never" | 6 | C | LANDED | - | #540 | worker |
 | 8 | Inventory and mint every console payload contract | 6 | C | LANDED | - | #542 | worker |
 | 9 | The producer writes the console its payloads | 8 | D | LANDED | - | #543 | worker |
 | 10 | The console fetches instead of inlining | 9 | E | LANDED | - | #544 | worker |
-| 16 | Two origins, a digest manifest, and one guard that still works | 8, 15 | E | PENDING | - | - | - |
+| 16 | Two origins, a digest manifest, and one guard that still works | 8, 15 | E | LANDED | - | #559 | worker |
 | 11 | The verdict band arrives first and alone | 10 | F | LANDED | - | #545 | worker |
-| 12 | The console surface: reserved shape and three states | 10, 11 | G | IN-FLIGHT | yi-s12-surface | - | worker |
-| 14 | One document serves every date | 13 | G | IN-FLIGHT | yi-s14-shell | - | worker |
+| 12 | The console surface: reserved shape and three states | 10, 11 | G | LANDED | - | #550 | worker |
+| 14 | One document serves every date | 13 | G | LANDED | - | #546 | worker |
 | 17 | Delete the committed weights | 16 | G | DESCOPED | - | - | owner, 2026-09-09 |
-| 18 | The gates measure a shell, not a document | 12, 14 | H | PENDING | - | - | - |
-| 19 | Record what was decided and what it cost | 1-18 | I | PENDING | - | - | - |
+| 18 | The gates measure a shell, not a document | 12, 14 | H | LANDED | - | #564 | worker |
+| 19 | Record what was decided and what it cost | 1-18 | I | IN-FLIGHT | yi-s19-docs | - | worker |
+
+**Seventeen rows landed, one was descoped and one is this closure.** Row 15
+escalated on 2026-09-09 - a GitHub Release asset carries no
+`Access-Control-Allow-Origin` on any hop, so a browser cannot read one
+cross-origin - and the owner resolved it as option B, which kept the committed
+weights, made Hugging Face the second origin and descoped row 17. Row 14
+escalated the same day at Level 5 and the owner authorised widening `DigestView`
+by nine fields, at a measured cost of 0.18 percent of the served days. Both
+amendments are in the row sections below.
 
 ## 1a. Dispatch map
 
@@ -125,10 +134,12 @@ Two files are touched by rows in different groups, which is sequential and safe:
 
 ## 2. Measured baseline
 
-Figures dated 2026-09-08 against `main` at `e89d6d8f`. Runner figures come from the GitHub Actions
-API on `ubuntu-latest`. Laptop figures are Intel Core i7-1265U / Windows 11 / node 24.12.0, warm,
-n = 1. Laptop overstates the runner by about 4.1x on a whole build (99.4 s against 24 s), and by
-more on a file walk; no row may reason across the two arms without naming which it measures.
+Figures dated 2026-09-08 against `main` at `e89d6d8f`, except the five rows row 19 re-took on
+2026-09-09 and 2026-09-10, which say so and say what they replaced. Runner figures come from the
+GitHub Actions API on `ubuntu-latest`. Laptop figures are Intel Core i7-1265U / Windows 11 /
+node 24.12.0, warm, n = 1. Laptop overstates the runner by about 4.1x on a whole build (99.4 s
+against 24 s), and by more on a file walk; no row may reason across the two arms without naming
+which it measures.
 
 | Fact | Value |
 | --- | --- |
@@ -136,11 +147,12 @@ more on a file walk; no row may reason across the two arms without naming which 
 | Growth | 1.69 MB and 5.71 documents per published day |
 | Dated and topic documents | 110 files, 9.54 MB - 0.502 MB per published day of the slope |
 | `frontend/static/assist/` total | 45,328,441 B = 43.23 MiB, 8 files, all tracked |
-| - `assist/models/` | 23,687,938 B = 22.59 MiB, 6 files. Leaves, minus `PROVENANCE.md` at 2,766 B |
+| - `assist/models/` | 23,687,938 B = 22.59 MiB, 6 files. **Stayed.** Row 17 was descoped on 2026-09-09 - the only origin a browser can read these from instead is a third party's, so keeping them is what makes our own origin primary. It costs 176 published days of runway and the owner paid it |
 | - `assist/wasm/` | 21,640,503 B = 20.64 MiB, 2 files. **Stays.** `loader.ts` points `wasmPaths` at `${base}/assist/wasm/`; Hugging Face does not host our ONNX runtime |
-| Post-migration site, estimate | 110.65 - 9.54 - 22.59 = **about 78.5 MB**. Row 1 replaces this with a measurement |
-| Post-migration slope, estimate | **1.19 MB/day**. Byte growth does not stop; document growth does |
-| Days to the 800 MB alarm | 408 today; about 606 after. **The win is roughly 200 days of runway**, not a percentage of the artifact |
+| Post-migration site, **measured** | **98.7 MB in 581 files.** The estimate this row replaced was 78.5 MB, which assumed the encoder weights left; row 17 was descoped and they stayed. Runner, 2026-09-10, n=4, spread zero |
+| Post-migration slope, **measured** | **0.96 MB a published day** at the 80-item ceiling, from 12,644 B a published item over 8,185 items. The estimate was 1.19 MB. Same run, same spread |
+| Days to the 800 MB alarm, **measured** | **601 before, 727 after - the win is 126 days of runway.** The estimate said "roughly 200 days", and it was 200 only in the tree where the weights also left. Both figures are `site-weight` on the runner: the 601 from run `34287508030` on 2026-09-08, the 727 from the ordinary `site` job of `ci.yml` on 2026-09-09 and 2026-09-10 |
+| Row 1's "migrated" arm, **withdrawn** | **777 days, and it measures a tree nobody built.** Its second arm removed the encoder weights and did not remove the dated directories - the file count moved by six, which is exactly the six weight files, and `digest` stayed at 18.2 MB. So 777 is "weights gone, documents kept", the inverse of what shipped. It may not be quoted; the 727 above replaces it. Full working in [`docs/reference/measurements.md`](../docs/reference/measurements.md) |
 | `console/index.html` | 3,726 KB - inlined payload 3,374 KB (90.6 pct), markup 351 KB, 32 inline SVG 139 KB (3.7 pct) |
 | Inside that payload | `source` 28,486 times, `stage` 9,490, `run_id` 9,383 - about 9,400 telemetry rows |
 | First-search wire cost today | 21.6 MB gzipped from one origin - 16.22 model + 0.21 tokenizer + 5.18 runtime |
@@ -151,7 +163,7 @@ more on a file walk; no row may reason across the two arms without naming which 
 | Input hash scope | 66.55 MB, of which corpus 13.44, state 17.72, `frontend/public` 29.75. `inputFingerprint` **already** uses `git ls-files --cached --others --exclude-standard -z` at line 48 |
 | Live artifact storage | **594.4 MB across 332 artifacts, 19 pct over the 500 MB figure in Rule #2** |
 | Actions cache | 9,892 of 10,240 MB, 96.6 pct full. Restores measured 41, 44, 46 and 73 s against a 21 to 24 s build |
-| `browser` CI job | 460 to 554 s of a 1,500 s timeout - 37 pct used, before six rows add specs |
+| `browser` CI job, **re-measured** | **310 to 384 s of a 1,500 s timeout - 20.7 to 25.6 pct.** It got faster, not slower: the specs six rows added cost less than the 116 dated documents the prerender step stopped writing before any of them ran. ESCALATE trigger 4 fires at 70 pct and does not fire. Runner, 2026-09-09 and 2026-09-10, n=4. The 460 to 554 s in the first draft was measured 2026-09-08 |
 | Telemetry month caps, already present | `monthCeiling(30)` = 2 files; `monthCap` holds a session to 15; `public_telemetry_keep_months` = 14 |
 | Unbounded retention knobs | `item_health_aggregate_keep_months` and `score_archive_keep_months` are both `null` |
 | Day payload projection | Staged copy is 468.58 bytes an item against the committed 792.65 - 40.9 pct less. 2026-08-31, 11 days, 3,733 items, gzip -9 |
@@ -899,6 +911,65 @@ Verified against the working tree on 2026-09-08. A worker uses these and does no
 
 ## 21. Row #19 - Record what was decided and what it cost
 
+> **CLOSED 2026-09-10.** Every file below was written. What the row found on the
+> way is here, because five of the six are things the plan itself got wrong.
+>
+> **The headline runway figure was withdrawn and replaced.** Section 2 carries
+> the working: the "migrated" arm of run `34287508030` deleted the encoder
+> weights and did not delete the dated directories, so its 777 days describe the
+> inverse of what shipped. The real figure is **727 published days at 98.7 MB in
+> 581 files**, against 601 before - a win of **126 days**, measured four times on
+> the runner with zero spread. It needed no harness: the site as it ships **is**
+> the migrated tree, so the ordinary `site` job of `ci.yml` answers the question,
+> which is also why `.github/workflows/measure-migrated-tree.yml` is deleted
+> rather than kept.
+>
+> **`console.shimmer_after_ms` could not be settled honestly, and the reason is a
+> ruling rather than an omission.** Decision 5 below hands this row the job of
+> re-deriving 400 from the measured median payload arrival. That number is about
+> a **reader's** wait, and section 0 of this plan scopes out a reader-facing
+> timing measurement (owner, 2026-09-08). Everything measurable instead is
+> localhost, where a payload arrives in a few milliseconds and any threshold from
+> it is one nobody crosses. **So 400 stays, its estimate label stays, and the
+> field description now points at what would settle it** rather than at this row.
+> Rule #10 forbids dressing an estimate as a measurement; it does not forbid
+> saying a measurement is still owed.
+>
+> **The home page is the golden principle's one open exception.** `bundle-gate`
+> reports `/` at **180,085 bytes `gzip -5`, counted and never capped**, and `/`
+> still prerenders a whole day inline. Ruling D2 says shell plus fetch "admits no
+> special case, on the home page and the console alike". The console took it and
+> `/` did not, and no row of this plan resolved the two. It is recorded in
+> [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md)
+> and **not fixed, and no row is opened for it** - it has a reader cost either way
+> and it is an owner decision.
+>
+> **The tag `encoder-2026-08-22` is unused and it is an owner decision, stated
+> both ways.** Row 15 made it for a failover leg option B killed. A tag pins that
+> commit's whole tree, `corpus/` included, reachable for ever, and `prune.yml`
+> pushes no tags - so it undoes section 8's prune exception for that one commit.
+> Deleting it loses the only published copy of assets a browser trace verified;
+> keeping it keeps one commit's corpus bytes permanently reachable in a public
+> repository. No side is recommended and nothing was deleted.
+>
+> **Two claims in this plan were contradicted by the shipped source, and the
+> source won.** Row 14's amendment says a cold dated URL "paints nothing until
+> the day payload arrives, because the fallback shell has no layout data". The
+> page renders its chrome and its date first and does not await the fetch, which
+> its own loader docstring says and which
+> [`frontend.md`](../docs/architecture/publishing/frontend.md) already recorded.
+> **What is true is one step earlier**: the fallback's body is a boot script, so a
+> cold dated load paints nothing until the **bundle** has booted - two waits where
+> there was none, and only the second has a sentence. And row 14 decision 4 says
+> the build "stops refusing a bad SVG anywhere". `withDrawing()` still runs at
+> build time for `/`, so the build refuses over the seed of the newest day and
+> nothing else; every other drawing is checked in the reader's browser by the same
+> function. Both are written down as they are.
+>
+> **`browser` got faster, not slower.** 310 to 384 s against a 1,500 s timeout,
+> 20.7 to 25.6 percent, over four runs. The specs six rows added cost less than
+> the 116 documents row 14 stopped writing. ESCALATE trigger 4 does not fire.
+
 - **Scope:** The documentation this plan owes, and the measurements that replace its estimates.
 - **Files touched:**
   - `docs/concepts/ui-shell.md` - **the spinner ban survives on narrower ground.** Its stated reason is that a reader already has a readable frame, and that reason is false on a route shipping an empty shell on purpose. Write the narrower ground down or the next agent reads the ban as absolute again. State 4 also becomes untrue
@@ -924,6 +995,11 @@ Verified against the working tree on 2026-09-08. A worker uses these and does no
 | 3 | `8.14 ms per file` is a derivation, not a measured constant - it is 12.93 s over 1,589 files, and the same run equally yields 17.2 MB/s. One data point cannot separate a per-file term from a per-byte term | Carmack, 2026-09-08 |
 | 4 | Row 1's workflow file is deleted here rather than kept. A measurement harness nobody runs is a maintenance cost with no reader | This plan |
 | 5 | This row settles `console.shimmer_after_ms`. Row 12 ships it as a declared estimate so a user-interface row does not have to be a measurement harness | Fowler, 2026-09-08 |
+
+**Decision 5 could not be executed, and the amendment above says why.** The
+number it asks for is a reader's wait, and section 0 of this plan scopes out a
+reader-facing timing measurement. The two decisions contradict each other and
+nobody noticed until the row ran. 400 stays labelled an estimate.
 
 ---
 

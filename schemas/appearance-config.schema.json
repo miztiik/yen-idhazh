@@ -299,7 +299,7 @@
         },
         "shimmer_after_ms": {
           "default": 400,
-          "description": "How long a reserved console block stays still before it starts to shimmer, in milliseconds. The block is drawn the moment the document is, so this knob decides nothing about the shape of the page - only whether a wait short enough to be over already gets animated on its way past. Four hundred is a DECLARED ESTIMATE and not a measurement (CLAUDE.md Rule #10): the console started fetching its months on 2026-09-09 and no median arrival time has been taken yet. The plan row that takes it re-derives this number from the measured median payload arrival (TODO/20260908-shell-and-fetch-plan.md row 19). `config/appearance.json` owns the value, as `console.shimmer_after_ms`.",
+          "description": "How long a reserved console block stays still before it starts to shimmer, in milliseconds. The block is drawn the moment the document is, so this knob decides nothing about the shape of the page - only whether a wait short enough to be over already gets animated on its way past. Four hundred is a DECLARED ESTIMATE and not a measurement (CLAUDE.md Rule #10), and it stays one: the number it needs is the median time a payload takes to reach a READER, and a reader-facing timing measurement is scoped out by the same owner ruling that authorised the fetch (2026-09-08). Everything measurable instead is localhost, where arrival is a few milliseconds and any threshold derived from it is one nobody ever crosses. What would settle it is in docs/reference/measurements.md under Still unmeasured. `config/appearance.json` owns the value, as `console.shimmer_after_ms`.",
           "maximum": 5000,
           "minimum": 0,
           "title": "Shimmer After Ms",

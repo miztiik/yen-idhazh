@@ -1436,6 +1436,15 @@ class DriftConfig(Model):
 #: host rather than a preference, so it is the bound `retention.pages_hard_cap_mb`
 #: is validated against and never a value config can reach past: an operator may
 #: make the site gate stricter and may not make it looser (Rule #2).
+#:
+#: This number is MiB and GitHub's published limit is 1 GB, so the gate is
+#: optimistic by 7.37 percent: `retention.BYTES_PER_MB` is 1024 * 1024, making
+#: 1024 here 1,073,741,824 bytes against 1,000,000,000. If GitHub means the
+#: decimal gigabyte, a site can pass this gate 73.7 MB over what the host will
+#: publish. Nothing has tested which reading is right, and the runway measured
+#: 2026-09-10 is 727 published days, so the gap costs about 76 days at the end
+#: of it rather than anything now. Narrowing it is a config edit, not a code
+#: change - the field below refuses anything above this line and nothing above.
 PAGES_HARD_CAP_MB: Final = 1024
 
 
@@ -2390,10 +2399,13 @@ class ConsoleConfig(Model):
             "is, so this knob decides nothing about the shape of the page - only "
             "whether a wait short enough to be over already gets animated on its "
             "way past. Four hundred is a DECLARED ESTIMATE and not a measurement "
-            "(CLAUDE.md Rule #10): the console started fetching its months on "
-            "2026-09-09 and no median arrival time has been taken yet. The plan row "
-            "that takes it re-derives this number from the measured median payload "
-            "arrival (TODO/20260908-shell-and-fetch-plan.md row 19). "
+            "(CLAUDE.md Rule #10), and it stays one: the number it needs is the "
+            "median time a payload takes to reach a READER, and a reader-facing "
+            "timing measurement is scoped out by the same owner ruling that "
+            "authorised the fetch (2026-09-08). Everything measurable instead is "
+            "localhost, where arrival is a few milliseconds and any threshold "
+            "derived from it is one nobody ever crosses. What would settle it is "
+            "in docs/reference/measurements.md under Still unmeasured. "
             "`config/appearance.json` owns the value, as `console.shimmer_after_ms`."
         ),
     )
