@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-10T08:51:30Z",
+  "generated_at": "2026-09-10T13:01:30Z",
   "months": [
     "2026-08",
     "2026-09"
   ],
   "routes": [
     {
-      "carries": "The model spent 2 h 42 m of this.",
+      "carries": "The model spent 5 h 35 m of this.",
       "description": "Did the runs work, which feeds broke, and what each stage cost.",
       "href": "/console/",
       "id": "pipelines",
@@ -15,16 +15,16 @@
       "worst": "17 feeds resting"
     },
     {
-      "carries": "This day ran as one run, so there is nothing to compare it against.",
+      "carries": "This day ran in 2 runs, 1.00x apart on read speed.",
       "description": "What the model wrote, how long it took, and what it got wrong.",
       "href": "/console/model/",
       "id": "model",
       "label": "Summaries",
       "severity": 3,
-      "worst": "8 items failed"
+      "worst": "12 items failed"
     },
     {
-      "carries": "72 articles on this day.",
+      "carries": "148 articles on this day.",
       "description": "The hardware the model ran on, and how much it varied between runs.",
       "href": "/console/machine/",
       "id": "machine",
@@ -34,12 +34,12 @@
     }
   ],
   "size": {
-    "articles_to_cap": 309039,
-    "bytes": 27639302,
-    "cap_fraction": 0.025741105899214745,
-    "left_mb": 997.6411075592041,
+    "articles_to_cap": 308972,
+    "bytes": 27864869,
+    "cap_fraction": 0.025951181538403034,
+    "left_mb": 997.4259901046753,
     "measured_days": 20,
-    "sentence": "26.4 MB of the 1 GB limit - room for about 309,000 more articles."
+    "sentence": "26.6 MB of the 1 GB limit - room for about 309,000 more articles."
   },
   "verdict": {
     "date": "2026-09-10",
@@ -49,9 +49,13 @@
       {
         "health": "amber",
         "label": "Run 1 is worth a look"
+      },
+      {
+        "health": "amber",
+        "label": "Run 2 is worth a look"
       }
     ],
-    "sentence": "2026-09-10 ran 1 run and published 72 of 80 planned items. 8 items failed."
+    "sentence": "2026-09-10 ran 2 runs and published 148 of 160 planned items. 12 items failed."
   },
   "version": "2026-09-09",
   "worst": {
