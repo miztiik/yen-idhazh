@@ -559,9 +559,12 @@ class AppearanceConfig(Contract):
                 "measurement: no median payload arrival has been taken since the "
                 "fetches landed, and Rule #10 refuses an unmeasured number the right "
                 "to justify a design, so this one justifies nothing - it is the value "
-                "the surface ships on until row 19 of "
-                "TODO/20260908-shell-and-fetch-plan.md re-derives it from the measured "
-                "median. Ruled by Fowler, 2026-09-08: a user-interface row is not a "
+                "the surface ships on until somebody re-derives it from the measured "
+                "median a payload takes to reach a reader. The shell-and-fetch "
+                "migration was meant to and could not: that number is a reader-facing "
+                "timing measurement, which the same plan scoped out (owner, "
+                "2026-09-08). docs/reference/measurements.md carries what would settle "
+                "it. Ruled by Fowler, 2026-09-08: a user-interface row is not a "
                 "measurement harness."
             ),
         ),
