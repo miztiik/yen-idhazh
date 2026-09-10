@@ -14,6 +14,16 @@ Plain, direct language. ASD-STE100. Short sentences, one idea each. Active voice
 
 This binds every answer, doc, commit message and reader-facing string. [`CLAUDE.md`](CLAUDE.md) section 0b is canonical; this copy exists because some agent tools read this file and not that one.
 
+## Decision requests and tables (CLAUDE.md section 0c)
+
+Write every answer in plain, simple English - a person outside this project understands it on one read. Define any unavoidable term in the same sentence.
+
+When you need the user to choose, ask in one message, in this order: situation, problem, impact, options with what each costs and gives up, recommendation naming one option. An option with no cost named is not an option.
+
+Every table in every answer is lettered in the order it appears - `Table A`, `Table B` - and each row's id is that letter plus its number (`A1`, `A2`, `B1`) in the first column. No id repeats in one message. Recommend by id. A message with no options is a status update and does not use the five-part shape.
+
+[`CLAUDE.md`](CLAUDE.md) section 0c is canonical.
+
 Before any non-trivial work:
 
 1. Read [`CLAUDE.md`](CLAUDE.md) - the engineering contract.
