@@ -398,6 +398,11 @@ derived from the bytes.
 
 ### The release, published and checked both ways
 
+**The release and its tag were deleted on 2026-09-10 and none of these URLs
+resolve now.** The readings stand as the record of what was measured; the reason
+they were deleted, and what the deletion cost, are in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
+
 Tag `encoder-2026-08-22` on `miztiik/yen-idhazh`, targeting commit
 `5f1eaf60067cc036a2927dc838935ad1fb8ece86`. A Release asset name cannot contain
 `/`, so the five are flat. Each was uploaded from the committed file, then
