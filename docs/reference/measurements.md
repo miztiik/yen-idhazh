@@ -592,9 +592,9 @@ absent  = neither - which means the verbosity was not raised, and is a
           failure of the check rather than a report about attention
 ```
 
-Three states, not two. **The third one is the one worth writing**, because a
-check that reads a missing line as "off" turns a forgotten `-lv 4` into a
-finding about attention. Corroborate with `sched_reserve: CPU compute buffer
+Three states, not two, and why the third one has to exist is in
+[agent-notes/git-and-github.md](agent-notes/git-and-github.md#reading-a-run).
+Corroborate with `sched_reserve: CPU compute buffer
 size`, which is a physical consequence rather than a restatement: on this model
 at `n_ctx` 8192 it is 112.01 MiB with attention fused and 572.01 MiB without.
 Corroboration is worth the line because the log grammar is llama.cpp's and moves
@@ -914,22 +914,12 @@ is fast rather than a timeout.
 
 ### Three traps this run walked into
 
-**A response that fails CORS never reaches Playwright's `response` event.** The
-first version of the probe listened for responses only, and reported "no request
-left the browser" for a request that had left, gone out, and come back refused.
-It reads as a client-side block when it is a server-side one. A probe needs
-`requestfailed` as well, and that is the listener that names the hop.
-
-**The final `ETag` on the model is not its SHA-256.** Hugging Face's CDN returns
-`etag: "c96f5f1e2aee643bd8191bb520a3e175db7b05821579a02a70acdf31e655d194"`, which
-is the storage layer's content hash and will never equal the file's digest. The
-SHA-256 is on the **302**, as `X-Linked-ETag`, and a checker that reads the final
-response's `ETag` reports a mismatch on a file that is perfectly correct.
-
-**`curl -I` and a browser disagree about the release asset, and the browser is
-the one that matters.** `curl -sIL` follows the redirect and prints a 200 with
-the right bytes, because curl enforces no same-origin policy. Nothing about that
-200 says a page cannot read it.
+They are tool quirks rather than readings, so they live where a reader looking
+for one would search: the CORS failure Playwright's `response` event cannot see
+and the disagreement between `curl -I` and a browser are in
+[agent-notes/browser.md](agent-notes/browser.md), and the `ETag` that is not the
+SHA-256 is in
+[agent-notes/shell-and-tools.md](agent-notes/shell-and-tools.md).
 
 ### What this does not measure
 
