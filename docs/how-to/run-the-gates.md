@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -176,8 +176,9 @@ python -m venv .venv
 `python` resolves to, which is often not the one you meant. `pyproject.toml`
 declares `requires-python = ">=3.12,<3.15.0a0"`, so pip refuses an interpreter
 outside the range instead of hanging on it -
-[../reference/agent-notes.md](../reference/agent-notes.md) has the symptom that
-used to show instead, and the escape when the machine has nothing else.
+[../reference/agent-notes/shell-and-tools.md](../reference/agent-notes/shell-and-tools.md#the-python-environment)
+has the symptom that used to show instead, and the escape when the machine has
+nothing else.
 
 **`uv pip install` does not work here.** It fails with a `HandshakeFailure`
 against `files.pythonhosted.org` (observed 2026-08-21). `ensurepip` then `pip`
@@ -222,7 +223,7 @@ prints who holds the lock, from which worktree, running what, and for how long,
 every 30 seconds. And it cannot fail your gate: a lock whose holder died is
 reclaimed, and a caller that waits out `--timeout` runs the gate unlocked rather
 than returning an error. What the lock does not save you from is in
-[../reference/agent-notes.md](../reference/agent-notes.md).
+[../reference/agent-notes/gates-and-builds.md](../reference/agent-notes/gates-and-builds.md#two-heavy-gates-on-one-box).
 
 **Never buy a pass with a raised timeout, an added retry or a relaxed
 assertion.** A suite that times out while siblings hold the cores has measured
@@ -645,7 +646,7 @@ reported `1 skipped` and exit 0, and the same test with the assertion reported
 right only when the environment genuinely varies. It is never right for a
 selector this repository controls, and the same mistake had already switched off
 an injection canary in `canaries.spec.ts`
-([../reference/agent-notes.md](../reference/agent-notes.md#running-the-gates)).
+([../reference/agent-notes/gates-and-builds.md](../reference/agent-notes/gates-and-builds.md#running-the-gates)).
 
 **The canary day carries every ledger the console reads.** The run manifest, the
 feed-health rows and the score rows are all written by `build_canary_day.py`;
