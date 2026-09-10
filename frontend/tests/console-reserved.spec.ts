@@ -15,7 +15,10 @@ import { telemetryCsv } from '../src/lib/charts/series';
  * - **The oracle.** Every console panel's bounding box, measured twice in ONE
  *   page session - while the months are still in the air, and once they have
  *   landed - and compared. A CSS property is not checked, because a CSS
- *   property is not what moves under a reader's cursor.
+ *   property is not what moves under a reader's cursor. The chrome arm reads
+ *   the whole column rather than the panels alone, and cuts the set at the
+ *   first panel's top rather than at the fold - a fold is a question about the
+ *   runner's fonts, and this one was six pixels from answering it wrongly.
  * - **One timeline.** Every shimmering block starts its sweep in the same
  *   frame. Out of phase, twelve sweeping boxes read as twelve broken things.
  * - **Reduced motion.** `app.css` zeroes every `animation-duration` to
@@ -98,6 +101,53 @@ async function holdMonths(page: Page) {
  */
 const FETCHED_PANEL = 'What is failing, by stage';
 
+/** Every block the console lays out in its one column, keyed by what it is.
+ *
+ * Panels alone are not the chrome an operator is looking at. He sees the title,
+ * the strip, the band, the window control, the carry line and the glance grid
+ * before the first panel begins - measured 2026-09-09 on the canary build at
+ * 1280x900, that panel starts 894px down - and until this read them, nothing
+ * watched any of it.
+ *
+ * The container the panels sit in is left out, and so is the section wrapping
+ * the panel that fills by fetch: both are ancestors of the box that grows, so
+ * they grow with it, and that is arithmetic rather than a defect.
+ */
+async function columnBoxes(page: Page): Promise<Record<string, [number, number, number, number]>> {
+	return page
+		.locator('[data-surface="operator"] > *, [data-console-panels] > *, [data-console-panel]')
+		.evaluateAll((nodes, fetchedPanel) => {
+			const fetched = document.querySelector(`[data-console-panel="${fetchedPanel}"]`);
+			const boxes: Record<string, [number, number, number, number]> = {};
+			for (const node of nodes) {
+				if (fetched !== null && node !== fetched && node.contains(fetched)) continue;
+				const marker = [...node.attributes].find((attribute) =>
+					attribute.name.startsWith('data-')
+				);
+				const named =
+					node.getAttribute('data-console-panel') ??
+					(marker === undefined
+						? node.tagName.toLowerCase()
+						: marker.value === ''
+							? marker.name
+							: `${marker.name}=${marker.value}`);
+				// The section headings carry no attribute at all, so the name alone is
+				// not a key. The ordinal is stable because the DOM order is, and the
+				// oracle fails anyway if a block appears or vanishes.
+				let key = named;
+				for (let n = 2; key in boxes; n += 1) key = `${named} (${n})`;
+				const box = node.getBoundingClientRect();
+				boxes[key] = [
+					Math.round(box.x),
+					Math.round(box.width),
+					Math.round(box.height),
+					Math.round(box.top + window.scrollY)
+				];
+			}
+			return boxes;
+		}, FETCHED_PANEL);
+}
+
 test('THE ORACLE: only the panel that is waiting for rows changes size', async ({ page }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 	await holdMonths(page);
@@ -140,42 +190,43 @@ test('THE ORACLE: nothing above the first panel moves when the payload lands', a
 	await holdMonths(page);
 	await page.goto('/console/');
 	await hydrated(page);
+	const first = await columnBoxes(page);
+	const panels = await panelBoxes(page);
 
-	// Everything above the first panel is chrome an operator is looking at while
-	// the months arrive: the title, the strip, the verdict band and the window
-	// control. Moving any of it is the failure the reserved shape exists to
-	// prevent.
+	// Everything above the first panel: the chrome an operator is reading while
+	// the months arrive. Moving one of these is the failure the reserved shape
+	// exists to prevent - it moves what somebody is looking at.
 	//
-	// It is measured as the first panel's own top rather than by asking which
-	// panels sit inside the first 900 px, and that is not a detail. The
-	// fold-based form passed on a laptop where the first panel began at 896 and
-	// failed on the CI runner where it began a few pixels lower - so the check
-	// was really asking how tall the runner's fonts were. A top that has not
-	// moved says nothing above it resized, at any viewport, on any machine.
-	const control = await page.locator('[data-window-control]').boundingBox();
-	const first = await panelBoxes(page);
-	const names = Object.keys(first).sort((a, b) => first[a][3] - first[b][3]);
-	expect(names.length, 'the page drew no panels at all').toBeGreaterThan(0);
-	const top = names[0] as string;
+	// The set is cut at the first panel's own top rather than at the fold, and
+	// that is not a detail. The fold-based form asked which blocks sat inside the
+	// first 900px, and the first panel begins at 894 on this box - so it was
+	// really asking how tall the runner's fonts were. It passed here every time
+	// and emptied on `ubuntu-latest`, where the guard below fired. A cut made at
+	// the panel holds at any viewport and on any machine.
+	//
+	// A block with no height is a `<noscript>` this browser will never draw, and a
+	// set of those would satisfy the guard while proving nothing.
+	const firstPanelTop = Math.min(...Object.values(panels).map((box) => box[3]));
+	const chrome = Object.keys(first).filter(
+		(name) => first[name][3] < firstPanelTop && first[name][2] > 0
+	);
+	expect(chrome.length, 'nothing was drawn above the first panel at all').toBeGreaterThan(3);
 
 	await settled(page);
 	await page.screenshot();
-	const after = await panelBoxes(page);
-	const controlAfter = await page.locator('[data-window-control]').boundingBox();
+	const after = await columnBoxes(page);
 
-	expect(
-		after[top][3],
-		`the first panel "${top}" moved from ${first[top][3]} to ${after[top][3]}, so something above it resized`
-	).toBe(first[top][3]);
-	// And the control itself, which is the piece that resized before this row:
-	// its price chips vanished as their months landed and took a line with them.
-	expect(controlAfter, 'the window control went missing').not.toBeNull();
-	expect(Math.round((controlAfter as { height: number }).height)).toBe(
-		Math.round((control as { height: number }).height)
-	);
-	expect(Math.round((controlAfter as { y: number }).y)).toBe(
-		Math.round((control as { y: number }).y)
-	);
+	// Each block against its own former box, rather than the first panel's top
+	// against its own. A top says only that the total height above it held, so a
+	// block that grew by the amount its neighbour shrank would pass - and the
+	// failure would name no block. This names the one that moved, which is the
+	// whole of what a person needs to fix it. The window control is in the set by
+	// its own name: it is the block that resized before the reserved shape landed,
+	// when its price chips vanished as their months arrived.
+	const moved = chrome
+		.filter((name) => JSON.stringify(first[name]) !== JSON.stringify(after[name]))
+		.map((name) => `${name}: ${JSON.stringify(first[name])} -> ${JSON.stringify(after[name])}`);
+	expect(moved, `the chrome moved under the operator:\n${moved.join('\n')}`).toEqual([]);
 });
 
 test('THE ORACLE: the reserved chart box is the box the chart takes', async ({ page }) => {
