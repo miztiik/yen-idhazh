@@ -1,6 +1,6 @@
 # 11 - One model, two calls
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-10
 **Level**: 5 (the model pick, the trust boundary, and the call structure every later plan rests on)
 
 **Chain**: previous [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) | next [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md).
@@ -243,3 +243,4 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) - the previous plan.
 - [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) - the next plan.
+- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - spawned from this plan; it spends these two calls on labels.
