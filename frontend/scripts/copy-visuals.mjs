@@ -197,11 +197,13 @@ stageIndexes();
 // byte difference, and swept by `reconcile` so a month the producer pruned
 // leaves the bundle with it.
 //
-// Nothing fetches these yet - row 10 of TODO/20260908-shell-and-fetch-plan.md is
-// where the console stops inlining and starts asking. They are staged now
-// because a payload written but never served is the half of the change that
-// cannot be tested, and because the staging rule is the same one the day
-// payloads already take.
+// Two of these are fetched by a browser since row 10 landed on 2026-09-09 -
+// `console/band.json` by `console/+layout.ts` at build time, and
+// `telemetry/<month>.csv` on mount - and both are capped by
+// `page_weight.payload_ceilings_bytes`, which `bundle-gate.mjs` reads off this
+// staged tree. The other five are staged and served and nothing asks for them
+// yet: a payload written but never served is the half of the change that cannot
+// be tested, and the staging rule is the same one the day payloads already take.
 const CONSOLE_SERIES = [
 	// The band is one file, not a month series, and it is named rather than
 	// pattern-matched: it is the first thing the console asks for, so a typo in

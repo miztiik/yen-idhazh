@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Two checks over a finished build: no encoder on the first-load path, and no
- * capped page over the weight ceiling config/idhazh.json sets for it.
+ * Three checks over a finished build: no encoder on the first-load path, no
+ * capped page over the weight ceiling config/idhazh.json sets for it, and no
+ * fetched payload over its own.
  *
  * The encoder rule is that nothing downloads or executes before a reader
  * clicks. A dynamic `import()` is what keeps that true, and a dynamic import is
@@ -11,6 +12,23 @@
  *
  * The document rule is a ceiling rather than a ratchet, because a page that got
  * lighter needs no permission. It bounds only the routes that render no day.
+ *
+ * The payload rule exists because the document rule stopped being able to see
+ * the bytes. Moving the console's telemetry out of its HTML took 3.4 MB off a
+ * page a ceiling watched and put it into files nothing watched; a reader still
+ * waits for them. A ceiling on the document alone now reads as a bound on what
+ * the console costs, and it is not one.
+ *
+ * **Every size here is gzip -5, because that is what the reader pays.** It was
+ * gzip -9 until 2026-09-10, which is a level no origin serves. Measured that
+ * day against the live Pages origin: it served /console/ in 46,917 bytes where
+ * a local gzip -5 makes 46,787 and a gzip -9 makes 45,077, and /archive/ in
+ * 5,760 against 5,755 at -5. So -5 lands within 0.3 pct of the wire and -9
+ * understates it by 3.9 pct - on a page whose ceiling is meant to catch growth,
+ * a level that flatters it by four percent is four percent of growth nobody
+ * sees. On a large CSV -5 is 2.2 pct low rather than high (168,438 served
+ * against 164,742 locally), which is the one place these numbers flatter the
+ * payload rather than the page, and the payload ceilings carry that knowingly.
  *
  * There was a third check here until 2026-08-30: a per-route first-load
  * JavaScript ratchet against a hand-maintained record, failing at +/-64 B on
@@ -27,12 +45,12 @@
  * serialised behind it - a branch could not merge until it had rebuilt,
  * re-measured and re-recorded a number its own change had not moved.
  *
- * The page ceilings below answer the question that survives - has this page
- * grown past what somebody priced - and they are absolute, so nothing has to
- * re-record them to merge. `tests/payload-weight.spec.ts` covers the pages a
+ * The ceilings below answer the question that survives - has this page, or this
+ * file, grown past what somebody priced - and they are absolute, so nothing has
+ * to re-record them to merge. `tests/payload-weight.spec.ts` covers the pages a
  * ceiling cannot bound, by counting a marker instead of bytes.
  *
- * So both remaining promises are checked mechanically rather than remembered.
+ * So all three promises are checked mechanically rather than remembered.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -112,12 +130,13 @@ function pagesUnder(directory) {
 }
 
 // Modules repeat heavily across the route classes, so each one is compressed
-// once and its size reused.
+// once and its size reused. Level 5 and not 9: see the header - 9 is a level no
+// origin serves, and the gate has to measure what the reader pays.
 const compressed = new Map();
 function gzipBytes(file) {
 	let size = compressed.get(file);
 	if (size === undefined) {
-		size = gzipSync(readFileSync(file), { level: 9 }).length;
+		size = gzipSync(readFileSync(file), { level: 5 }).length;
 		compressed.set(file, size);
 	}
 	return size;
@@ -162,13 +181,14 @@ let failed = false;
  */
 const CONFIG = resolve(process.cwd(), '..', 'config', 'idhazh.json');
 
-let ceilings;
+let config;
 try {
-	ceilings = JSON.parse(readFileSync(CONFIG, 'utf8')).page_weight?.ceilings_bytes;
+	config = JSON.parse(readFileSync(CONFIG, 'utf8'));
 } catch (error) {
 	console.error(`bundle gate: ${CONFIG} could not be read - ${error.message}`);
 	process.exit(1);
 }
+const ceilings = config.page_weight?.ceilings_bytes;
 if (ceilings === null || typeof ceilings !== 'object' || Array.isArray(ceilings)) {
 	console.error('bundle gate: config/idhazh.json needs a "page_weight.ceilings_bytes" object.');
 	process.exit(1);
@@ -190,7 +210,7 @@ for (const name of Object.keys(ceilings)) {
 	}
 }
 
-console.log('\nprerendered HTML, gzip -9, against page_weight.ceilings_bytes in config/idhazh.json:');
+console.log('\nprerendered HTML, gzip -5, against page_weight.ceilings_bytes in config/idhazh.json:');
 for (const [name, { bytes }] of [...heaviestPage].sort()) {
 	const measured = `  ${name.padEnd(18)} ${commas(bytes).padStart(9)} B  ${kb(bytes).padStart(9)}`;
 	if (rendersADay(name)) {
@@ -220,19 +240,151 @@ if (uncapped.length > 0) {
 	);
 }
 
+/**
+ * The files a reader's browser fetches, against page_weight.payload_ceilings_bytes.
+ *
+ * A key is a build-relative POSIX path, and its shape says what it bounds. A
+ * key naming a file bounds that file. A key ending in `/` bounds every file
+ * under that directory, each on its own - a month series takes one number
+ * rather than one a month, so a shard landing in October needs no config edit
+ * and gets no free pass either.
+ *
+ * A key that matches nothing fails, for the same reason an unmatched route
+ * ceiling does: a bound over nothing still reads as a bound somebody checked.
+ *
+ * The walk is over the named keys and not over the build, so what this costs is
+ * set by how many ceilings are written rather than by how much the pipeline has
+ * accumulated (Rule #12). A directory key does read every file under itself,
+ * and that read grows - a month a run appends is a file this opens. It is
+ * bounded where it matters by retention: observability.public_telemetry_keep_months
+ * is 14, so the directory holds fourteen shards however long the project runs.
+ */
+const payloadCeilings = config.page_weight?.payload_ceilings_bytes ?? {};
+if (payloadCeilings === null || typeof payloadCeilings !== 'object' || Array.isArray(payloadCeilings)) {
+	console.error('bundle gate: "page_weight.payload_ceilings_bytes" must be an object.');
+	process.exit(1);
+}
+
+/** Every build file a payload key covers, heaviest first. */
+function payloadsFor(key) {
+	const target = join(BUILD, ...key.split('/').filter(Boolean));
+	let stat;
+	try {
+		stat = statSync(target);
+	} catch {
+		return [];
+	}
+	if (!stat.isDirectory()) return [{ path: key, bytes: gzipBytes(target) }];
+	return readdirSync(target)
+		.filter((name) => !statSync(join(target, name)).isDirectory())
+		.map((name) => ({ path: `${key}${name}`, bytes: gzipBytes(join(target, name)) }))
+		.sort((left, right) => right.bytes - left.bytes);
+}
+
+const payloadKeys = Object.keys(payloadCeilings).sort();
+const heaviestPayload = new Map();
+if (payloadKeys.length > 0) {
+	console.log(
+		'\nfetched payloads, gzip -5, against page_weight.payload_ceilings_bytes in config/idhazh.json:'
+	);
+}
+for (const key of payloadKeys) {
+	const ceiling = payloadCeilings[key];
+	const found = payloadsFor(key);
+	if (found.length === 0) {
+		namesNothing.push(
+			`${key} is capped at ${kb(ceiling)}, and no file in the build is at that path`
+		);
+		continue;
+	}
+	heaviestPayload.set(key, found[0].bytes);
+	for (const { path, bytes } of found) {
+		const headroom = ceiling - bytes;
+		const verdict = headroom < 0 ? `${commas(-headroom)} OVER` : `${commas(headroom)} spare`;
+		console.log(
+			`  ${path.padEnd(26)} ${commas(bytes).padStart(9)} B  ${kb(bytes).padStart(9)}` +
+				`  (ceiling ${commas(ceiling)}, ${verdict})`
+		);
+		if (headroom < 0) over.push({ name: path, bytes, ceiling });
+	}
+}
+
+/**
+ * What one cold opening of the console asks for over the network.
+ *
+ * This bounds the design and not the data. A per-file ceiling says how heavy
+ * one shard may be; this says how many of them opening the page is allowed to
+ * want, which is the thing a widened default window changes and no per-file
+ * number can see. A key naming a file is fetched once. A key naming a directory
+ * of month shards is fetched once per month the window reaches into, and the
+ * page fetches those one after another, so this number and the four-hop chain
+ * ceiling in `tests/console-cold-load.spec.ts` are two readings of one design.
+ *
+ * The worst case is arithmetic, not a date: a run of N consecutive days lands in
+ * at most `1 + ceil((N - 1) / 28)` calendar months, because February is the
+ * shortest month there is. At the default 30 days that is three - a window
+ * opening on 31 January reaches 1 March - and not the two a reader sees for
+ * three hundred and sixty-three days of the year.
+ */
+const coldCeiling = config.page_weight?.cold_console_load_bytes ?? 0;
+if (Number.isInteger(coldCeiling) && coldCeiling > 0) {
+	const windowDays = config.console?.default_window_days;
+	if (!Number.isInteger(windowDays) || windowDays < 1) {
+		console.error(
+			'bundle gate: page_weight.cold_console_load_bytes needs console.default_window_days\n' +
+				'to know how many month shards a cold load asks for.'
+		);
+		process.exit(1);
+	}
+	const monthsTouched = 1 + Math.ceil((windowDays - 1) / 28);
+	let cold = 0;
+	const parts = [];
+	for (const key of payloadKeys) {
+		const heaviest = heaviestPayload.get(key);
+		if (heaviest === undefined) continue;
+		const copies = key.endsWith('/') ? monthsTouched : 1;
+		cold += heaviest * copies;
+		parts.push(copies === 1 ? `${key} ${commas(heaviest)}` : `${copies} x ${key} ${commas(heaviest)}`);
+	}
+	const headroom = coldCeiling - cold;
+	console.log(
+		`\ncold console load at console.default_window_days=${windowDays} ` +
+			`(${monthsTouched} month shards worst case):\n` +
+			`  ${parts.join(' + ')} = ${commas(cold)} B  ${kb(cold)}\n` +
+			`  (ceiling ${commas(coldCeiling)}, ` +
+			`${headroom < 0 ? `${commas(-headroom)} OVER` : `${commas(headroom)} spare`})`
+	);
+	if (headroom < 0) {
+		failed = true;
+		console.error(
+			`\nbundle gate FAILED - a cold console load asks for ${commas(cold)} B, ` +
+				`${commas(-headroom)} B over the ${commas(coldCeiling)} B ceiling.`
+		);
+		console.error(
+			'\nThe usual cause is not a heavier shard - it is a wider default window. Each\n' +
+				'extra month is a whole shard AND one more serial round trip, so check\n' +
+				'console.default_window_days before reaching for the ceiling. If the wider\n' +
+				'window is what was wanted, raise this in the same commit and say what the\n' +
+				'reader waits for in exchange.'
+		);
+	}
+}
+
 if (namesNothing.length > 0) {
 	failed = true;
-	console.error('\nbundle gate FAILED - a ceiling in config/idhazh.json names no route in the build:');
+	console.error(
+		'\nbundle gate FAILED - a ceiling in config/idhazh.json names nothing in the build:'
+	);
 	for (const line of namesNothing) console.error(`  ${line}`);
 	console.error(
-		'\nDelete the ceiling, or find out why the route stopped building. A ceiling over\n' +
-			'nothing still reads as a bound somebody checked.'
+		'\nDelete the ceiling, or find out why the route or the payload stopped being\n' +
+			'built. A ceiling over nothing still reads as a bound somebody checked.'
 	);
 }
 
 if (over.length > 0) {
 	failed = true;
-	console.error('\nbundle gate FAILED - a prerendered page is over its ceiling:');
+	console.error('\nbundle gate FAILED - a prerendered page or a fetched payload is over its ceiling:');
 	for (const { name, bytes, ceiling } of over) {
 		console.error(
 			`  ${name} weighs ${commas(bytes)} B (${kb(bytes)}), ` +
@@ -240,9 +392,10 @@ if (over.length > 0) {
 		);
 	}
 	console.error(
-		'\nTwo answers are legitimate and they are not interchangeable. If the page took on\n' +
-			'bytes it does not render - a day payload inlined by a layout is how this last\n' +
-			'happened - remove them. If the page genuinely carries more, raise the ceiling in\n' +
+		'\nTwo answers are legitimate and they are not interchangeable. If the page or the\n' +
+			'payload took on bytes nobody reads - a day payload inlined by a layout is how\n' +
+			'this last happened to a page, and a column added to a shard is how it happens to\n' +
+			'a payload - remove them. If it genuinely carries more, raise the ceiling in\n' +
 			'config/idhazh.json, in the commit that earned the bytes, and say in the message\n' +
 			'what they buy.'
 	);
@@ -262,4 +415,4 @@ if (over.length > 0) {
 
 if (failed) process.exit(1);
 
-console.log('\nbundle gate: every capped page is under its ceiling.');
+console.log('\nbundle gate: every capped page and every capped payload is under its ceiling.');
