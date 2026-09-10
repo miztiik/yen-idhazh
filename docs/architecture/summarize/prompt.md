@@ -321,12 +321,13 @@ a payload.
 
 ## The second call writes this summary, and the article is read once
 
-A second prompt is being built beside this one. `backend/idhazh/prompts/call_one.txt`
-asks a model what an article's already-extracted quantities and dates mean;
-`backend/idhazh/prompts/call_two.txt` then asks the same model, in the same
-conversation, for this page's summary and for a plan for one picture. Neither is
-dispatched by any stage yet - the gate in front of them and the picture they
-lead to are later rows of
+A second prompt is being built beside this one.
+`backend/idhazh/prompts/label_article_elements.txt` asks a model what an
+article's already-extracted quantities and dates mean;
+`backend/idhazh/prompts/summarize_and_plan_visual.txt` then asks the same model,
+in the same conversation, for this page's summary and for a plan for one
+picture. Neither is dispatched by any stage yet - the gate in front of them and
+the picture they lead to are later rows of
 [`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md).
 What is settled, and what this section owns, is why the second call is shaped
 the way it is.
@@ -411,15 +412,21 @@ content refresh. Re-read the figure then, and again when plan 11 is distilled pe
 **Open gap, owned by nobody: the prompt loop still refines the prompt that is
 retiring.** `backend/utilities/prompt_loop.py` today refines the single-call
 summariser prompt, `prompts/summarize.txt`. Once call 2 writes both the summary
-and the plan, the loop's target must become `prompts/call_two.txt`. This is owned
-by no row of plan 11 and no row of plan 12. It is written here so the distill
-picks it up.
+and the plan, the loop's target must become
+`prompts/summarize_and_plan_visual.txt`. This is owned by no row of plan 11 and
+no row of plan 12. It is written here so the distill picks it up.
 
 **Which prompt asks what.** Call 1 labels what is in the item - what its
 already-extracted quantities and dates mean - and never asks for a picture. Call
 2 asks for two things in one reply, in this order: the summary first, then the
 plan for one picture. `prompts/visual_planner.txt` and `prompts/summarize.txt`
 are the single-call pair these two replace, and row 6 of plan 11 deletes them.
+
+**A prompt file is named for what it asks the model to produce, not for its
+position in the sequence.** Both files carried their call number as their name
+until 2026-09-10. The calls keep their numbers - the order is what the
+prefix-cache argument above rests on - but a filename carries no order, so it
+says what the prompt asks for.
 
 ### `summary` is decoded before `visual`, and that order is the recovery
 
