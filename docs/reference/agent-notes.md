@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -465,6 +465,24 @@ The same CRLF also breaks a byte-identical round trip, so the contract drift
 gate reports a diff in a file whose content never changed.
 
 ## Gate commands
+
+**`service-worker.spec.ts` "a day already opened reads again with no network at
+all" is flaky in CI, and it reads exactly like a regression in whatever you just
+changed.** It fails `expect(received).toBe(expected) // Expected: 8, Received:
+0` with the message `the day read short offline` - the dated page rendered no
+stories, so the worker appears not to have kept the payload. Nothing about the
+message suggests timing. Seen on 2026-09-09 at `81edf049`, a commit on `main`
+that touched none of the offline path, and again the same evening on the
+unrelated encoder-origin branch; both passed on a rerun, and the same test
+passed locally on the same tree. Two things to check before you spend an hour on
+it: whether the same signature appears in a recent `browser` job on `main`
+(`gh api repos/<o>/<r>/commits/<sha>/check-runs --jq '.check_runs[] |
+select(.conclusion=="failure") | .name'`, then `gh run view --log-failed --job
+<id>`), and whether the test passes in your own `test:changed` run. If both say
+yes it is the flake. `gh run rerun <run-id> --failed` is the whole fix. The
+`offline` group runs alone and installs a real service worker, so its
+install-then-activate window is the timing-sensitive part; the flake has not
+been traced further than that.
 
 **`npm run test:changed --python <interpreter>` does NOT reach the canary
 build, so the selector fails at a step you already proved green.** The `--python`
@@ -3345,6 +3363,29 @@ wrong shape for "the page is not in state X". Playwright special-cases only
 `toBeInViewport` for a locator that resolves to nothing; everything else falls
 through to `matches = options.isNot`. The positive form on the state you do want
 is strictly stronger and fails with "element(s) not found" instead of passing.
+
+## A length test written with two-letter words is graded by the character rail, not the length rule
+
+`summarize.output_schema` puts `minLength` and `maxLength` on the summary field,
+derived from the ladder times a characters-per-word constant. Pydantic checks
+those while parsing the reply, which happens **before** `to_summary` counts a
+single word. So a fixture built as `"y " * 100` is 100 words and 200 characters,
+and the rail wants at least 125 and at most a few thousand - the reply is thrown
+out as `bad_shape`, the length rule never runs, and the test fails claiming the
+length verdict is `None`.
+
+Nothing about the failure names the cause. It reads as "the verdict did not
+fire", which sends you into the verdict function, which is correct.
+
+Write the fixture with realistic words - `"deliberation " * 100` is 100 words and
+1,300 characters, which is what 100 real words costs. The rule of thumb the
+schema itself uses is roughly 5 characters per word at the floor and 13 at the
+ceiling, so any fixture between those is safe at both ends.
+
+The same trap catches the other direction: a test that wants an over-length reply
+has to stay under the character ceiling, or it proves the rail works rather than
+the rule. Seen 2026-09-10, in
+`backend/tests/test_summarize.py::test_the_tolerance_comes_from_config`.
 
 ## See also
 

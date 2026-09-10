@@ -1014,7 +1014,7 @@ def stage_work(
         runtime_build=runtime_build(),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
         prompt=summarize.prompt_inputs(settings.app.summarize),
-        output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
+        output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
@@ -1294,7 +1294,6 @@ def _summarize_one(
                 model_id=model_id,
                 inference=inference,
                 prompt_config=settings.app.summarize,
-                evaluation=settings.app.evaluation,
             )
             rendered = canonical_json(payload)
             prompt_digest = text_digest(rendered)
@@ -2049,7 +2048,6 @@ def _one_call(
         model_id=model_id,
         inference=inference,
         prompt_config=settings.app.summarize,
-        evaluation=settings.app.evaluation,
     )
     started = time.monotonic()
     completion: Completion | None
@@ -2164,7 +2162,7 @@ def stage_qualify_canaries(
         runtime_build=runtime_build(),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
         prompt=summarize.prompt_inputs(settings.app.summarize),
-        output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
+        output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
@@ -2218,7 +2216,7 @@ def stage_qualify(
         runtime_build=candidate.runtime_build,
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
         prompt=summarize.prompt_inputs(settings.app.summarize),
-        output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
+        output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
@@ -2349,6 +2347,7 @@ def stage_qualify_decide(
     frozen, outcomes = qualify.gates(
         shards,
         evaluation=evaluation,
+        summarize=settings.app.summarize,
         inference=settings.app.models.summarize.inference,
         run=settings.app.run,
         budget_=qualify.Budget(

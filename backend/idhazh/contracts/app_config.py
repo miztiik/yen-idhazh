@@ -865,6 +865,75 @@ class ModelsConfig(Model):
         return self
 
 
+class OverLengthAction(StrEnum):
+    """What to do with a reply that overshoots its band by more than the policy allows."""
+
+    TRIM = "trim"
+    PUBLISH = "publish"
+
+
+class LengthPolicy(Model):
+    """What the pipeline accepts, once the prompt has asked.
+
+    The ask lives on the band; this is the tolerance around it. Both are here
+    rather than in `evaluation` because a length miss is not a quality finding -
+    it is the model rounding a request - and the two were one pair of global
+    integers until 2026-09-09, which could not see which band an item was in.
+
+    Every number is a starting point rather than a measurement (Rule #10). Our
+    own length figures describe a pipeline mid-repair - the prompt is being
+    tuned and a fine-tune is in flight - so none of them was used to pick one.
+    """
+
+    overshoot_ratio: float = Field(
+        default=0.20,
+        ge=0.0,
+        description=(
+            "How far past the band's ask a reply may run and still publish untouched, "
+            "as a share of `target_words_max`. Whichever of this and `overshoot_words` "
+            "is larger wins, so a short band gets a usable allowance too: 20 percent of "
+            "45 words is nine, and nine words is one clause."
+        ),
+    )
+    overshoot_words: int = Field(
+        default=25,
+        ge=0,
+        description=(
+            "The same allowance as a flat word count, for the bands where a ratio is "
+            "too small to mean anything. The larger of the two applies."
+        ),
+    )
+    undershoot_ratio: float = Field(
+        default=0.30,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How far under the band's ask a reply may fall and still publish, as a share "
+            "of `target_words_min`. Brevity is not a fault: a short summary of a long "
+            "article is a thin summary, and the reader can see that it is short. Losing "
+            "the story entirely tells them nothing."
+        ),
+    )
+    absolute_floor_words: int = Field(
+        default=25,
+        ge=1,
+        description=(
+            "Below this a reply is a failed extraction wearing a summary's clothes, and "
+            "it is the one length that still fails an item. Applies only to sources "
+            "longer than `floor_applies_above_source_words`, because a 40-word summary "
+            "of a 60-word post is the correct answer."
+        ),
+    )
+    floor_applies_above_source_words: int = Field(
+        default=700,
+        ge=0,
+        description=(
+            "Sources shorter than this are exempt from `absolute_floor_words`. A brief "
+            "has no length to lose."
+        ),
+    )
+
+
 class SummaryBand(Model):
     """How long a summary to ask for, once the article is at least this long."""
 
@@ -873,6 +942,16 @@ class SummaryBand(Model):
     )
     target_words_min: int = Field(ge=1, description="The shortest summary the prompt asks for.")
     target_words_max: int = Field(ge=1, description="The longest summary the prompt asks for.")
+    over_length_action: OverLengthAction = Field(
+        default=OverLengthAction.TRIM,
+        description=(
+            "What to do with a reply that overshoots past the policy's allowance. A "
+            "short band trims at the last complete sentence that fits, because wire-"
+            "shaped prose front-loads and a tail cut is safe. A long band publishes "
+            "over-length instead: on a feature the qualification lands last, so cutting "
+            "the tail is how a summary becomes wrong rather than merely long."
+        ),
+    )
     key_points_min: int = Field(
         default=2,
         ge=1,
@@ -904,28 +983,40 @@ class SummaryBand(Model):
 
 
 def _default_bands() -> list[SummaryBand]:
-    """Six sizes: note, report, feature, long feature, investigation, whole-read long read.
+    """Five sizes: note, post, report, feature, long read.
 
-    Starting points chosen from the shape of the sources we collect, not
-    measurements - nothing here may be quoted as one (Rule #10). The first
-    band begins at zero so every article lands in one, and the shortest ask sits
-    above `evaluation.summary_words_min` so a summary that misses low by a few
-    words is still publishable.
+    Starting points chosen from editorial practice outside this project, not
+    from our own numbers - nothing here may be quoted as a measurement (Rule
+    #10), and our length figures describe a pipeline mid-repair. The first band
+    begins at zero so every article lands in one.
 
-    The last floor is the last one there may ever be. It stays below
-    `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)`, so no rung
-    asks for a summary of words the model was never handed
-    (`docs/architecture/summarize/prompt.md`).
+    The ask grows with the source logarithmically, not in proportion to it.
+    Doubling an article does not double its distinct claims; it adds
+    scene-setting and repetition. Every trade that abstracts at scale says this
+    twice - an informative abstract is capped near 250 words whether the paper
+    is 4,000 words or 40,000 (ANSI/NISO Z39.14), and the executive summary's
+    "five to ten percent" rule is always overridden by "never more than two
+    pages". So the ladder opens with a ratio and closes with a ceiling.
 
-    The top rung raises the floor of the ask and leaves its ceiling where the
-    rung below it stands. The complaint it answers is a compression one, and
-    compression at a rung's floor is set by `target_words_min`; the ceiling
-    cannot move without moving `evaluation.summary_words_max`, which is a
-    separate decision about what we agree to publish.
+    **The ceiling is 200 words and it governs the rest.** An adult reads
+    non-fiction at about 240 words a minute, so the two minutes this digest asks
+    for is roughly 480 words. Thirty titles spend 250 to 300 of them being
+    scanned. What is left buys two summaries at 90 words or one at 200, and a
+    200-word item is already 50 seconds on one story out of thirty. Past that we
+    stop helping a reader decide whether to click through and start being the
+    article, badly.
 
-    Each band also carries its own key-point ask, graded from one at the brief
-    band to five at the investigation band: a note holds one fact, and asking it
-    for five requests facts the article does not have.
+    The last floor is the last one there may ever be, and it sits at 4,000 words
+    rather than at the cut point on purpose: the model is handed at most
+    `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)` words, so
+    every source past 4,000 arrives with much the same evidence and earns the
+    same ask. A rung above it would grade articles by a length the model never
+    saw.
+
+    Each band carries its own key-point ask, graded from one at the note to five
+    at the long read: a note holds one fact, and asking it for five requests
+    facts the article does not have. Each also carries what to do when a reply
+    runs long - see `SummaryBand.over_length_action`.
     """
     return [
         SummaryBand(
@@ -933,37 +1024,39 @@ def _default_bands() -> list[SummaryBand]:
             key_points_min=1, key_points_max=1,
         ),
         SummaryBand(
-            min_source_words=60, target_words_min=50, target_words_max=90,
+            min_source_words=60, target_words_min=45, target_words_max=80,
             key_points_min=1, key_points_max=2,
         ),
         SummaryBand(
-            min_source_words=700, target_words_min=70, target_words_max=150,
+            min_source_words=700, target_words_min=70, target_words_max=130,
             key_points_min=2, key_points_max=3,
         ),
         SummaryBand(
-            min_source_words=2000, target_words_min=110, target_words_max=200,
+            min_source_words=2000, target_words_min=95, target_words_max=160,
             key_points_min=2, key_points_max=4,
+            over_length_action=OverLengthAction.PUBLISH,
         ),
         SummaryBand(
-            min_source_words=3000, target_words_min=150, target_words_max=230,
+            min_source_words=4000, target_words_min=120, target_words_max=200,
             key_points_min=2, key_points_max=5,
-        ),
-        SummaryBand(
-            min_source_words=5000, target_words_min=180, target_words_max=230,
-            key_points_min=2, key_points_max=5,
+            over_length_action=OverLengthAction.PUBLISH,
         ),
     ]
 
 
 class SummarizeConfig(Model):
-    """What the prompt asks the model for.
+    """What the prompt asks the model for, and what the pipeline accepts back.
 
-    Separate from `evaluation`, which is what the pipeline agrees to accept. The
-    two ranges are deliberately different: a prompt is a request and a gate is a
-    rule, and asking for a tighter range than we enforce is what stops a
-    two-word miss from losing a story. `AppConfig` checks the invariant that
-    actually matters - every ask sits inside the gate - because only there are
-    both blocks visible.
+    A prompt is a request and a gate is a rule. Asking for a tighter range than
+    we accept is what stops a two-word miss from losing a story, so the ask
+    (`bands`) and the tolerance around it (`length_policy`) both live here,
+    where an operator editing one can see the other.
+
+    Until 2026-09-09 the tolerance was two integers in `evaluation` that applied
+    to all five rungs at once and could not see which band an item was in, and a
+    reply outside them deleted the item from that day's digest with no second
+    look. Both defects are gone: the allowance is derived from the band, and no
+    length outcome except `length_policy.absolute_floor_words` drops an item.
 
     Every band and title number here is substituted into the prompt text at
     render time, so the prompt cannot drift from the bounds the pipeline enforces
@@ -980,6 +1073,14 @@ class SummarizeConfig(Model):
             "One length ask per article size, ordered by min_source_words. A release "
             "note and a long read asked for the same range gives a padded summary of "
             "the first and a thin one of the second."
+        ),
+    )
+    length_policy: LengthPolicy = Field(
+        default_factory=LengthPolicy,
+        description=(
+            "How far a reply may miss its band's ask and still publish, and what happens "
+            "when it misses by more. Config rather than code so the tolerance can move "
+            "with the prompt while the prompt is still being tuned."
         ),
     )
     title_words_min: int = Field(
@@ -1072,6 +1173,16 @@ class SummarizeConfig(Model):
             raise ValueError("bands must climb, and no two may start at the same length")
         if self.title_words_min > self.title_words_max:
             raise ValueError("title_words_min must not exceed title_words_max")
+        # Rung 0 asks for the shortest summary on the ladder, so a floor at or above
+        # it fails every note the digest carries - and it fails them as a bad
+        # extraction, which is the one length verdict that still drops an item.
+        if self.length_policy.absolute_floor_words >= min(
+            band.target_words_min for band in self.bands
+        ):
+            raise ValueError(
+                "length_policy.absolute_floor_words must sit below every band's "
+                "target_words_min, or the shortest band fails every item"
+            )
         return self
 
     def band_for(self, source_words: int) -> SummaryBand:
@@ -1081,6 +1192,26 @@ class SummarizeConfig(Model):
             if source_words >= band.min_source_words:
                 chosen = band
         return chosen
+
+    def allowance(self, band: SummaryBand) -> int:
+        """Words past the band's ask that still publish untouched."""
+        policy = self.length_policy
+        return max(int(band.target_words_max * policy.overshoot_ratio), policy.overshoot_words)
+
+    def decoder_words_max(self) -> int:
+        """The widest reply any band can publish, which is the rail the decoder gets.
+
+        Deliberately the loosest number in the file. The rail is enforced by the
+        decoder as a character budget, so a reply that runs past it fails to parse
+        at all - and a reply that cannot parse never reaches the length verdict
+        that would have trimmed or published it. A tight rail would turn every
+        overshoot back into the lost item this policy exists to prevent.
+        """
+        return max(band.target_words_max + self.allowance(band) for band in self.bands)
+
+    def decoder_words_min(self) -> int:
+        """The narrowest reply any band can publish. See `decoder_words_max`."""
+        return self.length_policy.absolute_floor_words
 
 
 class EvaluationConfig(Model):
@@ -1115,15 +1246,6 @@ class EvaluationConfig(Model):
             "medium rather than forcing low."
         ),
     )
-    summary_words_min: int = Field(
-        default=25,
-        ge=1,
-        description=(
-            "Below this it is a headline, not a summary. Set under the lowest band in "
-            "`summarize.bands`: the prompt is a request, and dropping an item for missing "
-            "it by two words loses a story to a rounding error."
-        ),
-    )
     brief_compression_ceiling: float = Field(
         default=0.5,
         gt=0.0,
@@ -1132,9 +1254,6 @@ class EvaluationConfig(Model):
             "Maximum summary/source ratio for a brief item. Also caps verbatim_run on "
             "briefs and derives extract.min_source_words from the first brief ask."
         ),
-    )
-    summary_words_max: int = Field(
-        default=250, ge=1, description="Above this it is a copy. Absolute, not a ratio."
     )
     verbatim_reject_ceiling: float = Field(
         default=0.75,
@@ -1228,12 +1347,33 @@ class EvaluationConfig(Model):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _summary_word_bounds_moved_to_the_ladder(cls, data: Any) -> Any:
+        """Read a config that still names the old global summary word bounds.
+
+        `summary_words_min` and `summary_words_max` were one pair of integers
+        applied to every rung of the ladder, and a reply outside them deleted the
+        item. They are gone: the floor is `summarize.length_policy` and the
+        ceiling is derived per band. `config/` is a persisted surface and every
+        model here forbids unknown keys, so a file written before the move would be
+        refused outright (section 11). The old values are dropped rather than
+        mapped - neither has a counterpart, and carrying 250 forward as a ceiling
+        would reinstate the cap the ladder now sets for itself.
+        """
+        if not isinstance(data, dict):
+            return data
+        if not any(name in data for name in ("summary_words_min", "summary_words_max")):
+            return data
+        migrated = dict(data)
+        migrated.pop("summary_words_min", None)
+        migrated.pop("summary_words_max", None)
+        return migrated
+
     @model_validator(mode="after")
     def _bands_and_ranges_are_ordered(self) -> Self:
         if self.band_medium_min >= self.band_high_min:
             raise ValueError("band_medium_min must sit below band_high_min")
-        if self.summary_words_min >= self.summary_words_max:
-            raise ValueError("summary_words_min must sit below summary_words_max")
         # The chunker steps `chunk_words - chunk_overlap_words`. An overlap at or
         # above the window makes that step zero or negative, and the clamp that
         # stops it looping walks a long article one word at a time - a job that
@@ -2844,12 +2984,19 @@ class PageWeightConfig(Model):
 
 
 class AssistConfig(Model):
-    """On-device archive search: what the encoder reads, and what the list shows.
+    """On-device archive search: what the encoder reads, where it comes from, what shows.
 
     Every value here was a literal with no override path (Rule #6). The first two
-    describe how much of an item the encoder is allowed to read; the rest describe
-    what the reader's list keeps. All five are set from measurement rather than
-    from taste.
+    describe how much of an item the encoder is allowed to read; the five `model_`
+    keys describe where a browser may fetch the encoder and how it proves the bytes
+    are ours; the rest describe what the reader's list keeps. All of them are set
+    from measurement rather than from taste.
+
+    **Our own origin is primary and the committed weights stay.** The `model_` keys
+    are a failover, reached only when this site cannot serve a reader the weights it
+    committed. A second origin without `model_digests` would be a permission rather
+    than a fallback, so the manifest is the load-bearing half and the URL is the
+    convenience.
     """
 
     max_tokens: int = Field(
@@ -2881,6 +3028,104 @@ class AssistConfig(Model):
             "band: measured 2026-08-26 over the six committed days, 3 of 1889 items "
             "score 0.0 and the next lowest scores 0.9975, so every threshold between "
             "0.01 and 0.99 selects the same three items."
+        ),
+    )
+    model_base_url: str = Field(
+        default="https://huggingface.co/Xenova/all-MiniLM-L6-v2",
+        pattern=r"^https://[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?:/[A-Za-z0-9._-]+)*$",
+        description=(
+            "The SECOND origin a browser may fetch the encoder from, and only after "
+            "our own copy has failed that reader. Our origin stays primary: the "
+            "weights are committed under frontend/static/assist/models/ and every "
+            "reader gets them from us. This is the failover, and it is a repository "
+            "prefix rather than a bare host so the fetch is built from one value - "
+            "the path in it is a directory on that host, not a permission, and "
+            "frontend/asset-base.js takes only the ORIGIN into connect-src. A GitHub "
+            "Release asset was measured on 2026-09-09 and cannot serve this: it "
+            "carries no Access-Control-Allow-Origin on any hop, so a browser refused "
+            "all 15 attempts. Nothing here reaches the encoder as text (Rule #11), "
+            "and no payload field, model output or fetched string builds this URL."
+        ),
+    )
+    model_cdn_origins: tuple[str, ...] = Field(
+        default=("https://us.aws.cdn.hf.co",),
+        description=(
+            "The origins model_base_url redirects a large file to, listed because a "
+            "browser checks the redirect target against connect-src and would "
+            "otherwise refuse it. Measured 2026-09-09 from the live Pages origin, 15 "
+            "reads of 15: the four small files answer 307 then 200 on the base host, "
+            "and onnx/model_quantized.onnx answers 302 to this CDN and 200 there. "
+            "Listing the base host alone passes the four small files and blocks the "
+            "23 MB of weights, which is the worst of both - the reader waits, and "
+            "then gets nothing. Kept a separate knob from model_base_url because it "
+            "is the other party's delivery network rather than our fetch address, "
+            "and it moves when they move it."
+        ),
+    )
+    model_revision: str = Field(
+        default="751bff37182d3f1213fa05d7196b954e230abad9",
+        pattern=r"^[0-9a-f]{40}$",
+        description=(
+            "The upstream commit the committed weights are the bytes of, as a full "
+            "40-hex SHA-1. A branch name is refused by the pattern, because a branch "
+            "hands back whatever was uploaded last and a fetch built on one describes "
+            "bytes nobody can fetch again (Rule #10). Verified two ways on 2026-09-09: "
+            "the file tree at this commit returns a git blob SHA-1 for each small file "
+            "and an LFS SHA-256 for the model, all five equal to model_digests below, "
+            "and every response at this revision returns it as X-Repo-Commit. It does "
+            "NOT identify one commit - the parent carries the same five files - so it "
+            "is the head of main on the fetch date rather than something derived from "
+            "the bytes. ENCODER_VERSION in frontend/src/lib/assist/encoder.ts is the "
+            "browser's copy and backend/tests/test_embed.py fails when the two differ."
+        ),
+    )
+    model_digests: dict[str, str] = Field(
+        default_factory=lambda: {
+            "config.json": (
+                "7135149f7cffa1a573466c6e4d8423ed73b62fd2332c575bf738a0d033f70df7"
+            ),
+            "onnx/model_quantized.onnx": (
+                "afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1"
+            ),
+            "special_tokens_map.json": (
+                "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+            ),
+            "tokenizer.json": (
+                "da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0"
+            ),
+            "tokenizer_config.json": (
+                "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+            ),
+        },
+        description=(
+            "SHA-256 of every encoder file, keyed by its path under the model "
+            "directory. This is what makes reaching a second origin safe at all: the "
+            "browser hashes what arrived and discards the WHOLE set on any miss - a "
+            "non-200, a truncation, a timeout or a wrong digest - so provenance is "
+            "never mixed across files. Without it, model_base_url would be a "
+            "permission for a second party to put bytes into a reader's tab. "
+            "Re-derived from the committed files on 2026-09-09 and equal to what the "
+            "upstream tree reports at model_revision; "
+            "backend/tests/test_embed.py hashes the committed files against this map, "
+            "so a manifest that drifts from the weights fails the build rather than "
+            "failing closed on every reader."
+        ),
+    )
+    model_fetch_deadline_ms: int = Field(
+        default=120_000,
+        ge=1_000,
+        le=600_000,
+        description=(
+            "How long the whole second-origin fetch may take before the browser gives "
+            "up and tells the reader the download did not finish. It covers all five "
+            "files together rather than each one, because a reader is waiting on the "
+            "set and a per-file deadline lets four slow files add up to a wait nobody "
+            "bounded. Two minutes is the download this failover exists to complete: "
+            "the hub serves onnx/model_quantized.onnx uncompressed at 22,972,370 "
+            "bytes where our origin gzips it to 16.22 MB (measured 2026-09-08 on a "
+            "laptop against CloudFront AMS58-P3, n=3, spread 0), which is about 18 "
+            "seconds on a 10 Mbit line and about 100 on a 2 Mbit one. A reader on "
+            "less than that is better served by the sentence than by a spinner."
         ),
     )
     similarity_floor: float = Field(
@@ -3016,6 +3261,74 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-10T09:00",
+            change=(
+                "AssistConfig gains five keys: model_base_url, model_cdn_origins, "
+                "model_revision, model_digests and model_fetch_deadline_ms. "
+                "config/idhazh.json sets none of them, so the committed file is "
+                "unchanged and every value ships as its default. The shape is shared "
+                "with AppearanceConfig, so appearance-config is restamped with the "
+                "same version. Additive and defaulted, so a config file written "
+                "before today still validates."
+            ),
+            why=(
+                "The encoder had exactly one origin, and a reader whose fetch of it "
+                "failed had no search at all. These five name a second one and, more "
+                "to the point, name what makes reaching it safe: the browser hashes "
+                "every arriving file against model_digests and discards the whole set "
+                "on any miss, so a second party can put no unverified byte into a "
+                "reader's tab. Our own origin stays primary and keeps the committed "
+                "weights - nobody pays the hub's extra 6.75 MB unless this site has "
+                "already failed them. model_cdn_origins is a separate key because a "
+                "browser checks a redirect target against connect-src: measured "
+                "2026-09-09 from the live Pages origin, 15 reads of 15, the four "
+                "small files answer on the base host and the 23 MB of weights answers "
+                "302 to a CDN, so listing the base host alone passes the small files "
+                "and blocks the model. A GitHub Release asset was measured the same "
+                "day and cannot serve this at all - no Access-Control-Allow-Origin on "
+                "any hop, 15 refusals in 15 attempts - which is why the second origin "
+                "is the hub rather than a copy we publish."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-10T00:30",
+            change=(
+                "evaluation.summary_words_min and evaluation.summary_words_max are "
+                "removed. summarize gains length_policy (overshoot_ratio, "
+                "overshoot_words, undershoot_ratio, absolute_floor_words, "
+                "floor_applies_above_source_words) and each band gains "
+                "over_length_action. The ladder drops to five rungs and its ceiling "
+                "moves from 230 to 200: 0|30-45, 60|45-80, 700|70-130, 2000|95-160, "
+                "4000|120-200. A read-side migration drops the two old keys, and "
+                "AppConfig._the_ask_sits_inside_the_gate is gone with them."
+            ),
+            why=(
+                "The two removed integers were one global pair applied to all six rungs "
+                "of a ladder they could not see, and a reply outside them returned "
+                "LENGTH_OUT_OF_RANGE, which deletes the item from that day's digest with "
+                "no second attempt. So a 251-word reply to a 230-word ask lost the story "
+                "outright, and the same pair capped how much any rung could ever ask "
+                "for. Length is the one property a reader can judge unaided - a summary "
+                "that is too long is a summary they stop reading, and a summary that is "
+                "missing is nothing at all - so it may not be the property that silently "
+                "removes a story. The tolerance is now derived from the band the item "
+                "landed in, and the only length that still fails an item is "
+                "absolute_floor_words, which catches a failed extraction rather than a "
+                "long reply. The ladder is editorial rather than measured: an "
+                "informative abstract is capped near 250 words whether the source is "
+                "4,000 words or 40,000 (ANSI/NISO Z39.14), so the ask grows with the "
+                "source logarithmically and then stops. 200 is the ceiling because two "
+                "minutes of adult non-fiction reading is about 480 words, thirty titles "
+                "spend 250 to 300 of them, and a 200-word item is already 50 seconds on "
+                "one story out of thirty. The rungs at 3000 and 5000 collapse into one "
+                "at 4000 because the model is handed at most 7,692 words, so every "
+                "source past 4,000 arrives with much the same evidence. None of these "
+                "numbers came from state/scores/: the prompt is being tuned and a "
+                "fine-tune is in flight, so our own length figures describe a pipeline "
+                "mid-repair (Rule #10)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09T23:45",
             change=(
@@ -5097,25 +5410,16 @@ class AppConfig(Contract):
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
     @model_validator(mode="after")
-    def _the_ask_sits_inside_the_gate(self) -> Self:
-        """The prompt may ask for less than we accept. It may never ask for more.
+    def _the_ladder_and_the_extract_floor_agree(self) -> Self:
+        """The ask and the tolerance now live together, so only one block pair is left.
 
-        An operator editing one block cannot see the other, and the failure is
-        silent in the worst way: the prompt asks for 300 words, the model
-        complies, and the gate drops a correct summary every single run. So the
-        two blocks are checked together here, where both are in scope.
+        Until 2026-09-09 this checked every band against two global word bounds in
+        `evaluation`. That check is gone with the bounds: the tolerance is derived
+        from the band it applies to, so an operator editing the ladder can no
+        longer put the ask outside the gate without seeing both. What remains is
+        the one derivation that genuinely spans two blocks - the shortest ask sets
+        the shortest article worth fetching.
         """
-        for band in self.summarize.bands:
-            if band.target_words_min < self.evaluation.summary_words_min:
-                raise ValueError(
-                    f"summarize band at {band.min_source_words} words asks for a summary "
-                    "shorter than evaluation.summary_words_min accepts"
-                )
-            if band.target_words_max > self.evaluation.summary_words_max:
-                raise ValueError(
-                    f"summarize band at {band.min_source_words} words asks for a summary "
-                    "longer than evaluation.summary_words_max accepts"
-                )
         brief_target = self.summarize.bands[0].target_words_min
         derived_floor = math.ceil(brief_target / self.evaluation.brief_compression_ceiling)
         if self.extract.min_source_words != derived_floor:

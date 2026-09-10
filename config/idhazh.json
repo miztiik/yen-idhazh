@@ -6,6 +6,19 @@
     "eval_corpus_through": "2026-08-26",
     "max_tokens": 256,
     "min_readable_letter_share": 0.5,
+    "model_base_url": "https://huggingface.co/Xenova/all-MiniLM-L6-v2",
+    "model_cdn_origins": [
+      "https://us.aws.cdn.hf.co"
+    ],
+    "model_digests": {
+      "config.json": "7135149f7cffa1a573466c6e4d8423ed73b62fd2332c575bf738a0d033f70df7",
+      "onnx/model_quantized.onnx": "afdb6f1a0e45b715d0bb9b11772f032c399babd23bfc31fed1c170afc848bdb1",
+      "special_tokens_map.json": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3",
+      "tokenizer.json": "da0e79933b9ed51798a3ae27893d3c5fa4a201126cef75586296df9b4d2c62a0",
+      "tokenizer_config.json": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+    },
+    "model_fetch_deadline_ms": 120000,
+    "model_revision": "751bff37182d3f1213fa05d7196b954e230abad9",
     "recall_min": 0.68,
     "result_limit": 10,
     "search_min_days": 7,
@@ -93,8 +106,6 @@
     "lead_coverage_min": 0.3,
     "qualification_pool_multiple": 6,
     "spot_checks_per_week": 10,
-    "summary_words_max": 250,
-    "summary_words_min": 25,
     "validation_articles": 20,
     "validation_drop_max": 0.1,
     "validation_switch_margin": 0.05,
@@ -271,39 +282,41 @@
         "key_points_max": 2,
         "key_points_min": 1,
         "min_source_words": 60,
-        "target_words_max": 90,
-        "target_words_min": 50
+        "target_words_max": 80,
+        "target_words_min": 45
       },
       {
         "key_points_max": 3,
         "key_points_min": 2,
         "min_source_words": 700,
-        "target_words_max": 150,
+        "target_words_max": 130,
         "target_words_min": 70
       },
       {
         "key_points_max": 4,
         "key_points_min": 2,
         "min_source_words": 2000,
+        "over_length_action": "publish",
+        "target_words_max": 160,
+        "target_words_min": 95
+      },
+      {
+        "key_points_max": 5,
+        "key_points_min": 2,
+        "min_source_words": 4000,
+        "over_length_action": "publish",
         "target_words_max": 200,
-        "target_words_min": 110
-      },
-      {
-        "key_points_max": 5,
-        "key_points_min": 2,
-        "min_source_words": 3000,
-        "target_words_max": 230,
-        "target_words_min": 150
-      },
-      {
-        "key_points_max": 5,
-        "key_points_min": 2,
-        "min_source_words": 5000,
-        "target_words_max": 230,
-        "target_words_min": 180
+        "target_words_min": 120
       }
     ],
     "key_point_restatement_ceiling": 0.5,
+    "length_policy": {
+      "absolute_floor_words": 25,
+      "floor_applies_above_source_words": 700,
+      "overshoot_ratio": 0.2,
+      "overshoot_words": 25,
+      "undershoot_ratio": 0.3
+    },
     "max_verbatim_words": 20,
     "title_words_max": 14,
     "title_words_min": 6

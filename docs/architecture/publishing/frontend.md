@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -637,6 +637,31 @@ Three rules hold it together now.
 The cost is paid on the day the date moves: every returning searcher downloads the encoder again, in full. That is why it moves when the weights move and at no other time.
 
 A reader whose days were written by another encoder gets one line where the offer was, and gets it **before** the download rather than after - there is nothing they can do about it, so there is nothing to prompt them about, and no reason to spend 43 MB of their connection first.
+
+**From 2026-09-10 that guard compares two things that can really differ**, and until then it could not. The browser's encoder was the one this site published, so `model_id` could only ever match; it was a check written against a failure that had no way to happen. The second origin below is what gives it a job.
+
+## The encoder has a second origin, and a manifest is what makes that safe
+
+Our own origin is primary and the committed weights stay. A reader whose fetch of them fails - a dead cache, a partial deploy, a network that answers this site but not that file - used to get an archive with no search in it and one sentence saying the download did not finish. Since 2026-09-10 the browser tries again at Hugging Face.
+
+**The ordering is the library's own resolution, not code of ours.** `transformers.env.allowRemoteModels` stays `false` and `allowLocalModels` stays `true`, so the first `pipeline()` call can only read our copy. Nobody pays the second origin's extra 6.75 MB unless this site has already failed them, and there is no ordering code to get wrong. Only when that call throws does [frontend/src/lib/assist/weights.ts](../../../frontend/src/lib/assist/weights.ts) run.
+
+**The URL is the convenience; the manifest is the point.** `assist.model_digests` in `config/idhazh.json` holds the SHA-256 of all five encoder files. The browser hashes every arriving file and compares before a single byte reaches transformers.js. On any miss - a non-200, a truncation, a timeout or a wrong digest - the **whole set is discarded**, and the reader is told the download did not finish. Provenance is never mixed across files: five verified files or none, never four of ours and one of theirs. Without that, naming a second origin would be a permission for another party to put bytes into a reader's tab.
+
+Four things make it check rather than look like it checks.
+
+- **The manifest is baked into the bundle, not fetched.** `vite.config.ts` reads it from `config/` at build time into `__ENCODER_SOURCE__`. A manifest a page fetched could be answered by whoever answered the fetch, which is the thing it exists to guard against. It rides in the `/archive/` route's JavaScript rather than the prerendered document, so roughly 600 bytes of hex stay out of a page measured against a 7,553-byte ceiling.
+- **The fetch is pinned to a 40-hex commit.** `assist.model_revision` is refused by the contract unless it is one, because a branch hands back whatever was uploaded last and would make every digest a coin flip. `ENCODER_VERSION` in `encoder.ts` is the browser's copy of it and `backend/tests/test_embed.py` fails when the two differ.
+- **The manifest is checked against the committed weights on every build**, not on a reader's device. A manifest that drifted from the bytes would discard every set a browser fetched and leave no trace except readers with no search. The same test hashes the five files.
+- **An incomplete block turns the leg off rather than half on.** `encoderSource()` in [frontend/asset-base.js](../../../frontend/asset-base.js) answers the empty block unless a URL, a revision, a non-empty manifest and a deadline are all present, so a config edit cannot widen `connect-src` without also committing what the bytes must hash to.
+
+**`connect-src` ships as `'self' https://huggingface.co https://us.aws.cdn.hf.co`.** Three sources, every one derived from `config/idhazh.json` by the same module the fetch reads, so the CSP half and the fetch half cannot disagree. The CDN is listed because a browser checks a redirect target: measured 2026-09-09 from the live Pages origin, 15 reads of 15, the four small files answer on the base host and the 23 MB of weights answers 302 to that CDN. Listing the base host alone would pass the small files and block the model, which is the worst of both.
+
+**A GitHub Release asset cannot serve this**, which is why the second origin is the hub rather than a copy we publish. Measured the same day: no `Access-Control-Allow-Origin` on any hop, 15 refusals in 15 attempts.
+
+**What it costs a reader, said before they press the button.** The search panel's sentence names this site as the source, and adds one conditional clause: if this site cannot serve the files, the browser asks Hugging Face instead - about 50 MB rather than 43, because the hub does not compress the weights - and they would see the request. The unconditional half stays first and stays true either way: nothing a reader types leaves their browser. Almost nobody pays the conditional half, so it does not open the sentence; a reader deciding whether to start is still told before they start.
+
+The service worker never touches any of it. It refuses an off-origin request before it looks at anything else, so the only copy of a fetched-elsewhere encoder is the one the loader put in the library's own store **after** hashing it. A worker that cached it would be a second copy nobody verified, keyed by a URL nobody checked.
 
 ## A vector is a function of its own text, and of nothing it travelled with
 

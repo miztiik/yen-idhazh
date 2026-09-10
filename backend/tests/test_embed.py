@@ -12,6 +12,7 @@ nothing else. `TestPinnedArithmetic` holds the pins that make that true.
 from __future__ import annotations
 
 import base64
+import hashlib
 import math
 import re
 from pathlib import Path
@@ -27,7 +28,7 @@ from idhazh.embed import (
     DIMENSIONS,
     DTYPE,
     EMBEDDER_ID,
-    ENCODER_VERSION,
+    ENCODER_DIRECTORY,
     MAX_TOKENS,
     MODEL_RELDIR,
     ONNX_RELPATH,
@@ -160,12 +161,53 @@ class TestOneEncoderTwoRuntimes:
 
     def test_the_browser_loads_the_directory_the_runner_reads(self) -> None:
         """A version in the path is a cache boundary only if both sides use it."""
-        assert self.constant("ENCODER_VERSION") == ENCODER_VERSION
-        assert MODEL_RELDIR.endswith(f"{EMBEDDER_ID}/{ENCODER_VERSION}")
+        assert self.constant("ENCODER_DIRECTORY") == ENCODER_DIRECTORY
+        assert MODEL_RELDIR.endswith(f"{EMBEDDER_ID}/{ENCODER_DIRECTORY}")
 
     def test_the_versioned_directory_is_the_one_on_disk(self) -> None:
         """A rename that missed the weights is a 404 nothing else would catch."""
         assert (REPO_ROOT / MODEL_RELDIR).is_dir()
+
+    def test_the_browser_pins_the_fetch_to_the_revision_the_config_names(self) -> None:
+        """The browser may now fetch the encoder elsewhere. Both sides name one commit.
+
+        Let these separate and the failover asks a second origin for one commit
+        while the manifest below describes another, so every digest misses and
+        every reader our own origin failed gets nothing - a total failure with
+        no error anywhere until a reader hits it.
+
+        Forty hex is asserted here as well as in the contract because the
+        browser's copy is a literal the contract never sees. A branch name would
+        hand back whatever was uploaded last, which makes a fixed digest a coin
+        flip.
+        """
+        revision = self.constant("ENCODER_VERSION")
+        assert re.fullmatch(r"[0-9a-f]{40}", revision) is not None
+        assert revision == AssistConfig().model_revision
+
+    def test_every_committed_weight_matches_its_recorded_digest(self) -> None:
+        """The manifest is checked against the bytes here, not on a reader's device.
+
+        This is what stops the failover failing closed for everyone. A manifest
+        that drifts from the weights - a re-fetch, a re-quantise, an edited
+        `config.json` - would discard every set a browser fetched and leave no
+        trace except readers with no search. Hashing 23 MB of committed,
+        fixed-size files costs about 60 ms and is not a walk over anything a run
+        appends to (Rule #12).
+        """
+        digests = AssistConfig().model_digests
+        assert set(digests) == {
+            "config.json",
+            "onnx/model_quantized.onnx",
+            "special_tokens_map.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        }
+        for relpath, expected in sorted(digests.items()):
+            weight = REPO_ROOT / MODEL_RELDIR / relpath
+            assert weight.is_file(), f"{relpath} is in the manifest and not on disk"
+            got = hashlib.sha256(weight.read_bytes()).hexdigest()
+            assert got == expected, f"{relpath} is not the bytes the manifest describes"
 
     def test_the_browser_guards_against_the_width_the_runner_writes(self) -> None:
         """The browser refuses a day before downloading, so it needs the width."""

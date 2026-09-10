@@ -207,7 +207,7 @@ class Candidates(NamedTuple):
     found: int
 
 
-class _Reading(NamedTuple):
+class Reading(NamedTuple):
     """What one match says: its value, its unit, and where its characters end."""
 
     value: str
@@ -215,12 +215,12 @@ class _Reading(NamedTuple):
     span_end: int
 
 
-def _sentence_starts(text: str) -> list[int]:
+def sentence_starts(text: str) -> list[int]:
     """Where each sentence after the first begins, so an offset maps to an index."""
     return [match.end() for match in _SENTENCE_SPLIT.finditer(text)]
 
 
-def _read(match: re.Match[str]) -> _Reading | None:
+def read_quantity(match: re.Match[str]) -> Reading | None:
     """The quantity one match states, or nothing when it states none.
 
     The span ends where the reading does. A trailing word is inside the span
@@ -263,7 +263,7 @@ def _read(match: re.Match[str]) -> _Reading | None:
         value = value.rstrip("0").rstrip(".")
     if len(value) > VALUE_MAX_LENGTH:
         return None
-    return _Reading(value, unit or None, span_end)
+    return Reading(value, unit or None, span_end)
 
 
 def _read_date(match: re.Match[str]) -> str | None:
@@ -306,7 +306,7 @@ def read_value(kind: ElementKind, excerpt: str) -> str | None:
     """
     if kind is ElementKind.QUANTITY:
         match = NUMBER.match(excerpt)
-        reading = _read(match) if match is not None else None
+        reading = read_quantity(match) if match is not None else None
         return reading.value if reading is not None else None
     if kind is ElementKind.DATE:
         match = DATE.match(excerpt)
@@ -324,11 +324,11 @@ def quantity_elements(text: str, *, limit: int) -> Candidates:
     No dedupe, no floor on the magnitude, and no bare-year drop: this is the
     candidate set, and the drops belong to whoever chooses from it.
     """
-    starts = _sentence_starts(text)
+    starts = sentence_starts(text)
     kept: list[Element] = []
     found = 0
     for match in NUMBER.finditer(text):
-        reading = _read(match)
+        reading = read_quantity(match)
         if reading is None:
             continue
         found += 1
@@ -363,7 +363,7 @@ def date_elements(text: str, *, limit: int) -> Candidates:
     with nothing trimmed off either end, so a written date keeps the month word
     that makes it readable on the page.
     """
-    starts = _sentence_starts(text)
+    starts = sentence_starts(text)
     kept: list[Element] = []
     found = 0
     for match in DATE.finditer(text):
@@ -397,6 +397,13 @@ def settle(candidates: Iterable[Element]) -> list[Element]:
     `KIND_PRECEDENCE`: the pass with the closed vocabulary keeps the characters,
     so a date drops any quantity it shares a character with, whether the two
     spans are equal, nested either way round, or merely crossing.
+
+    **It is the rule between the two pattern passes and takes no other kind.**
+    `KIND_PRECEDENCE` names the two it ranks, so a model-pointed kind reaching
+    here raises rather than being ranked by accident - and it must not be ranked
+    at all, because a quote carrying a quantity inside it is the shape those
+    kinds need and this rule would drop one of the two. `visual_planner.anchored`
+    merges them after this has run.
 
     Quadratic in one article's candidates and bounded by the cap the caller
     passes, so it cannot grow with the archive (Rule #12).
