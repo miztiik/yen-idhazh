@@ -6,6 +6,7 @@ import { orderByTime } from '../src/lib/day-shape';
 import type { DigestItem } from '../src/lib/payload/types';
 import { shellSeedItems } from '../src/lib/server/config';
 import { dayShell } from '../src/lib/server/payload';
+import { dayReady } from './support/day-ready';
 
 /**
  * Row #26's oracle: a dated day page holds the stories it used to inline, and a
@@ -254,10 +255,7 @@ for (const route of ROUTES) {
 			page.on('pageerror', (error) => errors.push(String(error)));
 
 			await page.goto(`/${route.date}/`);
-			await expect(
-				page.locator('[data-payload-state]'),
-				'the page never settled on a state'
-			).toHaveAttribute('data-payload-state', 'ready');
+			await dayReady(page, 'the page never settled on a state');
 
 			const held = await reachable(page);
 
@@ -281,10 +279,7 @@ for (const route of ROUTES) {
 
 		test('every lead the page draws is an anchor it can reach', async ({ page }) => {
 			await page.goto(`/${route.date}/`);
-			await expect(page.locator('[data-payload-state]')).toHaveAttribute(
-				'data-payload-state',
-				'ready'
-			);
+			await dayReady(page);
 			const drawn = await page
 				.locator('[data-lead]')
 				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-lead') ?? ''));
@@ -320,10 +315,7 @@ test('a deep link into a day scrolls to its story and focuses it', async ({ page
 	page.on('pageerror', (error) => errors.push(String(error)));
 
 	await page.goto(`/${route.date}/#${target}`);
-	await expect(
-		page.locator('[data-payload-state]'),
-		'the page never settled on a state'
-	).toHaveAttribute('data-payload-state', 'ready');
+	await dayReady(page, 'the page never settled on a state');
 
 	const story = page.locator(`article.item[id="${target}"]`);
 	await expect(story, 'the story the link named is not on the page').toHaveCount(1);
