@@ -554,7 +554,7 @@ Remove-Item Env:IDHAZH_TEST_BUILD
 Take that arm before `build:canary`, which overwrites the same `build/`
 directory. **Two of its arms are expected to fail and are annotated
 `test.fail`**, because the composed page has two defects nobody has decided
-how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-the-composed-page-gets-wrong-2026-09-02)).
+how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-the-composed-page-got-wrong-and-what-shipped-2026-09-02)).
 An expected failure turns the suite red the day it starts passing, which is
 when the annotation comes off.
 
