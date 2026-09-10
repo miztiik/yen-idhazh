@@ -17,7 +17,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 | Why this plan exists | A story's subject is the feed's word for it today. `config/sources.json` declares a vertical and a kind per feed, and every article that feed carries inherits both, whatever it says. Measured over the 8,478 committed items, 84.4 percent are published as `reporting` because their feed said so, and 73.0 percent carry no lens at all. A model that has already read the whole article for the summary can answer these questions from the text, at the cost of a few hundred output tokens it is already paying to produce |
 | Hard scope - in | The label vocabularies as config; the desk; the article kind; political viewpoint; sentiment; the quote gate; per-label confidence; the classification ledger and its day roll-up; the console tab; the vertical proposal channel; the encoder alarm; the reference dataset; deleting the pipeline fingerprint |
 | Hard scope - out | **The five month-sharded ledgers.** Migrating `item-health`, `feed-health`, `scores`, `seen` and `score-index` from `<YYYY>-<MM>.csv` to a day shard is a future **plan 24**: 13-plus modules, three published mirrors and the shared window control, and not one line of it is about what an article is about. **Placement, the ranker, the time rail and the `assemble` consolidation** are a future **plan 25**. Neither is deferred by this plan's rows; both are simply somebody else's work |
-| ESCALATE triggers | 1. Any row's new output tokens would cost more than **10 percent of the escalate headroom** (section 0.3). 2. A schema conditional is proposed as a control - llama.cpp skips `if`/`then`/`else` silently, so it is not one. 3. A label the model chose becomes a path segment, a filename, a URL or a search-index term before a person committed it. 4. A removal row proposes to leave a test, a config key, a schema field or a doc paragraph behind |
+| ESCALATE triggers | 1. **The running worst-shard total in section 0.3 passes 150 minutes at the slow tail** - 30 minutes short of the 180-minute trigger, and the point at which one more row cannot be absorbed. It fires on the **total**, never on one row's share, because four additions each under ten percent of the headroom sum to more than the headroom. The projection today is 120.9 to 147.5, so the next row that adds output tokens after this plan's 185 fires it. 2. A schema conditional is proposed as a control - llama.cpp skips `if`/`then`/`else` silently, so it is not one. 3. A label the model chose becomes a path segment, a filename, a URL or a search-index term before a person committed it. 4. A removal row proposes to leave a test, a config key, a schema field or a doc paragraph behind |
 | Chosen strategy | Vocabulary and identity first, then one call structure, then one label at a time behind its own row, then the ledger, then the surfaces that read it. Every label lands recorded-only before anything renders it |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2.` |
 
@@ -50,7 +50,11 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 **What replaces it is a recorded input manifest that gates nothing** - the model id, the binary build, the decode parameters and a digest per config file, written into the run record so anybody can ask later what produced a number. One alarm survives: **if the prose changed while the model and the binary did not, say so.** It reports; it never blocks, and it never withholds a number.
 
-Deleting it removes work this plan would otherwise have carried: the blocking `response_format` measurement, every two-digest scheme, `output_vocabulary_sha256`, all enum-elision work, and the two blockers those raised. Row #1 owns the deletion. It is large - `pipeline_fingerprint` is named in **93 files, 66 of them outside `backend/tests/`, and 9 of them in `docs/`** (measured 2026-09-10) - and "no prisoners" applies to every one.
+Deleting it removes work this plan would otherwise have carried: the blocking `response_format` measurement, every two-digest scheme, `output_vocabulary_sha256`, all enum-elision work, and the two blockers those raised.
+
+**The behaviour goes here; the field goes in a later plan, and the split is the point.** `pipeline_fingerprint` is named in **144 files, 129 of them outside `backend/tests/`, and 9 of them in `docs/`** - measured 2026-09-10 in this worktree with `git grep -l`, superseding the 93 and the 66 an earlier draft of this plan carried. Of those 144: 21 are frozen published day records, 21 are committed day-metrics files, 19 are committed fixtures, 15 are backend tests, four are published or state CSV mirrors, and 12 are generated schemas. **Row #1a stops the gating and stops the reading**, which is the whole of what the owner decided. **Row #1b drops the field from the contracts**, and this plan names it as deferred rather than scheduling it.
+
+**Why those cannot be one commit.** `backend/idhazh/contracts/base.py:148` sets `extra="forbid"` on every model in this repository (verified 2026-09-10), so a payload carrying a key the model no longer declares is **rejected at read time, not ignored**. Those bytes are already on 21 frozen published days and 21 committed day-metrics files; `retention.dry_run` is `true` in `config/idhazh.json`, so nothing prunes them; and a published day is never rewritten. Dropping the field therefore means writing and **keeping** a read-side migration that strips a key from every payload older than the commit - a permanent shape carried for ever, bought in exchange for removing a field nothing reads. That trade is worth taking deliberately, on its own evidence, in its own row. It is not what stopping the gate is for.
 
 ### 0.3 The numbers this plan is priced against
 
@@ -64,12 +68,12 @@ Re-derived 2026-09-10 from the committed ledgers and the committed archive in th
 | Escalate trigger | **180 minutes** | plan 11 section 0 | - |
 | Worst shard since the ceiling halved | **66.9 minutes** | `state/runtime-counters.csv`, 96 rows dated 2026-09-06 or later, 5 days | 96 |
 | Shard wall clock, same window | median **48.2 min**, p05 30.2, p95 62.9 | same | 96 |
-| **Escalate headroom** | **113 minutes** (180 - 66.9) | derived | - |
+| **Escalate headroom, before this plan or plan 11 spends any of it** | **113 minutes** (180 - 66.9) | derived | - |
 | Decode rate | median **5.45 tok/s**, min 3.27, max 7.53 | `state/runtime-counters.csv`, whole ledger, 15 days | 265 |
 | Decode rate since the ceiling halved | median **5.49 tok/s**, min 3.49, max 7.07 | same, 2026-09-06 or later | 96 |
 | Prefill rate | median **9.84 tok/s**, min 8.52, max 43.0 | same | 265 |
-| Summarize call | median **117,804 ms**, p95 308,418 | `state/item-health/*.csv` | 8,751 |
-| Output tokens an item | median **249**, p95 356 | same | 7,937 |
+| Summarize call | median **114.6 s**, p95 **312.7 s**, longest **800.9 s** | [`../docs/reference/measurements.md`](../docs/reference/measurements.md), from `state/item-health/2026-09.csv` | 4,117 |
+| Output tokens an item | median **249**, p95 356 | `state/item-health/*.csv` | 7,937 |
 | Input tokens an item | median **1,669**, p95 3,371 | same | 7,937 |
 | Source words an item | median **519**, p95 1,894 | same | 8,751 |
 | Published a day | median **360**, range 282-387, over the five finished days 2026-09-05 to 2026-09-09 | `frontend/public/digest/**/digest.json` | 5 days |
@@ -78,9 +82,25 @@ Re-derived 2026-09-10 from the committed ledgers and the committed archive in th
 | Items carrying at least one lens | **2,291 of 8,478 - 27.0 percent** | committed archive | - |
 | Feed-declared kind, as published | `reporting` 7,158 (**84.4 percent**), `analysis` 415, `announcement` 381, `research` 283, `community` 139, `government` 102 | committed archive | 8,478 |
 
-**The token budget every labelling row is priced against.** Ten percent of the 113-minute escalate headroom is 11.3 minutes a shard. A shard carries 20 items, so that is **33.9 seconds an item**, and at the measured 5.45 tok/s that is **about 185 new output tokens an item, for all of this plan's labels together**. Every row that adds output tokens states its share against that 185 and ESCALATES if the running total passes it - not just the first row to notice.
+**The token budget every labelling row is priced against.** A "shard" here is one worker's slice of a run - 80 items over `run.max_parallel` 4, so 20 items - and `run.shard_timeout_minutes` 200 is the timeout on that worker's job. Ten percent of the 113-minute escalate headroom is 11.3 minutes a shard, which over 20 items is **33.9 seconds an item**, and at the measured 5.45 tok/s that is **about 185 new output tokens an item, for all of this plan's labels together**. Every row that adds output tokens states its share against that figure.
 
-Two cautions on those numbers. The escalate headroom is measured against the **9B** in the `work` job; the model that runs `visual_planner.py` today is **Qwen3-4B in the `visuals` job**, and the `visuals` job writes no runtime counters, so **the 4B's decode rate on the runner has never been measured**. Row #P4 measures it before any labelling row is priced. And the shard figures are the trailing five days; the trigger in section 0 is re-read against the trailing **seven** days at the time a row lands, not against this table.
+**But 113 minutes is not the headroom this plan actually has, and no row may be priced as though it were.** The 113 is the gap between today's worst shard and the trigger, before plan 11 spends any of it - and plan 11's rows 4, 5 and 6 land first by section 0.4. Charged in order, in minutes of worst-shard wall clock:
+
+| Line | At the median 5.45 tok/s | At the slow tail 3.27 tok/s |
+| --- | --- | --- |
+| Worst shard on record, 2026-09-06 or later | 66.9 | 66.9 |
+| Plan 11 row 6: the visual plan moves from the 4B to the 9B | **+9.7** | **+20.8** |
+| Plan 11 rows 4-6: the element table, about 140 output tokens an item | +8.6 | +14.3 |
+| This plan: 185 label output tokens an item | +11.3 | +18.9 |
+| **Subtotal, if the prefix cache holds across every call** | **96.5** | **120.9** |
+| Re-prefill at the new call boundary, if it does not (row #7) | +16.4 | +26.6 |
+| **Worst shard total** | **96.5 to 112.9** | **120.9 to 147.5** |
+
+**So the margin against the 180-minute trigger is 33 minutes at the slow tail, not 113** - and this plan's own 185 tokens are 11.3 of those 33, about a third. **The ESCALATE trigger in section 0 fires on this total, not on a single row's output tokens**, because four separate additions each under ten percent of 113 sum to more than the whole of what is left.
+
+**What is measured here and what is not.** 66.9, 5.45 and 3.27 are read from `state/runtime-counters.csv`. 140 and 185 output tokens are budgets this plan and plan 11 chose. The two plan-11 row-6 figures are **estimates and are the softest numbers in the table**: they scale the measured 21.0 s the visual-planner stage costs an item on the 4B by the ratio of the two `llama-bench` decode rates (13.00 and 5.45, or 13.00 and 3.27), which assumes the whole 21.0 s is decode. It is not - some of it is prefill and process overhead - so both are upper bounds. The re-prefill line is derived in row #7. **Row #P4 replaces the two estimates with a measurement, and this table is re-derived when it does.**
+
+Two cautions on the rest of it. The escalate headroom is measured against the **9B** in the `work` job, while the model that runs `visual_planner.py` today is **Qwen3-4B in the `visuals` job**. **The 4B's runner decode rate is on record and this plan may cite it: 13.00 +/- 0.03 tok/s, `llama-bench`, `ubuntu-latest`, 2026-08-22**, with the visual-planner stage at **mean 21.0 s an item, min 8.1, max 56.0, over 148 gaps**, and one whole run deciding 149 items in 51.7 minutes - all in [`../docs/reference/measurements.md`](../docs/reference/measurements.md). An earlier draft of this plan said that rate had never been measured. It had. **What has never been measured is the `visuals` job writing a `RuntimeCountersRow`**: all 265 committed rows come from `work`, so the 4B has no `cached_tokens`, no `peak_rss_bytes` and no prefill rate taken in the live digest path - and `measurements.md` says of its own `llama-bench` table that those figures "are not the prompt-cache cost in the live digest path". Row #P4 is scoped to that and to nothing else. And the shard figures are the trailing five days; the trigger in section 0 is re-read against the trailing **seven** days at the time a row lands, not against this table.
 
 ### 0.4 The external dependency this plan cannot start without
 
@@ -95,28 +115,37 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 | P1 | The property section 0a names, restated | - | A | PENDING | - | - | - |
 | P2 | The reference dataset, built so a number cannot flatter us | - | A | PENDING | - | - | - |
 | P4 | What one more call costs on the runner | - | A | PENDING | - | - | - |
-| 1 | The fingerprint goes, and a recorded input manifest takes its place | - | B | PENDING | - | - | - |
-| 2 | Every label vocabulary becomes config | P1 | B | PENDING | - | - | - |
-| P3 | A person labels the dev split and the test split | P2 | C | PENDING | - | - | human |
-| 3 | Lens and event ids become slugs, and a retired id keeps its tombstone | 2 | C | PENDING | - | - | - |
+| 1a | The fingerprint stops gating and stops being read | - | B | PENDING | - | - | - |
 | 5 | The item id becomes sixteen characters of base32 | - | C | PENDING | - | - | - |
-| 4 | An event gets a lifecycle | 3 | D | PENDING | - | - | - |
-| 6 | The desk is a new field, and the feed's word stays where it is | 3 | D | PENDING | - | - | - |
-| 7 | As many calls as the DAG needs, adjacent per item | P4, 6, plan 11 row 6 | E | PENDING | - | - | - |
-| 13 | The encoder alarm | 3 | E | PENDING | - | - | - |
-| 8 | Call A labels: desk, lenses, article kind | 7, 2 | F | PENDING | - | - | - |
-| 12 | The quote: seven conditions, three checks, ten codes | 7 | F | PENDING | - | - | - |
-| 9 | Confidence is a masked log-probability at one token | 8 | G | PENDING | - | - | - |
-| 10 | Political viewpoint, behind a gate written in code | 8 | G | PENDING | - | - | - |
-| 11 | Sentiment about one named subject | 8 | G | PENDING | - | - | - |
-| 14 | The classification ledger, and the day file the console reads | 8 | H | PENDING | - | - | - |
-| 15 | The console tab | 14 | I | PENDING | - | - | - |
-| 16 | A vertical is proposed into a channel and promoted by a person | 14, 6 | I | PENDING | - | - | - |
-| 17 | The weights loop proposes a pull request and commits nothing | 14 | J | PENDING | - | - | - |
-| 18 | The closing measurement: is a read desk better than a declared one | P3, 14, 6 | J | PENDING | - | - | - |
-| 19 | The keyword lenses retire, or they do not | 14, 13, 8 | K | PENDING | - | - | - |
+| 2 | Every label vocabulary becomes config | P1 | D | PENDING | - | - | - |
+| P3 | A person labels the dev split and the test split | P2 | D | PENDING | - | - | human |
+| 3 | Lens and event ids become slugs, and a retired id keeps its tombstone | 2 | E | PENDING | - | - | - |
+| 4 | An event gets a lifecycle | 3 | F | PENDING | - | - | - |
+| 13 | The encoder alarm | 3 | F | PENDING | - | - | - |
+| 6 | The desk is a new field, and the feed's word stays where it is | 3 | G | PENDING | - | - | - |
+| 7 | As many calls as the DAG needs, adjacent per item | P4, 6, plan 11 row 6 | H | PENDING | - | - | - |
+| 8 | Call A labels: desk, lenses, article kind | 7, 2 | I | PENDING | - | - | - |
+| 14 | The classification ledger, and the day file the console reads | 8 | J | PENDING | - | - | - |
+| 9 | Confidence is a masked log-probability at one token | 8, 14 | K | PENDING | - | - | - |
+| 15 | The console tab | 14 | K | PENDING | - | - | - |
+| 10 | Political viewpoint, behind a gate written in code | 8, 14 | L | PENDING | - | - | - |
+| 17 | The weights loop proposes a pull request and commits nothing | 14 | L | PENDING | - | - | - |
+| 11 | Sentiment about one named subject | 8, 14, P3 | M | PENDING | - | - | - |
+| 12 | The quote: seven conditions, three checks, ten codes | 7, 8 | N | PENDING | - | - | - |
+| 18 | The closing measurement: is a read desk better than a declared one | P3, 14, 6 | N | PENDING | - | - | - |
+| 16 | A vertical is proposed into a channel and promoted by a person | 14, 6 | O | PENDING | - | - | - |
+| 19 | The keyword lenses retire, or they do not | 14, 13, 8 | P | PENDING | - | - | - |
+| 1b | The fingerprint field is dropped from the contracts | 1a | - | **DEFERRED - not scheduled by this plan** | - | - | - |
 
-**Group H holds one row on purpose.** The classification ledger is what four later rows read, and a second row landing beside it would be reading a shape that is still moving.
+**What a parallel group means, stated so a worker can check it.** **Within one group, no two rows may write the same file.** A glob counts as every file it covers, so `backend/tests/**` and `schemas/**` collide with any named file underneath them - and a row that edits any model under `backend/idhazh/contracts/` counts as writing every schema its edit regenerates, because the drift gate fails on a byte. Where two rows in a group collide, **narrow the glob to named files first, and only then move the row to its own group.** Every group above satisfies this as the file lists stand. **A row that widens its file list during execution re-checks its own group before it opens a pull request**, and section 0.1 expects that widening to happen.
+
+**Ten of the sixteen groups hold one row, and three files are why.** `backend/idhazh/visual_planner.py` is written by rows 7, 8, 9, 10, 11, 12 and 16 - seven rows, and no narrowing helps because they all edit the same module. `docs/concepts/classification.md` is written by rows 8, 9, 10, 11, 13 and 18. `schemas/**` regenerates under row 5, because `ITEM_ID_PATTERN` lives in `backend/idhazh/contracts/base.py` and `ItemId` is used across the contracts, so row 5 rewrites most of the directory and nothing may regenerate a schema beside it. **So "parallel N = 2" is what the orchestrator may dispatch, not what this plan sustains**: it holds through groups A, D, F, K, L and N and nowhere else. **The structural fix is worth naming and is not taken here**: if the labelling rows each added a module under a new `backend/idhazh/classify/` package instead of extending `visual_planner.py`, four of the ten singletons - rows 7, 8, 11 and 16 - would become pairable. That is a design change to plan 11's call structure, and it belongs to whoever revises row #7, not to a reviewer's note.
+
+**Group J holds one row on purpose.** The classification ledger is what the eight rows after it read - 9, 10, 11, 15, 16, 17, 18 and 19 - and a second row landing beside it would be reading a shape that is still moving.
+
+**Rows 9, 10 and 11 depend on row 14, and that edge is new.** Each of them records a value onto a classification row, and row 14 is what defines that row's shape. Scheduling them before it meant three rows writing into a contract that did not exist.
+
+**This table is the schedule; the numbered sections below are the drafting order and are not.** Section 9 holds row #5 and section 19 holds row #14, but row #5 runs in group C and row #14 in group J. A worker takes its position from the Depends-on and Parallel-group columns above and never from a section number.
 
 ---
 
@@ -175,7 +204,7 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 
 ## 4. Row #P4 - What one more call costs on the runner
 
-- **Scope:** One dispatched run that records the `visuals` job's own decode and prefill rates, so the labelling rows are priced against a measured number instead of the 9B's. The `visuals` job writes no `RuntimeCountersRow` today; every one of the 265 committed rows comes from `work`.
+- **Scope:** One dispatched run that makes the `visuals` job write a `RuntimeCountersRow`. **The 4B's decode rate is not what is missing** - `docs/reference/measurements.md` records `Qwen3-4B-Q4_K_M` at **13.00 +/- 0.03 tok/s** on `ubuntu-latest`, 2026-08-22, and the visual-planner stage at **mean 21.0 s an item over 148 gaps**. What is missing is that job's own **live-path** figures: `cached_tokens`, `peak_rss_bytes`, `prompt_seconds_total` and `n_ctx_configured`, none of which a `llama-bench` run produces and all of which the labelling rows are priced against. All 265 committed counters rows come from `work`.
 - **Files touched:** `.github/workflows/digest.yml`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/runtime_counters.py`, `schemas/runtime-counters-row.schema.json`, `backend/tests/test_workflows.py`, `docs/reference/measurements.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; `shellcheck`; one dispatch of `digest.yml`.
 - **Oracle:** After one dispatch, `state/runtime-counters.csv` carries at least one row attributable to the `visuals` job, and its decode rate is a number, not an absence. A row that cannot say which job it came from proves nothing, so the job name is on the row.
@@ -184,18 +213,29 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | This row is a prerequisite, not a nicety. Every token budget in this plan divides by a decode rate, and the only decode rate on record belongs to a different model in a different job | `CLAUDE.md` Rule #10 |
+| 1 | This row is a prerequisite, not a nicety. **Two lines of section 0.3's running-total table are estimates derived by scaling a `llama-bench` ratio, and this row replaces them with a measurement.** `measurements.md` says of its own bench table that those figures "are not the prompt-cache cost in the live digest path", which is exactly the cost every labelling row spends | `CLAUDE.md` Rule #10 |
+| 1a | **An earlier draft of this row said the 4B's runner decode rate had never been measured. It had**, on 2026-08-22. The correction matters because the wrong claim made this row look like a blocker on arithmetic the plan could already do, and hid the measurement that is genuinely absent | Carmack, 2026-09-10 |
 | 2 | The new column is additive and defaulted, so a counters row written before this lands still validates. `version` stamped and `changelog` appended in the same commit | `CLAUDE.md` section 11 |
 | 3 | If plan 11 row 6 lands first and the `visuals` job is gone, this row still runs - it then measures the labelling call inside `work`, which is the number that actually binds | Fowler |
 
 ---
 
-## 5. Row #1 - The fingerprint goes, and a recorded input manifest takes its place
+## 5. Row #1a - The fingerprint stops gating and stops being read
 
-- **Scope:** Remove `pipeline_fingerprint` as a gate and as the eval-window key. Add a recorded input manifest to the run record. Keep exactly one alarm: prose changed, model and binary did not.
-- **Files touched:** `backend/idhazh/fingerprint.py`, `backend/idhazh/contracts/fingerprint.py`, `backend/idhazh/contracts/run_manifest.py`, `backend/idhazh/contracts/{eval_row,label_row,observation_index,public_eval,score_archive,summary,day_metrics,evidence,qualification,app_config}.py`, `backend/idhazh/evals/**`, `backend/idhazh/{assemble,cli,corpus,drift,fetch,summarize,publish_day_metrics}.py`, `schemas/**`, `state/fingerprints.csv`, `frontend/src/**`, `backend/tests/**`, `docs/**` (9 pages name it)
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the browser smoke on any console route that displayed it; **`git grep -c pipeline_fingerprint` returns zero outside the changelog entries that record its removal**.
+- **Scope:** `pipeline_fingerprint` stops being a gate and stops being the eval-window key. Every writer stops setting it and every reader stops reading it. **The field itself stays on the contracts**, relaxed to `Sha256 | None = None` where it is required today. A recorded input manifest takes over the job it was meant to do. Exactly one alarm survives: prose changed, model and binary did not.
+- **Files touched:** `backend/idhazh/fingerprint.py`, `backend/idhazh/contracts/{fingerprint,run_manifest,day_metrics,eval_row,label_row,observation_index,public_eval,score_archive,summary,evidence,qualification,app_config}.py`, `backend/idhazh/evals/{archive,evidence,labels,score,writer}.py`, `backend/idhazh/{assemble,cli,corpus,drift,fetch,summarize,publish_day_metrics}.py`, `schemas/{fingerprint-row,run-manifest,day-metrics,eval-row,label-row,observation-index-row,public-eval,score-archive,summary,evidence-item,qualification-report,qualification-shard,app-config}.schema.json`, `state/fingerprints.csv`, **`frontend/src/lib/console/eval-instruments.ts`, `frontend/src/lib/server/model-work.ts`, `frontend/src/routes/console/+page.server.ts`, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/tests/console-model-instruments.spec.ts`, `frontend/tests/console-model-rule.spec.ts`, `frontend/tests/support/reduction-input.ts`**, `backend/utilities/{build_canary_day,label_queue,measure_ledgers}.py`, `backend/tests/**`, `CLAUDE.md`, and the nine docs pages that name it - `docs/architecture/contracts/{determinism,schemas}.md`, `docs/architecture/publishing/{console-charts,retention}.md`, `docs/architecture/summarize/prompt.md`, `docs/archive/measurements-2026-08.md`, `docs/concepts/{config,evaluation}.md`, `docs/reference/github-actions.md`.
+- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the browser suite; the browser smoke on both console routes that displayed it; **no module under `backend/idhazh/` and no module under `frontend/src/` reads the field, asserted by a test over the source tree** - which is a fixed-size read of code a person wrote, not of data a run appended.
 - **Oracle:** A quality number is produced on a run whose prompt text changed that morning. Today that number is withheld until three consecutive run-days at one fingerprint; after this row it is produced, and the manifest says what produced it. The point of the row is that the number **exists**, so the oracle asserts a value where there used to be an absence.
+
+### What the operator loses, named rather than implied
+
+`frontend/src/lib/server/model-work.ts` draws the **model-change boundary panel**: it compares the same two rates either side of a swap, and it splits the ledger on a `pipeline_fingerprint` transition. `docs/architecture/publishing/console-charts.md` states the rule in one line - "the boundary is a `pipeline_fingerprint` transition, never a `model_id` one" - and that doc is rewritten in this commit.
+
+**`model_id` cannot stand in for it, and the module says why in its own docstring: measured 2026-08-27 over 2,232 rows, the stamp moved four times while every row named one model.** So a `model_id` split would have found none of those four boundaries. Once writers stop setting the fingerprint, the field stops moving and the panel finds no transitions at all.
+
+**This row therefore does one of two things and may not do neither.** Either it repoints the boundary at the recorded input manifest's `run_id` - which changes on the same four occasions and on more besides - or **it deletes the panel, its module, its two specs and its doc section in this commit**, per section 0.1. A panel left drawing a field nobody writes is the worst of the three outcomes: it reports "no model change" for ever and an operator believes it.
+
+`frontend/tests/console-model-instruments.spec.ts` is the second breaking spec and it breaks for a different reason: it asserts that `DRAWN_BY` and `NOT_A_MEASUREMENT` between them name **every** column of the published scores CSV exactly once. `pipeline_fingerprint` is a column of `frontend/public/scores/2026-09.csv` and stays one, so the entry stays; what changes is which of the two maps it sits in.
 
 ### Decisions
 
@@ -204,16 +244,28 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 | 1 | **Deleted as a gate and as the eval-window key.** The skip-if-unchanged half was never wired to anything; the window half makes measurement unreachable in a system whose prompts and vocabularies change weekly. It turns evolution into a fault | Owner, 2026-09-10, `CLAUDE.md` section 0 |
 | 2 | The replacement **records and gates nothing**: model id, binary build, decode parameters, and a digest per config file, on the run record, keyed by `run_id` | Owner, 2026-09-10 |
 | 3 | **One alarm survives.** Prose changed while the model and the binary did not - say so. It reports; it never blocks and never withholds a number | Owner, 2026-09-10 |
-| 4 | **No prisoners.** `pipeline_fingerprint` is named in 93 files (66 outside tests, 9 in `docs/`), measured 2026-09-10. All of them, one commit. `state/fingerprints.csv` and its contract go with it | Section 0.1 |
-| 5 | Every schema that loses the field is a **breaking** change: `version` stamped, `changelog` appended, and the read-side migration written so a payload from yesterday's run still reads | `CLAUDE.md` section 11 |
-| 6 | This deletion is what removes the blocking `response_format` measurement, every two-digest scheme, `output_vocabulary_sha256` and all enum-elision work from this plan. None of them is deferred; they had no purpose once the gate went | Owner, 2026-09-10 |
+| 4 | **The field stays; its readers go.** `pipeline_fingerprint` is named in **144 files, 129 of them outside `backend/tests/`, and 9 of them in `docs/`** (measured 2026-09-10 with `git grep -l`, superseding the 93 and 66 an earlier draft carried). Of those, 21 are frozen published days, 21 are committed day-metrics files and 19 are fixtures - **none of which this row touches, because none of them is a reader.** "No prisoners" applies to every reader and every gate, which is what section 0.1 is about | Section 0.1; decision 5 |
+| 5 | **Dropping the field is row #1b and is not scheduled by this plan.** `backend/idhazh/contracts/base.py:148` sets `extra="forbid"`, so removing the key rejects every older payload at read time unless a read-side migration strips it - and that migration is then kept for ever. `retention.dry_run` is `true`, so nothing prunes the 42 committed payloads carrying it, and a published day is never rewritten. Splitting the two lets the behaviour land this week and the shape argue its own case later | Fowler, 2026-09-10; `CLAUDE.md` section 11 |
+| 6 | Where the field is **required** today it becomes `Sha256 \| None = None` - `DayMetricsRecord.pipeline_fingerprint` is the one verified case (`backend/idhazh/contracts/day_metrics.py:378`). That is a **relaxing** change: every payload already on disk still validates, and no read-side migration is needed. `version` stamped and `changelog` appended | `CLAUDE.md` section 11 |
+| 7 | This deletion is what removes the blocking `response_format` measurement, every two-digest scheme, `output_vocabulary_sha256` and all enum-elision work from this plan. None of them is deferred; they had no purpose once the gate went | Owner, 2026-09-10 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Keep the fingerprint and widen the window from three run-days to seven | Widening a window that never opens makes it open less often. The defect is not the width | Owner |
-| 2 | Keep the field, stop reading it | An unread field on 66 non-test files is a shape every future contract change has to carry, and a reader who finds it will believe it means something | Section 0.1 |
+| 2 | Drop the field in the same commit that stops the gate | **This was the earlier draft's plan and it is reversed here.** `extra="forbid"` turns the drop into a permanent read-side migration bought to remove a field nothing reads, and it puts 42 frozen committed payloads and 19 fixtures inside a row whose actual subject is a gate. Deferred to row #1b, not refused | Fowler, 2026-09-10 |
+| 3 | Keep the field **and** keep its readers, changing only the eval window | Then the model-change panel goes on splitting on a stamp nobody advances, which is a wrong answer rather than a missing one | Decision 4 |
+
+---
+
+## 5a. Row #1b - The fingerprint field is dropped from the contracts
+
+**DEFERRED. This plan names it so it is not mistaken for work being done, and does not schedule it.**
+
+- **Scope:** `pipeline_fingerprint` is removed from every contract model, every generated schema, every fixture and every committed payload shape, with the read-side migration that lets an older payload still read.
+- **Depends on:** row #1a. Nothing may drop a field that something still reads.
+- **What it must price before it is scheduled:** the cost of carrying a read-side migration for ever against the cost of carrying an unread field for ever. The second is 42 committed payloads and 19 fixtures today and grows by two files a day; the first is one function that never gets deleted. Neither has been measured, and this plan does not measure it.
 
 ---
 
@@ -279,8 +331,9 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 
 ## 9. Row #5 - The item id becomes sixteen characters of base32
 
-- **Scope:** `item_id` becomes `<vertical>-<16 chars of Crockford base32 over bytes.fromhex(url_key)[:10]>`, for example `ai-3k7wq2m9x4hbn5tz`. Forward-only. `ITEM_ID_PATTERN` widens to accept both shapes and never contracts.
-- **Files touched:** `backend/idhazh/rank.py`, `backend/idhazh/contracts/base.py`, `backend/tests/test_contracts.py`, `backend/tests/test_discover.py`, `backend/tests/test_rank.py`, `docs/architecture/publishing/layout.md`, `docs/architecture/publishing/visuals.md`, `docs/architecture/sources/freshness.md`
+- **Scope:** `item_id` becomes `<vertical>-<16 chars of Crockford base32 over bytes.fromhex(url_key)[:10]>`, for example `ai-3k7wq2m9x4hbn5tz`. Forward-only. `ITEM_ID_PATTERN` widens to accept both shapes and never contracts: `^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$` today becomes `^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$`, where the second branch is the 32-symbol Crockford alphabet with `i`, `l`, `o` and `u` excluded.
+- **Files touched:** `backend/idhazh/rank.py`, `backend/idhazh/contracts/base.py`, **`schemas/**`**, `backend/tests/test_contracts.py`, `backend/tests/test_discover.py`, `backend/tests/test_rank.py`, `docs/architecture/publishing/layout.md`, `docs/architecture/publishing/visuals.md`, `docs/architecture/sources/freshness.md`
+- **Why `schemas/**` and not one file:** `ITEM_ID_PATTERN` is what `ItemId` is built from in `backend/idhazh/contracts/base.py:39-64`, and `ItemId` is used across the contracts, so widening the pattern regenerates every schema that carries an item id. That is also why this row holds parallel group C alone.
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the browser smoke on a day carrying both id shapes.
 - **Oracle:** **`assign_ids` is deleted and no test needs it.** The real prize is not the width. `assign_ids` resolves a collision by *stepping* the number, and the stepped id depends on which other addresses were in that run's pool - so a collided id is **not stable across the runs of one day**, which is the single property `item_id` exists to guarantee. The oracle drives two different candidate pools containing the same article and asserts the same id both times, which today is false for a collided item and cannot be made true while a collision loop exists.
 
@@ -324,7 +377,7 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 
 - **Scope:** `desk` is a **new field beside `Article.vertical`**, written from the model's whole-article label. The digest groups by `desk`. `Article.vertical` keeps carrying the feed's declared word and is not repointed.
 - **Files touched:** `backend/idhazh/contracts/article.py`, `backend/idhazh/contracts/{digest_day,digest_view}.py`, `schemas/**`, `backend/idhazh/{assemble,rank,cli}.py`, `frontend/src/**`, `backend/tests/**`, `docs/concepts/taxonomy.md`, `docs/architecture/publishing/layout.md`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the browser smoke on a day where a desk differs from its vertical.
+- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the browser smoke on a day where a desk differs from its vertical; **no occurrence of the word `desk` is left in `backend/idhazh/contracts/digest_day.py` still meaning the vertical** (decision 7).
 - **Oracle:** An item whose desk differs from its vertical validates, publishes, and renders under the desk - with its `item_id` still addressed `<vertical>-`. That combination is exactly what a repointed `vertical` makes impossible, so the oracle proves the choice rather than the code.
 
 ### Decisions
@@ -335,8 +388,10 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 | 2 | **Classification is re-decided between runs, not frozen on first publish.** The world changes between runs even though it does not change during one | Owner, 2026-09-10 |
 | 3 | **A re-decide path needs an explicit carve-out and will not fall out of existing behaviour.** `plannable_items` skips a published item **unconditionally** - `if item.item_id in published: continue`, verified at `backend/idhazh/cli.py:1398`. The carve-out is written in this row, with the ceiling it re-decides under | Verified 2026-09-10 |
 | 4 | Costs, taken with eyes open: `energy-0483729104` can render under the AI desk, and a link shared in the morning can show the story on a different desk by evening | Owner, 2026-09-10 |
-| 5 | `DigestVerticalRef.count` becomes a **desk** count while `considered`, `too_old` and `below_feed_floor` stay **vertical** facts, because collection is still per feed. Both `digest-day` and `digest-view` are stamped, and the changelog entry says which of the four regrouped | Fowler, 2026-09-10 |
-| 6 | **The feed floor question is decided here, not left open.** `rank.plan_vertical` plans nothing when `eligible_feeds < min_feeds`, and `below_feed_floor` means "collected but not rendered" (verified at `backend/idhazh/rank.py:373-377`; `ai` has `min_feeds` 35, the other four 21). Grouping by desk lets an above-floor vertical's items land in a below-floor desk that renders while flagged as not rendering. **Ruled: an item whose desk is below its own floor falls back to its feed vertical.** The floor is a statement about supply, and supply is still collected per feed | Owner, 2026-09-10 |
+| 5 | **`DigestVerticalRef.count` keeps meaning the vertical count, and `desk_count` is added beside it** as `int \| None = None`. The frontend prefers `desk_count` where it is present and falls back to `count`. Redefining `count` in place was the earlier draft's plan and is refused: 21 frozen published days already carry it, a published day is never rewritten, and nothing in the payload would say which of the two meanings a given day's number holds. Contracting `count` is a later commit, once no day in the retention window still needs it | Fowler, 2026-09-10; `CLAUDE.md` section 11 |
+| 6 | `considered`, `too_old` and `below_feed_floor` stay **vertical** facts, because collection is still per feed. Both `digest-day` and `digest-view` are stamped, and the changelog entry says which field is which | Fowler, 2026-09-10 |
+| 7 | **`desk` already means the vertical in `backend/idhazh/contracts/digest_day.py`, sixteen times, and this row rewrites every one of them in the same commit.** `DigestVerticalRef`'s own docstring opens "One desk of the day"; the module docstring at line 37 says "`considered`, `too_old` and `below_feed_floor` on a desk are what the planning step already knew and threw away"; four field descriptions and two validator messages use it the same way. Introducing a `desk` field while that prose stands leaves one word meaning two things in one file, and the second reader is the one who gets it wrong | Fowler, 2026-09-10; section 0.1 |
+| 8 | **The feed floor question is decided here, not left open.** `rank.plan_vertical` plans nothing when `eligible_feeds < min_feeds`, and `below_feed_floor` means "collected but not rendered" (verified at `backend/idhazh/rank.py:373-377`; `ai` has `min_feeds` 35, the other four 21). Grouping by desk lets an above-floor vertical's items land in a below-floor desk that renders while flagged as not rendering. **Ruled: an item whose desk is below its own floor falls back to its feed vertical.** The floor is a statement about supply, and supply is still collected per feed | Owner, 2026-09-10 |
 
 ### Rejected alternatives
 
@@ -344,16 +399,43 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 | --- | --- | --- | --- |
 | 1 | Repoint `Article.vertical` to the model's label | Rejected at read time by the contract's own identity validator, on every item whose desk moved | Decision 1 |
 | 2 | Freeze the desk on first publish | The world changes between runs. Freezing makes the label a fact about when we happened to see the story | Owner |
-| 3 | Move the feed floor onto the desk | The floor counts feeds, and a feed declares a vertical, not a desk. Moving it means counting feeds for a group no feed belongs to | Decision 6 |
+| 3 | Move the feed floor onto the desk | The floor counts feeds, and a feed declares a vertical, not a desk. Moving it means counting feeds for a group no feed belongs to | Decision 8 |
+| 4 | Redefine `DigestVerticalRef.count` to mean the desk count | 21 frozen published days already carry it under the old meaning, and a published day is never rewritten. The same number would mean two things with nothing in the payload to say which | Decision 5 |
 
 ---
 
 ## 12. Row #7 - As many calls as the DAG needs, adjacent per item
 
 - **Scope:** The call structure changes from two fixed calls to a DAG the code walks: elements, then every label and score, then the summary and the visual plan. The conditional political gate is **DAG code that inspects a reply and dispatches another call**, not a schema conditional.
-- **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/summarize.py`, `backend/idhazh/llm/server.py`, `backend/idhazh/prompts/**`, `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/**`, `backend/tests/**`, `docs/architecture/summarize/**`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; a recorded-response replay with no network; one dispatch reading `cached_tokens` on every call.
+- **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/summarize.py`, `backend/idhazh/llm/server.py`, `backend/idhazh/prompts/**`, `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `backend/tests/test_contracts.py`, `backend/tests/**`, `docs/architecture/summarize/**`
+- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; a recorded-response replay with no network; one dispatch reading `cached_tokens` **on every call, not once**, and `peak_rss_bytes` at the raised window.
 - **Oracle:** **Every call after the first reports `cached_tokens` at least equal to the first call's prompt token count.** One cache slot, one article, prefilled once. Plus: driving the same item twice, once with the gate firing and once without, produces the same first two calls byte for byte - which is what proves the gate is dispatch and not a different prompt.
+
+### The window, and why it moves in this commit
+
+**A third call does not get its own window. It extends the sequence in one slot**, and that sequence is already at 97 percent of the window today.
+
+| Case | Sequence | Against `n_ctx` 16,384 |
+| --- | --- | --- |
+| Worst article on the ledger, two calls (plan 11 row 5, on record in `docs/reference/measurements.md`) | **15,889** | 97 percent, margin 1.03x |
+| Same article, third call, instruction at its floor | 15,889 + 300 + 185 = **16,374** | 99.9 percent, margin **1.0006x** - ten tokens |
+| Same article, third call, instruction at a realistic length | 15,889 + 600 + 185 = **16,674** | **overflows by 290 tokens** |
+
+**300 is a floor, not an estimate.** The third call's instruction must carry the definition text of every vocabulary it labels against: 5 verticals, 6 active lenses, 5 article kinds, 8 political values and 3 sentiment values - **27 definition sentences** (counted from `config/taxonomy.json` and sections 14, 17 and 18, 2026-09-10). 300 tokens allows about 11 tokens a sentence. A definition text worth scoring against is longer than that, so the realistic row is the one to plan on.
+
+**So this row raises `models.summarize.inference.n_ctx` in the same commit that adds the third call**, and it extends `backend/tests/test_contracts.py::test_the_longest_article_the_cap_allows_still_fits_the_window` to sum **every call in the DAG** rather than one. That test exists and today it sums exactly one prompt and one `max_output_tokens` (`backend/tests/test_contracts.py:1105`, verified 2026-09-10). Left alone it goes on passing while the real sequence overflows, which is the failure mode its own docstring was written about.
+
+**The dispatch this row must run, and the result that changes the design.** Set `n_ctx` to 32,768, dispatch one run, and read `peak_rss_bytes` and the decode rate off the new `state/runtime-counters.csv` rows. **If peak RSS passes about 14.5 GB of the runner's 16 GB, or decode falls more than 10 percent, the third call is cut and the labels go into call 1 beside the elements** - which is rejected alternative 1, taken on evidence rather than on preference, at the cost the alternative names.
+
+**What the ledger already says about that risk**, measured 2026-09-10 over `state/runtime-counters.csv`: at `n_ctx` 8,192 peak RSS was median **12.94 GB** (min 11.16, max 14.10, n=12); at 16,384 it was median **12.54 GB** (min 11.44, max 13.30, n=28). **Doubling the window did not raise the footprint** - the weights dominate it. That is evidence the second doubling is affordable, not proof, because the max at 8,192 came within 1.9 GB of the runner's memory and nothing has been run at 32,768.
+
+### What the extra boundary costs in prefill
+
+**Each new call boundary re-prefills, and the row states the cost per boundary rather than once.** The article and the shared system turn prefill once and stay cached. What may not stay cached is the **previous call's generated output**: call 3 re-renders call 2's answer as an assistant turn through the chat template, which adds wrapper tokens the model never generated, and if that re-render does not tokenise identically the common prefix ends there.
+
+At the second boundary that is call 2's output plus the third instruction: **185 + 300 to 600 = 485 to 785 tokens**. At the measured prefill median of 9.84 tok/s that is **49 to 80 seconds an item, or 16.4 to 26.6 minutes a shard** - the line section 0.3's table charges, and on its own it is half the margin that table leaves.
+
+**Plan 11 row 3c, "own the prompt bytes", becomes a candidate to land before this row.** It is DEFERRED today pending a runner measurement of 209 re-prefilled tokens ([`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md)). This row makes that measurement worth taking, because it adds a second boundary with the same defect and a bigger payload.
 
 ### Decisions
 
@@ -379,7 +461,7 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 ## 13. Row #13 - The encoder alarm
 
 - **Scope:** One committed `.bin` of **11 vectors - 5 active verticals and 6 active lenses - at 384 int8 dimensions, 4,224 bytes** - compared against the item vector `assemble` already writes. It publishes one counter. It never picks a label.
-- **Files touched:** `backend/idhazh/assemble.py`, `backend/utilities/build_taxonomy_vectors.py`, `state/taxonomy-vectors.bin`, `backend/idhazh/contracts/day_metrics.py`, `schemas/day-metrics.schema.json`, `backend/tests/test_assemble.py`, `docs/concepts/classification.md`
+- **Files touched:** `backend/idhazh/assemble.py`, `backend/utilities/build_taxonomy_vectors.py`, `config/taxonomy-vectors.bin`, `backend/idhazh/contracts/day_metrics.py`, `schemas/day-metrics.schema.json`, `backend/tests/test_assemble.py`, `docs/concepts/classification.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
 - **Oracle:** The run makes **zero new encoder passes** and adds **zero bytes an item**, asserted by counting calls to the embedder over a fixture day and comparing the day payload's byte length before and after. An alarm that costs a pass an item is not an alarm, it is a second classifier.
 
@@ -390,7 +472,8 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 | 1 | It stays. It is the best-behaved row in the plan: it reuses a vector we already compute, `cosine_int8` already exists at `backend/idhazh/assemble.py:316`, and 4,224 bytes is committed once | Owner, 2026-09-10, over Carmack's cut list |
 | 2 | **Alarm on the delta, never on an absolute threshold.** The cosine between a 384-dimension int8 item vector and a label vector is uncalibrated and weak in absolute terms; a fixed threshold would be a number somebody picked. A change in the delta is a fact | Carmack |
 | 3 | **It never picks a label.** One counter on the day file, read by the console. If it ever selects, it is a classifier and needs everything a classifier needs | Section 0.1 |
-| 4 | The committed `.bin` carries a header with its dimension count, its vector count and a digest of the vocabulary it was built from, **so a stale file fails loudly** rather than quietly comparing against last month's lenses | Fowler |
+| 4 | The committed `.bin` carries a header with its dimension count, its vector count and **`taxonomy_digest`** - the same name row #14 decision 4 uses for the same value, so there is one word for it in this plan - **and a stale file fails loudly** rather than quietly comparing against last month's lenses | Fowler |
+| 5 | **The vectors file lives in `config/`, not `state/`.** `state/` is what a run appends; this file is built by a person running `backend/utilities/build_taxonomy_vectors.py` and committed, exactly like `config/taxonomy.json` it is derived from. Putting it in `state/` would put it inside the retention and prune machinery that governs run output, where it does not belong | `CLAUDE.md` section 3 |
 | 5 | It is **not** placed under `frontend/public/` unless a browser fetches it. A file in the served tree is a file in the page weight budget | `CLAUDE.md` Rule #2 |
 
 ### Rejected alternatives
@@ -406,7 +489,7 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 
 - **Scope:** The labelling call. It returns a desk, a lens list and an article kind, each drawn from the committed vocabulary of row #2. Recorded only - nothing on this row renders.
 - **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/prompts/**`, `backend/idhazh/contracts/article.py`, `backend/idhazh/contracts/{digest_day,digest_view}.py`, `config/taxonomy.json`, `schemas/**`, `backend/tests/**`, `docs/concepts/classification.md`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; a recorded-response replay; **the row's share of the 185-token budget stated in the pull request**.
+- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; a recorded-response replay; **the row's share of the label-token budget stated in the pull request, priced against the decode rate row #P4 records** and not against the 185 tokens section 0.3 derives from the 9B.
 - **Oracle:** A reply naming a label that is not in the committed vocabulary is refused, and the item keeps its fallback rather than losing the field. Driven from a fixture reply, so it tests the refusal and not the model.
 
 ### The five article kinds, final
@@ -440,7 +523,7 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 ## 15. Row #12 - The quote: seven conditions, three checks, ten codes
 
 - **Scope:** One pulled quote an item, or none. The model returns **sentence addresses and a speaker and never types the characters**; code slices the article and checks.
-- **Files touched:** `backend/idhazh/elements.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/element.py`, `schemas/element-table.schema.json`, `frontend/src/**`, `backend/tests/**`, `docs/architecture/extraction/**`
+- **Files touched:** `backend/idhazh/elements.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/element.py`, `schemas/element-table.schema.json`, `frontend/src/**`, `backend/tests/{test_elements,test_visual_planner,test_contracts}.py`, `docs/architecture/extraction/**`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the browser smoke on an item carrying a quote and on an item carrying a failing code.
 - **Oracle:** For every one of the ten codes, drive the condition that produces it from a fixture and assert the emitted code. The collected set must equal the enum exactly. **And: for every failing code, the article's quote text appears nowhere in the rendered DOM.**
 
@@ -459,7 +542,9 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 | 1 | **Never traded: a failing code never renders the quote text.** Not partially, not greyed, not blurred, not behind a click, not in a title attribute. This is the one line in the row with no trade-off attached to it | Owner, 2026-09-10 |
 | 2 | The heuristic **chooser** is deleted; the string **gate** stays. Choosing which sentence is quotable is a judgement the model makes better; checking that the characters match is arithmetic the model cannot be trusted with | Andre |
 | 3 | **`Element.attribution` is `UntrustedLine \| None` today** (verified at `backend/idhazh/contracts/element.py:280`), which is a free-text line. Check 3 compares it against `named` and `self_reported`, so **it must become an enum in this row or check 3 gates nothing** | Fowler, 2026-09-10 |
-| 4 | Sentence indices, never text. Exact search over a long string rejects a real quote over one changed word, silently | Plan 11 row #2 decision 3 |
+| 4 | **The enum already exists and is not written here - it is moved.** `backend/idhazh/visual_planner.py:712` declares `Attribution = Literal["named", "self_reported", "anonymous", "unattributed"]` and uses it at lines 768 and 817 (verified 2026-09-10). The refactoring is **Move Type**: lift it into `backend/idhazh/contracts/element.py`, import it back into `visual_planner.py`, and type `Element.attribution` with it. Writing a second four-member literal beside the first is how two vocabularies for one thing start | Fowler, 2026-09-10; `CLAUDE.md` section 4 |
+| 5 | Sentence indices, never text. Exact search over a long string rejects a real quote over one changed word, silently | Plan 11 row #2 decision 3 |
+| 6 | **This row depends on row #8, not on row #7 alone.** Condition 1 is "the kind allows a quote (`report`, `analysis`, `opinion` only)", and `article_kind` is the field row #8 creates. Scheduled beside row #8, condition 1 would gate on a field that does not exist yet, and the row would ship six conditions calling itself seven | Fowler, 2026-09-10 |
 
 ---
 
@@ -484,7 +569,8 @@ Call 1 and call 2 live in `backend/idhazh/visual_planner.py`, which runs in the 
 ## 17. Row #10 - Political viewpoint, behind a gate written in code
 
 - **Scope:** One viewpoint an item, asked only where the article kind warrants the question.
-- **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/prompts/**`, `config/taxonomy.json`, `backend/idhazh/contracts/**`, `schemas/**`, `backend/tests/**`, `docs/concepts/classification.md`
+- **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/prompts/**`, `config/taxonomy.json`, `backend/idhazh/contracts/{taxonomy,classification_row}.py`, `schemas/{taxonomy,classification-row}.schema.json`, `backend/tests/{test_visual_planner,test_contracts}.py`, `docs/concepts/classification.md`
+- **Why the tests are named and not globbed:** this row shares parallel group L with row #17, and `backend/tests/**` would cover row #17's `backend/tests/test_workflows.py`.
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; a recorded-response replay for both gate states.
 - **Oracle:** An item whose kind does not open the gate carries `not_applicable`, and **no model call was dispatched for it** - asserted by counting dispatches over a fixture set. A gate that dispatches and then discards is not a gate, it is a cost.
 
@@ -536,6 +622,7 @@ Plus two outcomes that are always available: **`none`** - we looked and the piec
 | 2 | **The kill criterion is pre-committed here, in two parts.** Human-human agreement below **0.6 on 60 items** from row #P3, or model accuracy below the **majority-class baseline plus 10 points**. `neutral` will be the majority class, and an always-`neutral` model scores 60 to 70 percent and looks competent - which is why the baseline, not zero, is what it must beat | Owner, 2026-09-10; Andre |
 | 3 | If either part of the kill criterion fires, **the row is deleted, not tuned** - code, config keys, schema fields, tests and docs, in one commit | Section 0.1 |
 | 4 | The item's own subject comes from data already committed. This row adds no entity extraction and no watchlist work | Row scope |
+| 5 | **This row depends on row #P3, and that edge is now on the Reckoner.** Decision 2's first kill criterion is human-human agreement over 60 items of the dev split, and row #P3 is the row that produces those labels. Scheduled without the edge, the row could reach its acceptance gate with a kill criterion nobody could evaluate - which is a pre-committed criterion in name only | Fowler, 2026-09-10 |
 
 ---
 
@@ -556,8 +643,9 @@ The day shard is not a new invention: `state/day-metrics/`, `state/published/` a
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **A new classification is a new row, never a new column.** A header is a positional contract that every committed shard has already agreed to; a row is not. `csv_columns()` is `tuple(cls.model_fields)` and `version` is column 0 | Fowler; `CLAUDE.md` section 11 |
+| 1 | **A new classification is a new row, never a new column.** A header is a positional contract that every committed shard has already agreed to; a row is not | Fowler; `CLAUDE.md` section 11 |
 | 2 | `csv_columns()` is **not** defined on `Contract`. It is defined independently on 18 classes under `backend/idhazh/contracts/` (verified 2026-09-10). **Copy `ItemHealthRow.csv_columns()`** - that is the pattern, and there is no base-class hook to override | Verified 2026-09-10 |
+| 2a | **Do not assume `version` is a column.** It is column 0 of the state ledgers, and it is **not a column at all** of a published mirror: `PublicEvalRow.csv_columns()` returns `tuple(name for name in cls.model_fields if name != "version")`, and `frontend/public/scores/2026-09.csv` opens `date,run_id,...` where `state/scores/2026-09.csv` opens `version,date,...` (verified 2026-09-10). If this ledger ever gets a published mirror, it follows the mirror's rule and not the ledger's | Verified 2026-09-10 |
 | 3 | `DayTaxonomy` is declared **`DayTaxonomy \| None = None`** on the day-metrics contract, so the 21 day files already on disk still validate | `CLAUDE.md` section 11 |
 | 4 | **`prompt_digest` and `taxonomy_digest` move to the run manifest, keyed by `run_id`.** They are identical on every row of a run and about 128 of roughly 362 bytes a row, so on the row they are pure repetition | Owner, 2026-09-10 |
 | 5 | **This row adds a prune, in the same commit that adds the ledger.** The plan otherwise creates a new growing ledger while citing the others having a fold. Note plainly, in the row and in the doc: **`retention.dry_run` is `true` in `config/idhazh.json`**, so every prune in this repository is a no-op today and this one will be too until somebody flips it | Fowler; verified 2026-09-10 |
@@ -572,7 +660,7 @@ At the measured 360 items a day and seven classification fields an item, the led
 ## 20. Row #15 - The console tab
 
 - **Scope:** Classification gets **its own console tab**, not a corner of the summaries panel. **Three charts, nine numbers, one generated sentence.**
-- **Files touched:** `frontend/src/routes/console/**`, `frontend/src/lib/components/**`, `backend/idhazh/publish_day_metrics.py`, `frontend/public/console/**`, `frontend/tests/**`, `docs/architecture/publishing/console.md`, `docs/concepts/console-design.md`
+- **Files touched:** `frontend/src/routes/console/**`, `frontend/src/lib/components/**`, `backend/idhazh/publish_day_metrics.py`, `frontend/public/console/**`, `frontend/tests/**`, `docs/architecture/publishing/console.md`, `docs/architecture/publishing/console-payloads.md`, `docs/architecture/publishing/console-charts.md`, `docs/concepts/console-design.md`
 - **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; the section 12 smoke; **the page renders complete with its data file absent**.
 - **Oracle:** With the classification day files deleted, the tab renders, says it has no data, and logs no error. A console panel that white-screens on missing data fails on exactly the day an operator most needs it.
 
@@ -593,7 +681,7 @@ Every metric in the earlier draft was about what the **model produced**. None wa
 1. **What reached a reader** - of everything labelled, what published and what rendered.
 2. **What it cost** - the tokens and the wall clock this plan's calls added.
 3. **Disagreement per publisher.** This is the only panel here that produces an **action**: one feed miscategorising everything is a config fix, and it is invisible inside a 5 by 5 desk grid.
-4. **Before and after a prompt change** - which is only answerable at all because row #1 deleted the window that withheld it.
+4. **Before and after a prompt change** - which is only answerable at all because row #1a deleted the window that withheld it.
 
 ### Decisions
 
@@ -603,14 +691,14 @@ Every metric in the earlier draft was about what the **model produced**. None wa
 | 2 | **Colour on exactly two metrics: evidence drop and quote acceptance.** They are the only two with a right answer. Colour on a metric with no right answer tells a reader something is wrong when nothing is | Jony |
 | 3 | **The test for whether a number earns a pixel**: name the verb somebody does today because of it; does it stay still when the pipeline is unchanged; can a single number say it. **And a surviving panel must name the panel it displaces** | Susan, 2026-09-10 |
 | 4 | **The calibration panel ships only if its mechanism line can be filled in on the day the row lands.** Otherwise the tab carries one line reading `Calibration is not measured yet.` and no panel. A panel drawing a calibration curve nobody computed is a lie with axes | Susan |
-| 5 | **`docs/architecture/publishing/console.md` exists** - 1,669 lines, last updated 2026-09-10 - and so does `docs/concepts/console-design.md`. This row **extends** both. The earlier draft of this plan said the page did not exist and scheduled writing it from scratch | Verified 2026-09-10 |
+| 5 | **`docs/architecture/publishing/console.md` exists** - 1,669 lines, last updated 2026-09-10 - and so do `docs/concepts/console-design.md`, `docs/architecture/publishing/console-payloads.md` and `docs/architecture/publishing/console-charts.md`. This row **extends** all four. The earlier draft of this plan said the page did not exist and scheduled writing it from scratch, and named two of the four not at all | Verified 2026-09-10 |
 
 ---
 
 ## 21. Row #16 - A vertical is proposed into a channel and promoted by a person
 
 - **Scope:** The model may **propose** a new vertical into a channel. **Only a human commit changes the publish vocabulary.**
-- **Files touched:** `backend/idhazh/visual_planner.py`, `state/vertical-proposals/<YYYY>/<MM>/<DD>.csv`, `backend/idhazh/contracts/vertical_proposal.py`, `schemas/**`, `config/idhazh.json`, `backend/utilities/review_vertical_proposals.py`, `backend/tests/**`, `docs/concepts/taxonomy.md`
+- **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/{cli,ledger}.py`, `state/vertical-proposals/<YYYY>/<MM>/<DD>.csv`, `backend/idhazh/contracts/vertical_proposal.py`, `schemas/vertical-proposal.schema.json`, `config/idhazh.json`, `backend/utilities/review_vertical_proposals.py`, `backend/tests/**`, `docs/concepts/taxonomy.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; an injection-canary fixture driven end to end.
 - **Oracle:** **A proposed term appears in no rendered page, no URL, no filename and no search-index entry.** Driven from an injection canary that proposes a hostile term, then asserted across the built site. This is the row's whole safety case, so it is the row's oracle.
 
@@ -632,6 +720,7 @@ Of nine controls, four are load-bearing:
 | 1 | Starting values to `config/`: **N=12 items, M=5 domains, D=7 days, cap 2 a domain.** All four are **estimates** and are config precisely because they are | Owner, 2026-09-10; `CLAUDE.md` Rule #6 |
 | 2 | **The residual risk is stated rather than argued away.** A patient adversary with five real domains over seven days gets a term in front of a person. **That is the intended end state**: the attack terminates at a pull request instead of at a reader | Owner, 2026-09-10 |
 | 3 | The proposal ledger is day-sharded from the first commit, following `state/published/` and `state/visual-prunes/`, and gets a prune in the same commit | Row #14 decision 5 |
+| 4 | **`visual_planner.py` does not write the ledger. It puts the proposal on its reply payload, and `cli.py` writes the row through `ledger.py`.** The planner writes no file today - verified 2026-09-10, it names no `STATE_DIR` and opens nothing - and every state ledger in this repository is written by `cli.py`, `ledger.py`, `drift.py`, `retention.py`, `telemetry.py`, the two publishers or `evals/`. Giving the module that talks to the model a file handle puts untrusted text one bug away from disk, and it breaks the payloads-not-calls rule the whole pipeline is built on | `CLAUDE.md` section 1a; verified 2026-09-10 |
 
 ---
 
@@ -649,6 +738,11 @@ Of nine controls, four are load-bearing:
 | 1 | **It never commits, and auto-merge is banned on its pull requests.** A loop that tunes a published vocabulary without a person reading the diff is a model selecting what publishes | `CLAUDE.md` section 0a |
 | 2 | Its own workflow, not a step in `digest.yml`. A weekly job inside a four-hourly pipeline either runs 42 times too often or blocks the pipeline while it thinks | Carmack |
 | 3 | It reads a **bounded window** of the classification ledger - the trailing N days from config - and declares that read in `growing-reads.md` | `CLAUDE.md` Rule #12 |
+| 4 | **It adapts on the counterfactual, not the outcome.** A weight that rises because the lens's items published is a loop reading its own past decisions and calling them evidence. What the proposal compares is what the ranker **would have** selected at a candidate weight against what it **did** select at the committed one, over the same window. Adapting on the outcome converges on whatever the loop already preferred, and it converges quietly | Andre; `CLAUDE.md` Rule #10 |
+| 5 | **Under-carriage is an eligibility gate, not a term in the score.** A lens carried by too few items in the window has a weight nobody can estimate. Folding "too few items" in as a penalty produces a number that reads as a measurement and is a refusal wearing arithmetic. The lens is **excluded from the proposal and named as excluded in the pull request body**, with its item count | Andre |
+| 6 | **A thin window produces a refusal, not a smaller adjustment.** Below `lens_weights.min_items_per_lens` in the window, the workflow proposes nothing for that lens and says so. A proposal computed from four items is not a smaller proposal; it is a different kind of thing | `CLAUDE.md` Rule #10 |
+| 7 | **A staleness alarm on the open pull request.** A weekly job that opens a pull request nobody merges opens 52 a year. If this workflow's proposal is still open when the next cycle runs, the run **comments on the existing pull request and opens no second one**, and the console says a proposal is waiting. Without this the loop's failure mode is silent accumulation | Carmack |
+| 8 | **Three kill criteria, pre-committed here so none is chosen afterwards to fit the result.** (a) Two consecutive proposals rejected by a person - the loop is proposing against a judgement it cannot see. (b) A proposal moving any weight by more than `lens_weights.max_move_per_cycle` - the window is too short or the signal is noise, and either way the arithmetic is not ready. (c) No proposal accepted in `lens_weights.max_idle_cycles` - the loop is producing review work and no value. **Any one of the three and the workflow is deleted**, code, config keys, tests and doc, in one commit. All three thresholds are **estimates** and live in `config/` for that reason | Section 0.1; `CLAUDE.md` Rules #6 and #10 |
 
 ---
 
@@ -696,11 +790,13 @@ Of nine controls, four are load-bearing:
 | `docs/concepts/classification.md` | **no** | 8, 9, 10, 11, 13, 18 | Every label, its definition text, what renders and what does not, and the confidence rule |
 | `docs/how-to/measure-a-classifier.md` | **no** | P2, P3, 18 | The dataset, the split rule, the labelling procedure, the baseline |
 | `docs/architecture/publishing/console.md` | **yes**, 1,669 lines | 15 | **Extended**, not written. The new tab, panel by panel |
+| `docs/architecture/publishing/console-payloads.md` | **yes** | 15 | Extended with the classification day file's published shape |
+| `docs/architecture/publishing/console-charts.md` | **yes** | 1a, 15 | **Rewritten** where it says "the boundary is a `pipeline_fingerprint` transition, never a `model_id` one" - row #1a is what makes that line false. Extended by row #15 with the three new charts |
 | `docs/concepts/console-design.md` | **yes** | 15 | Extended with the tinting rule and the two coloured metrics |
 | `docs/architecture/publishing/layout.md` | yes | 5, 6 | **Rewritten** where it forbids hash-like names and calls the id ten decimal digits |
 | `docs/architecture/publishing/visuals.md` | yes | 5 | **Rewritten** where it cites the hash rule by test name |
 | `docs/concepts/growing-reads.md` | yes | 14, 16, 17 | A declaration for every new read over a collection a run appends to |
-| `docs/reference/measurements.md` | yes | P4, 18 | The 4B's runner decode rate; the closing measurement with its date and spread |
+| `docs/reference/measurements.md` | yes | P4, 18 | The `visuals` job's first runtime-counters row - **not the 4B's decode rate, which is already on record at 13.00 +/- 0.03 tok/s** - and the closing measurement with its date and spread |
 | The dataset datasheet | **no** | P2 | Who built it, how the split was drawn, what it may not be used for |
 | `docs/how-to/tune-the-lens-weights.md` | **no** | 17 | What the weekly workflow proposes and who merges it |
 
