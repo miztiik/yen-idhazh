@@ -40,12 +40,16 @@ await page.evaluate(() => ({ hidden: document.hidden, state: document.visibility
 
 ## Waiting and routing
 
-**A count taken straight after `goto` or `reload` measures the shell, not the day.** One document answers every dated address, so the stories arrive when the day's fetch resolves - after the load event - and whether a one-shot count finds them is a property of the machine. `service-worker.spec.ts` passed on a Windows box three runs out of three and took `main` red on `ubuntu-latest` with `Expected: 8, Received: 0`. Wait for the page's own `data-payload-state` to read `ready`, and write the assertion so it retries:
+**A count taken straight after `goto` or `reload` measures the shell, not the day.** One document answers every dated address, so the stories arrive when the day's fetch resolves - after the load event - and whether a one-shot count finds them is a property of the machine. `service-worker.spec.ts` passed on a Windows box three runs out of three and took `main` red on `ubuntu-latest` with `Expected: 8, Received: 0`. Wait for the page's own `data-payload-state` to read `ready` through `frontend/tests/support/day-ready.ts`, and write the assertion so it retries:
 
 ```javascript
 await expect(locator, 'why').toHaveCount(n);   // retries
 expect(await locator.count()).toBe(n);         // does not
 ```
+
+The helper exists because seven specs already waited longhand and the eighth, written without it, was the one that broke.
+
+**A negated `toHaveAttribute` passes when the element is absent**, so it is the wrong shape for "the page is not in state X" - it reports a state the page never reached. Playwright special-cases only `toHaveCount`, `toBeVisible`, `toBeHidden`, `toBeAttached`, `toBeDetached` and `toBeInViewport` for a locator resolving to nothing; everything else falls through to `matches = options.isNot`. Assert the positive form of the state you do want. It is strictly stronger and fails with "element(s) not found" rather than passing.
 
 **A vacuity guard built on a pixel threshold is a cross-platform time bomb.** A spec kept "every panel with `top < 900`" and asserted the set was non-empty; the first panel sits at 894 on Windows, the runner's taller fonts pushed it past 900, the set emptied and the guard fired - green locally every time, red on `main` every time. Cut the set on something the page itself draws (the first panel's own top), never on a number you chose, and print the margin rather than the verdict when it fires: the failure said the set was empty and did not say the nearest item missed by six pixels, which is the difference between a minute and an hour. Any pixel out of a browser moves between platforms: fonts, scrollbar width, form-control metrics, fractional rounding. Measured 2026-09-09 at 1280x900 on an Intel Core i7-1265U against the canary build.
 
@@ -90,6 +94,8 @@ const context = await browser.newContext({ serviceWorkers: 'block' });
 ```typescript
 await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeEnabled();
 ```
+
+**A bare `[data-attr]` selector can match a wrapper and a child at once**, so a geometry read off the wrong one is silently wrong rather than an error. On the digest page `[data-band]` is on the `<article>` and on the confidence chip inside it. Name the element as well as the attribute: `span[data-band]`.
 
 **A CSS length read off `style` is the browser's serialisation** - a bar drawn at `inline-size: 100.0000%` comes back as `100%` while every other row at `52.9412%` round-trips, so a string comparison fails on exactly one row and reads like a bug in the one case the arithmetic cannot get wrong (2026-08-30). Compare parsed numbers against `Number(expected.toFixed(4))`.
 
