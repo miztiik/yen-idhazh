@@ -1194,66 +1194,6 @@ of these names the flip the way it would name a hardware change, and reads no tr
 across it. The switch is `config/idhazh.json` `observability.tracing_enabled`; the
 reasoning is in [`../concepts/telemetry.md`](../concepts/telemetry.md).
 
-## How old the digest was publishing, 2026-08-30
-
-Source: the 2,900 items in the committed day payloads under
-`frontend/public/digest/` for 2026-08-22 to 2026-08-29. Each item's age is
-`runs[introduced_by_run].at - published_at`, so it is the age at the moment the
-run added it, not the age today. `published_at` on a committed item is the date
-the run believed, so a future stamp is already resolved to first sight. Every
-one of the 2,900 carried a date; none fell back.
-
-| statistic | age when added |
-| --- | --- |
-| minimum | -3.3 h (inside the 6 h forward tolerance) |
-| median | 5.5 h |
-| 90th percentile | 856.1 h (35.7 days) |
-| 99th percentile | 6,246.2 h (260.3 days) |
-| maximum | 155,383.6 h (6,474.3 days, 17.7 years) |
-
-The oldest is `et-default`, "Prabhudas Lilladher downgrades Infosys to reduce
-with Rs 1,246 target", dated 2008-12-05 and published in a 2026 digest.
-
-What each candidate window would have kept:
-
-| window | keeps | drops |
-| --- | --- | --- |
-| 24 h | 2,074 (71.5%) | 826 (28.5%) |
-| 48 h | 2,155 (74.3%) | 745 (25.7%) |
-| 72 h | 2,237 (77.1%) | 663 (22.9%) |
-| 7 days | 2,411 (83.1%) | 489 (16.9%) |
-
-The curve is almost flat between 24 h and 7 days: a week only buys back 337
-items over a day, because what sits past 24 hours is not two-day-old news, it is
-a back catalogue. That is the number that made 24 the shipped value - the
-wider windows pay a real freshness cost and recover almost nothing.
-
-At 24 hours the loss is concentrated:
-
-| desk | survives | loses |
-| --- | --- | --- |
-| `world` | 624 of 652 (95.7%) | 28 |
-| `india` | 647 of 680 (95.1%) | 33 |
-| `business-economy` | 242 of 318 (76.1%) | 76 |
-| `energy` | 310 of 476 (65.1%) | 166 |
-| `ai` | 251 of 774 (32.4%) | 523 |
-
-The ten feeds that lose the most are archive-style research and institution
-blogs: `mistral-news` (43 of 44), `google-research-blog` (42 of 47),
-`deepmind-blog` (41 of 43), `huggingface-blog` (39 of 44), `mit-news-ai`
-(36 of 39), `nist-news` (36 of 37), `nvidia-technical-blog` (33 of 47),
-`amazon-science` (25 of 27), `ai2-blog` (25 of 27), `simon-willison` (20 of 28).
-Ten of 104 sources lose every item they published.
-
-**What to re-read after a week of the gate.** Three numbers, in this order.
-First, whether a run still reaches `safety_ceiling_per_run` - if it stops
-binding, supply rather than the ceiling now sizes the day and the ceiling
-argument in [`freshness.md`](../architecture/sources/freshness.md) needs
-re-deriving. Second, `too_old` summed per vertical from the committed plans,
-against the shares above. Third, whether `ai` recovers as its news feeds are
-read more often, or stays near a third - if it stays, the AI feed list is the
-thing to fix and no threshold will do it.
-
 ## How long we go quiet about a registry name, 2026-08-31
 
 **We never go quiet. The longest silence about any of the 30 registry names, in
@@ -3770,368 +3710,6 @@ page does not answer - see
 [../concepts/config.md](../concepts/config.md) on why a guard sitting in the
 working range stops being a guard.
 
-## Feed availability
-
-**Measured** on a developer machine (i7-1265U, Windows, 2026-08-21) by running
-the real plan stage against the ratified `ai` list - a better check than a
-bespoke script, because it exercises the code that will do it daily.
-
-| Quantity | Value |
-| --- | --- |
-| Feeds configured | 36 |
-| Resolved on the first pass | 26 |
-| Recovered by finding the real feed URL | 5 |
-| **Live after correction** | **31, against a floor of 25** |
-| Retired: `robots.txt` forbids or is unreadable | 4 |
-| Retired: the publisher declares no feed at all | 1 |
-
-Two of the retirements are permanent by the host's own instruction rather than
-defects to fix. One publisher (`ai.meta.com`) is a JavaScript application that
-declares no feed on any path, which is a category the plan did not anticipate:
-a source can be real, active and unreachable by RSS.
-
-Two figures from the same runs, both single observations and both a laptop
-rather than a runner: **one feed read takes roughly 0.5-4 s including its
-`robots.txt`**, and a whole 36-feed plan pass finishes in **under a minute**.
-That matters only as a shape: the planning step loads no weights, so fanning out
-afterwards is what costs, not deciding the day.
-
-**Summarization, Qwen3-4B-Q4_K_M, 4 threads, i7-1265U, 2026-08-21, n=1:** a
-2,557-token article took **89 s** end to end for 179 output tokens. One
-observation on a laptop, recorded because it is the first real per-article
-number this project has; it is not a runner figure and may not be used as one.
-
-### What the robots policy cost
-
-#### On the runner (authoritative)
-
-**Measured 2026-08-23** on `ubuntu-latest`, by running the same day twice: run
-1 (`32624081323`) on the old policy, run 2 (`32634191910`) on the new one, same
-date, same config, same feed list. Comparing two real plan passes is a better
-check than any script, because it exercises exactly what runs daily.
-
-| Quantity | Before | After |
-| --- | --- | --- |
-| Feeds read | 115 | **132** |
-| Feeds refused | 31 | **14** |
-| Items published | 8 | 9 |
-| Eval rows written | 0 | **9** |
-
-**17 feeds recovered.** The 14 that still refuse are the check on the change:
-the policy keeps refusing when a host serves a file that says no, and keeps
-refusing when nobody answers at all.
-
-The published count moved by only one because the daily cap, not the feed
-count, decides how many items a reader gets. What a wider pool buys is
-**choice**: 17 items are now selected from a larger candidate set, so the
-ranking has more to rank. Feed count is an input to quality, not to volume.
-
-The eval-row column measures a different fault fixed in the same commit: the
-scorer had been disabled on every scheduled run, so the ledger had never once
-been written by automation. Nine rows is the first time it has.
-
-#### On a developer machine (kept for the IP contrast)
-
-**Measured 2026-08-23** (i7-1265U, Windows), n=1 per feed, against the 26 feeds
-run 1 recorded as `robots_denied`, driving the real fetcher.
-
-| Outcome after the change | Feeds |
-| --- | --- |
-| **Recovered** | **19** |
-| Still refused - a served `robots.txt` disallows the path | 2 |
-| Still refused - the article itself answered HTTP 403 | 4 |
-| Still refused - the host reset the `robots.txt` connection | 1 |
-
-Ten of the nineteen serve no `robots.txt` at all and answered 404. Reading
-"no such file" as a refusal was a rule we invented and the host never wrote,
-and it was silently costing the digest most of its `business-economy` and
-`world` candidates.
-
-This page predicted the runner would recover fewer than 19 because a developer
-IP is not a runner IP, and several of the 403s were a WAF answering a
-datacentre address. The runner recovered 17. **The laptop over-counted by two,
-in the direction predicted** - which is the reason the runner table sits above
-this one and the laptop table is kept only for the contrast.
-
-### What the robots parser costs, 2026-09-02
-
-`protego==0.6.2` replaced `urllib.robotparser` because the standard library
-reads one committed file two ways across the interpreter range
-`pyproject.toml` declares - Python 3.12 takes the first matching group and the
-first matching rule, Python 3.14 merges repeated groups and applies
-longest-match. See
-[the trust boundary](../architecture/sources/trust-boundary.md). This is what
-that dependency costs (Rule #8, Rule #10).
-
-#### On the runner (authoritative)
-
-**Measured 2026-09-02** on `ubuntu-latest` (Linux 6.17.0-1022-azure x86_64,
-4 vCPU, 16,766,414,848 bytes of RAM), CPython 3.12.14, in a throwaway workflow
-on a branch cut from `main` - so the baseline is `pip install -e ".[dev]"` with
-no protego in it. Run `33668824024`; the branch was deleted once the log was
-read.
-
-| Quantity | Value |
-| --- | --- |
-| Install seconds | 0.661, 0.449, 0.454 (n=3, mean **0.521**, spread **0.212**) |
-| Installed bytes | 422,890,458 -> 422,943,750, so **+53,292** |
-| Installed files | 10,317 -> 10,334, so **+17** |
-| `pip list --format=freeze` | one line added, `Protego==0.6.2`; none removed, no version moved |
-
-Sample 1 includes the wheel download and samples 2 and 3 read pip's local
-cache, which is what the 0.212 s spread on a 0.521 s mean is. Half a second
-against the 15 minutes the `gates` job is allowed is not a number any design
-turns on; it is here because Rule #8 asks what a dependency costs.
-
-#### Against the figure the plan recorded
-
-The plan recorded a **10,296-byte wheel** from the package index and left the
-installed size unmeasured. Installed, it is **53,292 bytes - 5.18 times the
-wheel**. That ratio is what unpacking a zip and byte-compiling it costs, not a
-dependency that turned out bigger than it looked: the Python source alone is
-**19,709 bytes over five modules, 1.91 times the wheel**, and the rest is
-30,496 bytes of bytecode pip generates and 9,142 bytes of packaging metadata
-(counted per file on the developer box, below).
-
-In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes** and
-**0.15 percent of shellcheck-py's 34,782,285**, both of which are already
-dependencies nobody has argued about.
-
-**The installed figure is the baseline, and the wheel figure is not.** Owner
-ruling, 2026-09-02, on reading the two numbers above: `protego` is inside the
-budget, and every future size comparison for this dependency is made against
-**53,292 installed bytes and 0.521 s to install**. A wheel is a zip, so the
-unpacked source, the bytecode pip generates and the packaging metadata are three
-different things - a comparison anchored on the 10,296-byte wheel understates
-what the runner actually holds by 5.18 times, and would let a package grow five
-fold before anything read as a change.
-
-**Beneficiary:** one reading of `robots.txt` on every interpreter the project
-supports. That is the control Rule #11 rests on, and it may not have an answer
-that depends on which runner picked up the job.
-
-#### On a developer machine (kept for the contrast)
-
-**Measured 2026-09-02** (Windows 11, CPython 3.14.2) by summing
-`site-packages` before and after: 356,807,900 -> 356,867,247 bytes over
-11,027 -> 11,044 files, so **+59,347 bytes over 17 files**. That is 6,055 bytes
-over the runner's figure, and the cp314 bytecode is where it goes. Installing
-it took 5.02 s here (n=1, with the test suite on the same box), so read that as
-an upper bound and the runner's 0.521 s as the number.
-
-`protego` ships `py.typed`, so `mypy --strict` needs no `ignore_missing_imports`
-entry for it - measured by running the gate with the package installed and no
-override: 0 errors over 141 source files.
-
-### Why the other items failed
-
-**Measured 2026-08-23** on a developer machine (i7-1265U, Windows), by
-re-fetching all 9 failures of run 1 and comparing what the extractor returned
-against the prose actually present in the markup.
-
-| Items | Source | Extracted | Cause |
-| --- | --- | --- | --- |
-| 2 | GitHub release tag | 51, 162 words | The page is a list of binary names. The largest prose block in the markup is GitHub's own "You signed in with another tab" furniture |
-| 2 | NBER paper page | 128, 178 words | The extractor returned **the abstract, correctly**. The paper is a PDF |
-| 1 | Marginal Revolution | 229 words | The post is 277 words. The extractor got 83% of it |
-| 2 | Japan Times | 86, 111 words | Metered paywall |
-| 2 | IAEA | never fetched | HTTP 403 at the WAF |
-
-Fetches took **0.45-0.80 s**, and no item failed on a timeout or a retry
-budget. Two hypotheses are ruled out by this table: the sources are not slow,
-and they are not JavaScript shells hiding their text from the extractor.
-
-**The extractor is behaving correctly.** The 250-word floor is rejecting
-short-form sources that were extracted properly - a release tag, an abstract,
-a short blog post. That makes the low count a **source-selection** result
-rather than an extraction defect, and it is why raising the floor's pass rate
-belongs in `config/sources.json` and not in `extract.py`.
-
-### Lead coverage newline boundary
-
-**Measured 2026-08-23** on a developer machine (Windows, Python 3.12.12), by
-extracting the 17 committed `tests/fixtures/short-sources/` HTML fixtures with
-`to_article()`, comparing the old capitalised-run expression against the fixed
-metric, and scoring five hand-written `publish_brief` summaries through
-`score.band()` at `hhem = 0.95`. Spread is not available because this is a
-deterministic string metric.
-
-| Check | Before | After |
-| --- | --- | --- |
-| Fixtures with a glued newline entity | 6 of 17 | 0 of 17 |
-| Extractable fixtures in the pass | 15 of 17 | 15 of 17 |
-| Hand-written `publish_brief` rows moved by the fixed metric | 1 of 5 | 0 remaining wrongly capped |
-
-The glued entities were: `ai2\nglenn matlin`,
-`published\nus president donald trump`, `student researcher\nwe`,
-`xcframework\nlinux`, `gender-specific parental investment\nwe`, and
-`biodiversity loss\nwe`.
-
-| Fixture | Coverage before | Band before | Coverage after | Band after |
-| --- | --- | --- | --- | --- |
-| `llama-cpp-releases-01` | 0.625000 | high | 0.636364 | high |
-| `llama-cpp-releases-02` | 0.857143 | high | 0.857143 | high |
-| `marginal-revolution-01` | 1.000000 | high | 1.000000 | high |
-| `nber-new-01` | 0.833333 | high | 1.000000 | high |
-| `nber-new-02` | 0.000000 | medium | 0.500000 | high |
-
-The committed `state/scores.csv` had 156 rows, but no source-text or summary-text
-columns. The stored `coverage` column cannot be recomputed honestly from that
-ledger alone, so this pass reports 0 computable re-bands rather than inventing a
-movement count.
-
-## What every source yielded, 2026-08-24 to 2026-08-29
-
-**Measured 2026-08-29** over `state/item-health/2026-08.csv` at `origin/main`,
-which carries one row per planned article per run. 21 runs, 3,832 planned
-articles. Deterministic over a committed file; no spread.
-
-| Quantity | Value |
-| --- | --- |
-| Source ids that appeared at all | 122 |
-| Articles planned | 3,832 |
-| Articles published | 2,739 (**71.5 percent**) |
-| Articles lost | 1,093 (**28.5 percent**) |
-| **Sources that published nothing, not once** | **24** |
-| Failures owned by those 24 | 910, which is **83.3 percent of every failure** |
-| Slots they consumed per run | **43.3 of 160**, so 27 percent of a run bought nothing |
-
-The loss rate is steady across all six days, which is what makes it a property
-of the source list rather than a bad week.
-
-### Where the losses happen
-
-| Stage | Share of the 1,093 |
-| --- | --- |
-| Fetch: the page answers 4xx, a robots file forbids it, or the host resets | 60 percent |
-| Extract: a paywall, or no readable prose on the page | 38 percent |
-| Summarize | 2 percent |
-
-Two codes dominate: `http_client_error` (518) and `paywalled` (330). Neither is
-a defect in this repository.
-
-### What reaches a reader, by kind of source
-
-**Measured 2026-08-29** over the 1,284 items published between 2026-08-26 and
-2026-08-29.
-
-| Tier | Published | Share |
-| --- | --- | --- |
-| 1, the institution that IS the fact | 194 | 15.1 percent |
-| 2, trade press and news outlets | 1,073 | **83.6 percent** |
-| 3, community and independent writing | 17 | **1.3 percent** |
-
-94 of the 138 configured feeds contributed at least one item.
-
-### The per-feed cap decides the day, not the score
-
-**Measured 2026-08-29** over the six runs of 2026-08-27 to 2026-08-29.
-
-| Run | Slots | Distinct feeds drawn from | Feeds sitting on the 2-item cap |
-| --- | --- | --- | --- |
-| 2026-08-27-1 | 160 | 87 | 73 |
-| 2026-08-27-2 | 160 | 85 | 75 |
-| 2026-08-27-3 | 160 | 85 | 75 |
-| 2026-08-28-1 | 160 | 87 | 73 |
-| 2026-08-29-1 | 160 | 86 | 74 |
-| 2026-08-29-2 | 160 | 82 | 78 |
-
-**Between 73 and 78 of the roughly 85 working feeds hit `max_per_source` in
-every run.** The corroborating figure: the fifteen feeds that published most
-between 2026-08-26 and 2026-08-29 each published **exactly 22**, which is two
-per run across eleven runs.
-
-What this means, said plainly: with 160 slots and two allowed per feed, the list
-fills itself from about 80 feeds and the score only decides which handful of
-feeds miss out. "A story three independent sources carried is the day's story"
-is the stated design ([../architecture/sources/discovery.md](../architecture/sources/discovery.md))
-and it is not what is happening. **This is a source-supply result, not a ranking
-defect** - the cap stops binding as soon as the pool of working feeds is
-comfortably larger than 80.
-
-### A failed address is retried all day and fails again
-
-**Measured 2026-08-29** over the same ledger. The published ledger stops a
-repeat; a *failure* is not published, so the next run of the same day plans the
-same address again.
-
-| Quantity | Value |
-| --- | --- |
-| Addresses attempted more than once inside one day | 233 |
-| Of those, addresses that never succeeded on any attempt | 231 |
-| Repeat attempts that produced nothing | **401** |
-| Repeat attempts that produced something | **2** |
-
-Per run the waste is 8 to 41 slots, and it is zero on run 1 of a day by
-construction. 403 repeat attempts bought 2 items. Their failure codes are the
-ones that cannot change within a day: `http_client_error` (112), `paywalled`
-(59), `no_text` (21), `robots_denied` (11).
-
-### Probing the 40 non-producing sources
-
-**Measured 2026-08-29** on a developer machine (i7-1265U, Windows) by fetching
-each configured feed URL and one article behind it, with the pipeline's own user
-agent. n=1 per feed.
-
-| Finding | Feeds |
-| --- | --- |
-| Refused from a developer machine **and** from the runner: paywall, robots, or an outright block | 22 |
-| Returned a valid feed to a developer machine and 403 to the runner | 7 |
-| Answered with a web page and no feed at all - our configured URL is not a feed | 3 |
-| Judgement calls: PDF-only articles, connection resets, rate limiting | 8 |
-
-The seven in row two are the reason this table exists. `indianexpress.com`
-served **200 headlines** to a laptop while the runner recorded HTTP 403 on every
-attempt for weeks. A developer IP is not a runner IP, and this page has recorded
-that contrast in the opposite direction before (see the robots policy row
-above). A source that fails only on the runner is blocked by address, not
-broken.
-
-The three in row three are ours: `anthropic-news`, `cohere-blog` and
-`stanford-hai` were configured with the address of an HTML page. Every fetch
-returned HTTP 200 and zero items, so feed health recorded a read that succeeded
-and a pool that gained nothing. **A feed read can succeed and still be worthless,
-and no gate in this repository noticed for weeks.**
-
-### The feed floor counts configured feeds, not working ones
-
-**Measured 2026-08-29** by applying the retirement to `config/sources.json` and
-comparing each vertical against its `min_feeds` in `config/taxonomy.json`.
-
-| Vertical | Feeds configured | Feeds that ever produced an item | `min_feeds` |
-| --- | --- | --- | --- |
-| `ai` | 38 | **28** | 35 |
-| `business-economy` | 22 | **12** | 21 |
-| `energy` | 24 | **20** | 21 |
-| `india` | 27 | **19** | 21 |
-| `world` | 27 | **19** | 21 |
-
-`rank.plan_vertical` refuses to plan anything for a vertical below its floor, so
-a vertical that drops under it publishes nothing at all.
-
-**Every one of the five verticals is under its floor on the count that matters,
-and every one of them passes on the count the gate reads.** `ai` published 52
-items on 2026-08-29 from an effective 28 feeds against a floor of 35, so a floor
-that is meant to stop a thin desk reaching a reader has been passing a desk it
-would have failed. The gate is not wrong about the number it reads; it is
-reading a number that stopped describing the source pool.
-
-
-
-**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`. Single observed run
-per gate; values are rounded wall-clock durations. Spread is not available for
-this row because each gate has one observation.
-
-| Gate | Duration | Spread |
-| --- | --- | --- |
-| `ci` | about 2 min | n=1; not available |
-| `site` | about 2 min | n=1; not available |
-| `pages` | about 50 s | n=1; not available |
-| `digest` | about 25 min | n=1; not available |
-
-The publish path is the long pole. Orchestrators should not serialize
-independent work on these gates; the merge gate still waits for green checks.
-
 ## Corpus shape
 
 **Measured 2026-08-22**, `ubuntu-latest` (4 vCPU), the `corpus` job in
@@ -4765,6 +4343,216 @@ The backend suite is 63 s of a 106 s job and was never the critical path, so
 none of this was done to make it faster. It was done because the cost grows with
 the corpus and the coverage does not. The whole backend suite still runs on
 every change.
+
+## Feed availability
+
+**Measured** on a developer machine (i7-1265U, Windows, 2026-08-21) by running
+the real plan stage against the ratified `ai` list - a better check than a
+bespoke script, because it exercises the code that will do it daily.
+
+| Quantity | Value |
+| --- | --- |
+| Feeds configured | 36 |
+| Resolved on the first pass | 26 |
+| Recovered by finding the real feed URL | 5 |
+| **Live after correction** | **31, against a floor of 25** |
+| Retired: `robots.txt` forbids or is unreadable | 4 |
+| Retired: the publisher declares no feed at all | 1 |
+
+Two of the retirements are permanent by the host's own instruction rather than
+defects to fix. One publisher (`ai.meta.com`) is a JavaScript application that
+declares no feed on any path, which is a category the plan did not anticipate:
+a source can be real, active and unreachable by RSS.
+
+Two figures from the same runs, both single observations and both a laptop
+rather than a runner: **one feed read takes roughly 0.5-4 s including its
+`robots.txt`**, and a whole 36-feed plan pass finishes in **under a minute**.
+That matters only as a shape: the planning step loads no weights, so fanning out
+afterwards is what costs, not deciding the day.
+
+**Summarization, Qwen3-4B-Q4_K_M, 4 threads, i7-1265U, 2026-08-21, n=1:** a
+2,557-token article took **89 s** end to end for 179 output tokens. One
+observation on a laptop, recorded because it is the first real per-article
+number this project has; it is not a runner figure and may not be used as one.
+
+### What the robots policy cost
+
+#### On the runner (authoritative)
+
+**Measured 2026-08-23** on `ubuntu-latest`, by running the same day twice: run
+1 (`32624081323`) on the old policy, run 2 (`32634191910`) on the new one, same
+date, same config, same feed list. Comparing two real plan passes is a better
+check than any script, because it exercises exactly what runs daily.
+
+| Quantity | Before | After |
+| --- | --- | --- |
+| Feeds read | 115 | **132** |
+| Feeds refused | 31 | **14** |
+| Items published | 8 | 9 |
+| Eval rows written | 0 | **9** |
+
+**17 feeds recovered.** The 14 that still refuse are the check on the change:
+the policy keeps refusing when a host serves a file that says no, and keeps
+refusing when nobody answers at all.
+
+The published count moved by only one because the daily cap, not the feed
+count, decides how many items a reader gets. What a wider pool buys is
+**choice**: 17 items are now selected from a larger candidate set, so the
+ranking has more to rank. Feed count is an input to quality, not to volume.
+
+The eval-row column measures a different fault fixed in the same commit: the
+scorer had been disabled on every scheduled run, so the ledger had never once
+been written by automation. Nine rows is the first time it has.
+
+#### On a developer machine (kept for the IP contrast)
+
+**Measured 2026-08-23** (i7-1265U, Windows), n=1 per feed, against the 26 feeds
+run 1 recorded as `robots_denied`, driving the real fetcher.
+
+| Outcome after the change | Feeds |
+| --- | --- |
+| **Recovered** | **19** |
+| Still refused - a served `robots.txt` disallows the path | 2 |
+| Still refused - the article itself answered HTTP 403 | 4 |
+| Still refused - the host reset the `robots.txt` connection | 1 |
+
+Ten of the nineteen serve no `robots.txt` at all and answered 404. Reading
+"no such file" as a refusal was a rule we invented and the host never wrote,
+and it was silently costing the digest most of its `business-economy` and
+`world` candidates.
+
+This page predicted the runner would recover fewer than 19 because a developer
+IP is not a runner IP, and several of the 403s were a WAF answering a
+datacentre address. The runner recovered 17. **The laptop over-counted by two,
+in the direction predicted** - which is the reason the runner table sits above
+this one and the laptop table is kept only for the contrast.
+
+### What the robots parser costs, 2026-09-02
+
+`protego==0.6.2` replaced `urllib.robotparser` because the standard library
+reads one committed file two ways across the interpreter range
+`pyproject.toml` declares - Python 3.12 takes the first matching group and the
+first matching rule, Python 3.14 merges repeated groups and applies
+longest-match. See
+[the trust boundary](../architecture/sources/trust-boundary.md). This is what
+that dependency costs (Rule #8, Rule #10).
+
+#### On the runner (authoritative)
+
+**Measured 2026-09-02** on `ubuntu-latest` (Linux 6.17.0-1022-azure x86_64,
+4 vCPU, 16,766,414,848 bytes of RAM), CPython 3.12.14, in a throwaway workflow
+on a branch cut from `main` - so the baseline is `pip install -e ".[dev]"` with
+no protego in it. Run `33668824024`; the branch was deleted once the log was
+read.
+
+| Quantity | Value |
+| --- | --- |
+| Install seconds | 0.661, 0.449, 0.454 (n=3, mean **0.521**, spread **0.212**) |
+| Installed bytes | 422,890,458 -> 422,943,750, so **+53,292** |
+| Installed files | 10,317 -> 10,334, so **+17** |
+| `pip list --format=freeze` | one line added, `Protego==0.6.2`; none removed, no version moved |
+
+Sample 1 includes the wheel download and samples 2 and 3 read pip's local
+cache, which is what the 0.212 s spread on a 0.521 s mean is. Half a second
+against the 15 minutes the `gates` job is allowed is not a number any design
+turns on; it is here because Rule #8 asks what a dependency costs.
+
+#### Against the figure the plan recorded
+
+The plan recorded a **10,296-byte wheel** from the package index and left the
+installed size unmeasured. Installed, it is **53,292 bytes - 5.18 times the
+wheel**. That ratio is what unpacking a zip and byte-compiling it costs, not a
+dependency that turned out bigger than it looked: the Python source alone is
+**19,709 bytes over five modules, 1.91 times the wheel**, and the rest is
+30,496 bytes of bytecode pip generates and 9,142 bytes of packaging metadata
+(counted per file on the developer box, below).
+
+In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes** and
+**0.15 percent of shellcheck-py's 34,782,285**, both of which are already
+dependencies nobody has argued about.
+
+**The installed figure is the baseline, and the wheel figure is not.** Owner
+ruling, 2026-09-02, on reading the two numbers above: `protego` is inside the
+budget, and every future size comparison for this dependency is made against
+**53,292 installed bytes and 0.521 s to install**. A wheel is a zip, so the
+unpacked source, the bytecode pip generates and the packaging metadata are three
+different things - a comparison anchored on the 10,296-byte wheel understates
+what the runner actually holds by 5.18 times, and would let a package grow five
+fold before anything read as a change.
+
+**Beneficiary:** one reading of `robots.txt` on every interpreter the project
+supports. That is the control Rule #11 rests on, and it may not have an answer
+that depends on which runner picked up the job.
+
+#### On a developer machine (kept for the contrast)
+
+**Measured 2026-09-02** (Windows 11, CPython 3.14.2) by summing
+`site-packages` before and after: 356,807,900 -> 356,867,247 bytes over
+11,027 -> 11,044 files, so **+59,347 bytes over 17 files**. That is 6,055 bytes
+over the runner's figure, and the cp314 bytecode is where it goes. Installing
+it took 5.02 s here (n=1, with the test suite on the same box), so read that as
+an upper bound and the runner's 0.521 s as the number.
+
+`protego` ships `py.typed`, so `mypy --strict` needs no `ignore_missing_imports`
+entry for it - measured by running the gate with the package installed and no
+override: 0 errors over 141 source files.
+
+### Why the other items failed
+
+**Measured 2026-08-23** on a developer machine (i7-1265U, Windows), by
+re-fetching all 9 failures of run 1 and comparing what the extractor returned
+against the prose actually present in the markup.
+
+| Items | Source | Extracted | Cause |
+| --- | --- | --- | --- |
+| 2 | GitHub release tag | 51, 162 words | The page is a list of binary names. The largest prose block in the markup is GitHub's own "You signed in with another tab" furniture |
+| 2 | NBER paper page | 128, 178 words | The extractor returned **the abstract, correctly**. The paper is a PDF |
+| 1 | Marginal Revolution | 229 words | The post is 277 words. The extractor got 83% of it |
+| 2 | Japan Times | 86, 111 words | Metered paywall |
+| 2 | IAEA | never fetched | HTTP 403 at the WAF |
+
+Fetches took **0.45-0.80 s**, and no item failed on a timeout or a retry
+budget. Two hypotheses are ruled out by this table: the sources are not slow,
+and they are not JavaScript shells hiding their text from the extractor.
+
+**The extractor is behaving correctly.** The 250-word floor is rejecting
+short-form sources that were extracted properly - a release tag, an abstract,
+a short blog post. That makes the low count a **source-selection** result
+rather than an extraction defect, and it is why raising the floor's pass rate
+belongs in `config/sources.json` and not in `extract.py`.
+
+### Lead coverage newline boundary
+
+**Measured 2026-08-23** on a developer machine (Windows, Python 3.12.12), by
+extracting the 17 committed `tests/fixtures/short-sources/` HTML fixtures with
+`to_article()`, comparing the old capitalised-run expression against the fixed
+metric, and scoring five hand-written `publish_brief` summaries through
+`score.band()` at `hhem = 0.95`. Spread is not available because this is a
+deterministic string metric.
+
+| Check | Before | After |
+| --- | --- | --- |
+| Fixtures with a glued newline entity | 6 of 17 | 0 of 17 |
+| Extractable fixtures in the pass | 15 of 17 | 15 of 17 |
+| Hand-written `publish_brief` rows moved by the fixed metric | 1 of 5 | 0 remaining wrongly capped |
+
+The glued entities were: `ai2\nglenn matlin`,
+`published\nus president donald trump`, `student researcher\nwe`,
+`xcframework\nlinux`, `gender-specific parental investment\nwe`, and
+`biodiversity loss\nwe`.
+
+| Fixture | Coverage before | Band before | Coverage after | Band after |
+| --- | --- | --- | --- | --- |
+| `llama-cpp-releases-01` | 0.625000 | high | 0.636364 | high |
+| `llama-cpp-releases-02` | 0.857143 | high | 0.857143 | high |
+| `marginal-revolution-01` | 1.000000 | high | 1.000000 | high |
+| `nber-new-01` | 0.833333 | high | 1.000000 | high |
+| `nber-new-02` | 0.000000 | medium | 0.500000 | high |
+
+The committed `state/scores.csv` had 156 rows, but no source-text or summary-text
+columns. The stored `coverage` column cannot be recomputed honestly from that
+ledger alone, so this pass reports 0 computable re-bands rather than inventing a
+movement count.
 
 ## Retired measurements
 
