@@ -70,14 +70,30 @@ sees. That is also the engine that makes a page grow: somebody who cannot tell
 which statement is in force adds a new one instead of editing the old.
 
 So the guardrail is three tests over questions, and **no page here has a maximum
-length**. A line limit is met by opening `-part2.md`, which trades one long page
-for a set nobody can navigate.
+length**.
+
+**A split names a question. It never names a sequence.** `feature-part2.md` is
+not a split and never will be: part 2 answers no question of its own, it is the
+remainder of part 1, and a reader cannot arrive at it because nobody has ever
+held the question "the rest of that". A page whose title only makes sense after
+reading another page is a section of that page wearing a filename. The check is
+one line, and it is the merge test applied to whatever the split test produced:
+**say out loud the question somebody would be holding when they open the new
+page.** If that sentence needs the old page's title in it, do not split - the
+page was long and it was not confused, and a long page beats a set nobody can
+navigate.
+
+What a real split looks like: `measurements.md` became the producer and
+`measurements-site.md` became what the reader downloads, because "how fast does
+the model write" and "how big is the page I ship" are two questions and a person
+arrives holding one or the other. What it never looks like: `measurements-1.md`
+and `measurements-2.md`.
 
 - **The split test.** Open the page at one section, read only that section, act
   on it. If acting correctly needs a fact that lives in a different section of
-  the same page, the page has outgrown itself. Split it, and the stem path
-  becomes an index so every inbound link keeps working - rule 8 above, which is
-  this test written for one doc class.
+  the same page, the page has outgrown itself. Split it **along the question
+  each part answers**, and the stem path becomes an index so every inbound link
+  keeps working - rule 8 above, which is this test written for one doc class.
 - **The delete test.** A section a later section corrects is not history, it is
   a second answer. Delete it in the commit that writes the correction; git holds
   the bytes. Leave one sentence behind wherever a reader meeting only the new

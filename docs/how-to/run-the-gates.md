@@ -471,7 +471,7 @@ noise floor. That headroom shrinks about 8 bytes on every publish since the day
 list folded into month disclosures on 2026-09-01, down from 12 to 18 before it,
 and it expires by design: when the gate fires on an ordinary day, the answer is
 to re-measure and re-derive the number, not to add a digit
-([../reference/measurements.md](../reference/measurements-site.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
+([../reference/measurements-site.md](../reference/measurements-site.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
 **The console is three routes and takes three ceilings, last re-derived on
 2026-09-10 against the tree that moved its telemetry to a browser fetch.** One
@@ -492,7 +492,7 @@ stayed - so for four days it stood at 7.2 times the page it bounded and could
 not have fired on anything short of a sevenfold regression. **A ceiling is only
 a tripwire while it is near the page**, and nothing in the build fails when one
 drifts away from it
-([../reference/measurements.md](../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
+([../reference/measurements-site.md](../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
 
 **None of the three had fired when they were re-derived, and that is the normal
 case.** A ceiling is re-derived because its runway expired, not because a gate
@@ -887,7 +887,7 @@ one convention: the heaviest of five builds of the tree that ships, plus a
 tenth, measured at `gzip -5`.** That replaced four different conventions the old
 set had accumulated. The current numbers, the spread they were taken over and
 the arms behind them are in
-[../../reference/measurements.md](../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10);
+[../reference/measurements-site.md](../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10);
 `config/idhazh.json` is where they live and
 [../../how-to/run-the-gates.md](run-the-gates.md) is what to do when
 one fires.

@@ -761,7 +761,7 @@ obeyed.** Measured 2026-09-02 over twenty items drawn from the two longest
 summary bands, ninety key points read one at a time: **78 of 89 clear verdicts
 restate a claim the summary already makes**, and thirteen of the twenty items
 add nothing at all
-([../../reference/measurements.md](../../archive/measurements-2026-08.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02)).
+([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02)).
 The instruction survives the terseness pass on the same argument as before - it
 is one line and the failure it prevents is worse than the failure it allows -
 but nobody may now claim the behaviour is intact. Nothing in the pipeline reads

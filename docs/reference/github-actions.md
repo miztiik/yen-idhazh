@@ -223,7 +223,7 @@ ahead of the checkout, so the clock covers the cache restore and the weight load
 `$GITHUB_ENV`, and the counters step passes both to `python -m idhazh counters`.
 The rollback rule for the truncation cap reads that clock, and until 2026-08-29
 the only place it existed was the jobs API, which drops a job record when the run
-ages out ([measurements.md](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)).
+ages out ([../archive/measurements-2026-08.md](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)).
 
 ### The three commit steps push through a rebase, and the one that can rebuild rebuilds
 
