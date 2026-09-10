@@ -38,7 +38,14 @@ await page.setViewportSize({ width: 1280, height: 900 });
 
 **Walking the reading page's pager on a real day runs past the test timeout.** A published day carries hundreds of stories, so clicking through to the end is minutes of navigation. Read the pager's own label for the count instead of walking it, or drive the canary day, which is fixed in size.
 
-**A DOM count taken straight after `goto` or `reload` measures whatever the machine happened to finish.** Wait on the page's own published state attribute instead.
+**A count taken straight after `goto` or `reload` measures the shell, not the day.** One document answers every dated address, so the stories arrive when the day's fetch resolves - after the load event - and whether a one-shot count finds them is a property of the machine. `service-worker.spec.ts` passed on a Windows box three runs out of three and took `main` red on `ubuntu-latest` with `Expected: 8, Received: 0`. Wait for the page's own `data-payload-state` to read `ready`, and write the assertion so it retries:
+
+```javascript
+await expect(locator, 'why').toHaveCount(n);   // retries
+expect(await locator.count()).toBe(n);         // does not
+```
+
+**A vacuity guard built on a pixel threshold is a cross-platform time bomb.** A spec kept "every panel with `top < 900`" and asserted the set was non-empty; the first panel sits at 894 on Windows, the runner's taller fonts pushed it past 900, the set emptied and the guard fired - green locally every time, red on `main` every time. Cut the set on something the page itself draws (the first panel's own top), never on a number you chose, and print the margin rather than the verdict when it fires. Any pixel out of a browser moves between platforms: fonts, scrollbar width, form-control metrics, fractional rounding.
 
 **A page carrying a meta refresh makes three Playwright calls lie.** `page.url()`, a URL assertion and a locator can each answer about the page you asked for while the browser is already elsewhere. Assert on the destination.
 
@@ -83,8 +90,6 @@ test.use({ serviceWorkers: 'block' });
 **Two fixtures that both fit inside the narrowest preset make a window oracle pass on a route that ignores the window.** Pick fixtures that straddle the boundary.
 
 **A new chart component that draws a `<path>` fails the icon gate**, which counts path elements to find unlicensed icons. Register the component or draw with primitives.
-
-**A vacuity guard built on a pixel threshold is a cross-platform time bomb.** A spec kept "every panel with `top < 900`" and asserted the set was non-empty; the first panel sits at 894 on Windows, Linux runner fonts pushed it past 900, the set emptied and the guard fired - green locally every time, red on `main` every time. Cut the set on something the page itself draws, never on a number you chose.
 
 **A spec cannot import a client module that imports `$app/paths` as a value.** Bundle it first (esbuild or vite, UMD output, a stub for the app module) and inject with `addInitScript`.
 
