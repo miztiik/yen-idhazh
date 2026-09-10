@@ -18,7 +18,7 @@ owns the prompt.
 
 `backend/idhazh/prompts/summarize.txt` holds no numbers. It holds
 `$target_words_min`, `$title_words_max`, `$max_verbatim_words` and their
-siblings, and `system_prompt()` substitutes them from `config.summarize` at
+siblings, and `system_prompt` substitutes them from `config.summarize` at
 render time (Rule #6).
 
 Substitution uses `substitute` and never `safe_substitute`. A renamed knob
@@ -29,7 +29,7 @@ looks like.
 ## One ask per article length
 
 `config.summarize.bands` holds one length ask per article size, ordered by
-`min_source_words`. `band_for()` picks the longest band the article reaches,
+`min_source_words`. `band_for` picks the longest band the article reaches,
 unless extraction recorded the item as brief. A brief item always uses band 0.
 
 A release note and a long read asked for the same number of words gives a padded
@@ -52,14 +52,14 @@ Five rungs, and what a reader gets on each:
 Three rules make band selection safe rather than approximate:
 
 - The first band must start at zero, so selection is total and no article falls
-  through with no ask at all.
+ through with no ask at all.
 - Bands must climb, and no two may start at the same length. A config whose
-  bands do not climb is refused at load, because `band_for` would otherwise
-  return the wrong ask instead of failing.
+ bands do not climb is refused at load, because `band_for` would otherwise
+ return the wrong ask instead of failing.
 - **No band floor may sit above the cut point**, which is
-  `int(extract.truncation_cap_tokens / TOKENS_PER_WORD)`.
-  `test_no_rung_floor_ever_sits_above_the_cut_point` reads both sides from
-  `config/` and fails on a ladder that breaks it.
+ `int(extract.truncation_cap_tokens / TOKENS_PER_WORD)`.
+ `test_no_rung_floor_ever_sits_above_the_cut_point` reads both sides from
+ `config/` and fails on a ladder that breaks it.
 
 The band is chosen from the length of the **source body**, before
 `extract.truncation_cap_tokens` cut it. `Article.source_word_count` carries that
@@ -196,7 +196,7 @@ receive the same words. It can be built the day decoding stops being greedy, and
 not before.
 
 **The decoder rail is the trap in this design.**
-`SummarizeConfig.decoder_words_max()` is deliberately the loosest number in the
+`SummarizeConfig.decoder_words_max` is deliberately the loosest number in the
 file - the widest ask plus its allowance - because the rail is enforced as a
 character budget during decoding. A reply past it fails to parse, and a reply
 that cannot parse never reaches the verdict that would have trimmed it or
@@ -466,11 +466,11 @@ source's headline stays where it always was, on the article.
 Five rules, in the prompt:
 
 - Read the article **body** and the source's headline, then write a new title of
-  `title_words_min` to `title_words_max` words that states the main topic.
+ `title_words_min` to `title_words_max` words that states the main topic.
 - **Do not copy the source's headline and do not repair it.**
 - Name the actor and the action, with a worked example of each.
 - No sensationalism, no clickbait, no hype. A title that asks a question,
-  withholds the fact, or addresses the reader is not a title.
+ withholds the fact, or addresses the reader is not a title.
 - Everything about attribution and certainty applies to the title too.
 
 **The body is named first because the headline is the weaker input.** The ask is
@@ -503,7 +503,7 @@ absent whenever the rewrite missed its range.
 The intended fingerprint ledger expands it, but production does not write that
 ledger yet.
 
-It hashes `prompt_inputs()` - the template text plus every number that can be
+It hashes `prompt_inputs` - the template text plus every number that can be
 substituted into it - and not one rendered prompt. The rendered text varies with
 the article's length, so a stamp built from it would move per item and could not
 answer the question the stamp exists to answer.
@@ -511,10 +511,10 @@ answer the question the stamp exists to answer.
 Two consequences once fingerprint-based skip is wired:
 
 - Editing the wording, any band, or any title knob changes the stamp exactly
-  once and would invalidate every prior work identity.
+ once and would invalidate every prior work identity.
 - A band edit re-summarizes articles in the other bands too. That
-  over-invalidates by design. It is cheaper than a rule that has to decide which
-  articles an edit reached, and it is wrong in the safe direction.
+ over-invalidates by design. It is cheaper than a rule that has to decide which
+ articles an edit reached, and it is wrong in the safe direction.
 
 This also closed a hole: `summary_words_min` and `summary_words_max` decide which
 summaries are publishable and were absent from the fingerprint, so a cached
@@ -556,12 +556,12 @@ Three expensive lines were considered and **kept**, because each does work no
 other line does:
 
 - **The worked example** - "Example Grid orders four reactors from Northwind
-  Atomics" against "A major move in the nuclear sector". 26 words, and the only
-  few-shot signal in the file.
+ Atomics" against "A major move in the nuclear sector". 26 words, and the only
+ few-shot signal in the file.
 - **The five hedge terms** - "reportedly", "is expected to", "could", "may",
-  "according to". Every one is a literal member of the lexicons in
-  `backend/idhazh/evals/metrics.py`. The prompt and the alarm share a vocabulary
-  on purpose; cutting the list decouples them.
+ "according to". Every one is a literal member of the lexicons in
+ `backend/idhazh/evals/metrics.py`. The prompt and the alarm share a vocabulary
+ on purpose; cutting the list decouples them.
 - **"The summary is prose."** - four words that stop a bulleted summary.
 
 **Length is not the measure of a prompt; conditioning is.** A cut is safe when
@@ -586,7 +586,7 @@ obeyed.** Measured 2026-09-02 over twenty items drawn from the two longest
 summary bands, ninety key points read one at a time: **78 of 89 clear verdicts
 restate a claim the summary already makes**, and thirteen of the twenty items
 add nothing at all
-([../../reference/measurements.md](../../reference/measurements.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02)).
+([../../reference/measurements.md](../../archive/measurements-2026-08.md#whether-an-items-key-points-repeat-its-own-summary-2026-09-02)).
 The instruction survives the terseness pass on the same argument as before - it
 is one line and the failure it prevents is worse than the failure it allows -
 but nobody may now claim the behaviour is intact. Nothing in the pipeline reads

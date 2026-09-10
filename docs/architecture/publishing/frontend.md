@@ -8,9 +8,9 @@ Concept-level *why* lives in [../../concepts/digest.md](../../concepts/digest.md
 
 ## Six documents, and a seventh that answers every dated address
 
-Six routes are generated at build time - `/`, `/archive/`, `/evals/` and the three console routes - and `adapter-static`'s fallback, `404.html`, answers everything else. SvelteKit with `adapter-static`, `prerender = true` declared on each of those six, and no `entries()` reading the digest tree anywhere. `/`, `/archive/`, `/404`, `/evals/` and the console inline everything they draw; a dated URL is the fallback document, and the page fetches the served day for the whole of it.
+Six routes are generated at build time - `/`, `/archive/`, `/evals/` and the three console routes - and `adapter-static`'s fallback, `404.html`, answers everything else. SvelteKit with `adapter-static`, `prerender = true` declared on each of those six, and no `entries` reading the digest tree anywhere. `/`, `/archive/`, `/404`, `/evals/` and the console inline everything they draw; a dated URL is the fallback document, and the page fetches the served day for the whole of it.
 
-**Until 2026-09-09 every route was prerendered, and that cost six documents a published day.** 20 dated pages and 96 topic pages, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. Measured on a real build, Intel Core i7-1265U, 2026-09-09, `BUILD_VERSION` pinned across both arms: 796 files and 116,050,183 bytes before, **572 files and 101,880,352 after** - 224 files and 14,169,831 bytes, 12.2 percent of the built site. 123 documents become 7 and 121 `__data.json` files become 5. **The document count no longer moves when a day is added**, which is the whole of it.
+**Until 2026-09-09 every route was prerendered, and that cost six documents a published day.** 20 dated pages and 96 topic pages, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinned across both arms: 796 files and 116,050,183 bytes before, **572 files and 101,880,352 after** - 224 files and 14,169,831 bytes, 12.2 percent of the built site. 123 documents become 7 and 121 `__data.json` files become 5. **The document count no longer moves when a day is added**, which is the whole of it.
 
 Three consequences, and the third one changed shape again when the dated routes moved into the browser:
 
@@ -70,7 +70,7 @@ the server sends the drawing and the numbers, never a drawing instruction.
 
 **Missing and Unreachable are two sentences and they never merge.** Telling a reader a day was never published when their train went into a tunnel is a lie they can check. What separates them is now the host's own answer: a 404 or a 410 for `digest/<Y>/<M>/<D>/digest.json` is the host saying it has no such day, and every other failure is the connection. [NotHere.svelte](../../../frontend/src/lib/components/NotHere.svelte) is the one copy of the Missing screen - the framework's error page renders it for a status it was handed, and a dated page renders it when the host says it has no such day, because a reader cannot tell those two apart and must not be told different things by them.
 
-**The table has a machine-readable half, and it is `data-payload-state`.** The live region that [PayloadState.svelte](../../../frontend/src/lib/components/PayloadState.svelte) renders on every state carries the current `DayStatus` - `loading`, `slow`, `ready`, `unreachable` - as that attribute, and Missing is absent from it because that screen is `NotHere` and this region is not on the page at all. The route sets the status and the day in one callback, so **`ready` lands in the same flush as the stories**: it is the only honest "the whole day is in this document". This is what a check measures a dated page by, and there is nothing else it can use - one shell answers every dated address, so the HTML a load or a reload returns carries no stories, offline included, where the worker answers the fetch instead of the host. A count taken at the load event is a count of the shell, and whether it happens to find the day is a property of the machine: measured 2026-09-09 on an Intel Core i7-1265U, three runs of the offline arm, the day was already on the page every time - the same read on `ubuntu-latest` found nothing and took `main` red. The wait is one helper, [../../../frontend/tests/support/day-ready.ts](../../../frontend/tests/support/day-ready.ts), rather than the nine longhand copies that let one spec be written without it.
+**The table has a machine-readable half, and it is `data-payload-state`.** The live region that [PayloadState.svelte](../../../frontend/src/lib/components/PayloadState.svelte) renders on every state carries the current `DayStatus` - `loading`, `slow`, `ready`, `unreachable` - as that attribute, and Missing is absent from it because that screen is `NotHere` and this region is not on the page at all. The route sets the status and the day in one callback, so **`ready` lands in the same flush as the stories**: it is the only honest "the whole day is in this document". This is what a check measures a dated page by, and there is nothing else it can use - one shell answers every dated address, so the HTML a load or a reload returns carries no stories, offline included, where the worker answers the fetch instead of the host. A count taken at the load event is a count of the shell, and whether it happens to find the day is a property of the machine: measured 2026-09-09 on a developer machine, three runs of the offline arm, the day was already on the page every time - the same read on `ubuntu-latest` found nothing and took `main` red. The wait is one helper, [../../../frontend/tests/support/day-ready.ts](../../../frontend/tests/support/day-ready.ts), rather than the nine longhand copies that let one spec be written without it.
 
 The home page uses the newest committed payload as the day it can prove. It never
 uses the build clock as "today". If the site is rebuilt after a quiet or failed
@@ -81,7 +81,7 @@ state offers the archive plus the latest published day when one exists.
 
 Until 2026-09-05 every published chart shipped inside an `img`. An SVG in an `img` is a separate document: it reads none of the page's custom properties, so the only colours it could ever have are the ones the renderer baked in. Those are black axis type, `#888` ticks, `#ddd` grid lines and a `#4c6ef5` bar - fine on white, and on the dark theme black type on a near-black card. **It was the loudest reader-facing defect on the site and no gate could see it**, because every check the drawing had was about whether the file was served. The grid lines are in that palette and were never in a published drawing: the census below counted 0 of 351.
 
-The fix is the carrier, and it changes no backend byte. `dayShell()` reads the file off disk for the stories the prerendered document carries and hands the markup over with the story; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) puts it in the document and repaints it from the page's own tokens. **A presentation attribute has the lowest priority in the cascade**, so a stylesheet rule wins over `fill="#000"` with no `!important` and with nothing added to the file - the drawing keeps saying what it said and only the paint moves. Four groups, four tokens:
+The fix is the carrier, and it changes no backend byte. `dayShell` reads the file off disk for the stories the prerendered document carries and hands the markup over with the story; [ItemVisual.svelte](../../../frontend/src/lib/components/ItemVisual.svelte) puts it in the document and repaints it from the page's own tokens. **A presentation attribute has the lowest priority in the cascade**, so a stylesheet rule wins over `fill="#000"` with no `!important` and with nothing added to the file - the drawing keeps saying what it said and only the paint moves. Four groups, four tokens:
 
 | What is drawn | Token | Why that one |
 | --- | --- | --- |
@@ -94,9 +94,9 @@ The drawing that is not a chart needed none of them. The diagram renderer alread
 
 **What the reader gained, as contrast on the dark card.** Measured 2026-09-05 against `--color-surface`: the axis type was black on `#141922`, which is **1.19:1** where readable text needs 4.5:1, and it is now 7.86:1. The bars went from a fixed `#4c6ef5` to 5.93:1 on dark and 6.35:1 on light. The light theme was always fine, which is why this survived every review: the defect was invisible to anyone reading in the theme the drawing was drawn for. The grid lines were `#ddd` at **12.97:1**, which is the loudest thing in a figure - but that figure is the canary chart, and no reader has ever been served one. The census below is where that number comes from.
 
-**Inlining markup means the markup is checked, and since 2026-09-09 the build checks almost none of it.** `refusedDrawing()` in [../../../frontend/src/lib/payload/drawing.ts](../../../frontend/src/lib/payload/drawing.ts) is the guard: it refuses a file that is not a published visual path and a file whose markup carries anything a document should not, and a refused drawing is simply not drawn. The module and the rule did not change when the dated routes moved - **where it runs did.** `withDrawing()` is called from `dayShell()`, and `dayShell()` is now called by `/` alone, so the build reads and refuses over the seed of the newest day and nothing else. Every other drawing on the site is checked in the reader's browser instead, by the same function, on the day they ask for it. So the guarantee is the same and the place it is enforced is not: a bad SVG committed for an older day fails no build and no gate, and is caught on the device of the reader who opens that day (row #14 decision 4 of [the shell-and-fetch plan](../../../TODO/20260908-shell-and-fetch-plan.md), Fowler, 2026-09-08). It is the same trade `validate-days` records above - the build stopped being the place a bad day is found, and it is written down rather than assumed.
+**Inlining markup means the markup is checked, and since 2026-09-09 the build checks almost none of it.** `refusedDrawing` in [../../../frontend/src/lib/payload/drawing.ts](../../../frontend/src/lib/payload/drawing.ts) is the guard: it refuses a file that is not a published visual path and a file whose markup carries anything a document should not, and a refused drawing is simply not drawn. The module and the rule did not change when the dated routes moved - **where it runs did.** `withDrawing` is called from `dayShell`, and `dayShell` is now called by `/` alone, so the build reads and refuses over the seed of the newest day and nothing else. Every other drawing on the site is checked in the reader's browser instead, by the same function, on the day they ask for it. So the guarantee is the same and the place it is enforced is not: a bad SVG committed for an older day fails no build and no gate, and is caught on the device of the reader who opens that day (row #14 decision 4 of [the shell-and-fetch plan](../../../TODO/20260908-shell-and-fetch-plan.md), Fowler, 2026-09-08). It is the same trade `validate-days` records above - the build stopped being the place a bad day is found, and it is written down rather than assumed.
 
-**Every published drawing is a bar chart, and not one of them carries a grid line.** Counted 2026-09-05 over all 351 drawings the 15 committed days hold: 351 carry a bar, an axis label and an axis line, 0 carry a grid line, and 0 carry a mark of any other type - no line, no area, no arc, no point, and no diagram. It is not an accident of the corpus. `chart_spec()` in [visual_planner.py](../../../backend/idhazh/visual_planner.py) writes `"mark": {"type": "bar"}` and `"axis": {"grid": False}` on every spec it builds, so nothing else can reach a reader while that function is the renderer.
+**Every published drawing is a bar chart, and not one of them carries a grid line.** Counted 2026-09-05 over all 351 drawings the 15 committed days hold: 351 carry a bar, an axis label and an axis line, 0 carry a grid line, and 0 carry a mark of any other type - no line, no area, no arc, no point, and no diagram. It is not an accident of the corpus. `chart_spec` in [visual_planner.py](../../../backend/idhazh/visual_planner.py) writes `"mark": {"type": "bar"}` and `"axis": {"grid": False}` on every spec it builds, so nothing else can reach a reader while that function is the renderer.
 
 Two consequences, and they point opposite ways. The `--chart-grid` rule is exercised only by the canary chart, whose spec is hand-written in `build_canary_day.py` and leaves the grid at the Vega-Lite default - so `item-visual.spec.ts` asserts a rule that no published page has ever used. **It is kept anyway**: it is four lines, it costs a reader nothing, and the day a renderer starts drawing a grid is the day the dark theme would break again without it. The other consequence is the one nothing here can fix. Forty-three drawings on 2026-08-31 - the heaviest committed day, 43 across 601 stories - are 43 distinct files that are all the same picture, and a reader scrolling that day meets one bar chart after another. That is the renderer's shape, so it is the renderer's plan to change; this page records the number so the plan that replaces it does not have to re-measure.
 
@@ -115,13 +115,13 @@ A day page went up by about a fifth of what a single round trip costs on a slow 
 
 **The fetch waits until the story is nearly on screen**, because the `img` carried `loading="lazy"` and a plain fetch on mount throws that away. The case where that hurts is not the ordinary one. A reading page draws twelve stories and the seed is fifteen, so a reader who lands on `/<date>/` fetches **no** drawing at all until they press for more, and each press brings twelve stories carrying **0.66 drawings on average** - measured 2026-09-05 over the 15 committed days, 351 drawings across 6,425 stories, which is 5.5 percent. The case that hurts is a deep link: `/<date>/#<story>` pages the stream down to that story, so the whole prefix mounts at once, and on 2026-08-31 - the day carrying the most drawings, 43 across 601 stories - that is up to 43 requests and 534 KB opened together, against the day payload the same page is still waiting on. An `IntersectionObserver` with a `100%` root margin holds it to the drawings within one screen of the reader. The margin is a percentage rather than a pixel count, so a phone asks one phone-screen early and a desktop one desktop-screen, and there is no number to maintain.
 
-**One watcher serves every story that is waiting.** A watcher per story is a cost that rises with the day rather than with the code, which is the shape Rule #12 refuses: nobody writes a line and the page gets more expensive, because the run published more stories. [reveal.ts](../../../frontend/src/lib/reveal.ts) holds one `IntersectionObserver` and a map from element to the work that element waits for, so a story registers on mount and is dropped from both when it goes. Measured 2026-09-06 on an Intel Core i7-1265U against the built site, `/2026-08-31/` with all 601 stories revealed and all 43 drawings fetched: **44 observers before, 2 after**. One of each pair is SvelteKit's own link-preload watcher, so ours went from 43 to 1 - one per drawing, to one for the page - and every drawing still arrived. The count is deterministic rather than sampled; the new arm returned 2 on each of three runs. The module imports nothing, for the same reason [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) does: a spec can then drive it in a plain `node` process, which is the only way this rule can be checked at all. The canary day is eight stories against a seed of fifteen, so no canary page ever holds a waiting story and no browser check can reach this path.
+**One watcher serves every story that is waiting.** A watcher per story is a cost that rises with the day rather than with the code, which is the shape Rule #12 refuses: nobody writes a line and the page gets more expensive, because the run published more stories. [reveal.ts](../../../frontend/src/lib/reveal.ts) holds one `IntersectionObserver` and a map from element to the work that element waits for, so a story registers on mount and is dropped from both when it goes. Measured 2026-09-06 on a developer machine against the built site, `/2026-08-31/` with all 601 stories revealed and all 43 drawings fetched: **44 observers before, 2 after**. One of each pair is SvelteKit's own link-preload watcher, so ours went from 43 to 1 - one per drawing, to one for the page - and every drawing still arrived. The count is deterministic rather than sampled; the new arm returned 2 on each of three runs. The module imports nothing, for the same reason [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) does: a spec can then drive it in a plain `node` process, which is the only way this rule can be checked at all. The canary day is eight stories against a seed of fifteen, so no canary page ever holds a waiting story and no browser check can reach this path.
 
 **A story that leaves the page takes its request with it.** Unmount drops the watch and aborts the fetch, so a reader who pages away is not still paying for markup nothing will show, and a response that lands after the story is gone is discarded rather than written into a component that no longer exists. An aborted fetch is silent: it is the reader's own move, not a fault, and logging it would fill the console on every page change.
 
 **A drawing that does not arrive leaves the story shorter, and nothing else.** No broken-image glyph, no grey box, no skeleton - which is the shape two stories in three already have, and the reason the placeholder was refused in the first place: a grey rectangle makes "this story needed no picture" look identical to "the picture failed". The element that waits for the fetch is a zero-height `div` with no border and no background, so a story that never gets its drawing is exactly as tall as a story that never had one.
 
-**And the drawing has to survive the rest of the day arriving.** A reading route sets `arrived = whole.items` when the fetch lands, which swapped the seed out for the served copy - and the served copy carries no markup, by design. Measured 2026-09-05 on `/2026-09-04/` before the fix: the document held an inline drawing and the page held an `img` a second later, which is the defect this row exists to remove, arriving one second late. `keepDrawings()` in [day-shape.ts](../../../frontend/src/lib/day-shape.ts) re-attaches the seed's drawings by story id, and both reading routes call it at the one line where the list is replaced. It lives beside `orderByTime` rather than in the fetch module because that module imports `$app/paths`, and a spec that imports `$app` fails the whole browser suite at load - so a rule with no test would have been the alternative.
+**And the drawing has to survive the rest of the day arriving.** A reading route sets `arrived = whole.items` when the fetch lands, which swapped the seed out for the served copy - and the served copy carries no markup, by design. Measured 2026-09-05 on `/2026-09-04/` before the fix: the document held an inline drawing and the page held an `img` a second later, which is the defect this row exists to remove, arriving one second late. `keepDrawings` in [day-shape.ts](../../../frontend/src/lib/day-shape.ts) re-attaches the seed's drawings by story id, and both reading routes call it at the one line where the list is replaced. It lives beside `orderByTime` rather than in the fetch module because that module imports `$app/paths`, and a spec that imports `$app` fails the whole browser suite at load - so a rule with no test would have been the alternative.
 
 **Inlining moves the trust boundary, and the check is at the move - on both sides of it.** Inside an `img` an SVG is inert whatever it holds. In the document it is markup in our own origin, and a chart's labels are written by a model that read a stranger's page (Rule #11). So a drawing is refused if it does not open on an `<svg>` element or if it carries a script, an inline handler, embedded HTML, a link out, or a fetched image - and its path is matched against the shape `visual_planner.py` writes before that path is joined onto a directory or onto `base`, because it is about to become an address. [drawing.ts](../../../frontend/src/lib/payload/drawing.ts) holds both checks and imports nothing, which is what lets the build and the browser run the same code: `node:fs` in that graph would put the build's file reader in a browser bundle, and a `$lib` alias would put a Vite alias in a plain `node` process. **The browser's copy is the one that matters**, because that is the path a stranger's bytes travel with nobody watching; two copies of one refusal is how the two drift. A refused drawing is logged by name and not drawn, which is a degrade rather than a failure: the story is shorter. [frontend/tests/item-visual.spec.ts](../../../frontend/tests/item-visual.spec.ts) plants each of those six shapes in a copy of the canary tree, asserts the markup never reaches the story and that the same markup would be refused on the fetch path too, with a control that the ordinary drawing does inline - without it every refusal case would pass on a build that inlined nothing.
 
@@ -149,7 +149,7 @@ A seven-line inline script applies a stored `light` before first paint. It is th
 
 `system` was a third toggle state until 2026-08-31. It was removed with `ThemeChoice.SYSTEM`, `watchSystem` and the sun glyph, on the owner's decision that the site starts dark. What a reader loses is a theme that follows their device at sunset; what they get is a control with one obvious action instead of three. `config/appearance.json` still names the default in `digest.theme_default`, and a config that still says `system` reads as `dark` (`CLAUDE.md` section 11).
 
-The browser's own chrome follows the page. `app.html` ships one unconditional `theme-color` tag holding the base theme's background, because an installed window reads it at launch before any script has run and the page is dark whatever the system prefers - a media-scoped pair would be wrong for every reader whose system says light and who has chosen nothing. `apply()` in `$lib/theme` rewrites that same tag from the resolved `--color-bg`, so a reader who picked light does not sit under dark chrome.
+The browser's own chrome follows the page. `app.html` ships one unconditional `theme-color` tag holding the base theme's background, because an installed window reads it at launch before any script has run and the page is dark whatever the system prefers - a media-scoped pair would be wrong for every reader whose system says light and who has chosen nothing. `apply` in `$lib/theme` rewrites that same tag from the resolved `--color-bg`, so a reader who picked light does not sit under dark chrome.
 
 The oracle is [../../../frontend/tests/theme.spec.ts](../../../frontend/tests/theme.spec.ts). It loads every route three ways - no stored choice, `light` stored, `dark` stored - and asserts that every change to `data-theme` happened while `document.body` was still null, which is what makes it a statement about the first painted frame rather than about the settled one. A fourth arm runs with JavaScript switched off, where there is exactly one frame and it has to be dark.
 
@@ -243,7 +243,7 @@ They now split by what they are a claim about.
 
 **Below the summary is document order, not paint order.** At the side-rail breakpoint the footer moves into a 14rem column beside the prose, as the meta line always did. What the split promises is the order a reader meets the facts in, including with no stylesheet and in a screen reader; where the browser paints them at 1024px and up is [layout.md](layout.md)'s business and row #18 of the reading-page plan revisits it.
 
-**What it weighs: nothing worth a sentence, which is the answer that had to be measured.** Two builds on Intel Core i7-1265U / Windows 11 / node 24.12.0, 2026-09-01, over the same 12 committed days and 4,468 items - one of this branch, one of the same worktree with the five changed source files checked out at `8d658de3`. `gzip -9` on each prerendered document, treated minus control:
+**What it weighs: nothing worth a sentence, which is the answer that had to be measured.** Two builds on a developer machine / / node 24.12.0, 2026-09-01, over the same 12 committed days and 4,468 items - one of this branch, one of the same worktree with the five changed source files checked out at `8d658de3`. `gzip -9` on each prerendered document, treated minus control:
 
 | Route | Control | This change | Move |
 | --- | ---: | ---: | ---: |
@@ -336,7 +336,7 @@ because a trigger nobody wrote down is a feature nobody ships.
 
 A reader can mark an item read. The mark lives in `localStorage` and nowhere else - never a cookie, because a cookie is sent on every request and would put a reading history into the host's access logs.
 
-**The store is keyed by digest date, one storage key a date**: `idhazh:read:2026-08-23` holds `["ai-0417291083", ...]`. It used to be one flat list of ids with no date, and that shape had two faults that are really one fault:
+**The store is keyed by digest date, one storage key a date**: `idhazh:read:2026-08-23` holds `["ai-0417291083",...]`. It used to be one flat list of ids with no date, and that shape had two faults that are really one fault:
 
 - **It greyed out the wrong article.** An id that came round again on a later day matched a mark the reader had never made, so an unopened item arrived already read.
 - **It grew forever.** Nothing in a bare list says which day a mark belongs to, so nothing could ever decide which marks to drop.
@@ -402,7 +402,7 @@ Two shapes were refused. **A search field that expands to reveal filters** hides
 
 **The panel is a surface, not a rule.** It takes `--color-surface`, a hairline and `--radius-lg`, the same low-chrome card language the item took in row #8 - the sticky band needs a ground of its own to sit in front of, and a bordered panel is what says the pills and the field are one control rather than two things that happen to be adjacent.
 
-**What it costs in vertical space, measured rather than asserted.** Chromium on the built site, the real 2026-09-01 digest of 117 stories over five desks, an 800px-tall CSS viewport, Intel Core i7-1265U / Windows 11 / node 24.12.0, 2026-09-01. Geometry is deterministic for a given pill count, so the spread is zero across repeats and the numbers move with the number of desks that published, not with the day's story count.
+**What it costs in vertical space, measured rather than asserted.** Chromium on the built site, the real 2026-09-01 digest of 117 stories over five desks, an 800px-tall CSS viewport, a developer machine / / node 24.12.0, 2026-09-01. Geometry is deterministic for a given pill count, so the spread is zero across repeats and the numbers move with the number of desks that published, not with the day's story count.
 
 | CSS viewport width | Panel height | Share of the screen | Position |
 | --- | --- | --- | --- |
@@ -416,7 +416,7 @@ That table is the argument for decision 3 rather than an illustration of it. At 
 
 ## The archive lists stories, and fetches them a month at a time
 
-`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on one checkout, six committed days and 2,237 items: **1,766,682 gzipped bytes**, growing **489,843 bytes** for the one extra day that carried 621 stories. The page a reader opened to find one story carried all of them. It is **2,912 bytes** now, and one more day of 621 stories costs it **24 bytes** ([../../reference/measurements.md](../../reference/measurements.md#the-archive-stops-carrying-the-corpus)).
+`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on one checkout, six committed days and 2,237 items: **1,766,682 gzipped bytes**, growing **489,843 bytes** for the one extra day that carried 621 stories. The page a reader opened to find one story carried all of them. It is **2,912 bytes** now, and one more day of 621 stories costs it **24 bytes** ([../../reference/measurements.md](../../reference/measurements-site.md#the-archive-stops-carrying-the-corpus)).
 
 What it renders now, top to bottom:
 
@@ -468,8 +468,8 @@ still grows with days:
 
 Both fixture archives cover the same 24 months, so the difference between the
 two rows of each column is days and nothing else. Measured 2026-09-01 on Intel
-Core i7-1265U / Windows 11 / node 24.12.0; method and the full numbers in
-[../../reference/measurements.md](../../reference/measurements.md#the-archive-day-list-stops-growing-a-row-a-day).
+Core a developer machine / / node 24.12.0; method and the full numbers in
+[../../reference/measurements.md](../../reference/measurements-site.md#the-archive-day-list-stops-growing-a-row-a-day).
 
 #### Design rationale
 
@@ -650,7 +650,7 @@ A reader whose days were written by another encoder gets one line where the offe
 
 Our own origin is primary and the committed weights stay. A reader whose fetch of them fails - a dead cache, a partial deploy, a network that answers this site but not that file - used to get an archive with no search in it and one sentence saying the download did not finish. Since 2026-09-10 the browser tries again at Hugging Face.
 
-**The ordering is the library's own resolution, not code of ours.** `transformers.env.allowRemoteModels` stays `false` and `allowLocalModels` stays `true`, so the first `pipeline()` call can only read our copy. Nobody pays the second origin's extra 6.75 MB unless this site has already failed them, and there is no ordering code to get wrong. Only when that call throws does [frontend/src/lib/assist/weights.ts](../../../frontend/src/lib/assist/weights.ts) run.
+**The ordering is the library's own resolution, not code of ours.** `transformers.env.allowRemoteModels` stays `false` and `allowLocalModels` stays `true`, so the first `pipeline` call can only read our copy. Nobody pays the second origin's extra 6.75 MB unless this site has already failed them, and there is no ordering code to get wrong. Only when that call throws does [frontend/src/lib/assist/weights.ts](../../../frontend/src/lib/assist/weights.ts) run.
 
 **The URL is the convenience; the manifest is the point.** `assist.model_digests` in `config/idhazh.json` holds the SHA-256 of all five encoder files. The browser hashes every arriving file and compares before a single byte reaches transformers.js. On any miss - a non-200, a truncation, a timeout or a wrong digest - the **whole set is discarded**, and the reader is told the download did not finish. Provenance is never mixed across files: five verified files or none, never four of ours and one of theirs. Without that, naming a second origin would be a permission for another party to put bytes into a reader's tab.
 
@@ -659,7 +659,7 @@ Four things make it check rather than look like it checks.
 - **The manifest is baked into the bundle, not fetched.** `vite.config.ts` reads it from `config/` at build time into `__ENCODER_SOURCE__`. A manifest a page fetched could be answered by whoever answered the fetch, which is the thing it exists to guard against. It rides in the `/archive/` route's JavaScript rather than the prerendered document, so roughly 600 bytes of hex stay out of a page measured against a 6,400-byte ceiling.
 - **The fetch is pinned to a 40-hex commit.** `assist.model_revision` is refused by the contract unless it is one, because a branch hands back whatever was uploaded last and would make every digest a coin flip. `ENCODER_VERSION` in `encoder.ts` is the browser's copy of it and `backend/tests/test_embed.py` fails when the two differ.
 - **The manifest is checked against the committed weights on every build**, not on a reader's device. A manifest that drifted from the bytes would discard every set a browser fetched and leave no trace except readers with no search. The same test hashes the five files.
-- **An incomplete block turns the leg off rather than half on.** `encoderSource()` in [frontend/asset-base.js](../../../frontend/asset-base.js) answers the empty block unless a URL, a revision, a non-empty manifest and a deadline are all present, so a config edit cannot widen `connect-src` without also committing what the bytes must hash to.
+- **An incomplete block turns the leg off rather than half on.** `encoderSource` in [frontend/asset-base.js](../../../frontend/asset-base.js) answers the empty block unless a URL, a revision, a non-empty manifest and a deadline are all present, so a config edit cannot widen `connect-src` without also committing what the bytes must hash to.
 
 **`connect-src` ships as `'self' https://huggingface.co https://us.aws.cdn.hf.co`.** Three sources, every one derived from `config/idhazh.json` by the same module the fetch reads, so the CSP half and the fetch half cannot disagree. The CDN is listed because a browser checks a redirect target: measured 2026-09-09 from the live Pages origin, 15 reads of 15, the four small files answer on the base host and the 23 MB of weights answers 302 to that CDN. Listing the base host alone would pass the small files and block the model, which is the worst of both.
 
@@ -720,18 +720,18 @@ how a lead is chosen is
 Three rules make this hierarchy rather than truncation:
 
 - **No item is removed, hidden or re-ranked.** A lead names a story the stream
-  already holds, in the place it already holds it, and the block draws what the
-  payload hands it rather than re-ranking anything in the browser.
+ already holds, in the place it already holds it, and the block draws what the
+ payload hands it rather than re-ranking anything in the browser.
 - **Every lead's story is rendered, so every anchor resolves.** The stream draws
-  the head of the published order plus every lead, in published order and never
-  twice. That is not a nicety: measured 2026-09-01 on the 601-story day of
-  2026-08-31, the five leads sat at positions 249, 285, 337, 344 and 493, so a
-  page holding only the head is a block whose links land on nothing - and
-  SvelteKit's own `handleMissingId` check fails the build rather than shipping
-  it.
+ the head of the published order plus every lead, in published order and never
+ twice. That is not a nicety: measured 2026-09-01 on the 601-story day of
+ 2026-08-31, the five leads sat at positions 249, 285, 337, 344 and 493, so a
+ page holding only the head is a block whose links land on nothing - and
+ SvelteKit's own `handleMissingId` check fails the build rather than shipping
+ it.
 - **A topic route and an active filter draw no block.** Both already have a
-  subject, and a lead outside what the page is showing is a link that scrolls
-  to nothing.
+ subject, and a lead outside what the page is showing is a link that scrolls
+ to nothing.
 
 **What this replaced, and what it cost.** Until 2026-09-01 the view rendered one
 section per vertical showing each topic's first `ui.items_per_topic` stories and
@@ -759,7 +759,7 @@ stood empty beside the prose, at every width from 1,280px up. The frame is not
 the problem and was not widened: at 801px the item already takes 91.9 percent of
 the frame. What is spendable is one column of at most 27.1rem, once a
 68-character measure and a 1.75rem source mark are paid for
-([../../reference/measurements.md](../../reference/measurements.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02)).
+([../../reference/measurements.md](../../reference/measurements-site.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02)).
 
 **One trailing column at a time.** The item's own footer rail wants the same
 slot, and keeping both leaves the summary 570px against a measure of 659.81. So
@@ -846,7 +846,7 @@ It would also be three removes from the source - a summary of summaries of artic
 ## The footer is its links, and nothing else
 
 ```
-Archive   Console   Source code
+Archive Console Source code
 ```
 
 Links only, because they are the only thing in a footer anyone came to use.
@@ -879,7 +879,7 @@ route has such a file. The root layout is above every route on the site, so
 keeping its `load` on the server decided that for all of them, and a route that
 ever stopped being prerendered would meet the framework's error screen instead of
 its own page. The knobs travel as `__UI_CONFIG__` instead, which
-`vite.config.ts` resolves once per build out of the same `uiConfig()` the server
+`vite.config.ts` resolves once per build out of the same `uiConfig` the server
 reader owns - a knob a surface needs is imported into the bundle at build time
 and never fetched
 ([../../concepts/config.md](../../concepts/config.md)). Page options went with the
@@ -976,7 +976,7 @@ one convention: the heaviest of five builds of the tree that ships, plus a
 tenth, measured at `gzip -5`.** That replaced four different conventions the old
 set had accumulated. The current numbers, the spread they were taken over and
 the arms behind them are in
-[../../reference/measurements.md](../../reference/measurements.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10);
+[../../reference/measurements.md](../../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10);
 `config/idhazh.json` is where they live and
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) is what to do when
 one fires.

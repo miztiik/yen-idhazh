@@ -146,31 +146,31 @@ news day.** Until 2026-08-31 the console painted both from the sign, so the
 improvement read as the loss.
 
 - **Polarity is a property of the measure, declared where the measure is
-  defined** - `lower-is-better`, `higher-is-better`, or `no-agreed-direction`.
-  The console declares it in three places and nowhere else: `COLUMNS` on the
-  Model route, `sideMeasures` in
-  [../../frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts),
-  and the `TargetSense` a bar was already built with. A component that decided
-  its own is how two cards come to disagree about whether down is good.
+ defined** - `lower-is-better`, `higher-is-better`, or `no-agreed-direction`.
+ The console declares it in three places and nowhere else: `COLUMNS` on the
+ Model route, `sideMeasures` in
+ [../../frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts),
+ and the `TargetSense` a bar was already built with. A component that decided
+ its own is how two cards come to disagree about whether down is good.
 - **A movement with no agreed direction paints neutral and says so**, in words
-  on the card. Susan, 2026-08-31: a grey number a reader has to interpret is a
-  fact withheld.
+ on the card. Susan, 2026-08-31: a grey number a reader has to interpret is a
+ fact withheld.
 - **Zero is neutral on every measure.** Nothing moved, so there is no direction
-  to be right about.
+ to be right about.
 - **The pair is not the confidence ramp and may never equal it.** Green there
-  means "it worked". A summary that got 3 percent slower is not broken, and
-  painting it `--band-low` is how an operator learns to ignore `--band-low`.
-  `ThemeConfig` in
-  [../../backend/idhazh/contracts/appearance_config.py](../../backend/idhazh/contracts/appearance_config.py)
-  refuses a movement value equal to a band value, and
-  [../../frontend/tests/console-polarity.spec.ts](../../frontend/tests/console-polarity.spec.ts)
-  refuses it again on the rendered page.
+ means "it worked". A summary that got 3 percent slower is not broken, and
+ painting it `--band-low` is how an operator learns to ignore `--band-low`.
+ `ThemeConfig` in
+ [../../backend/idhazh/contracts/appearance_config.py](../../backend/idhazh/contracts/appearance_config.py)
+ refuses a movement value equal to a band value, and
+ [../../frontend/tests/console-polarity.spec.ts](../../frontend/tests/console-polarity.spec.ts)
+ refuses it again on the rendered page.
 - **Same meaning, quieter voice.** Measured 2026-08-31 over the committed hex
-  values, the light pair sits at 40.5 and 44.2 percent saturation against the
-  confidence ramp's 66 and 70.6, and both still clear the 4.5:1 WCAG 2.2 SC
-  1.4.3 sets for normal type.
+ values, the light pair sits at 40.5 and 44.2 percent saturation against the
+ confidence ramp's 66 and 70.6, and both still clear the 4.5:1 WCAG 2.2 SC
+ 1.4.3 sets for normal type.
 - **Colour is never the only signal.** The sign is printed beside every
-  coloured percentage.
+ coloured percentage.
 
 The values live in `config/appearance.json` under `theme` and reach CSS through
 `frame.generated.css` at build time - the same route the frame tokens take, and
@@ -215,14 +215,14 @@ utility to a token. Two rules, and an oracle in
 each, over every file a reading route can reach:
 
 - **No bracketed arbitrary value in a utility class.** `text-[0.8125rem]` is a
-  size no theme can reach and no scale can hold. Where one sat between two
-  steps it was rounded to the nearer step, and to the larger of the two on an
-  exact tie - this surface's proven failure mode is being too little, so a tie
-  that shrinks it is the wrong way to break one.
+ size no theme can reach and no scale can hold. Where one sat between two
+ steps it was rounded to the nearer step, and to the larger of the two on an
+ exact tie - this surface's proven failure mode is being too little, so a tie
+ that shrinks it is the wrong way to break one.
 - **No `px` literal in an authored style block.** A hard pixel count ignores a
-  reader who set their browser text larger. A size is `%` or `fr` for a share of
-  the space, `ch` for a text measure, `rem` for anything that should scale with
-  the reader's own setting, or a `clamp()` between two of those.
+ reader who set their browser text larger. A size is `%` or `fr` for a share of
+ the space, `ch` for a text measure, `rem` for anything that should scale with
+ the reader's own setting, or a `clamp` between two of those.
 
 Two carve-outs, named in the oracle rather than left to a general escape. **A
 hairline is `1px`**, because a border that scales stops being a hairline. **A
@@ -287,24 +287,24 @@ asks on every run, from the committed values, so the spread is zero by
 construction.
 
 - **Five stops at 135deg, one set per theme.** Seven stops across roughly 200px
-  of glyphs puts a stop every 28px and the middle three read as one band. Dark
-  gets its own set rather than a tint of light's, because on a light ground a
-  stop has to go down to be read and on a dark ground it has to go up.
+ of glyphs puts a stop every 28px and the middle three read as one band. Dark
+ gets its own set rather than a tint of light's, because on a light ground a
+ stop has to go down to be read and on a dark ground it has to go up.
 - **`--wordmark-size` is `clamp(1.75rem, 1.2rem + 2.2vw, 2.75rem)`** - 28px on a
-  360px phone, 44px from 1127px up. Not 52px: the header sits on every route,
-  and 52px is 8 percent of a 640px phone screen spent before the first story.
+ 360px phone, 44px from 1127px up. Not 52px: the header sits on every route,
+ and 52px is 8 percent of a 640px phone screen spent before the first story.
 - **Weight 300, and no second face.** The committed variable face covers 100 to
-  900, so the weight axis is free. A display face bought for ten characters on
-  one string is a second woff2 on every route (`CLAUDE.md` Rule #2).
+ 900, so the weight axis is free. A display face bought for ten characters on
+ one string is a second woff2 on every route (`CLAUDE.md` Rule #2).
 - **No animation.** A cycling `background-position` is a loop rather than a
-  response to anything the reader did, and `prefers-reduced-motion` is a hard
-  kill-switch, so the effect would have to be designed twice. **What is lost is
-  the moving shimmer**; what buys it back is the size, the five stops and the
-  wider angle, which survive a screenshot, reduced motion and a battery.
+ response to anything the reader did, and `prefers-reduced-motion` is a hard
+ kill-switch, so the effect would have to be designed twice. **What is lost is
+ the moving shimmer**; what buys it back is the size, the five stops and the
+ wider angle, which survive a screenshot, reduced motion and a battery.
 - **The three wordmark scale tokens sit in the `:root` block, outside both
-  themes.** A scale is not a colour. The tracking is `0.06em` rather than a
-  pixel count so it holds at both ends of the clamp - a fixed 4px is 0.14em at
-  28px and breaks the word into separate letters.
+ themes.** A scale is not a colour. The tracking is `0.06em` rather than a
+ pixel count so it holds at both ends of the clamp - a fixed 4px is 0.14em at
+ 28px and breaks the word into separate letters.
 
 Authority: Susan, 2026-08-31. Rejected: a second geometric display face, on
 bytes; and animating the gradient, on the reduced-motion cost above.
@@ -370,7 +370,7 @@ The filter bar is the case. It sticks from `frame.breakpoints_px[1]` (1024px) up
 
 **The measure never moves.** A wide card holding a 68-character paragraph is not wasted space; a wide paragraph is what the measure exists to prevent, and widening it was refused before the layout was chosen. What the aside spends is the space the measure does not want.
 
-**A `rem` zone is only a `rem` zone if something checks.** `14rem` and `224px` look identical at the default font size and diverge the moment a reader changes it, and no screenshot tells them apart. `frontend/tests/item-zones.spec.ts` reads every zone's used width with the root font size at 16px and again at 22px and fails unless each one scaled by 22/16 - measured on its own build, the mark went 28 to 38.5, the item's footer rail 224 to 308, the aside 288 to 396 and the time rail 88 to 121. It prints both numbers in the failure, so the assertion cannot pass on a layout it never measured. Numbers and method: [../reference/measurements.md](../reference/measurements.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02).
+**A `rem` zone is only a `rem` zone if something checks.** `14rem` and `224px` look identical at the default font size and diverge the moment a reader changes it, and no screenshot tells them apart. `frontend/tests/item-zones.spec.ts` reads every zone's used width with the root font size at 16px and again at 22px and fails unless each one scaled by 22/16 - measured on its own build, the mark went 28 to 38.5, the item's footer rail 224 to 308, the aside 288 to 396 and the time rail 88 to 121. It prints both numbers in the failure, so the assertion cannot pass on a layout it never measured. Numbers and method: [../reference/measurements.md](../reference/measurements-site.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02).
 
 **The hairline behind the rail is what makes a column of times one axis.** It runs the height of the stream and each marker knocks a hole in it by painting its own ground - so the eye reads a single line with labels on it rather than a stack of separate numbers. That is the only place on the reading surface a rule runs vertically, and it earns it because the thing beside it is ordered. It is a column affordance, so below the small breakpoint it turns: the marker becomes a rule across the top of its group with the time under it.
 
@@ -496,14 +496,14 @@ The archive's on-device search is the whole example, and it has five states:
 Three rules hold under them:
 
 - **The cost is named before the click, never after it.** Whether the download
-  has already been paid for is read out of the browser's own cache storage. That
-  is this device's disk, so nothing is reported anywhere and Rule #1 is intact.
-  When it cannot be read the whole size is printed, because overstating a cost
-  is honest and understating one is not.
+ has already been paid for is read out of the browser's own cache storage. That
+ is this device's disk, so nothing is reported anywhere and Rule #1 is intact.
+ When it cannot be read the whole size is printed, because overstating a cost
+ is honest and understating one is not.
 - **Every wait offers a stop, and stopping leaves the page as it was.** Nothing
-  greys out while a download runs, and the list a reader was reading stays live.
+ greys out while a download runs, and the list a reader was reading stays live.
 - **A failure offers a retry.** One flaky connection may not turn a feature off
-  for the rest of a page's life.
+ for the rest of a page's life.
 
 The shape generalises past this one control: any state worth a colour is worth a
 sentence, and a state a reader cannot act on is worth neither.
@@ -578,7 +578,7 @@ fails the build if a page ever preloads it.
 What a chart may take from a library is the arithmetic. `d3-scale` and
 `d3-array` map a domain to pixels and choose the tick values; they own no
 element, no canvas and no theme, and the marks, the SVG and the prerendering
-stay ours. `.nice()` and `ticks()` are the part a hand-rolled axis gets wrong,
+stay ours. `.nice` and `ticks` are the part a hand-rolled axis gets wrong,
 and getting it wrong shows as an axis labelled 0, 37, 74 that nobody can read a
 value off. The two are 20.5 KB together, and nothing on a reader's route imports
 either one.
@@ -604,22 +604,22 @@ of them. `docs/architecture/publishing/visuals.md` holds the contract that makes
 that true. What binds a surface is the consequence of it.
 
 - **A converted figure is drawn in its converted form and never redrawn over the
-  original.** `4.2 kt` and `4,200 t` are one quantity, and putting both on one
-  page is two answers to one question. The axis carries the form the chart is
-  drawn against.
+ original.** `4.2 kt` and `4,200 t` are one quantity, and putting both on one
+ page is two answers to one question. The axis carries the form the chart is
+ drawn against.
 - **The accessible description carries what the article printed, where the two
-  differ.** Nothing is lost by a conversion - the element still holds the
-  characters - so the description is where a reader who wants the source figure
-  is given it, rather than a second visible label competing with the first.
+ differ.** Nothing is lost by a conversion - the element still holds the
+ characters - so the description is where a reader who wants the source figure
+ is given it, rather than a second visible label competing with the first.
 - **A figure we computed is never presented as a figure the article stated.** A
-  percentage that is a share of the slices, or a bar that is a count of values in
-  a range, is what the caption says it is. This is the same rule as
-  [a console figure says what it counts, in words](console-design.md#a-console-figure-says-what-it-counts-in-words),
-  read from the reader's side.
+ percentage that is a share of the slices, or a bar that is a count of values in
+ a range, is what the caption says it is. This is the same rule as
+ [a console figure says what it counts, in words](console-design.md#a-console-figure-says-what-it-counts-in-words),
+ read from the reader's side.
 - **A chart with nothing to draw draws nothing.** A mark whose figure resolves to
-  neither of the two ways is not softened, greyed or labelled "unavailable" - the
-  item publishes with no picture, which reads exactly like the nine items in ten
-  that never earned one.
+ neither of the two ways is not softened, greyed or labelled "unavailable" - the
+ item publishes with no picture, which reads exactly like the nine items in ten
+ that never earned one.
 
 Shortening a number is a separate act and is not on this list: `2,000,000` drawn
 as `2M` is the same quantity in fewer glyphs. It is bound by the legibility floor
@@ -678,8 +678,8 @@ alternatives were all libraries that draw: `echarts` (canvas), `@observablehq/pl
 library, which is worst of all when every chart on the surface is bespoke. A CDN
 was rejected on top of all of them: the HTTP cache is partitioned per site, so
 the shared-cache argument is dead, and the repo's `script-src` allows `self`
-only. "Fix the units without the dependency" was rejected last, because `.nice()`
-and `ticks()` are exactly the part hand-rolling gets wrong. Jony and Carmack,
+only. "Fix the units without the dependency" was rejected last, because `.nice`
+and `ticks` are exactly the part hand-rolling gets wrong. Jony and Carmack,
 2026-08-25, owner accepted; overruled for the operator surface only on
 2026-08-29, on the three conditions in the chart section above.
 

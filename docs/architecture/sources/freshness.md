@@ -150,9 +150,9 @@ that a person could grep the ledger for an address and get the day and the item
 id back. That look is now a two-step join, and the answer is exact:
 
 1. Find the row in `state/published/<YYYY>/<MM>/<DD>.csv`. It gives
-   `published_on` and `item_id`, and the file name already gives the day.
+ `published_on` and `item_id`, and the file name already gives the day.
 2. Open `frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json` for that date and
-   read `source_url` off the item with that `item_id`.
+ read `source_url` off the item with that `item_id`.
 
 Worked, on a real row:
 
@@ -337,7 +337,7 @@ The factor is applied multiplicatively, `tier_weight * weight * reliability`, an
 
 The clamp to `[reliability_floor, 1.0]` is what makes the change safe to ship without a second guard. Because the factor can never exceed 1.0 it can only ever reduce a score, and because it can never reach 0 it can never zero a feed out; and because it scales a score rather than removing a feed, it cannot change `eligible_feeds`, which is what a vertical's `min_feeds` floor counts. So the factor alone can neither move a score by more than the floor allows nor take a desk under its floor - the two failure modes the plan named. A floor of 0.5 caps the worst cut at two-to-one.
 
-Measured over the committed 30-day window ending 2026-09-06 (Intel Core i7-1265U / Windows 11): 184 feeds carried evidence-bearing reads. 157 scored a full 1.0 - dependable across the window - and 27, about one in seven, were dimmed below it, 15 of them sitting at the 0.5 floor because their record was worse than one good read in two. The median feed was untouched at 1.0, and no factor fell below the floor, so neither failure mode was anywhere near firing. The factor is a real signal - it moves 27 feeds - and a bounded one.
+Measured over the committed 30-day window ending 2026-09-06 (a developer machine / ): 184 feeds carried evidence-bearing reads. 157 scored a full 1.0 - dependable across the window - and 27, about one in seven, were dimmed below it, 15 of them sitting at the 0.5 floor because their record was worse than one good read in two. The median feed was untouched at 1.0, and no factor fell below the floor, so neither failure mode was anywhere near firing. The factor is a real signal - it moves 27 feeds - and a bounded one.
 
 ### The plan-stage duplicate pass ships record-only, and does not yet read the published past
 
@@ -345,7 +345,7 @@ The pass records what it would collapse before it cuts anything, because a cut n
 
 **It compares a day against itself, and not against the days already published - deliberately, and for now.** The design called for a second comparison: embed the stories published in a trailing window, decayed by recency, and drop today's story if it repeats one, so a re-run of the same day cannot publish the same story twice. That step is deferred, because the store it would read cannot answer it. `state/published/` carries `item_id`, `published_on` and `url_key` and no title, so even under a finite `collect.published_window_days` there is no text to embed. Embedding a trailing window of published stories needs a bounded, title-carrying published surface that does not exist, and creating one is a new retention surface this plan refused. The within-day collapse is the honest part today's committed state supports; the cross-day part waits for a surface that carries the text (Rule #12).
 
-**Two knobs shipped, not four.** The deferred cross-day step needs a window length and a recency half-life; both are added when that step lands, not before, because a config knob no code reads is a knob nobody can trust. The threshold reuses `assemble.duplicate_similarity_min` rather than minting a second number for the same question one stage earlier: both ask whether two of a day's stories are one, both score cosine over MiniLM vectors, and 0.94 was set by hand labels for exactly that question (measured 2026-09-01, i7-1265U, 3,978 items). The text each embeds differs - a feed's lead here, our own summary at assemble - so the reused number is the labelled answer to the same question, not a claim the inputs are identical.
+**Two knobs shipped, not four.** The deferred cross-day step needs a window length and a recency half-life; both are added when that step lands, not before, because a config knob no code reads is a knob nobody can trust. The threshold reuses `assemble.duplicate_similarity_min` rather than minting a second number for the same question one stage earlier: both ask whether two of a day's stories are one, both score cosine over MiniLM vectors, and 0.94 was set by hand labels for exactly that question (measured 2026-09-01, a developer machine, 3,978 items). The text each embeds differs - a feed's lead here, our own summary at assemble - so the reused number is the labelled answer to the same question, not a claim the inputs are identical.
 
 ### Age became a hard gate on 2026-08-30, and the argument above is the thing it overturned
 
@@ -414,7 +414,7 @@ refused it.
 | Why it was refused | The evidence |
 | --- | --- |
 | The bound it adds already exists one stage later, and it is a clock rather than a count | `cli.stage_visual_planner` stops its loop at `run.visual_planner_budget_minutes` (40 minutes), inside the `visuals` job's 50-minute timeout. A count has to be set for the worst host, so the number that fits a slow host leaves a fast one idle. The planner-side version of the same proposal was refused for the same reason - see [../publishing/visuals.md](../publishing/visuals.md). |
-| The loss it answered is already prevented | The `visuals` artifact upload in `.github/workflows/digest.yml` carries `if: always()`. A visuals stage that runs out of clock still hands over every decision it made. What cost four of the six runs on 2026-08-24/25 their visuals was a cancelled job skipping an upload step that had no condition on it. That step has one now. |
+| The loss it answered is already prevented | The `visuals` artifact upload in `.github/workflows/digest.yml` carries `if: always`. A visuals stage that runs out of clock still hands over every decision it made. What cost four of the six runs on 2026-08-24/25 their visuals was a cancelled job skipping an upload step that had no condition on it. That step has one now. |
 | The number behind it is contaminated | The 20.7 s and 40.3 s per-item planning figures were measured over 703 items that all ran with `diagram` in `visuals.enabled_kinds`, so the model was asked about every one of them: `asked=False` appears zero times in all 703. `diagram` is off now, and with it off a measured 68 of 145 items (46.9 percent) never reach the model at all. |
 | It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `visuals`. `summarize` runs as four worker jobs by default, eight at the ceiling, and has no stage clock at all - its only bound is the `work` job's timeout, which is `run.shard_timeout_minutes` and is 200 minutes. `visuals` is one job with a 40-minute stage clock. On 2026-08-24 the committed digest carries **731 items**; a 59-item budget over five runs caps that day at 295 and deletes about 436 of them. |
 
@@ -454,7 +454,7 @@ and guessing it is what this refusal is about.
 | Treating a placeholder date as no date at all | The better answer, and it needs a number nobody has measured: "implausible year" is a floor, and a floor guessed here would silently drop or admit real articles. The crash is fixed without one, and the age gate already refuses the placeholder and says so in `too_old`. |
 | Keeping rank position as the item id | Run 2 of a day renumbers every story, and anything that moved one place publishes twice. |
 | Writing the published ledger at plan time | A run that dies mid-way would leave behind a claim it published something it did not, and the article would never be publishable again. |
-| A per-run reading budget at the planning step | Refused 2026-08-25 by Carmack and Fowler. The bound already exists one stage later and is a clock; the artifact loss it answered already carries `if: always()`; its value came from a measurement taken before `diagram` was switched off; and it deletes about 436 items from a 731-item day. See the design rationale above. |
+| A per-run reading budget at the planning step | Refused 2026-08-25 by Carmack and Fowler. The bound already exists one stage later and is a clock; the artifact loss it answered already carries `if: always`; its value came from a measurement taken before `diagram` was switched off; and it deletes about 436 items from a 731-item day. See the design rationale above. |
 | A score floor set now rather than measured | A floor is the right control and the wrong thing to guess. It waits on the retrieval eval, which is the instrument that can say what a score is worth. |
 | Sharding `state/published.csv` by month | Refused until 2026-09-08, and then overturned. The reasoning stood while the read had no cover: every shard is opened anyway, so it adds file opens and removes nothing. Rule #12 made constant cost the default, the read gained `collect.published_window_days`, and the ledger moved to `state/published/YYYY/MM/DD.csv` - a day rather than a month, for the three reasons in the section above. |
 | Windowing the dedupe read without sharding the file | Filtering rows after reading them saves no I/O. A window pays only when it can decide which files to skip - which is why the partition landed before the cover did. |

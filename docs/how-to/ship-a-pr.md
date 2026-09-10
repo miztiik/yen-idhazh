@@ -34,8 +34,8 @@ edits. Check `git worktree list` before choosing the new directory:
 ```powershell
 git fetch origin main
 git worktree list
-git worktree add -b <type>/<scope>-<slug> ../<worktree-name> origin/main
-Set-Location -LiteralPath ../<worktree-name>
+git worktree add -b <type>/<scope>-<slug>../<worktree-name> origin/main
+Set-Location -LiteralPath../<worktree-name>
 ```
 
 If work already exists in the shared checkout, preserve and verify its exact
@@ -53,9 +53,9 @@ All file edits, deletes, schema bumps, test changes. The plan-doc / concept / ho
 
 ```powershell
 git add <named paths>
-git status --short  # Verify EVERY named path shows M / A / D / R in column 1.
-                    # Any ' M' (space-M) entry means the path is NOT staged.
-git commit -F .tmp_commit_msg.txt   # or: git commit -m "<single-line message>"
+git status --short # Verify EVERY named path shows M / A / D / R in column 1.
+ # Any ' M' (space-M) entry means the path is NOT staged.
+git commit -F.tmp_commit_msg.txt # or: git commit -m "<single-line message>"
 ```
 
 The `git status --short` verification protects against the staged-then-silently-unstaged bug (a path can show `MM` if it was staged and then edited again; if you commit without re-`git add`, the second edit ships invisibly missing).
@@ -66,7 +66,7 @@ If you author the commit message in a scratch file with PowerShell, prefer `[Sys
 
 ```powershell
 git push -u origin <branch>
-gh pr create --base main --head <branch> --title "<title>" --body-file .tmp_pr_body.md
+gh pr create --base main --head <branch> --title "<title>" --body-file.tmp_pr_body.md
 ```
 
 Capture the PR number from the URL it prints.
@@ -155,11 +155,11 @@ After several merges the local repo accumulates branches whose remote-tracking r
 ```powershell
 git fetch --prune
 git branch -vv | Select-String ': gone\]' | ForEach-Object {
-    $tokens = ($_.Line.TrimStart('*',' ').Trim() -split '\s+')
-    $branchName = $tokens[0]
-    if ($branchName -and -not ($branchName -match '^(main|HEAD)$')) {
-        git branch -D $branchName
-    }
+ $tokens = ($_.Line.TrimStart('*',' ').Trim -split '\s+')
+ $branchName = $tokens[0]
+ if ($branchName -and -not ($branchName -match '^(main|HEAD)$')) {
+ git branch -D $branchName
+ }
 }
 ```
 
@@ -170,7 +170,7 @@ Do NOT prune branches without a `: gone` marker; those have live upstreams and m
 ### Step 5 - clean up tmp files
 
 ```powershell
-Remove-Item .tmp_*.txt, .tmp_*.md, .tmp_*.log -ErrorAction SilentlyContinue
+Remove-Item.tmp_*.txt,.tmp_*.md,.tmp_*.log -ErrorAction SilentlyContinue
 ```
 
 The `.tmp_*` pattern is the convention for ephemeral PR-authoring files. Add `.tmp_*` to `.gitignore` once it exists.

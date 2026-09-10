@@ -31,18 +31,18 @@ in words a person can act on and never in the name of the column behind it.
 Five rules hold for every number the console prints:
 
 - **A count of that day's items, not a score.** No value between zero and one
-  reaches the screen, and no cell prints a decimal. A share prints as whole
-  percent.
+ reaches the screen, and no cell prints a decimal. A share prints as whole
+ percent.
 - **No ledger column name on screen.** `hhem`, `hedge_dropped` and
-  `truncation_flagged` are how the file spells it. The page spells what it
-  means.
+ `truncation_flagged` are how the file spells it. The page spells what it
+ means.
 - **A dash where the ledger holds no answer.** Null and zero are different
-  facts, and a zero that was really an absence is the one number nobody checks.
+ facts, and a zero that was really an absence is the one number nobody checks.
 - **`<1` where a real measurement rounds away.** A `0` there would say the work
-  was free.
+ was free.
 - **The item count sits beside every quality figure.** A share over four
-  articles is not a measurement, and a column that hides its denominator
-  invites a trend that is not there.
+ articles is not a measurement, and a column that hides its denominator
+ invites a trend that is not there.
 
 ### The empty state is the panel, not a replacement for it
 
@@ -79,19 +79,19 @@ There is exactly one money figure on this site: the counterfactual cost on
 owner's carve-out for that one on conditions this section holds:
 
 - **Never a currency symbol.** `0.48 USD`, never `$0.48`. A symbol in front of a
-  number is the shape a bill takes, and this is not a bill - nothing bills us,
-  because Actions minutes are free on a public repository.
+ number is the shape a bill takes, and this is not a bill - nothing bills us,
+ because Actions minutes are free on a public repository.
 - **The rate is printed, in full, beside the figure.** Both halves of it: a
-  provider prices prompt tokens and written tokens apart, and one blended rate
-  would understate a run that wrote a lot.
+ provider prices prompt tokens and written tokens apart, and one blended rate
+ would understate a run that wrote a lot.
 - **Where the rate came from is printed too** - `Using your rate` or `Using the
-  configured rate`. A money figure whose basis is invisible is the exact thing
-  Rule #10 exists to prevent.
+ configured rate`. A money figure whose basis is invisible is the exact thing
+ Rule #10 exists to prevent.
 - **The word for what it is sits in the panel, not in a tooltip**: what the run
-  would have cost somewhere else, never an amount owed.
+ would have cost somewhere else, never an amount owed.
 - **Digits are grouped by hand, never by `toLocaleString`.** The server draws
-  the page and two builds have to agree; a locale-dependent separator moves the
-  prerendered document and the byte gate reads it as a regression.
+ the page and two builds have to agree; a locale-dependent separator moves the
+ prerendered document and the byte gate reads it as a regression.
 
 The label set for `What the model did`, with the sentence each one carries:
 
@@ -136,13 +136,13 @@ intros, readouts and empty states. Twelve hands write twelve voices, so one pass
 reads the whole page at the end and settles it against `CLAUDE.md` section 0b.
 
 - **A sentence that names a threshold, a denominator, a cost or an empty-state
-  reason is kept.** Several of the console's decision rules are written nowhere
-  else. Owner, 2026-08-30.
+ reason is kept.** Several of the console's decision rules are written nowhere
+ else. Owner, 2026-08-30.
 - **A sentence that says what the chart is, or argues for the shape it took, is
-  cut.** The heading already names the subject, and the case against a rejected
-  chart type belongs in the code comment that rejected it. Owner, 2026-08-30.
+ cut.** The heading already names the subject, and the case against a rejected
+ chart type belongs in the code comment that rejected it. Owner, 2026-08-30.
 - **Prose cut from the page goes into the chart's accessible description**, so a
-  screen-reader user is never left with less than a sighted one. Jony.
+ screen-reader user is never left with less than a sighted one. Jony.
 
 Three habits are what that pass caught, and they are the ones to check in any
 new section. **One name for one span**: the page carried four phrasings for one
@@ -214,16 +214,16 @@ that decides whether a shard fits `run.shard_timeout_minutes`, and no single
 number on the page was carrying it.
 
 - **The bars double.** Writing times run from 0.3 s to 702 s, and on a linear
-  axis every bar but one is a hairline against the left edge. Each bar is one
-  doubling of the clock, so a bar is the same width wherever it sits. The lowest
-  bar has no lower edge worth a label and carries the console's own `<1`.
+ axis every bar but one is a hairline against the left edge. Each bar is one
+ doubling of the clock, so a bar is the same width wherever it sits. The lowest
+ bar has no lower edge worth a label and carries the console's own `<1`.
 - **The two rules are taken over the values, never off a bar.** A percentile read
-  out of a bin is a guess at where inside a doubling it fell, and these are the
-  two figures somebody quotes.
+ out of a bin is a guess at where inside a doubling it fell, and these are the
+ two figures somebody quotes.
 - **Leading and trailing empty bars are dropped; a gap in the middle stays.** An
-  empty span between two occupied bars is the distribution saying nothing landed
-  there, which over the committed ledger is real and visible: one summary
-  finished in 0.3 s and the next fastest took 16 s.
+ empty span between two occupied bars is the distribution saying nothing landed
+ there, which over the committed ledger is real and visible: one summary
+ finished in 0.3 s and the next fastest took 16 s.
 
 **`score_ms` lives under the same heading, as two figures and no chart.** It was
 a fourth line on `Time per item, by stage` until 2026-08-31, where it read as a
@@ -265,21 +265,21 @@ row - the only axis a median in seconds, a length in words and a count in a
 hundred summaries can share.
 
 - **The arrowhead carries the direction; the hue carries the verdict where there
-  is one.** Until 2026-08-31 every row was drawn in one categorical colour,
-  because a red-for-worse ramp needed somebody to agree which way is worse for
-  each of the seven. Five now say so themselves, through the polarity declared
-  on the measure rather than chosen by the chart; the two with no agreed
-  direction stay grey and name themselves under the plot. A hue here is never a
-  guess.
+ is one.** Until 2026-08-31 every row was drawn in one categorical colour,
+ because a red-for-worse ramp needed somebody to agree which way is worse for
+ each of the seven. Five now say so themselves, through the polarity declared
+ on the measure rather than chosen by the chart; the two with no agreed
+ direction stay grey and name themselves under the plot. A hue here is never a
+ guess.
 - **The axis is symmetric about no change**, so a fifth off and a fifth on draw
-  the same track length. An axis running 78 to 120 would draw one as the bigger
-  move.
+ the same track length. An axis running 78 to 120 would draw one as the bigger
+ move.
 - **Both absolute values print on the row label**, because a ratio with no
-  magnitude behind it can be a rounding error wearing a percentage.
+ magnitude behind it can be a rounding error wearing a percentage.
 - **Both article counts print above the chart, and the panel refuses to draw at
-  all where either side holds fewer than `console.min_attempts_for_rate`
-  summaries.** Two models over two article sets is two measurements, not a
-  trend. Andre, 2026-08-30.
+ all where either side holds fewer than `console.min_attempts_for_rate`
+ summaries.** Two models over two article sets is two measurements, not a
+ trend. Andre, 2026-08-30.
 
 Measured 2026-08-31 off the built page, across the one swap the ledger holds -
 `qwen3-8b-q4-k-m` on 2,228 summaries to 26 August, `qwen3-5-9b-q4-k-m` on 1,529
@@ -308,20 +308,20 @@ Three labels naming a quantity and its unit the same way is a form, so it is
 written down here rather than copied a fourth time by eye.
 
 - **The quantity, then the unit.** `Summary length, words` - never `Summary
-  length (words)` and never `words`. A bracket reads as a footnote, and a label
-  a reader meets before any of the numbers is not a footnote.
+ length (words)` and never `words`. A bracket reads as a footnote, and a label
+ a reader meets before any of the numbers is not a footnote.
 - **An axis title may not be a ledger column name.** `source words` is how the
-  file spells `source_word_count` and `source_words`. A term from a subsystem is
-  not a term for a user (`CLAUDE.md` section 0b), and this is the rule two
-  bullets above - no ledger column name on screen - applied to the label rather
-  than to the cell.
+ file spells `source_word_count` and `source_words`. A term from a subsystem is
+ not a term for a user (`CLAUDE.md` section 0b), and this is the rule two
+ bullets above - no ledger column name on screen - applied to the label rather
+ than to the cell.
 - **It says what the heading says.** Until 2026-08-29 the compression chart
-  called one quantity `Article length` in its heading and `source words` on its
-  axis, on one screen. Two names for one thing makes a reader work out that they
-  are the same thing before they can read the chart.
+ called one quantity `Article length` in its heading and `source words` on its
+ axis, on one screen. Two names for one thing makes a reader work out that they
+ are the same thing before they can read the chart.
 - **A label that needs no unit is just the noun.** `Runs`, `Failed`, `Cut
-  short`. The comma form is for a quantity whose number means nothing without
-  the unit, and adding one where none is needed is noise.
+ short`. The comma form is for a quantity whose number means nothing without
+ the unit, and adding one where none is needed is noise.
 
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
@@ -384,27 +384,27 @@ shape that answers it. Their arithmetic is in
 and the bar it draws come from one place.
 
 - **Ranked by magnitude, never by date.** A date sort is a log. It is the right
-  shape for exactly one thing on this page - the item list behind a selected
-  cause - and the wrong shape for every ranking above it.
+ shape for exactly one thing on this page - the item list behind a selected
+ cause - and the wrong shape for every ranking above it.
 - **The list prints its own divisor**, as a sentence: `A full bar is 38 cuts.` A
-  bar scaled to a hidden maximum can be read for order and cannot be read for
-  size, and nothing on the screen says which of the two the reader has.
+ bar scaled to a hidden maximum can be read for order and cannot be read for
+ size, and nothing on the screen says which of the two the reader has.
 - **Capped, with the tail in a sentence.** The sum is printed only where adding
-  the hidden magnitudes means something: counts add, distances do not, and a list
-  of distances says how many rows are missing and nothing else.
+ the hidden magnitudes means something: counts add, distances do not, and a list
+ of distances says how many rows are missing and nothing else.
 - **The two empty states say different things.** `Nothing has recorded an article
-  length yet.` means the ledger cannot answer. `No article was cut short in these
-  7 days.` means it answered no. Reading the first as the second is the same
-  mistake as reading a null as a zero.
+ length yet.` means the ledger cannot answer. `No article was cut short in these
+ 7 days.` means it answered no. Reading the first as the second is the same
+ mistake as reading a null as a zero.
 - **No row is tinted.** The order is the ranking. A word beside the name carries
-  a status where a row has one, because colour is one signal and never the only
-  one.
+ a status where a row has one, because colour is one signal and never the only
+ one.
 - **A threshold is a marker on the track, never a subtraction the reader
-  performs.** `12 failures` means nothing until the count that rests a feed is on
-  the same track. `TargetBar` draws the track at the threshold's own scale, the
-  fill at the value, and a rule at the threshold. It takes the confidence ramp
-  only where the threshold is a health fact - quarantine is, and a policy limit
-  somebody chose is not, so tinting one would invent a verdict nobody agreed to.
+ performs.** `12 failures` means nothing until the count that rests a feed is on
+ the same track. `TargetBar` draws the track at the threshold's own scale, the
+ fill at the value, and a rule at the threshold. It takes the confidence ramp
+ only where the threshold is a health fact - quarantine is, and a policy limit
+ somebody chose is not, so tinting one would invent a verdict nobody agreed to.
 
 The bars and the trend lines are markup, not charts. Seventy target bars in a
 feed table would be seventy chart instances, and markup is also what still draws
@@ -431,37 +431,37 @@ the four other places the console reports the cap are in
 Eight rulings hold it, Jony's of 2026-08-29 unless a later date is given:
 
 - **The cap is on the chart.** This is the whole defect the plot fixes. Five
-  columns of numbers were unreadable because the one number every column had to
-  be compared against appeared nowhere in the section. Susan, 2026-08-30.
+ columns of numbers were unreadable because the one number every column had to
+ be compared against appeared nowhere in the section. Susan, 2026-08-30.
 - **The rule comes off the rows, never off `extract.truncation_cap_tokens`.** A
-  window can hold rows a run wrote under an older cap, and the setting is one
-  number: a thirty-day window holds cuts at 1,923 words and at 3,846, and the
-  file says only 3,846. A rule from the file also draws in a window where
-  nothing was cut. Fowler, 2026-08-30.
+ window can hold rows a run wrote under an older cap, and the setting is one
+ number: a thirty-day window holds cuts at 1,923 words and at 3,846, and the
+ file says only 3,846. A rule from the file also draws in a window where
+ nothing was cut. Fowler, 2026-08-30.
 - **It sorts by count, never by rate.** Measured over the committed ledger the
-  shares run 3 to 67 percent on denominators of 6 to 38 articles, so a rate sort
-  puts a source with 4 cuts of 6 above one with 17 of 38 - and it is the
-  seventeen that cost the digest its articles. `Share cut` was dropped as a
-  column for the same reason it was never the sort key; what a reader loses is
-  the share as a number, and both counts are still on the row.
+ shares run 3 to 67 percent on denominators of 6 to 38 articles, so a rate sort
+ puts a source with 4 cuts of 6 above one with 17 of 38 - and it is the
+ seventeen that cost the digest its articles. `Share cut` was dropped as a
+ column for the same reason it was never the sort key; what a reader loses is
+ the share as a number, and both counts are still on the row.
 - **No row is tinted.** The order is the ranking. The confidence ramp means
-  good, watch and bad about a summary, and a source at 55 percent is not broken,
-  it publishes long articles. The rule itself is drawn in tertiary text rather
-  than the low band: a red vertical would say the cap is a fault, and the cap is
-  a setting somebody chose.
+ good, watch and bad about a summary, and a source at 55 percent is not broken,
+ it publishes long articles. The rule itself is drawn in tertiary text rather
+ than the low band: a red vertical would say the cap is a fault, and the cap is
+ a setting somebody chose.
 - **Ten rows and no `Show more`.** The worst seven hold 69 of 153 cuts, 45
-  percent; past ten the tail is sources with a single cut in a week, and a
-  control that reveals rows nobody acts on does nothing.
+ percent; past ten the tail is sources with a single cut in a week, and a
+ control that reveals rows nobody acts on does nothing.
 - **The track is the whole article, cut or not.** A track over the cut articles
-  alone would answer a question about the cap with a set the cap produced, and
-  it would hide how short the rest of the source's articles are - which is the
-  part that says whether the cap is the problem.
+ alone would answer a question about the cap with a set the cap produced, and
+ it would hide how short the rest of the source's articles are - which is the
+ part that says whether the cap is the problem.
 - **No ledger or config name reaches it.** Not `truncation_flagged`, not
-  `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
+ `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
 - **The two empty states say different things.** `Nothing has recorded an
-  article length yet.` means the ledger cannot answer; `No article was cut short
-  in these 7 days.` means it answered no. Reading the first as the second is the
-  same mistake as reading a null as a zero.
+ article length yet.` means the ledger cannot answer; `No article was cut short
+ in these 7 days.` means it answered no. Reading the first as the second is the
+ same mistake as reading a null as a zero.
 
 **Nothing is abbreviated at any width.** A source id is the ledger's own
 spelling of a name, so where the name cannot sit beside the plot it moves above
@@ -501,21 +501,21 @@ It binds every chart on the console whose marks sit on a shared column - four
 series or one - and the rules are not negotiable per chart:
 
 - **A fixed strip below the plot, never a floating box over it.** A floating
-  tooltip covers the mark it explains, and one that dodges the cursor moves the
-  thing being read. Measured 2026-08-30: a floating box occupied 40 to 55
-  percent of the chart it explained.
+ tooltip covers the mark it explains, and one that dodges the cursor moves the
+ thing being read. Measured 2026-08-30: a floating box occupied 40 to 55
+ percent of the chart it explained.
 - **Every series at the hovered column, at once.** Comparing four series must
-  not cost four hovers. The strip is the legend as well, so the four numbers a
-  reader compares are printed once rather than twice.
+ not cost four hovers. The strip is the legend as well, so the four numbers a
+ reader compares are printed once rather than twice.
 - **Capped at `chart.readout_max_share`** - 0.33 today. A share of the plot and
-  not a pixel count, so the cap holds at every window width.
+ not a pixel count, so the cap holds at every window width.
 - **A vertical guide down the hovered column**, across every series.
 - **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
-  returns to rest. **A tooltip is never the only place a value appears**: a
-  tooltip needs a hover, and a hover is not a thing a thumb can do.
+ returns to rest. **A tooltip is never the only place a value appears**: a
+ tooltip needs a hover, and a hover is not a thing a thumb can do.
 - **It opens on a resting column and is never blank.** The prerendered document
-  carries that column's numbers in words, so a reader with no script still gets
-  one column read out to him, and the panel never changes size as it fills.
+ carries that column's numbers in words, so a reader with no script still gets
+ one column read out to him, and the panel never changes size as it fills.
 
 An engine-drawn chart takes the same strip through
 [Chart.svelte](../../frontend/src/lib/charts/Chart.svelte). The action goes on
@@ -560,7 +560,7 @@ engine the identical `data` list in both shapes and change only `type` and
 `stack`. The presence of a transform is the definition of "not cheap", and a
 chart that needs its data massaged to fit the second shape gets no switch at
 all. Owner, 2026-08-30. Two charts qualify today - `What is failing, by stage`
-and `Prompt cache`, both callers of `stacked()` - and
+and `Prompt cache`, both callers of `stacked` - and
 `console-chrome.spec.ts` fails the build if their two shapes ever draw different
 numbers.
 
@@ -577,19 +577,19 @@ note would have fixed nothing. One sentence now, and five rules hold it. Susan,
 2026-08-31.
 
 - **Once per chart, whatever the series count.** The fact is about the window,
-  not about a line.
+ not about a line.
 - **Above the plot, not below it.** A reader meets a broken line before he meets
-  the sentence that explains it.
+ the sentence that explains it.
 - **The denominator is the day's own item count**, never the sum of the stages'
-  totals: one item waits on all three, so summing counts it three times. Where
-  the stages reached different amounts of the same days the numerator prints as
-  a range, because picking one stage would be arbitrary.
+ totals: one item waits on all three, so summing counts it three times. Where
+ the stages reached different amounts of the same days the numerator prints as
+ a range, because picking one stage would be arbitrary.
 - **Nothing at all where the window was measured in full.** A sentence that only
-  ever says "all of it" is noise, and `SPARSE_COVERAGE` is the line it has to
-  fall under - see
-  [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
+ ever says "all of it" is noise, and `SPARSE_COVERAGE` is the line it has to
+ fall under - see
+ [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
 - **The open-dot legend is a second sentence in the same paragraph**, printed
-  once and only where an open dot is drawn.
+ once and only where an open dot is drawn.
 
 Not in the hover strip: `ChartReadout` is one contract capped at
 `chart.readout_max_share` and it prints one column's values, so a window-level
@@ -616,8 +616,8 @@ The console held its telemetry inside its own document until 2026-09-09. Every r
 
 Five rules hold under that table.
 
-- **The box is exactly `console.chart_height` tall, in both the states it appears in.** [../../frontend/tests/console-reserved.spec.ts](../../frontend/tests/console-reserved.spec.ts) measures every panel's real bounding box twice in one page session - while the months are in the air and once they have landed - and fails on any panel that changed size except the one named as fetched. It reads boxes and never a CSS property, because a CSS property is not what moves under a cursor. Measured 2026-09-09 at 1280 CSS px on an Intel Core i7-1265U: seven panels, none changed width, one changed height by 172 px. **A second arm watches the chrome above the panels**, which nothing watched before: the title, the strip, the band, the window control, the carry line and the glance grid, each against its own former box. The set is cut at the first panel's own top rather than at the fold, and that correction is the second half of the same measurement. The fold-based form asked which blocks sat inside the first 900 px; the first panel begins at 894, so it was really asking how tall the runner's fonts were, and on `ubuntu-latest` the set came back empty and took `main` red. A cut made at the panel holds at any viewport and on any machine. Each block is compared on its own rather than the panel's top being compared to itself, because a top says only that the total height above it held - a block that grew by the amount its neighbour shrank would pass, and the failure would name no block. This one names it: a 24 px line injected into the chrome fails with the two blocks below it listed by name, and the box each held before and after.
-- **An empty plot draws its axis frame and its tick marks and no numbers.** A tick label needs a value and there is no value, so a number printed there would be invented. Both come out of the same `frame()` and the same margins the real charts use, so the frame a reader watches is the frame they get - and the box carries no tint of its own, so the axis sits on the same ground the real charts' axes do. Measured over the committed token values: `--chart-axis` reads 3.2:1 in dark and 2.58:1 in light on a panel, against 2.76:1 and 2.38:1 on a tinted box. The waiting frame is exactly as legible as the chart it stands in for, neither louder nor quieter.
+- **The box is exactly `console.chart_height` tall, in both the states it appears in.** [../../frontend/tests/console-reserved.spec.ts](../../frontend/tests/console-reserved.spec.ts) measures every panel's real bounding box twice in one page session - while the months are in the air and once they have landed - and fails on any panel that changed size except the one named as fetched. It reads boxes and never a CSS property, because a CSS property is not what moves under a cursor. Measured 2026-09-09 at 1280 CSS px on a developer machine: seven panels, none changed width, one changed height by 172 px. **A second arm watches the chrome above the panels**, which nothing watched before: the title, the strip, the band, the window control, the carry line and the glance grid, each against its own former box. The set is cut at the first panel's own top rather than at the fold, and that correction is the second half of the same measurement. The fold-based form asked which blocks sat inside the first 900 px; the first panel begins at 894, so it was really asking how tall the runner's fonts were, and on `ubuntu-latest` the set came back empty and took `main` red. A cut made at the panel holds at any viewport and on any machine. Each block is compared on its own rather than the panel's top being compared to itself, because a top says only that the total height above it held - a block that grew by the amount its neighbour shrank would pass, and the failure would name no block. This one names it: a 24 px line injected into the chrome fails with the two blocks below it listed by name, and the box each held before and after.
+- **An empty plot draws its axis frame and its tick marks and no numbers.** A tick label needs a value and there is no value, so a number printed there would be invented. Both come out of the same `frame` and the same margins the real charts use, so the frame a reader watches is the frame they get - and the box carries no tint of its own, so the axis sits on the same ground the real charts' axes do. Measured over the committed token values: `--chart-axis` reads 3.2:1 in dark and 2.58:1 in light on a panel, against 2.76:1 and 2.38:1 on a tinted box. The waiting frame is exactly as legible as the chart it stands in for, neither louder nor quieter.
 - **A skeleton mark takes `--color-rule-strong`, and that was measured rather than picked.** The sunken surface reads 1.06:1 in dark and 1.13:1 in light on a panel - a block nobody can see is not a block, and in light it was gone until the sweep crossed it. Rule-strong reads 1.61:1 and 1.48:1: plainly there, and still well under the weight of a drawn mark, which is what a placeholder owes.
 - **Every skeleton on the surface is on one timeline.** The sweep is switched on by a single attribute on an ancestor, so every block starts its animation in the same frame. Out of phase, a dozen sweeping boxes read as a dozen broken things rather than as one page waiting.
 - **The sweep starts late.** `console.shimmer_after_ms` is how long a wait has to outlast before it is worth drawing as one, so a fetch that lands first never animates at all. **It ships at 400 as a declared estimate and not a measurement** - see the design rationale below.

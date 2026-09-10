@@ -10,7 +10,7 @@ scope: [../agent-notes.md](../agent-notes.md).
 
 **Send one line.** The terminal tool takes a single command; a multi-line block is not reliably delivered. Chain with `;`, and write anything longer to a `.ps1` with the file-creation tool and run the file. There is no heredoc: a multi-line here-string sent as one command arrives mangled, and the variable then holds the PREVIOUS script - which runs happily and answers the previous question, found on 2026-08-29 only because the launcher printed a `PWD=` line from the run before. The same applies to `python -c` with a multi-line string; it exits 1 and writes a zero-byte file even with `*> out.txt` on it, which reads exactly like the interpreter crashing on the import you were checking.
 
-**`[System.IO.File]` resolves a relative path against the process directory, not the shell's.** `Set-Location` and `Push-Location` move the PowerShell location only, so `WriteAllText('docs/x.md', ...)` lands in whatever directory the host started in - usually the shared checkout, so an edit meant for a worktree silently modifies `main`. Two tells: a size that matches the file before your edit, and a `git status` that is dirty in the OTHER checkout. `Get-Content` and `Select-String` are unaffected, because PowerShell resolves their paths itself. Always pass an absolute path, or call `[IO.Directory]::SetCurrentDirectory($w)` right after the `Set-Location`. Fourth sighting 2026-09-10, on a READ rather than a write: `ReadAllText` on a relative path returned the shared checkout's copy of a file just edited in the worktree, which reads as an edit that did not apply and cost 20 minutes.
+**`[System.IO.File]` resolves a relative path against the process directory, not the shell's.** `Set-Location` and `Push-Location` move the PowerShell location only, so `WriteAllText('docs/x.md',...)` lands in whatever directory the host started in - usually the shared checkout, so an edit meant for a worktree silently modifies `main`. Two tells: a size that matches the file before your edit, and a `git status` that is dirty in the OTHER checkout. `Get-Content` and `Select-String` are unaffected, because PowerShell resolves their paths itself. Always pass an absolute path, or call `[IO.Directory]::SetCurrentDirectory($w)` right after the `Set-Location`. Fourth sighting 2026-09-10, on a READ rather than a write: `ReadAllText` on a relative path returned the shared checkout's copy of a file just edited in the worktree, which reads as an edit that did not apply and cost 20 minutes.
 
 **A function that logs with `Write-Output` returns the log as part of its value.** Every uncaptured expression joins the return value, so a caller doing `if (Test-Thing) { }` tests a non-empty array and always takes the true branch. On 2026-09-09 a build-hash oracle printed `IDENTICAL=` with nothing after it for that reason, and the two arms agreed only because the second build had failed and the helper hashed the first build's leftover file. Log with `Write-Host`, return exactly one object, and return an explicit sentinel on failure rather than falling through.
 
@@ -36,13 +36,13 @@ $p = Start-Process -FilePath pwsh -ArgumentList '-NoProfile','-File','x.ps1' -Wa
 
 **`-like '??*'` treats `?` as a wildcard**, so a filter meant to find untracked lines in `git status --porcelain` matches every line of two or more characters and returns the whole status. Ask git instead (`git ls-files --others --exclude-standard`), or use `.StartsWith('??')`.
 
-**`-match` against an ARRAY filters it instead of answering yes or no.** `if ($lines -notmatch 'x')` is true whenever ANY line fails to match, so a check-run poller broke on its first tick and wrote its "done" sentinel over a log reading `browser=in_progress ... gates=in_progress` (2026-09-06). Nothing errors and the exit code is 0. Join before you match - `if (($r -join ' ') -notmatch 'in_progress|queued')` - and remember `-eq`, `-like` and `-ne` filter an array too.
+**`-match` against an ARRAY filters it instead of answering yes or no.** `if ($lines -notmatch 'x')` is true whenever ANY line fails to match, so a check-run poller broke on its first tick and wrote its "done" sentinel over a log reading `browser=in_progress... gates=in_progress` (2026-09-06). Nothing errors and the exit code is 0. Join before you match - `if (($r -join ' ') -notmatch 'in_progress|queued')` - and remember `-eq`, `-like` and `-ne` filter an array too.
 
-**`Select-String` matches case-insensitively unless you pass `-CaseSensitive`.** Hunting a merge failure on 2026-08-27, a search for `INDEX_ROOT` reported five hits in a file whose real content was five `_index_root()` calls, which read as "the constant is still there" and pointed the diagnosis at the wrong side of the merge. It also has no `-Recurse`; feed it `Get-ChildItem -Recurse` output.
+**`Select-String` matches case-insensitively unless you pass `-CaseSensitive`.** Hunting a merge failure on 2026-08-27, a search for `INDEX_ROOT` reported five hits in a file whose real content was five `_index_root` calls, which read as "the constant is still there" and pointed the diagnosis at the wrong side of the merge. It also has no `-Recurse`; feed it `Get-ChildItem -Recurse` output.
 
 **A git revision carrying `@{` is eaten before git sees it.** `git diff HEAD@{1} HEAD` answers `fatal: ambiguous argument 'HEAD@'` - one character short of what you typed, because PowerShell reads `@{` as a hashtable literal - which reads as a repository with no reflog. Single-quote the whole argument, or name the two shas from `git log --oneline -3`.
 
-**A multi-paragraph commit message goes through a file.** Write it with `[System.IO.File]::WriteAllText` (not `Set-Content`, which adds a BOM that lands in the message), then `git commit -F .tmp_commit_msg.txt`. `.tmp_*` is gitignored.
+**A multi-paragraph commit message goes through a file.** Write it with `[System.IO.File]::WriteAllText` (not `Set-Content`, which adds a BOM that lands in the message), then `git commit -F.tmp_commit_msg.txt`. `.tmp_*` is gitignored.
 
 **`git show <ref>:<path> | Set-Content` writes CRLF** and produces a phantom whole-file diff; `-NoNewline` is worse, because PowerShell splits the output into lines and joins them with nothing, so a Python file arrives as one line and fails to import while the copy still reports success. Use `git restore --source=<ref> --worktree -- <path>`, which touches no encoding and leaves the index alone. The same pipe defeats `sha256sum --check`, whose error then names the file with a trailing `$'\r'`.
 
@@ -56,7 +56,7 @@ $p = Start-Process -FilePath pwsh -ArgumentList '-NoProfile','-File','x.ps1' -Wa
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-  Where-Object CommandLine -like '*<your worktree>*' | Select-Object ProcessId, UserModeTime
+ Where-Object CommandLine -like '*<your worktree>*' | Select-Object ProcessId, UserModeTime
 ```
 
 **A killed command is indeterminate in BOTH directions** - the same kill left `gh pr create` having done nothing and left `git push -u` having pushed the branch and skipped only the upstream write. Verify by side effect (the file it writes, the remote ref it pushes), never by exit code.
@@ -77,7 +77,7 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
 $t='<abs>'; Set-Location -LiteralPath $t; if ($PWD.Path -ne $t) { exit 9 }; <command>
 ```
 
-**A queued command can execute long after you sent it**, on top of live work. A `Remove-Item -Recurse -Force .venv` ran about 25 minutes after it was issued, under a `pytest` that had started in the meantime: the suite froze at a fixed percentage, `pytest --version` answered `No module named pytest`, and `import pydantic` still worked - a half-deleted environment that reads exactly like a broken toolchain (2026-08-29). Never queue a destructive command against a path a later command needs.
+**A queued command can execute long after you sent it**, on top of live work. A `Remove-Item -Recurse -Force.venv` ran about 25 minutes after it was issued, under a `pytest` that had started in the meantime: the suite froze at a fixed percentage, `pytest --version` answered `No module named pytest`, and `import pydantic` still worked - a half-deleted environment that reads exactly like a broken toolchain (2026-08-29). Never queue a destructive command against a path a later command needs.
 
 **A foreground `pytest` can be killed mid-run and reported as though it finished** - exit 1 and an empty output file, the same shape as a collection error. `--collect-only` tells the two apart: a suite that collects cleanly and then dies partway through was interrupted. Run long suites detached with two sentinels, and anchor any pattern you grep for, because `PASSED` also matches `XPASSED`.
 
@@ -94,9 +94,9 @@ $t='<abs>'; Set-Location -LiteralPath $t; if ($PWD.Path -ne $t) { exit 9 }; <com
 Build any check that decides whether something can be deleted on an argument the shell cannot rewrite. A 40-character object id has no `:` and no `/`:
 
 ```bash
-git hash-object <file>                       # then: git cat-file -e <40-hex sha>
-git ls-tree <rev> -- <path>                  # no colon, so nothing to rewrite
-MSYS_NO_PATHCONV=1 git show 'origin/main:docs/a.md'   # the fallback, per shell
+git hash-object <file> # then: git cat-file -e <40-hex sha>
+git ls-tree <rev> -- <path> # no colon, so nothing to rewrite
+MSYS_NO_PATHCONV=1 git show 'origin/main:docs/a.md' # the fallback, per shell
 ```
 
 `git grep` is case-sensitive by default (`-i` makes it not) and exits 1 when it finds nothing, which a `&&` chain reads as a failure. It also reads anything after the pattern as a revision until it meets `--`, so a context flag placed the way ripgrep takes it becomes a commit-ish: `git grep -n -A 20 'pattern' -- <path>`.
@@ -113,7 +113,7 @@ MSYS_NO_PATHCONV=1 git show 'origin/main:docs/a.md'   # the fallback, per shell
 
 ## The Python environment
 
-**An install on an unsupported interpreter does not fail, it stops answering.** pip writes nothing into `site-packages` until it has resolved and built every distribution, so a large download, a backtracking resolver and a source build all look identical from outside - on 2026-08-25 `python -m venv .venv` took a 3.14 that `python` happened to resolve to, and ten minutes later `site-packages` held `pip` and nothing else. `pyproject.toml` now bounds the interpreter (`requires-python = ">=3.12,<3.15.0a0"`), so pip refuses one it cannot resolve for with a message that names the version. Print it before trusting an install:
+**An install on an unsupported interpreter does not fail, it stops answering.** pip writes nothing into `site-packages` until it has resolved and built every distribution, so a large download, a backtracking resolver and a source build all look identical from outside - on 2026-08-25 `python -m venv.venv` took a 3.14 that `python` happened to resolve to, and ten minutes later `site-packages` held `pip` and nothing else. `pyproject.toml` now bounds the interpreter (`requires-python = ">=3.12,<3.15.0a0"`), so pip refuses one it cannot resolve for with a message that names the version. Print it before trusting an install:
 
 ```powershell
 & <python> -c "import sys; print(sys.version)"
@@ -122,7 +122,7 @@ MSYS_NO_PATHCONV=1 git show 'origin/main:docs/a.md'   # the fallback, per shell
 **On a machine outside the bound, do not build a venv - borrow the shared one.** Set `PYTHONPATH` to the worktree's `backend` and run the shared interpreter, so the code under test is yours and the dependencies are the ones already installed. Three follow-on traps. The venv's `.pth` holds the ABSOLUTE path of the checkout it was installed from, so without the variable `pytest` collects your tests while `import idhazh` resolves to the other tree and a green run says nothing (verified 2026-08-25 across ten worktrees). The variable then leaks into every later terminal and beats a CORRECT `.pth` just as reliably, so `python -m idhazh.contracts.export` writes `schemas/` into the other tree while `git status` here stays clean (2026-08-27). And it reaches the browser suite through a spec that shells out to `python`, where the system interpreter finds your package and dies on `ModuleNotFoundError: No module named 'feedparser'` - one spec of 989 inside a 14-minute suite, naming a dependency rather than a path (2026-09-06). Print the resolved path before every gate run, and clear the variable before switching worktrees:
 
 ```powershell
-$env:PYTHONPATH = '<abs path to your worktree>\backend'     # or '' when not borrowing
+$env:PYTHONPATH = '<abs path to your worktree>\backend' # or '' when not borrowing
 & <shared venv>\Scripts\python.exe -c "import idhazh; print(idhazh.__file__)"
 ```
 
@@ -131,8 +131,8 @@ $env:PYTHONPATH = '<abs path to your worktree>\backend'     # or '' when not bor
 **`ModuleNotFoundError: pydantic_core._pydantic_core` is an ABI mismatch, not a missing package.** A venv built for one minor version and run by another finds the package and cannot load its extension, and nothing reinstalls or repairs it because pip sees the distributions as present. Diagnose by counting interpreter tags on the `.pyd` files - a count under `cp312-win_amd64` while `python -V` says anything else IS the diagnosis (2026-08-28, 269 of them beside a 3.14.2 launcher) - and fix by building a fresh venv under `$env:TEMP`, never by reinstalling into the broken one. Redirect that install to a file rather than piping it, and when it runs from a detached script confirm with an actual import: the log says `Successfully installed` before the environment can be used.
 
 ```powershell
-Get-ChildItem .\.venv\Lib\site-packages -Recurse -Filter *.pyd |
-  Group-Object { ($_.Name -split '\.')[-2] } | Select-Object Name, Count
+Get-ChildItem.\.venv\Lib\site-packages -Recurse -Filter *.pyd |
+ Group-Object { ($_.Name -split '\.')[-2] } | Select-Object Name, Count
 ```
 
 **The shared venv can simply be missing a declared dependency**, which reads as a broken tree rather than a stale environment: `mypy` names a source file and `pytest` dies loading `conftest.py`, for a distribution declared in `pyproject.toml` for weeks (2026-09-02, `protego`). `pip install --dry-run` separates the two cases and costs a download of nothing. One distribution and nothing else moving means a plain install repairs the venv for every sibling sharing it; a version something else pins means stop and build a separate venv.
@@ -163,7 +163,7 @@ Test-Path frontend/node_modules/.bin/svelte-kit.cmd
 
 ```
 GET https://huggingface.co/api/models/<repo>/tree/<commit>?recursive=1
-GET https://huggingface.co/<repo>/raw/<rev>/<file>        # the LFS pointer, oid sha256:
+GET https://huggingface.co/<repo>/raw/<rev>/<file> # the LFS pointer, oid sha256:
 ```
 
 The revision-scoped `?blobs=true` API returns `lfs.oid` as null, so a check written against it silently compares against `None`. And a file's digests do not identify one commit - walking `Xenova/all-MiniLM-L6-v2` on 2026-09-09, the head and its parent carried the same five digests because the head added other variants - so pin the revision explicitly and say you picked the branch head at the fetch date. A `resolve/<40-hex-sha>/` URL redirects where `resolve/main/` does not, and the small files answer `307` on `huggingface.co` while the model answers `302` to the CDN, so a hop count or a CSP source list has to allow for both.
