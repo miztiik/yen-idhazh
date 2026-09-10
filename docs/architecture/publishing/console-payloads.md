@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 The operator console reads twelve datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
@@ -216,6 +216,26 @@ payload, so the band is real markup in all three documents and an operator on a
 dead connection reads the verdict; in a browser the same code runs again on a
 move between routes. `export const prerender = true` moved from
 `+layout.server.ts` to `+layout.ts` and did not change.
+
+**Which means the band costs a cold load no round trip at all, and that was
+checked in a browser rather than reasoned from the code.** Measured 2026-09-10
+on Intel Core i7-1265U / Windows 11, Chromium via Playwright against the real
+build: a cold `/console/` makes 47 requests over 737,467 bytes, of which the
+payloads are two telemetry shards and 303,306 bytes, and `console/band.json` is
+not among them. **The chain is three round trips against the four-hop ceiling:
+the document, then one shard, then the next.** `loadVisibleMonths` awaits each
+month in turn, so a month is a hop and the single hop of headroom is one more
+month, not one more file.
+
+`frontend/tests/console-cold-load.spec.ts` holds both facts. It counts the
+longest run of requests that each had to wait for the one before it - the
+document and the page's own fetches, never the module graph, because the module
+graph's depth on any given run is a fact about how fast the machine ran. Two
+readings that looked equivalent are not, and the difference is written up in that
+file: grouping requests into waves lets one slow download absorb a whole serial
+chain beside it, and it was proved wrong by this row's own oracle, where two
+round trips added ahead of the telemetry took the real chain from three to five
+and left the wave count at three.
 
 ### The band is drawn once, in `console/+layout.svelte`
 

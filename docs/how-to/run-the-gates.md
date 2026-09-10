@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -399,11 +399,12 @@ published days, to the alarm point and to the cap. **The size on the line above
 is a level, and no level has a date in it.** A tree carrying no day payloads
 prints `runway: unknown` rather than a comfortable number.
 
-`bundle-gate` does two things. It asserts no encoder lands on the first-load
-path, and it holds every route named in `config/idhazh.json` under the gzip
-ceiling set there.
+`bundle-gate` does three things. It asserts no encoder lands on the first-load
+path, it holds every route named in `config/idhazh.json` under the gzip ceiling
+set there, and since 2026-09-10 it holds every payload a reader's browser
+fetches under one too.
 
-**A third check was deleted on 2026-08-30**: a per-route first-load JavaScript
+**A fourth check was deleted on 2026-08-30**: a per-route first-load JavaScript
 ratchet against `frontend/bundle-baseline.json`, at 64 bytes either way. It had
 no requirement behind it, a local build could not reproduce CI's inside its own
 tolerance, and its record was one file every branch had to rewrite. The
@@ -414,7 +415,7 @@ is gone rather than something you need to re-record.
 
 **The page ceiling is one-sided, and it bounds the document rather than the
 script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
-`gzip -9` size each named route's prerendered HTML may reach. A page that got
+`gzip -5` size each named route's prerendered HTML may reach. A page that got
 lighter needs no permission, so there is no lower bound. A route is named when
 its growth has been priced: `/404` and `/evals/` move only when the source moves,
 `/archive/` grows by one day link a published day, and `/console/` grows by about
@@ -426,11 +427,34 @@ by the marker count in `frontend/tests/payload-weight.spec.ts`, which runs in th
 browser suite. A route the config does not name is reported by the gate without
 failing it.
 
-When a named route is over, two failures are worth telling apart:
+**The unit is `gzip -5`, and it was `gzip -9` until 2026-09-10.** Nine is a level
+no origin serves. Measured that day against the live Pages origin: it served
+`/console/` in 46,917 bytes where a local `gzip -5` makes 46,787 and a `gzip -9`
+makes 45,077, and `/archive/` in 5,760 against 5,755 at `-5`. So `-5` lands
+within 0.3 percent of the wire and `-9` understated it by 3.9 percent, which on a
+ceiling meant to catch growth is four percent of growth nobody saw. If you are
+reading a ceiling recorded before that date, it is a `-9` number and about four
+percent low.
 
-- **A page took on bytes it does not render.** A day payload inlined by a layout
-  is how this last happened, and it cost 313,000 bytes. Remove them.
-- **The page genuinely carries more.** Raise the number in `config/idhazh.json`,
+**The payload ceiling bounds a file a browser fetches**, which no page ceiling
+can see. `page_weight.payload_ceilings_bytes` maps a build-relative path to the
+largest `gzip -5` size it may reach; a key naming a file bounds that file, and a
+key ending in `/` bounds every file under it, each on its own. It exists because
+the console stopped inlining its telemetry on 2026-09-09: 3.4 MB left a document
+a ceiling watched and landed in files nothing watched, and a reader still waits
+for them. `page_weight.cold_console_load_bytes` bounds the sum one cold opening
+of the console asks for - the design rather than the data, so what it catches is
+a widened `console.default_window_days` rather than a heavier shard. Its partner
+is `frontend/tests/console-cold-load.spec.ts`, which counts the serial round
+trips instead of the bytes: four is the ceiling, three is what a cold load takes
+today, and each extra telemetry month is one more.
+
+When a named route or payload is over, two failures are worth telling apart:
+
+- **A page or a payload took on bytes nobody reads.** A day payload inlined by a
+  layout is how this last happened to a page, and it cost 313,000 bytes; a column
+  added to a shard is how it happens to a payload. Remove them.
+- **It genuinely carries more.** Raise the number in `config/idhazh.json`,
   in the commit that earned the bytes, and say in the message what they buy. The
   number lives in that file alone - the `PageWeightConfig` default is empty - so
   there is no second copy to move.

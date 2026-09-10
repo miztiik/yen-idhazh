@@ -248,12 +248,17 @@
   },
   "page_weight": {
     "ceilings_bytes": {
-      "/404": 2200,
-      "/archive/": 7553,
-      "/console/": 335051,
-      "/console/machine/": 44706,
-      "/console/model/": 56385,
-      "/evals/": 3279
+      "/404": 2400,
+      "/archive/": 6400,
+      "/console/": 52000,
+      "/console/machine/": 50000,
+      "/console/model/": 63000,
+      "/evals/": 3600
+    },
+    "cold_console_load_bytes": 3400000,
+    "payload_ceilings_bytes": {
+      "console/band.json": 2000,
+      "telemetry/": 1100000
     }
   },
   "retention": {

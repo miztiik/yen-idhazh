@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -15,6 +15,163 @@ Two rules govern this page:
   an order-of-magnitude check, not a runner figure. The runner has a different
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
+
+## What compression level the reader actually pays, 2026-09-10
+
+Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0. Date: 2026-09-10.
+Method: fetch the live Pages origin with `accept-encoding: gzip`, read
+`content-length` off the response, gzip the decoded body locally at every level
+from 1 to 9 and find the nearest. n=1 per URL; the numbers are deterministic for
+a given body, so a repeat measures the same thing.
+
+**The page ceilings were `gzip -9` until this measurement and `gzip -5` after
+it, and this is why.**
+
+| Served | On the wire | Local `-5` | Local `-9` | Nearest local level |
+| --- | --- | --- | --- | --- |
+| `/console/` | 46,917 B | 46,787 B | 45,077 B | **-5**, 0.28 pct low |
+| `/archive/` | 5,760 B | 5,755 B | 5,686 B | **-5**, 0.09 pct low |
+| `telemetry/2026-09.csv` | 168,438 B | 164,742 B | 156,789 B | between -4 and -5, 2.19 pct low at -5 |
+
+**What it means.** On a document, `-5` lands within a third of a percent of what
+the origin sends and `-9` understates it by 3.9 percent. A ceiling meant to catch
+growth, measured in a unit four percent below the wire, is four percent of growth
+nobody sees - and four percent of `/console/` is 1,800 bytes, which is more than
+a small regression costs. On a large CSV `-5` is 2.2 percent **low** rather than
+high, so a payload ceiling in this unit flatters the payload slightly; that is
+stated rather than corrected, because the alternative is a per-file fudge factor
+nobody could check.
+
+**The level and the six committed values had to move in one commit.** At `-5` the
+tree already stood over two of the `-9` ceilings - `/console/model/` measured
+56,652 against 56,385 and `/console/machine/` 44,960 against 44,706 - so either
+half on its own leaves the build red.
+
+## The page ceilings re-aimed at the migrated tree, 2026-09-10
+
+Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0. Date: 2026-09-10.
+Method: `gzip -5` over each prerendered `index.html` in `frontend/build`,
+heaviest page per route class, **five builds of one tree**, heaviest per route
+and never a mean - which is the method `bundle-gate.mjs` prints when a console
+route fires.
+
+| Route | Heaviest of five | Spread | Ceiling before (`-9`) | Ceiling now (`-5`) | Headroom |
+| --- | --- | --- | --- | --- | --- |
+| `/404` | 2,153 B | 7 B | 2,200 | **2,400** | 11.5 pct |
+| `/archive/` | 5,744 B | 7 B | 7,553 | **6,400** | 11.4 pct |
+| `/console/` | 46,775 B | 9 B | 335,051 | **52,000** | 11.2 pct |
+| `/console/machine/` | 44,966 B | 11 B | 44,706 | **50,000** | 11.2 pct |
+| `/console/model/` | 56,664 B | 16 B | 56,385 | **63,000** | 11.2 pct |
+| `/evals/` | 3,232 B | 8 B | 3,279 | **3,600** | 11.4 pct |
+| `/` | 180,086 B | 8 B | none | **none** | renders a day - counted, not capped |
+
+**What it means.** The spread between two builds of the same tree is at most 16
+bytes, which is 0.03 percent, so the headroom is a choice and not noise. Every
+ceiling is now the heaviest build plus a tenth, which replaces four different
+conventions the old set had accumulated - the old `/archive/` carried 43 percent
+and the old `/404` carried 3.9.
+
+**`/console/` fell by a factor of 6.4, and that is the finding rather than a
+tidy-up.** It was sized on 2026-09-06 against a document that inlined the
+telemetry and weighed 3.88 MB. Row 10 moved the telemetry to a browser fetch on
+2026-09-09, the document became 46,775 bytes, and the ceiling stayed. For four
+days it stood at 7.2 times the page it bounded, so nothing short of a sevenfold
+regression could have fired it. **A ceiling only works while it is near the
+page**, and nothing in the build fails when one drifts away.
+
+There are **no dated ceilings and there never were**. `page_weight.ceilings_bytes`
+has never named `/` or any `/<date>/` route, so row 14 removing every dated
+document removed no key and the gate's unmatched-ceiling check never had anything
+to say about them.
+
+### What `BASE_PATH` does to the same document
+
+Same box and date. One build with `BASE_PATH=/yen-idhazh`, the way `pages.yml`
+builds, against the heaviest of the five plain builds `ci.yml` makes:
+
+| Route | Plain | `BASE_PATH` | Delta |
+| --- | --- | --- | --- |
+| `/404` | 2,153 B | 2,172 B | **+19 B, +0.88 pct** |
+| `/archive/` | 5,744 B | 5,749 B | +5 B |
+| `/` | 180,086 B | 180,094 B | +8 B |
+| `/evals/` | 3,232 B | 3,235 B | +3 B |
+| `/console/` | 46,775 B | 46,778 B | +3 B |
+| `/console/machine/` | 44,966 B | 44,964 B | -2 B |
+| `/console/model/` | 56,664 B | 56,659 B | -5 B |
+
+**What it means.** The sub-path is eleven repeated characters and gzip charges
+almost nothing for a repeat, so the biggest move is 19 bytes on the smallest page
+and every other route moves less than the spread between two plain builds. The
+document CI measures is the document the reader is served, which is why
+`bundle-gate` is not added to the deploy job
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
+
+## What a cold console load costs and how deep its chain is, 2026-09-10
+
+Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0, Chromium via Playwright.
+Date: 2026-09-10. Method: a fresh browser context against `vite preview` over the
+real build, recording Chromium's own `Request.timing()` for every request. n=1;
+the request set is deterministic, and the byte figures are read off the files
+rather than off the clock.
+
+| | |
+| --- | --- |
+| Requests on a cold `/console/` | 47 |
+| On the wire, all 47 | 737,467 B |
+| Of that, payloads | 303,306 B - two telemetry shards and nothing else |
+| Serial round trips, payloads only | **3** against a ceiling of 4 |
+| Round trips the verdict band costs | **0** |
+
+**What it means.** The band is free on a cold load. `console/+layout.ts` is a
+universal load on a prerendered route, so SvelteKit runs it at build time and
+serialises the verdict into the document - it costs a request only on a
+client-side navigation into the console. The three hops are the document, then
+one telemetry shard, then the next: `loadVisibleMonths` awaits each month in turn,
+so **a month is a hop**. That is the headroom being spent - a fourth month in the
+default window is a fourth hop, and the ceiling is four.
+
+**The default window can reach three months, not two.** A run of 30 consecutive
+days lands in three calendar months when it starts on the 31st and February is in
+the middle. A reader sees two on 363 days of the year and three on the other two.
+The code comment saying "two of them and never more" is right about the ordinary
+case and wrong about that pair of days; nothing is broken by it, because the page
+fetches what the window reaches.
+
+### The payloads, and what bounds them
+
+`gzip -5` over `frontend/build`, same box and date:
+
+| Payload | Now | Ceiling | Basis |
+| --- | --- | --- | --- |
+| `console/band.json` | 794 B | **2,000** | `months` caps at 14 by `observability.public_telemetry_keep_months` and `verdict.runs` at the cron slots, so 12 more month strings is all the growth there is |
+| `telemetry/2026-09.csv` | 164,742 B | **1,100,000** | a full 31-day month at the heaviest day ever run |
+| `telemetry/2026-08.csv` | 145,192 B | **1,100,000** | " |
+| cold load, worst case | 495,020 B | **3,400,000** | the band plus three shards, each at its own ceiling, plus 3 pct |
+
+**The telemetry ceiling is a full month and not today's file, and the difference
+is 6.7 times.** Measured over both committed shards: 2026-08 holds 5,227 rows
+over 8 days and 2026-09 holds 4,796 over 9, so **neither month is full** - the
+archive starts on 2026-08-24 and the measurement was taken on the 10th. The
+heaviest day ever run is 1,000 rows (2026-08-24 and 2026-08-25) and the heaviest
+row costs 34.35 B at `gzip -5`, so a full 31-day month at that rate is 1,064,850
+B. A ceiling set from what a shard weighs today would go red in October because a
+month filled up, which is the failure that got the `/archive/` ceiling removed in
+August.
+
+**What it costs to set it there, stated rather than hidden:** at 6.7 times the
+current file, this ceiling will not catch a doubling. It catches a shard that has
+stopped being a shard. The instrument for a doubling is the round-trip count
+beside it, which moves the day a month is added.
+
+**A per-row ceiling was the rejected alternative** - "no telemetry row may cost
+more than 40 gzipped bytes" fires the day a column is added and never fires on
+ordinary growth, which is the Rule #12 shape. It was refused because it puts two
+units in one config object, and a mixed-unit knob is read wrong once and then
+trusted.
+
+**`gzip -5` in node is not `gzip -5` in python.** The same 2026-08 shard measures
+145,192 B under node's zlib and 142,291 B under python's `gzip.compress(data, 5)`,
+a 2 percent gap. The gate is node, so every ceiling on this page is a node figure.
 
 ## What the doubled window and the doubled cap cost, measured 2026-09-09
 

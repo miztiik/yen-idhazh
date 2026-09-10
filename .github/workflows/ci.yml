@@ -201,12 +201,15 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      # Two checks under one step. The on-device encoder must stay behind a
+      # Three checks under one step. The on-device encoder must stay behind a
       # dynamic import; a static import would put a multi-megabyte library on
       # every reader's first load, and nothing about that edit looks wrong in
       # review. Each page that renders no day must stay under its ceiling in
-      # config/idhazh.json. Read which one failed - they have different answers.
-      - name: Bundle gate - encoder and page ceilings
+      # config/idhazh.json, and so must each file a reader's browser fetches -
+      # the console's telemetry left its document on 2026-09-09, so a page
+      # ceiling alone no longer sees what the console costs. Read which one
+      # failed - they have different answers.
+      - name: Bundle gate - encoder, page ceilings and payload ceilings
         working-directory: frontend
         run: npm run bundle-gate
 

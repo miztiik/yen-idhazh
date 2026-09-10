@@ -2812,12 +2812,27 @@ class PageWeightConfig(Model):
     say which one did - so the operator raises the shared number and the
     regression lands under it. Sizing them separately is what makes the split
     worth having.
+
+    **Every number here is gzip -5, because that is what the reader pays.**
+    Measured 2026-09-10 against the live Pages origin: it served `/console/` in
+    46,917 bytes where a local gzip -5 makes 46,787 and a gzip -9 makes 45,077,
+    and `/archive/` in 5,760 where -5 makes 5,755. So -5 lands within 0.3 pct of
+    the wire on a document and -9 understates it by 3.9 pct. On a large CSV -5 is
+    2.2 pct low rather than high (168,438 served against 164,742), which is the
+    one place these numbers flatter the payload rather than the page.
+
+    **A document is capped and a payload is capped, and they are different
+    jobs.** A document ceiling catches a page that took on bytes it does not
+    render. A payload ceiling catches a file a browser fetches growing past what
+    somebody priced, which no document ceiling can see because the bytes are not
+    in the document at all - that is exactly what moving the console's telemetry
+    out of its HTML did.
     """
 
     ceilings_bytes: dict[str, int] = Field(
         default_factory=dict,
         description=(
-            "Route class -> the largest gzip -9 size that route's prerendered HTML may "
+            "Route class -> the largest gzip -5 size that route's prerendered HTML may "
             "reach. The committed values live in config/idhazh.json, which the gate "
             "reads; this default is empty so the numbers are not duplicated here where "
             "they could drift from the file the gate enforces (Rule #6). A route the "
@@ -2833,6 +2848,33 @@ class PageWeightConfig(Model):
         ),
     )
 
+    payload_ceilings_bytes: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Build-relative POSIX path -> the largest gzip -5 size a file a reader's "
+            "browser fetches may reach. A key naming a file bounds that file; a key "
+            "ending in / bounds every file under that directory, each on its own, so a "
+            "month series takes one number rather than one a month. Empty by default "
+            "for the same reason as ceilings_bytes: config/idhazh.json is the single "
+            "source and the gate reads the file. A key that matches no file in the "
+            "build fails the gate - a ceiling over nothing still reads as a bound "
+            "somebody checked."
+        ),
+    )
+
+    cold_console_load_bytes: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "The largest gzip -5 total the console's payload fetches may reach on a "
+            "cold load at console.default_window_days. It bounds the design rather "
+            "than the data: the per-file ceilings say how heavy one shard may be, and "
+            "this says how many of them one opening of the page is allowed to want. "
+            "Zero means unchecked, and the committed config is where the real number "
+            "lives."
+        ),
+    )
+
     @model_validator(mode="after")
     def _a_ceiling_bounds_a_route(self) -> Self:
         for route, ceiling in self.ceilings_bytes.items():
@@ -2840,6 +2882,28 @@ class PageWeightConfig(Model):
                 raise ValueError(f"page_weight ceiling {route!r} is not a route")
             if ceiling <= 0:
                 raise ValueError(f"page_weight ceiling for {route} must be above zero")
+        return self
+
+    @model_validator(mode="after")
+    def _a_payload_ceiling_bounds_a_built_file(self) -> Self:
+        """A payload key is a path inside the build, written the way every path
+        that leaves this process is written (section 2).
+
+        A leading slash is what separates the two objects: a route key has one
+        and a payload key does not, so a value typed into the wrong object is
+        refused by shape rather than discovered as a gate that checks nothing.
+        """
+        for path, ceiling in self.payload_ceilings_bytes.items():
+            if path.startswith("/"):
+                raise ValueError(
+                    f"page_weight payload ceiling {path!r} is a route, not a path in the build"
+                )
+            if "\\" in path or ".." in path.split("/") or path == "":
+                raise ValueError(
+                    f"page_weight payload ceiling {path!r} is not a relative POSIX path"
+                )
+            if ceiling <= 0:
+                raise ValueError(f"page_weight payload ceiling for {path} must be above zero")
         return self
 
 
@@ -3121,6 +3185,38 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-10T12:00",
+            change=(
+                "PageWeightConfig gains payload_ceilings_bytes and "
+                "cold_console_load_bytes, both empty by default so a config written "
+                "before today still validates. page_weight.ceilings_bytes is now read "
+                "as gzip -5 rather than gzip -9, and all six committed values were "
+                "re-measured at that level in the same commit: /404 2,200 -> 2,400, "
+                "/archive/ 7,553 -> 6,400, /console/ 335,051 -> 52,000, "
+                "/console/machine/ 44,706 -> 50,000, /console/model/ 56,385 -> 63,000, "
+                "/evals/ 3,279 -> 3,600. No key was removed and no type changed."
+            ),
+            why=(
+                "Two of these numbers had stopped describing the site. /console/ was "
+                "sized when the console inlined its telemetry and the document weighed "
+                "3.88 MB; the page is 46,773 gzip -5 bytes now, so the ceiling stood at "
+                "7.2 times the page it was meant to bound and could not have caught any "
+                "regression short of a sevenfold one. The level moved because -9 is not "
+                "what a reader pays: measured 2026-09-10 against the live Pages origin, "
+                "it served /console/ in 46,917 bytes where a local gzip -5 makes 46,787 "
+                "and a gzip -9 makes 45,077, and /archive/ in 5,760 against 5,755 at -5 "
+                "- so -5 is within 0.3 pct of the wire and -9 understates it by 3.9 pct. "
+                "The level and the six values had to move together: at -5 the tree "
+                "already stood over two of the old ceilings, so either half alone leaves "
+                "the build red. The two new keys bound what the document ceilings "
+                "stopped being able to see. Moving the console's telemetry out of its "
+                "HTML took 3.4 MB off a document that a ceiling watched and put it into "
+                "files that nothing watched; payload_ceilings_bytes watches them, and "
+                "cold_console_load_bytes bounds how many of them one opening of the page "
+                "may want, which is a property of the design rather than of the data."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-10T09:00",
             change=(

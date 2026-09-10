@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -891,6 +891,10 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 **`site_bytes` on the run manifest stays what it always was.** It is the committed payload tree, six days of published manifests carry it, and changing what it means would be a contract break for a number that is genuinely useful about repository growth. What changed is that it now says which tree it holds, so nobody reads it as the site again ([../contracts/schemas.md](../contracts/schemas.md)).
 
 **The deploy is not gated.** `pages.yml` prints `du -sb build` and always did. Adding the check there would need a Python install on the deploy path for no new coverage: every byte that reaches `main` passes through the `assemble` job or through `ci.yml`, and both now measure it before the push rather than after.
+
+**`bundle-gate` was weighed for the deploy on 2026-09-10 and left out, and this time "no new coverage" is a measurement rather than an argument.** It needs no Python, and `pages.yml` already runs `npm ci` and `npm run build`, so the cost is a couple of seconds - the Python objection above does not apply to it at all. What made the case worth reopening is that `pages.yml` builds with `BASE_PATH=/<repo>` and `ci.yml` does not, so on paper CI measures a different document from the one the reader is served. Measured on Intel Core i7-1265U / Windows 11 / node 24.12.0, one `BASE_PATH` build against the heaviest of five plain builds, `gzip -5` per route: `/404` +19 B, `/archive/` +5 B, `/evals/` +3 B, `/console/` +3 B, `/` +8 B, `/console/machine/` -2 B, `/console/model/` -5 B. **The largest move is 19 bytes and 0.88 percent, on the smallest page; every other route moves less than the 16-byte spread between two plain builds of the same tree.** The sub-path is eleven repeated characters and gzip charges almost nothing for a repeat. So the document CI measures is the document the reader gets, and the ceilings carry 11 percent headroom over a difference of 0.9 percent at worst.
+
+**And the cost of being wrong is not symmetric.** A gate on the deploy job stops the deploy, so a ceiling crossed on a Tuesday would leave the reader on Monday's digest until somebody looked - which is the trade this page already settled the other way three paragraphs down: a digest that never arrives is the larger failure. A non-fatal copy was rejected for the reason a warning was rejected there: nobody reads it.
 
 ### A bad day is stopped before the commit; the weight ratchet is not (2026-08-29)
 
