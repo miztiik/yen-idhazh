@@ -44,7 +44,7 @@ from idhazh.contracts.element import Element, ElementKind, ElementTable, Extract
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.elements import Candidates, date_elements, element_table, quantity_elements
+from idhazh.elements import Candidates, date_elements, element_table, quantity_elements, settle
 from idhazh.fetch import FetchResult
 from idhazh.visual_planner import numeric_facts
 
@@ -491,6 +491,30 @@ def test_the_settled_table_stays_in_the_article_s_own_order() -> None:
     table = element_table(page_article(PAGES[0]), config=ELEMENTS)
     starts = [element.span_start for element in table.elements]
     assert starts == sorted(starts)
+
+
+def test_the_settle_rule_takes_the_two_pattern_kinds_and_no_other() -> None:
+    """A quote carrying a quantity is the shape the model-pointed kinds need.
+
+    This rule drops any element sharing a character with a higher-precedence
+    one, so applied to those kinds it would delete one of the two. It ranks by
+    `KIND_PRECEDENCE`, which names the two pattern passes and nothing else, so a
+    model-pointed kind raises here rather than being ranked by accident.
+    `visual_planner.anchored` merges them after this has run.
+    """
+    quote = Element(
+        element_id="quote-0-11",
+        kind=ElementKind.QUOTE,
+        span_start=0,
+        span_end=11,
+        span_excerpt="Revenue rea",
+        value=None,
+        unit=None,
+        sentence_index=0,
+        extractor=Extractor.MODEL,
+    )
+    with pytest.raises(KeyError):
+        settle([quote])
 
 
 @pytest.mark.parametrize(

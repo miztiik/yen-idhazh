@@ -1,17 +1,20 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-10
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
 candidate pass that fills it, the rule that settles two passes claiming one
-stretch of characters, and the invariant that says when a span has stopped
-pointing where it did.
+stretch of characters, the call that labels what the pass found, and the
+invariant that says when a span has stopped pointing where it did.
 
-Two passes write into this table today, both pure code over the article's own
-bytes: [`backend/idhazh/elements.py`](../../../backend/idhazh/elements.py) finds
-quantities and it finds absolute dates. The four kinds a model has to point at
-have no producer, and a kind with no producer is legal and simply never appears.
+Two passes write into this table from the article's own bytes with no model at
+all: [`backend/idhazh/elements.py`](../../../backend/idhazh/elements.py) finds
+quantities and it finds absolute dates. A third asks a model, and it is two
+sections below: it labels what the two patterns found, points at a figure they
+missed, and points at the four kinds no pattern can reach - an organisation, a
+place, a quote and a claim. It types nothing a reader sees. All six kinds have a
+producer now, and every one of them carries a span code cut.
 
 ## What an element is
 
@@ -177,9 +180,9 @@ producer can write one by accident.
 The value is pinned as **text** for the reason a timestamp is: one spelling, and
 no float formatting that can drift underneath a committed file.
 
-Six kinds ship in one changelog entry and two of them have a producer today. A
-kind with no producer is legal and simply never appears, which is cheaper than
-widening a persisted shape four more times.
+Six kinds shipped in one changelog entry and all six have a producer. The two
+pattern passes write `quantity` and `date`; call 1 points at the other four and
+code cuts them.
 
 ## The candidate pass
 
@@ -293,6 +296,204 @@ than carrying a second copy of the numbers.
 equal as strings or pinning the value as text buys nothing. The pass writes the
 plain decimal form with no exponent and no trailing zeros: `4200000000` for
 both. `span_excerpt` still holds whichever of the two the article wrote.
+
+## Call 1: what the model may say about a candidate
+
+The candidate pass says where every figure is. It cannot say what any of them
+means, because meaning is not in the bytes. Call 1 is the pass that asks, and it
+lives in
+[`backend/idhazh/visual_planner.py`](../../../backend/idhazh/visual_planner.py).
+
+One sentence governs it: **code finds and cuts every character a reader will
+see, and the model points at where to cut and says what the cut means.**
+
+The model is given the item's title, the whole article one addressed sentence
+per line, and the candidate table addressed by `element_id` - the article rather
+than a summary of it, because a compression cannot carry a series it dropped and
+judging what an item is about against text that lost the figures is judging the
+wrong document. Both blocks are fenced as untrusted data (Rule #11). The
+addresses are ours; the sentences are a stranger's web page.
+
+**No field of the reply accepts a number.** Not a value, not a unit, not a
+count, not a span and not a character offset. Every position the model may name
+is a string address code printed for it - `s7` for a sentence, `quantity-19-33`
+for a candidate - so a figure the article does not carry is unreachable by
+grammar rather than caught by a check downstream. That is the row's oracle and
+it is asserted against the generated schema, beside a shape that fails the same
+assertion so the check is known to be able to go red.
+
+| The reply says | What code does with it |
+| --- | --- |
+| `labels[]` - a candidate's `element_id`, and what it means | Writes the Tier 2 cells onto that element. An address the pass never minted drops **that label**; its siblings stand |
+| `proposed[]` - a sentence address and the words a figure was written in | Searches only the named sentence, demands exactly one hit, and re-reads the value and the unit from the article's own bytes. Stamped `extractor: model` |
+| `entity_mentions[]`, `place_mentions[]` - a group key, and the sentences the item names that thing in | Searches each mention inside its own named sentence. Every hit is one `entity` or `place` element carrying the item's characters |
+| `quotes[]`, `claims[]` - two sentence addresses, no text | Slices the run of sentences between them into one `quote` or `claim` element. Indices only: an exact search over a long quotation rejects a real one over a single changed word, silently |
+| `keyphrases[]`, `lede_sentence_ids[]` | Carried for search and for `lead_coverage`. Nothing draws them |
+
+**The two mention lists are named for what code takes from them, and that was a
+ruling rather than a preference.** A prompt in this repository may not ask a
+model to pick a reader-facing tag - a page choosing its own steers a control -
+and [`backend/tests/test_tag.py`](../../../backend/tests/test_tag.py) holds every
+prompt to it. Asking where an item names an organisation is not that: the model
+returns an address and some of the item's own words, code cuts the characters,
+and the group key is matched against slugs code already holds. The control is
+untouched, the lists carry the Tier 1 word, and the reasoning is in the design
+rationale below.
+
+**A band is a word, and the score is code's arithmetic.** `salience` is
+`primary`, `supporting` or `background`, and `Element.salience` gets the
+midpoint of that band over 0 to 1. The model may not type `0.83`, so it does not
+get to; and three words are a judgement a person can check, where a decimal to
+two places is a precision nobody has.
+
+**`attribution` is a type, not a sentence**: `named`, `self_reported`,
+`anonymous` or `unattributed`. A closed list is what makes the attribution rule
+mechanical instead of aspirational, and `unattributed` writes nothing - the item
+stated it in its own voice, so there is no attribution to record.
+
+**`time` cites a date element and is never typed.** The date pass exists, so a
+label that wants to say when a figure applies names a `date` row of the same
+table and code copies the value that row already holds. An address that names no
+date drops the time and keeps the measure: a label is several judgements, and
+one of them being unusable says nothing about the others.
+
+**`entity` groups under a slug the watchlist holds, and this pass mints none.**
+The model names the organisation in the item's words; code matches that name
+against the entities we already track. An unknown name is one we do not track
+yet, and inventing a slug for it would put two spellings of one company in two
+groups for ever. The alias ledger is separate work.
+
+### What `proposed` is for, now that the candidate pass exists
+
+It is the escape hatch for a figure the pattern missed, and after the candidate
+pass landed there are two ways left to miss one.
+
+**The bound on work.** `elements.max_per_article` keeps the first 256 figures in
+article order, and a dense long article states more than that. The figures after
+the cap are exactly the ones nobody can label. So the merged table is bounded by
+`max_per_article` **plus** the proposal cap rather than by `max_per_article`
+alone: spending the recovery out of the pattern's budget would make the escape
+hatch unreachable on the articles that need it. There are at most four
+proposals, so the total is still a stated bound, and the merge only ever adds -
+nothing the pattern found is evicted.
+
+**A character the pattern cannot start on.** The number pattern refuses a run of
+digits glued to a word or a hyphen, which is what keeps `COVID-19` from reading
+as a quantity. A proposal is re-read in the article's own context, with that
+refusal still in force, so a figure the pattern structurally cannot reach stays
+unreachable. That is the conservative half of the trade and it is deliberate.
+
+Four refusals, and each is ambiguity rather than a near miss:
+
+- **A sentence address that names no sentence.** Nothing to search.
+- **A surface that occurs twice in its sentence, or not at all.** This is the
+  mis-pointing failure no span check can see - the span would be real, just the
+  wrong one - so ambiguity is refused rather than guessed.
+- **A surface holding two figures, or none.** Same rule, one level down.
+- **A number spelled out in words, and a relative change.** "About a third" and
+  "doubled" have nothing for the pattern to parse, and a figure worked out from
+  them is a derived value rather than a found one.
+
+**A proposal over characters the pass already read is dropped before anything is
+settled.** A second reading of a stretch of characters code already read is not
+a recovery, and leaving it to `settle` would let the later pass take a span off
+the earlier one on nothing better than which offset came first.
+
+`candidates_found` counts every proposal that read as a figure, including the
+ones dropped next. It is one count per pass taken before the rules that remove,
+which is what keeps it able to say the cap bit and by how much.
+
+## The four kinds only a model can find
+
+No pattern reaches an organisation, a place, a quotation or an assertion. Call 1
+points at all four, and code cuts every character. The producers are in
+[`backend/idhazh/visual_planner.py`](../../../backend/idhazh/visual_planner.py)
+beside `proposed`, because they read the same reply.
+
+**The anchoring rule is different for each pair, and that is the point.**
+
+| Kind | What the reply carries | How code anchors it |
+| --- | --- | --- |
+| `entity`, `place` | a group key, and up to four `(sentence address, the words)` mentions of it | Each mention is searched inside **its own named sentence** and must occur there exactly once. Every hit is one element |
+| `quote`, `claim` | the address of the first and last sentence | The run between them is sliced whole, trimmed of surrounding whitespace by moving the offsets |
+
+**A name is never searched for.** An item writes "Vestas Wind Systems A/S" once
+and "Vestas" four times, and the fullest form may appear nowhere verbatim - so
+searching for it would reject the thing it was meant to find. Resolving a name to
+its mentions is what a semantic model is good at and string matching is bad at,
+which is why the model does that half and code does the cutting.
+
+**The mention draws; the name never does.** `drawn_label(group)` answers with the
+longest mention that anchored, and a page has nothing else to show: the name is
+model-authored words with no span, and a mention is the item's own characters at
+an offset code computed. That is the invariant an implementer is most likely to
+lose, because drawing the name is easier and looks tidier, so it is the second
+half of this row's oracle and it is asserted with a counter-implementation beside
+it.
+
+**The name lands only as a slug this project already tracks.** An unknown name is
+one we do not track yet, and minting a slug for it would put two spellings of one
+organisation in two groups for ever. Grouping the rest is the alias ledger's job
+and it is separate work.
+
+**A quote is addresses, never text.** An exact search for a long quotation
+rejects a real one over a single changed word, and it does so silently, which is
+worse than no check at all. A run wider than the 500 characters the shape holds
+is **dropped rather than cut down** - a truncated excerpt stops being the
+characters its span names, and that is the one property every one of these kinds
+exists to keep.
+
+**A rejection is per element, never per article.** A mention that will not anchor
+drops itself; a group that anchored none of its mentions drops itself; a range
+whose address names no sentence drops itself. Every sibling stands and the item
+still publishes (`CLAUDE.md` section 1a).
+
+**The settle rule never sees these kinds.** It drops any element sharing a
+character with a higher-precedence one, which is right for two patterns reading
+one stretch of digits and exactly wrong here: a quote holds every figure inside
+it, and both have to survive. So `anchored` runs the settle rule over the pattern
+candidates first and merges the model-pointed kinds after it, and two of them
+claiming one address is settled by keeping the first.
+
+### A quote's excerpt is article text, and it stops at the element table
+
+`CLAUDE.md` section 0a says article bodies are never republished to a reader. A
+`quote` or a `claim` element carries a run of the item's own sentences, so it is
+the one element kind whose excerpt is a paragraph of somebody's page rather than
+a figure or a name.
+
+It may go where the table goes: into the labelled table call 2 reads, into an
+eval row, into a log line, into a fixture. **It may not reach a reader-facing
+page**, and neither may a fragment of it. What publishes is the link and our own
+summary. A later row that wants to show a quotation is proposing a change to
+section 0a and has to take it there, not to this page.
+
+### Two failures no anchoring check can see, recorded rather than papered over
+
+This is permanent and it is stated so that nobody later reads the span check as
+covering more than it does.
+
+| Failure | Why no check sees it | What the design does instead |
+| --- | --- | --- |
+| **Mis-pointing** - the model means one `"5"` and the anchor lands on another | The span is real. `text[span_start:span_end] == span_excerpt` passes, the write-time re-slice passes and the read-time one passes | The per-sentence rule. A surface is searched inside one named sentence and must hit exactly once, so ambiguity is a rejection rather than a coin toss |
+| **Mis-labelling** - right span, wrong `measure`, `entity` or `salience` | Tier 2 is a judgement and no string search reaches it | A judgement is only ever attached to an address, so it is checkable against that element's own kind, unit and magnitude. A judgement attached to a free string is checkable against nothing |
+
+Neither is closed and neither is closable by anchoring. What anchoring buys is
+that a wrong answer is still *a fact the item states*, at a location a reader can
+check, rather than a sentence the model wrote.
+
+### What call 1 is not asked for
+
+An **event** and a **relation** are the next thing this table wants and neither is
+in it. When they arrive, every actor and object in one has to resolve to a
+surviving `entity` element or the row is dropped, because an unanchored arrow is
+a causal claim the article did not make.
+
+A **type for a named thing** and a **geographical hint** are sketched in the plan
+and are not asked for. `Element` has nowhere to put either, `ElementKind` already
+separates an organisation from a location, and a decoded field with no consumer
+costs output tokens on every item for ever. Adding one is cheap the day something
+reads it.
 
 ## The span-drift invariant
 
@@ -576,6 +777,60 @@ same fact.
 
 Authority: **Fowler** (module structure).
 
+### The mention lists were named, and the tag control was not narrowed
+
+Call 1 could not ask for a named thing until this was settled.
+`test_no_prompt_asks_a_model_for_a_tag` refuses any prompt carrying the literal
+words `lens`, `event type` or the plural of `entity`, and its stated reason is
+that a page choosing its own reader-facing tags steers a control. The obvious
+field name for a list of organisations trips that check on the third word.
+
+Two honest routes existed. **Narrow the control** to the tag vocabulary it names,
+so an extraction field is not caught by a bare word. **Or name the field for what
+code takes from it**, if a name exists that a reader of the prompt would not
+misread. The second was taken, for three reasons and one of them decided it.
+
+The control is not ours to weaken. It is Andre's ruling and it protects the tag
+vocabulary; a mention list does not touch that vocabulary at all, so nothing in
+this row needs the ruling changed. **And the name is better, not merely
+permitted.** Decision 1 of this row says the mention is Tier 1 and is what draws,
+while the name is Tier 2 and a grouping key. A field called after the plural of
+`entity` invites the reader to think the named thing is the payload;
+`entity_mentions` says the mentions are. The third reason is that the check is a
+substring match, so a chosen name is a stable answer and a narrowed control is a
+new judgement call on every future prompt.
+
+What that costs, stated rather than hidden: the control now passes on a prompt
+that does ask about an organisation, so a later reader could take the silence as
+approval it never gave. Two things answer that. This section is the record. And
+`test_the_mention_lists_do_not_reach_the_tag_control` holds the same three words
+out of the reply **schema** as well as the prompt, which is one surface more than
+the original control reads - the schema is handed to the decoder in
+`response_format`, so a class docstring is prompt text too.
+
+Authority: **Andre** (the prompt and the schema at the injection boundary),
+consulted by reading [`.github/agents/andre.agent.md`](../../../.github/agents/andre.agent.md).
+
+### The four kinds needed no contract change
+
+The row's own file list did not name `backend/idhazh/contracts/element.py`, and
+after checking it did not need to. A **mention is an element**: its span is the
+mention's own characters, and several mentions of one organisation are several
+elements. The grouping key decision 1 calls the `name` is `Element.entity`, which
+already exists, is already a slug, and is already filled by matching against the
+watchlist rather than by minting. So `schemas/` did not move, no changelog entry
+was owed, and no committed fixture had to gain a key in sorted order.
+
+The one contract file that did move gained no field: `UNTRUSTED_LINE_MAX` is now
+a named number beside the annotation that used it. A producer slicing a run of
+sentences has to refuse a slice the shape will not hold, and the only other way
+to find that out is to let the shape raise part-way through an article. It is the
+same move `VALUE_MAX_LENGTH` and `UNIT_MAX_LENGTH` made one row earlier, and the
+generated schema is byte-identical either way.
+
+Authority: **Fowler** (persisted contracts), consulted by reading
+[`.github/agents/fowler.agent.md`](../../../.github/agents/fowler.agent.md).
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -600,6 +855,13 @@ Authority: **Fowler** (module structure).
 | Resolve a relative date | "Three years ago" resolves against a publication date the article never wrote, on the very plan that establishes the trust boundary | Andre, O45 |
 | Duplicate the number pattern in the new pass | Two definitions of one concept, and the first fix to either would land in one of them | Fowler |
 | Raise on a 200-digit run or a 600-character unit word | Degrade, do not fail (`CLAUDE.md` section 1a). A pattern over fetched bytes will meet both, and one hostile page must not take an article's whole table down | Andre |
+| Exact-search a name to find its mentions | It confuses a location with a label. The fullest form may appear nowhere verbatim, so the search rejects the very thing it was written to find | Andre, row 2 decision 1 |
+| Ask the model for coreference chains | Exact and prefix matching over spans code already holds does most of it, and the model's version cannot be span-validated | Andre, pseudo-plan 10.6 |
+| Exact-search a quotation to anchor it | One changed word rejects a real quote, silently. Two sentence addresses cannot fail that way | Andre, row 2 decision 3 |
+| Draw the group name instead of a mention | The name has no span, so a page would show a string the item may not contain. The mention is the item's own characters at an offset code computed | Andre, invariant 2 |
+| Truncate a quotation too wide for the shape | A cut-down excerpt stops being the characters its span names, which is the one property these kinds exist to keep. The range is dropped instead | Fowler |
+| Run the settle rule over the model-pointed kinds | A quote holds every figure inside it, so precedence would delete one of the two. The rule is between the two patterns and the merge happens after it | Fowler |
+| One flat mention list carrying the name on every entry | The name and the band are then repeated per mention, and output tokens are the expensive direction on this runner | Andre, pseudo-plan 10.6 |
 
 ### Why the schema stem is `element-table`
 
@@ -627,6 +889,36 @@ them.
 
 Authority: **Fowler** (module structure).
 
+### `extractor` is `model`, and the plan spells it `model_proposed`
+
+The plan that specified call 1 asks for a proposed figure to be stamped
+`extractor="model_proposed"`. The contract already carried the member and calls
+it `model`, with the docstring "a model proposed the location and code cut the
+characters at it" - the same property under a shorter word. It stayed as it is,
+and the reason is the rows still to come: `entity`, `place`, `quote` and `claim`
+are model-pointed the same way and none of them is a proposal, so a field spelled
+`model_proposed` would be wrong on four of the five paths that will write it. The
+field names **who found it**, not what shape was asked for.
+
+Cost, stated rather than implied: a reader holding the plan-doc and the payload
+side by side sees two words for one thing until they reach this paragraph. The
+alternative cost was a persisted enum value that four later producers would have
+to contradict.
+
+### Call 1 is built and nothing dispatches it
+
+The request, the reply shape, the parser and every anchoring path ship here; no
+stage calls them. That is deliberate rather than unfinished. Call 1 alone
+produces a labelled table and no page: the call that turns it into a summary and
+a visual is the next row, and it appends to **this** call's message array, so the
+article prefills once. Wiring call 1 in on its own would spend a model call per
+item for an answer nothing reads yet, and it would do it inside a job with a
+50-minute bound.
+
+So there is no flag to flip and no dead config knob: production behaviour is
+byte-identical, and the row that adds the second call is the row that turns both
+on together.
+
 ## See also
 
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the generated schemas, and the drift gate over both.
@@ -634,3 +926,4 @@ Authority: **Fowler** (module structure).
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3 (contracts before logic), Rule #6 (no hardcoding), Rule #11 (fetched text is data), section 11 (schema versioning).
 - [../../../TODO/20260905-08-element-table-plan.md](../../../TODO/20260905-08-element-table-plan.md) - the plan this shape was written for, and the producers that follow it.
+- [../../../TODO/20260905-11-two-call-planner-plan.md](../../../TODO/20260905-11-two-call-planner-plan.md) - the plan call 1 belongs to, and the call that reads its table next.

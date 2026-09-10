@@ -675,9 +675,11 @@ an injection canary in `canaries.spec.ts`
 feed-health rows and the score rows are all written by `build_canary_day.py`;
 the item-health rows are written by `build:canary`. The score rows are shaped
 for the compression plot rather than picked at random - eight items from 38 to
-6100 source words, so the log x axis spans four decades, every configured target
-zone has a mark under it, and three items carry the truncation flag that draws a
-diamond. A chart state the fixture does not reach is a chart state this suite
+6100 source words, so the log x axis spans four decades, and each of the five
+configured target zones has at least one mark under it. Four rows carry the
+truncation flag and three of those have a source word count, so the plot draws
+three diamonds; the other two rows have no source count and cannot be placed.
+A chart state the fixture does not reach is a chart state this suite
 cannot test.
 
 **Known defect: the canary item ids do not satisfy the item-id grammar.**

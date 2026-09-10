@@ -195,6 +195,7 @@ def outcomes_of(shard: QualificationShard) -> dict[GateName, Any]:
     _, gates = qualify.gates(
         [shard],
         evaluation=EVALUATION,
+        summarize=SUMMARIZE,
         inference=INFERENCE,
         run=RUN,
         budget_=a_passing_budget(),
@@ -440,11 +441,24 @@ def test_a_failed_call_is_not_counted_as_a_determinism_violation() -> None:
     assert outcomes_of(broken)[GateName.DETERMINISM].status is GateStatus.PASSED
 
 
-def test_a_summary_outside_the_publishable_range_fails() -> None:
-    broken = with_one_bad_call(
-        a_passing_shard(), summary_word_count=EVALUATION.summary_words_max + 1
+def test_a_summary_under_the_floor_fails_and_a_long_one_does_not() -> None:
+    """The gate asks the one length question production still drops an item on.
+
+    A reply past its band's ask is trimmed or published long rather than dropped,
+    so failing a candidate model for it would hold the qualification to a
+    standard the pipeline itself does not apply.
+    """
+    starved = with_one_bad_call(
+        a_passing_shard(),
+        summary_word_count=SUMMARIZE.length_policy.absolute_floor_words - 1,
     )
-    assert outcomes_of(broken)[GateName.PUBLISHABLE_LENGTH].status is GateStatus.FAILED
+    assert outcomes_of(starved)[GateName.PUBLISHABLE_LENGTH].status is GateStatus.FAILED
+
+    verbose = with_one_bad_call(
+        a_passing_shard(),
+        summary_word_count=max(band.target_words_max for band in SUMMARIZE.bands) * 2,
+    )
+    assert outcomes_of(verbose)[GateName.PUBLISHABLE_LENGTH].status is GateStatus.PASSED
 
 
 def test_a_request_that_does_not_fit_the_context_fails() -> None:
@@ -478,6 +492,7 @@ def test_a_job_past_its_bound_fails_the_budget_gate() -> None:
     corpus, gates = qualify.gates(
         [a_passing_shard()],
         evaluation=EVALUATION,
+        summarize=SUMMARIZE,
         inference=INFERENCE,
         run=RUN,
         budget_=qualify.Budget(

@@ -289,7 +289,7 @@ Interpret them in this order:
 | Summary `context_exceeded` | The server answered HTTP 400: the prompt plus the reply budget did not fit `--ctx-size`. Shorten the source, not the server. |
 | Summary `output_truncated` | The model exhausted the configured output budget before closing its JSON. |
 | Summary `bad_shape` | The constrained reply or reasoning channel violated the summary contract. |
-| Summary `length_out_of_range` | The reply parsed, but its word count missed the configured band. |
+| Summary `length_out_of_range` | The reply parsed, but it holds fewer words than `summarize.length_policy.absolute_floor_words` and the source was longer than `floor_applies_above_source_words`. That combination reads as a failed extraction, not a short summary. Missing the band's ask is not this - it publishes. |
 | Summary `copied_source` | The summary's longest unbroken run copied from the source ran past `evaluation.verbatim_reject_ceiling`. Republishing an article body is a non-goal. |
 | Summary `leaked_address` | The summary or a key point carried an address, or the `[link]` placeholder the sanitizer left where the source's address was. The title degrades to the source headline instead. |
 | No eval file | Expected with `--no-faithfulness`; otherwise inspect scorer installation and stderr. |
