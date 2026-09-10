@@ -6667,5 +6667,540 @@
     },
     "version": "2026-09-08T21:00",
     "visuals_rendered": 19
+  },
+  {
+    "addresses_considered": 10007,
+    "bands": {
+      "high": 50,
+      "low": 4,
+      "medium": 18
+    },
+    "date": "2026-09-10",
+    "determinism_violations": 0,
+    "extraction": {
+      "chartable": 41,
+      "chartable_charted": 1,
+      "chartable_published": 41,
+      "elements_found": 1073,
+      "items": 74,
+      "narrative": 11,
+      "span_integrity_pass": 74,
+      "unclassified": 22
+    },
+    "extraction_suspect": 0,
+    "instruments": [
+      {
+        "column": "compression",
+        "stat": {
+          "count": 72,
+          "maximum": 0.7777777777777778,
+          "minimum": 0.02617801047120419,
+          "p25": 0.11505273250239693,
+          "p50": 0.17097862767154107,
+          "p75": 0.2356020942408377,
+          "total": 14.849566932932012
+        }
+      },
+      {
+        "column": "coverage",
+        "stat": {
+          "count": 72,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "p25": 0.5,
+          "p50": 0.631578947368421,
+          "p75": 0.8181818181818182,
+          "total": 44.322798692535535
+        }
+      },
+      {
+        "column": "evidential_density",
+        "stat": {
+          "count": 72,
+          "maximum": 0.03994673768308921,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 0.0006416426050689766,
+          "p75": 0.0027829313543599257,
+          "total": 0.15496989044799991
+        }
+      },
+      {
+        "column": "extractiveness",
+        "stat": {
+          "count": 72,
+          "maximum": 0.5901639344262295,
+          "minimum": 0.0,
+          "p25": 0.07692307692307693,
+          "p50": 0.1792452830188679,
+          "p75": 0.2727272727272727,
+          "total": 13.95018781159529
+        }
+      },
+      {
+        "column": "hhem",
+        "stat": {
+          "count": 72,
+          "maximum": 0.9847432374954224,
+          "minimum": 0.006857107859104872,
+          "p25": 0.9035457372665405,
+          "p50": 0.9304336905479431,
+          "p75": 0.9590469598770142,
+          "total": 63.90083861676976
+        }
+      },
+      {
+        "column": "hhem_delta",
+        "stat": {
+          "count": 72,
+          "maximum": 0.0,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 0.0,
+          "p75": 0.0,
+          "total": 0.0
+        }
+      },
+      {
+        "column": "hhem_full",
+        "stat": {
+          "count": 72,
+          "maximum": 0.9847432374954224,
+          "minimum": 0.006857107859104872,
+          "p25": 0.9035457372665405,
+          "p50": 0.9304336905479431,
+          "p75": 0.9590469598770142,
+          "total": 63.90083861676976
+        }
+      },
+      {
+        "column": "new_fact_rate",
+        "stat": {
+          "count": 72,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 1.0,
+          "p75": 1.0,
+          "total": 49.5
+        }
+      },
+      {
+        "column": "score_ms",
+        "stat": {
+          "count": 72,
+          "maximum": 10727.0,
+          "minimum": 162.0,
+          "p25": 709.0,
+          "p50": 1241.0,
+          "p75": 2188.0,
+          "total": 140056.0
+        }
+      },
+      {
+        "column": "self_repetition",
+        "stat": {
+          "count": 72,
+          "maximum": 0.028169014084507005,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 0.0,
+          "p75": 0.0,
+          "total": 0.09087525547581199
+        }
+      },
+      {
+        "column": "source_seen_word_count",
+        "stat": {
+          "count": 72,
+          "maximum": 3082.0,
+          "minimum": 35.0,
+          "p25": 315.0,
+          "p50": 467.0,
+          "p75": 745.0,
+          "total": 41552.0
+        }
+      },
+      {
+        "column": "source_word_count",
+        "stat": {
+          "count": 72,
+          "maximum": 3082.0,
+          "minimum": 35.0,
+          "p25": 315.0,
+          "p50": 467.0,
+          "p75": 745.0,
+          "total": 41552.0
+        }
+      },
+      {
+        "column": "speculative_density",
+        "stat": {
+          "count": 72,
+          "maximum": 0.027777777777777776,
+          "minimum": 0.0,
+          "p25": 0.0,
+          "p50": 0.002386634844868735,
+          "p75": 0.0070921985815602835,
+          "total": 0.31706615292217466
+        }
+      },
+      {
+        "column": "summary_word_count",
+        "stat": {
+          "count": 72,
+          "maximum": 153.0,
+          "minimum": 28.0,
+          "p25": 62.0,
+          "p50": 75.0,
+          "p75": 100.0,
+          "total": 5810.0
+        }
+      },
+      {
+        "column": "verbatim_run",
+        "stat": {
+          "count": 72,
+          "maximum": 0.421875,
+          "minimum": 0.03571428571428571,
+          "p25": 0.07142857142857142,
+          "p50": 0.10483870967741936,
+          "p75": 0.14814814814814814,
+          "total": 8.724006941003204
+        }
+      }
+    ],
+    "items_failed": 8,
+    "items_planned": 80,
+    "items_published": 72,
+    "items_truncated": 0,
+    "model_id": "qwen3-5-9b-q4-k-m",
+    "pipeline_fingerprint": "0c865a9b3759856a282d219d8d7554bfec3f7fbbae8da4b482c8fa033a38842d",
+    "reasons": {
+      "faithfulness": 5,
+      "hedge_dropped": 9,
+      "lead_missing": 6,
+      "not_scored": 0,
+      "unattributed": 0,
+      "unsupported_number": 2
+    },
+    "revision": 1,
+    "runs": 1,
+    "sources": [
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "abc-au-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "africanews",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "bbc-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "bbc-tech",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "bbc-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "business-today-in",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "cgtn-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 2,
+        "published": 2,
+        "source_id": "cgtn-china",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "cna-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "cna-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "deccan-chronicle",
+        "truncated": 0
+      },
+      {
+        "doubted": 2,
+        "published": 2,
+        "source_id": "economic-times",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "euronews",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "fastcompany-tech",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "france24",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "free-press-journal",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "frontline",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "guardian-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "guardian-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "hindustan-times",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "ibm-research-blog",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "independent-world",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "india-today",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "japan-times",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "lemonde-en",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "livemint",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "marginal-revolution",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "marktechpost",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "mongabay",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "npr-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "nvidia-newsroom",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "oilprice",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "pv-magazine",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "pytorch-blog",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 1,
+        "source_id": "scroll-in",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "solar-quarter",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "straitstimes-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 2,
+        "published": 2,
+        "source_id": "techcrunch-ai",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "the-federal",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "the-hindu-national",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "thehindu-all",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "thehindu-business",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "thehindu-intl",
+        "truncated": 0
+      },
+      {
+        "doubted": 1,
+        "published": 2,
+        "source_id": "toi-india",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 2,
+        "source_id": "toi-top",
+        "truncated": 0
+      },
+      {
+        "doubted": 0,
+        "published": 1,
+        "source_id": "wired-ai",
+        "truncated": 0
+      }
+    ],
+    "sources_present": 46,
+    "stage_timing": [
+      {
+        "max_ms": 2464,
+        "p50_ms": 506,
+        "p90_ms": 1487,
+        "stage": "fetch",
+        "sum_ms": 54146,
+        "timed": 74
+      },
+      {
+        "max_ms": 210,
+        "p50_ms": 54,
+        "p90_ms": 100,
+        "stage": "extract",
+        "sum_ms": 4777,
+        "timed": 74
+      },
+      {
+        "max_ms": 554653,
+        "p50_ms": 109350,
+        "p90_ms": 213193,
+        "stage": "summarize",
+        "sum_ms": 9695777,
+        "timed": 74
+      }
+    ],
+    "summaries_scored": 72,
+    "throughput": {
+      "cached_tokens": 56975,
+      "decode_ms": 2907265,
+      "input_tokens": 126417,
+      "items": 72,
+      "output_tokens": 16246,
+      "prefill_ms": 6569375
+    },
+    "version": "2026-09-08T21:00",
+    "visuals_rendered": 1
   }
 ]
