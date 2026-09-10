@@ -92,7 +92,7 @@ from idhazh.sanitize import sanitize, untrusted_block
 from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "visual_planner.txt"
-CALL_ONE_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "call_one.txt"
+CALL_ONE_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "label_article_elements.txt"
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -1457,7 +1457,7 @@ def anchored(
 # --- Call 2: the summary and the plan, over the prefix call 1 already paid for
 
 
-CALL_TWO_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "call_two.txt"
+CALL_TWO_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize_and_plan_visual.txt"
 
 #: How many characters of a decoded string one word may cost, matching
 #: `summarize._MAX_CHARS_PER_WORD` because both rails are cut from the same
