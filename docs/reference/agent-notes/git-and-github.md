@@ -190,6 +190,10 @@ $at = (Select-String -Path $path -Pattern 'MYTAG' -SimpleMatch).LineNumber
 $log[($at[0])..($at[1] - 2)]
 ```
 
+**A missing llama-server log line is a verbosity setting, not a fact about the server.** At the default `-lv 3` a start prints twelve lines and the whole model-loader block is absent - no `llama_model_loader:`, no `print_info:`, no `load_tensors:`, no `llama_kv_cache:`, no `sched_reserve:`, and nothing naming flash attention. At `-lv 4` the same start prints about 206. So a grep that finds nothing has three possible answers and only one of them is about the server, which is why a reader of that log needs three states rather than two: **active**, **refused**, and **the verbosity was not raised** - and a check that reads the missing line as "off" turns a forgotten flag into a finding about attention. `/props` and `/metrics` cannot settle it either; both come back byte-identical whether the server started with `-fa on` or `-fa off`. `models.summarize.inference.log_verbosity` is 4 in `config/idhazh.json` for this reason. Measured 2026-09-09; the readings are in [../measurements.md](../measurements.md#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09).
+
+**A grep for a string the build never writes matches nothing for ever, and reads as a broken step.** `system_info` was grepped from the visuals job's server log on nine consecutive runs and matched zero times: llama.cpp `b10598` writes no line containing it. Before treating a silent grep as a regression, confirm the build emits the string at all.
+
 **`gh run download` can exit 0 on a partial artifact.** On 2026-08-25 one download extracted 25 of 37 items with no warning on either stream; an identical re-run gave all 124 files. Count what landed against what the run declares before computing anything from it - a measurement taken from a silently truncated artifact is wrong in a direction nobody checks:
 
 ```powershell

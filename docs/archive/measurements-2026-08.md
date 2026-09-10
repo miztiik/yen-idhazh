@@ -1012,7 +1012,7 @@ matched **zero times in nine runs**, because llama.cpp `b10598` writes no line
 holding that string. The row is kept in the table because the question it
 answers - which instruction sets the build uses - is still the open one, and
 because an instrument that silently returns nothing is worth naming. See
-[The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)
+[The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)
 for what that costs.
 
 The step also echoes `LLAMA_CPP_BUILD`, so a disagreement between the pin and
@@ -1053,7 +1053,7 @@ scrape has printed `llamacpp:` lines into the job log since 2026-08-25, and the
 raw body has ridden in `runtime-log-<shard>` for two days. From 2026-08-27 each
 shard also files the counters as one row of `state/runtime-counters.csv`, which
 is what turned the read rate from a reported number into a checked one - see
-[The ledger and the server agree about the read rate](#the-ledger-and-the-server-agree-about-the-read-rate)
+[The ledger and the server agree about the read rate](../reference/measurements.md#the-ledger-and-the-server-agree-about-the-read-rate)
 for the arithmetic, the reconciliation and the storage cost.
 
 
@@ -1074,7 +1074,7 @@ reading of that run.
 job records the processor it drew in its own `state/runtime-counters.csv` row,
 so the covariate this comparison used to be unable to hold is now readable per
 shard. The `route` job still has no such row
-([Still unmeasured](#still-unmeasured)).
+([Still unmeasured](../reference/measurements.md#still-unmeasured)).
 
 **Date.** **2026-08-29.** The first scheduled run at cap 5000 is run
 `33244705103`, ledger run id `2026-08-29-2`, head commit `fa53634`, started
@@ -1085,7 +1085,7 @@ control every comparison below uses.
 **n.** One run, four `work` jobs, 160 items planned, 40 items a worker.
 `run.max_parallel` is 4 and `run.safety_ceiling_per_run` is 160, so a scheduled
 run cannot hand a worker more. That is the same load
-[The first scheduled day on the configured model](#the-first-scheduled-day-on-the-configured-model-2026-08-27)
+[The first scheduled day on the configured model](../reference/measurements.md#the-first-scheduled-day-on-the-configured-model-2026-08-27)
 carried, which is what makes its 85.6 minutes a like-for-like baseline rather
 than a number off a differently shaped day.
 
@@ -1228,7 +1228,7 @@ or worse, which is 10 to 21 percent above the worst prose measured here. An
 absence test on an event that will not fire passes on a run that did nothing,
 and this project has published that mistake once already, when a canary that
 returned no summary at all was written up as a sanitizer failure
-([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)).
+([The fifth canary was never exercised](../reference/measurements.md#the-fifth-canary-was-never-exercised)).
 
 **What makes it fail on a run that exercised nothing.** The ledger's
 `source_words` is the post-cap count, and it cannot exceed
@@ -1333,7 +1333,7 @@ a published payload a reader's browser fetches rather than measurement evidence
 under `state/` ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
 That reasoning does not reach the `route` job, which runs no shards and files no
 counters row, so which processor a `route` job drew is still unrecorded
-([Still unmeasured](#still-unmeasured)).
+([Still unmeasured](../reference/measurements.md#still-unmeasured)).
 
 
 ## What the first run at cap 5000 must record
@@ -1432,7 +1432,7 @@ read a committed file instead of an API.
 | 9 | Widest complete request, prompt plus output tokens, from `n_tokens_max` | 3,775 + 900 measured, against `n_ctx` of 8,192. **Above 7,800 the cap comes down to 4000 and `n_ctx` does not move** | **4,925 tokens**, shard 2. The four shards read 3,122, 4,178, 4,570 and 4,925. **2,875 below the 7,800 line and 3,267 below the window** - step 7 did not fire and the cap stays at 5000 |
 | 10 | Implied tokens per word on the widest item | 1.35 to 1.44 measured on this project's prose; 1.59 or worse is what it takes to overflow | **1.387 tokens an article word over the run, and 1.352 on the widest item.** Regressing `input_tokens` on `source_words` over the 104 sized items gives a slope of 1.387 and a fixed prompt of 951 tokens, with a residual spread of 119 tokens. On the widest item - 2,772 words, 4,698 prompt tokens - the article's own share is 3,747 tokens. Both sit inside the measured band and well under the 1.59 that would overflow. **Superseded 2026-08-30 by a wider population**: over all 413 rows written at cap 5000 the slope is **1.2999** and the fixed prompt 998 tokens ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). The 1.387 here is this one run and it reproduces exactly; the two runs after it read an article to the full 3,846-word ceiling and the widest point is what sets a slope. 1.2999 sits *below* the 1.35 to 1.44 band this row checks against, so the band is superseded rather than confirmed, and 1.2999 is 18.2 percent under the 1.59 that overflows |
 | 11 | `context_exceeded` rows | 0 over 3,672 rows of `state/item-health/2026-08.csv`, counted 2026-08-29. Read it beside row 3 - a zero here means nothing if nothing was read past 1,923 words | **0 of 160 planned rows.** It is a measurement rather than an absence, because row 3 says 6 items were read past the old ceiling on this run |
-| 12 | Peak resident set per worker | 14.39 GiB high point on record, against 16 GB on the runner | **12.56, 12.64, 12.70 and 13.55 GiB** for `llama-server`, plus 1.43 to 1.98 GiB for the Python worker, over 167 to 260 samples a shard. Under the 14.39 on record and 2.45 GiB under the runner's 16 GB at the worst shard. `cgroup_memory_peak_bytes` printed `unavailable` on all four, so that instrument is still broken ([Still unmeasured](#still-unmeasured)) |
+| 12 | Peak resident set per worker | 14.39 GiB high point on record, against 16 GB on the runner | **12.56, 12.64, 12.70 and 13.55 GiB** for `llama-server`, plus 1.43 to 1.98 GiB for the Python worker, over 167 to 260 samples a shard. Under the 14.39 on record and 2.45 GiB under the runner's 16 GB at the worst shard. `cgroup_memory_peak_bytes` printed `unavailable` on all four, so that instrument is still broken ([Still unmeasured](../reference/measurements.md#still-unmeasured)) |
 | 13 | `route`: `items_prefiltered`, `items_asked`, `unrouted` | 18 unrouted is the median of the runs on record. A longer body yields more quantities, so **prefiltered should fall and unrouted should rise**. It costs charts, not clock - the stage self-stops at `run.route_budget_minutes` of 40 | **58 prefiltered, 46 asked, 0 unrouted** over the 104 items the stage decided, with 10 charts drafted and 8 kept. It spent 37.0 of its 40 minutes, so it just fit. **The prediction did not hold, and this run cannot test it**: prefiltered rose from 44.1 percent on run 1 (41 of 93) to 55.8 percent, and unrouted fell from a median of 18 to zero. Only 6 items got any extra text at all, so nothing here is attributable to the cap |
 | 14 | `hhem` against `hhem_full` on items that would have been cut at the old cap | `hhem_delta` runs -0.1235 to +0.0381 over the 24 cut items on record. **This row is an observation, not a gate.** Nothing measured says a longer read produces a better summary | **`hhem_delta` is 0.0000 on all 6.** That is the ledger being unable to answer rather than an answer: `cli.stage_work` passes `article.text` as both `seen_text` and `full_text`, so the two scores are one score and the column is structurally zero in production. The instrument that can answer is the offline re-score over committed evidence pairs ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)) |
 
@@ -1452,7 +1452,7 @@ one plan of 160 items split four ways:
 runs 1.54x across the four while the clock runs 1.51x. And the processor does
 not explain all of it: the two shards on the identical `9V45` string are still
 1.11x apart. That is the shape
-[the `route` job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)
+[the `route` job's per-item cost](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)
 already has, now measured on the stage that decides the run's wall-clock. What
 it means for [Trigger A](#trigger-a---the-shard-clock): the run waits for the
 last worker, so drawing a `7763` for one shard costs 24 minutes more than
@@ -1487,7 +1487,7 @@ changing anything.
 article read, and that is all it is measured to buy. Whether the summary is
 better is a different measurement with a different instrument, and the instrument
 that would say has never returned a real number
-([Still unmeasured](#still-unmeasured)).
+([Still unmeasured](../reference/measurements.md#still-unmeasured)).
 
 **The run also showed the ledger cannot answer row 14 at all.** `hhem_delta` is
 0.0000 on all six items the old cap would have cut, because production hands the
@@ -1620,7 +1620,7 @@ lottery that moved a shard 1.37x within one run, so it needs two of three.
 **When every step passes, say so on this page.** Replace the sheet's opening
 sentence - the one that says no value is measured yet - with the run id and the
 date, and strike the `truncation_cap_tokens` half of the
-[Still unmeasured](#still-unmeasured) row in the same commit. A sheet that stays
+[Still unmeasured](../reference/measurements.md#still-unmeasured) row in the same commit. A sheet that stays
 blank after its run has happened reads as a run that never happened.
 
 
@@ -1663,7 +1663,7 @@ Run `32742672105`, 2026-08-24, GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB),
 four `work` jobs, `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), llama.cpp `b10598`.
 Every row is
 already on this page under
-[Model throughput across the four workers](#model-throughput-across-the-four-workers).
+[Model throughput across the four workers](../reference/measurements.md#model-throughput-across-the-four-workers).
 
 | Quantity | Four shards |
 | --- | --- |
@@ -2734,3 +2734,328 @@ this row because each gate has one observation.
 
 The publish path is the long pole. Orchestrators should not serialize
 independent work on these gates; the merge gate still waits for green checks.
+
+### The CPU model does not sort the per-item cost of the visuals job
+
+**Measured 2026-08-27** from the `route` job log of every `digest.yml` run this
+repository holds - 27 runs, 2026-08-22 to 2026-08-26. Method:
+`gh run view --repo miztiik/yen-idhazh --job <id> --log` for each `route` job,
+then the `model name` line out of `/proc/cpuinfo` and the `route_ms` field of
+every `item routed` line that says `asked=True`. Skipped items are left out
+because a pre-filtered item costs 0 to 3 ms and would deflate the mean. The
+method reproduces the table above: it returns 40.3 s for run `32804437110`,
+which is the figure that row already carries.
+
+**None of the six runs above can ever be attributed a CPU.** The
+`What this runner is` step landed on 2026-08-25, after all six had run, and no
+line naming a processor appears anywhere in their job logs - checked across all
+27. Job logs outlive artifacts here, so this is not a retention problem that
+waiting would fix. The nine runs below are the whole of the evidence.
+
+| Run | Started (UTC) | CPU | `nproc` | `n_slots` | Items asked | Per item, mean | Median | Min | Max |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `32839359536` | 2026-08-25 10:51 | AMD EPYC 7763 64-Core | 4 | 1 | 62 | **48.9 s** | 47.3 s | 22.2 s | 72.0 s |
+| `32863921985` | 2026-08-25 15:08 | Intel Xeon Platinum 8573C | 4 | 1 | 54 | **44.4 s** | 44.7 s | 27.3 s | 79.2 s |
+| `32869125768` | 2026-08-25 15:58 | AMD EPYC 9V74 80-Core | 4 | 1 | 49 | **49.8 s** | 50.6 s | 32.6 s | 73.6 s |
+| `32887038177` | 2026-08-25 18:59 | AMD EPYC 9V74 80-Core | 4 | 1 | 70 | **34.2 s** | 33.2 s | 19.0 s | 64.0 s |
+| `32926523936` | 2026-08-26 03:27 | AMD EPYC 9V74 80-Core | 4 | 1 | 47 | **51.1 s** | 49.9 s | 27.7 s | 88.5 s |
+| `32941554666` | 2026-08-26 07:11 | AMD EPYC 9V74 80-Core | 4 | 1 | 44 | **54.8 s** | 54.2 s | 28.5 s | 87.5 s |
+| `32960510065` | 2026-08-26 10:53 | AMD EPYC 9V74 80-Core | 4 | 1 | 46 | **52.5 s** | 50.6 s | 30.8 s | 106.3 s |
+| `32986307407` | 2026-08-26 15:54 | AMD EPYC 9V74 80-Core | 4 | 1 | 48 | **50.1 s** | 51.3 s | 29.1 s | 80.7 s |
+| `33008629212` | 2026-08-26 20:05 | AMD EPYC 9V74 80-Core | 4 | 1 | 48 | **50.8 s** | 47.2 s | 27.5 s | 94.0 s |
+
+**One CPU string covers most of the swing, so the CPU string is not the
+answer.** Seven of the nine drew the same part, `AMD EPYC 9V74 80-Core
+Processor`, and their per-item means run 34.2 s to 54.8 s - **1.60x on a single
+CPU string**, against the 1.92x (21.0 s to 40.3 s) that opened this question.
+The other two parts land inside that band rather than outside it: the EPYC 7763
+run at 48.9 s and the Xeon 8573C run at 44.4 s. Group the nine by CPU and the
+groups overlap completely. Everything else a host could vary was held and read
+rather than assumed, because the job log prints it: `nproc` 4 and `n_slots` 1 on
+all nine, llama.cpp build 10598 commit `56db501e7` with `llama-server` sha256
+`9bcaf7569a1b...`, and weights `Qwen3-4B-Q4_K_M.gguf` sha256 `7485fe6f11af...`,
+the exact value `config/idhazh.json` pins.
+
+**This cuts against the suspect the `work` job named.**
+[Eight work shards](../archive/measurements-2026-08.md#eight-work-shards) found two Intel Xeon shards prefilling
+3.4x faster than six AMD EPYC ones on one day. Prefill is 85 percent of a planner
+request in the slow mode, so if that vendor split reached this stage an Intel
+job would cost about 40 percent of an AMD one - near 20 s an item, which
+is exactly the fast mode. The one Intel job on record cost **44.4 s**, the
+middle of the AMD band. Either the split does not reach this stage, or that
+Xeon job was not in the fast mode. Nothing here separates the two.
+
+**Only one of these jobs has ever carried both a CPU model and a prefill rate.**
+Run `32839359536`: AMD EPYC 7763, **21.09 tok/s prefill** over 62 requests,
+median prompt 898 tokens, 48.9 s an item. 21.09 tok/s is the slow mode - the six
+runs above span 20.2 to 62.9 - and at 898 tokens prefill alone is 42.6 s of the
+48.9, which is 87 percent and matches the 85 to 86 percent the slow runs show.
+One observation in one group proves nothing about a group it cannot compare
+against.
+
+**The fast mode has not recurred.** Every one of the nine costs 34.2 s or more
+an item; the fast mode was 20.7 to 21.0 s. Nine consecutive runs over 33 hours
+and not one was fast. The comparison this question needs - a fast run and a slow
+run that both name their CPU - has nine observations on the slow side and none
+on the fast side.
+
+**Do not average these nine with the six above; they are different regimes.**
+`visuals.enabled_kinds` dropped to `[chart]` on 2026-08-25, which switched the
+pre-filter on: 35 to 73 items a run are now skipped with no model call, and the
+items still asked are the chart-eligible ones, which carry more numbers and more
+text. The one new run whose prompt size is readable medians 898 tokens against
+622 to 700 on the six - 28 percent more prompt, so 28 percent more prefill, and
+40.3 s x 898/700 is 51.7 s. That sits inside the 49.8 to 54.8 s band six of the
+nine occupy. The nine read as the slow mode carrying a bigger prompt, not as a
+new effect.
+
+**Two instruments added to answer this question did not work. Both are now
+explained, and only one of them was a fault.** Both were checked on all nine
+runs:
+
+- `grep -m1 'system_info' router.log` **has matched zero times in nine runs.**
+  llama.cpp `b10598` writes no line containing that string, so the one line that
+  names the instruction sets - AVX2 against AVX-512, the obvious way two hosts
+  sharing a CPU model string could differ 3x on prefill - has never been
+  captured. The other five lines under
+  [What a job log names](../archive/measurements-2026-08.md#what-a-job-log-names) do print. **This was never a
+  grep fault**: the line is not printed at all below verbosity 4, so the pattern
+  was right and the line was not there
+  ([What llama-server reports about its own runtime settings](../reference/measurements.md#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).
+- The log summary's `grep -E '^(srv|slot) '` **could not match this build's
+  output, and that one was a fault.** Every line starts with a timestamp and a
+  level, as in
+  `0.02.841.335 I srv load_model: initializing, n_slots = 1`, so the anchor
+  never fired; the one line that did reach the job log matched on the
+  `n_ctx_slot` alternative instead. `slot print_timing:`, which carries
+  `prompt eval time`, stopped reaching the job log when the older unanchored
+  `grep 'prompt eval time ='` was replaced. Measured 2026-09-09 over the four
+  committed captures: 1 line of 40 found, and the corrected anchor
+  `^[0-9.]+ [A-Z] (srv|slot) ` finds 38 of 40, the two it leaves being the
+  common-args block. Fixed in both jobs the same day, so those timings reach a
+  job log again from the next run rather than surviving only inside the
+  two-day artifact.
+
+**The unmet prerequisite, exactly.** With the anchor fixed and the verbosity
+understood: **two `route` runs carrying a prefill rate on each CPU model, at
+least one of them in the fast mode.** Today that count is 1 on the EPYC 7763, 0
+on the EPYC 9V74 and 0 on the Xeon 8573C, so it is five more observations at
+minimum. No date goes with that number - which CPU a job draws is not ours to
+choose, and no fast run has appeared in nine.
+
+### Where the per-item cost actually goes
+
+**Measured 2026-08-25** from llama-server's own `print_timing` lines in each
+run's `router-log` artifact - the runtime's numbers, not ours. Same six runs,
+608 requests.
+
+| Run | slots | Per item | Prefill | Decode | Prefill share | Prompt | Reply |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `32701966659` | 4 | 20.7 s | **62.9 tok/s** | 5.5 tok/s | 56% | 696 tok | 38 tok |
+| `32719349248` | 4 | 38.2 s | **20.2 tok/s** | 8.7 tok/s | 86% | 622 tok | 38 tok |
+| `32742672105` | 4 | 21.0 s | **60.6 tok/s** | 5.5 tok/s | 56% | 659 tok | 38 tok |
+| `32766098026` | 4 | 37.2 s | **21.0 tok/s** | 9.1 tok/s | 86% | 623 tok | 39 tok |
+| `32772221068` | 1 | 26.6 s | **31.5 tok/s** | 8.7 tok/s | 81% | 628 tok | 38 tok |
+| `32804437110` | 1 | 40.3 s | **21.3 tok/s** | 9.0 tok/s | 85% | 700 tok | 39 tok |
+
+Rates are day totals - tokens summed, milliseconds summed, divided once - not
+the mean of per-item rates. Prompt and reply are medians.
+
+Four candidate causes die here and one survives:
+
+- **Not the article mix.** The median prompt is 622-700 tokens on every run and
+  the median reply is 38-39. The work per item did not change.
+- **Not `n_slots`.** Four-slot runs appear at both 62.9 and 20.2 tok/s, and
+  one-slot runs at both 31.5 and 21.3. The `-np 1` production trial is not what
+  moved this.
+- **Not decode, and not a generally slower machine.** Decode moves the *other
+  way*: 5.5 tok/s on the fast runs against 8.7-9.3 on the slow ones. A slower
+  host would slow both.
+- **Not a truncated request.** `visuals.request_timeout_minutes` is 2.0 and the
+  slowest item measured 79.5 s.
+- **It is the prefill rate, and only the prefill rate.** It swings 3.1x, and
+  because prefill is 56% to 86% of a request, the whole per-item figure follows
+  it. What differs between hosts to produce a 3x prompt-eval swing alongside a
+  *faster* decode is not recorded, because nothing logged the CPU. The `route`
+  job began printing `/proc/cpuinfo` model name, `nproc` and llama-server's
+  `system_info` line on 2026-08-25, after all six of these runs. The nine runs
+  that do name their CPU are read in
+  [The CPU model does not sort the per-item cost of the visuals job](../archive/measurements-2026-08.md#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job),
+  and they rule the CPU model out rather than confirming it.
+
+The lever this points at is the prompt, not the runtime: `visuals.lead_words`
+(150) is most of each request's prefill, and prefill is most of the stage. It has
+never been swept.
+
+### The qualification budget, derived 2026-08-26
+
+Derived, not measured, and the design is built so the verdict does not depend on
+the derivation being right.
+
+The starting point is a live production observation, not a bench: run
+`32742672105` on 2026-08-24 spent 232.7 minutes in prefill and 135.7 in decode
+across four workers over roughly 150 articles, which is **147 s of model time an
+article** on the incumbent, with the shared system prompt already cached.
+
+Scaling that to the candidate uses the two `llama-bench` rows above - prefill
+12.1 -> 10.14 tok/s and decode 7.28 -> 6.01 tok/s, so 1.193x and 1.211x the
+time. Those rows were taken on different CPUs and runtime builds, so the ratio
+is an estimate and is labelled one:
+
+```text
+147 s x (0.632 x 1.193 + 0.368 x 1.211) = 176 s an article
+```
+
+`.github/workflows/validate.yml` runs three capture-and-replay shards of ten
+frozen articles at three repeats, which is 30 inference calls a shard:
+
+| Cost, per shard | Derived |
+| --- | --- |
+| 30 replay calls at 176 s | 88 min |
+| 5 injection canaries, shard 0 only | 15 min |
+| Checkout, Python, `pip install -e ".[faithfulness]"` | 4 min |
+| llama.cpp plus 5.29 GiB of weights on a cache miss | 3 min |
+| Server start and health | 1 min |
+| Fetch and extract up to 30 addresses | 2 min |
+| HHEM load and 10 items scored | 2 min |
+| **Worst shard** | **115 min against a 330-minute bound** |
+
+Margin 215 minutes, 65 percent of the bound. **At twice the derived per-item
+cost the worst shard is 218 minutes and still inside**, which is the point of
+sharding it: the design survives the estimate being wrong by 100 percent
+(Rule #2, Rule #10).
+
+The production projection uses the same 176 s. `digest.yml` derives workers as
+`min(ceil(items / run.shard_size), run.max_parallel)`, so at the 160-item
+`run.safety_ceiling_per_run` then in force a worst worker drew `160 / 4 = 40`
+items: 40 x 176 s = 117 minutes of model time, about 130 minutes with the fixed
+costs, against the `work` job's 330. For comparison, the measured incumbent worst
+worker was 58.8 minutes after PR #110.
+
+**What the run actually cost, measured 2026-08-26.** Run `33016222069`: the
+slowest job took **95.2 minutes** against the 330-minute bound it ran under, and
+the slowest single item took **449 s**. The derivation said 115 minutes for the
+worst shard, so it over-predicted by 21 percent - in the safe direction, and
+close enough that the sharding margin was never tested.
+
+**That is a qualification job, not a production worker.** The two run different
+work against different bounds: 30 replay calls at 3 repeats on frozen payloads,
+against up to 40 live items with fetch, extraction, routing and scoring around
+them, under the `work` job's 150-minute bound. The configured model has never
+run a production day, so its worst worker is still unmeasured
+([Where the work job's bound comes from](../reference/measurements.md#where-the-work-jobs-bound-comes-from)).
+
+### The vector backfill, and the one raise the archive plan cannot absorb
+
+Hardware: Intel Core i7-1265U, Windows, node 24.12.0, onnxruntime 1.29.0. Date:
+2026-08-26. Method: as above, three builds of one tree.
+
+The backfill filled every closed day's vectors, and 1,175 new vectors are bytes
+`/archive/` carries. The ceilings were raised, and this is the one case the
+"archive plan, not a bigger number" rule above does not cover: that plan is
+blocked on this backfill by its own preconditions, so it cannot land first.
+
+Taken on the final rebased tree, seven published days:
+
+| Route | Build 1 | Build 2 | Build 3 | Range | Ceiling committed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `/404` | 1,061 | 1,061 | 1,059 | 2 | **1,127** (unchanged) |
+| `/evals/` | 2,411 | 2,411 | 2,406 | 5 | **2,475** (unchanged) |
+| `/console/` | 136,702 | 136,708 | 136,708 | 6 | **136,772** |
+| `/archive/` | 1,675,982 | 1,675,983 | 1,675,984 | 2 | **1,676,048** |
+
+**Two causes, and they are not the same size.** The backfill's own share was
+isolated an hour earlier, on the tree before the last rebase, by building
+`origin/main` untouched and then building it again with the repair applied:
+
+| Route | Ceiling before | `origin/main` untouched | With the backfill | The backfill's share |
+| --- | ---: | ---: | ---: | ---: |
+| `/archive/` | 1,124,663 | 1,213,246 | 1,583,734 | **+370,488** |
+| `/console/` | 123,330 | 129,598 | 129,602 | **+4** |
+
+So `/archive/` was already 88,583 bytes over its ceiling and `/console/` 6,268
+over, on a tree nobody had touched - the scheduled pipeline published more of
+2026-08-26 after PR #126 measured them, which is the countdown behaviour that
+section describes, watched a third time. The CI `site` job was already failing
+on `main` at 6535e52 for exactly this, before this row existed. The gap between
+1,583,734 and the 1,675,984 in the table above is the same countdown running
+again during the row: `digest: 2026-08-26` grew the live day from 385 items to
+505 while the gates were running. **A ceiling measured before the final rebase
+is already wrong.**
+
+370,488 bytes for 1,175 vectors is 315 bytes a vector on the wire, against 512
+base64 characters raw - so gzip returns about 38 percent of what base64 costs.
+That figure sizes the archive plan's shards and replaces its 35 percent
+estimate. **It has since been measured directly**, over the vectors themselves
+rather than inferred from how much the page around them grew: 322.55 bytes for
+the same base64 shape and 249.82 for a raw `.bin`
+([Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index)). Quote those.
+
+**A day page carries its own vectors and never reads them.** `/<date>/` went
+from 396,997 to 581,552 bytes gzipped over the same backfill - 184,555 bytes a
+reader downloads to read one day's stories. Search lives on `/archive/`; the
+in-page filter on a day is a lowercased substring test that needs no vector at
+all. Nothing was measuring this before, because a day route is deliberately
+uncapped and the block was nearly empty. This is a defect in the day route's
+load, not in the backfill: a day payload the archive reads whole is the same
+file the day page renders, and only the archive needs the block.
+
+**What a reader pays.** `/archive/` is 1.68 MB gzipped. That is the cost of
+holding the whole corpus on one page, and it is the reason the archive plan
+exists rather than a reason to leave the corpus empty: before the backfill,
+1,175 of the 1,614 items a reader can search for had no vector at all, so the
+page was heavy AND could not find them.
+
+#### The instrument prints the runway now, and it prints a floor (2026-08-30)
+
+Every figure above was worked out by hand on this page, three times, and got the
+wrong answer twice. `idhazh site-weight` now prints it from the tree it just
+measured. Hardware: Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+2026-08-30, `origin/main` at `76cdc72`, nine published days, 3,054 items.
+Method: `npm run build` then `python -m idhazh site-weight --site-tree build`.
+n=1; a byte count over a fixed tree has no spread to report.
+
+```text
+site-weight build: 141.1 MB in 311 files, 883 MB left to the 1024 MB Pages cap
+site-weight by directory: assist 43.2 MB, _app 22.3 MB, 2026-08-24 15.6 MB,
+                          2026-08-25 15.5 MB, 2026-08-26 13.4 MB, 2026-08-29 7.4 MB
+site-weight rate: 48457 B per published item over 3054 items,
+                  so 7.39 MB a published day at the 160 item ceiling
+site-weight runway: 89 published days to the 800 MB alarm point, 119 to the 1024 MB Pages cap
+```
+
+Exactly: **147,986,756 bytes in 311 files**, 141.13 MiB of a 1,024 MiB cap -
+13.8 percent used - and **119.4 published days** to the cap, **89.1** to the
+alarm point.
+
+**The printed rate is an average that charges the fixed directories to the
+items, so the runway is a floor.** Nothing in the tree is only per-item: the
+on-device encoder under `assist/` and the JavaScript under `_app/` cost the same
+whether a day publishes 4 items or 160.
+
+| Part of the tree | Bytes | Share | Moves with items? |
+| --- | ---: | ---: | --- |
+| `assist/` - the on-device encoder | 45,328,441 | 30.6 percent | no |
+| `_app/` - the built JavaScript | 23,367,156 | 15.8 percent | no |
+| `fonts/`, `icons/`, `404.html`, manifest, favicon | 109,159 | 0.1 percent | no |
+| everything else - day routes, payloads, index, console | 79,182,000 | 53.5 percent | yes |
+
+**46.5 percent of the site does not grow with a published day.** Divide only the
+part that does and the rate is **25,927 bytes an item**, which is 3.96 MiB a day
+at the 160-item ceiling and **223 published days** to the cap. That figure is
+derived from the split above, not separately measured - but it lands within 6.4
+percent of the 24,378 bytes an item measured independently on 2026-08-29 over
+seven mature days, from a different tree state and a different method.
+
+**So the honest reading of the printed line is "at least 119 days, and about
+223".** The instrument prints the conservative one on purpose: a runway that
+assumes the model directory is bought again every day is wrong in the direction
+that costs nobody a site. `by_directory` is on the same output precisely so a
+reader can do the sum above rather than take the floor as the answer.
+
+**Where the bytes actually are.** `assist/` is the largest single directory in
+the published site and it is a feature no digest assertion depends on
+(CLAUDE.md section 0a). Deleting it would give back 30.6 percent of the site and
+buy nothing on the rate, which is the same lesson PR #171 taught one level down:
+a one-off saving buys a fraction of a day forever, and only the rate moves a
+date.
