@@ -540,7 +540,7 @@ them apart.
 - [month-partitions.md](month-partitions.md) - the companion: what a layout obliges a writer to do, the freeze rule, and what counts as a month name.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md#the-published-ledger-files-by-day-and-the-read-carries-a-cover) - the published cover, the day grain, and the argument it reversed.
-- [../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree) - what bounds each committed collection, and the state-prune measurement.
+- [../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree) - what bounds each committed collection, and the state-prune measurement.
 - [telemetry.md](telemetry.md#the-committed-traces-briefly) - a store bounded by its prune rather than by a read.
 - [../reference/data-growth-audit.md](../reference/data-growth-audit.md) - the audit these reads were found in, and what each finding cost.
 - [../../CLAUDE.md](../../CLAUDE.md) - Rule #12, which this page is the address of, and Rule #10 on what a measurement obliges.
