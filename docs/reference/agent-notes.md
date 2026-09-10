@@ -41,8 +41,23 @@ twelve lines including the command block:
 3. The command or snippet that gets the true answer.
 
 Longer than twelve lines means it is two entries, or it is not a tool quirk.
-Date an entry only where it can go stale - a tool version, upstream behaviour, a
-workflow that may since have been fixed. A date on a permanent trap is noise.
+
+**A number carries its date, its hardware and its spread** (`CLAUDE.md` Rule
+#10) - without them a measurement is an assertion, and an entry whose evidence
+was cut reads exactly like one somebody guessed. Date an entry with no number
+in it only where it can go stale: a tool version, upstream behaviour, a
+workflow that may since have been fixed.
+
+**Keep the tell.** It is the check that separates the trap from the thing it
+looks like, it is the longest and most narrative-looking sentence in an entry,
+and under an instruction to be terse it reads exactly like the padding you were
+told to remove. It is also the only thing on these pages a reader cannot
+reconstruct: an entry with a fix and no tell fires confidently on the wrong
+diagnosis, which costs more than a long read.
+
+An entry whose trap can no longer fire is deleted, not archived. Where its
+shape still binds, it survives as one sentence inside the entry that replaced
+it, never as a section of its own.
 
 ## See also
 

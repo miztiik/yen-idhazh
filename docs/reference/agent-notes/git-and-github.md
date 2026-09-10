@@ -19,7 +19,7 @@ git worktree add <repo>.worktrees/<name> -b <branch> origin/main
 
 **Branch before the first edit, not after the work is done.** A 35-file change built uncommitted in the shared checkout on 2026-08-28 survived only by luck: the owner committed underneath it, `origin/main` gained 22 commits, and an earlier `git add` had been undone by another process. `git switch -c <branch>` carries an uncommitted tree onto a new branch, so the recovery is cheap - but it defers the merge to the worst moment.
 
-**A `git worktree add` the terminal kills leaves a directory that is not a worktree.** The tree is most of the way there, `git rev-parse` inside says `not a git repository`, and `git worktree list` does not mention it - so there is nothing to remove and the branch name is taken. Clean up all three pieces, then retry from a detached script:
+**A `git worktree add` the terminal kills leaves a directory that is not a worktree.** On 2026-08-30 the checkout was cut at 69 percent of 697 files: the tree is most of the way there, `git rev-parse` inside says `not a git repository`, and `git worktree list` does not mention it - so there is nothing to remove and the branch name is taken. Clean up all three pieces, then retry from a detached script:
 
 ```powershell
 Remove-Item -LiteralPath <path> -Recurse -Force; git worktree prune; git branch -D <branch>
@@ -33,7 +33,7 @@ Check `Test-Path <path>\.git` afterwards; progress lines reaching 100 percent do
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<worktree>*' }
 ```
 
-**Nothing removes a finished worktree on its own, and `git worktree prune` is not that thing** - it only clears the entry for a directory that has already gone. Sweep them, and read the report before removing, because a sibling creates a worktree between any two commands:
+**Nothing removes a finished worktree on its own, and `git worktree prune` is not that thing** - it only clears the entry for a directory that has already gone. Measured 2026-09-02: 38 abandoned sibling directories holding 156,482 files, every one a row whose pull request had merged days earlier, because the closing step is the one a worker killed mid-row never reaches. Sweep them, and read the report before removing, because a sibling creates a worktree between any two commands:
 
 ```powershell
 python backend/utilities/sweep_worktrees.py            # report, change nothing
@@ -159,7 +159,7 @@ Before merging anything that rewrites `frontend/public/`, check `gh run list --w
 gh api "repos/<owner>/<repo>/commits/<sha>/check-runs" --jq '.check_runs[]|.name+"="+.status+"/"+(.conclusion//"-")'
 ```
 
-**`gh pr checks --watch` answers about the run it already knew about.** Called within seconds of a push it reports the PREVIOUS run's conclusions as `pass`. Bind the question to the head commit (`gh pr view <n> --json headRefOid`), and read an empty result as "not registered yet", which is a different answer from `pass`.
+**`gh pr checks --watch` answers about the run it already knew about.** Called within seconds of a push it reports the PREVIOUS run's conclusions as `pass` - observed 2026-08-25 on PR #94, immediately after updating the branch. Bind the question to the head commit (`gh pr view <n> --json headRefOid`), and read an empty result as "not registered yet", which is a different answer from `pass`.
 
 **`gh pr checks` exit codes: 8 while anything is pending, 0 when every check is green, 1 when one failed.** It also prints `no checks reported` for about a minute after a push. A job can report `status: in_progress` with `conclusion: success` while the run is complete, so a settle loop keyed on exit 0 polls for ever - key it on `gh run view <id> --json status,conclusion` instead.
 
@@ -190,7 +190,7 @@ $at = (Select-String -Path $path -Pattern 'MYTAG' -SimpleMatch).LineNumber
 $log[($at[0])..($at[1] - 2)]
 ```
 
-**`gh run download` can exit 0 on a partial artifact.** One download extracted 25 of 37 items with no warning on either stream; an identical re-run gave all 124 files. Count what landed against what the run declares before computing anything from it:
+**`gh run download` can exit 0 on a partial artifact.** On 2026-08-25 one download extracted 25 of 37 items with no warning on either stream; an identical re-run gave all 124 files. Count what landed against what the run declares before computing anything from it - a measurement taken from a silently truncated artifact is wrong in a direction nobody checks:
 
 ```powershell
 gh api "repos/<owner>/<repo>/actions/runs/<id>/artifacts" --jq '[.artifacts[].name]|length'
@@ -209,7 +209,7 @@ if ($checks.Count -gt 0 -and $pending.Count -eq 0) { ... }
 
 **The `items-*` artifacts are the only corpus of real article text.** Nothing commits an article body, so a rule that reads `Article.text` cannot be measured against `frontend/public/digest/` at all; the measurable corpus is a completed run's artifacts. Two things bite: filter on `status == "ok"` (a failed article is a real payload with no text, and deflated every percentage by 24 percent on the run measured 2026-08-26), and artifacts expire, so the number carries its run id and not just its date.
 
-**An upstream README can be behind the binary it documents.** A flag the release supports may be undocumented, and a flag the README describes may have been renamed. Ask the binary (`--help`) or the release notes for the exact tag, not the front page of the repository.
+**An upstream README can be behind the binary it documents.** llama.cpp `b10598` publishes `llamacpp:prompt_tokens_cached_total` and describes `prompt_tokens_total` as excluding cached tokens; its own `tools/server/README.md` at that exact tag carries neither the extra series nor the four words that decide whether a number is a read rate or a prompt rate. A field's meaning comes from a capture, never from the document about it. Where the instrument publishes a derived value beside its inputs, reproduce it as a free self-check - `prompt_tokens_seconds` is exactly `prompt_tokens_total / prompt_seconds_total`, which proves which definition the counter is using with no second source needed.
 
 **A missing runner fixture can be captured in about three minutes, with no checkout.** Create a ref through the API, `PUT` a one-job workflow onto it as base64 content, read the job log, then `DELETE` the ref. Every trigger here is main-only or dispatch-only, so a branch that exists for forty seconds starts nothing else. Record the run id in the measurement, and say the branch was deleted. **Convert the YAML to LF before you base64 it** - a carriage return inside a `run: |` block reaches bash as part of the command, so the job fails on a line that looks correct in every rendering of it.
 

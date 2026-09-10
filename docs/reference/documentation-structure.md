@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-09-10
 
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 

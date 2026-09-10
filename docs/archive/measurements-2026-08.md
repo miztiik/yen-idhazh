@@ -1,6 +1,6 @@
 # Retired measurements, August 2026
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-10
 
 Moved out of [../reference/measurements.md](../reference/measurements.md) on
 2026-08-30. Every number here was true when it was taken, on the hardware and

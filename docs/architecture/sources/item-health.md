@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-10
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
