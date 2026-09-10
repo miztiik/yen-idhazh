@@ -1177,6 +1177,7 @@ Named here so they are not mistaken for work this plan is doing.
 ## See also
 
 - [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - the plan this one spawned from; its rows 4, 5 and 6 gate every labelling row here.
+- [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - the five month-sharded ledgers section 0 puts out of scope, planned.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - the plan this one spawned; it decides where a story goes, and its rows #7 and #8 are what stops a read desk turning a five-desk day into a one-desk day.
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record O43, E1 and E5 come from.
 - [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - what a read over a growing collection must declare.
