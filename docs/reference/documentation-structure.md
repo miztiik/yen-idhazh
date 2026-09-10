@@ -185,6 +185,30 @@ The one thing here worth measuring is the bootstrap load itself - the tokens a
 reader has to hold before the first line of code is read. That names a budget
 rather than a threshold, and a budget is what leaves room for the working set.
 
+### The tool that hands you the numbers
+
+```text
+python backend/utilities/doc_load.py
+```
+
+It prints the bootstrap load and one row per page, and **it decides nothing**:
+every column is an input to one of the three tests above, and no number it prints
+is a threshold. There is no doc gate and no line-count lint, deliberately - a
+count is met by starting a second file, which is the fragmentation failure with
+none of the benefit.
+
+| Column | The test it feeds |
+| --- | --- |
+| `~tok` | the bootstrap load, against the working set you still have to hold |
+| `top h2` | the largest section as a share of the page. One section holding most of a page usually holds several answers - open it and ask the **split test** whether you can act on one section without another |
+| `from` | how many other pages link here. `1` means one page is the only way in, so the **merge test** asks whether that page owns this as a section; `0` is the same question, louder |
+| `super` | sections saying a later one corrects them. Each is a **delete test** candidate and never a verdict: keep the correction whose trap a reader can still walk into, cut the one the correction closed |
+
+Its token figure is about four characters a token - a declared estimate rather
+than a measurement (Rule #10), which is enough to compare pages and not enough to
+quote anywhere else. Run it before a docs pass to pick the page, and after one to
+see what moved.
+
 ### `docs/` is the memory
 
 Everything a future contributor or agent needs is written here, in a file that
