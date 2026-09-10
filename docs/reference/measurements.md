@@ -1635,64 +1635,33 @@ mistake was made against this exact figure before the distribution was measured.
 
 ## How much of the runner's memory a run needs
 
-**Measured 2026-09-01** from `state/runtime-counters.csv`, read independently of
-the page by a script that groups by run and then by shard index and refuses a run
-whose rows disagree - the same rule
-[../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md#a-shard-is-a-set-and-a-run-that-cannot-be-reconciled-is-refused)
-states. Hardware is GitHub-hosted `ubuntu-latest`, 4 vCPU and **16 GB**, which is
-the ceiling every figure below is read against (CLAUDE.md Rule #2). The value is
-`peak_rss_bytes`, llama-server's own high-water mark for its process.
+**Measured 2026-09-01** from `state/runtime-counters.csv`, over 76 rows and 18
+runs on GitHub-hosted `ubuntu-latest`, 4 vCPU and 16 GB. `peak_rss_bytes` landed
+2026-08-30, so 44 of the 76 rows carry it and a shard older than that reports
+nothing - which is a missing reading and not a shard that used no memory. The
+worst run reached 13.18 GiB of llama-server's own high-water mark, and the eleven
+runs carrying the cell spanned 1.08x.
 
-**76 rows, 18 runs, all 18 readable, and 44 of the 76 rows carry the cell.** It
-landed on 2026-08-30, so a shard older than that reports nothing - which is a
-missing reading and not a shard that used no memory. Eleven of the eighteen runs
-have at least one shard that reported.
+**What that does NOT say is how much room was left**, and the two sections below
+carry the full retraction. A process mark is not the job, a resident set counts
+mapped weight pages the kernel can evict, and subtracting either from the
+machine's whole 16 GB describes no budget anybody has. Nothing on this page has
+ever measured what the machine had free.
 
-**The high-water mark is 14,155,517,952 B - 13.18 GiB, 82.4 percent of the
-runner** - on shard 1 of run `2026-08-31-33448379177`. Over the eleven runs that
-carry the cell, the per-run maximum runs 13,072,498,688 B (12.17 GiB, 76 percent)
-to that figure, a spread of 1.08x.
-
-| Run | Shards reporting | Run's maximum | Of the runner |
-| --- | --- | --- | --- |
-| `2026-08-31-33448379177` | 4 of 4 | 14,155,517,952 B (13.18 GiB) | **82.4%** |
-| `2026-08-31-33434587836` | 4 of 4 | 14,112,464,896 B (13.14 GiB) | 82.2% |
-| `2026-09-01-33484160918` | 4 of 4 | 14,084,059,136 B (13.11 GiB) | 82.0% |
-| `2026-08-31-33420639886` | 4 of 4 | 13,932,216,320 B (12.97 GiB) | 81.1% |
-| `2026-08-31-33399830093` | 4 of 4 | 13,714,620,416 B (12.77 GiB) | 79.9% |
-| `2026-08-31-33374118069` | 4 of 4 | 13,654,548,480 B (12.72 GiB) | 79.5% |
-| `2026-08-30-3` | 4 of 4 | 13,589,483,520 B (12.66 GiB) | 79.1% |
-| `2026-08-30-1` | 4 of 4 | 13,581,275,136 B (12.65 GiB) | 79.1% |
-| `2026-08-30-2` | 4 of 4 | 13,575,516,160 B (12.64 GiB) | 79.0% |
-| `2026-08-30-4` | 4 of 4 | 13,401,452,544 B (12.48 GiB) | 78.0% |
-| `2026-08-30-5` | 4 of 4 | 13,072,498,688 B (12.17 GiB) | 76.1% |
+Two rules from that reading do still bind, and both are enforced rather than
+described.
 
 **A run's figure is the LARGEST of its shards and never their sum.** Shards are
-separate jobs on separate hosts, so summing run `2026-08-31-33448379177` would
-report 53,615,280,128 B - 49.9 GiB on a machine that has 16 - which is a machine
-that never existed. The console draws it the same way and
+separate jobs on separate hosts, so summing the worst run would report 49.9 GiB
+on a machine that has 16 - a machine that never existed. The console draws it the
+same way and
 [../../frontend/tests/console-machine-data.spec.ts](../../frontend/tests/console-machine-data.spec.ts)
 fails on a sum.
 
-**Inside one run the shards differ by 1.14x at the widest**, on
-`2026-08-31-33374118069`: 12,404,453,376 B on shard 1 against 13,654,548,480 B on
-shard 0. That spread is why the panel draws every shard and not only the
-aggregate - one number hides which shard is nearest the edge.
-
-**What it settles: about 2.8 GiB of headroom is left.** The configured summarizer
-on the configured `n_ctx` of 8,192 peaks at 82 percent of the runner, so a model
-or a context window needing 18 percent more memory does not fit, and one needing
-less has to be measured rather than assumed. No threshold has been agreed for
-"too near", so the console draws no tint - a colour would publish a limit nobody
-set.
-
-**Superseded 2026-09-08, and retracted further 2026-09-09, by the two sections
-below.** That paragraph reads llama-server's mark as though it were the job's,
-and it is not: the ledger's own worst row is higher, and the python beside the
-server holds over a gigabyte more. The 2026-09-09 correction goes further and
-takes the word "headroom" off all of them. Every one of these figures is a
-process mark or a subtraction from the machine's whole 16 GB, and neither says
-what the machine had free - which nothing here has ever measured.
+**Inside one run the shards differ by 1.14x at the widest.** That spread is why
+the panel draws every shard rather than the aggregate alone: one number hides
+which shard is nearest the edge. No threshold has been agreed for "too near", so
+the console draws no tint - a colour would publish a limit nobody set.
 
 ### Summed RSS reaches 14.31 GiB, and that does not say how near the edge the job came
 
