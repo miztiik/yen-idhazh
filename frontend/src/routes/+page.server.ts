@@ -1,5 +1,5 @@
 import { shellSeedItems } from '$lib/server/config';
-import { dayShell, latestDate, loadDay, publishedDates, wholeDay } from '$lib/server/payload';
+import { homeShell, latestDate, loadDay, publishedDates } from '$lib/server/payload';
 
 /** The flag is here rather than on the root layout, and it has to be.
  *
@@ -11,19 +11,32 @@ import { dayShell, latestDate, loadDay, publishedDates, wholeDay } from '$lib/se
  */
 export const prerender = true;
 
-/** The home page reads the day it renders.
+/** The home page reads the day it renders, and carries a seed of it.
  *
- * It used to read one the root layout returned, which is why every other page
- * carried that day too - the console, the archive, an old dated page.
+ * **It inlined the whole day until 2026-09-10**, which ruling D2 of the
+ * shell-and-fetch plan says it may not - shell plus fetch "admits no special
+ * case, on the home page and the console alike". The case made for the
+ * exception was that `/` stayed readable with no script at all. It did not.
+ * Measured that day on a clean production build with the scripts stripped, on a
+ * 72-story day: the document is 176,622 bytes raw, 63.9 percent of them script,
+ * and what a script-free reader can read is **17 stories under a header saying
+ * 72, above a button offering 55 more that does nothing**. On a mature day the
+ * header says 360 or 627 and the seed is still about 17.
  *
- * It loads across the same seam the dated routes do - the day's bounded facts,
- * its stories split at `ui.shell_seed_items`, and both halves put straight back
- * together. Nothing fetches yet, so the prerendered document does not move.
+ * So the exception charged a script-free reader for a day they could not reach
+ * and left them a control that lies. The seed is what the document carries now,
+ * and the browser fetches the rest from the served file a dated URL and a search
+ * result already read.
+ *
+ * **The seed keeps the day's leads whatever their position**, which is what
+ * `dayShell`'s `keep` was written for and had no caller for. `homeShell` makes
+ * that decision, so a fixture can drive it: the canary's biggest day holds 8
+ * stories against a 15-story seed and no leads, so nothing built from it can see
+ * this route's behaviour at all.
  */
 export function load() {
 	const latest = latestDate();
-	const shell = latest ? dayShell(latest, shellSeedItems()) : null;
-	const day = shell ? wholeDay(shell) : null;
+	const shell = latest ? homeShell(latest, shellSeedItems()) : null;
 	// A handful of recent days, so "what did I miss on Tuesday" is answered in
 	// place. Dates and counts only: the stories stay where they are, and this
 	// list grows per day rather than per story.
@@ -35,5 +48,5 @@ export function load() {
 	const recent = publishedDates()
 		.slice(0, 7)
 		.map((date) => ({ date, items: loadDay(date)?.items.length ?? 0 }));
-	return { day, today: day?.date ?? latest, recent };
+	return { day: shell ? { ...shell.facts, items: shell.seed } : null, today: latest, recent };
 }
