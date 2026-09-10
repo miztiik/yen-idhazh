@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -6016,7 +6016,7 @@ What a browser fetches before a reader does anything: the prerendered document, 
 | `/evals/` | 3,113 | 43,272 | 6,806 | **53,191** | 23 | the signpost to the console |
 | `/404` | 1,604 | 42,397 | 6,806 | **50,807** | 21 | the fallback shell |
 
-**The spread is the build's own noise and nothing else.** Two builds of one unchanged tree, back to back in the same worktree, moved each route's first load by **10 to 19 bytes** - `/` +19, `/<date>/` +18, `/<date>/<topic>/` +16, `/archive/` +12, `/evals/` +10, `/404` +10. Every document moved by 1 byte or less; all of it is JavaScript. That is `kit.version.name` defaulting to `Date.now()`, which lands in the content hash of every chunk filename ([agent-notes.md](agent-notes.md#gate-commands)). The version was deliberately **not** pinned to take these two arms: the pin stops every page hydrating when `BUILD_VERSION` is unset, which costs more than the noise it removes. 64 bytes remains the working tolerance, and 19 is well inside it.
+**The spread is the build's own noise and nothing else.** Two builds of one unchanged tree, back to back in the same worktree, moved each route's first load by **10 to 19 bytes** - `/` +19, `/<date>/` +18, `/<date>/<topic>/` +16, `/archive/` +12, `/evals/` +10, `/404` +10. Every document moved by 1 byte or less; all of it is JavaScript. That is `kit.version.name` defaulting to `Date.now()`, which lands in the content hash of every chunk filename ([agent-notes/gates-and-builds.md](agent-notes/gates-and-builds.md#running-the-gates)). The version was deliberately **not** pinned to take these two arms: the pin stops every page hydrating when `BUILD_VERSION` is unset, which costs more than the noise it removes. 64 bytes remains the working tolerance, and 19 is well inside it.
 
 **The home page is proportional to the day and a dated route is not, and one publish measured both.** The same instrument ran a few hours earlier over the twelve days to 2026-09-01, when the newest day was that day's **627** stories rather than 2026-09-02's 128:
 

@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -409,7 +409,7 @@ What the figure did give back is height. A fixed 16:10 box reserved space the ch
 
 Every page here is rendered whole before a script runs - the stories past a reading route's seed are the one exception, and they are content rather than a control - so a control that only works afterwards has to say so. The shape is a `<noscript>` block holding a `<style>` that hides the scripted controls by attribute, and one sentence, hidden by `hidden`, that the same rule un-hides. Nothing is conditionally rendered, so hydration has nothing to reconcile and there is no flash.
 
-Two details make it work rather than look like it works. The rule inside `<noscript>` is unscoped, and a Svelte scoped class rule outranks it - `.field.svelte-<hash>` is specificity (0,2,0) against (0,1,0) - so the element carrying the attribute must not take a `display` of its own; the layout goes on a child. And the fallback sentence uses `hidden`, which the author rule beats without an `!important`. The trap and its symptom are in [../reference/agent-notes.md](../reference/agent-notes.md).
+Two details make it work rather than look like it works. The rule inside `<noscript>` is unscoped, and a Svelte scoped class rule outranks it - `.field.svelte-<hash>` is specificity (0,2,0) against (0,1,0) - so the element carrying the attribute must not take a `display` of its own; the layout goes on a child. And the fallback sentence uses `hidden`, which the author rule beats without an `!important`. The trap and its symptom are in [../reference/agent-notes/browser.md](../reference/agent-notes/browser.md#svelte).
 
 What survives without a script is the part that was never scripted. On a day page the topic pills are links to prerendered routes, so a reader with no script still reaches every desk; on the archive they are buttons over a list a script fetched, so they go with the field and the page keeps its prerendered day list - the recent days as rows, and every older day inside a native month disclosure that opens with no script at all.
 

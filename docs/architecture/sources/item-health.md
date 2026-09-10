@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-10
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -198,6 +198,19 @@ extract signal: `too_short`, `not_prose` or `boilerplate`.
 
 `visuals` and `render` are not terminal item-health stages. A render failure
 degrades an item and never fails it.
+
+**A successful item leaves a `publish` row, so `summarize` rows are a failure
+count and nothing else.** The stage on the row is where the item STOPPED, not
+the last stage it passed through, so filtering on `stage == "summarize"` selects
+only the calls that failed or degraded. Over `state/item-health/2026-09.csv` on
+2026-09-09 that filter returned 42 rows across nine days; the pipeline had
+summarized 4,117 articles. The honest filter for per-item timings, token counts
+and lengths is `stage == "publish"`.
+
+Column coverage is the cheap check before trusting any stage filter. On the same
+shard, `input_tokens` is present on 4,117 rows and every one of them is
+`publish`. A stage that carries none of the columns you are measuring is not the
+stage that did the work.
 
 ## Failure codes
 
