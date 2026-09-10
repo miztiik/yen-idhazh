@@ -412,7 +412,7 @@ ratchet against `frontend/bundle-baseline.json`, at 64 bytes either way. It had
 no requirement behind it, a local build could not reproduce CI's inside its own
 tolerance, and its record was one file every branch had to rewrite. The
 reasoning is in
-[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-bundle-gate-checks-two-promises-and-used-to-check-three).
+[below](#the-bundle-gate-checks-two-promises-and-used-to-check-three).
 If you are reading an older commit that fails on a route weight, that is why it
 is gone rather than something you need to re-record.
 
@@ -460,7 +460,7 @@ every one of those sat 6 to 14 percent above its page. That is a budget: an
 ordinary content day reaches it, so what fires is a publish rather than a
 regression, and the operator learns that a red gate is asking for a bigger
 number. The measurements behind the six values are in
-[../reference/measurements-site.md](../reference/measurements-site.md#the-guardrails-at-twice-the-page-2026-09-10).
+[../reference/measurements-site.md](../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10).
 `page_weight.payload_ceilings_bytes` and `page_weight.cold_console_load_bytes`
 were already 2.5 and 6.8 times what they bound, so neither moved that day.
 
@@ -485,34 +485,10 @@ day on 2026-08-26 to silence a gate that fired on ordinary publishes, and then
 uncapped, because a page that inlined every committed day could not hold a fixed
 number.
 
-**A number that drifts away from its page is a different fault from one set
-away from it.** `/console/` stood at 335,051 from 2026-09-06, sized against a
-document that inlined the telemetry and weighed 3.88 MB. The telemetry moved to
-a browser fetch on 2026-09-09, the document became 46,775 bytes, and the number
-stayed - so for four days it sat at 7.2 times the page and could not have fired
-on anything short of a sevenfold regression, and nothing in the build fails when
-that happens
-([../reference/measurements-site.md](../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
-Twice the page is a distance somebody chose, wrote down and re-derives; 7.2 times
-was a distance nobody chose and nobody could see.
-
-**The console is three routes and takes three guardrails.** One key over three
-surfaces still fails when any of them grows and then cannot say which one did.
-That is also the decisive argument for splitting the console into routes rather
-than tabs.
-
-**When a console guardrail fires, the panel does not move.** The owner ruled on
-2026-08-31 that no approved feature is removed, deferred or shrunk to stay under
-a page-weight number, so the answer is to re-derive and record in the same commit
-what the bytes bought. That reverses the guidance this page carried until then,
-which was to turn `console.default_window_days` down instead. Turning the window
-down is still the right first move when the page is inlining something the first
-paint does not need - it is a saving rather than a cut - but it is no longer a
-reason to leave a panel unbuilt. The two limits neither ruling waives are Rule
-#2's 1 GB Pages cap, which is a platform limit, and the 200,000-byte lazy chart
-chunk, which stands because a new echarts registration is a decision about the
-chart vocabulary and not about size
-([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)).
+What to do when a console route is the one that fires is
+[below](#the-console-guardrail-and-what-to-do-when-it-fires), with
+the reason a number on a console route is fair where one on a day page would not
+be.
 
 ## The browser suite
 
@@ -826,6 +802,128 @@ deliberately does not take the second seat: it would cost six file operations on
 every hand-over to cover a case that needs a gate still running 7,200 s in -
 **6.6x the longest gate ever measured here** - and with twenty callers spinning
 it took a hand-over from 0.7 s to about 10 s.
+
+## The bundle gate checks two promises, and used to check three
+
+`npm run bundle-gate` asserts that no encoder reaches the first-load path, and
+that every guarded page is under the number `config/idhazh.json` sets for it.
+
+**A third check was deleted on 2026-08-30: a per-route first-load JavaScript
+ratchet against a hand-maintained record in `frontend/bundle-baseline.json`,
+failing when a route moved more than 64 bytes in either direction.** The file is
+gone with it. Deleting a gate deserves the same argument as adding one, so here
+is the whole of it.
+
+**The gate never had a requirement behind it.** Its own docstring said so: every
+route is prerendered, so first-load JavaScript is hydration cost rather than
+time-to-read, nobody had measured what that cost a reader, and Rule #1 forbids
+the telemetry that would settle it. Having no number to defend, it defined bad
+as *different*. That is a change-detector, and Rule #10 says an unmeasured
+number may not justify a design.
+
+**What it cost is measured.** A local Windows build does not reproduce a Linux
+CI build inside 64 bytes on a route of about 80,000 - 0.08 percent - so a
+failure could not be read without a control build of `origin/main` on the same
+tree: two extra builds, roughly six minutes, before a branch could tell its own
+change from the toolchain. `origin/main`'s own source failed its own record more
+than once. Worse, the record was one file every branch had to rewrite, so the
+fifteen rows of the console-signal plan serialised behind it - each one rebuilt,
+re-measured and re-recorded a number its own change had not moved, because a
+sibling had merged first.
+
+**And it caught nothing.** Across every firing in that plan the resolution was
+to re-record the number. Not one was a regression somebody then fixed.
+
+What survives answers the question that was actually worth asking. The page
+guardrails are absolute limits somebody priced, in `config/idhazh.json`, so
+nothing has to re-record them to merge and a page that got lighter needs no
+permission. The encoder grep names a cause a byte count never could. And
+`tests/payload-weight.spec.ts` covers the pages a number cannot bound - a page
+that renders a day weighs whatever the day published - by counting a marker
+instead of bytes, which is the same number whatever the published history holds.
+
+| Option | Why rejected |
+| --- | --- |
+| Keep the ratchet and widen the tolerance | The tolerance was never the problem. A wider one still needs a per-route record in one shared file, which is what serialised the branches. |
+| Keep the ratchet and generate the record | A file the build rewrites is a log, and a gate whose own tooling updates its baseline cannot fail. |
+| Replace it with a transfer-time budget | Two invented constants instead of one, and Rule #1 forbids the telemetry that would settle either. It also models a cost a reader of a prerendered page does not pay. |
+| Delete the page ceilings too | `/archive/` shipped at 873.1 KB of gzipped HTML and nobody noticed until somebody measured. A guardrail is a priced limit, not a change-detector, and it costs nothing to hold. |
+
+Authority: owner, 2026-08-30. The ratchet was Carmack's, 2026-08-25, on the
+argument that a new dependency must be measured before it ships; measuring a
+dependency is still right, and `docs/reference/measurements.md` is where that
+measurement goes. What is gone is failing every unrelated branch until somebody
+retypes it.
+
+## The console guardrail, and what to do when it fires
+
+**Every guarded route carries its own number, and since 2026-09-10 they share one
+convention: twice the heaviest of five builds of the tree that ships, measured at
+`gzip -5`.** That is an owner ruling of that day - "any ceiling is a guideline not
+a rule - increase with twice the buffer and document it is a guard rail" - and it
+replaced a set that sat 6 to 14 percent above each page, which in turn had
+replaced four different conventions. The current numbers, the spread they were
+taken over and the arms behind them are in
+[../reference/measurements-site.md](../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10);
+`config/idhazh.json` is where they live.
+
+**The console takes three of them rather than one**, because one key over three
+surfaces fails when any of them grows and then cannot say which one did - the
+operator raises the shared number and the regression lands under it. Sizing them
+separately is what makes the split worth having.
+
+**`/console/` fell by a factor of 6.4 in the 2026-09-10 re-derivation, and the
+fall is the finding rather than a tidy-up.** It was sized on 2026-09-06 against a
+document that inlined the telemetry and weighed 3.88 MB. The telemetry moved to a
+browser fetch on 2026-09-09, the document became 46,775 gzipped bytes, and the
+number stayed - so for four days it stood at 7.2 times the page it bounded and
+could not have caught any regression short of a sevenfold one. **Nothing fails
+when a number drifts away from the page it bounds**, which is what makes this the
+failure mode to look for rather than the one to assume cannot happen. That is a
+different fault from the distance a guardrail keeps on purpose: twice the page is
+a distance somebody chose, wrote down and re-derives, where 7.2 times was nobody's
+choice and nobody could see it.
+
+**When one fires, the panel does not move.** The owner ruled on 2026-08-31 that
+no approved feature is removed, deferred or shrunk to stay under a page-weight
+number, so a crossed number means re-derive it and record in the same commit what
+the bytes bought. **This reversed what this page said until then**, which was to
+turn `console.default_window_days` down and never to raise the number. That
+instinct is still right when the page is inlining something the first paint does
+not need - windowing the seed on 2026-08-29 and folding the compression scatter on
+2026-08-30 were both savings - but a saving is not a cut, and neither is a
+reason to leave a panel unbuilt. What neither ruling waives: Rule #2's 1 GB
+Pages cap, which is a platform limit, and the 200,000-byte lazy chart chunk,
+which stands because a new echarts registration is a decision about the chart
+vocabulary rather than about size.
+
+Two answers stay wrong whatever the number is. **Nudging it up to just clear the
+new page** spends headroom somebody priced and turns a guardrail back into a
+budget, which is what got an earlier `/archive/` ceiling deleted after it was
+raised twice in one day; re-derive to twice the new heaviest instead. And
+**thinning a plot** - sampling points, or dropping the oldest days - is not a byte
+decision at all: it changes what the chart is a measurement of, and a scatter that
+quietly stopped drawing some of its rows is worse than one that got heavy.
+
+Two rules came out of the savings and outlived the numbers that motivated them.
+**One mark per article per day, never one per row**: the telemetry holds a row
+per item per run, so a re-run writes a second row for an article the first run
+published, and the run that read the most of it is the one kept. And **the seed's
+cutoff anchors on the newest committed day, never on the build clock** - anchored
+on today, a corpus that stopped last month would seed an empty console, which is
+precisely when an operator needs it.
+
+**Why a number here does not cap the news, when one on a day page would.** A day
+page and the home page render published items, so the only way under a number on
+them is to publish fewer - and [layout.md](../architecture/publishing/layout.md) forbids removing an item a
+run published, so it would be deciding how much news ships. No console
+route renders a published item. It is the operator's surface, and every figure on
+it is derived at build time from ledgers that stay committed and complete
+whatever the page shows.
+
+Authority: Jony and Fowler, 2026-08-29; the measurement and the worst-case
+sizing, Carmack; the ratchet ruling, owner, 2026-08-31; the guardrail ruling,
+owner, 2026-09-10.
 
 ## See also
 

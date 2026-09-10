@@ -1330,7 +1330,7 @@ fetch, on one convention - the heaviest of five builds plus a tenth, at `gzip
 -5` - and `/console/` fell by a factor of 6.4. The per-published-day rates above
 are the record of how this route grew while it inlined its telemetry, and they
 are kept for that. The live numbers and the current method are in
-[../../reference/measurements.md](../../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)
+[../../reference/measurements-site.md](../../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10)
 and what to do when one fires is in
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md).
 

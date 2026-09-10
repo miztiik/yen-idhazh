@@ -61,6 +61,80 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 7. Where a file or a whole directory belongs in the tree? -> the **repository-layout reference doc.** One page maps every top-level directory to what it holds, who writes it, and whether it is committed - so a new directory has to state its reason before it exists.
 8. A tool quirk, an environment trap, or a command whose result cannot be trusted at face value? -> the **agent-notes reference.** Not a private memory file - see below. It is one page until it stops being readable as one; then the stem path becomes an index and each child is named for the tool family whose output lies, so every inbound link keeps working.
 
+### A page answers one question, and length is a symptom rather than the fault
+
+A document does not go wrong by getting long. It goes wrong by holding **several
+answers to one question**, where only the order of the sections says which one
+governs - and the order is the one signal a reader who arrives by search never
+sees. That is also the engine that makes a page grow: somebody who cannot tell
+which statement is in force adds a new one instead of editing the old.
+
+So the guardrail is three tests over questions, and **no page here has a maximum
+length**. A line limit is met by opening `-part2.md`, which trades one long page
+for a set nobody can navigate.
+
+- **The split test.** Open the page at one section, read only that section, act
+  on it. If acting correctly needs a fact that lives in a different section of
+  the same page, the page has outgrown itself. Split it, and the stem path
+  becomes an index so every inbound link keeps working - rule 8 above, which is
+  this test written for one doc class.
+- **The delete test.** A section a later section corrects is not history, it is
+  a second answer. Delete it in the commit that writes the correction; git holds
+  the bytes. Leave one sentence behind wherever a reader meeting only the new
+  text would re-propose the thing the correction killed. The plan-doc
+  single-snapshot rule below is this test written for one doc class.
+- **The merge test.** A page earns its existence by being where somebody arrives
+  with a question in hand. If the only way to reach it is a link on a page they
+  had to read anyway, it is a section of that page.
+
+**The tests are deliberately in tension, and fragmentation is the worse half.** A
+page that is too long costs a diluted answer; a page nobody opens costs a
+confident wrong one. Where the split test and the merge test disagree, the page
+stays whole.
+
+### What a sentence has to do to stay
+
+**Keep the sentence a reader who skipped it would act wrongly without. Cut the
+sentence that only leaves them less well read.** Being uninformed is not a
+failure and acting wrongly is, and that asymmetry is the whole rule. Two checks
+fall out of it: a sentence that restates its own heading goes, and a sentence
+whose removal changes only what somebody knows rather than what they do goes.
+
+**A rejected alternative is a fence, not a story.** It exists so nobody reopens a
+settled gate, and a fence needs a name and a reason rather than the minutes of
+the argument. The form is one sentence with four clauses - the rule now in
+force, the alternative named, the cost it would carry, and who decided and when.
+An alternative that was built and measured keeps its number and that number's
+conditions; one that was only argued keeps one clause. Safe to lose as a class:
+the sequence of the argument, every option nobody built, restatements of the
+winner in other words, and any sentence describing how a conclusion was reached
+rather than what it constrains.
+
+**A dated correction is kept only while its trap is still reachable.** Where the
+failure it describes is now refused by a schema, a gate or a type, the code says
+it earlier and better and the correction goes. Where a later reader would meet
+something that looks wrong on sight and "fix" it back, the correction stays - in
+one sentence, beside the thing that looks wrong, never in a history section.
+
+**Six classes are not cut at any budget**: a stated commitment to a reader or an
+operator, the reason an absence or a zero is correct, a measurement's
+conditions, the cost clause of a decision, a still-reachable trap, and an
+exception with the authority line that granted it.
+
+### Which page to fix first
+
+**The property is how often a page enters a reader's or an agent's working set,
+never how big it is.** Size sets what one pass saves; frequency sets how many
+passes it is saved on, and the cost is paid on load rather than on existence. The
+order is pages on the bootstrap path, then pages read once per task, then once
+per subsystem, then once per question. At equal frequency the tie-break is how
+much a page has been appended to lately, because a page still growing is the one
+whose contradictions are freshest.
+
+The one thing here worth measuring is the bootstrap load itself - the tokens a
+reader has to hold before the first line of code is read. That names a budget
+rather than a threshold, and a budget is what leaves room for the working set.
+
 ### `docs/` is the memory
 
 Everything a future contributor or agent needs is written here, in a file that

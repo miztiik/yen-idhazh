@@ -291,7 +291,7 @@ constant was deleted and the spec now reads the config key (Rule #6), and its
 century model was replaced by the retention bound above, because a century of
 months was never reachable. The gate's number did not move: at 2.47 times the
 bounded payload it was already a guardrail under the ruling of that day
-([../../reference/measurements-site.md](../../reference/measurements-site.md#the-guardrails-at-twice-the-page-2026-09-10)).
+([../../reference/measurements-site.md](../../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10)).
 
 ### The band is the second payload, not the first, and the reason is not ours
 

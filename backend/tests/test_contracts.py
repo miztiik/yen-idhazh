@@ -125,6 +125,9 @@ from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields, text_digest
+from idhazh.measured import CONSOLE_CEILING_HEADROOM_BYTES as CONSOLE_CEILING_HEADROOM
+from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
+from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
 from idhazh.retention import oldest_month_kept
 from utilities import build_canary_day
@@ -1078,22 +1081,11 @@ def test_the_wider_window_is_the_summarizers_alone() -> None:
     )
 
 
-#: What the summarize prompt costs before a word of the article reaches it - the
-#: system prompt, the fence and the instructions. Measured 2026-09-09 over the
-#: 4,117 published items in `state/item-health/2026-09.csv` (2026-09-01 to 09,
-#: stock ubuntu-latest 4 vCPU runners): a least-squares fit of `input_tokens`
-#: against `source_words` gives 997 tokens of overhead and 1.306 tokens a word,
-#: and the shortest items on the shard - 3 words each - measured 980 to 985
-#: tokens directly, which is the same constant read off the data twice.
-PROMPT_OVERHEAD_TOKENS: Final = 997
-
-#: The highest tokens a word any of those 4,117 items reached, same shard and
-#: date: (7,093 - 997) / 3,846. `extract.truncate_to_tokens` spends the cap at
-#: `TOKENS_PER_WORD`, which is 1.3, so a body that tokenizes above that overruns
-#: the budget its own cap gave it. The spread is the point: the median item runs
-#: 1.306 and this one runs 1.585, so a window sized on the median is sized on
-#: the article that never causes trouble.
-WORST_TOKENS_A_WORD: Final = 1.585
+#: What the summarize prompt costs before a word of the article reaches it, and
+#: the hardest any published item has tokenized. Both records, their method and
+#: what to do when either moves are in `idhazh.measured`.
+PROMPT_OVERHEAD_TOKENS: Final = int(_PROMPT_OVERHEAD.value)
+WORST_TOKENS_A_WORD: Final = _WORST_TOKENS.value
 
 
 def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
@@ -2069,19 +2061,12 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     inlined by a layout, which cost 313,300 gzipped bytes when it last happened,
     so a ceiling more than that above the page could never see it land again.
 
-    **The 370,000 bound is a stand-in for the page, and it is re-derived whenever
-    the guardrails are.** This test reads the config and never a build, so it
-    cannot subtract the real page weight; the constant is the heaviest console
-    document plus that regression - 57,488 measured 2026-09-10 at c40eda91, gzip
-    -5, over five builds, plus 313,300, rounded down to the thousand. It therefore
-    decays as the page grows, and the commit that re-derives the three guardrails
-    re-derives this with them. It held 433,000 from 2026-08-31, when the heaviest
-    console document was 119,700, and 536,000 from 2026-09-06, when it was 222,819
-    - and 222,819 is the measure of how far the stand-in can drift from the page,
-    because by 2026-09-10 the console had stopped inlining its telemetry and the
-    heaviest document was a quarter of that.
+    **The bound is a stand-in for the page, it lives in `idhazh.measured`, and it
+    is re-derived whenever the guardrails are.** This test reads the config and
+    never a build, so it cannot subtract the real page weight; the record there
+    carries the value, what measured it and what to do when it fires.
 
-    **A guardrail at twice the page still clears this by a wide margin**, which is
+    **A guardrail at twice the page still clears it by a wide margin**, which is
     the check that the two rules agree: the console guardrails are 92,000 to
     116,000 since 2026-09-10, so the regression this bound exists to catch would
     land 200,000 bytes over the number rather than under it.
@@ -2106,7 +2091,7 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
             f"{route} is a prerendered route with no ceiling - the bundle gate reports "
             "an unnamed route without failing it, so this one would grow unwatched"
         )
-        assert ceilings[route] < 370_000, (
+        assert ceilings[route] < int(CONSOLE_CEILING_HEADROOM.value), (
             f"the guardrail on {route} is above the heaviest console document plus the "
             "313,300 a day payload cost when a layout last inlined one - a number that "
             "high cannot catch the one regression this surface has actually had"
