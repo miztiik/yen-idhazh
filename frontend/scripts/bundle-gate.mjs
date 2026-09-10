@@ -168,18 +168,20 @@ let failed = false;
  * default in app_config.py is empty so the numbers are not copied into a second
  * file.
  *
- * **Each number is twice the heaviest of five builds** (owner, 2026-09-10), so
- * an ordinary content day cannot reach it and only a change of a different order
- * can. Firing one is a question about what took on the bytes, never about what
- * the number should be, and a commit that makes a page heavier may not raise its
- * guardrail in the same breath. The keys are still spelled `ceilings_bytes`
- * because that is the name the config already uses.
+ * **A route is named here only if its weight does not move when a run
+ * publishes** (owner, 2026-09-10). `/archive/` and the three `/console/` routes
+ * were named until then and are not now: they grow when the pipeline appends a
+ * day, so the gate fired on ordinary publishing and the only way past it was to
+ * type a bigger number. `/404` and `/evals/` move only when a person edits
+ * source, so they stay.
  *
  * config/idhazh.json decides what is guarded. A route it names is measured and
  * failed when it is over; a route it does not name is measured and printed
- * here, but never failed. A page that renders a day is never guarded, because
- * the only way under such a number is to publish fewer items -
- * `tests/payload-weight.spec.ts` covers that class by counting a marker instead.
+ * here, but never failed. **The regression this file used to be asked to catch
+ * - a layout inlining a day payload, 313,300 gzipped bytes on 2026-08-26 - is
+ * asserted directly by `tests/payload-weight.spec.ts`**, which looks for a
+ * day-payload marker in every document that should not carry one. That check has
+ * no number in it, so it returns the same verdict whatever the archive holds.
  */
 const CONFIG = resolve(process.cwd(), '..', 'config', 'idhazh.json');
 
@@ -233,12 +235,13 @@ for (const [name, { bytes }] of [...heaviestPage].sort()) {
 
 if (uncapped.length > 0) {
 	console.log(
-		`\nReported, not guarded: ${uncapped.join(', ')}. config/idhazh.json names what\n` +
-			'is guarded, and a route it leaves out is one nobody has measured yet. Build\n' +
-				'the shipping tree five times, take the heaviest reading for the route, and\n' +
-			'add twice that under "page_weight": { "ceilings_bytes": { ... } } in\n' +
-			'config/idhazh.json - a guardrail catches a change of a different order, so a\n' +
-			'number close to the page is a budget and fires on an ordinary publish.'
+		`\nReported, not guarded: ${uncapped.join(', ')}. That is the normal state for\n` +
+			'a route whose weight moves when the pipeline publishes, and it is deliberate:\n' +
+			'a number on one of those has to be raised every time we publish, so it teaches\n' +
+			'the operator to raise numbers and catches nothing. What a document must not do\n' +
+			'is carry a payload it does not render, and tests/payload-weight.spec.ts asserts\n' +
+			'that with no number in it. Add a key here only for a route that moves when a\n' +
+			'person edits source and never when a run appends a day.'
 	);
 }
 
@@ -419,4 +422,4 @@ if (over.length > 0) {
 
 if (failed) process.exit(1);
 
-console.log('\nbundle gate: every capped page and every capped payload is under its ceiling.');
+console.log('\nbundle gate: every guarded page and every guarded payload is inside its number.');
