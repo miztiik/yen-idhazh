@@ -935,19 +935,19 @@ Encode cost: 0.16 s an item, one sequence per forward pass. 1,602 items in
 
 ### Days to the 1 GB Pages ceiling
 
-**This section divided by the wrong tree until 2026-08-27, and both of its
-answers were wrong by about twenty times.** It took the headroom of the
-**published site** and divided it by the daily growth of the **committed payload
-tree** under `frontend/public/digest/`. Those are two different directories.
-Measured 2026-08-27 on this checkout: the payload tree is 7,027,075 bytes and
-the built site is 128,064,853 - eighteen times larger, and twenty-one times
-before PR #171 moved it. Neither "593 days" nor its correction to "516 days"
-was a number about anything. The same mistake was in the code: the site alarm
-measured the payload tree, so it could not have fired until the site was already
-six times past the cap ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
+**The trap this section exists to close: divide the headroom of the published
+site by the growth of the committed payload tree and the answer is wrong by
+about twenty times.** They are two directories - measured 2026-08-27, the
+payload tree was 7,027,075 bytes against a built site of 128,064,853. The same
+mistake was in the code, where the alarm measured the payload tree and could not
+have fired until the site was already six times past the cap. It is closed on
+both sides now, and it is written here because nothing on sight says which tree
+a growth figure belongs to.
 
 **The site is `frontend/build/`, because that is the directory the Pages deploy
-uploads.** Everything below divides its headroom by its own growth.
+uploads.** Everything below divides its headroom by its own growth. The rate is
+also `SITE_GROWTH_KB_A_DAY` in `backend/idhazh/measured.py`, which is what the
+tests read; this section is where it came from.
 
 | Quantity | Bytes | What it means |
 | --- | ---: | --- |

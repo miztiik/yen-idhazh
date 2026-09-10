@@ -68,7 +68,7 @@ our stopwatch around the HTTP request; `prefill_ms + decode_ms` is what the
 server said the same request cost. Over the 2,317 committed rows that carry all
 three the difference - transport, JSON and validation - has a median of **79 ms
 against a median call of 122,432 ms**, and **0 of the 2,317 are negative**
-([../../reference/measurements.md](../../archive/measurements-2026-08.md#our-stopwatch-and-the-servers-own-clocks-agree-to-0066-percent)).
+([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#our-stopwatch-and-the-servers-own-clocks-agree-to-0066-percent)).
 So a slow day is the model and not the client, and there is no unnamed third
 phase hiding inside `summarize_ms`.
 

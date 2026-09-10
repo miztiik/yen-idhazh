@@ -416,7 +416,7 @@ That table is the argument for decision 3 rather than an illustration of it. At 
 
 ## The archive lists stories, and fetches them a month at a time
 
-`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on one checkout, six committed days and 2,237 items: **1,766,682 gzipped bytes**, growing **489,843 bytes** for the one extra day that carried 621 stories. The page a reader opened to find one story carried all of them. It is **2,912 bytes** now, and one more day of 621 stories costs it **24 bytes** ([../../reference/measurements.md](../../reference/measurements-site.md#the-archive-stops-carrying-the-corpus)).
+`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on one checkout, six committed days and 2,237 items: **1,766,682 gzipped bytes**, growing **489,843 bytes** for the one extra day that carried 621 stories. The page a reader opened to find one story carried all of them. It is **2,912 bytes** now, and one more day of 621 stories costs it **24 bytes** ([../../reference/measurements-site.md](../../reference/measurements-site.md#the-archive-stops-carrying-the-corpus)).
 
 What it renders now, top to bottom:
 
@@ -469,7 +469,7 @@ still grows with days:
 Both fixture archives cover the same 24 months, so the difference between the
 two rows of each column is days and nothing else. Measured 2026-09-01 on Intel
 Core a developer machine / / node 24.12.0; method and the full numbers in
-[../../reference/measurements.md](../../reference/measurements-site.md#the-archive-day-list-stops-growing-a-row-a-day).
+[../../reference/measurements-site.md](../../reference/measurements-site.md#the-archive-day-list-stops-growing-a-row-a-day).
 
 #### Design rationale
 
@@ -759,7 +759,7 @@ stood empty beside the prose, at every width from 1,280px up. The frame is not
 the problem and was not widened: at 801px the item already takes 91.9 percent of
 the frame. What is spendable is one column of at most 27.1rem, once a
 68-character measure and a 1.75rem source mark are paid for
-([../../reference/measurements.md](../../reference/measurements-site.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02)).
+([../../reference/measurements-site.md](../../reference/measurements-site.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02)).
 
 **One trailing column at a time.** The item's own footer rail wants the same
 slot, and keeping both leaves the summary 570px against a measure of 659.81. So
