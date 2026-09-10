@@ -2069,14 +2069,17 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     inlined by a layout, which cost 313,300 gzipped bytes when it last happened,
     so a ceiling more than that above the page could never see it land again.
 
-    **The 536,000 bound is a stand-in for the page, and it is re-derived whenever
+    **The 369,000 bound is a stand-in for the page, and it is re-derived whenever
     the ceilings are.** This test reads the config and never a build, so it cannot
     subtract the real page weight; the constant is the heaviest console document
-    plus that regression - 222,819 measured 2026-09-06 plus 313,300, rounded down
-    to the thousand. It therefore decays as the page grows, and the commit that
-    re-derives the three ceilings re-derives this with them. It held 433,000 from
-    2026-08-31, when the heaviest console document was 119,700, and at that value
-    the next ordinary re-derivation of `/console/` would have crossed it.
+    plus that regression - 56,664 measured 2026-09-10 at gzip -5 over five builds,
+    plus 313,300, rounded down to the thousand. It therefore decays as the page
+    grows, and the commit that re-derives the three ceilings re-derives this with
+    them. It held 433,000 from 2026-08-31, when the heaviest console document was
+    119,700, and 536,000 from 2026-09-06, when it was 222,819 - and 222,819 is the
+    measure of how far the stand-in can drift from the page, because by 2026-09-10
+    the console had stopped inlining its telemetry and the heaviest document was
+    a quarter of that.
 
     All three console routes are asserted, and that is the point of splitting
     them: one key over three surfaces still fails when any of them grows and
@@ -2098,11 +2101,57 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
             f"{route} is a prerendered route with no ceiling - the bundle gate reports "
             "an unnamed route without failing it, so this one would grow unwatched"
         )
-        assert ceilings[route] < 536_000, (
+        assert ceilings[route] < 369_000, (
             f"the ceiling on {route} is above the heaviest console document plus the "
             "313,300 a day payload cost when a layout last inlined one - a ceiling that "
             "high cannot catch the one regression this surface has actually had"
         )
+
+
+def test_the_committed_config_caps_what_a_cold_console_load_fetches() -> None:
+    """The page ceilings above cannot see these bytes, and that is why they exist.
+
+    The console stopped inlining its telemetry on 2026-09-09. That took 3.4 MB out
+    of a document a ceiling watched and put it into files nothing watched, and a
+    reader still waits for them - measured 2026-09-10 in a real browser, a cold
+    `/console/` load fetches two telemetry shards worth 303,306 bytes on the wire
+    and no other payload at all. A document ceiling now reads as a bound on what
+    the console costs a reader, and it is not one.
+
+    `cold_console_load_bytes` bounds the design rather than the data: the per-file
+    ceilings say how heavy one shard may be, this says how many of them one
+    opening of the page is allowed to want. The two are asserted against each
+    other here, because a total below the sum of its parts is a gate that cannot
+    be satisfied at the limit and a total far above it is a gate that never fires.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    weight = committed.page_weight
+    payloads = weight.payload_ceilings_bytes
+
+    assert PageWeightConfig().payload_ceilings_bytes == {}, "the model default must stay empty"
+    assert PageWeightConfig().cold_console_load_bytes == 0, "the model default must stay empty"
+
+    for path in ("console/band.json", "telemetry/"):
+        assert path in payloads, (
+            f"{path} is fetched by a reader's browser and has no ceiling - the bundle "
+            "gate cannot fail a file nobody named, so this one would grow unwatched"
+        )
+
+    # The worst case a run of N consecutive days can land in, because February is
+    # the shortest month there is. Mirrors the arithmetic in bundle-gate.mjs.
+    window = committed.console.default_window_days
+    months_touched = 1 + -(-(window - 1) // 28)
+    worst = payloads["console/band.json"] + months_touched * payloads["telemetry/"]
+    assert weight.cold_console_load_bytes >= worst, (
+        "a cold load of every payload sitting exactly on its own ceiling is already "
+        f"over cold_console_load_bytes ({worst} against "
+        f"{weight.cold_console_load_bytes}) - the two gates contradict each other"
+    )
+    assert weight.cold_console_load_bytes < worst + payloads["telemetry/"], (
+        "cold_console_load_bytes has room for one more telemetry shard than the "
+        "default window reaches, so widening console.default_window_days past a "
+        "month would not fire it - which is the one thing it exists to catch"
+    )
 
 
 def test_a_page_ceiling_bounds_a_route_and_bounds_it_above_zero() -> None:
@@ -2111,6 +2160,23 @@ def test_a_page_ceiling_bounds_a_route_and_bounds_it_above_zero() -> None:
         PageWeightConfig(ceilings_bytes={"/evals/": 0})
     with pytest.raises(ValueError, match="is not a route"):
         PageWeightConfig(ceilings_bytes={"evals": 2475})
+
+
+def test_a_payload_ceiling_bounds_a_path_in_the_build() -> None:
+    """The leading slash is what tells the two objects apart.
+
+    A route ceiling has one and a payload ceiling does not, so a number typed
+    into the wrong object is refused by shape here rather than discovered later
+    as a gate quietly checking nothing.
+    """
+    with pytest.raises(ValueError, match="above zero"):
+        PageWeightConfig(payload_ceilings_bytes={"telemetry/": 0})
+    with pytest.raises(ValueError, match="is a route, not a path"):
+        PageWeightConfig(payload_ceilings_bytes={"/telemetry/": 500_000})
+    with pytest.raises(ValueError, match="not a relative POSIX path"):
+        PageWeightConfig(payload_ceilings_bytes={"telemetry\\2026-09.csv": 500_000})
+    with pytest.raises(ValueError, match="not a relative POSIX path"):
+        PageWeightConfig(payload_ceilings_bytes={"../telemetry/": 500_000})
 
 
 def test_every_configured_feed_names_a_declared_vertical() -> None:
