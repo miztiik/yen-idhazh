@@ -656,7 +656,7 @@ Our own origin is primary and the committed weights stay. A reader whose fetch o
 
 Four things make it check rather than look like it checks.
 
-- **The manifest is baked into the bundle, not fetched.** `vite.config.ts` reads it from `config/` at build time into `__ENCODER_SOURCE__`. A manifest a page fetched could be answered by whoever answered the fetch, which is the thing it exists to guard against. It rides in the `/archive/` route's JavaScript rather than the prerendered document, so roughly 600 bytes of hex stay out of a page measured against a 7,553-byte ceiling.
+- **The manifest is baked into the bundle, not fetched.** `vite.config.ts` reads it from `config/` at build time into `__ENCODER_SOURCE__`. A manifest a page fetched could be answered by whoever answered the fetch, which is the thing it exists to guard against. It rides in the `/archive/` route's JavaScript rather than the prerendered document, so roughly 600 bytes of hex stay out of a page measured against a 6,400-byte ceiling.
 - **The fetch is pinned to a 40-hex commit.** `assist.model_revision` is refused by the contract unless it is one, because a branch hands back whatever was uploaded last and would make every digest a coin flip. `ENCODER_VERSION` in `encoder.ts` is the browser's copy of it and `backend/tests/test_embed.py` fails when the two differ.
 - **The manifest is checked against the committed weights on every build**, not on a reader's device. A manifest that drifted from the bytes would discard every set a browser fetched and leave no trace except readers with no search. The same test hashes the five files.
 - **An incomplete block turns the leg off rather than half on.** `encoderSource()` in [frontend/asset-base.js](../../../frontend/asset-base.js) answers the empty block unless a URL, a revision, a non-empty manifest and a deadline are all present, so a config edit cannot widen `connect-src` without also committing what the bytes must hash to.
@@ -3135,9 +3135,18 @@ retypes it.
 ## The console ceiling is a tripwire, and what to do when it fires
 
 **Since 2026-08-31 there are three of them, one per route.** `/console/` is
-capped at 335,051 bytes, `/console/model/` at 56,385 and `/console/machine/` at
-44,706, all re-derived on 2026-09-06
-([../../reference/measurements.md](../../reference/measurements.md#all-three-console-ceilings-re-derived-on-the-backfills-tree-2026-09-06)).
+capped at 52,000 bytes, `/console/model/` at 63,000 and `/console/machine/` at
+50,000, all re-derived on 2026-09-10 at `gzip -5`
+([../../reference/measurements.md](../../reference/measurements.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
+**`/console/` fell by a factor of 6.4 in that re-derivation, and the fall is the
+finding.** It was 335,051 from 2026-09-06, when the console inlined its telemetry
+and the document weighed 3.88 MB. Row 10 moved the telemetry to a browser fetch
+on 2026-09-09 and the document became 46,766 gzipped bytes - so for four days the
+ceiling stood at 7.2 times the page it was meant to bound and could not have
+caught any regression short of a sevenfold one. **A ceiling is only a tripwire
+while it is near the page**, and nothing fails when one drifts away from it,
+which is what makes this the failure mode to look for rather than the one to
+assume cannot happen.
 One key over three surfaces still fails when any of them grows and then
 cannot say which one did, so the operator raises the shared number and the
 regression lands under it. Sizing them separately is what makes the split worth
