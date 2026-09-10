@@ -2016,6 +2016,20 @@ class TestCallTwoShape:
             band.key_points_max,
         )
 
+    def test_they_still_agree_when_no_article_names_a_band(self) -> None:
+        """The union rail, and the prompt has to state it too.
+
+        With no article named the decoder holds the envelope every band fits
+        inside. A prompt reading the shortest band's numbers off `band_for(0)`
+        would ask for one key point where the grammar admits five.
+        """
+        ask = SummarizeConfig()
+        points = call_two_schema(ask)["$defs"]["SummaryDraft"]["properties"]["key_points"]
+        floor, ceiling = summarize.key_point_rail(ask, None, False)
+
+        assert (points["minItems"], points["maxItems"]) == (floor, ceiling)
+        assert f"{floor} to {ceiling} of them" in call_two_user_turn(ask)
+
     def test_the_plan_the_decoder_sees_carries_neither_field_code_stamps(self) -> None:
         """`version` and `plan_version` are facts code holds, not questions for a model."""
         plan = call_two_schema()["$defs"]["VisualPlanDraft"]["properties"]

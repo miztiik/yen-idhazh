@@ -1575,16 +1575,20 @@ def call_two_user_turn(
     untrusted text in front of the model.
 
     Every number in it is substituted from `config/` at render time (Rule #6),
-    and the band is the article's own, so the length the prompt asks for and the
-    length the decoder enforces are the same number.
+    and the key-point pair comes off `summarize.key_point_rail`, which is the
+    same function the decoder's rail comes off. Asking for more key points than
+    the grammar admits would lose the item for doing what it was told, and with
+    no article named the two would disagree: the prompt would state the shortest
+    band's numbers while the decoder held the union of every band's.
     """
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0) if brief else ask.band_for(source_words or 0)
+    key_points_min, key_points_max = summarize.key_point_rail(ask, source_words, brief)
     return _call_two_template().substitute(
         title_words_min=ask.title_words_min,
         title_words_max=ask.title_words_max,
-        key_points_min=band.key_points_min,
-        key_points_max=band.key_points_max,
+        key_points_min=key_points_min,
+        key_points_max=key_points_max,
         key_point_words_max=ask.key_point_words_max,
         target_words_min=band.target_words_min,
         target_words_max=band.target_words_max,

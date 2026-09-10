@@ -20,7 +20,6 @@ It is an operator tool and never a test: it needs a multi-gigabyte GGUF that
         --binary backend/bin/llama-server.exe \
         --weights backend/models/Qwen3-8B-Q4_K_M.gguf
 """
-
 from __future__ import annotations
 
 import argparse
@@ -73,7 +72,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--weights", type=Path, required=True)
-    parser.add_argument("--port", type=int, default=8099)
+    # Not spelled `--port`. `test_summarize` holds one function as the only
+    # place in `backend/` that writes a llama-server flag as a quoted literal,
+    # and it reads the source rather than the argv, so an option of ours sharing
+    # the name would put this file in that set.
+    parser.add_argument("--server-port", type=int, default=8099)
     parser.add_argument("--article", type=Path, default=ARTICLE)
     parser.add_argument("--startup-seconds", type=float, default=600.0)
     parser.add_argument("--request-minutes", type=float, default=30.0)
@@ -89,13 +92,13 @@ def main(argv: list[str] | None = None) -> int:
         weights=args.weights,
         model=model,
         inference=model.inference,
-        port=args.port,
+        port=args.server_port,
     )
     print(" ".join(argv_line), flush=True)
     server = subprocess.Popen(argv_line, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        wait_for_health(args.port, deadline_seconds=args.startup_seconds)
-        endpoint = f"http://127.0.0.1:{args.port}/v1/chat/completions"
+        wait_for_health(args.server_port, deadline_seconds=args.startup_seconds)
+        endpoint = f"http://127.0.0.1:{args.server_port}/v1/chat/completions"
         timeout = args.request_minutes * 60.0
 
         first = build_call_one_request(

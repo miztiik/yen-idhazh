@@ -147,7 +147,7 @@ def _draft_model(
     )
 
 
-def _key_point_rail(
+def key_point_rail(
     ask: SummarizeConfig, source_words: int | None, brief: bool
 ) -> tuple[int, int]:
     """The key-point floor and ceiling the decoder is held to.
@@ -160,6 +160,10 @@ def _key_point_rail(
     When no article is named - the fingerprint, an offline harness, a schema
     check - the rail is the union across every band, the permissive envelope any
     band's valid reply fits inside.
+
+    Public because the prompt has to state the same two numbers the decoder
+    enforces. A prompt asking for more key points than the grammar admits loses
+    the item for doing exactly what it was told.
     """
     if brief:
         band = ask.band_for(0)
@@ -193,7 +197,7 @@ def draft_model(
     published it long.
     """
     ask = prompt_config or SummarizeConfig()
-    key_points_min, key_points_max = _key_point_rail(ask, source_words, brief)
+    key_points_min, key_points_max = key_point_rail(ask, source_words, brief)
     return _draft_model(
         key_points_min,
         key_points_max,

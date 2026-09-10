@@ -31,7 +31,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Call 1 reads the article and points at it | - | A | DONE #561 | yi-t11r1 | #561 | worker |
 | 2 | The four kinds only a model can find | 1 | B | DONE #562 | yi-t11r2 | #562 | worker |
-| 3 | Call 2 summarises and plans, and the article is read once | 2 | C | PENDING | - | - | - |
+| 3 | Call 2 summarises and plans, and the article is read once | 2 | C | DONE #570 | yi-t11r3 | #570 | worker |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | PENDING | - | - | - |
 | 5 | One chart, drawn end to end | 4 | E | PENDING | - | - | - |
 | 6 | The small model, its job and its cache go | 5 | F | PENDING | - | - | - |
