@@ -445,6 +445,17 @@ deliberate, and it is why the recovery above exists - the budget is the brake
 and the recovery is the seatbelt. A budget large enough to be an unbreakable
 ceiling would leave no window for the article it is summarising.
 
+**A budget is also a clock, and this one is close to a bound.** At the 6.01
+tokens a second the configured summarizer decodes at on `ubuntu-latest`
+(2026-08-23), 4,694 tokens is 13.0 minutes, against a
+`models.summarize.inference.request_timeout_minutes` of 22.1 and a
+`run.visual_planner_budget_minutes` of 40. So a single reply that ran to the
+brake would not trip the request timeout, and three of them would spend the
+whole stage budget. The grammar closes the object long before that on every
+reply seen so far - the two committed plan fixtures are a fifth and a tenth of
+the plan's own ceiling - but the wiring row is where that stops being a
+reassurance and starts being something to watch.
+
 **A retry must perturb the input, or it must not happen.** Decoding is
 `temperature 0.0` with `seed 0`, so a second call against an identical prompt
 returns identical bytes and costs a full decode for them. That is the same
