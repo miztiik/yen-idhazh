@@ -15,6 +15,25 @@ prose is the thing that rots.
 Every record also says what to do when it fires. These are guardrails for riding
 a boundary, not walls: a number that only ever stops work gets raised by whoever
 finds it inconvenient, and a number that says how to re-derive it gets re-derived.
+
+**And every record says why it is a number at all, because most of them should
+not be.** A threshold is a proxy for a property nobody stated, and it fails in
+two directions that are both green: too tight it fires on ordinary work and the
+cheapest answer is to raise it, too loose it fires on nothing and nothing says
+so. `page_weight.ceilings_bytes` did both - it fired on ordinary publishing four
+times and was raised each time, while `/console/` sat at 7.2 times the page it
+bounded for four days with the build green. Four of its six numbers were deleted
+on 2026-09-10 and the property behind them is asserted directly, by
+`frontend/tests/payload-weight.spec.ts`, which looks for a day payload in a
+document that should not carry one and has no number in it at all.
+
+**The test a number has to pass to live here: does it have to move when nobody
+wrote any code, because a run appended more?** That is Rule #12's question with
+one noun changed. Yes means it is the defect and the property behind it should be
+asserted instead. No means it is a design statement and it is welcome. And where
+a number must exist, prefer putting the direction it may not move into the type -
+`retention.pages_hard_cap_mb` is bounded `le=PAGES_HARD_CAP_MB`, so the loose
+failure is unrepresentable rather than merely unlikely.
 """
 
 from __future__ import annotations
@@ -35,10 +54,11 @@ class Measured:
     taken_on: date
     method: str
     when_it_fires: str
+    why_a_number: str
     kind: Kind = "measurement"
 
     def __post_init__(self) -> None:
-        for field in ("measures", "method", "when_it_fires"):
+        for field in ("measures", "method", "when_it_fires", "why_a_number"):
             if not getattr(self, field).strip():
                 raise ValueError(f"{field} is empty: a number with no {field} is an estimate")
 
@@ -59,6 +79,12 @@ SITE_GROWTH_KB_A_DAY: Final = Measured(
         "record. The alarm point moves with it rather than the other way round: the "
         "rate is the evidence and retention.site_budget_mb is the knob."
     ),
+    why_a_number=(
+        "the question is how many days of warning are left, and days are the rate "
+        "divided into the headroom - there is no property that answers it. It passes "
+        "the test: publishing more does not change how fast the site grows, so this "
+        "number does not have to move when nobody wrote any code."
+    ),
 )
 
 WARNING_DAYS_REQUIRED: Final = Measured(
@@ -77,31 +103,12 @@ WARNING_DAYS_REQUIRED: Final = Measured(
         "retention.site_budget_mb, or re-derive SITE_GROWTH_KB_A_DAY if the rate "
         "itself has moved. Do not lower this number to make the check pass."
     ),
+    why_a_number=(
+        "it is how long a person needs, and a person is not a property this repository "
+        "can assert. It moves when the pipeline's schedule or the fix's cost moves, "
+        "never when a run publishes."
+    ),
     kind="judgement",
-)
-
-CONSOLE_CEILING_HEADROOM_BYTES: Final = Measured(
-    value=370_000,
-    measures="the bound every console page guardrail has to stay under, in gzipped bytes",
-    taken_on=date(2026, 9, 10),
-    method=(
-        "the heaviest console document plus 313,300 - what a day payload cost when a "
-        "layout last inlined one, which is the single regression this surface has "
-        "actually had. A number above the sum cannot catch it. 57,488 measured at "
-        "c40eda91, gzip -5, heaviest of five builds of the shipping tree, plus "
-        "313,300, rounded down to the thousand. It held 369,000 from 2026-09-06 at a "
-        "heaviest document of 56,664, 536,000 before that at 222,819, and 433,000 "
-        "before that at 119,700 - and 222,819 is the measure of how far this stand-in "
-        "drifts from the page, because the console then stopped inlining its telemetry "
-        "and the document fell to a quarter of it."
-    ),
-    when_it_fires=(
-        "the console genuinely carries more, so re-measure the heaviest document and "
-        "re-derive this bound in the same commit. It is the ceiling on a guardrail "
-        "rather than a guardrail itself, so it does not take the twice-the-page rule: "
-        "a page-weight number above this sum cannot see the regression it exists for. "
-        "No approved panel is cut to stay under a number (owner, 2026-08-31)."
-    ),
 )
 
 PROMPT_OVERHEAD_TOKENS: Final = Measured(
@@ -117,6 +124,11 @@ PROMPT_OVERHEAD_TOKENS: Final = Measured(
     when_it_fires=(
         "the system prompt, the fence or the instructions changed. Re-fit against the "
         "newest month shard; the window-fit check reads this value and the cap together."
+    ),
+    why_a_number=(
+        "it is a term in an arithmetic check that the context window fits the worst "
+        "article, so it has to be a number to be added to anything. It moves when the "
+        "prompt is edited, never when a run publishes."
     ),
 )
 
@@ -135,26 +147,18 @@ WORST_TOKENS_A_WORD: Final = Measured(
         "an article tokenized harder than any before it. Raise this to what it "
         "measured and re-check the cap against the window - the two are one decision."
     ),
-)
-
-ITEMS_A_DAY_CEILING: Final = Measured(
-    value=160,
-    measures="the item ceiling a run plans to, run.safety_ceiling_per_run",
-    taken_on=date(2026, 8, 26),
-    method="read from config/idhazh.json; spelled out so the arithmetic reading it stays readable.",
-    when_it_fires=(
-        "the config moved and this copy did not. Read it from the config rather than "
-        "raising it here."
+    why_a_number=(
+        "the same arithmetic as PROMPT_OVERHEAD_TOKENS and the same answer: a ratio "
+        "has to be a number to be multiplied by a word count. It moves when an "
+        "article tokenizes harder than any before it, which is a property of one "
+        "article rather than of how many we published."
     ),
-    kind="judgement",
 )
 
 #: Everything above, so a check can walk the set rather than naming each one.
 EVERY_MEASURED: Final = (
     SITE_GROWTH_KB_A_DAY,
     WARNING_DAYS_REQUIRED,
-    CONSOLE_CEILING_HEADROOM_BYTES,
     PROMPT_OVERHEAD_TOKENS,
     WORST_TOKENS_A_WORD,
-    ITEMS_A_DAY_CEILING,
 )

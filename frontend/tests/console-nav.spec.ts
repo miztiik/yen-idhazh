@@ -1,6 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 /**
  * The console is three routes, and this file is why it is routes and not tabs.
@@ -8,7 +6,7 @@ import { resolve } from 'node:path';
  * A tab strip that switches with script fails every assertion here: with
  * JavaScript off it shows one panel set and no way to reach the others, and
  * every panel it hides still ships inside the one document. Three prerendered
- * routes with real anchors pass, and each one can be weighed on its own.
+ * routes with real anchors pass.
  *
  * Three things this file protects that a screenshot cannot. The labels are the
  * words the owner chose, so a paraphrase fails. The ids and the paths under
@@ -17,10 +15,6 @@ import { resolve } from 'node:path';
  * health ramp: green, amber and red on a label would say a route is failing,
  * and a route is a noun.
  */
-
-const CONFIG = JSON.parse(
-	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-) as { page_weight: { ceilings_bytes: Record<string, number> } };
 
 /** The owner's words, and the paths they sit on. Typed out on purpose: this is
  * the copy the file exists to protect, so reading it from the source it guards
@@ -75,8 +69,7 @@ test.describe('the strip', () => {
 		// Two of the three labels were rewritten on 2026-08-31. The whole risk of a
 		// rename row is that a word an operator reads and a word a browser resolves
 		// are the same string somewhere, so this asserts the second set did not
-		// move: the tab ids, the hrefs, the route markers each page prints, and the
-		// ceiling keys config holds them to.
+		// move: the tab ids, the hrefs, and the route markers each page prints.
 		await page.goto('/console/');
 		const drawn = await tabs(page);
 		expect(
@@ -89,12 +82,6 @@ test.describe('the strip', () => {
 				entry.path
 			);
 		}
-		expect(
-			Object.keys(CONFIG.page_weight.ceilings_bytes)
-				.filter((key) => key.startsWith('/console/'))
-				.sort(),
-			'a ceiling key moved with a label'
-		).toEqual(['/console/', '/console/machine/', '/console/model/']);
 
 		for (const entry of ROUTES) {
 			const answered = await page.request.get(entry.path);
@@ -285,21 +272,6 @@ test.describe('the standing band', () => {
 		expect(href, 'the worst thing names a route it does not link to').toContain(
 			ROUTES.find((entry) => entry.id === named)?.path ?? ''
 		);
-	});
-});
-
-test.describe('the ceilings follow the split', () => {
-	test('config names a ceiling for each of the three routes', () => {
-		const ceilings = CONFIG.page_weight.ceilings_bytes;
-		// The gate already fails a ceiling that names no route in the build. This
-		// is the reverse: a route that names no ceiling is only reported, so a new
-		// surface would grow unwatched. One key over three surfaces cannot say
-		// which of them blew a budget, and that is the argument for routes.
-		for (const route of ROUTES) {
-			expect(ceilings[route.path], `${route.path} has no ceiling in config`).toBeGreaterThan(0);
-		}
-		const named = Object.keys(ceilings).filter((key) => key.startsWith('/console/'));
-		expect(named.sort()).toEqual(ROUTES.map((entry) => entry.path).sort());
 	});
 });
 
