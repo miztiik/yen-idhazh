@@ -472,19 +472,25 @@ to re-measure and re-derive the number, not to add a digit
 ([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
 **The console is three routes and takes three ceilings, last re-derived on
-2026-09-06 once every row of the console backfill had merged.** One key over
-three surfaces fails without saying which surface failed, so `/console/`,
-`/console/model/` and `/console/machine/` each carry their own: **335,051**,
-**56,385** and **44,706** bytes.
+2026-09-10 against the tree that moved its telemetry to a browser fetch.** One
+key over three surfaces fails without saying which surface failed, so
+`/console/`, `/console/model/` and `/console/machine/` each carry their own:
+**52,000**, **63,000** and **50,000** bytes.
 
-Each is the heaviest of five builds of the tree that ships, plus seven publishes,
-plus the 64-byte build noise floor. What a publish costs is measured by removing
-one real mature day from every ledger the console reads and rebuilding - 16,024
-gzipped bytes on `/console/` and 1,634 on `/console/model/`. `/console/machine/`
-is priced in RUNS instead, at 252 bytes a run over seven days at the observed
-maximum of five runs a day, because a day that ran three times and a day that ran
-five cost it differently
-([../reference/measurements.md](../reference/measurements.md#all-three-console-ceilings-re-derived-on-the-backfills-tree-2026-09-06)).
+Each is the heaviest of five builds of the tree that ships, plus a tenth - one
+convention across every capped route, replacing the four the old set had
+accumulated. The measurement is `gzip -5`, which is what `bundle-gate.mjs`
+itself reads.
+
+**`/console/` fell by a factor of 6.4 in that re-derivation, and the fall is the
+finding rather than a tidy-up.** It was 335,051 from 2026-09-06, sized against a
+document that inlined the telemetry and weighed 3.88 MB. The telemetry moved to
+a browser fetch on 2026-09-09, the document became 46,775 bytes, and the ceiling
+stayed - so for four days it stood at 7.2 times the page it bounded and could
+not have fired on anything short of a sevenfold regression. **A ceiling is only
+a tripwire while it is near the page**, and nothing in the build fails when one
+drifts away from it
+([../reference/measurements.md](../reference/measurements.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
 
 **None of the three had fired when they were re-derived, and that is the normal
 case.** A ceiling is re-derived because its runway expired, not because a gate
