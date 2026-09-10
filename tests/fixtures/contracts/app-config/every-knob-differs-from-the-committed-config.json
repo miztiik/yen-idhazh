@@ -261,6 +261,11 @@
       "/archive/": 1500000,
       "/console/": 150000,
       "/evals/": 4096
+    },
+    "cold_console_load_bytes": 900000,
+    "payload_ceilings_bytes": {
+      "console/band.json": 4096,
+      "telemetry/": 500000
     }
   },
   "retention": {
