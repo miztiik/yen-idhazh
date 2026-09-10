@@ -157,7 +157,15 @@
 	);
 	const shown = $derived(Math.max(shownCount || PAGE, reach));
 	const paged = $derived(revealed(visible, list.pinnedRows, leading, shown));
-	const remaining = $derived(Math.max(visible.length - paged.length, 0));
+	// Counted against the day rather than the list in hand, because on a reading
+	// route the list in hand is a seed. Counting the seed would offer "Show 2
+	// more" and then "Show 55 more" the moment the fetch landed, which is a number
+	// ticking under a reader who is looking at it - the same fault `DayNotice`
+	// avoids by reading the desk counts. `total` is those counts, so it is already
+	// the truth about the day and it does not move. A filter or a hide narrows the
+	// list on purpose, and then the list IS the promise.
+	const reachable = $derived(filtering || hideRead ? visible.length : Math.max(visible.length, total));
+	const remaining = $derived(Math.max(reachable - paged.length, 0));
 	// A fragment naming a story this page never draws. The whole day rather than
 	// what is visible, so a story the reader has hidden or filtered out is not
 	// reported as absent - it is here, and the controls to bring it back are on
@@ -264,13 +272,33 @@
 				</TimeRail>
 
 				{#if remaining > 0}
+					<!-- Hidden with no script, and replaced by a line that says so.
+					     The control needs a click handler to do anything, so leaving it
+					     drawn hands a script-free reader a button that promises 55
+					     stories and does nothing when pressed - which is what `/` did
+					     until 2026-09-10. The attribute is what the `<noscript>` rule
+					     below hides, for the reason `FilterBar` records: a `<noscript>`
+					     block cannot reach a scoped class, and it can reach an
+					     attribute. -->
 					<button
 						type="button"
+						data-pager-scripted
 						onclick={() => (shownCount = shown + PAGE)}
 						class="min-h-11 w-full py-6 text-base text-accent hover:underline"
 					>
 						Show {remaining} more
 					</button>
+					<noscript>
+						<style>
+							[data-pager-scripted][data-pager-scripted] {
+								display: none;
+							}
+						</style>
+						<p class="pager-noscript w-full py-6 text-sm text-text-tertiary">
+							{remaining} more stories need JavaScript. Every topic above is a link and still
+							works.
+						</p>
+					</noscript>
 				{/if}
 			{/if}
 

@@ -346,6 +346,30 @@ export function dayShell(
 	};
 }
 
+/** The day the home page carries: a seed with the day's leads anchored in it.
+ *
+ * A route `load` can only read the committed tree, so a seed decision made
+ * inside one is reachable by a test only through the archive - which Rule #12
+ * forbids and the canary cannot stand in for, because its biggest day holds 8
+ * stories against a 15-story seed and no leads at all. So the decision is here,
+ * with a root a fixture can point at.
+ *
+ * The leads are the whole reason this is not a plain `dayShell` call. A lead is
+ * chosen across the whole day rather than off its head - measured 2026-09-01 on
+ * the 601-story day of 2026-08-31, the five sat at positions 249, 285, 337, 344
+ * and 493 - so a seed built as a prefix ships a leading block whose links land
+ * on nothing until the fetch arrives, and on nothing at all when it fails.
+ */
+export function homeShell(
+	date: string,
+	seedItems: number,
+	root: string = DIGEST_ROOT
+): DayShell | null {
+	const day = loadDay(date, root);
+	if (!day) return null;
+	return dayShell(date, seedItems, { keep: (day.leads ?? []).map((lead) => lead.item_id), root });
+}
+
 /** The two halves back together.
  *
  * The home page still renders the whole day inline, so this is what its `load`
