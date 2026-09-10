@@ -1,45 +1,45 @@
 {
-  "generated_at": "2026-09-10T13:01:30Z",
+  "generated_at": "2026-09-10T15:58:08Z",
   "months": [
     "2026-08",
     "2026-09"
   ],
   "routes": [
     {
-      "carries": "The model spent 5 h 35 m of this.",
+      "carries": "The model spent 8 h 5 m of this.",
       "description": "Did the runs work, which feeds broke, and what each stage cost.",
       "href": "/console/",
       "id": "pipelines",
       "label": "Pipelines",
       "severity": 3,
-      "worst": "17 feeds resting"
+      "worst": "18 feeds resting"
     },
     {
-      "carries": "This day ran in 2 runs, 1.00x apart on read speed.",
+      "carries": "This day ran in 3 runs, 1.30x apart on read speed.",
       "description": "What the model wrote, how long it took, and what it got wrong.",
       "href": "/console/model/",
       "id": "model",
       "label": "Summaries",
       "severity": 3,
-      "worst": "12 items failed"
+      "worst": "18 items failed"
     },
     {
-      "carries": "148 articles on this day.",
+      "carries": "222 articles on this day.",
       "description": "The hardware the model ran on, and how much it varied between runs.",
       "href": "/console/machine/",
       "id": "machine",
       "label": "Hardware",
       "severity": 1,
-      "worst": "shards read 1.48x apart"
+      "worst": "shards read 4.32x apart"
     }
   ],
   "size": {
-    "articles_to_cap": 308972,
-    "bytes": 27864869,
-    "cap_fraction": 0.025951181538403034,
-    "left_mb": 997.4259901046753,
+    "articles_to_cap": 308892,
+    "bytes": 28137112,
+    "cap_fraction": 0.026204727590084076,
+    "left_mb": 997.1663589477539,
     "measured_days": 20,
-    "sentence": "26.6 MB of the 1 GB limit - room for about 309,000 more articles."
+    "sentence": "26.8 MB of the 1 GB limit - room for about 309,000 more articles."
   },
   "verdict": {
     "date": "2026-09-10",
@@ -53,15 +53,19 @@
       {
         "health": "amber",
         "label": "Run 2 is worth a look"
+      },
+      {
+        "health": "amber",
+        "label": "Run 3 is worth a look"
       }
     ],
-    "sentence": "2026-09-10 ran 2 runs and published 148 of 160 planned items. 12 items failed."
+    "sentence": "2026-09-10 ran 3 runs and published 222 of 240 planned items. 18 items failed."
   },
   "version": "2026-09-09",
   "worst": {
     "href": "/console/",
     "id": "pipelines",
     "label": "Pipelines",
-    "sentence": "17 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
+    "sentence": "18 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
   }
 }
