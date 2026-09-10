@@ -141,13 +141,13 @@ Two kinds, and they are not the same operation.
 `prune_telemetry` and `prune_scores` unlink a file. The partition is the unit, nothing
 is edited, and the freeze rule has no opinion because there is no month left to
 rewrite. What bounds each collection is
-[the state-tree section](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree)
+[the state-tree section](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree)
 of the publishing doc.
 
 **Rows go from a partition that stays.** That is a correction and it takes the path
 above. Taking one published day back off the site is the worked case, and the eleven
 artefacts it owes - three of them month-grain - are
-[designed but not built](../architecture/publishing/layout.md#unpublishing-a-day-a-range-or-a-month-the-design-2026-09-06).
+[designed but not built](../architecture/publishing/retention.md#unpublishing-a-day-a-range-or-a-month-the-design-2026-09-06).
 
 ### A late arrival
 
