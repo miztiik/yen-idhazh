@@ -313,10 +313,9 @@ three trees differed only in source, which the site does not carry.
 
 By directory today: `assist` 43.2 MB, `_app` 22.6, `digest` 19.0, `scores` 4.4,
 `index` 4.3, `console` 1.3. The `assist` line is the committed encoder weights,
-which stayed - row #17 of
-[the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md) was
-descoped when a GitHub Release asset turned out not to be readable
-cross-origin, so the 22.59 MiB was forfeited deliberately.
+which stayed - the row of the shell-and-fetch migration that would have
+deleted them was descoped when a GitHub Release asset turned out not to be
+readable cross-origin, so the 22.59 MiB was forfeited deliberately.
 
 ### The run that was supposed to answer this measured something else
 
@@ -355,9 +354,8 @@ at 16.22 MB. A first search goes from 21.6 MB to **28.4 MB, a 31 percent rise**.
 Nothing else in the move costs anything: the tokenizer arrives gzipped from the
 hub at 212,991 bytes against 0.21 MB from our origin, which is the same number.
 
-This settles the fork Carmack left open on 2026-09-08 for
-[row #1 of the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md):
-it is the expensive arm. The 6.75 MB is what gzip was taking off the quantised
+This settles the fork Carmack left open on 2026-09-08, when the
+shell-and-fetch migration measured the two origins: it is the expensive arm. The 6.75 MB is what gzip was taking off the quantised
 ONNX weights, 29.4 percent of them, and a hub that serves them as an opaque
 octet-stream gives that back to the reader.
 
@@ -428,10 +426,9 @@ to send an origin.
 carries no `Access-Control-Allow-Origin` header on any hop, so Chromium refuses
 the `fetch` before a byte arrives, and no setting of ours changes that -
 `connect-src` is our list, CORS is the other origin's answer, and both have to
-say yes. The failover origin
-[row #15 of the shell-and-fetch plan](../../TODO/20260908-shell-and-fetch-plan.md)
-named therefore does not work as a fetch target, and this is the row's
-escalation trigger 2 firing rather than a detail.
+say yes. The failover origin the shell-and-fetch migration named therefore
+does not work as a fetch target, and that is what sent the row back to the
+owner rather than a detail.
 
 Two origins that do work were measured in the same run, and both returned our
 exact bytes on all five files. `raw.githubusercontent.com` at the release tag

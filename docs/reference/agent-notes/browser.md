@@ -68,6 +68,18 @@ await expect.poll( => page.url).toMatch(/\/console\/$/);
 
 **A `page.route` pattern written as a glob can intercept nothing and say nothing.** `page.route('**/digest/**/digest.json')` counted zero aborts against a URL it should have matched on 2026-09-01, where the same handler as a `RegExp` counted one. Prefer a `RegExp`, and print the count - a route that never fired is a null result, not a pass. A pattern one segment too wide counts the page's own assets: `**/digest/**` catches an item's picture as well, so an arm asserting "this reached the network for nothing" failed at 2 on a fetch nobody made.
 
+**A right pattern also fires zero times when the request never reaches the network**, and this site has two things that serve one: the service worker, and the day store `daysHeldOffline` reads. Both survive `page.goto`, so an abort arm re-run in the same page keeps passing on the answer the FIRST load cached - four attempts on 2026-09-10 reported `blockedCount: 0` and `data-payload-state="ready"` with the route registered correctly, which reads as the page ignoring the interception. The tell is a hit count of zero next to a page that plainly has the data. Clear all three stores in the page before the arm, then navigate:
+
+```typescript
+await page.evaluate(async () => {
+	for (const r of (await navigator.serviceWorker?.getRegistrations?.()) ?? []) await r.unregister();
+	for (const k of (await caches?.keys?.()) ?? []) await caches.delete(k);
+	for (const d of (await indexedDB.databases?.()) ?? []) indexedDB.deleteDatabase(d.name);
+});
+```
+
+That the day was served from the device is not a bug - it is the offline path working - so do not "fix" it by widening the pattern.
+
 **`page.route` cannot block what the service worker answers.** The worker's fetches do not pass through the page's route table, so an interception arm silently covers nothing: four aborted navigations left a day page fully rendered with `aborted: 0` (2026-09-05), and a `**/*.svg` 404 route let all 43 drawings draw (2026-09-06). Block workers for the spec, and use `context.route` so a page opened later is covered too:
 
 ```javascript
