@@ -73,7 +73,7 @@ discover. All are folded in. The five that would have cost the most:
 | 14 | One document serves every date | 13 | G | LANDED | - | #546 | worker |
 | 17 | Delete the committed weights | 16 | G | DESCOPED | - | - | owner, 2026-09-09 |
 | 18 | The gates measure a shell, not a document | 12, 14 | H | LANDED | - | #564 | worker |
-| 19 | Record what was decided and what it cost | 1-18 | I | IN-FLIGHT | yi-s19-docs | #568 | worker |
+| 19 | Record what was decided and what it cost | 1-18 | I | LANDED | - | #568 | worker |
 
 **Seventeen rows landed, one was descoped and one is this closure.** Row 15
 escalated on 2026-09-09 - a GitHub Release asset carries no
