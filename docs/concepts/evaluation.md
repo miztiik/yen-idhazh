@@ -735,55 +735,44 @@ summary defects, and dropping them would bias the sample toward well-extracted
 items - the sampling error this whole page argues against. `unjudgeable` carries
 them, and the rate is reported with and without.
 
-### The label queue: three repairs, and what they left
+### The label queue, and the four rules that hold a draw honest
 
-The queue could not be used by a person until 2026-08-27. Three things were
-wrong with it, and all three are now fixed.
+**A labeller sees the exact premise the scorer read, or the row is not
+labellable.** The run writes that premise and the summary to
+`backend/var/evidence/<date>/` and records a `source_digest` on the eval row; the
+CLI refuses any row whose text does not match its digest. **All 2,232 rows
+written before 2026-08-27 predate that column and are marked not labellable
+rather than guessed at** - which is the correct state, not a defect to repair.
 
-**It never showed the labeller the article.** `state/scores.csv` carries no
-summary text and no source text, so `label_queue.py` printed a missing-summary
-fallback on every row. That fallback was not a degradation - it was the only
-branch that could ever run, because `summary` is not a column in that file at
-all. The run now writes the exact premise the scorer read, plus the summary, to
-`backend/var/evidence/<date>/`, and records a `source_digest` on the eval row.
-The CLI shows both texts and refuses any row whose text does not match its
-recorded digest, so a labeller cannot judge text the scorer did not read. A row
-scored before that column existed is marked not labellable rather than guessed
-at, and all 2,232 rows written before 2026-08-27 are in that state.
-
-**The draw leaked the hidden score gradient through its order.** `draw`
-returned rows in sequential HHEM-decile blocks. The number was hidden and the
-stratum was not. It now returns one global `label_id` sort. `label_id` is
+**The strata are how rows are chosen, never how they are ordered.** An order that
+walks the deciles leaks the hidden score gradient: the number is hidden and the
+stratum is not. `draw` returns one global `label_id` sort, and `label_id` is
 already a sha256 over the address, the inputs, the words, the instrument and the
-draw, so the shuffle needs no seed and stays reproducible - two labellers can
-compare notes by position. **The strata are how rows are chosen, never how they
-are ordered.** Measured over the 38 rows at `draw_id=d1`: 9 runs of equal decile
+draw, so the shuffle needs no seed and two labellers can compare notes by
+position. Measured over the 38 rows at `draw_id=d1`: 9 runs of equal decile
 before, 28 after.
 
 **A global hash shuffle does not balance a prefix, and the first version of this
 rule said it did.** Over those same 38 rows the first ten deciles run 9, 9, 8, 9,
 9, 9, 5, 8, 9, 7. Balance is a property in expectation, not per draw. Stopping
-early gives a roughly balanced sample, not a guaranteed one, and a partial draw
-may not be reported as stratified.
+early gives a roughly balanced sample, and **a partial draw may not be reported
+as stratified.**
 
 **One draw is one `scorer_version`. The pipeline is a covariate the draw reports,
-not a filter it applies (owner decision, 2026-08-27).** `eligible`, `draw`
-and `run_days` require the scorer with no default, because the cuts being
-calibrated live inside that string: a row read by a different instrument answers
-a different question. `pipeline_fingerprint` is optional, and omitting it is the
-normal case. `strata` splits the drawn rows by producer, and the tool prints
-that split with any stratum under `evaluation.label_min_stratum_rows` marked too
-thin to cut on.
+not a filter it applies** (owner decision, 2026-08-27). `eligible`, `draw` and
+`run_days` require the scorer with no default, because the cuts being calibrated
+live inside that string: a row read by a different instrument answers a different
+question. `pipeline_fingerprint` is optional and omitting it is the normal case;
+`strata` splits the drawn rows by producer, marking any stratum under
+`evaluation.label_min_stratum_rows` too thin to cut on.
 
-Requiring both was unreachable rather than strict. The stamp digests seventeen
-inputs, so a reworded prompt, a llama.cpp rebuild or a sanitizer fix reset the
-count to zero, and no pair has ever held for more than three consecutive
-run-days. The trade is stated rather than hidden: **a rate read off a pooled
-draw is a prior with wide bounds, never a calibration.** Report it split by
-stratum. The tool says so on any draw carrying more than one producer, and it
-refuses to let the split go unprinted. An empty pool still exits non-zero and
-prints every pair in the ledger with its rows and dates. Article bodies remain
-local and uncommitted.
+Requiring both was unreachable rather than strict - the stamp digests seventeen
+inputs, so a reworded prompt or a llama.cpp rebuild resets the count to zero, and
+no pair has ever held for more than three consecutive run-days. The trade is
+stated rather than hidden: **a rate read off a pooled draw is a prior with wide
+bounds, never a calibration.** The tool refuses to let the split go unprinted,
+and an empty pool exits non-zero listing every pair with its rows and dates.
+Article bodies remain local and uncommitted.
 
 **The exact remaining requirement**, checked against the committed ledger and
 current code on 2026-08-28. These are exact counts over committed files rather
