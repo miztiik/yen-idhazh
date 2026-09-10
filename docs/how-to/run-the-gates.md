@@ -139,7 +139,7 @@ delegated, because they tell you the branch is wrong before CI has finished
 installing:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff check.
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/test_<the module you changed>.py
 ```
@@ -166,7 +166,7 @@ seconds either way.
 Python 3.12, 3.13 or 3.14. CI installs 3.12.
 
 ```powershell
-python -m venv .venv
+python -m venv.venv
 .\.venv\Scripts\python.exe -c "import sys; print(sys.version)"
 .\.venv\Scripts\python.exe -m ensurepip --upgrade
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
@@ -261,7 +261,7 @@ anywhere has to be repointed.
 | `-m "not slow"` | Everything else, which is 84 percent of the tests | 1,807 | 39.3 s (n=1) | - |
 | nothing | The whole suite, which is what CI runs | 2,142 | 155.4 s (n=2, spread 45.9) | - |
 
-**Windows 11, 12 logical CPUs, Python 3.14.2, pytest 9.1.1, 2026-09-05**, every
+**Python 3.14.2, pytest 9.1.1, 2026-09-05**, every
 arm through `gate_lock.py` so no sibling gate could land inside a timing.
 `-n 0` is the faster arm for a small subset, because twelve workers cost about
 seven seconds to start and that is most of what a 161-test run pays.
@@ -290,10 +290,12 @@ those areas already has something shorter to run than the whole suite: that
 module. And `-m "not slow"` still pays for the two longest tests outside the
 slow set, one in `test_extract.py` at 37 s and one in `test_embed.py` at 16 s.
 
-**What each gate costs on a developer box, and what `-n auto` buys, is measured
-in [../reference/measurements.md](../reference/measurements.md#what-the-gates-cost-on-a-developer-box).**
-Read it there rather than guessing from one run: on a machine several agents
-share, the same suite spans a factor of three depending on who else is working.
+**Do not size a gate from one run on your own machine.** On a box several agents
+share, the same suite spans a factor of three depending on who else is working,
+and `-n auto` can read slower than serial because two performance cores shared
+six ways have nothing to hand a second worker. The figure that decides anything
+is the runner's, and it is in
+[../reference/measurements.md](../reference/measurements.md).
 
 **A test may not walk a collection a run appends to**, because its cost then
 grows with every published day rather than with the code it checks (Rule #12 and
@@ -311,10 +313,10 @@ make this slower.
 Run all five from the repository root. Each must be clean.
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff check.
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest
-.\.venv\Scripts\shellcheck.exe --severity=style (Get-ChildItem .github/scripts/*.sh).FullName
+.\.venv\Scripts\shellcheck.exe --severity=style (Get-ChildItem.github/scripts/*.sh).FullName
 .\.venv\Scripts\python.exe -m idhazh.contracts.export
 git diff --exit-code -- schemas/
 ```
@@ -336,7 +338,7 @@ written inline in a workflow `run:` body is held by the contract tests in
 `backend/tests/test_workflows.py`
 ([../reference/github-actions.md](../reference/github-actions.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
 
-**`ruff format` is not a gate.** `ruff format --check .` reports dozens of files
+**`ruff format` is not a gate.** `ruff format --check.` reports dozens of files
 it would rewrite - 14 on 2026-08-24 and 38 on 2026-08-29 - all of them
 pre-existing. That count is deliberately written as a magnitude rather than a
 figure: it tracks how much Python the repository holds, so an exact number here
@@ -375,7 +377,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 Naming no day checks every committed day, which is what a push to `main` does.
 **A named day that is not there exits non-zero** rather than reporting a clean
 run over nothing - a workflow typo must not read as a pass. Measured 2026-09-06
-on an Intel Core i7-1265U: 0.27 s per published day, so the 16 committed days
+on a developer machine: 0.27 s per published day, so the 16 committed days
 cost 6.6 to 7.1 s and a year of them would cost about 100 s a run. That is the
 reason the scope step decides.
 
@@ -453,12 +455,12 @@ today, and each extra telemetry month is one more.
 When a named route or payload is over, two failures are worth telling apart:
 
 - **A page or a payload took on bytes nobody reads.** A day payload inlined by a
-  layout is how this last happened to a page, and it cost 313,000 bytes; a column
-  added to a shard is how it happens to a payload. Remove them.
+ layout is how this last happened to a page, and it cost 313,000 bytes; a column
+ added to a shard is how it happens to a payload. Remove them.
 - **It genuinely carries more.** Raise the number in `config/idhazh.json`,
-  in the commit that earned the bytes, and say in the message what they buy. The
-  number lives in that file alone - the `PageWeightConfig` default is empty - so
-  there is no second copy to move.
+ in the commit that earned the bytes, and say in the message what they buy. The
+ number lives in that file alone - the `PageWeightConfig` default is empty - so
+ there is no second copy to move.
 
 **A ceiling is not raised to buy time.** `/archive/` was capped, raised twice in
 one day on 2026-08-26 to silence a gate that fired on ordinary publishes, and
@@ -469,7 +471,7 @@ noise floor. That headroom shrinks about 8 bytes on every publish since the day
 list folded into month disclosures on 2026-09-01, down from 12 to 18 before it,
 and it expires by design: when the gate fires on an ordinary day, the answer is
 to re-measure and re-derive the number, not to add a digit
-([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
+([../reference/measurements.md](../reference/measurements-site.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
 **The console is three routes and takes three ceilings, last re-derived on
 2026-09-10 against the tree that moved its telemetry to a browser fetch.** One
@@ -490,7 +492,7 @@ stayed - so for four days it stood at 7.2 times the page it bounded and could
 not have fired on anything short of a sevenfold regression. **A ceiling is only
 a tripwire while it is near the page**, and nothing in the build fails when one
 drifts away from it
-([../reference/measurements.md](../reference/measurements.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
+([../reference/measurements.md](../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
 
 **None of the three had fired when they were re-derived, and that is the normal
 case.** A ceiling is re-derived because its runway expired, not because a gate
@@ -531,14 +533,14 @@ npm run test:browser
 ```
 
 995 tests in 74 files (2026-09-05): 984 passed and 11 skipped, in 13.4 minutes
-on an i7-1265U. The same suite measured 954 tests and 19.2 minutes on
+on an a developer machine. The same suite measured 954 tests and 19.2 minutes on
 2026-09-02, so read the minutes as the machine rather than the suite - the test
 count is what grew.
 
 **`PLAYWRIGHT_WORKERS` sets how many run at once: one locally, four in CI, and
 the two machines disagree about which is right.** A runner is 4 vCPU with
 nothing else on it (Rule #2) and four workers took the browser step from 344 s
-to 207 s, 40 percent faster, measured 2026-09-05. The same change on an i7-1265U
+to 207 s, 40 percent faster, measured 2026-09-05. The same change on an a developer machine
 with six other checkouts building measured 233.7 s against 135.5 s - **72 percent
 slower**, because two performance cores shared with six sibling agents have no
 spare capacity to hand a second worker. Both arms passed all 268 tests, so the
@@ -576,7 +578,7 @@ Remove-Item Env:IDHAZH_TEST_BUILD
 
 Take that arm before `build:canary`, which overwrites the same `build/`
 directory. **Two of its arms are expected to fail and are annotated
-`test.fail()`**, because the composed page has two defects nobody has decided
+`test.fail`**, because the composed page has two defects nobody has decided
 how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-the-composed-page-gets-wrong-2026-09-02)).
 An expected failure turns the suite red the day it starts passing, which is
 when the annotation comes off.
@@ -601,7 +603,7 @@ npm run build
 npm run test:whole-day
 ```
 
-**Between 2.8 and 3.7 minutes end to end** on an Intel Core i7-1265U,
+**Between 2.8 and 3.7 minutes end to end** on a developer machine,
 2026-09-05, over two full runs on a machine several agents share: the build took
 72.2 and 117.5 seconds, and the spec 97.3 and 102.1. The spec is 7 tests - three
 that read the day off disk in under 25 ms each, and four browser arms that
@@ -651,8 +653,8 @@ change is still local - the CI answer arrives after the push.
 **A component with no call site proves itself here too.** A shared component
 lands before the sections that render it, so the build tree-shakes it away and
 no page exercises it. Compile it inside the spec instead: `preprocess` with
-`vitePreprocess()`, then `compile(source, { generate: 'server' })`, write the
-module under `frontend/test-results/`, `import()` it, and hand `render()` from
+`vitePreprocess`, then `compile(source, { generate: 'server' })`, write the
+module under `frontend/test-results/`, `import` it, and hand `render` from
 `svelte/server` the props. Feed that body and the `css.code` from the same
 compile to `page.setContent` - the scope hashes match, because both came from
 one compile - and the geometry can be measured with `getBoundingClientRect` in a
@@ -663,7 +665,7 @@ alternative is a route that exists only to host a test, and that route ships to
 a reader.
 
 **A skip condition must never read a locator count.** Written as
-`test.skip((await panels.count()) === 0, ...)`, a test turns itself off the
+`test.skip((await panels.count) === 0,...)`, a test turns itself off the
 moment the attribute it counts is renamed: nothing matches, the count is zero,
 the skip fires, and the suite reports green. Read the skip against a fact the
 fixture owns instead - the window the console publishes in an attribute, the
@@ -716,7 +718,7 @@ Run this from `frontend/` to print the number this checkout will use, which is
 the same derivation the config runs:
 
 ```powershell
-node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd()).digest().readUInt32BE(0)%10000)"
+node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd).digest.readUInt32BE(0)%10000)"
 ```
 
 Three traps make this suite lie to you. A fourth used to, and was fixed at the
@@ -728,20 +730,20 @@ meant to keep healthy.
 The traps that remain:
 
 - **`frontend/build` is one shared directory.** `npm run build` and
-  `npm run build:canary` both write it. If anything rebuilds the real site
-  between your `build:canary` and your `test:browser`, the suite runs against
-  real published dates and fails for reasons that are not your change. Confirm
-  `frontend/build/console/index.html` still carries a canary date before and
-  after the run.
+ `npm run build:canary` both write it. If anything rebuilds the real site
+ between your `build:canary` and your `test:browser`, the suite runs against
+ real published dates and fails for reasons that are not your change. Confirm
+ `frontend/build/console/index.html` still carries a canary date before and
+ after the run.
 - **An occupied preview port is rejected, not adopted.** `reuseExistingServer`
-  is false locally and in CI. Stop a server only after proving that it belongs
-  to your checkout, or choose another `PREVIEW_PORT`. Never kill every preview
-  process on a machine shared with another agent.
+ is false locally and in CI. Stop a server only after proving that it belongs
+ to your checkout, or choose another `PREVIEW_PORT`. Never kill every preview
+ process on a machine shared with another agent.
 
 - **The canary day has one vertical** (`ai`, 8 items). Any rule that only shows
-  up with several topics cannot be tested here. Put that rule in a pure module
-  and unit-test it there - `frontend/src/lib/day-shape.ts` exists for exactly
-  this reason.
+ up with several topics cannot be tested here. Put that rule in a pure module
+ and unit-test it there - `frontend/src/lib/day-shape.ts` exists for exactly
+ this reason.
 
 ## Smoke-test a published-site change by hand
 
@@ -755,15 +757,15 @@ npx vite preview --outDir build --port 4174 --strictPort --host 127.0.0.1
 ```
 
 - **The dev server cannot be used for this.** On `vite dev` a `script-src` CSP
-  violation blocks SvelteKit's bootstrap, so the page never hydrates and every
-  control - the theme toggle, `Show N more` - is dead. It is a Vite artifact
-  rather than a regression, and the production build logs zero console errors.
+ violation blocks SvelteKit's bootstrap, so the page never hydrates and every
+ control - the theme toggle, `Show N more` - is dead. It is a Vite artifact
+ rather than a regression, and the production build logs zero console errors.
 - **`vite preview` serves `index.html` as an SPA fallback**, so a route that
-  does not exist returns HTTP 200 with a page full of asset 404s. Preview cannot
-  answer "does this URL exist"; the dev server and GitHub Pages both render the
-  real 404 page.
+ does not exist returns HTTP 200 with a page full of asset 404s. Preview cannot
+ answer "does this URL exist"; the dev server and GitHub Pages both render the
+ real 404 page.
 - Confirm the page still renders with its data file absent or empty. A page that
-  white-screens on missing data is a failure (section 12, step 5).
+ white-screens on missing data is a failure (section 12, step 5).
 
 ## Dependencies
 
@@ -782,6 +784,49 @@ a script; it is only the dependency commands that are destructive.
 
 Every new dependency names a beneficiary feature and its cost, per `CLAUDE.md`
 section 8.
+
+## What the shared gate lock and the preview port are, measured
+
+Both came out of a run of the gates on a shared machine, and both are
+correctness results rather than timings - a port collision count and a race
+count, neither of which a faster box would change.
+
+### The preview port derivation
+
+`playwright.config.ts` hashes its own directory into a port between 20000 and
+29999. Over the **16 worktree paths registered on this box: 16 distinct ports,
+zero collisions.** `yi-g01`, `yi-g02` and `yi-g03` differ by one character and
+land 2,276 and 2,869 apart - which is why the derivation hashes rather than
+sums. A character sum would have put them adjacent and rebuilt the clustering
+the change exists to remove. About 1 percent of checkout pairs still collide by
+birthday arithmetic, and `PREVIEW_PORT` is the override for those.
+
+### The lock's own correctness, and two defects it had
+
+The lock's oracle is "K real callers, and no two of them overlap". It failed
+once in CI, so it was reproduced with a harness that starts K real callers on
+one lock, each writing its own monotonic `(start, end)` pair:
+
+| K | wait | rounds | rounds with two callers holding at once |
+| --- | --- | --- | --- |
+| 5 | 0.05 s | 20 | 0 |
+| 20 | 0.05 s | 50 | **4** |
+
+The 50-round run took 715.92 s. The four overlaps ran 3.0, 12.2, 26.8 and
+39.5 ms into holds of 50.6 to 58.6 ms; the 3.0 ms one is the CI signature - two
+callers starting 3 ms apart and running the whole hold together. The same 50
+rounds surfaced a second defect nobody had filed: **61 callers of 1,000 died
+with a traceback and a non-zero exit**, across 36 of the 50 rounds. On Windows a
+name whose last handle is closing is "delete pending", and every create on it is
+refused with access denied rather than with "it already exists".
+
+Both are fixed. The record is now linked into place with `os.link` rather than
+created and then written, and the stale-lock delete runs under a second
+exclusive create. A refused create is a lost create, not a crash. `release`
+deliberately does not take the second seat: it would cost six file operations on
+every hand-over to cover a case that needs a gate still running 7,200 s in -
+**6.6x the longest gate ever measured here** - and with twenty callers spinning
+it took a hand-over from 0.7 s to about 10 s.
 
 ## See also
 

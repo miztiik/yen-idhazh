@@ -10,12 +10,12 @@ This reference is **domain-neutral** so it can be copied between projects unchan
 
 Every document belongs to exactly one tier:
 
-| Tier         | Directory            | Reader question                                  |
+| Tier | Directory | Reader question |
 | ------------ | -------------------- | ------------------------------------------------ |
-| Architecture | `docs/architecture/` | Why is it designed this way?                     |
-| How-to       | `docs/how-to/`       | How do I perform a specific task?                |
-| Concepts     | `docs/concepts/`     | What is this concept / vocabulary?               |
-| Reference    | `docs/reference/`    | What are the exact options / values / contracts? |
+| Architecture | `docs/architecture/` | Why is it designed this way? |
+| How-to | `docs/how-to/` | How do I perform a specific task? |
+| Concepts | `docs/concepts/` | What is this concept / vocabulary? |
+| Reference | `docs/reference/` | What are the exact options / values / contracts? |
 
 Support tiers:
 
@@ -41,14 +41,14 @@ A topic that needs deeper nesting is two topics. Split it.
 
 Docs fall into the typed classes below. Each has one audience, one mutability rule, one allowed content type, and one forbidden content type. Routing is enforced at PR review time, not by tooling. A decision is NOT its own class - when a choice clears the Rule #4 bar, its rationale lives as a `## Design rationale` / `## Rejected alternatives` section on whichever class below it impacts; there is no ADR file and no `docs/architecture/decisions/` directory.
 
-| Class             | Path pattern                            | Audience                           | Mutability                                        | Contains                                                            | Forbidden                                         |
+| Class | Path pattern | Audience | Mutability | Contains | Forbidden |
 | ----------------- | --------------------------------------- | ---------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------- |
-| **Subsystem doc**         | `docs/architecture/<area>/*.md`         | Engineer extending the subsystem                  | Living snapshot (edit in place)                   | Shape, layout, contracts, invariants, write/read paths (+ a `## Design rationale` for a decision the subsystem carries) | Long PR narrative; duplicate concept definitions        |
-| **Concept doc**   | `docs/concepts/*.md`                    | Anyone learning project vocabulary | Living, terse                                     | One term, defined once, with cross-links                            | Duplication of any term defined elsewhere         |
-| **How-to doc**    | `docs/how-to/<verb>-<slug>.md`          | Operator running a procedure       | Living runbook                                    | Ordered steps, inputs, validation, failure modes                    | Rationale prose; concept definitions              |
-| **Reference doc** | `docs/reference/*.md`                   | Someone needing an exact value     | Living table                                      | Exact options, values, contracts, measurements with hardware + date | Narrative; procedure                              |
-| **Agent notes**   | `docs/reference/agent-notes.md` (index) + `docs/reference/agent-notes/<tool-family>.md` | Anyone running commands in the repo | Living list                                      | Environment and tool quirks that make a command lie about its result | Project behaviour, design rationale, product rules |
-| **Plan-doc**      | `TODO/<YYYYMMDD>-<slug>-plan.md`        | Next person picking up work        | Single-snapshot; DELETED once distilled (git history is the ledger) | Phase status, active PR breakdown, TBD list, pointers               | Rationale prose; decisions; rejected alternatives |
+| **Subsystem doc** | `docs/architecture/<area>/*.md` | Engineer extending the subsystem | Living snapshot (edit in place) | Shape, layout, contracts, invariants, write/read paths (+ a `## Design rationale` for a decision the subsystem carries) | Long PR narrative; duplicate concept definitions |
+| **Concept doc** | `docs/concepts/*.md` | Anyone learning project vocabulary | Living, terse | One term, defined once, with cross-links | Duplication of any term defined elsewhere |
+| **How-to doc** | `docs/how-to/<verb>-<slug>.md` | Operator running a procedure | Living runbook | Ordered steps, inputs, validation, failure modes | Rationale prose; concept definitions |
+| **Reference doc** | `docs/reference/*.md` | Someone needing an exact value | Living table | Exact options, values, contracts, measurements with hardware + date | Narrative; procedure |
+| **Agent notes** | `docs/reference/agent-notes.md` (index) + `docs/reference/agent-notes/<tool-family>.md` | Anyone running commands in the repo | Living list | Environment and tool quirks that make a command lie about its result | Project behaviour, design rationale, product rules |
+| **Plan-doc** | `TODO/<YYYYMMDD>-<slug>-plan.md` | Next person picking up work | Single-snapshot; DELETED once distilled (git history is the ledger) | Phase status, active PR breakdown, TBD list, pointers | Rationale prose; decisions; rejected alternatives |
 
 ### Routing rules (decide a new statement's home)
 

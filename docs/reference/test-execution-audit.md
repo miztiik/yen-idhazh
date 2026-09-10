@@ -68,7 +68,7 @@ npx playwright test tests/console.spec.ts tests/console-run-health.spec.ts tests
 The duplicate browser command, from the worker's frontend directory, was:
 
 ```text
-python ../backend/utilities/gate_lock.py -- node node_modules/@playwright/test/cli.js test
+python../backend/utilities/gate_lock.py -- node node_modules/@playwright/test/cli.js test
 ```
 
 These are historical commands, not recommended launch instructions. The first

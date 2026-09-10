@@ -16,46 +16,46 @@ There is no one-command model swap.
 What exists:
 
 - `backend/utilities/measure_llm.py` verifies GGUF identity and measures raw
-  prefill and decode locally;
+ prefill and decode locally;
 - `.github/workflows/measure.yml`, target `llm`, runs the same raw measurement on
-  `ubuntu-latest`;
+ `ubuntu-latest`;
 - `idhazh.llm.server.server_argv` builds the server command from config;
 - `work` can exercise the real fetch, extract, sanitize and summarize path;
 - `validate` can score model output with HHEM; and
 - `.github/workflows/validate.yml` plus `idhazh qualify` and
-  `idhazh qualify-decide` freeze a corpus, replay it, run the live canaries and
-  evaluate eleven absolute gates. Rebuilt 2026-08-26.
+ `idhazh qualify-decide` freeze a corpus, replay it, run the live canaries and
+ evaluate eleven absolute gates. Rebuilt 2026-08-26.
 
 What the qualification arm now does, which the old exploratory one did not:
 
 - builds a candidate config under gitignored `backend/var/candidate-config`, a
-  copy of committed `config/` with `models.summarize` replaced and nothing else,
-  so it never edits the committed config and never has to restore it;
+ copy of committed `config/` with `models.summarize` replaced and nothing else,
+ so it never edits the committed config and never has to restore it;
 - fetches the candidate from an **immutable repository revision**, checks its
-  SHA-256 and its byte count against the adoption target, and does both before
-  the server starts;
+ SHA-256 and its byte count against the adoption target, and does both before
+ the server starts;
 - keys the weights cache on the GGUF digest rather than the filename, and holds
-  one model per entry;
+ one model per entry;
 - plans the addresses once, in one job, and carries the date forward, so a run
-  that crosses UTC midnight is still one run;
+ that crosses UTC midnight is still one run;
 - freezes each shard's slice exactly once, hashes the model-visible truncated
-  text and the sanitized full text, writes the hashes down **before** the first
-  inference call, and replays those bytes;
+ text and the sanitized full text, writes the hashes down **before** the first
+ inference call, and replays those bytes;
 - keeps walking its slice until the slice has offered every length tier the
-  corpus definition asks for, instead of stopping at a fixed pool size. A long
-  read is the scarce shape - 3 of 109 extracted articles on 2026-08-26 - so a
-  walk sized on the item count alone met that count every time while the top
-  tier stayed empty. The extra addresses cost fetch seconds, never model
-  minutes ([../reference/measurements.md](../reference/measurements.md));
+ corpus definition asks for, instead of stopping at a fixed pool size. A long
+ read is the scarce shape - 3 of 109 extracted articles on 2026-08-26 - so a
+ walk sized on the item count alone met that count every time while the top
+ tier stayed empty. The extra addresses cost fetch seconds, never model
+ minutes ([../reference/measurements.md](../reference/measurements.md));
 - picks the length tier from the source body rather than from the post-cap text,
-  because the post-cap count cannot pass 1923 words and the top tier starts at
-  2000, so it never fired
-  ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md));
+ because the post-cap count cannot pass 1923 words and the top tier starts at
+ 2000, so it never fired
+ ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md));
 - interleaves the repeats - every item once, then every item again - so a repeat
-  never lands on a warm prompt cache and skips its own prefill;
+ never lands on a warm prompt cache and skips its own prefill;
 - runs every injection canary on live candidate calls; and
 - records every failed call in the denominator, and every diagnostic with the
-  denominator it was taken over.
+ denominator it was taken over.
 
 What is still missing:
 
@@ -66,13 +66,13 @@ Two capability gaps were closed on 2026-08-26 and are worth naming because
 anything measured before then inherits them:
 
 - `HHEM_REVISION` was the branch name `main`, and `weights_digest` hashed that
-  name rather than the loaded weight bytes. It is now pinned to
-  `8e4a2e6e96c708cc76c2344f7e4757df2515292c` and the digest walks the loaded
-  state dict. A faithfulness number from before this date was measured with an
-  instrument nobody can name.
+ name rather than the loaded weight bytes. It is now pinned to
+ `8e4a2e6e96c708cc76c2344f7e4757df2515292c` and the digest walks the loaded
+ state dict. A faithfulness number from before this date was measured with an
+ instrument nobody can name.
 - `leaderboard_hhem` was a required float, so a model with no published result
-  had to be recorded as `0.0`. It is now nullable beside a
-  `leaderboard_provenance` of `not_reported`.
+ had to be recorded as `0.0`. It is now nullable beside a
+ `leaderboard_provenance` of `not_reported`.
 
 `measure_llm.py` still resolves Hugging Face `main` and cannot request an
 immutable revision or accept an expected SHA. That is sufficient for an
@@ -98,8 +98,8 @@ file with different bytes, and records the runtime and model hashes:
 
 ```bash
 python backend/utilities/measure_llm.py \
-  --models "owner/repository@<40-character commit>:model-Q4_K_M.gguf" \
-  --threads "4"
+ --models "owner/repository@<40-character commit>:model-Q4_K_M.gguf" \
+ --threads "4"
 ```
 
 The files under `backend/models/` are local, gitignored files. The ad hoc
@@ -161,18 +161,18 @@ For every rendered summary band, including the brief path:
 
 1. Render the exact LF-terminated system prompt.
 2. Add the source-form line, feed title, fences and exact sanitized model-visible
-   text.
+ text.
 3. Apply the candidate's embedded chat template, including the generation
-   suffix.
+ suffix.
 4. Tokenize that complete request with the candidate runtime and GGUF.
 5. Repeat for representative extracted articles from each measured length
-   bucket.
+ bucket.
 6. Record the maximum complete-request count and spread.
 7. Recalculate:
 
-   ```text
-   complete chat-templated request tokens + output budget
-   ```
+ ```text
+ complete chat-templated request tokens + output budget
+ ```
 
 8. Confirm the result fits `models.summarize.inference.n_ctx`.
 9. Confirm `fits_context` still over-reserves rather than under-reserves.
@@ -192,9 +192,9 @@ Run incumbent and candidate in the **same workflow job**:
 
 ```bash
 gh workflow run measure.yml \
-  -f target=llm \
-  -f models='incumbent/repo:incumbent-Q4_K_M.gguf,candidate/repo:candidate-Q4_K_M.gguf' \
-  -f threads='4'
+ -f target=llm \
+ -f models='incumbent/repo:incumbent-Q4_K_M.gguf,candidate/repo:candidate-Q4_K_M.gguf' \
+ -f threads='4'
 ```
 
 Read the `bench-llm` artifact:
@@ -203,8 +203,8 @@ Read the `bench-llm` artifact:
 - `weights.txt`: exact GGUF size and SHA-256;
 - `llm.json`: prefill and decode rates with spread; and
 - `resources.json`: wall time, CPU pressure, throttling and memory events.
-  Cgroup `memory.peak` can be absent or cumulative; it is not a per-model RSS
-  comparison.
+ Cgroup `memory.peak` can be absent or cumulative; it is not a per-model RSS
+ comparison.
 
 Compare:
 
@@ -270,9 +270,9 @@ A controlled comparison:
 
 1. Fetches and extracts each article once.
 2. Stores the sanitized full text and exact model-visible truncated text under
-   `backend/var/`, with hashes.
+ `backend/var/`, with hashes.
 3. Sends the same model-visible bytes through both models and the same full bytes
-   to the scorer.
+ to the scorer.
 4. Records every failed item, not only scored successes.
 5. Scores both outputs with the same scorer version.
 6. Reads the deterministic counterweights as well as HHEM.
@@ -383,21 +383,21 @@ Do not change historical payloads or historical measurement rows.
 Update the current surfaces:
 
 1. `config/idhazh.json`
-   - model id;
-   - repository;
-   - GGUF file;
-   - quantisation; and
-   - exact SHA-256.
+ - model id;
+ - repository;
+ - GGUF file;
+ - quantisation; and
+ - exact SHA-256.
 2. `.github/workflows/digest.yml`
-   - summary model repository and file;
-   - cache identity includes verified GGUF SHA and pinned runtime identity.
+ - summary model repository and file;
+ - cache identity includes verified GGUF SHA and pinned runtime identity.
 3. `.github/workflows/validate.yml`
-   - configured incumbent and generic candidate handling.
+ - configured incumbent and generic candidate handling.
 4. `.github/workflows/measure.yml`
-   - runtime-sweep model when the candidate becomes the incumbent.
+ - runtime-sweep model when the candidate becomes the incumbent.
 5. Current docs and diagrams that name the configured model.
 6. Tests that assert the configured default or workflow model. Do not replace
-   fixture ids that are intentionally historical or generic.
+ fixture ids that are intentionally historical or generic.
 
 A value-only model change does not change a JSON shape. If the work also makes
 SHA-256 required, adds a runtime-build field, or changes a persisted contract,
@@ -460,12 +460,12 @@ Then:
 3. Verify bounded worker selection against the day you plan to run.
 4. Run a manual Content refresh only after its measured worker population fits.
 5. Inspect item-health failure codes, per-item read/write rates, the fingerprint
-   row, run manifest, cache state and published summaries.
+ row, run manifest, cache state and published summaries.
 6. Confirm no model directory or diagnostic payload is tracked.
 7. For rollback, pause normal workers, delete the candidate summary cache,
-   revert the adoption commit, fill the incumbent summary cache once without
-   fanout, verify its identity and health, then resume normal workers. Do not
-   edit historical output.
+ revert the adoption commit, fill the incumbent summary cache once without
+ fanout, verify its identity and health, then resume normal workers. Do not
+ edit historical output.
 
 Do not raise a timeout or lower a quality threshold to make the candidate pass.
 Measure the cause or reject the candidate.

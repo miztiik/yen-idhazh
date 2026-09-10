@@ -21,14 +21,14 @@ Do NOT run for in-flight rows. Distillation only happens after the finding has s
 
 For each finding in the closed row's narrative, apply the routing rules in [../reference/documentation-structure.md](../reference/documentation-structure.md#routing-rules-decide-a-new-statements-home) and route to ONE home:
 
-| Finding shape                                                                                    | Destination                                                                                                                                                 | Example                                                                                                                  |
+| Finding shape | Destination | Example |
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Current domain rule, UI shape, tuning invariant, or cross-subsystem vocabulary                                           | **Concept doc** under `docs/concepts/<slug>.md`                | "What does this status value mean, wherever it appears?" -> `docs/concepts/`                  |
-| Current shape / layout / contract of one subsystem                                                                       | **Subsystem doc** under `docs/architecture/<area>/<slug>.md`   | "How is this payload laid out on disk?" -> `docs/architecture/<area>/layout.md`          |
-| Operator runbook / step-by-step procedure                                                                                | **How-to doc** under `docs/how-to/<verb>-<slug>.md`            | "How do I re-run a failed stage?" -> `docs/how-to/`                            |
+| Current domain rule, UI shape, tuning invariant, or cross-subsystem vocabulary | **Concept doc** under `docs/concepts/<slug>.md` | "What does this status value mean, wherever it appears?" -> `docs/concepts/` |
+| Current shape / layout / contract of one subsystem | **Subsystem doc** under `docs/architecture/<area>/<slug>.md` | "How is this payload laid out on disk?" -> `docs/architecture/<area>/layout.md` |
+| Operator runbook / step-by-step procedure | **How-to doc** under `docs/how-to/<verb>-<slug>.md` | "How do I re-run a failed stage?" -> `docs/how-to/` |
 | Architecture choice with actively explored rejected alternatives + non-trivial reversal cost + cross-system consequences | **`## Design rationale` / `## Rejected alternatives` section on the impacted subsystem / concept doc** (no ADR file, no `decisions/` dir) | "Why library X instead of library Y?" -> a rationale section on the subsystem doc that owns the choice |
-| Agent-only execution lesson (gotcha, recurring trap, tool quirk)                                                         | **Agent-notes reference** at `docs/reference/agent-notes.md`   | "the cosmetic gh-merge confirmation pattern"; "PowerShell BOM bites `git commit -F`"            |
-| Per-PR audit trail                                                                                                       | **Stays in the plan-doc `CLOSED` sub-section**                 | Diff stat, gate results, discoveries specific to this PR's execution                              |
+| Agent-only execution lesson (gotcha, recurring trap, tool quirk) | **Agent-notes reference** at `docs/reference/agent-notes.md` | "the cosmetic gh-merge confirmation pattern"; "PowerShell BOM bites `git commit -F`" |
+| Per-PR audit trail | **Stays in the plan-doc `CLOSED` sub-section** | Diff stat, gate results, discoveries specific to this PR's execution |
 
 If a finding fits two destinations, pick the living doc that a future maintainer would search first. Do not create a new architecture decision unless the rejected alternative and reversal cost are both concrete. If it fits none, it probably is not durable - leave it in the plan-doc `CLOSED` sub-section and move on.
 

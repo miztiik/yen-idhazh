@@ -50,7 +50,7 @@ answer reused. About 97 percent of items are never cut, so most items pay one
 pass instead of two.
 
 Evaluator identity is pinned. `HHEM_REVISION` is a full immutable commit, and
-`weights_digest()` hashes the loaded tensors rather than a model name.
+`weights_digest` hashes the loaded tensors rather than a model name.
 `scorer_version` carries both observations. A scorer that has not loaded cannot
 name its weights and fails instead of minting a plausible identity.
 
@@ -63,7 +63,7 @@ between them is the cut, and nothing else.
 
 **A row stamped before `2026-08-27T20:00` measured something else.** Both cells
 came off the post-cap string through two different counters -
-`len(_WORD.findall(t))` against `len(t.split())` - so the difference measured
+`len(_WORD.findall(t))` against `len(t.split)` - so the difference measured
 the counters. Over the 2,232 rows written before that stamp the two agree on
 287, `source_word_count` is larger on 1,355, and `source_seen_word_count` is
 larger on **590**, which is impossible when one string is a cut of the other.
@@ -483,7 +483,7 @@ absence as absence
 
 **`METRICS_VERSION` did not move.** Nothing in
 `backend/idhazh/evals/metrics.py` changed, `truncation_flagged` is not a
-`band()` input, and no derived column reads it - so every row written under
+`band` input, and no derived column reads it - so every row written under
 `metrics-3` still says exactly what it said. Bumping it would restart the
 ten-run-day count below to record a change that did not happen to the
 counterweights.
@@ -624,7 +624,7 @@ not supply an error rate for any cut.
 
 Historical `band` cells are a time-of-write record, not a live distribution.
 Rows written before the counterweight caps may record `high` even though today's
-`band()` would cap them at `medium`. Re-band the ledger with the current function
+`band` would cap them at `medium`. Re-band the ledger with the current function
 before using the bands as a distribution. Measured 2026-08-24 on the committed
 `state/scores.csv` at 447 rows: recorded 63.8 / 18.1 / 18.1, re-banded
 57.7 / 24.2 / 18.1. Twenty-seven rows move, all of them written before the caps
@@ -643,7 +643,7 @@ fixes - a low band is the grader's own confidence, an unsupported number is a
 fabrication, and a dropped hedge is a certainty the article did not have - so the
 row prints all three beside the count and the page never adds them into a score.
 A summary can carry more than one, so the three do not sum to the row's own
-count, which is also why they are never stacked into a bar. `doubted()` in
+count, which is also why they are never stacked into a bar. `doubted` in
 [frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts)
 is the one predicate; the model-change panel below reads the same one, so the
 list and the panel cannot disagree about what a doubt is.
@@ -749,7 +749,7 @@ recorded digest, so a labeller cannot judge text the scorer did not read. A row
 scored before that column existed is marked not labellable rather than guessed
 at, and all 2,232 rows written before 2026-08-27 are in that state.
 
-**The draw leaked the hidden score gradient through its order.** `draw()`
+**The draw leaked the hidden score gradient through its order.** `draw`
 returned rows in sequential HHEM-decile blocks. The number was hidden and the
 stratum was not. It now returns one global `label_id` sort. `label_id` is
 already a sha256 over the address, the inputs, the words, the instrument and the
@@ -765,11 +765,11 @@ early gives a roughly balanced sample, not a guaranteed one, and a partial draw
 may not be reported as stratified.
 
 **One draw is one `scorer_version`. The pipeline is a covariate the draw reports,
-not a filter it applies (owner decision, 2026-08-27).** `eligible()`, `draw()`
-and `run_days()` require the scorer with no default, because the cuts being
+not a filter it applies (owner decision, 2026-08-27).** `eligible`, `draw`
+and `run_days` require the scorer with no default, because the cuts being
 calibrated live inside that string: a row read by a different instrument answers
 a different question. `pipeline_fingerprint` is optional, and omitting it is the
-normal case. `strata()` splits the drawn rows by producer, and the tool prints
+normal case. `strata` splits the drawn rows by producer, and the tool prints
 that split with any stratum under `evaluation.label_min_stratum_rows` marked too
 thin to cut on.
 
@@ -851,16 +851,16 @@ The console plots these five since 2026-09-05, and the panel had to read them
 from the committed day payloads under `frontend/public/digest/`. **`band_reason`
 is not a column of `state/scores/`.** The ledger's 35 columns carry the inputs
 the reason is decided from - `hhem`, `coverage`, `unsupported_numbers`,
-`hedge_dropped` - and the band, and no reason. `verdict()` decides it,
+`hedge_dropped` - and the band, and no reason. `verdict` decides it,
 `assemble.build_day` writes it onto the item, and that is the only place on disk
 it exists.
 
 Re-deriving it from the ledger's inputs was the rejected alternative. It would
-put a second copy of `verdict()` in a second language, and the day the two
+put a second copy of `verdict` in a second language, and the day the two
 disagree the console is wrong about the item a reader was shown - which is the
 one failure this instrument exists to prevent.
 
-**Each item carries at most one reason**, because `verdict()` returns exactly
+**Each item carries at most one reason**, because `verdict` returns exactly
 one. That is what lets the five be added: a stacked column of the five is the
 count of summaries the checker wrote a reason on, with nothing counted twice.
 
@@ -966,7 +966,7 @@ faithfulness score, rather than comparing two different measured subsets.
 non-article text**. Shorter sources with steady faithfulness warrant inspection;
 they do not prove that extraction failed. Short news and video introductions
 can be valid. Removing player notices also makes an extraction shorter while
-improving it. See the [issue 438 replay](../reference/measurements.md#drift-review-and-source-extraction-2026-09-08)
+improving it. See the [issue 438 replay](../archive/measurements-2026-08.md#drift-review-and-source-extraction-2026-09-08)
 for the sample counts and the confirmed extraction defect.
 
 ### Current drift implementation gap
@@ -1189,7 +1189,7 @@ the embedding stage would point at the wrong code.
 
 ### The baseline, 2026-08-26
 
-Measured on Windows 11, 12 logical CPUs, `onnxruntime` 1.29.0, against the
+Measured on `onnxruntime` 1.29.0, against the
 committed archive after the vector backfill - 2,121 published items of which
 2,119 carry a vector (99.9%), 60 queries, floor 0.35, ten slots.
 
@@ -1285,8 +1285,8 @@ count looking like a win.
 The eleventh published day landed and the gate failed at **0.68978 against a bar
 of 0.69** - short by 0.00022, which is one percent of one standard error. The
 drop is real and it is not the ranking. The same four arms as 2026-08-26, over
-the same 60 queries, the same labels and the same ranking code, on Windows 11,
-12 logical CPUs, `onnxruntime` 1.29.0, alone on the machine:
+the same 60 queries, the same labels and the same ranking code, on,
+`onnxruntime` 1.29.0, alone on the machine:
 
 | Arm | recall@10 | Effect |
 | --- | --- | --- |
@@ -1313,7 +1313,7 @@ both arms and B equals C exactly. Competition is the only mechanism left.
 **The slide has a rate, and the rate is the point.** Measured over all eleven
 committed days on one instrument in one run - the eleven points, their corpus
 sizes and the fit are in
-[../reference/measurements.md](../reference/measurements.md#how-fast-archive-search-slides-under-a-frozen-label-set) -
+[../reference/measurements.md](../reference/measurements-site.md#how-fast-archive-search-slides-under-a-frozen-label-set) -
 recall falls **0.0134 for every published day** and **0.0000479 for every
 published item** once the labels close on 2026-08-26. The series reproduces the
 record: its 2026-08-26 point is 0.75571 over 2,237 items, against the 0.756 over
@@ -1514,7 +1514,7 @@ Every item produces one row, appended to a committed CSV. It is appended by CI, 
 
 Committing the scores rather than deriving them is what makes a claim about last quarter a lookup instead of a re-run against a model that has since changed.
 
-The ledger header is part of the contract. A writer now refuses to append when the committed header no longer matches `EvalRow.csv_columns()`. A contract test also parses every committed `state/*.csv` with Python's `csv` module and fails if any data row has a different cell count from its header. This protects the file itself, not only the append path.
+The ledger header is part of the contract. A writer now refuses to append when the committed header no longer matches `EvalRow.csv_columns`. A contract test also parses every committed `state/*.csv` with Python's `csv` module and fails if any data row has a different cell count from its header. This protects the file itself, not only the append path.
 
 **The ledger records measurements, not runs.** The writer refuses a row whose
 address, pipeline fingerprint, output words and scorer version all match a row
@@ -1591,14 +1591,14 @@ reconciled field by field against a second reading of the shard. The archive
 carries:
 
 - the shard's SHA-256 and its row count, which is what says WHICH file it
-  summarises rather than what was in it;
+ summarises rather than what was in it;
 - one digest per distinct measurement it held, sorted -
-  `evals.writer.recorded_observations` unions these with the live rows, which is
-  how the promise above keeps holding for a month whose rows are gone;
+ `evals.writer.recorded_observations` unions these with the live rows, which is
+ how the promise above keeps holding for a month whose rows are gone;
 - one cohort per (date, run, row version, model, pipeline fingerprint, scorer
-  version), each carrying its row count, ten faithfulness deciles, three bands,
-  the boolean signal counts, the known and actual cut counts, the premise-digest
-  counts, and `{n, sum, sum_squares, min, max}` for every numeric column.
+ version), each carrying its row count, ten faithfulness deciles, three bands,
+ the boolean signal counts, the known and actual cut counts, the premise-digest
+ counts, and `{n, sum, sum_squares, min, max}` for every numeric column.
 
 Five numbers a column and not a mean and a standard deviation, because a stored
 mean cannot be re-added into a total and a stored spread cannot be pooled across
@@ -1616,8 +1616,8 @@ counts, cut counts and exact dedupe. Every utility that needs an item-level row 
 can no longer reach, rather than reporting a smaller number as though the ledger
 had always been that size. Authority: Andre, under Rule #10.
 
-**Measured 2026-09-03** on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM,
-Windows 11 (build 26200), CPython 3.14.2, over both committed shards with three
+**Measured 2026-09-03** on a developer machine,
+ (build 26200), CPython 3.14.2, over both committed shards with three
 reads each: 4,266,655 bytes of shard become 557,290 bytes of archive, **13.1
 percent**. Three reads gave byte-identical archives, so the spread is zero -
 reading a committed file is deterministic. Two thirds of the archive is the digest
@@ -1659,15 +1659,15 @@ The existing HHEM arithmetic is a screening signal:
 Three things about this are deliberate:
 
 - **A mean over three articles is not a mean.** A candidate scored on fewer than
-  `validation_articles` is ignored, on both sides: an undersampled challenger
-  cannot win and an undersampled incumbent cannot be confirmed.
+ `validation_articles` is ignored, on both sides: an undersampled challenger
+ cannot win and an undersampled incumbent cannot be confirmed.
 - **Better is not enough.** A model swap changes persisted model identity,
-  pipeline fingerprints and future words. Current-output goldens may change;
-  historical contract fixtures remain compatibility evidence and are not
-  rewritten. A challenger that is merely ahead changes nothing. It has to be
-  ahead by the margin.
+ pipeline fingerprints and future words. Current-output goldens may change;
+ historical contract fixtures remain compatibility evidence and are not
+ rewritten. A challenger that is merely ahead changes nothing. It has to be
+ ahead by the margin.
 - **The rule never applies a switch.** It returns `switch_and_pause` and stops.
-  That pause is the whole point of the gate.
+ That pause is the whole point of the gate.
 
 **The arithmetic may screen and must not select.** HHEM is the production alarm.
 Using it to choose the model optimizes against the monitor and breaks the rule
@@ -1750,7 +1750,7 @@ added.
 **The replay against the retired Qwen3-8B-Q4_K_M that this section used to
 prescribe is cancelled**, and the reason is recorded so nobody re-opens it. Both
 of its branches - "both models fail" and "only the 9B fails" - assume a marker
-reached a reply, and none did; and `sanitize()` runs before the request is built
+reached a reply, and none did; and `sanitize` runs before the request is built
 under every model, so the replay is structurally incapable of returning a
 different answer. What replaces it is narrower: land the failure code, then
 re-run the canary arm alone against the configured 9B - five calls, no corpus

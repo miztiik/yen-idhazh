@@ -32,7 +32,7 @@ Install the package, and the faithfulness extra if you want scores:
 
 ```
 python -m pip install -e ".[dev]"
-python -m pip install -e ".[faithfulness]"   # transformers + torch, hundreds of MB
+python -m pip install -e ".[faithfulness]" # transformers + torch, hundreds of MB
 ```
 
 Get the runtime and the weights per
@@ -98,21 +98,21 @@ revert` is not a recovery path here.
 Turning live deletion on is a separate one-line commit, and this is the order:
 
 1. Wait for a scheduled run whose log would name at least one file. **The first
-   such day is 2027-10-01**, when `2026-08` falls below the fourteen-month
-   windows. Before then the list is empty every day and the switch proves
-   nothing.
+ such day is 2027-10-01**, when `2026-08` falls below the fourteen-month
+ windows. Before then the list is empty every day and the switch proves
+ nothing.
 2. Read that run's log: `gh run view <runId> --repo <owner/repo> --job <jobId>
-   --log`, and grep it for `prune-state would remove`.
+ --log`, and grep it for `prune-state would remove`.
 3. Check the list against what you expect. On 2027-10-01 that is four files -
-   `state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv`,
-   `state/feed-health/2026-08.csv` and `state/scores/2026-08.csv`. A fifth name,
-   or a month that is not the oldest, means a boundary is wrong and the switch
-   waits.
+ `state/item-health/2026-08.csv`, `frontend/public/telemetry/2026-08.csv`,
+ `state/feed-health/2026-08.csv` and `state/scores/2026-08.csv`. A fifth name,
+ or a month that is not the oldest, means a boundary is wrong and the switch
+ waits.
 4. Confirm `state/score-archive/2026-08.json` exists and reconciles. The step
-   writes and reads back every archive before it unlinks anything, so an archive
-   that is missing is a step that already refused.
+ writes and reads back every archive before it unlinks anything, so an archive
+ that is missing is a step that already refused.
 5. Only then drop `--dry-run` from the `prune-state` step, in a commit that
-   changes nothing else.
+ changes nothing else.
 
 **Dropping that flag does not switch the picture cleanup on**, and it is worth
 knowing why before step 5. The same step also cleans the rendered visuals and
@@ -146,9 +146,9 @@ failure count:
 1. Open the current month shard.
 2. Filter by `date` and `run_id`.
 3. Read `stage`, `outcome`, `code`, `http_status`, `source_words`,
-   `summary_words`, `fetch_ms`, `extract_ms` and `summarize_ms`.
+ `summary_words`, `fetch_ms`, `extract_ms` and `summarize_ms`.
 4. Treat `detail` as a bug report for the classifier. It appears only when
-   `code = unknown`, and it means the enum needs a better member.
+ `code = unknown`, and it means the enum needs a better member.
 
 Use the gitignored payloads under `backend/var/run/<date>/items/` only for the
 next layer of evidence while the local run still exists:

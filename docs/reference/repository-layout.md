@@ -134,12 +134,12 @@ never ships a runner detail.
 ## What is deliberately not a directory
 
 - **`evals/`** - folded into `state/`. The published dashboard keeps its
-  `/evals/` route, because a reader's URL is a promise and a folder name is not.
+ `/evals/` route, because a reader's URL is a promise and a folder name is not.
 - **`docs/architecture/decisions/`** - there is no ADR directory. A decision is
-  recorded in the living doc it impacts, as a `## Design rationale` or
-  `## Rejected alternatives` section on that page (section 5).
+ recorded in the living doc it impacts, as a `## Design rationale` or
+ `## Rejected alternatives` section on that page (section 5).
 - **Anything empty.** A directory is created when real code is about to land in
-  it. An empty module "for later" is a section 10 anti-pattern.
+ it. An empty module "for later" is a section 10 anti-pattern.
 
 ## Design rationale
 

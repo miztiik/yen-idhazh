@@ -58,20 +58,20 @@ actual results. It is not the score grading itself.
 
 ```mermaid
 flowchart TD
-   evidence["Past article outcomes and assessments"] --> scale["Put signals on a common scale"]
-   scale --> age["Give recent evidence more weight"]
-   seed["Starting belief that fades over time"] --> age
-   age --> score["Combine signal and assessor weights"]
-   settings["Tunable settings and formula version"] -.-> score
-   score --> choose["Choose feeds and articles"]
-   limits["Permission, pauses, coverage and work limits"] --> choose
-   choose --> fetch["Fetch and extract source material"]
-   fetch --> summarize["Usable material reaches the summarizer"]
-   fetch --> record["Record results and actual work"]
-   record --> evidence
-   record --> compare["Check quality and useful output independently"]
-   compare --> trial["Test a small settings change"]
-   trial -. "Only after confirmation" .-> settings
+ evidence["Past article outcomes and assessments"] --> scale["Put signals on a common scale"]
+ scale --> age["Give recent evidence more weight"]
+ seed["Starting belief that fades over time"] --> age
+ age --> score["Combine signal and assessor weights"]
+ settings["Tunable settings and formula version"] -.-> score
+ score --> choose["Choose feeds and articles"]
+ limits["Permission, pauses, coverage and work limits"] --> choose
+ choose --> fetch["Fetch and extract source material"]
+ fetch --> summarize["Usable material reaches the summarizer"]
+ fetch --> record["Record results and actual work"]
+ record --> evidence
+ record --> compare["Check quality and useful output independently"]
+ compare --> trial["Test a small settings change"]
+ trial -. "Only after confirmation".-> settings
 ```
 
 The first delivery supplies the evidence, inspection and temporary-stop parts.
@@ -110,13 +110,13 @@ earns those opportunities. A rising internal score is not the objective.
 ## One feedback loop
 
 1. Select due, permitted feeds within a polling budget, then observe their
-   offering. Select bounded article work and record access and content outcomes.
+ offering. Select bounded article work and record access and content outcomes.
 2. Attach assessments from the enabled methods and classify sampled content.
 3. Update age-weighted component estimates and their evidence support.
 4. Apply eligibility, identity and selection policy. Allocate the available work.
 5. Execute and record outcomes, including work that failed or was not attempted.
 6. Periodically compare prediction with delivery, test policy candidates and
-   review due sources for recovery or continued membership.
+ review due sources for recovery or continued membership.
 
 The admission utility and periodic hygiene pass are two entry points to this
 same loop, not separate definitions of a good feed. The current utility's
@@ -622,20 +622,20 @@ the test while it runs.
 ### Candidate, confirmation and rollback
 
 1. Freeze a baseline, outcome objective, resource budgets, rubric, taxonomy and
-   assessor versions for the comparison. Use independently assessed useful
-   distinct quantity and quality, not $T_f$ or agreement with the tuning model.
+ assessor versions for the comparison. Use independently assessed useful
+ distinct quantity and quality, not $T_f$ or agreement with the tuning model.
 2. Search a finite candidate set on training evidence. Start with small grid or
-   coordinate changes. Fix the selected candidate before looking at fresh
-   confirmation evidence; repeatedly tuning on the same holdout overfits it.
+ coordinate changes. Fix the selected candidate before looking at fresh
+ confirmation evidence; repeatedly tuning on the same holdout overfits it.
 3. Evaluate in time order on supported logged decisions. Where support is absent,
-   use a limited prospective trial within permitted sources and its own budget.
-   Log its policy probability and cap both duration and affected work.
+ use a limited prospective trial within permitted sources and its own budget.
+ Log its policy probability and cap both duration and affected work.
 4. Promote only with adequate evidence of improvement and acceptable quality,
-   quantity and coverage regressions. Otherwise retain the baseline. An expired
-   trial can conclude `insufficient_evidence`, not automatically win or lose.
+ quantity and coverage regressions. Otherwise retain the baseline. An expired
+ trial can conclude `insufficient_evidence`, not automatically win or lose.
 5. Monitor the promoted policy on new outcomes and roll back on the agreed
-   deterioration or budget condition. Restore compatible policy/state while
-   preserving real outcomes and unresolved access restrictions.
+ deterioration or budget condition. Restore compatible policy/state while
+ preserving real outcomes and unresolved access restrictions.
 
 In plain language, a candidate should improve independently assessed useful
 coverage without unacceptable losses in quality, useful quantity or important
