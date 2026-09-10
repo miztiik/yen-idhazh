@@ -31,7 +31,9 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Call 1 reads the article and points at it | - | A | DONE #561 | yi-t11r1 | #561 | worker |
 | 2 | The four kinds only a model can find | 1 | B | DONE #562 | yi-t11r2 | #562 | worker |
-| 3 | Call 2 summarises and plans, and the article is read once | 2 | C | PENDING | - | - | - |
+| 3 | Call 2 summarises and plans, and the article is read once | 2 | C | DONE #570 | yi-t11r3 | #570 | worker |
+| 3b | Every call reports its own cost | 3 | C2 | PENDING | - | - | - |
+| 3c | Own the prompt bytes | 6 | - | DEFERRED | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | PENDING | - | - | - |
 | 5 | One chart, drawn end to end | 4 | E | PENDING | - | - | - |
 | 6 | The small model, its job and its cache go | 5 | F | PENDING | - | - | - |
@@ -110,6 +112,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 6 | The output budget is **derived** from the contract's bounds, not picked, and re-derived whenever a bound changes | Row 13, section 11.3 |
 | 7 | `context_exceeded` degrades to a **chunked read**, not to nothing. Element extraction is naturally chunkable because an element is local to its span | Row 20, section 11.4 |
 | 8 | A retry must perturb the **input**. Where no input perturbation applies, do not retry - under greedy decoding a retry against identical input is bit-identical and costs a full decode | Row 17 |
+| 9 | **The floor held.** Measured, call 2 cached 1,493 tokens against call 1's 1,497-token prompt, so the ESCALATE trigger fired on the letter - four tokens short. Ruled: the floor held. The trigger's own sentence names the failure it guards against, "the prompt was built in the wrong order", and call 1 caching 0 while call 2 cached the whole article and the whole system turn is the proof that did not happen. The four are the chat template's empty think block, which nothing here renders | Owner, 2026-09-10, section 0 |
 
 ### Rejected alternatives
 
@@ -118,6 +121,45 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | A different system prompt for call 2 | The common prefix would end at the template header and the whole article would re-prefill - roughly double | Section 10.2 |
 | 2 | Three calls | Needs a measured timeout rate first. Out of scope until that measurement exists | O43, E5 |
 | 3 | Temperature jitter on retry | Breaks the `seed: 0`, `temperature: 0.0` determinism contract - a re-run stops being a re-run | Row 17 |
+
+---
+
+## 4a. Row #3b - Every call reports its own cost
+
+- **Scope:** Two model calls per item currently fold into one set of flat `Summary` fields, so the row keeps one call's `cached_tokens`, `prefill_ms`, `decode_ms`, `input_tokens` and `output_tokens` and does not say which. Record them per call, so the operator console can plot call 1 against call 2.
+- **Files touched:** `backend/idhazh/contracts/summary.py`, `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/public_telemetry.py`, `schemas/*.schema.json`, `backend/idhazh/summarize.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/publish_day_metrics.py`, `frontend/src/**`, `backend/tests/**`, `docs/architecture/summarize/**`
+- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the browser smoke on the console route.
+- **Oracle:** One published item carries two `cached_tokens` figures and they differ - call 1 caches nothing on a cold slot, call 2 caches the whole article. One folded field cannot show that difference, which is the whole reason to split it.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The two calls are not one measurement. Call 1 prefills the article and caches nothing; call 2 caches the article and decodes several times more. A single field holding one of them, unlabelled, is a number nobody can read | Owner, 2026-09-10, section 0 |
+| 2 | The new fields are additive and defaulted, so a row written before this lands still validates. `version` stamped and `changelog` appended in the same commit | CLAUDE.md section 11 |
+
+---
+
+## 4b. Row #3c - Own the prompt bytes
+
+- **Scope:** Send a rendered completion instead of a chat completion, so cache reuse is true by construction and the oracle becomes an offline byte assertion rather than a live-server measurement.
+- **Files touched:** `backend/idhazh/llm/server.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/prompts/**`, `backend/tests/**`, `docs/architecture/summarize/**`
+- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
+- **Oracle:** Call 2's rendered prompt starts with call 1's rendered prompt, byte for byte. That is a string comparison over two files and needs no server, where today's oracle needs a running model and a warm cache slot.
+- **Deferred until:** the first daily run after row 6 prices the 209 re-prefilled tokens on the runner. The figure that argues for this row was taken on a developer laptop against the retired weights, one run and no spread, so it cannot yet say the work is worth doing.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The four-token gap is `<think>\n\n</think>\n\n` from Qwen3's chat template. It writes an empty think block into the generation prompt under `enable_thinking: false` and drops it when the same turn is replayed as history, so the two renderings diverge there. Nothing in this repository renders it | Owner, 2026-09-10 |
+| 2 | Deferred, not refused. A prefix cache reuses a prefix, so those four tokens end the reuse and 209 tokens re-prefill per item. Whether that is worth owning the prompt bytes is a runner measurement nobody has taken | Owner, 2026-09-10 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Write the empty think block into call 1's history ourselves, so the two renderings agree | A band-aid on one template's private behaviour. It patches a symptom of a template we do not control, and the next model ships a different template | Owner, 2026-09-10; CLAUDE.md Rule #5 |
 
 ---
 

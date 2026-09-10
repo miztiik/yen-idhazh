@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -239,6 +240,51 @@ def request_payload(
         # summarization is compression - every reasoning token is a chance to
         # leave the source.
         "chat_template_kwargs": {"enable_thinking": inference.thinking},
+    }
+
+
+def continued_payload(
+    first: Mapping[str, Any],
+    *,
+    reply: str,
+    user: str,
+    output_schema: dict[str, Any],
+    schema_name: str,
+    max_output_tokens: int,
+) -> dict[str, Any]:
+    """A second request whose prompt opens with the first one's, byte for byte.
+
+    The prefix is identical **by construction** rather than by two call sites
+    agreeing to render the same string. That is the whole point of taking the
+    first payload as an argument instead of rebuilding it: a prefix cache reuses
+    the longest common prefix of the tokenised prompt, so one changed character
+    in the system turn costs a full re-prefill of the article behind it, and
+    nothing about that failure is loud - the run is simply twice as slow.
+
+    Only three things move. The message array grows by the assistant turn the
+    first call produced and the user turn that asks the next question; the
+    decoder is held to a different shape; and the output budget is the one
+    derived for that shape. Temperature, `top_p`, `seed`, `stream` and the
+    thinking flag are carried over untouched, because `request_payload` is the
+    one place that sets them (`docs/architecture/contracts/determinism.md`).
+
+    `reply` is the first call's own content, replayed verbatim. It is a string
+    the model wrote and it is not trusted any further here than a fetched page
+    would be - it has already been parsed against a closed schema, and what it
+    can reach downstream is bounded by that schema and not by this turn.
+    """
+    return {
+        **first,
+        "messages": [
+            *(dict(message) for message in first["messages"]),
+            {"role": "assistant", "content": reply},
+            {"role": "user", "content": user},
+        ],
+        "max_tokens": max_output_tokens,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": schema_name, "strict": True, "schema": output_schema},
+        },
     }
 
 

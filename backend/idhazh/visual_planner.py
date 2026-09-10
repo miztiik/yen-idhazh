@@ -13,8 +13,16 @@ so `none` is the default that everything else has to earn its way past.
 model the article itself rather than a summary of it, beside the table of
 quantities and dates the candidate pass already cut, and asks what each one
 means. Its reply cites addresses code minted and types nothing a reader sees.
-It is built here and no stage calls it yet: call 2 is what turns the labelled
-table into a summary and a plan, and it is a later row's work.
+
+**Call 2 appends to call 1's message array and the article is read once.** It
+sends back the same system turn and the same article-carrying user turn, byte
+for byte, followed by call 1's own reply and one new question - so the server's
+prefix cache answers for the article and only the new turn is prefilled. Its
+reply carries the summary first and the plan second, and that order is the
+recovery: a decode the output budget cuts is cut in the plan, and the summary
+behind it is already closed. Both calls are built here and no stage dispatches
+either yet; the gate in front of them, and the picture they lead to, are later
+rows.
 """
 
 from __future__ import annotations
@@ -25,14 +33,31 @@ import re
 from bisect import bisect_right
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 from pathlib import Path
+from string import Template
 from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    create_model,
+)
 
-from idhazh.contracts.app_config import ElementsConfig, InferenceConfig, VisualsConfig
+from idhazh import summarize
+from idhazh.contracts.app_config import (
+    ElementsConfig,
+    InferenceConfig,
+    SummarizeConfig,
+    VisualsConfig,
+)
 from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article
+from idhazh.contracts.base import Model as ContractModel
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.element import (
     Element,
@@ -42,6 +67,11 @@ from idhazh.contracts.element import (
     derive_element_id,
 )
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.visual import (
+    CODE_STAMPED_FIELDS,
+    VisualPlan,
+    widest_json_characters,
+)
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.elements import (
     MAGNITUDE,
@@ -56,8 +86,10 @@ from idhazh.elements import (
     sentence_starts,
     settle,
 )
-from idhazh.llm.server import Completion, request_payload
+from idhazh.extract import approx_tokens
+from idhazh.llm.server import Completion, continued_payload, request_payload
 from idhazh.sanitize import sanitize, untrusted_block
+from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "visual_planner.txt"
 CALL_ONE_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "call_one.txt"
@@ -1420,4 +1452,373 @@ def anchored(
     if (drift := whole.span_drift(text)) is not None:
         raise SpanDriftError(f"call 1 cannot re-slice its own output: {drift}")
     return whole
+
+
+# --- Call 2: the summary and the plan, over the prefix call 1 already paid for
+
+
+CALL_TWO_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "call_two.txt"
+
+#: How many characters of a decoded string one word may cost, matching
+#: `summarize._MAX_CHARS_PER_WORD` because both rails are cut from the same
+#: cloth: a word count in `config/` spent as a `maxLength` the grammar enforces.
+CHARS_PER_WORD: Final = 12
+
+
+class CallTwoReply(NamedTuple):
+    """What call 2 came back with, as the two contracts it stands for.
+
+    The decoder shape is not this. That one is generated per band and carries
+    neither of the fields code stamps; it exists to be a grammar and it stops at
+    `parse_call_two`. What a caller gets is a summary draft the summarizer's own
+    gates can read and a plan the validator can rule on.
+    """
+
+    summary: summarize.SummaryDraft
+    visual: VisualPlan
+
+
+@lru_cache(maxsize=1)
+def _call_two_template() -> Template:
+    return Template(CALL_TWO_PROMPT_PATH.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def _plan_draft_model() -> type[BaseModel]:
+    """The plan as the decoder meets it: `VisualPlan` without the fields code stamps.
+
+    Derived from `VisualPlan.model_fields` rather than restated, so a field
+    added to the contract appears here on the next import and cannot be
+    forgotten. `version` and `plan_version` are dropped because nothing decodes
+    them - `version` says when the shape last moved and `plan_version` which
+    planning vocabulary the plan was made against, and a model asked for either
+    would be guessing at a fact code already holds.
+
+    The contract's own validators are deliberately **not** carried over. This
+    shape is the grammar and nothing else; whether a plan that declines also
+    left its type null is `VisualPlan`'s rule, and it is asked when the decoded
+    body is turned into the contract, which is where a failure names the plan
+    rather than the parse.
+    """
+    fields: dict[str, Any] = {
+        name: (info.annotation, info)
+        for name, info in VisualPlan.model_fields.items()
+        if name not in CODE_STAMPED_FIELDS
+    }
+    return create_model("VisualPlanDraft", __base__=ContractModel, **fields)
+
+
+@lru_cache(maxsize=16)
+def _call_two_model(draft: type[BaseModel]) -> type[BaseModel]:
+    """Keyed on the band-narrowed summary shape, which is a hashable type."""
+    return create_model(
+        "CallTwoReply",
+        __base__=ContractModel,
+        summary=(draft, Field(description="The reader's summary. Decoded first, and whole.")),
+        visual=(_plan_draft_model(), Field(description="The plan for one picture, or none.")),
+    )
+
+
+def call_two_model(
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    source_words: int | None = None,
+    brief: bool = False,
+) -> type[BaseModel]:
+    """What the decoder is constrained to emit on call 2.
+
+    **`summary` is declared before `visual`, and the order is load-bearing.**
+    Field order is decode order, so the summary is written and closed before the
+    plan is started. Two things follow from that and neither is cosmetic.
+
+    A reply the output budget cuts is cut in the plan, and a grammar-constrained
+    decoder closes each sub-object as it finishes it - so the summary that came
+    back is closed, balanced and independently parseable. `recovered_completion`
+    is that guarantee spent: the item publishes with its summary and no picture,
+    at no extra seconds and with no second request. Reversed, the same cut would
+    lose the summary, which is the part a reader came for.
+
+    And the plan is drafted with the summary already in context. That is
+    conditioning, not sourcing: `element_ids` may cite only an element the
+    article's own table carries, so a plan cannot draw a figure the summary
+    happened to mention and the table does not hold.
+    """
+    return _call_two_model(
+        summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
+    )
+
+
+def call_two_schema(
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    source_words: int | None = None,
+    brief: bool = False,
+) -> dict[str, Any]:
+    """Generated from the model, never hand-written (Rule #3)."""
+    return call_two_model(
+        prompt_config, source_words=source_words, brief=brief
+    ).model_json_schema()
+
+
+def call_two_user_turn(
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    source_words: int | None = None,
+    brief: bool = False,
+) -> str:
+    """The second question, and nothing the first turn already carried.
+
+    It names no article and quotes no sentence. The item, its addressed
+    sentences and its candidate table are in the first user turn and are still
+    there, so repeating any of them would spend prefill on bytes the server
+    already holds - and would put a second, differently-worded copy of the same
+    untrusted text in front of the model.
+
+    Every number in it is substituted from `config/` at render time (Rule #6),
+    and the key-point pair comes off `summarize.key_point_rail`, which is the
+    same function the decoder's rail comes off. Asking for more key points than
+    the grammar admits would lose the item for doing what it was told, and with
+    no article named the two would disagree: the prompt would state the shortest
+    band's numbers while the decoder held the union of every band's.
+    """
+    ask = prompt_config or SummarizeConfig()
+    band = ask.band_for(0) if brief else ask.band_for(source_words or 0)
+    key_points_min, key_points_max = summarize.key_point_rail(ask, source_words, brief)
+    return _call_two_template().substitute(
+        title_words_min=ask.title_words_min,
+        title_words_max=ask.title_words_max,
+        key_points_min=key_points_min,
+        key_points_max=key_points_max,
+        key_point_words_max=ask.key_point_words_max,
+        target_words_min=band.target_words_min,
+        target_words_max=band.target_words_max,
+        max_verbatim_words=ask.max_verbatim_words,
+    )
+
+
+def call_two_prose_words(prompt_config: SummarizeConfig | None = None) -> int:
+    """Every word the reply's prose fields can hold, at their widest.
+
+    The union rail rather than one band's, because the budget is a property of
+    the reply shape and not of the article in front of it. `key_points_max` is
+    the widest band's, for the same reason.
+    """
+    ask = prompt_config or SummarizeConfig()
+    key_points = max(band.key_points_max for band in ask.bands)
+    return (
+        ask.title_words_max
+        + key_points * ask.key_point_words_max
+        + ask.decoder_words_max()
+    )
+
+
+def call_two_output_tokens(prompt_config: SummarizeConfig | None = None) -> int:
+    """Call 2's output budget, derived from the reply shape's own bounds.
+
+    **Not picked.** Every array in the shape carries a `maxItems` and every
+    decoded string a `maxLength`, so the longest reply the grammar admits is
+    arithmetic, and the arithmetic runs again on every import - move a bound and
+    this number moves with it, without anybody remembering to.
+
+    Two halves, converted differently, because they are two different kinds of
+    text and one rule would be wrong about one of them.
+
+    - **The prose** is `title`, the key points and the summary. Their rails are
+      word counts from `config/`, spent as characters at `CHARS_PER_WORD`, so
+      the honest unit for them is words: `extract.approx_tokens` at 1.3 tokens a
+      word is what the truncation cap already spends, and using a second ratio
+      here would put two answers in the repository to one question.
+    - **The structure** is everything else: the keys, the punctuation, the
+      element addresses and the closed vocabularies. A token spans at least one
+      character, so its character count is a hard ceiling on its token count and
+      is used unconverted.
+
+    **What this guarantees, and what it does not.** The structural half is a
+    true ceiling. The prose half is a sizing: a reply that spent its whole
+    character rail on 12-character words would cost more tokens than 1.3 a word,
+    and the rail is a character rail. That is deliberate and it is why
+    `recovered_completion` exists - section 11.3's wording is that the budget is
+    the brake and the recovery is the seatbelt. A budget large enough to be an
+    unbreakable ceiling would leave no window for the article it is summarising.
+
+    Measured against the committed bounds on 2026-09-10, the whole reply is
+    11,692 characters at its widest: 7,848 of prose, which is 850 tokens at 1.3
+    a word, and 3,844 of structure, of which the plan alone is 3,767. So the
+    budget is 4,694 tokens and it is mostly the picture.
+    """
+    ask = prompt_config or SummarizeConfig()
+    words = call_two_prose_words(ask)
+    structure = widest_json_characters(call_two_schema(ask)) - words * CHARS_PER_WORD
+    return approx_tokens(words) + structure
+
+
+#: The budget the committed bounds produce, written down as well as computed.
+#: `visual.WORST_CASE_REPLY_CHARACTERS` is the precedent and the reason is the
+#: same: a number that only exists inside a function is a number nobody
+#: re-derives, and a bound can then move without anybody seeing what it cost.
+CALL_TWO_BUDGET_TOKENS: Final = 4694
+
+if call_two_output_tokens() != CALL_TWO_BUDGET_TOKENS:
+    raise TypeError(
+        "a bound moved and call 2's output budget did not follow it - the reply shape "
+        f"now needs {call_two_output_tokens()} tokens against a recorded "
+        f"{CALL_TWO_BUDGET_TOKENS}; re-derive it in `call_two_output_tokens`"
+    )
+if tuple(call_two_model().model_fields) != ("summary", "visual"):
+    raise TypeError(
+        "field order is decode order, and the summary has to close before the plan "
+        "starts or a cut reply loses the half a reader came for - "
+        f"got {tuple(call_two_model().model_fields)}"
+    )
+
+
+def build_call_two_request(
+    first: Mapping[str, Any],
+    reply: str,
+    *,
+    prompt_config: SummarizeConfig | None = None,
+    source_words: int | None = None,
+    brief: bool = False,
+) -> dict[str, Any]:
+    """Call 2's request body, built by appending to call 1's.
+
+    `first` is the payload call 1 was sent and `reply` is what came back, so the
+    system turn and the article-carrying user turn are the same bytes rather
+    than the same intent. That is the point of taking them as arguments: a
+    prefix cache reuses the longest common prefix of the tokenised prompt, so
+    one re-rendered character in front of the article costs a full re-prefill of
+    it, and nothing about that failure is loud.
+
+    **Call 1's system prompt is reused rather than replaced.** A prompt of call
+    2's own would end the common prefix at the chat template's header, and the
+    whole article would prefill a second time - roughly double the stage's
+    wall clock for a wording nobody could measure the benefit of.
+
+    The two calls belong **adjacent, per item**. `models.summarize.inference`
+    pins `n_parallel` to 1, so the server holds one cache slot: every call 1
+    first and every call 2 after would evict the prefix before it was reused,
+    every time, with nothing in any log to say so.
+    """
+    return continued_payload(
+        first,
+        reply=reply,
+        user=call_two_user_turn(prompt_config, source_words=source_words, brief=brief),
+        output_schema=call_two_schema(prompt_config, source_words=source_words, brief=brief),
+        schema_name="call_two",
+        max_output_tokens=call_two_output_tokens(prompt_config),
+    )
+
+
+def parse_call_two(
+    raw: str,
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    source_words: int | None = None,
+    brief: bool = False,
+) -> CallTwoReply:
+    """A whole reply, held to the band the article is in, as the two contracts it stands for.
+
+    The decoder shape is an implementation detail of the grammar and stops here.
+    What comes out is a `SummaryDraft` and a `VisualPlan`, and building the plan
+    is where `version` and `plan_version` are stamped - by code, from what this
+    build holds, because a model asked for either would be guessing at a fact we
+    already have. `VisualPlan`'s own validators run at that moment, so a plan
+    that declines and still names a type fails here, naming the plan.
+    """
+    content = _THINK.sub("", raw).strip()
+    fenced = _FENCED_JSON.match(content)
+    if fenced:
+        content = fenced.group(1)
+    body = (
+        call_two_model(prompt_config, source_words=source_words, brief=brief)
+        .model_validate_json(content)
+        .model_dump(mode="json")
+    )
+    draft = summarize.draft_model(
+        prompt_config, source_words=source_words, brief=brief
+    ).model_validate(body["summary"])
+    plan = VisualPlan.model_validate(
+        body["visual"] | {"plan_version": PLAN_VOCABULARY_VERSION}
+    )
+    return CallTwoReply(summary=draft, visual=plan)
+
+
+def summary_object(raw: str) -> str | None:
+    """The closed `summary` object out of a reply that never closed, or nothing.
+
+    `summary` is the first property of the reply shape, so a decode that got far
+    enough to be cut got past it: the object is complete, balanced and sitting
+    at a known place in the bytes. `json.JSONDecoder().raw_decode` reads exactly
+    one value from a position and ignores whatever follows, which is the whole
+    of the recovery - no repair, no bracket counting, no second request.
+
+    Nothing is returned when the cut landed inside the summary itself, which is
+    the case where there is genuinely nothing to publish.
+    """
+    content = _THINK.sub("", raw).strip()
+    fenced = _FENCED_JSON.match(content)
+    if fenced:
+        content = fenced.group(1)
+    key = content.find('"summary"')
+    if key < 0:
+        return None
+    colon = content.find(":", key + len('"summary"'))
+    if colon < 0:
+        return None
+    start = colon + 1
+    while start < len(content) and content[start].isspace():
+        start += 1
+    try:
+        body, _ = json.JSONDecoder().raw_decode(content, start)
+    except json.JSONDecodeError:
+        return None
+    return json.dumps(body) if isinstance(body, dict) else None
+
+
+def recovered_completion(completion: Completion) -> Completion | None:
+    """A reply the output budget cut, recast as the summary reply alone.
+
+    The bytes came back on an ordinary HTTP 200 and `to_summary` used to fail
+    the item on `finish_reason` without reading them. They are worth reading:
+    the picture is lost and the summary is not, and the summary is the part the
+    digest cannot publish an item without.
+
+    What comes back is shaped exactly like a single-call reply, so every
+    publishability check still runs on it - the length verdict, the copied-source
+    reject, the address reject and the restatement drop all read the recovered
+    words the same way they read any others. Nothing here decides an item is
+    publishable; it only stops one being thrown away unread.
+
+    The token counts are carried over unchanged, because they were really spent.
+    `finish_reason` becomes `stop`, which is the one field that would otherwise
+    make a reader of the ledger think this reply completed on its own terms.
+    """
+    if not completion.hit_the_budget:
+        return None
+    body = summary_object(completion.content)
+    if body is None:
+        return None
+    return replace(completion, content=body, finish_reason="stop")
+
+
+def plan_lost_to_the_budget(
+    summary: Summary, *, model_id: str, decided_at: str, version: str
+) -> VisualDecision:
+    """The `none` an item gets when its summary survived the cut and its plan did not.
+
+    A decision and not a failure. The item publishes; what it does not carry is
+    a picture, and the rationale says which of the two ran out of budget so an
+    operator reading a run of these knows to look at the budget rather than at
+    the articles.
+    """
+    return _nothing(
+        summary,
+        model_id=model_id,
+        reason=(
+            "the reply ran out of output budget after the summary closed, "
+            "so the plan was never written"
+        ),
+        decided_at=decided_at,
+        version=version,
+    )
 
