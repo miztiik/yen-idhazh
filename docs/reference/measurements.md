@@ -11,10 +11,26 @@ Two rules govern this page:
 - A figure is either **measured** - and then it carries hardware, date and
   spread - or it is listed under [Still unmeasured](#still-unmeasured) with the
   measurement that would settle it. There is no third category.
-- **A laptop measures the laptop.** Every figure below taken on an i7-1265U is
-  an order-of-magnitude check, not a runner figure. The runner has a different
-  core topology, different memory bandwidth, and a shared host. Nothing here
-  substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
+- **A second and a resident set belong to the box that took them; a byte, a
+  token and a pixel do not.** So a gzip size, a tokenizer count, a layout width
+  or a row count measured on a developer machine is as good as any runner's, and
+  a duration or a memory figure measured there is an order-of-magnitude check
+  and nothing more. Two readings on this page prove it: the laptop said the 8B
+  was 3.3x slower to decode where the runner said 1.8x, and the laptop reported
+  a 72 percent regression from four Playwright workers that the runner measured
+  as a 40 percent gain. Nothing here substitutes for
+  `.github/workflows/measure.yml` on `ubuntu-latest`.
+
+**This page holds the reading, never the decision.** The value in force lives in
+`config/idhazh.json` and the rule that acts on it lives in the doc it impacts,
+so a section here ends by linking to that doc rather than restating its rule. A
+superseded reading of a quantity this page still carries is deleted rather than
+kept - git holds the bytes and `git log -p config/idhazh.json` holds the value
+that was in force, which is the better record because it cannot disagree with
+the running system. A finished experiment whose method or corpus a later reader
+would reproduce goes to
+[../archive/measurements-2026-08.md](../archive/measurements-2026-08.md)
+instead.
 
 ## What the doubled window and the doubled cap cost, measured 2026-09-09
 
@@ -192,14 +208,6 @@ today**. Against a measured low-water mark of 6.84 GiB that leaves about 6.3
 GiB, 6.3 times the trigger's 1.0 GiB bar. **If a later plan needs a wider window,
 memory is not what stops it** - the standing objection to 32,768 is that nothing
 needs it, and that objection is now the only one.
-
-### Recorded, not attributed
-
-The priced run wrote 5 summarize failures against the baseline's 2, out of about
-75 items each: `length_out_of_range` 3 against 1, plus one `bad_shape` and one
-`copied_source`. **The article sets differ and no claim is made here.** It is
-written down so that a later run at this fingerprint has something to compare
-against.
 
 ## How often the truncation cap actually bites, 2026-09-09
 
@@ -386,91 +394,6 @@ and 1.49. So the worst instant is set by llama-server, and python contributes
 27,652 kB, and is gone by the next sample fifteen seconds later. It is never
 present at a peak. It is a python that starts and exits inside one sampling
 interval; what it is, the capture cannot say.
-
-### What the captures cannot say, and what now will
-
-A count and a sum cannot name a process. Nothing on the row, in the artifact or
-in the job log said which three pythons those were, so the 4 percent above is
-the most the committed data can attribute and the remaining 1.5 GiB is one
-opaque process.
-
-From 2026-09-09 the sampler writes `python-procs.tsv` beside `rss-samples.tsv`:
-one row per python process per sample, carrying the process id, `comm`, both
-memory marks, the executable path and three fields of the command line. The work
-job prints a per-process roll-call in **What memory this shard used** and
-uploads the file with the rest of the runtime artifact. Three argv fields rather
-than the whole line, because `comm` is `python3` for every one of them and names
-nothing, while the executable plus argv 1 to 3 separates a hosted-tool-cache
-`python -m idhazh work` from a distribution `/usr/bin/python3 -u /usr/sbin/...`
-and stops well before anything a command line might carry further along
-(`CLAUDE.md` section 1b).
-
-Cost: three more short-lived commands per python process per 15-second sample,
-and about 113 kB a shard in a two-day artifact. The next scheduled run answers
-the question.
-
-### Two candidates, settled differently, and neither by a measurement
-
-**The ONNX encoder is not resident in a work shard at all.** `stage_work` never
-constructs an `Embedder`; the three callers are `stage_plan`, `stage_assemble`
-and `backfill-vectors`, and none of them runs in the `work` job. `embed.py`
-imports `onnxruntime` inside the two functions that need it, so importing
-`idhazh.cli` does not load it either. It costs the shard nothing.
-
-**The faithfulness scorer is resident, and it is in use throughout.** `main`
-builds it before `stage_work` runs, and `stage_work` scores each item
-immediately after summarizing it, from the same loop. So `torch` and
-`transformers` are alive at llama-server's peak by design, not by accident.
-**How much of the 1.5 GiB they hold is not measured, and this page will not
-guess** - the shared virtual environment has neither package installed, and a
-laptop figure for a resident set is not a runner figure.
-
-### Why no reduction is proposed here
-
-The obvious move - load the scorer later, or in its own process - buys nothing,
-and the reason is in the readings above. llama-server is started before the work
-step and killed at the end of the job, and its resident set climbs from 8.68 GiB
-to its peak across the whole shard. A scoring pass moved after the summarize
-pass would still run beside a server holding its maximum. The concurrent peak
-only falls if llama-server stops first, which means moving the `/metrics` scrape
-ahead of it and changing the order of five steps - a pipeline-shape decision
-with an owner, not a worker's call.
-
-What is genuinely available is stated rather than done: if the scorer turns out
-to hold most of the 1.5 GiB, running it in a second process **after llama-server
-is stopped** would return roughly that much to the worst instant, at the cost of
-a second python start a shard and a step-order change. The measurement that
-prices it is one dispatch and no code, and it is in
-[Still unmeasured](#still-unmeasured).
-
-### Does 16,384 fit
-
-**Unknown, and this page cannot say. Corrected 2026-09-09.** This section
-previously answered "no", on the reasoning that the worst shard already leaves
-0.66 GiB free counting only the job, against the 1.0 GiB the plan's first
-escalate trigger asks for. The reading was taken correctly; the word "free" was
-wrong. That figure is 14.90 GiB minus two processes' summed RSS, and
-[the section that retracts it](#summed-rss-reaches-1431-gib-and-that-does-not-say-how-near-the-edge-the-job-came)
-gives the three reasons it is not headroom: 14.90 GiB is the whole machine with
-nothing reserved for the kernel or the runner agent, summed RSS counts mapped
-weight pages that the kernel can evict and counts shared pages twice, and what
-the machine actually had free was never captured. A deficit computed from a
-number nobody measured is not a deficit.
-
-What still holds is the direction: doubling the window can only add to the KV
-cache, so 16,384 needs more memory than 8,192 and not less. What is missing is
-the other side of the comparison. Until a run records `MemAvailable` beside the
-marks - which the sampler starts doing from 2026-09-09 - there is no measured
-figure to hold the increase against, and Rule #10 does not let an unmeasured one
-decide a design either way.
-
-**No arithmetic here extrapolates the doubling** either, because
-[section 11.2 of the runtime plan](../../TODO/20260905-09-pin-the-runtime-plan.md)
-accounts for only about 5.6 GiB of the 13.29 GiB measured, and an extrapolation
-off a term that explains two fifths of the total is a guess with a decimal point.
-So both sides of the comparison are open, not one. An owner choosing today is
-choosing without an instrument, and the cheap next step is one run rather than
-one argument.
 
 ### The run arrived, and 16,384 is now committed - what it is projected to cost
 
@@ -1271,66 +1194,6 @@ of these names the flip the way it would name a hardware change, and reads no tr
 across it. The switch is `config/idhazh.json` `observability.tracing_enabled`; the
 reasoning is in [`../concepts/telemetry.md`](../concepts/telemetry.md).
 
-## How old the digest was publishing, 2026-08-30
-
-Source: the 2,900 items in the committed day payloads under
-`frontend/public/digest/` for 2026-08-22 to 2026-08-29. Each item's age is
-`runs[introduced_by_run].at - published_at`, so it is the age at the moment the
-run added it, not the age today. `published_at` on a committed item is the date
-the run believed, so a future stamp is already resolved to first sight. Every
-one of the 2,900 carried a date; none fell back.
-
-| statistic | age when added |
-| --- | --- |
-| minimum | -3.3 h (inside the 6 h forward tolerance) |
-| median | 5.5 h |
-| 90th percentile | 856.1 h (35.7 days) |
-| 99th percentile | 6,246.2 h (260.3 days) |
-| maximum | 155,383.6 h (6,474.3 days, 17.7 years) |
-
-The oldest is `et-default`, "Prabhudas Lilladher downgrades Infosys to reduce
-with Rs 1,246 target", dated 2008-12-05 and published in a 2026 digest.
-
-What each candidate window would have kept:
-
-| window | keeps | drops |
-| --- | --- | --- |
-| 24 h | 2,074 (71.5%) | 826 (28.5%) |
-| 48 h | 2,155 (74.3%) | 745 (25.7%) |
-| 72 h | 2,237 (77.1%) | 663 (22.9%) |
-| 7 days | 2,411 (83.1%) | 489 (16.9%) |
-
-The curve is almost flat between 24 h and 7 days: a week only buys back 337
-items over a day, because what sits past 24 hours is not two-day-old news, it is
-a back catalogue. That is the number that made 24 the shipped value - the
-wider windows pay a real freshness cost and recover almost nothing.
-
-At 24 hours the loss is concentrated:
-
-| desk | survives | loses |
-| --- | --- | --- |
-| `world` | 624 of 652 (95.7%) | 28 |
-| `india` | 647 of 680 (95.1%) | 33 |
-| `business-economy` | 242 of 318 (76.1%) | 76 |
-| `energy` | 310 of 476 (65.1%) | 166 |
-| `ai` | 251 of 774 (32.4%) | 523 |
-
-The ten feeds that lose the most are archive-style research and institution
-blogs: `mistral-news` (43 of 44), `google-research-blog` (42 of 47),
-`deepmind-blog` (41 of 43), `huggingface-blog` (39 of 44), `mit-news-ai`
-(36 of 39), `nist-news` (36 of 37), `nvidia-technical-blog` (33 of 47),
-`amazon-science` (25 of 27), `ai2-blog` (25 of 27), `simon-willison` (20 of 28).
-Ten of 104 sources lose every item they published.
-
-**What to re-read after a week of the gate.** Three numbers, in this order.
-First, whether a run still reaches `safety_ceiling_per_run` - if it stops
-binding, supply rather than the ceiling now sizes the day and the ceiling
-argument in [`freshness.md`](../architecture/sources/freshness.md) needs
-re-deriving. Second, `too_old` summed per vertical from the committed plans,
-against the shares above. Third, whether `ai` recovers as its news feeds are
-read more often, or stays near a third - if it stays, the AI feed list is the
-thing to fix and no threshold will do it.
-
 ## How long we go quiet about a registry name, 2026-08-31
 
 **We never go quiet. The longest silence about any of the 30 registry names, in
@@ -1448,7 +1311,7 @@ lengths a short, medium and long article actually produce.
 llama.cpp `b10580`, 3 repeats. These are the `llama-bench` numbers a design
 decision may cite for article-length prefill and decode. They are not the
 prompt-cache cost in the live digest path; use
-[Prompt cache reuse](#prompt-cache-reuse) for that. The laptop tables below are
+[Prompt cache reuse](../archive/measurements-2026-08.md#prompt-cache-reuse) for that. The laptop tables below are
 kept only to show how far a laptop misleads.
 
 | Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
@@ -1492,35 +1355,6 @@ eight-thread point.
 **Decision: keep `n_threads = 4`.** The raw screen rejected eight threads at
 every measured workload, so the five-article server A/B would spend runner time
 on a candidate that already failed its prerequisite.
-
-### Derived seconds per article
-
-Derived from the runner table by `backend/utilities/summarise_bench.py`, using
-the **measured** length buckets in [Corpus shape](#corpus-shape). Derived, not
-measured: they inherit both the throughput spread and the bucket error.
-
-| Model | short | medium | long | blended | worst long |
-| --- | --- | --- | --- | --- | --- |
-| Qwen3-4B-Q4_K_M | 79s | 166s | 198s | **130s** | 198s |
-| Qwen3-8B-Q4_K_M (retired incumbent, historical record) | 142s | 291s | 342s | **229s** | 342s |
-
-The blended figures were first published as 128s and 196s -> corrected to 112s
-and 196s when the bucket shares were replaced by the measured ones -> corrected
-again to 130s and 229s when the tool's hardcoded 200-token prompt was removed
-and article tokens were clamped at the production 2500-token cap. The prompt
-measured 801 tokens at the time and now measures at most 879. The table uses the
-current maximum. A derived time now requires an explicit model-specific prompt
-count and truncation cap; without them the tool prints raw throughput only.
-
-**These figures do not size a production worker.** From 2026-08-26 `digest.yml`
-derives the worker count as `min(ceil(items / run.shard_size), run.max_parallel)`,
-so `run.shard_size` decides how few workers a small day is worth, not how big a
-shard is. `run.max_parallel` is four, so an automatic run still fans out to at
-most the four this page has measured; a dispatch may ask for up to eight. At
-`run.safety_ceiling_per_run` a worker now draws 20 items, not five. Run
-`32742672105` measured 34 to 41 items per worker across four back when the
-ceiling was 200. Size request and job bounds from a measured real worker population
-and its worst item, never from five-item arithmetic or the 229-second blend.
 
 ### The configured summarizer: Qwen3.5-9B-Q4_K_M
 
@@ -1899,83 +1733,6 @@ Replace this table with a measurement as soon as one exists. The measurement tha
 settles it is one candidate `work` shard on `ubuntu-latest` reporting its own
 `prefill_ms` and `decode_ms` per item.
 
-### On a laptop (kept only as a warning)
-
-### Qwen3-4B-Q4_K_M
-
-Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 3.
-
-| n_prompt | prefill tok/s | stddev |
-| --- | --- | --- |
-| 730 | 24.05 | 1.46 |
-| 1800 | 18.35 | 4.49 |
-| 4850 | 12.34 | 3.02 |
-| decode (250) | 6.07 | 0.15 |
-
-### Qwen3-8B-Q4_K_M (retired incumbent, historical record)
-
-Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 2.
-
-| n_prompt | prefill tok/s | stddev | vs 4B |
-| --- | --- | --- | --- |
-| 730 | 9.30 | 0.80 | 2.6x slower |
-| 1800 | 8.40 | 2.00 | 2.2x slower |
-| 4850 | 6.30 | 0.30 | 2.0x slower |
-| decode (250) | 1.84 | 0.17 | **3.3x slower** |
-
-### Local 4-vs-8 thread screen
-
-**Measured 2026-08-23** on Windows 11, Intel Core i7-1265U (10 physical cores,
-12 logical processors), Qwen3-8B-Q4_K_M (retired incumbent, historical record), llama.cpp
-`b10444` (`5f754ea0e`), 3 repeats. The bounded screen used 730 prompt tokens and 64 decode tokens.
-
-| Threads | Prefill tok/s | Decode tok/s | Combined benchmark wall-clock |
-| --- | --- | --- | --- |
-| 4 | 9.44 +/- 0.44 | 3.44 +/- 0.31 | 375.06 s |
-| 8 | 11.17 +/- 0.13 | 3.91 +/- 0.19 | 318.67 s |
-
-Eight threads improved this laptop's prefill by 18% and decode by 14%; combined
-wall-clock fell 15%. The laptop exposes 12 logical processors, so this does not
-answer whether eight software workers help a four-vCPU VM. That answer must come
-from the hosted sweep on the same model and runtime build.
-
-### Derived seconds per article, on the laptop
-
-Superseded by the runner table above. Kept because the gap between the two is
-the finding: this said the 8B cost 2.9x a short article, and the runner says
-1.8x. Nothing here may be cited.
-| bucket | 4B typical | 8B typical | multiple |
-| --- | --- | --- | --- |
-| short | 55 s | 160 s | 2.9x |
-| medium | 131 s | 323 s | 2.5x |
-| long | 435 s | 906 s | 2.1x |
-| blended | 173 s | 399 s | 2.3x |
-
-Worst case matters more than the blend for one decision: a single long article
-on the 8B is 1223 s worst, so a five-URL shard that draws five long articles is
-roughly 102 minutes. Job timeouts are set from that number, not from 399 s.
-
-**Three findings that changed the design**, all of which contradicted an
-estimate:
-
-1. **Prefill tok/s degrades with context length** (24.1 -> 18.3 -> 12.3 on the
-   4B). The estimate assumed a constant rate; attention is quadratic, so the
-   long bucket came out 4.5x worse than predicted while short was only 1.9x
-   worse. Any future length estimate has to model prefill as a function of
-   context length.
-2. **Decode degrades worse than prefill on the larger model** (3.3x against
-   2.0x) despite roughly 2x the weights. Decode is memory-bandwidth-bound and
-   4.68 GiB streams from RAM with no reuse, while prefill still gets arithmetic
-   intensity from batching. Output length is therefore a first-class cost lever
-   on the 8B: 250 tokens at 1.84 tok/s is 136 s of pure decode.
-3. **Truncation is a performance lever, not only a safety cap.** Capping at
-   2500 instead of 6000 input tokens takes a long 8B article from ~906 s to
-   ~450 s and the blended figure from 399 s to ~308 s.
-
-The stddev is ~25% of the mean at 1800 and 4850 tokens, which is thermal
-throttling on a laptop. A shared-host runner may be better or worse; the CI run
-must report its own spread rather than inherit this one.
-
 ## The summarizer prompt in tokens
 
 **Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) on a
@@ -2079,33 +1836,6 @@ Prefill runs about 2.2x the decode rate, which is the reason `prefill_ms` and
 table stops being the only copy - see
 [../architecture/sources/item-health.md](../architecture/sources/item-health.md).
 
-### The prompt token counts, from the tokenizer
-
-**Measured 2026-08-23.** Method: `backend/bin/llama-tokenize` against
-`backend/models/Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), over the system prompt rendered from the
-committed `config/` for every band. A token count is a property of the tokenizer
-and the text, so it does not vary with the machine that counted it.
-
-Every earlier figure for this prompt came from a word-share count, not a
-tokenizer, and every one of them was wrong:
-
-| Quantity | Earlier estimate | Measured |
-| --- | --- | --- |
-| Full system prompt | 801 tokens | **877-879 tokens** |
-| Invariant shared prefix | about 315 tokens | **381 tokens** (296 words) |
-| Distinct rendered prompts | 3 | **4** |
-
-The prefix ends exactly where `band_for()` substitutes the word range, at
-`Length:\n\n- Write one summary of `. The fourth distinct prompt is the brief
-band that row 8 added; the earlier count of three predates it.
-
-Re-running the row 9 arithmetic on the measured head and the measured prefill
-throughput of 34.23 tok/s: 381 tokens costs **11.1 s** per item, so 13
-recoverable items is **2.4 min** of CPU, or about **0.6 min** of wall clock
-across four shards. That is 21 percent more than the 315-token estimate implied,
-and it does not change the decision - the ceiling is still 1-2 percent of a run.
-**Row 9's collapse survives its own correction.**
-
 ## The ledger and the server agree about the read rate
 
 **Measured 2026-08-27** against run `33008629212` of `digest.yml`, which is run
@@ -2168,7 +1898,7 @@ The four captures are committed at `tests/fixtures/runtime/`.
 
 0.494 tok/s from slowest to fastest, which is 4.4 percent of the run figure -
 the host-to-host variation
-[Which machine a shard drew moved its rate 3.4x](#which-machine-a-shard-drew-moved-its-rate-34x)
+[Which machine a shard drew moved its rate 3.4x](../archive/measurements-2026-08.md#which-machine-a-shard-drew-moved-its-rate-34x)
 already documents, at its small end. **The run figure is the sum of the tokens
 over the sum of the seconds and never the mean of these four rates**; averaging
 would weigh a shard that read 23,411 tokens the same as one that read 30,538.
@@ -2296,14 +2026,6 @@ widest unit group 3 (mean 2.9, max 14), median 621 article words (mean 732, max
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Articles | 13 | 30 | 25 | 31 | 19 | 12 | 4 | 3 | 5 | 1 | 1 | 1 |
 
-### What the model actually asked for
-
-Run `32804437110` is the first to log the draft kind beside the final kind:
-**17 chart drafts, 71 `none` drafts, 0 diagram drafts in 88 items.** Nine of the
-17 chart drafts survived the same-unit and distinct-bar checks. Across all six
-runs above, `diagram` was the final kind **zero times in 703 items**. The arm was
-switched off on the strength of this.
-
 ### Where the per-item cost actually goes
 
 **Measured 2026-08-25** from llama-server's own `print_timing` lines in each
@@ -2390,7 +2112,7 @@ all nine, llama.cpp build 10598 commit `56db501e7` with `llama-server` sha256
 the exact value `config/idhazh.json` pins.
 
 **This cuts against the suspect the `work` job named.**
-[Eight work shards](#eight-work-shards) found two Intel Xeon shards prefilling
+[Eight work shards](../archive/measurements-2026-08.md#eight-work-shards) found two Intel Xeon shards prefilling
 3.4x faster than six AMD EPYC ones on one day. Prefill is 85 percent of a planner
 request in the slow mode, so if that vendor split reached this stage an Intel
 job would cost about 40 percent of an AMD one - near 20 s an item, which
@@ -2431,7 +2153,7 @@ runs:
   names the instruction sets - AVX2 against AVX-512, the obvious way two hosts
   sharing a CPU model string could differ 3x on prefill - has never been
   captured. The other five lines under
-  [What a job log names](#what-a-job-log-names) do print. **This was never a
+  [What a job log names](../archive/measurements-2026-08.md#what-a-job-log-names) do print. **This was never a
   grep fault**: the line is not printed at all below verbosity 4, so the pattern
   was right and the line was not there
   ([What llama-server reports about its own runtime settings](#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).
@@ -2455,29 +2177,6 @@ least one of them in the fast mode.** Today that count is 1 on the EPYC 7763, 0
 on the EPYC 9V74 and 0 on the Xeon 8573C, so it is five more observations at
 minimum. No date goes with that number - which CPU a job draws is not ours to
 choose, and no fast run has appeared in nine.
-
-### Why a cancelled run published nothing
-
-A job cancelled at its timeout skips every step without an explicit condition.
-Step 15 of run `32804437110`'s `route` job - the `routes` artifact upload - is
-recorded as `skipped`, while `Upload router log` (which carries `if: always()`)
-ran. So 88 visual decisions and 9 rendered charts existed on that runner and
-none of them left it. `assemble` downloaded no visuals artifact and published 145
-items with zero visuals.
-
-The derived ceiling, restated for both hosts and both configurations:
-
-| Per-item | `[chart, diagram]` | `[chart]` |
-| --- | --- | --- |
-| 20.7 s (fast host) | 172 items | 324 items |
-| 40.3 s (slow host) | 88 items | 166 items |
-
-against a 50-minute stage budget. `run.safety_ceiling_per_run` was 200 when this
-was measured and moved to 160 on 2026-08-26 for the `work` job's sake. 160 is the
-first ceiling a slow host clears with `enabled_kinds: [chart]` - 166 items
-against 160 - so the plan ceiling and the planner's capacity now agree where at
-200 they never did. A slow host still cannot finish a maximum day with the
-diagram arm on, which is why the stage stops itself rather than being killed.
 
 ## Weights on disk
 
@@ -2701,63 +2400,6 @@ doing its job on a fixture small enough to read by eye. The widths above were
 measured 2026-09-02 against the old word labels; the collapse to digits on
 2026-09-06 made every label shorter or the same, so the column was not re-taken.
 
-### Why the visual did not get a column
-
-Row 18's zone model called for a 20 rem to 24 rem column holding an item's
-chart. It is not built, and the arithmetic is why.
-
-**A chart draws at the size the column gives it.** The committed charts are
-825 x 437 px SVGs carrying 25 text labels at 10 px - measured 2026-09-02 over
-`frontend/public/digest/2026/08/24/ai-04.svg`. Today the figure takes the card
-body, so at 890 px it draws those labels at 10.8 CSS px. In a 20 rem column it
-draws them at **3.9 px**, and in a 24 rem column at **4.7 px**.
-
-**And the column does not fit anyway.** The item's content row at 1,280 px and
-up is 1,166 px. A 68-character measure is 659.81, the mark is 28 and the gaps
-are 12 each, so a trailing column can be 454 px at most - and only if it is the
-*only* trailing column. With the day's aside taking that slot, the card body at
-1536 px is 806 px and a 20 rem column beside the measure would leave 130 px.
-
-**What would change it**: `chart.width_px` becoming the column's width rather
-than a fixed 760, which is row 18's own decision 6 and belongs to whichever row
-owns the render spec. Until then `digest.visual_side` stays unread, because a
-knob whose only setting draws an illegible chart is worse than a knob nothing
-reads.
-
-Two things the row did fix for a visual: the figure no longer reserves a 16:10
-box the chart does not fill - measured 2026-09-02, an 825 x 437 chart inside an
-890 x 556 box left **85 px of empty band above and below** every one of them -
-and only **5.4 percent of published items carry a rendered visual at all**, 249
-of 4,598 over the twelve committed days, which is why this was never the zone
-that decided the layout.
-
-### Why the item's rail did not drop to the small breakpoint
-
-Row 18's decision 3 moved the item's footer rail from the middle breakpoint
-(1024 px) to the small one (640 px). It is refused, and the arithmetic is the
-reason.
-
-The item's content row is the frame's content box less 50 px of padding and
-border. Take the 1.75 rem mark, its 12 px gap, and a 14 rem rail with its own
-12 px gap, and what is left for the summary is:
-
-| Viewport | Content box | Card body with a rail | As characters |
-| --- | --- | --- | --- |
-| 640 px | 588.8 px | **262.8 px** | about 26 |
-| 801 px | 737 px | **411 px** | about 42 |
-| 1024 px | 960 px | 634 px | about 65 |
-| 1280 px | 1,216 px | 890 px | 68, the measure |
-
-`frame.measure_ch` is bounded at 52 to 80 characters because below about 50 the
-eye returns too often. A 26-character line is not a narrower measure, it is a
-broken one - the same rule that refuses a wide paragraph, failing the other way.
-
-**And the reason the decision existed is already gone.** It wanted the item's
-facts out of the middle of the read. Splitting the meta line did that on
-2026-09-01: the four facts a reader uses to decide whether to read at all went
-above the title, and the claims about our own summary went below it. Nothing
-interrupts the read at any width now, so no breakpoint has to move to fix it.
-
 ## Whether an item's key points repeat its own summary, 2026-09-02
 
 Hardware: Intel Core i7-1265U, Windows 11, Python 3.14.2. Date: 2026-09-02.
@@ -2887,39 +2529,6 @@ separates the two columns cleanly enough to say the reading was not arbitrary:
 Thirteen of the ninety points score 1.00, meaning every word of the point that
 is not a stop word is already in the summary. Every one of the thirteen was
 ruled a restatement.
-
-### The twenty, one row each
-
-`R` restates, `A` adds, `B` borderline. The `item_id` is what a re-run resolves
-against, so a later reader can pull the same summary and the same points out of
-the committed tree and disagree with the verdict on the record.
-
-| # | `item_id` | Band | Source words | Summary words | Points | R | A | B |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `ai-0329024737` | 3 | 2,629 | 77 | 5 | 4 | 1 | 0 |
-| 2 | `ai-2515174690` | 3 | 2,619 | 140 | 5 | 4 | 0 | 1 |
-| 3 | `ai-3641201508` | 4 | 3,391 | 157 | 4 | 4 | 0 | 0 |
-| 4 | `ai-6396054327` | 4 | 3,271 | 121 | 5 | 5 | 0 | 0 |
-| 5 | `ai-8527189458` | 3 | 2,792 | 154 | 4 | 4 | 0 | 0 |
-| 6 | `ai-9972825170` | 3 | 2,617 | 136 | 5 | 5 | 0 | 0 |
-| 7 | `business-economy-1212338099` | 3 | 2,236 | 172 | 4 | 4 | 0 | 0 |
-| 8 | `business-economy-4950988149` | 3 | 2,111 | 128 | 4 | 3 | 1 | 0 |
-| 9 | `business-economy-7456600394` | 4 | 3,525 | 131 | 4 | 4 | 0 | 0 |
-| 10 | `business-economy-9869346526` | 4 | 3,195 | **49** | 4 | 1 | **3** | 0 |
-| 11 | `energy-1156799945` | 4 | 4,362 | 210 | 4 | 3 | 1 | 0 |
-| 12 | `energy-2492116826` | 3 | 2,718 | 170 | 5 | 5 | 0 | 0 |
-| 13 | `energy-5655925703` | 3 | 2,955 | 165 | 4 | 4 | 0 | 0 |
-| 14 | `india-3097742416` | 3 | 2,264 | 172 | 5 | 5 | 0 | 0 |
-| 15 | `india-5125363799` | 3 | 2,021 | 138 | 5 | 5 | 0 | 0 |
-| 16 | `india-8172647558` | 3 | 2,271 | 182 | 4 | 1 | **3** | 0 |
-| 17 | `world-3624247373` | 4 | 3,218 | 130 | 5 | 5 | 0 | 0 |
-| 18 | `world-6133886535` | 4 | 5,314 | 154 | 5 | 4 | 1 | 0 |
-| 19 | `world-7086417611` | 3 | 2,524 | 146 | 4 | 4 | 0 | 0 |
-| 20 | `world-9654915186` | 3 | 2,252 | 161 | 5 | 4 | 1 | 0 |
-
-Rows 10 and 16 are the only two where the points carry more than one thing the
-summary does not, and they are 49 and 182 summary words - the shortest in the
-sample and the second longest. Nothing about the length sorts them.
 
 ## Published payload size
 
@@ -3092,166 +2701,6 @@ the page after seven publishes is about 335,000 and its ceiling about 447,000 -
 which is a contract test with a countdown in it. It is re-derived in the commit
 that re-derives the ceilings, for the same reason and on the same cadence.
 
-#### The `/console/` ceiling, re-derived 2026-09-03
-
-Hardware: Intel Core i7-1265U, Windows 11, node 24.12.0. Date: 2026-09-03.
-Method: `frontend/scripts/bundle-gate.mjs`, which is `gzip -9` over each
-prerendered `index.html` in `frontend/build`. One tree, twelve published days,
-built three times, with no sibling agent on the box.
-
-| Route | Build 1 | Build 2 | Build 3 | Spread | Committed ceiling |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `/console/` | 163,472 | 163,460 | 163,467 | 12 | **277,195** |
-| `/console/machine/` | 31,597 | 31,588 | 31,587 | 10 | 39,743, unchanged |
-| `/console/model/` | 29,421 | 29,411 | 29,414 | 10 | 37,979, unchanged |
-
-**What a published day costs the page**, by removing one. 2026-08-27 was
-dropped from `state/scores`, `state/item-health`, `state/feed-health`,
-`frontend/public/telemetry` and `frontend/public/digest`, and the site rebuilt
-through `STATE_ROOT`, `TELEMETRY_ROOT` and `DIGEST_ROOT`. Never the newest or
-the oldest day: both anchor a window, and moving an anchor measures the anchor.
-
-| Reading | Bytes |
-| --- | ---: |
-| `/console/` with 2026-08-27 | 163,494 |
-| `/console/` without it | 155,856 |
-| One published day | **7,638** |
-| Ledger rows that day carried | 814 |
-| Per ledger row | **9.38** |
-
-Both arms of that pair were built before the section's final wording landed, so
-they are 20 to 30 bytes heavier than the table above. The difference between
-them is what the arm measures and it is unaffected.
-
-**2026-08-27 is a light day and the ceiling is sized on a heavy one.** Over the
-twelve committed days the ledger rows a day carries run 10 to 1,731, median
-1,240. At 9.38 bytes a row the heaviest day on record costs **16,237 bytes**, so
-seven of those are 113,659. The ceiling is the heaviest build plus that plus the
-64-byte noise floor: 163,472 + 113,659 + 64 = **277,195**.
-
-**It over-states the long run, which is the safe direction.** The telemetry seed
-is windowed at `console.default_window_days`, so once the ledger is longer than
-the window a new day pushes the oldest out of the document and the marginal cost
-falls toward zero. A ceiling sized on the un-windowed rate expires sooner rather
-than later, which is what a ratchet is for.
-
-**What this row cost.** Control arm: the row's five frontend source files
-checked out at `origin/main` on the same tree, built and gated, then restored.
-
-| Route | Control | Branch | Change |
-| --- | ---: | ---: | ---: |
-| `/console/` | 161,056 | 163,472 | **+2,416** (1.50 percent) |
-| `/console/machine/` | 31,583 | 31,587-31,597 | +4 to +14 |
-| `/console/model/` | 29,411 | 29,411-29,421 | 0 to +10 |
-| `/404` | 1,599 | 1,597-1,601 | -2 to +2 |
-| `/archive/` | 5,027 | 5,023-5,026 | -4 to -1 |
-| `/evals/` | 3,108 | 3,106-3,107 | -2 to -1 |
-
-**The two sibling console routes move a little, and that is the change too.**
-The standing band is one component on all three, and it gained a sentence
-counting the feeds nobody has read. The three routes this row cannot reach -
-`/404`, `/archive/` and `/evals/` - moved inside their own build-to-build
-spread, which is what says the 2,416 is the change rather than the toolchain.
-
-**What the published view costs.** `frontend/public/source-health.json` is
-44,736 bytes over 144 addresses, **310.6 bytes an address**. It is rewritten
-whole every run rather than appended, so it grows with the source list and not
-with the days - a source added costs about 311 bytes, for ever, and a day costs
-nothing. It is never served: nothing fetches it, so it is not staged into
-`frontend/static/` and it is outside both the 1 GB Pages cap and the per-day
-site rate.
-
-**What the section occupies, and that it really leaves.** Three builds off one
-copied payload root, differing only in that file: present, deleted, and
-truncated to 54 bytes of invalid JSON. Page height is the honest signal here,
-because a subtree can still report an intrinsic box while the document height
-cannot lie.
-
-| Arm | `/console/` at 1440 px | at 390 px | Console errors | Responses 400+ |
-| --- | ---: | ---: | ---: | ---: |
-| View present | 11,013 | 17,531 | 0 | 0 |
-| View deleted | 10,031 | 15,519 | 0 | 0 |
-| View truncated to invalid JSON | 10,031 | 15,519 | 0 | 0 |
-
-Both degraded arms drew the named absence, kept every other panel, and left the
-document 982 px shorter at 1440 and 2,012 px shorter at 390. The truncated arm
-also logged one line at build time naming the file and the parse error, which is
-the difference between a guard that fired and a file that was quietly ignored.
-
-#### The 2026-08-26 record, superseded
-
-Hardware: Intel Core i7-1265U, Windows, node 24.12.0. Date: 2026-08-26. Method:
-`gzip -9` over each prerendered `index.html` in `frontend/build`, heaviest page
-per route class. One tree, six published days, built three times.
-
-These are the numbers behind `page_weight.ceilings_bytes` in
-`config/idhazh.json`, which
-[../how-to/run-the-gates.md](../how-to/run-the-gates.md) explains.
-
-**Superseded 2026-08-26, and partly reversed 2026-08-27.** The `/archive/` and
-`/console/` ceilings below were removed from the committed config after they
-behaved as the countdowns this section documents - firing on ordinary publishes
-and being raised to silence them rather than catching any regression.
-`/console/` is still uncapped: it grows with the ledger its charts read and
-nobody has priced that growth. `/archive/` is capped again, because it stopped
-inlining the day payloads and now grows by one day link a day rather than by
-every story - see
-[The ceiling that holds the saving](#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from).
-The tables that follow stay as the dated record of what those ceilings were and
-why a fixed byte number could not hold them while the page carried the corpus
-(Rule #10).
-
-| Route | Build 1 | Build 2 | Build 3 | Range | Ceiling committed |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `/404` | 1,060 | 1,062 | 1,062 | 2 | **1,127** |
-| `/evals/` | 2,411 | 2,408 | 2,411 | 3 | **2,475** |
-| `/console/` | 123,266 | 123,260 | 123,265 | 6 | **123,330** |
-| `/archive/` | 1,124,597 | 1,124,599 | 1,124,596 | 3 | **1,124,663** |
-| `/` | 229,772 | 229,772 | 229,772 | 0 | not capped |
-| `/<date>/` | 396,993 | 396,995 | 396,995 | 2 | not capped |
-| `/<date>/<topic>/` | 395,866 | 395,867 | 395,869 | 3 | not capped |
-
-Each ceiling is the heaviest observed build plus 64 bytes, and the 64 is the
-noise floor derived under First-load JavaScript per route. **A ceiling
-inside its own noise floor is a coin toss, not a measurement**: the range above
-is up to 8 bytes over three builds because SvelteKit stamps a version string
-into the markup and different digits compress differently, so a ceiling set at
-exactly the heaviest build would fail on a rebuild of an unchanged tree. 64
-bytes is 8x the widest range measured here, and the regression these ceilings
-exist to catch is 313,000 bytes, so the allowance costs the gate nothing. The
-`/404` ceiling keeps the 1,063 seen on an earlier tree the same day rather than
-tightening onto 1,062.
-
-**Confirmed on node 22, which is what CI runs.** Same tree, node 22.23.2 win-x64
-from `nodejs.org/dist`: `/404` 1,061, `/evals/` 2,413, `/console/` 123,265,
-`/archive/` 1,124,602. Every route stays under its ceiling with 61 to 66 bytes
-spare, so the toolchain moves these numbers by less than the noise floor
-absorbs. The JavaScript ratchet is the part that does care: on node 24 the `/`
-route reads 65 bytes under its node-22 record, one byte outside the +/-64
-tolerance, so `npm run bundle-gate` fails locally on node 24 for a reason that
-is not the change.
-
-**The last three rows are deliberately uncapped.** A day page weighs what the
-day published, so a number over it would cap the news rather than catch a
-regression. `frontend/tests/payload-weight.spec.ts` covers those by counting a
-marker instead, which is the same promise in a unit that does not move when the
-pipeline publishes.
-
-**A ceiling here fires on a published day, and that was watched happening
-within the hour.** The table above is the second measurement. The first, taken
-on the same day against the same tree less than an hour earlier, read
-`/archive/` 1,022,379 and `/console/` 114,161. Between the two, `digest:
-2026-08-26` re-ran the day and grew `frontend/public/digest/2026/08/26/digest.json`
-from 380,272 to 727,978 bytes. `/archive/` rose 102,222 bytes and `/console/`
-9,105, and `npm run bundle-gate` failed on both.
-
-`/archive/` inlines every committed day to feed the on-device search, so it
-grows about 170 KB per published day: 822.0 KB over five days on 2026-08-26
-(PR #119, same method), 1,022.4 KB over six, 1,124.6 KB after that day was
-re-run. `/console/` grows with the ledger its charts read, and plateaus once the
-prerendered window is full. Neither ceiling is a steady bound. **When one fires
-on a publish, the fix is the archive plan under `TODO/`, not a bigger number.**
-
 ### The vector backfill, and the one raise the archive plan cannot absorb
 
 Hardware: Intel Core i7-1265U, Windows, node 24.12.0, onnxruntime 1.29.0. Date:
@@ -3296,7 +2745,7 @@ That figure sizes the archive plan's shards and replaces its 35 percent
 estimate. **It has since been measured directly**, over the vectors themselves
 rather than inferred from how much the page around them grew: 322.55 bytes for
 the same base64 shape and 249.82 for a raw `.bin`
-([Sizing the archive index](#sizing-the-archive-index)). Quote those.
+([Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index)). Quote those.
 
 **A day page carries its own vectors and never reads them.** `/<date>/` went
 from 396,997 to 581,552 bytes gzipped over the same backfill - 184,555 bytes a
@@ -3540,261 +2989,6 @@ earned and were therefore skipped.
 Encode cost: 0.16 s an item, one sequence per forward pass. 1,602 items in
 511 s, single-threaded, on a loaded machine.
 
-#### The console section, on top of that raise
-
-Two more runs of 2026-08-26 landed after PR #126 set the first ceilings, and the
-console draws the ledger they append to. Six builds, same hardware, same method,
-`origin/main` at `85fbc16`:
-
-| Tree | `/console/` | `/archive/` |
-| --- | ---: | ---: |
-| `origin/main` source over the payload at `bd1b3c9` | 123,265 | 1,124,600 |
-| `origin/main` minus the Charts table (#122) | 135,784 | 1,306,343 |
-| `origin/main` | 136,704 | 1,306,339 |
-| `What the model did`, build 1 | **137,501** | 1,306,338 |
-| `What the model did`, build 2 | 137,494 | 1,306,343 |
-| `What the model did`, build 3 | 137,496 | 1,306,341 |
-
-**The first row is the control.** It puts `origin/main`'s frontend source over
-the payload as it stood at `bd1b3c9` - the commit that set the ceilings - and
-reads 123,265 against the 123,266 recorded above, one byte apart. The frontend
-source is byte-identical between `bd1b3c9` and `origin/main`, so that row varies
-the payload and nothing else. Without a control that reproduces the number being
-replaced, a re-measurement cannot be told apart from a different measurement.
-
-The 14,235 bytes between the ceiling #126 set and the one this measurement asks
-for split two ways:
-
-| What the bytes buy | Bytes | Share |
-| --- | ---: | ---: |
-| Two further runs of 2026-08-26 in the ledger the console draws | 13,439 | 94.4% |
-| The `What the model did` section | 797 | 5.6% |
-| The Charts table (#122) | 0 | already inside the old ceiling |
-
-**The Charts table is not part of the raise.** It costs 920 bytes at that
-payload, and none of them are new: #122 landed before #126 measured 123,266, so
-the old ceiling already carried it. Between that measurement and this one,
-`run.json` for 2026-08-26 went from 2 runs to 4, `telemetry/2026-08.csv` from
-2,393 rows to 2,713, and that day's item count from 273 to 505. The console
-draws a mark per item, so its document grows with the day's own re-runs, which
-is what the fourteen kilobytes are.
-
-**Re-measured after the final rebase**, over the seven published days and the
-backfilled vectors, on the tree that carries both:
-
-| Tree | `/console/` | `/archive/` |
-| --- | ---: | ---: |
-| `origin/main` source, same payload | 136,707 | 1,675,980 |
-| `What the model did`, build 1 | 137,502 | 1,675,978 |
-| `What the model did`, build 2 | **137,503** | 1,675,982 |
-| `What the model did`, build 3 | 137,496 | 1,675,982 |
-
-The committed ceiling is 137,503 + 64 = **137,567**. The section costs 796 bytes
-here against 797 on the tree before the rebase, so its own figure is stable
-while everything under it moved by fourteen kilobytes - which is the point of
-measuring the two separately.
-
-**`/archive/` is untouched by the section.** It reads within 2 bytes of the
-`origin/main` build over the same payload, inside the spread over three builds
-of one tree, and stays under the 1,676,048 the backfill row set.
-
-#### The console ceiling is a tripwire, and it is priced in published days
-
-Hardware: Intel Core i7-1265U, Windows, node 24.12.0. Date: 2026-08-29. Method:
-`npm run build` then
-`gzipSync(readFileSync('build/console/index.html'), { level: 9 }).length`, which
-is the byte the gate itself takes.
-
-**The ceiling builds are at `795cd62`**, which is `origin/main` after the
-`work: 2026-08-29 shard 3` commit, because a ceiling is set from the tree it
-ships on. Nine published days, 2,711 scored rows.
-
-| Route | 1 | 2 | 3 | 4 | 5 | Spread | Ceiling committed |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/console/` | 170,271 | **170,281** | 170,277 | 170,273 | 170,279 | 10 | **301,580** |
-
-The same five builds one commit earlier, at `7bab3d1` with 2,683 scored rows,
-read 169,356 / 169,367 / 169,355 / 169,359 / 169,353 - spread 14, heaviest
-169,367. That shard added 28 scored rows and moved the page 914 bytes, which is
-why this section was re-taken after the merge rather than before it. Row #5 of
-the truncation-cap plan recorded 169,375 on its own branch before the merge, 8
-bytes above the heaviest at `7bab3d1` and inside that spread, so the two agree.
-
-**A published day was priced by removing a real one.** Measured at `7bab3d1`; a
-rate over whole mature days is not moved by 28 more rows on a partial one. The
-obvious method - clone a mature day k times and scan k - reads 18 percent low
-here, because a clone is a near-copy of a block gzip already holds and a real day
-is not a near-copy of anything. So each arm below drops one real mature day from
-every ledger the
-console reads (`state/scores.csv`, `state/item-health/`, `state/feed-health/`,
-`frontend/public/telemetry/`, and the day's own directory under
-`frontend/public/digest/`) and rebuilds. The day dropped is never the newest or
-the oldest, so the 30-day telemetry window and the archive's span are the same in
-both arms and the day is the only difference.
-
-| Arm | `/console/` | Cost of that day | Scored items | Bytes an item |
-| --- | ---: | ---: | ---: | ---: |
-| every day (control) | 169,362 | - | - | - |
-| without 2026-08-24 | 125,617 | **43,745** | 731 | 59.8 |
-| without 2026-08-25 | 125,658 | 43,704 | 724 | 60.4 |
-| without 2026-08-26 | 132,858 | 36,504 | 621 | 58.8 |
-
-**The control is what makes the rest readable.** It builds the same source over a
-copy of the three trees reached through `DIGEST_ROOT`, `STATE_ROOT` and
-`TELEMETRY_ROOT`, and reads 169,362 against the five in-repo builds of the same
-commit, which spanned 169,353 to 169,367. The redirection is not a variable.
-
-**The rate is a cost per item, not a cost per day**, and that is the useful form:
-59.8, 60.4 and 58.8 gzipped bytes an item across three days that differ by 18
-percent in size. A day costs what it published. The three most recent committed
-days scored 621, 334 and 117 items, so the calendar runway is longer than the
-mature-day arithmetic says - which is why the ceiling is sized on the heaviest
-day measured and not on the mean (Rule #10, worst case).
-
-The arithmetic is then:
-
-```text
-  170,281  heaviest of five builds
-+ 131,235  three mature published days at 43,745, the heaviest measured
-+      64  the build noise floor derived below
-= 301,580
-```
-
-**Three days, because of what the headroom has to be smaller than.** The
-regression this ceiling exists to catch is a day payload inlined by a layout,
-measured 2026-08-26 at 313,300 gzipped bytes on this page (406.3 KB total, of
-which 93.0 KB was the chart). Three days of headroom is 131,235, so the
-regression is 2.4 times the slack. Seven days would be 306,215 - within 2 percent
-of the regression itself, which is a gate whose blind spot is the size of the
-thing it watches for. Three is the largest whole number of measured publishes
-that keeps that margin above 2x.
-
-**The synthetic scan, kept because it shows the shape.** Cloning 2026-08-25 into
-the empty first half of August and rebuilding gives a curve rather than a point,
-and it is what says the marginal day gets cheaper as the page grows. Its one-day
-figure is 35,666 against the 43,704 the same day really costs - 18 percent low -
-so the levels here must not be used to set a number.
-
-| Days added | `/console/` | Added | Bytes a day | `/archive/` |
-| ---: | ---: | ---: | ---: | ---: |
-| 0 | 169,362 | 0 | - | 3,075 |
-| 1 | 205,028 | 35,666 | 35,666 | 3,088 |
-| 3 | 266,088 | 96,726 | 32,242 | 3,115 |
-| 7 | 388,740 | 219,378 | 31,340 | 3,165 |
-| 14 | 603,196 | 433,834 | 30,988 | 3,265 |
-| 20 | 785,961 | 616,599 | 30,830 | 3,360 |
-
-**The `/archive/` column is the method's own check.** The same synthetic days move
-that page 14.25 bytes a day, and the paired removal of a real day moves it 22 -
-both inside the 12.21 to 18.00 bytes a day measured independently two days
-earlier, from a different tree and a different method. A synthetic day that
-behaved nothing like a real one would not land there.
-
-**Where the bytes are, and it is not all the scatter.** Growing one synthetic day
-in one tree at a time, against the same control: the eval and item-health ledgers
-cost 5,431, the published telemetry shard 16,179, and the day's own directory and
-the interactions between them the remaining 14,056. The telemetry seed is bounded
-- `telemetryRows` windows it to `console.default_window_days`, so that term stops
-once the window is full, about 22 published days from here. What never stops is
-the compression scatter, which inlines a point for every row the ledger has ever
-held and has no retention behind it.
-
-**Re-measure before trusting this, and re-measure late.** The scheduled pipeline
-rewrites a day's payload several times an hour; a rewrite on 2026-08-26 moved
-`/archive/` 102 KB, and the shard that landed while this section was being
-written moved `/console/` 914 bytes. The five builds the ceiling is set from were
-re-taken after the final fetch of `origin/main`, and that is the only defence.
-
-#### The console grows on items, not on days, and the window does not bound it (2026-08-30)
-
-Hardware: Intel Core i7-1265U, Windows 11, node v24.12.0. Date: 2026-08-30.
-Tree: `origin/main` at `76cdc72`, nine published days, 3,054 items, 3,113 scored
-rows. Method: copy `frontend/public/digest/`, `frontend/public/telemetry/`,
-`frontend/public/assist/` and `state/` to a scratch directory, reach it through
-`DIGEST_ROOT`, `STATE_ROOT` and `TELEMETRY_ROOT`, remove whole real days from
-every one of them, rebuild, and take
-`gzipSync(readFileSync('build/console/index.html'), { level: 9 }).length` - the
-byte the page-weight gate itself takes. n=1 per arm; the five in-repo builds of a
-single commit recorded above spanned 10 bytes, so an arm difference of tens of
-thousands is far outside the build noise.
-
-**The redirection is not a variable, re-checked.** The control arm builds the
-same source over a copy of the three trees reached through `DIGEST_ROOT`,
-`STATE_ROOT` and `TELEMETRY_ROOT` and reads 173,269. An in-repo build of the same
-commit with no redirection at all, taken minutes later, reads **173,278** - nine
-bytes apart, inside the ten-byte spread five in-repo builds of one commit showed
-above.
-
-**Every arm that sets a level removes real days. Nothing in the first three is
-cloned.** A clone is a near-copy of a block gzip already holds and reads low,
-which the synthetic scan above shows directly and the last row here re-measures.
-The days removed are mid-range ones, so the newest and the oldest are the same in
-every arm and the 30-day window anchor never moves.
-
-| Arm | Days | Items | Scored rows | `/console/` | Of the 301,580 ceiling |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| every day (control) | 9 | 3,054 | 3,113 | **173,269** | 57.5 percent |
-| without 2026-08-25 | 8 | 2,330 | 2,389 | 136,676 | 45.3 percent |
-| without 2026-08-24, 25 and 26 | 6 | 978 | 1,037 | **68,534** | 22.7 percent |
-| a full 30-day window, cloned fill | 30 | 17,586 | 17,645 | **671,577** | **2.23x** |
-
-**The two arms the row asked for are 68,534 bytes at six days and 671,577 at
-thirty.** The first is measured on real days. The second is not, and the rest of
-this section is about why the difference matters more than either number.
-
-**The page is linear in items and the slope barely moves.** 2026-08-25 alone is
-724 items and 36,593 bytes, which is **50.5 gzipped bytes an item**. The three
-days together are 2,076 items and 104,735 bytes, which is **50.4**. Over the
-whole span of real arms, 978 items to 3,054, the fit is:
-
-```text
-/console/ gzipped bytes = 19,300 + 50.45 x items in the ledger
-```
-
-That predicts the control at 173,317 against a measured 173,269 - **0.03 percent
-out**, over a range where the page more than doubles.
-
-**The synthetic arm reads 25.9 percent low, so it is a floor and not a level.**
-Its 21 filler days are clones of three mature days, and the fit above puts 17,586
-items at 906,503 bytes where the build measured 671,577. The recorded bias for a
-one-day clone scan is 18 percent; cloning three days twenty-one times is more
-repetitive than that, and it reads correspondingly lower. **Use the slope, not
-this row.**
-
-**The 30-day window does not bound this, and that is the finding.** The
-telemetry seed is windowed by `console.default_window_days`, so that term does
-stop. The compression scatter is not: it inlines a point for every row
-`state/scores.csv` has ever held, and nothing prunes that file today. So the page
-grows on total scored rows, forever, at whatever the day publishes.
-
-**The runway for this page is short, and it is short in published days.** The
-ceiling is 301,580 and the page is 173,269, so the headroom is 128,311 bytes. At
-the item ceiling then in force - `run.safety_ceiling_per_run` was 160 - a published day
-costs `160 x 50.45 = 8,072` bytes, and the headroom is **15.9 published days**.
-At the observed nine-day mean of 339 items a day it is 7.5 days. Both are
-derived from the measured slope; neither is a separate measurement.
-
-**The "2.49x the ceiling" extrapolation was wrong, and its shape was the
-problem rather than its size.** 2.49 times 301,580 is 750,935 bytes. The fit
-reaches that at 14,500 items, which is **71 published days away at the 160-item
-ceiling** - not 30. The synthetic arm lands at 2.23x and the same arm corrected
-for its own clone bias at about 3.0x, so 2.49 sits inside the range for a window
-of 700-item days. **That regime no longer exists**: the day cap came down to 160
-on 2026-08-27 and to 80 on 2026-09-05, and every figure taken from days that
-published 731 describes a pipeline this one is not.
-
-**What the same measurement says instead is worse, because it carries a date.**
-21 more published days at 160 items puts the page near 342,800 bytes, **1.14x the
-ceiling** - a smaller multiple, arriving sooner, and crossing on **published day
-16**. A magnitude with no date has exactly the defect a level has, which is the
-whole subject of the row that took this measurement.
-
-**What this does not settle.** Every real arm here removes days from a ledger of
-nine, so nothing measured the page against 30 days of real rows - those do not
-exist yet. And the fix is not this row's: bounding `state/scores.csv` is the
-retention row's work, and this section is the measurement that says the page
-needs it inside 16 published days rather than inside a quarter.
-
 #### Three console routes, three ceilings, and a day priced on each (2026-08-31)
 
 Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
@@ -3882,517 +3076,6 @@ gzipped bytes, byte for byte what it measured before the split, against the
 200,000 escalate trigger. No new echarts type was registered and none was needed.
 The one larger lazy chunk in the build is the assist encoder at 901,929 raw and
 234,135 gzipped, which is a different artifact and carries no chart trigger.
-
-#### The Model route's panels, and the two ceilings they moved (2026-08-31)
-
-Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
-2026-08-31, hours after the section above. Tree:
-`feat/the-model-route-shows-what-one-summary-cost` on `origin/main` at
-`100e2f6` - the same ten published days, 3,544 scored rows and 4,632 item-health
-rows the section above measured, so the two are directly comparable. Same
-method: `npm run build`, then the gate's own
-`gzipSync(readFileSync(page), { level: 9 }).length`.
-
-The change: `/console/model/` gained a log-binned distribution of the time to
-write one summary, the scoring cost that moved off the Pipelines timing chart,
-one three-mark column per run of summary lengths, and a seven-row model-swap
-comparison. `/console/` lost the `score` line from `Time per item, by stage`.
-
-**Seven builds of the same tree, heaviest per route, never a mean:**
-
-| Route | 1 | 2 | 3 | 4 | 5 | 6 | 7 | heaviest | spread |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/console/` | 115,548 | 115,555 | 115,557 | 115,551 | 115,552 | 115,562 | 115,557 | **115,562** | 14 |
-| `/console/model/` | 20,378 | 20,386 | 20,392 | 20,380 | 20,384 | 20,390 | 20,385 | **20,392** | 14 |
-| `/console/machine/` | 5,326 | 5,331 | 5,332 | 5,329 | 5,329 | 5,330 | 5,332 | **5,332** | 6 |
-
-Spreads of 14, 14 and 6 bytes, all well inside the 64-byte noise floor. Against
-the same five-build figures taken before the change, `/console/` fell **267
-bytes** and `/console/model/` rose **6,884**.
-
-Builds 6 and 7 were taken after one sentence under the scoring cost gained the
-span it was measured over - the browser suite's own window oracle demanded it -
-and they are in the table rather than replacing the first five because more
-measurements of one tree is more evidence, not less. The sentence is worth
-about 12 bytes on `/console/model/`, which is inside the spread either way.
-
-**A published day was priced by removing the same real one**, 2026-08-25, from
-`state/scores.csv`, `state/item-health/`, `state/feed-health/`,
-`frontend/public/telemetry/` and its own directory under
-`frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT` and
-`DIGEST_ROOT`. Identical to the arm above: 724 scored rows, 1,000 item-health
-rows, 828 feed-health rows, 1,000 telemetry rows and 29 files. Paired against
-build 1:
-
-| Route | ten days | without 2026-08-25 | cost of that day | before this change |
-| --- | ---: | ---: | ---: | ---: |
-| `/console/` | 115,548 | 96,338 | **19,210** | 19,250 |
-| `/console/model/` | 20,378 | 19,244 | **1,134** | 730 |
-| `/console/machine/` | 5,326 | 5,330 | **0** (-4, inside the 6-byte spread) | 0 |
-
-**The Model route's per-day cost rose 55 percent, and the reason is the run
-column.** It used to inline one row a day from `modelWork` and one from
-`throughputDays`. It now also inlines one entry per run for the length panel,
-and a day holds up to five runs. Everything else the change added is fixed: the
-histogram is a dozen bins whatever the ledger holds, the scoring cost is two
-numbers, and the swap comparison is seven rows however long each model ran.
-
-`/console/machine/` moved four bytes the wrong way with a fifth of every ledger
-removed, which is the control saying the root redirection is not a variable -
-the same reading the section above took.
-
-```text
-  115,562 + 7 x 19,210 + 64 = 250,096  /console/
-   20,392 + 7 x  1,134 + 64 =  28,394  /console/model/
-    5,332 + 3 x    502 + 64 =   6,899  /console/machine/ (unchanged)
-```
-
-**What the raise bought, stated because the ruling requires it.** 9,712 bytes on
-`/console/model/`: 6,884 of built page for four panels the route did not have,
-and 2,828 of runway so the number does not fire on an ordinary publish for seven
-more days. `/console/` came down 547 in the same commit. `/console/machine/` is
-untouched - a sibling row is building that route, and its figures here (5,332
-heaviest, 6-byte spread) are inside its own recorded 5,329.
-
-**The regression each ceiling exists to catch is still far above its slack.** A
-day payload inlined by a layout measured 313,300 gzipped bytes on 2026-08-26.
-The slack is 134,534 on `/console/`, 8,002 on `/console/model/` and 1,567 on
-`/console/machine/`, so that regression is 2.33x, 39.2x and 199.9x the slack.
-
-**The lazy chart chunk did not move, and the hash is the proof.**
-`_app/immutable/chunks/DIuPWcXJ.js`, 584.86 kB raw, is the same filename - and
-therefore the same content hash - the section above recorded. Every panel this
-change added is hand-written SVG, so no echarts type was registered and the
-route loads no engine at all.
-
-#### The Machine route draws the counters, and its ceiling is re-derived (2026-08-31)
-
-Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
-2026-08-31. Tree: `feat/the-machine-route-draws-what-the-server-did` off
-`origin/main` at `100e2f6`, ten published days, **54 runtime-counter rows over 12
-runs** and **4,632 item-health rows**. Method: `npm run build` then
-`node scripts/bundle-gate.mjs`, whose printed byte is the one the gate itself
-takes.
-
-The route rendered no ledger at all when it was priced at 6,899 bytes. It now
-draws nine panels off `state/runtime-counters.csv` and `state/item-health/`.
-
-**Five builds of the same tree, heaviest per route, never a mean:**
-
-| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/console/machine/` | 22,242 | 22,236 | 22,241 | 22,241 | 22,238 | **22,242** | 6 |
-| `/console/` | 115,821 | 115,808 | 115,810 | 115,814 | 115,811 | 115,821 | 13 |
-| `/console/model/` | 13,489 | 13,483 | 13,481 | 13,485 | 13,477 | 13,489 | 12 |
-
-Six bytes of spread on a 22,242-byte page, and the two routes this row does not
-touch moved 13 and 12 - well inside the 64-byte noise floor every other ceiling
-on this site carries, and the control that says the machine reproduces itself.
-
-**A first attempt read 23,225 and 981 of those bytes were a defect.** The route's
-`load` returned each chart's echarts `option` beside its prerendered SVG, and
-everything a load returns is serialised into the document - so the page shipped
-the magenta sentinel colours `toCssVariables` swaps out of the SVG, which
-`charts.spec.ts` fails the build over and which no reader may ever see. The
-component rebuilds the option from the same arrays instead. The bytes were the
-smaller half of that; the leak was the point.
-
-**A published day was priced by removing a real one**, the same method the two
-sections above use. 2026-08-27 was dropped from `state/runtime-counters.csv`,
-`state/scores.csv`, `state/item-health/`, `state/feed-health/`,
-`frontend/public/telemetry/` and its own directory under
-`frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT` and
-`DIGEST_ROOT`, and the tree rebuilt twice. That is **3 runs**, 16 counter rows,
-480 item-health rows, 334 scored rows, 414 feed-health rows and 27 files of
-published day. The day is neither the newest nor the oldest, so the window
-anchor never moves.
-
-| Route | ten days (mean of five) | without 2026-08-27 (2 builds) | cost of that day |
-| --- | ---: | ---: | ---: |
-| `/console/machine/` | 22,239.6 | 21,547 / 21,549 | **692** |
-| `/console/` | 115,812.8 | 107,518 / 107,519 | 8,294 |
-| `/console/model/` | 13,483.0 | 12,892 / 12,894 | 590 |
-
-**The Machine route is linear in RUNS, not in days, and that is what its
-allowance has to be built from.** 2026-08-27 carried 3 runs, so a day costs it
-692 bytes only when the day ran three times; at **231 bytes a run** the newest
-day, which ran five times, costs 1,155. The allowance therefore prices seven days
-at the observed maximum of five runs a day rather than at the removed day's
-three - a runway has to be the worst case to be worth printing.
-
-```text
-/console/machine/   22,242  heaviest of five builds of the tree that ships
-                  +  8,085  seven published days at 5 runs a day, 231 B a run
-                  +     64  the build noise floor
-                  = 30,391
-```
-
-**The route grew 4.17x and no panel was cut, which is the ruling working rather
-than a regression.** The owner ruled on 2026-08-31 that no approved feature is
-removed, deferred or shrunk to stay under a page-weight number: a ceiling is a
-ratchet. What the 16,913 extra bytes bought is a shard board that says whether a
-slow day was the work or the machine, the split between reading and writing, the
-prompt cache per day, context headroom per day, the two clocks checked against
-each other per shard, the three host cells nothing had printed, a latency curve
-per run, tokens per run, and the counterfactual cost. Nine panels for 22.2 KB on
-a `noindex` operator page that no reader is ever served.
-
-**What bounds it from here.** Every figure on the route reads a fixed
-`console.default_window_days` = 30 days, so the page stops growing once thirty
-days of runs are inside the window; it does not grow forever. The counters ledger
-spans four days today, so there are about twenty-three more days of growth
-available before it saturates, and seven of those are inside this ceiling. Like
-the other two, this ceiling is meant to expire.
-
-**The lazy chart chunk did not move.** Every chart on the route is a bar, a line
-or hand-written markup, all of which `frontend/src/lib/charts/core.ts` already
-registers. No new echarts type was added and the 200,000-byte escalate trigger
-was not approached.
-
-#### All three console ceilings, re-derived once every row had merged (2026-08-31)
-
-Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
-2026-08-31, at the close of the observability plan. Tree: `origin/main` at
-`ce4e09e`, **ten published days, 3,509 scored rows, 4,588 item-health rows and 52
-runtime-counter rows over 12 runs** - the ledgers as PR #309 settled them, which
-is the first tree on which no run holds a shard twice. Method: `npm run build`,
-then `gzipSync(readFileSync(page), { level: 9 }).length`, which is the byte the
-gate itself takes.
-
-**The three sections above each set a ceiling from the tree that shipped that
-row, and each of those trees is now stale.** Two more rows landed after the last
-of them - #310 gave every chart a shared readout strip and every panel a named
-empty state, and #309 removed 81 duplicate rows from three ledgers - so all three
-numbers are re-derived here on one tree, which is the whole point of doing it at
-closure rather than inside a row.
-
-**Five builds of the same tree, heaviest per route, never a mean.** A mean fires
-on half of all builds:
-
-| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/console/` | 116,153 | 116,149 | 116,145 | 116,148 | 116,150 | **116,153** | 8 |
-| `/console/model/` | 20,954 | 20,956 | 20,948 | 20,952 | 20,948 | **20,956** | 8 |
-| `/console/machine/` | 23,110 | 23,110 | 23,106 | 23,106 | 23,109 | **23,110** | 4 |
-
-A sixth build of the same source, taken after both removal arms to leave the real
-site on disk, read 116,146 / 20,952 / 23,104 - inside all three spreads, which is
-the control saying the machine reproduces itself and that the root redirection
-below is not a variable.
-
-**Two removal arms, because the three routes do not grow on the same thing.** A
-published day is priced by removing a real one, never by cloning one: a clone
-reads about 18 percent cheap because gzip sees a near-copy of a block it already
-holds. Both arms drop a mature day - neither the newest nor the oldest, so the
-30-day window anchor never moves - from `state/scores.csv`,
-`state/runtime-counters.csv`, `state/item-health/`, `state/feed-health/`,
-`frontend/public/telemetry/` and the day's own directory under
-`frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT` and
-`DIGEST_ROOT`. Both are paired against build 1, the same source and the same
-command.
-
-| Arm | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
-| --- | --- | ---: | ---: | ---: |
-| ten days (build 1) | - | 116,153 | 20,954 | 23,110 |
-| A: without 2026-08-25 | 724 scored, 1,000 item-health, 828 feed-health, 1,000 telemetry rows, 29 files, **no counter rows** | 96,852 | 19,775 | 22,676 |
-| **cost of that day** | | **19,301** | **1,179** | 434 |
-| B: without 2026-08-27 | 334 scored, 480 item-health, 414 feed-health, 480 telemetry rows, 27 files, **16 counter rows over 3 runs** | 107,828 | 20,077 | 22,378 |
-| **cost of that day** | | 8,325 | 877 | **732, so 244 a run** |
-
-**Arm A prices the two routes that grow per day and arm B prices the one that
-grows per run.** 2026-08-25 is the heavier day and predates the counters
-entirely, so it is the honest worst case for Pipelines and Model and says nothing
-about Machine. 2026-08-27 carries three runs, which is what makes a per-run
-figure available at all. The 434 bytes a counter-free day still costs Machine is
-the band's own text and the item-health the clock check reads - real, and far
-smaller than a run.
-
-The ceilings follow the method already written down above - heaviest of five
-builds, plus seven publishes, plus the 64-byte build noise floor - with Machine
-priced at the observed maximum of five runs a day:
-
-```text
-  116,153 + 7 x 19,301     + 64 = 251,324  /console/
-   20,956 + 7 x  1,179     + 64 =  29,273  /console/model/
-   23,110 + 7 x 5 x    244 + 64 =  31,714  /console/machine/
-```
-
-**No ceiling was crossed and all three still rose.** The pages measured 116,153,
-20,956 and 23,110 against committed ceilings of 250,096, 28,394 and 30,391, so
-nothing fired. What expired was the runway: each of those ceilings was derived on
-a tree two rows older, and the point of the allowance is that it is seven
-publishes long on the tree that ships. The raise is +1,228, +879 and +1,323
-bytes, and it decomposes exactly:
-
-| Route | page since its ceiling was set | a day, or a run, since then | seven publishes of that | total |
-| --- | ---: | ---: | ---: | ---: |
-| `/console/` | 115,562 -> 116,153, **+591** | 19,210 -> 19,301, +91 | +637 | **+1,228** |
-| `/console/model/` | 20,392 -> 20,956, **+564** | 1,134 -> 1,179, +45 | +315 | **+879** |
-| `/console/machine/` | 22,242 -> 23,110, **+868** | 231 -> 244 a run, +13 | +455 | **+1,323** |
-
-**What the bytes bought, stated because the ruling requires it.** The page terms
-- 591, 564 and 868 bytes - are the one shared readout strip that replaced two
-components' worth of hand-rolled strips and gave eight more charts one, plus a
-named empty state on every panel of all three routes. The rate terms are the
-ledgers growing: a published day costs Pipelines 91 bytes more and Model 45 more
-than when those two were last priced, because both inline more per day than they
-did. No panel was cut, deferred or shrunk to fit, which is the owner's ruling of
-2026-08-31 working rather than a number being nudged.
-
-**The regression each ceiling exists to catch is still far above its slack.** A
-day payload inlined by a layout measured 313,300 gzipped bytes on 2026-08-26. The
-slack is 135,171 on `/console/`, 8,317 on `/console/model/` and 8,604 on
-`/console/machine/`, so that regression is 2.32x, 37.7x and 36.4x the slack. All
-three stay well under the 433,000 bound
-`test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
-them to.
-
-**All three are meant to expire, and `/console/` expires first.** Its slack is
-exactly seven published days at 19,301 bytes each. The finding that opened this
-question - `/console/` crossing on published day 16 - was measured against a
-301,580-byte ceiling on a page that still carried the model panels; the split
-moved those to a route of their own and the page is now a third of the size, so
-the crossing date moved out and the shape did not change. The page is still
-linear in items, `state/scores.csv` is still unbounded on purpose, and the answer
-when the gate fires is still to re-measure and raise it.
-
-**The lazy chart chunk did not move across the whole plan.**
-`_app/immutable/chunks/DIuPWcXJ.js` measured **585,481 bytes raw and 197,561
-gzipped on every one of the eight builds** taken here - the same filename, and
-therefore the same content hash, that the three sections above recorded. Twenty-one
-rows added panels to three routes and not one of them registered a new echarts
-type, so the 200,000-byte escalate trigger was never approached. 2,439 bytes of
-headroom remain, and the next registration still crosses it.
-
-#### The console is taller after the split, not shorter (2026-08-31)
-
-Same tree, same day, measured in chromium at a 1440x900 viewport off the built
-site: `document.documentElement.scrollHeight` per route, and every `svg` the page
-draws.
-
-| Route | height | screens at 900px | charts |
-| --- | ---: | ---: | ---: |
-| `/console/` (Pipelines) | 10,484 px | 11.6 | 24 |
-| `/console/model/` | 3,818 px | 4.2 | 17 |
-| `/console/machine/` | 5,364 px | 6.0 | 7 |
-
-**The route an operator lands on is 19 percent taller than the single page the
-split replaced**, which was 8,794 px on 2026-08-30. That is the honest answer to
-"did splitting it make it shorter" and the answer is no. What the split bought is
-different: 9,182 px of the total now sit behind two named routes with their own
-labels, their own worst state and their own ceiling, rather than below the fold of
-one page where a figure 7,000 px down was hidden without saying so. Rows 13 to 19
-then added panels to all three, so `/console/` grew even as it lost every model
-panel to a route of its own.
-
-**Every ledger emptied, the three routes still render.** The console fetches
-nothing at runtime but a font, so an aborted-request arm intercepts nothing and
-proves nothing. The honest arm is a rebuild: `state/` and
-`frontend/public/telemetry/` copied to a scratch tree, all **nine CSV files
-truncated to their header line - 45,903 rows dropped** - and `STATE_ROOT` and
-`TELEMETRY_ROOT` pointed at the copy.
-
-| Route | height, ten days | height, every ledger empty | charts, before -> after |
-| --- | ---: | ---: | --- |
-| `/console/` | 10,484 px | 4,446 px | 24 -> 9 |
-| `/console/model/` | 3,818 px | 1,097 px | 17 -> 2 |
-| `/console/machine/` | 5,364 px | 2,585 px | 7 -> 2 |
-
-All three answered HTTP 200 with **zero console errors and zero responses at 400
-or above**, and each panel printed its own named empty state rather than a zero.
-`/` and `/archive/` were byte-identical across the two arms, at 7,481 px and
-1,872 px, which is the control saying the arm bit the ledgers the console reads
-and nothing else. The height fall is the proof the content really left; a page
-that still measured 10,484 px would mean the arm had missed.
-
-#### All three ceilings again, at the close of the chart-craft plan (2026-09-01)
-
-Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
-2026-09-01. Tree: `origin/main` at `2d11328a`, the commit this branch was cut
-from, plus this branch's own three edits - **twelve published days, 4,110
-scored rows, 5,227 item-health rows and 84 runtime-counter rows over 20 runs**.
-Method: `npm run build`, then `gzipSync(readFileSync(page), { level: 9 }).length`
-- the byte the gate itself takes.
-
-**Nothing crossed a ceiling and all three still rose. What expired is the
-runway.** The pages measured 142,623, 27,744 and 29,599 against committed
-ceilings of 251,324, 29,273 and 31,714, so the gate never fired. But a ceiling
-here is the page plus **seven published days of growth**, and twenty-six rows had
-landed since the last derivation: `/console/model/` was down to 1,529 bytes of
-slack, which is **1.05 publishes**, and `/console/machine/` to 2,115, which is
-**1.47**. A ceiling that cannot survive two publishes is a ceiling that will fire
-on ordinary work rather than on a regression.
-
-**Five builds of the same tree, heaviest per route, never a mean.** A mean fires
-on half of all builds:
-
-| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `/console/` | 142,618 | 142,620 | 142,619 | 142,613 | 142,615 | 142,620 | 7 |
-| `/console/model/` | 27,742 | 27,744 | 27,740 | 27,739 | 27,733 | **27,744** | 11 |
-| `/console/machine/` | 29,599 | 29,596 | 29,596 | 29,593 | 29,592 | **29,599** | 7 |
-
-**The sixth build was the control, and on one route it landed outside the
-five-build range.** Taken after both removal arms to leave the real site on disk,
-it read 142,623 / 27,742 / 29,599 - inside the spread on Model and Machine, and
-**3 bytes above the top of it on `/console/`**. So the honest spread on that route
-is 10 bytes rather than 7, on a 142.6 KB page - 0.007 percent, and well inside
-the 64-byte noise floor every other ceiling on this site carries. The page term
-below is the heaviest of all six, not of the five, because a control that reads
-high is evidence and not an outlier.
-
-**Two removal arms, because the three routes do not grow on the same thing.** A
-published day is priced by removing a real one, never by cloning one: a clone
-reads about 18 percent cheap because gzip sees a near-copy of a block it already
-holds. Both arms drop a mature day - neither the newest nor the oldest, so the
-30-day window anchor never moves - from the published ledger,
-`state/scores/`, `state/runtime-counters.csv`, `state/item-health/`,
-`state/feed-health/`, `frontend/public/telemetry/` and the day's own directory
-under `frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT`
-and `DIGEST_ROOT`. `frontend/public/assist/` is copied beside `digest/` in each
-arm, because `INDEX_ROOT` is derived from `DIGEST_ROOT` and has no switch of its
-own. Both arms are paired against build 1, the same source and the same command.
-
-| Arm | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
-| --- | --- | ---: | ---: | ---: |
-| twelve days (build 1) | - | 142,618 | 27,742 | 29,599 |
-| A: without 2026-08-25 | 724 scored, 1,000 item-health, 828 feed-health, 1,000 telemetry rows, 29 files, **no counter rows** | 123,455 | 26,289 | 28,647 |
-| **cost of that day** | | **19,163** | **1,453** | 952 |
-| B: without 2026-08-27 | 334 scored, 480 item-health, 414 feed-health, 480 telemetry rows, 27 files, **16 counter rows over 3 runs** | 134,584 | 26,867 | 28,736 |
-| **cost of that day** | | 8,034 | 875 | **863, so 288 a run** |
-
-**Arm A prices the two routes that grow per day and arm B prices the one that
-grows per run.** 2026-08-25 is the heavier day and predates the counters
-entirely, so it is the honest worst case for Pipelines and Model and says nothing
-about Machine. 2026-08-27 carries three runs, which is what makes a per-run
-figure available at all.
-
-The ceilings follow the method already written down above - heaviest build, plus
-seven publishes, plus the 64-byte build noise floor - with Machine priced at the
-observed maximum of five runs a day:
-
-```text
-  142,623 + 7 x 19,163     + 64 = 276,828  /console/
-   27,744 + 7 x  1,453     + 64 =  37,979  /console/model/
-   29,599 + 7 x 5 x    288 + 64 =  39,743  /console/machine/
-```
-
-**Machine now grows on both, and the run term is still the larger one.** Arm A
-says a day with no runs at all costs it 952 bytes - the item-health the clock
-check reads and the band's own text - against 434 when it was last priced. Seven
-five-run days at 288 come to 10,080, which is 1,440 a publish, so the allowance
-still covers a counter-free day with room over. That is why the run term is the
-one the allowance is built from.
-
-**The raise decomposes exactly into a page term and a rate term.** The totals are
-+25,504, +8,706 and +8,029 bytes, and the two halves sum to each:
-
-| Route | page since its ceiling was set | a day, or a run, since then | seven publishes of that | total |
-| --- | ---: | ---: | ---: | ---: |
-| `/console/` | 116,153 -> 142,623, **+26,470** | 19,301 -> 19,163, **-138** | -966 | **+25,504** |
-| `/console/model/` | 20,956 -> 27,744, **+6,788** | 1,179 -> 1,453, +274 | +1,918 | **+8,706** |
-| `/console/machine/` | 23,110 -> 29,599, **+6,489** | 244 -> 288 a run, +44 | +1,540 | **+8,029** |
-
-**`/console/` is the one route whose rate FELL**, by 138 bytes a published day,
-so its raise is entirely page and the rate gives 966 bytes back. Rows #7, #8 and
-#12 replaced per-item failure rows with sources ranked by articles lost and
-stopped charts drawing spans nothing measured, and a ranked list of sources does
-not grow with the day the way a list of failed items does.
-
-**What the bytes bought, stated because the ruling requires it.** The page terms
-- 26,470, 6,788 and 6,489 - are twenty-six rows of panels across three routes:
-sources ranked by articles lost, a reliability denominator on the feeds, an
-articles-published skyline, a doubt list, a cost distribution, one context chart
-in place of thirteen repeated bars, peak memory per shard, latency per
-percentile, and a shared date axis, hover readout and movement colour under all
-of them. No panel was cut, deferred or shrunk to fit, which is the owner's ruling
-of 2026-08-31 working rather than a number being nudged.
-
-**The regression each ceiling exists to catch is still far above its slack.** A
-day payload inlined by a layout measured 313,300 gzipped bytes on 2026-08-26. The
-new slack is 134,205 on `/console/`, 10,235 on `/console/model/` and 10,144 on
-`/console/machine/`, so that regression is 2.33x, 30.6x and 30.9x the slack. All
-three stay well under the 433,000 bound
-`test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
-them to.
-
-**All three are meant to expire, and the two small routes expire first.** Each
-slack is exactly seven publishes at its own measured rate. Model and Machine were
-last derived two days ago and had already fallen to 1.05 and 1.47 publishes of
-room, so the useful figure to carry forward is not the ceiling but the rate: a
-published day now costs Pipelines 19,163 bytes, Model 1,453, and Machine 1,440 at
-five runs. The answer when the gate fires is still to re-measure and raise it.
-
-**`origin/main` moved to `8d658de` while this was being measured, and the three
-numbers are kept.** That merge put the day page's filter and the archive's topic
-pills into one panel, which touches the shell every route carries, so a single
-build of the merged tree read 142,628, 27,750 and 29,612 - **5, 6 and 13 bytes
-above** the page terms above. All three are inside the 10 to 14 bytes of
-build-to-build spread measured here and well inside the 64-byte noise floor the
-allowance already carries, so re-running the six-build census to move a ceiling
-by 13 bytes would buy nothing. The gate on the merged tree passes with 134,200,
-10,229 and 10,131 bytes spare.
-
-**The lazy chart chunk did not move across the whole plan.**
-`_app/immutable/chunks/EWEX9oIW.js` measured **567,839 bytes raw and 192,029
-gzipped on every one of the eight builds** taken here, which is the figure Row #2
-recorded when it removed the legend component. Twenty-six rows added panels to
-three routes and not one of them registered a new echarts type, so the
-200,000-byte escalate trigger was never approached and 7,971 bytes of headroom
-remain. **The chunk is found by content and never by size**: the encoder chunk in
-the same tree is bigger, at 901,929 bytes raw and 234,135 gzipped, so "the
-largest chunk" names the wrong file. `text.includes('sankey')` names the right
-one.
-
-#### The console is shorter where an operator lands and taller behind it (2026-09-01)
-
-Same tree, same day. Measured in chromium off the built site served by a plain
-static file server, at 1440x1000 and 390x844, in both themes:
-`document.documentElement.scrollHeight` per route, and the chart census
-`frontend/tests/console-readout.spec.ts` uses - every `svg` on the operator
-surface that is not an icon and that measures wider than zero.
-
-**Both themes gave identical heights on every route**, which is the control
-saying colour is the only thing a theme changes.
-
-| Route | 1440, at the plan's start | 1440, now | 390, at the plan's start | 390, now |
-| --- | ---: | ---: | ---: | ---: |
-| `/console/` | 10,484 px | **9,769 px** | 16,385 px | **15,131 px** |
-| `/console/model/` | 3,818 px | 5,054 px | 6,650 px | 9,083 px |
-| `/console/machine/` | 5,038 px | 6,801 px | 9,219 px | 12,283 px |
-
-**The plan opened by complaining the console was too tall on a phone, and the
-route an operator lands on is now 7.7 percent shorter there** - 1,254 px off a
-16,385 px page, and 715 px off the desktop one. The band went from 528 px of an
-844 px phone viewport to three facts, and the failure list gained a cap.
-
-**The other two routes grew by about a third**, 32 to 37 percent, and that is the
-plan working rather than failing: the Summaries route gained a doubt list and a
-cost distribution, and the Hardware route gained a context chart, peak memory and
-three latency plots. Across all three the console is 11.8 percent taller at 1440
-and 13.2 percent taller at 390. Height was never the target; **the page a reader
-of this console lands on** was, and that one came down.
-
-**Every chart now declares what it does about a hover, and none is undeclared.**
-
-| Route | charts drawn, then -> now | with a shared column and a strip | no column, with the reason in words |
-| --- | --- | ---: | ---: |
-| `/console/` | 24 -> 24 | 5 of 5 | 19 |
-| `/console/model/` | 17 -> 16 | 4 of 4 | 12 |
-| `/console/machine/` | 7 -> 7 | 7 of 7 | 0 |
-
-Charts with a hover readout went from **4 / 3 / 3 to 5 / 4 / 7**, and the number
-that matters is the second column against the first: **every chart on all three
-routes that shares a column between its marks resolves exactly one readout strip,
-and every chart that does not carries a written reason.** Zero charts on any
-route are undeclared, which is the pair Row #2 introduced doing its job - a chart
-somebody decided needs no hover and a chart where the readout was forgotten look
-identical on screen otherwise. `/console/` draws 23 rather than 24 at 390,
-because Row #13 replaces the chart-arm flow with a stepped list below the
-breakpoint.
-
-All twenty page loads answered with **zero console errors, zero page errors and
-zero responses at 400 or above**, and every one hydrated.
 
 ### Days to the 1 GB Pages ceiling
 
@@ -4495,77 +3178,6 @@ the published site and it is a feature no digest assertion depends on
 buy nothing on the rate, which is the same lesson PR #171 taught one level down:
 a one-off saving buys a fraction of a day forever, and only the rate moves a
 date.
-
-#### The image rows, kept as history
-
-The rows below are the arithmetic that made Row #9's retention question urgent
-in August. They are unmeasured, from 2026-08-21, and they were computed over the
-payload tree, so they are **not** comparable with the site figures above. They
-are kept only because the ordering they revealed still holds for any raster we
-ever add: encoding beats pruning, and honouring the visual rule beats both.
-Since 2026-08-23 no run produces an image at all
-([Images do not fit the runner](#images-do-not-fit-the-runner)).
-
-| Scenario | KB/day | days from empty |
-| --- | --- | --- |
-| PNG, an image on every item | 8,537 | 123 (4 months) |
-| WebP, an image on every item | 1,567 | 669 (22 months) |
-| WebP, an image on one item in three | 547 | 1,917 (5.25 years) |
-
-**The old 37 KB/day and 28,340 days were wrong by 48x**, for a third reason
-again: 37 KB was a 17-item day priced from a 2.2 KB-per-item fixture estimate,
-and a day has since run 731 items.
-
-The ordering of the levers falls out of this: encoding buys 5.6x, honouring the
-visual rule buys another 2.9x, and retention is what remains after both. See
-[../architecture/publishing/layout.md](../architecture/publishing/layout.md).
-
-#### The console band divided by a per-run ceiling (2026-08-31)
-
-The band's remaining-room figure was in published days, and the articles-a-day
-it divided by was `run.safety_ceiling_per_run`. That knob bounds one **run**,
-and the schedule fires up to five runs a day
-([github-actions.md](github-actions.md)) - so the band priced a day at 160
-articles while the days it was measuring ran many times that.
-
-Measured on `origin/main` at `fb6a65a`, over the eleven committed manifests
-under `frontend/public/digest/`. Hardware: Intel Core i7-1265U, Windows 11
-10.0.26200, node v24.12.0. n=1 per figure: a count over a fixed committed tree
-has no spread, and the spread that matters is on the rate and is given below.
-
-| Quantity | Value |
-| --- | ---: |
-| Committed payload tree, newest manifest (2026-08-31) | 11,660,434 B |
-| Per-article cost, median over the 10 measured published days | 3,404 B |
-| Spread of that cost, root-mean-square about the median | 654 B, 19.2 percent |
-| Articles a published day, median over the same days | 334 |
-| Articles a published day, range | 4 to 731 |
-| Runs a published day, median | 3 |
-| `run.safety_ceiling_per_run` | 160 |
-
-At the ceiling the band read **1,950 published days**. At the measured median of
-334 articles a published day the same headroom is **934 days**, so the printed
-figure was **2.09 times too long**. Against 2026-08-30 alone - 431 articles over
-5 runs - it is 2.69 times, which is the figure the plan-doc recorded from that
-one day.
-
-**The fix removes the assumption rather than correcting it.** Headroom over the
-per-article cost is `(1,073,741,824 - 11,660,434) / 3,404 =` **312,038
-articles**, and no daily rate enters it. It is printed to three significant
-figures because the cost under it carries a 19.2 percent spread (Rule #10):
-`room for about 312,000 more articles`.
-
-**Multiplying the ceiling by a median runs-a-day was rejected.** It replaces one
-assumption with two, and the runs-a-day figure is itself unstable - 1 to 5 over
-these eleven days, and GitHub drops scheduled slots silently
-([github-actions.md](github-actions.md)).
-
-**`idhazh site-weight` still divides by the ceiling and shares the premise.**
-`retention.daily_growth_bytes` documents `items_per_day` as "the most a day is
-allowed to cost", which a per-run ceiling is not, so its published-days runway
-is long by the same kind of factor. It measures a different tree and answers to
-an operator rather than to a reader; it was left alone deliberately and is filed
-here rather than fixed.
 
 #### How fast the site actually fills (2026-09-06)
 
@@ -4738,8 +3350,7 @@ measures how long one maintainer takes to read one issue, so nothing here can
 ground it. Two things around it are measured and bound the window rather than
 set it: the pipeline runs five times a day, so the site is measured every four
 hours and the alarm is never more than a few hours late, and the fix - a config
-edit and a redeploy - costs about 25 minutes of CI
-([CI and publish wall-clock](#ci-and-publish-wall-clock)). Every remaining day is
+edit and a redeploy - costs about 25 minutes of CI. Every remaining day is
 a person noticing. Fourteen days lets a maintainer be away for a week and still
 have a week to act.
 
@@ -4823,7 +3434,7 @@ because quantised embedding bytes are close enough to random that the extra
 search finds nothing.
 
 Projected onto a 30-day month at the two rates
-([Sizing the archive index](#sizing-the-archive-index) has where the rates come
+([Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index) has where the rates come
 from):
 
 | Rate | Items a month | Browse index | Vector file |
@@ -5099,368 +3710,6 @@ page does not answer - see
 [../concepts/config.md](../concepts/config.md) on why a guard sitting in the
 working range stops being a guard.
 
-## Feed availability
-
-**Measured** on a developer machine (i7-1265U, Windows, 2026-08-21) by running
-the real plan stage against the ratified `ai` list - a better check than a
-bespoke script, because it exercises the code that will do it daily.
-
-| Quantity | Value |
-| --- | --- |
-| Feeds configured | 36 |
-| Resolved on the first pass | 26 |
-| Recovered by finding the real feed URL | 5 |
-| **Live after correction** | **31, against a floor of 25** |
-| Retired: `robots.txt` forbids or is unreadable | 4 |
-| Retired: the publisher declares no feed at all | 1 |
-
-Two of the retirements are permanent by the host's own instruction rather than
-defects to fix. One publisher (`ai.meta.com`) is a JavaScript application that
-declares no feed on any path, which is a category the plan did not anticipate:
-a source can be real, active and unreachable by RSS.
-
-Two figures from the same runs, both single observations and both a laptop
-rather than a runner: **one feed read takes roughly 0.5-4 s including its
-`robots.txt`**, and a whole 36-feed plan pass finishes in **under a minute**.
-That matters only as a shape: the planning step loads no weights, so fanning out
-afterwards is what costs, not deciding the day.
-
-**Summarization, Qwen3-4B-Q4_K_M, 4 threads, i7-1265U, 2026-08-21, n=1:** a
-2,557-token article took **89 s** end to end for 179 output tokens. One
-observation on a laptop, recorded because it is the first real per-article
-number this project has; it is not a runner figure and may not be used as one.
-
-### What the robots policy cost
-
-#### On the runner (authoritative)
-
-**Measured 2026-08-23** on `ubuntu-latest`, by running the same day twice: run
-1 (`32624081323`) on the old policy, run 2 (`32634191910`) on the new one, same
-date, same config, same feed list. Comparing two real plan passes is a better
-check than any script, because it exercises exactly what runs daily.
-
-| Quantity | Before | After |
-| --- | --- | --- |
-| Feeds read | 115 | **132** |
-| Feeds refused | 31 | **14** |
-| Items published | 8 | 9 |
-| Eval rows written | 0 | **9** |
-
-**17 feeds recovered.** The 14 that still refuse are the check on the change:
-the policy keeps refusing when a host serves a file that says no, and keeps
-refusing when nobody answers at all.
-
-The published count moved by only one because the daily cap, not the feed
-count, decides how many items a reader gets. What a wider pool buys is
-**choice**: 17 items are now selected from a larger candidate set, so the
-ranking has more to rank. Feed count is an input to quality, not to volume.
-
-The eval-row column measures a different fault fixed in the same commit: the
-scorer had been disabled on every scheduled run, so the ledger had never once
-been written by automation. Nine rows is the first time it has.
-
-#### On a developer machine (kept for the IP contrast)
-
-**Measured 2026-08-23** (i7-1265U, Windows), n=1 per feed, against the 26 feeds
-run 1 recorded as `robots_denied`, driving the real fetcher.
-
-| Outcome after the change | Feeds |
-| --- | --- |
-| **Recovered** | **19** |
-| Still refused - a served `robots.txt` disallows the path | 2 |
-| Still refused - the article itself answered HTTP 403 | 4 |
-| Still refused - the host reset the `robots.txt` connection | 1 |
-
-Ten of the nineteen serve no `robots.txt` at all and answered 404. Reading
-"no such file" as a refusal was a rule we invented and the host never wrote,
-and it was silently costing the digest most of its `business-economy` and
-`world` candidates.
-
-This page predicted the runner would recover fewer than 19 because a developer
-IP is not a runner IP, and several of the 403s were a WAF answering a
-datacentre address. The runner recovered 17. **The laptop over-counted by two,
-in the direction predicted** - which is the reason the runner table sits above
-this one and the laptop table is kept only for the contrast.
-
-### What the robots parser costs, 2026-09-02
-
-`protego==0.6.2` replaced `urllib.robotparser` because the standard library
-reads one committed file two ways across the interpreter range
-`pyproject.toml` declares - Python 3.12 takes the first matching group and the
-first matching rule, Python 3.14 merges repeated groups and applies
-longest-match. See
-[the trust boundary](../architecture/sources/trust-boundary.md). This is what
-that dependency costs (Rule #8, Rule #10).
-
-#### On the runner (authoritative)
-
-**Measured 2026-09-02** on `ubuntu-latest` (Linux 6.17.0-1022-azure x86_64,
-4 vCPU, 16,766,414,848 bytes of RAM), CPython 3.12.14, in a throwaway workflow
-on a branch cut from `main` - so the baseline is `pip install -e ".[dev]"` with
-no protego in it. Run `33668824024`; the branch was deleted once the log was
-read.
-
-| Quantity | Value |
-| --- | --- |
-| Install seconds | 0.661, 0.449, 0.454 (n=3, mean **0.521**, spread **0.212**) |
-| Installed bytes | 422,890,458 -> 422,943,750, so **+53,292** |
-| Installed files | 10,317 -> 10,334, so **+17** |
-| `pip list --format=freeze` | one line added, `Protego==0.6.2`; none removed, no version moved |
-
-Sample 1 includes the wheel download and samples 2 and 3 read pip's local
-cache, which is what the 0.212 s spread on a 0.521 s mean is. Half a second
-against the 15 minutes the `gates` job is allowed is not a number any design
-turns on; it is here because Rule #8 asks what a dependency costs.
-
-#### Against the figure the plan recorded
-
-The plan recorded a **10,296-byte wheel** from the package index and left the
-installed size unmeasured. Installed, it is **53,292 bytes - 5.18 times the
-wheel**. That ratio is what unpacking a zip and byte-compiling it costs, not a
-dependency that turned out bigger than it looked: the Python source alone is
-**19,709 bytes over five modules, 1.91 times the wheel**, and the rest is
-30,496 bytes of bytecode pip generates and 9,142 bytes of packaging metadata
-(counted per file on the developer box, below).
-
-In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes** and
-**0.15 percent of shellcheck-py's 34,782,285**, both of which are already
-dependencies nobody has argued about.
-
-**The installed figure is the baseline, and the wheel figure is not.** Owner
-ruling, 2026-09-02, on reading the two numbers above: `protego` is inside the
-budget, and every future size comparison for this dependency is made against
-**53,292 installed bytes and 0.521 s to install**. A wheel is a zip, so the
-unpacked source, the bytecode pip generates and the packaging metadata are three
-different things - a comparison anchored on the 10,296-byte wheel understates
-what the runner actually holds by 5.18 times, and would let a package grow five
-fold before anything read as a change.
-
-**Beneficiary:** one reading of `robots.txt` on every interpreter the project
-supports. That is the control Rule #11 rests on, and it may not have an answer
-that depends on which runner picked up the job.
-
-#### On a developer machine (kept for the contrast)
-
-**Measured 2026-09-02** (Windows 11, CPython 3.14.2) by summing
-`site-packages` before and after: 356,807,900 -> 356,867,247 bytes over
-11,027 -> 11,044 files, so **+59,347 bytes over 17 files**. That is 6,055 bytes
-over the runner's figure, and the cp314 bytecode is where it goes. Installing
-it took 5.02 s here (n=1, with the test suite on the same box), so read that as
-an upper bound and the runner's 0.521 s as the number.
-
-`protego` ships `py.typed`, so `mypy --strict` needs no `ignore_missing_imports`
-entry for it - measured by running the gate with the package installed and no
-override: 0 errors over 141 source files.
-
-### Why the other items failed
-
-**Measured 2026-08-23** on a developer machine (i7-1265U, Windows), by
-re-fetching all 9 failures of run 1 and comparing what the extractor returned
-against the prose actually present in the markup.
-
-| Items | Source | Extracted | Cause |
-| --- | --- | --- | --- |
-| 2 | GitHub release tag | 51, 162 words | The page is a list of binary names. The largest prose block in the markup is GitHub's own "You signed in with another tab" furniture |
-| 2 | NBER paper page | 128, 178 words | The extractor returned **the abstract, correctly**. The paper is a PDF |
-| 1 | Marginal Revolution | 229 words | The post is 277 words. The extractor got 83% of it |
-| 2 | Japan Times | 86, 111 words | Metered paywall |
-| 2 | IAEA | never fetched | HTTP 403 at the WAF |
-
-Fetches took **0.45-0.80 s**, and no item failed on a timeout or a retry
-budget. Two hypotheses are ruled out by this table: the sources are not slow,
-and they are not JavaScript shells hiding their text from the extractor.
-
-**The extractor is behaving correctly.** The 250-word floor is rejecting
-short-form sources that were extracted properly - a release tag, an abstract,
-a short blog post. That makes the low count a **source-selection** result
-rather than an extraction defect, and it is why raising the floor's pass rate
-belongs in `config/sources.json` and not in `extract.py`.
-
-### Lead coverage newline boundary
-
-**Measured 2026-08-23** on a developer machine (Windows, Python 3.12.12), by
-extracting the 17 committed `tests/fixtures/short-sources/` HTML fixtures with
-`to_article()`, comparing the old capitalised-run expression against the fixed
-metric, and scoring five hand-written `publish_brief` summaries through
-`score.band()` at `hhem = 0.95`. Spread is not available because this is a
-deterministic string metric.
-
-| Check | Before | After |
-| --- | --- | --- |
-| Fixtures with a glued newline entity | 6 of 17 | 0 of 17 |
-| Extractable fixtures in the pass | 15 of 17 | 15 of 17 |
-| Hand-written `publish_brief` rows moved by the fixed metric | 1 of 5 | 0 remaining wrongly capped |
-
-The glued entities were: `ai2\nglenn matlin`,
-`published\nus president donald trump`, `student researcher\nwe`,
-`xcframework\nlinux`, `gender-specific parental investment\nwe`, and
-`biodiversity loss\nwe`.
-
-| Fixture | Coverage before | Band before | Coverage after | Band after |
-| --- | --- | --- | --- | --- |
-| `llama-cpp-releases-01` | 0.625000 | high | 0.636364 | high |
-| `llama-cpp-releases-02` | 0.857143 | high | 0.857143 | high |
-| `marginal-revolution-01` | 1.000000 | high | 1.000000 | high |
-| `nber-new-01` | 0.833333 | high | 1.000000 | high |
-| `nber-new-02` | 0.000000 | medium | 0.500000 | high |
-
-The committed `state/scores.csv` had 156 rows, but no source-text or summary-text
-columns. The stored `coverage` column cannot be recomputed honestly from that
-ledger alone, so this pass reports 0 computable re-bands rather than inventing a
-movement count.
-
-## What every source yielded, 2026-08-24 to 2026-08-29
-
-**Measured 2026-08-29** over `state/item-health/2026-08.csv` at `origin/main`,
-which carries one row per planned article per run. 21 runs, 3,832 planned
-articles. Deterministic over a committed file; no spread.
-
-| Quantity | Value |
-| --- | --- |
-| Source ids that appeared at all | 122 |
-| Articles planned | 3,832 |
-| Articles published | 2,739 (**71.5 percent**) |
-| Articles lost | 1,093 (**28.5 percent**) |
-| **Sources that published nothing, not once** | **24** |
-| Failures owned by those 24 | 910, which is **83.3 percent of every failure** |
-| Slots they consumed per run | **43.3 of 160**, so 27 percent of a run bought nothing |
-
-The loss rate is steady across all six days, which is what makes it a property
-of the source list rather than a bad week.
-
-### Where the losses happen
-
-| Stage | Share of the 1,093 |
-| --- | --- |
-| Fetch: the page answers 4xx, a robots file forbids it, or the host resets | 60 percent |
-| Extract: a paywall, or no readable prose on the page | 38 percent |
-| Summarize | 2 percent |
-
-Two codes dominate: `http_client_error` (518) and `paywalled` (330). Neither is
-a defect in this repository.
-
-### What reaches a reader, by kind of source
-
-**Measured 2026-08-29** over the 1,284 items published between 2026-08-26 and
-2026-08-29.
-
-| Tier | Published | Share |
-| --- | --- | --- |
-| 1, the institution that IS the fact | 194 | 15.1 percent |
-| 2, trade press and news outlets | 1,073 | **83.6 percent** |
-| 3, community and independent writing | 17 | **1.3 percent** |
-
-94 of the 138 configured feeds contributed at least one item.
-
-### The per-feed cap decides the day, not the score
-
-**Measured 2026-08-29** over the six runs of 2026-08-27 to 2026-08-29.
-
-| Run | Slots | Distinct feeds drawn from | Feeds sitting on the 2-item cap |
-| --- | --- | --- | --- |
-| 2026-08-27-1 | 160 | 87 | 73 |
-| 2026-08-27-2 | 160 | 85 | 75 |
-| 2026-08-27-3 | 160 | 85 | 75 |
-| 2026-08-28-1 | 160 | 87 | 73 |
-| 2026-08-29-1 | 160 | 86 | 74 |
-| 2026-08-29-2 | 160 | 82 | 78 |
-
-**Between 73 and 78 of the roughly 85 working feeds hit `max_per_source` in
-every run.** The corroborating figure: the fifteen feeds that published most
-between 2026-08-26 and 2026-08-29 each published **exactly 22**, which is two
-per run across eleven runs.
-
-What this means, said plainly: with 160 slots and two allowed per feed, the list
-fills itself from about 80 feeds and the score only decides which handful of
-feeds miss out. "A story three independent sources carried is the day's story"
-is the stated design ([../architecture/sources/discovery.md](../architecture/sources/discovery.md))
-and it is not what is happening. **This is a source-supply result, not a ranking
-defect** - the cap stops binding as soon as the pool of working feeds is
-comfortably larger than 80.
-
-### A failed address is retried all day and fails again
-
-**Measured 2026-08-29** over the same ledger. The published ledger stops a
-repeat; a *failure* is not published, so the next run of the same day plans the
-same address again.
-
-| Quantity | Value |
-| --- | --- |
-| Addresses attempted more than once inside one day | 233 |
-| Of those, addresses that never succeeded on any attempt | 231 |
-| Repeat attempts that produced nothing | **401** |
-| Repeat attempts that produced something | **2** |
-
-Per run the waste is 8 to 41 slots, and it is zero on run 1 of a day by
-construction. 403 repeat attempts bought 2 items. Their failure codes are the
-ones that cannot change within a day: `http_client_error` (112), `paywalled`
-(59), `no_text` (21), `robots_denied` (11).
-
-### Probing the 40 non-producing sources
-
-**Measured 2026-08-29** on a developer machine (i7-1265U, Windows) by fetching
-each configured feed URL and one article behind it, with the pipeline's own user
-agent. n=1 per feed.
-
-| Finding | Feeds |
-| --- | --- |
-| Refused from a developer machine **and** from the runner: paywall, robots, or an outright block | 22 |
-| Returned a valid feed to a developer machine and 403 to the runner | 7 |
-| Answered with a web page and no feed at all - our configured URL is not a feed | 3 |
-| Judgement calls: PDF-only articles, connection resets, rate limiting | 8 |
-
-The seven in row two are the reason this table exists. `indianexpress.com`
-served **200 headlines** to a laptop while the runner recorded HTTP 403 on every
-attempt for weeks. A developer IP is not a runner IP, and this page has recorded
-that contrast in the opposite direction before (see the robots policy row
-above). A source that fails only on the runner is blocked by address, not
-broken.
-
-The three in row three are ours: `anthropic-news`, `cohere-blog` and
-`stanford-hai` were configured with the address of an HTML page. Every fetch
-returned HTTP 200 and zero items, so feed health recorded a read that succeeded
-and a pool that gained nothing. **A feed read can succeed and still be worthless,
-and no gate in this repository noticed for weeks.**
-
-### The feed floor counts configured feeds, not working ones
-
-**Measured 2026-08-29** by applying the retirement to `config/sources.json` and
-comparing each vertical against its `min_feeds` in `config/taxonomy.json`.
-
-| Vertical | Feeds configured | Feeds that ever produced an item | `min_feeds` |
-| --- | --- | --- | --- |
-| `ai` | 38 | **28** | 35 |
-| `business-economy` | 22 | **12** | 21 |
-| `energy` | 24 | **20** | 21 |
-| `india` | 27 | **19** | 21 |
-| `world` | 27 | **19** | 21 |
-
-`rank.plan_vertical` refuses to plan anything for a vertical below its floor, so
-a vertical that drops under it publishes nothing at all.
-
-**Every one of the five verticals is under its floor on the count that matters,
-and every one of them passes on the count the gate reads.** `ai` published 52
-items on 2026-08-29 from an effective 28 feeds against a floor of 35, so a floor
-that is meant to stop a thin desk reaching a reader has been passing a desk it
-would have failed. The gate is not wrong about the number it reads; it is
-reading a number that stopped describing the source pool.
-
-
-
-**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`. Single observed run
-per gate; values are rounded wall-clock durations. Spread is not available for
-this row because each gate has one observation.
-
-| Gate | Duration | Spread |
-| --- | --- | --- |
-| `ci` | about 2 min | n=1; not available |
-| `site` | about 2 min | n=1; not available |
-| `pages` | about 50 s | n=1; not available |
-| `digest` | about 25 min | n=1; not available |
-
-The publish path is the long pole. Orchestrators should not serialize
-independent work on these gates; the merge gate still waits for green checks.
-
 ## Corpus shape
 
 **Measured 2026-08-22**, `ubuntu-latest` (4 vCPU), the `corpus` job in
@@ -5507,7 +3756,7 @@ the old buckets were wrong. It does not settle what the right ones are.
 Hardware is GitHub-hosted `ubuntu-latest`, 4 vCPU and 16 GB, and which CPU model
 a job draws is not ours to choose: the same page records a 3.4x prefill swing
 between the four CPU models one run drew
-([Which machine a shard drew moved its rate 3.4x](#which-machine-a-shard-drew-moved-its-rate-34x)).
+([Which machine a shard drew moved its rate 3.4x](../archive/measurements-2026-08.md#which-machine-a-shard-drew-moved-its-rate-34x)).
 Summarizer `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through `llama-server`,
 llama.cpp `b10598`.
 
@@ -5556,29 +3805,6 @@ prefill by.** A worker is prefill plus decode, and this page already records tha
 the hosts which read a prompt fastest write a summary slowest, so the two swings
 partly cancel over 40 items. That is why a shard clock is a steadier thing to
 size a bound against than a tokens-a-second figure.
-
-### The fixed cost, and what a worker costs an item
-
-Three earlier runs planned a 17-item day, which gave each worker 5 items:
-`32634191910`, `32624081323` and `32571647176`, on 2026-08-22 and 2026-08-23.
-Their slowest workers took 12.4, 13.7 and 14.4 minutes. Two points on the same
-line - 5 items and 40 items, worst against worst - give:
-
-- **about 3 minutes a worker spends before it summarizes anything**: checkout,
-  `pip install`, the cache restore (30-73 s, median 45) and the weights load.
-- **about 2.29 minutes an item after that.**
-
-That predicts `3 + 40 x 2.29 = 94.6` minutes for a worker at the 40-item
-ceiling those days ran. The worst one measured is 94.5. The arithmetic is a check on the
-measurement here, not a substitute for it.
-
-**The 3 minutes is a 2026-08-22 figure and the direct measurement is larger.**
-Run `2026-08-29-2` spent 1,340.6 s of its 13,362 s of shard clock outside
-fetching, extracting and summarizing - **335.1 s a shard, 5.6 minutes** - and the
-server's own counters put the same quantity at 284 to 447 s ([Three figures the
-ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). A line through two 5-item days on the retired
-8B is a weaker instrument than one run read against its own clock, so take the
-5.6 minutes and read the 3 as history.
 
 ### Where the work job's bound comes from
 
@@ -5859,33 +4085,6 @@ even be attributed to a model - 56 runs span both the retired 8B and the
 configured 9B. What 13.82 GiB says is how large the mark got. How near the edge
 it came is the open question above.
 
-### llama-server prints no buffer line, so three planned fields were not added
-
-**Measured 2026-09-08** over eight llama-server logs: the four committed captures
-of run `2026-08-29-3` (`Qwen3.5-9B-Q4_K_M`) and four raw, unfiltered logs of run
-`32742672105` (`Qwen3-8B-Q4_K_M`, 75 to 98 KB each). Searched for `KV self size`,
-`kv_cache`, `compute buffer`, `CPU_Mapped`, `model buffer`, `buf size` and `MiB`.
-
-**Zero matches in eight logs.** The whole model-loader block is absent: there is
-no `llama_model_loader:` line, no `print_info:` line and no `load_tensors:` line
-anywhere. One library line does reach the log - a `W load:` warning about a
-control token - so the library's warnings arrive and its load-time information
-does not. The only line that survives between the two load markers is
-`srv load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'`,
-and that is where `n_ctx_configured` is read from.
-
-The consequence is a plan consequence rather than a defect. `kv_cache_bytes`,
-`compute_buffer_bytes` and `model_buffer_bytes` were specified against "the
-`llama-server.log` KV-buffer line at load". There is no such line on build
-`b10598` as this pipeline starts the server, so the three were left unwritten
-rather than minted as columns that would be empty on every row for ever.
-
-What that costs, stated rather than implied: the 5.6 GiB of arithmetic and the
-13.29 GiB measured cannot be reconciled from anything this pipeline records, and
-the flash-attention saving cannot be attributed to a term. Getting them needs the
-server to print them first - a llama-server flag or verbosity change measured on
-the runner, which is a settings change and not a contract one.
-
 ## What the gates cost on a developer box
 
 Every figure in this section: **Windows 11, 12 logical CPUs, 31.8 GiB RAM,
@@ -6145,6 +4344,216 @@ none of this was done to make it faster. It was done because the cost grows with
 the corpus and the coverage does not. The whole backend suite still runs on
 every change.
 
+## Feed availability
+
+**Measured** on a developer machine (i7-1265U, Windows, 2026-08-21) by running
+the real plan stage against the ratified `ai` list - a better check than a
+bespoke script, because it exercises the code that will do it daily.
+
+| Quantity | Value |
+| --- | --- |
+| Feeds configured | 36 |
+| Resolved on the first pass | 26 |
+| Recovered by finding the real feed URL | 5 |
+| **Live after correction** | **31, against a floor of 25** |
+| Retired: `robots.txt` forbids or is unreadable | 4 |
+| Retired: the publisher declares no feed at all | 1 |
+
+Two of the retirements are permanent by the host's own instruction rather than
+defects to fix. One publisher (`ai.meta.com`) is a JavaScript application that
+declares no feed on any path, which is a category the plan did not anticipate:
+a source can be real, active and unreachable by RSS.
+
+Two figures from the same runs, both single observations and both a laptop
+rather than a runner: **one feed read takes roughly 0.5-4 s including its
+`robots.txt`**, and a whole 36-feed plan pass finishes in **under a minute**.
+That matters only as a shape: the planning step loads no weights, so fanning out
+afterwards is what costs, not deciding the day.
+
+**Summarization, Qwen3-4B-Q4_K_M, 4 threads, i7-1265U, 2026-08-21, n=1:** a
+2,557-token article took **89 s** end to end for 179 output tokens. One
+observation on a laptop, recorded because it is the first real per-article
+number this project has; it is not a runner figure and may not be used as one.
+
+### What the robots policy cost
+
+#### On the runner (authoritative)
+
+**Measured 2026-08-23** on `ubuntu-latest`, by running the same day twice: run
+1 (`32624081323`) on the old policy, run 2 (`32634191910`) on the new one, same
+date, same config, same feed list. Comparing two real plan passes is a better
+check than any script, because it exercises exactly what runs daily.
+
+| Quantity | Before | After |
+| --- | --- | --- |
+| Feeds read | 115 | **132** |
+| Feeds refused | 31 | **14** |
+| Items published | 8 | 9 |
+| Eval rows written | 0 | **9** |
+
+**17 feeds recovered.** The 14 that still refuse are the check on the change:
+the policy keeps refusing when a host serves a file that says no, and keeps
+refusing when nobody answers at all.
+
+The published count moved by only one because the daily cap, not the feed
+count, decides how many items a reader gets. What a wider pool buys is
+**choice**: 17 items are now selected from a larger candidate set, so the
+ranking has more to rank. Feed count is an input to quality, not to volume.
+
+The eval-row column measures a different fault fixed in the same commit: the
+scorer had been disabled on every scheduled run, so the ledger had never once
+been written by automation. Nine rows is the first time it has.
+
+#### On a developer machine (kept for the IP contrast)
+
+**Measured 2026-08-23** (i7-1265U, Windows), n=1 per feed, against the 26 feeds
+run 1 recorded as `robots_denied`, driving the real fetcher.
+
+| Outcome after the change | Feeds |
+| --- | --- |
+| **Recovered** | **19** |
+| Still refused - a served `robots.txt` disallows the path | 2 |
+| Still refused - the article itself answered HTTP 403 | 4 |
+| Still refused - the host reset the `robots.txt` connection | 1 |
+
+Ten of the nineteen serve no `robots.txt` at all and answered 404. Reading
+"no such file" as a refusal was a rule we invented and the host never wrote,
+and it was silently costing the digest most of its `business-economy` and
+`world` candidates.
+
+This page predicted the runner would recover fewer than 19 because a developer
+IP is not a runner IP, and several of the 403s were a WAF answering a
+datacentre address. The runner recovered 17. **The laptop over-counted by two,
+in the direction predicted** - which is the reason the runner table sits above
+this one and the laptop table is kept only for the contrast.
+
+### What the robots parser costs, 2026-09-02
+
+`protego==0.6.2` replaced `urllib.robotparser` because the standard library
+reads one committed file two ways across the interpreter range
+`pyproject.toml` declares - Python 3.12 takes the first matching group and the
+first matching rule, Python 3.14 merges repeated groups and applies
+longest-match. See
+[the trust boundary](../architecture/sources/trust-boundary.md). This is what
+that dependency costs (Rule #8, Rule #10).
+
+#### On the runner (authoritative)
+
+**Measured 2026-09-02** on `ubuntu-latest` (Linux 6.17.0-1022-azure x86_64,
+4 vCPU, 16,766,414,848 bytes of RAM), CPython 3.12.14, in a throwaway workflow
+on a branch cut from `main` - so the baseline is `pip install -e ".[dev]"` with
+no protego in it. Run `33668824024`; the branch was deleted once the log was
+read.
+
+| Quantity | Value |
+| --- | --- |
+| Install seconds | 0.661, 0.449, 0.454 (n=3, mean **0.521**, spread **0.212**) |
+| Installed bytes | 422,890,458 -> 422,943,750, so **+53,292** |
+| Installed files | 10,317 -> 10,334, so **+17** |
+| `pip list --format=freeze` | one line added, `Protego==0.6.2`; none removed, no version moved |
+
+Sample 1 includes the wheel download and samples 2 and 3 read pip's local
+cache, which is what the 0.212 s spread on a 0.521 s mean is. Half a second
+against the 15 minutes the `gates` job is allowed is not a number any design
+turns on; it is here because Rule #8 asks what a dependency costs.
+
+#### Against the figure the plan recorded
+
+The plan recorded a **10,296-byte wheel** from the package index and left the
+installed size unmeasured. Installed, it is **53,292 bytes - 5.18 times the
+wheel**. That ratio is what unpacking a zip and byte-compiling it costs, not a
+dependency that turned out bigger than it looked: the Python source alone is
+**19,709 bytes over five modules, 1.91 times the wheel**, and the rest is
+30,496 bytes of bytecode pip generates and 9,142 bytes of packaging metadata
+(counted per file on the developer box, below).
+
+In absolute terms it is **7.3 percent of PyYAML's 728,341 installed bytes** and
+**0.15 percent of shellcheck-py's 34,782,285**, both of which are already
+dependencies nobody has argued about.
+
+**The installed figure is the baseline, and the wheel figure is not.** Owner
+ruling, 2026-09-02, on reading the two numbers above: `protego` is inside the
+budget, and every future size comparison for this dependency is made against
+**53,292 installed bytes and 0.521 s to install**. A wheel is a zip, so the
+unpacked source, the bytecode pip generates and the packaging metadata are three
+different things - a comparison anchored on the 10,296-byte wheel understates
+what the runner actually holds by 5.18 times, and would let a package grow five
+fold before anything read as a change.
+
+**Beneficiary:** one reading of `robots.txt` on every interpreter the project
+supports. That is the control Rule #11 rests on, and it may not have an answer
+that depends on which runner picked up the job.
+
+#### On a developer machine (kept for the contrast)
+
+**Measured 2026-09-02** (Windows 11, CPython 3.14.2) by summing
+`site-packages` before and after: 356,807,900 -> 356,867,247 bytes over
+11,027 -> 11,044 files, so **+59,347 bytes over 17 files**. That is 6,055 bytes
+over the runner's figure, and the cp314 bytecode is where it goes. Installing
+it took 5.02 s here (n=1, with the test suite on the same box), so read that as
+an upper bound and the runner's 0.521 s as the number.
+
+`protego` ships `py.typed`, so `mypy --strict` needs no `ignore_missing_imports`
+entry for it - measured by running the gate with the package installed and no
+override: 0 errors over 141 source files.
+
+### Why the other items failed
+
+**Measured 2026-08-23** on a developer machine (i7-1265U, Windows), by
+re-fetching all 9 failures of run 1 and comparing what the extractor returned
+against the prose actually present in the markup.
+
+| Items | Source | Extracted | Cause |
+| --- | --- | --- | --- |
+| 2 | GitHub release tag | 51, 162 words | The page is a list of binary names. The largest prose block in the markup is GitHub's own "You signed in with another tab" furniture |
+| 2 | NBER paper page | 128, 178 words | The extractor returned **the abstract, correctly**. The paper is a PDF |
+| 1 | Marginal Revolution | 229 words | The post is 277 words. The extractor got 83% of it |
+| 2 | Japan Times | 86, 111 words | Metered paywall |
+| 2 | IAEA | never fetched | HTTP 403 at the WAF |
+
+Fetches took **0.45-0.80 s**, and no item failed on a timeout or a retry
+budget. Two hypotheses are ruled out by this table: the sources are not slow,
+and they are not JavaScript shells hiding their text from the extractor.
+
+**The extractor is behaving correctly.** The 250-word floor is rejecting
+short-form sources that were extracted properly - a release tag, an abstract,
+a short blog post. That makes the low count a **source-selection** result
+rather than an extraction defect, and it is why raising the floor's pass rate
+belongs in `config/sources.json` and not in `extract.py`.
+
+### Lead coverage newline boundary
+
+**Measured 2026-08-23** on a developer machine (Windows, Python 3.12.12), by
+extracting the 17 committed `tests/fixtures/short-sources/` HTML fixtures with
+`to_article()`, comparing the old capitalised-run expression against the fixed
+metric, and scoring five hand-written `publish_brief` summaries through
+`score.band()` at `hhem = 0.95`. Spread is not available because this is a
+deterministic string metric.
+
+| Check | Before | After |
+| --- | --- | --- |
+| Fixtures with a glued newline entity | 6 of 17 | 0 of 17 |
+| Extractable fixtures in the pass | 15 of 17 | 15 of 17 |
+| Hand-written `publish_brief` rows moved by the fixed metric | 1 of 5 | 0 remaining wrongly capped |
+
+The glued entities were: `ai2\nglenn matlin`,
+`published\nus president donald trump`, `student researcher\nwe`,
+`xcframework\nlinux`, `gender-specific parental investment\nwe`, and
+`biodiversity loss\nwe`.
+
+| Fixture | Coverage before | Band before | Coverage after | Band after |
+| --- | --- | --- | --- | --- |
+| `llama-cpp-releases-01` | 0.625000 | high | 0.636364 | high |
+| `llama-cpp-releases-02` | 0.857143 | high | 0.857143 | high |
+| `marginal-revolution-01` | 1.000000 | high | 1.000000 | high |
+| `nber-new-01` | 0.833333 | high | 1.000000 | high |
+| `nber-new-02` | 0.000000 | medium | 0.500000 | high |
+
+The committed `state/scores.csv` had 156 rows, but no source-text or summary-text
+columns. The stored `coverage` column cannot be recomputed honestly from that
+ledger alone, so this pass reports 0 computable re-bands rather than inventing a
+movement count.
+
 ## Retired measurements
 
 Twenty-three sections moved to
@@ -6168,24 +4577,24 @@ to justify a design decision.
 | --- | --- | --- |
 | **What the site weighs, and how fast it grows, once the dated documents and the committed encoder weights leave it** | **arithmetic, not a measurement: 110.65 - 9.54 - 22.59 = about 78.5 MB, and a 1.19 MB slope a published day** | dispatch `.github/workflows/measure-migrated-tree.yml` from `main`. It builds the site as it ships, measures it, then rebuilds with `frontend/static/assist/models` deleted, removes the prerendered dated directories from the tree, and measures again - both arms on one commit, because the archive grows 1.69 MB a published day underneath a before-and-after taken on two days. It runs the migrated arm twice, so the figures come with a spread instead of an assertion. **The dispatch is owed**: `workflow_dispatch` only fires from the default branch, so this could not run while the workflow was on a branch. Read `site-weight <tree>: N MB in N files` and `site-weight runway: N published days to the 800 MB alarm point` off the job log for each arm. The claim the plan needs is the difference between the two runway lines, in days - a percentage of a number that keeps growing is not a result (Carmack, 2026-09-08). Taken on the runner and not a laptop because the dominant term is per-file syscall cost, which is the term differing most between the two machines. |
 | **Whether a subject the registry does not name goes quiet for long enough to matter** | **bounded, not measured: 75.2 percent of published items carry no registry name** | the 30 registry names are all covered near-daily, so nothing in the record supports a fade rate ([How long we go quiet about a registry name](#how-long-we-go-quiet-about-a-registry-name-2026-08-31)). Whether a quiet subject exists in the other three items in four cannot be read from a closed vocabulary, and this repository has no entity recogniser. Two things settle it, in order: put one real subject in `config/watchlist.json` and re-run `python backend/utilities/entity_gap.py` for that entry alone; or, if the question is ever worth a model, score the model on the gap as well as the coverage, because a recogniser that splits one subject across three names raises coverage and shortens every gap. |
-| **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
-| **Unaccounted job wall-clock per SHARD** | **the instrument landed 2026-08-30 and has no population: 0 of 4,167 committed item rows carry a `shard`** | `shard` is now a column on `ItemHealthRow`, and a column is null on every row written before it existed, so the finest grain the committed data supports is still the whole run ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). The read rate spreads 2.30x between shards inside one run, so a per-run figure averages away exactly what an operator needs to see. Re-run `python backend/utilities/measure_ledgers.py` after the next scheduled run - it splits per shard on its own once a run's rows carry the cell. |
-| **A work shard's fixed cost on more than one run** | **one run measured: 335.1 s a shard, 5.6 minutes** | only run `2026-08-29-2` has four clocks and one execution each; `2026-08-29-3` filed six counter rows for four shards and cannot be joined, and the six runs before 2026-08-29 have no `job_seconds` cell at all ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). Re-run `python backend/utilities/measure_ledgers.py` after a few more clocked days, and read the spread rather than the single figure. | | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
-| **Whether a day at eight work shards publishes** | **answered 2026-08-27: it does** | run `33114410534` published the 2026-08-27 day at `shards = 8`, with 25 charts over 25 distinct paths and 25 files in the tree ([Eight work shards, paired](#eight-work-shards-paired-2026-08-27)). What remains is a decision about `run.max_parallel`, not a measurement. |
+| **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
+| **Unaccounted job wall-clock per SHARD** | **the instrument landed 2026-08-30 and has no population: 0 of 4,167 committed item rows carry a `shard`** | `shard` is now a column on `ItemHealthRow`, and a column is null on every row written before it existed, so the finest grain the committed data supports is still the whole run ([Three figures the ledgers already held](../archive/measurements-2026-08.md#three-figures-the-ledgers-already-held-2026-08-30)). The read rate spreads 2.30x between shards inside one run, so a per-run figure averages away exactly what an operator needs to see. Re-run `python backend/utilities/measure_ledgers.py` after the next scheduled run - it splits per shard on its own once a run's rows carry the cell. |
+| **A work shard's fixed cost on more than one run** | **one run measured: 335.1 s a shard, 5.6 minutes** | only run `2026-08-29-2` has four clocks and one execution each; `2026-08-29-3` filed six counter rows for four shards and cannot be joined, and the six runs before 2026-08-29 have no `job_seconds` cell at all ([Three figures the ledgers already held](../archive/measurements-2026-08.md#three-figures-the-ledgers-already-held-2026-08-30)). Re-run `python backend/utilities/measure_ledgers.py` after a few more clocked days, and read the spread rather than the single figure. | | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](../archive/measurements-2026-08.md#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
+| **Whether a day at eight work shards publishes** | **answered 2026-08-27: it does** | run `33114410534` published the 2026-08-27 day at `shards = 8`, with 25 charts over 25 distinct paths and 25 files in the tree ([Eight work shards, paired](../archive/measurements-2026-08.md#eight-work-shards-paired-2026-08-27)). What remains is a decision about `run.max_parallel`, not a measurement. |
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **measured 2026-09-06 over five published days: 3,023,156 bytes a published day, 5,572 an item** | answered. Two arms of today's code over two real corpora, and a per-date fit of one of them, land 4.4 percent apart ([How fast the site actually fills](#how-fast-the-site-actually-fills-2026-09-06)). What is left open is one line of it: `console/` takes 507,894 bytes a published day and is bounded only at `console.max_window_days` = 366, which is past the 318-day runway, so nothing on record says what it costs after that. |
-| **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs on an i7-1265U ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). A laptop measures the laptop, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
+| **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs on an i7-1265U ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). A laptop measures the laptop, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
 | **What holds the 1.5 GiB a work shard's own python holds** | **bounded, not attributed: 1.49 to 1.55 GiB over four captured shards, in one process nothing names** | two dispatches of `.github/workflows/digest.yml`, no code. The first with `faithfulness: false`: the install step then takes `.` instead of `.[faithfulness]` and `_scorer` returns nothing, so the difference in `python_peak_rss_bytes` between that run and a scored one **is** the scorer's resident share, on the runner. The second at the default, to read the new per-process roll-call in **What memory this shard used** and confirm what the other two pythons are ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). Do the second one first - it costs nothing extra and it says whether the 4 percent attributed to the host is really the host. |
 | **What makes a visuals host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and one instrument was broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)). Exactly one run carries both a CPU and a prefill rate. **Both greps are now explained and neither needs fixing again.** `system_info` was never a grep fault: it is not printed at all below verbosity 4, so the pattern was always right and the line was never there to find ([What llama-server reports about its own runtime settings](#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)). The log summary's `^(srv|slot) ` anchor was a real fault - it matched 1 line of 40 in every committed capture and none of them by the anchor - and it was corrected on 2026-09-09 to read the timestamp and level letter the tag sits behind, which finds 38 of 40. So `prompt eval time` reaches a job log again from the next run. Then: **two runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
-| **Which CPU the visuals job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). The `visuals` job runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give it a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |
+| **Which CPU the visuals job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the per-item cost of the visuals job](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)). The `visuals` job runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give it a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
-| **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record)). |
+| **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record)). |
 | A production day payload | fixture figure above | the first real pipeline run |
-| HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
-| Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
+| HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
+| Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
-| A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). It is a resident set and not a demand, which is the honest bound: 13.16 GiB at the worst of four shards against 16 GB. **That cell is llama-server alone**; the job also holds 1.49 to 1.55 GiB of its own python at the same time, and the two together leave 0.66 GiB free at the worst captured shard ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). |
+| A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)). It is a resident set and not a demand, which is the honest bound: 13.16 GiB at the worst of four shards against 16 GB. **That cell is llama-server alone**; the job also holds 1.49 to 1.55 GiB of its own python at the same time, and the two together leave 0.66 GiB free at the worst captured shard ([What the 1.6 GiB of python beside the model actually is](#what-the-16-gib-of-python-beside-the-model-actually-is-2026-09-09)). |
 | **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize()` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary arm alone against the configured 9B - five calls, no corpus freeze, no repeats. |
 | Whether the configured summarizer is better or worse than the retired Qwen3-8B-Q4_K_M | **no comparison was ever run** | a cache-safe replay of one frozen corpus through both models, at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread, and a pre-registered blind human selector. The 0.7149 mean hhem above is one model on one corpus and is not a delta. |
 
