@@ -48,6 +48,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 | **How-to doc** | `docs/how-to/<verb>-<slug>.md` | Operator running a procedure | Living runbook | Ordered steps, inputs, validation, failure modes | Rationale prose; concept definitions |
 | **Reference doc** | `docs/reference/*.md` | Someone needing an exact value | Living table | Exact options, values, contracts, measurements with hardware + date | Narrative; procedure |
 | **Agent notes** | `docs/reference/agent-notes.md` (index) + `docs/reference/agent-notes/<tool-family>.md` | Anyone running commands in the repo | Living list | Environment and tool quirks that make a command lie about its result | Project behaviour, design rationale, product rules |
+| **Benchmark record** | `docs/reference/benchmarks/<YYYY-MM-DD>-<what-was-measured>.md` | Anyone citing or re-running that run | **Frozen** - a run happened on a date and its conditions do not change | One run: its conditions, method, arms, raw figures, and what it settles and does not | The rule the figures justify; a figure a later run superseded |
 | **Plan-doc** | `TODO/<YYYYMMDD>-<slug>-plan.md` | Next person picking up work | Single-snapshot; DELETED once distilled (git history is the ledger) | Phase status, active PR breakdown, TBD list, pointers | Rationale prose; decisions; rejected alternatives |
 
 ### Routing rules (decide a new statement's home)
@@ -60,6 +61,39 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 6. Architecture choice with an actively explored rejected alternative, non-trivial reversal cost, and cross-system consequences? -> a `## Design rationale` / `## Rejected alternatives` section ON the living doc it impacts (concept / how-to / subsystem). No ADR file, no `decisions/` directory. If any leg is missing, just update the living doc's current-state text.
 7. Where a file or a whole directory belongs in the tree? -> the **repository-layout reference doc.** One page maps every top-level directory to what it holds, who writes it, and whether it is committed - so a new directory has to state its reason before it exists.
 8. A tool quirk, an environment trap, or a command whose result cannot be trusted at face value? -> the **agent-notes reference.** Not a private memory file - see below. It is one page until it stops being readable as one; then the stem path becomes an index and each child is named for the tool family whose output lies, so every inbound link keeps working.
+9. A benchmark run - a sweep, a candidate priced, two arms raced? -> its own **benchmark record**, and a link from the instrument log. Never an append to the log. See below.
+
+### A benchmark run gets its own page, and never the log's name
+
+A run is a fact about a day: these weights, that build, this corpus, that
+machine. The figure it produces is a fact about now, and only until the next run.
+Appending the run to the instrument log merges the two, and the page then carries
+several readings of one quantity in date order where only the ordering says which
+governs - which is the failure the three tests above exist to stop, arriving by
+the one door nobody guards, because each append is individually correct.
+
+So they separate:
+
+- **The record holds the run.** Conditions, method, arms, raw figures, and what
+  it settles and does not. It is **frozen** once written: a later run does not
+  edit it, it gets its own record.
+- **The instrument log holds the figure now in force**, one per quantity, and
+  links to the record behind it. When a run supersedes a figure, the log's number
+  is replaced in the same commit - the old reading goes, and the record it came
+  from stays where it is.
+
+**The name says what was measured, never a sequence and never the family.**
+`2026-09-09-doubled-window-and-cap.md` is a name somebody can arrive at.
+`benchmark-2.md`, `measurements-3.md` and `perf-run-final.md` are not: the first
+two answer no question and the third will be wrong within a week. A record may
+not take the instrument log's name, because the log is where somebody arrives
+holding "what is the number today" and the record answers "what happened on that
+day" - two questions, and the log is the one every other doc links to.
+
+**A run whose figure nothing acts on still gets a record**, and the log gets no
+row. That is the honest outcome for an exploratory sweep, and it is cheaper than
+the alternative this project has already paid for twice: a number in the log
+that no config key reads, which a later reader treats as load-bearing.
 
 ### A page answers one question, and length is a symptom rather than the fault
 
@@ -150,6 +184,30 @@ whose contradictions are freshest.
 The one thing here worth measuring is the bootstrap load itself - the tokens a
 reader has to hold before the first line of code is read. That names a budget
 rather than a threshold, and a budget is what leaves room for the working set.
+
+### The tool that hands you the numbers
+
+```text
+python backend/utilities/doc_load.py
+```
+
+It prints the bootstrap load and one row per page, and **it decides nothing**:
+every column is an input to one of the three tests above, and no number it prints
+is a threshold. There is no doc gate and no line-count lint, deliberately - a
+count is met by starting a second file, which is the fragmentation failure with
+none of the benefit.
+
+| Column | The test it feeds |
+| --- | --- |
+| `~tok` | the bootstrap load, against the working set you still have to hold |
+| `top h2` | the largest section as a share of the page. One section holding most of a page usually holds several answers - open it and ask the **split test** whether you can act on one section without another |
+| `from` | how many other pages link here. `1` means one page is the only way in, so the **merge test** asks whether that page owns this as a section; `0` is the same question, louder |
+| `super` | sections saying a later one corrects them. Each is a **delete test** candidate and never a verdict: keep the correction whose trap a reader can still walk into, cut the one the correction closed |
+
+Its token figure is about four characters a token - a declared estimate rather
+than a measurement (Rule #10), which is enough to compare pages and not enough to
+quote anywhere else. Run it before a docs pass to pick the page, and after one to
+see what moved.
 
 ### `docs/` is the memory
 

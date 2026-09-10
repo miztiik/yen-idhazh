@@ -18,7 +18,7 @@ Before any non-trivial work:
 
 1. Read [`CLAUDE.md`](CLAUDE.md) - the engineering contract.
 2. Run the ritual in [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md); honour [`docs/agents/guardrails.md`](docs/agents/guardrails.md).
-3. Route new docs by [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md).
+3. Route new docs by [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md). **A page answers one question and has no maximum length; a split names a question, never a sequence, so `-part2.md` is never the answer. A benchmark run gets its own record under `docs/reference/benchmarks/`, named for what it measured and the date, and the instrument log links to it rather than absorbing it. Before and after a docs pass, run `python backend/utilities/doc_load.py` - it prints the bootstrap load and one row per page, and every column feeds a test on that page rather than a threshold.**
 4. For plan execution, follow [`docs/how-to/execute-a-plan.md`](docs/how-to/execute-a-plan.md).
 5. Before claiming a change is done, read [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md). **Use `npm --prefix frontend run test:changed -- --list`, then run the selected local checks. CI runs the full suite. Do not repeat a worker's unchanged check or launch a second copy while its first run is active.** A documentation-only closure needs no local application suite.
 6. Write new and generated text with LF before the first test. Git normalises at `git add`, which is too late for a test that reads the working file.
