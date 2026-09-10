@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -318,6 +318,96 @@ The output shape is enforced by grammar-constrained decoding against a schema
 generated from `SummaryDraft`, not requested in prose. `SummaryDraft` is closed
 to unknown keys, so a planted tool call fails at validation rather than reaching
 a payload.
+
+## The second call writes this summary, and the article is read once
+
+A second prompt is being built beside this one. `backend/idhazh/prompts/call_one.txt`
+asks a model what an article's already-extracted quantities and dates mean;
+`backend/idhazh/prompts/call_two.txt` then asks the same model, in the same
+conversation, for this page's summary and for a plan for one picture. Neither is
+dispatched by any stage yet - the gate in front of them and the picture they
+lead to are later rows of
+[`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md).
+What is settled, and what this section owns, is why the second call is shaped
+the way it is.
+
+**Call 2 appends to call 1's message array, and reuses call 1's system prompt.**
+The request is built from call 1's own payload rather than rendered again, so
+the system turn and the article-carrying user turn are the same bytes and not
+merely the same intent. A prefix cache reuses the longest common prefix of the
+tokenised prompt, so a system prompt of call 2's own would end the shared prefix
+at the chat template's header and prefill the whole article a second time -
+roughly double, for a wording whose benefit nobody could measure. The reuse is
+asserted on the bytes and never on a `prefill_ms` ratio, which would confound
+cache reuse with how long the new turn is and would read as partial success when
+the prompt had been built in the wrong order.
+
+**The two calls belong adjacent, per item.** `models.summarize.inference` pins
+`n_parallel` to 1, so the server holds one cache slot. Every call 1 first and
+every call 2 afterwards would evict the prefix before it was reused, every time,
+and nothing in any log would say so.
+
+### `summary` is decoded before `visual`, and that order is the recovery
+
+Field order is decode order, so the summary is written and closed before the
+plan is started. Two things follow and neither is cosmetic.
+
+**A reply the output budget cuts is cut in the plan.** The bytes come back on an
+ordinary HTTP 200 and a grammar-constrained decoder closes each sub-object as it
+finishes it, so the summary in front of the cut is closed, balanced and
+independently parseable. `visual_planner.recovered_completion` reads it out with
+`json.JSONDecoder().raw_decode` and hands back something shaped exactly like a
+single-call reply - so the length verdict, the copied-source reject, the address
+reject and the restatement drop above all still run on it, unchanged. The item
+publishes with its summary and no picture, at no extra seconds and with no
+second request. Reversed, the same cut would lose the summary, which is the part
+a reader came for. `to_summary` used to fail such an item on `finish_reason`
+without reading the bytes at all.
+
+**The plan is drafted with the summary already in context, and that is
+conditioning rather than sourcing.** The plan may cite only an element the
+article's own table carries, so a picture cannot draw a figure the summary
+happened to mention and the table does not hold. The risk this ordering does
+carry is the other direction: a plan can drift toward illustrating the sentences
+the summary chose rather than the article. **If `information_delta` collapses
+after this ordering goes live, this is the first thing to suspect.**
+
+### The output budget is derived, not picked
+
+Call 2 decodes the summary and the plan through one ceiling, and that number is
+arithmetic over the two shapes' own bounds. Every array in them carries a
+`maxItems` and every decoded string a `maxLength` - which is why
+`summarize.key_point_words_max` exists at all, since a key point was the one
+decoded string in the reply with no upper end and a derivation with an unbounded
+term in it is not a derivation.
+
+`visual_planner.call_two_output_tokens` runs the arithmetic on every import and
+raises when the recorded number no longer matches, so a bound cannot move
+without the budget moving with it. The two halves convert differently, because
+one rule would be wrong about one of them:
+
+| Part | Bound | Converted at |
+| --- | --- | --- |
+| `title`, `key_points`, `summary` | word counts from `config/`, spent as characters at 12 a word | 1.3 tokens a word, which is what `extract.approx_tokens` already spends the truncation cap at |
+| everything else - keys, punctuation, element addresses, closed vocabularies | characters, from the generated schema | one token a character, because a token spans at least one |
+
+Against the committed bounds on 2026-09-10 the widest reply is 11,692
+characters: 7,848 of prose, which is 850 tokens, and 3,844 of structure, of
+which the visual plan alone is 3,767. **The budget is 4,694 tokens and it is
+mostly the picture.**
+
+**What that guarantees, and what it does not.** The structural half is a true
+ceiling. The prose half is a sizing: a reply that spent its whole character rail
+on twelve-character words would cost more tokens than 1.3 a word. That is
+deliberate, and it is why the recovery above exists - the budget is the brake
+and the recovery is the seatbelt. A budget large enough to be an unbreakable
+ceiling would leave no window for the article it is summarising.
+
+**A retry must perturb the input, or it must not happen.** Decoding is
+`temperature 0.0` with `seed 0`, so a second call against an identical prompt
+returns identical bytes and costs a full decode for them. That is the same
+argument the copied-source reject above makes, and it is why a reply cut by the
+budget is recovered rather than re-requested.
 
 ## The shape is not the whole check
 
@@ -743,6 +833,12 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 | Cut the five hedge terms and keep only "keep the source's hedges" | Each term is a literal member of a lexicon in `backend/idhazh/evals/metrics.py`. The prompt and the alarm share a vocabulary, and cutting the list decouples them silently. |
 | Keep cutting until the prompt is as short as it can be | Length is not the measure. A cut is safe when another line, the decoder or a metric still carries the behaviour, and a gamble when nothing does. |
 | Move band-varying numbers to the tail before measuring | The live runner measurement collapsed the prize. The current server log cannot prove reuse, so the change would risk output drift for an unproved gain. |
+| A system prompt of call 2's own | The shared prefix would end at the chat template's header and the whole article would prefill again - roughly double, for a wording nobody could measure the benefit of. |
+| Three calls, so a cut reply is retried in halves | It needs a measured timeout rate first, and there is none. The recovery above costs zero seconds and does not. |
+| Temperature jitter on a retry | It breaks the `seed: 0`, `temperature: 0.0` contract. A re-run that is not a re-run makes every other measurement on this page unrepeatable. |
+| Pick the output budget and check it against the bounds | A number somebody chose is a number nobody re-derives. It is computed on every import instead, and a bound that moves without it is an import error. |
+| Leave a key point unbounded and derive the budget from the rest | Then the derivation has a term with no upper end in it, which is a guess with a table next to it. |
+| Bound a key point at the longest one ever published | A `maxLength` is a hard grammar stop. The next slightly longer key point becomes a parse failure for the whole item. |
 
 ## See also
 
