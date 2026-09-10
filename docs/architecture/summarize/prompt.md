@@ -347,6 +347,48 @@ the prompt had been built in the wrong order.
 every call 2 afterwards would evict the prefix before it was reused, every time,
 and nothing in any log would say so.
 
+### What the cache actually reused, and the four tokens it did not
+
+`backend/utilities/measure_two_calls.py` starts a real server, sends the two
+calls adjacent on one slot, and reads `timings.cache_n` off call 2's reply.
+
+**12th Gen Intel Core i7-1265U, Windows 11, four threads, `n_ctx` 16384, flash
+attention on, `Qwen3-8B-Q4_K_M.gguf` through `llama-server`, 2026-09-10, one
+run.** The token counts are exact and are a property of the template and the
+tokenizer; the milliseconds are this laptop with other work on it and are not a
+runner figure.
+
+| | call 1 | call 2 |
+| --- | --- | --- |
+| prompt tokens | 1,497 | 2,389 |
+| **cached tokens** | 0 | **1,493** |
+| completion tokens | 205 | 567 |
+| prefill | 214.1 s | 186.8 s |
+| decode | 88.8 s | 292.6 s |
+
+**The article and the system turn prefilled once, and the reuse stops four
+tokens short of call 1's whole prompt.** Those four are
+`<think>\n\n</think>\n\n`, which tokenizes to `[151667, 271, 151668, 271]`
+against the same weights on the same day. Qwen3's chat template writes an empty
+think block into the **generation prompt** under `enable_thinking: false` and
+drops it when the same turn is replayed as **history**, so the two renderings
+diverge at exactly that point. Nothing in this repository renders it and no
+change to how the prompt is built moves it.
+
+**What those four tokens cost is not four tokens.** A prefix cache reuses a
+prefix, so the divergence ends the reuse and everything behind it is processed
+again: 1,493 cached against the 1,702 that call 1's prompt and its own reply
+come to, which is 209 tokens re-prefilled - the four, plus the whole 205-token
+reply. That answers the second half of the question this measurement was taken
+to answer: **call 1's generated tokens do not cache**, and the reason is
+upstream of them.
+
+The weights measured are not the configured ones. `models.summarize` names
+`Qwen3.5-9B-Q4_K_M.gguf`; `Qwen3-8B-Q4_K_M.gguf` is the retired incumbent and is
+what this machine holds. The result is about a chat template rather than about
+weights, but a template ships with its weights, so it is re-measured when the
+model moves.
+
 ### `summary` is decoded before `visual`, and that order is the recovery
 
 Field order is decode order, so the summary is written and closed before the

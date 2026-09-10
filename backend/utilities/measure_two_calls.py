@@ -29,6 +29,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from dataclasses import asdict
 from pathlib import Path
 
 from idhazh import config
@@ -80,6 +81,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--article", type=Path, default=ARTICLE)
     parser.add_argument("--startup-seconds", type=float, default=600.0)
     parser.add_argument("--request-minutes", type=float, default=30.0)
+    parser.add_argument(
+        "--decode-cap",
+        type=int,
+        default=0,
+        help=(
+            "Stop each decode after this many tokens. Zero uses the real budgets. "
+            "Both oracle numbers are prefill facts and are on the reply whatever "
+            "stopped it, so a cap answers the same question in minutes instead of "
+            "hours on a machine slower than the runner - at the cost of telling you "
+            "nothing about what the reply said."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(REPO_ROOT / "config")
@@ -104,12 +117,16 @@ def main(argv: list[str] | None = None) -> int:
         first = build_call_one_request(
             article, table, model_id=model.id, inference=model.inference
         )
+        if args.decode_cap:
+            first["max_tokens"] = args.decode_cap
         one = post(first, endpoint=endpoint, timeout=timeout)
         report("call 1", one)
 
         second = build_call_two_request(
             first, one.content, source_words=article.band_source_words, brief=article.brief
         )
+        if args.decode_cap:
+            second["max_tokens"] = args.decode_cap
         two = post(second, endpoint=endpoint, timeout=timeout)
         report("call 2", two)
     finally:
@@ -129,12 +146,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FLOOR HELD - {reused - floor} tokens beyond call 1's prompt were reused too")
     else:
         print(f"FLOOR BROKEN - {floor - reused} tokens of call 1's prompt prefilled again")
+        print(
+            "  A four-token gap here is Qwen3's chat template rather than the prompt: it "
+            "writes an\n"
+            "  empty <think></think> block into a generation prompt and drops it when the "
+            "same turn is\n"
+            "  replayed as history. Anything larger is the prompt, and the first thing to "
+            "check is\n"
+            "  whether call 2 was built from call 1's own payload."
+        )
     if reused >= generated:
         print("TARGET: call 1's generated tokens cache as well")
     else:
         print(f"TARGET: {generated - reused} of call 1's own reply prefilled again")
     print()
-    print(json.dumps({"call_one": one.__dict__, "call_two": two.__dict__}, default=str))
+    print(json.dumps({"call_one": asdict(one), "call_two": asdict(two)}, default=str))
     return 0 if reused >= floor else 1
 
 
