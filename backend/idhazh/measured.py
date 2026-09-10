@@ -81,18 +81,26 @@ WARNING_DAYS_REQUIRED: Final = Measured(
 )
 
 CONSOLE_CEILING_HEADROOM_BYTES: Final = Measured(
-    value=369_000,
-    measures="the bound every console page ceiling has to stay under, in gzipped bytes",
-    taken_on=date(2026, 9, 6),
+    value=370_000,
+    measures="the bound every console page guardrail has to stay under, in gzipped bytes",
+    taken_on=date(2026, 9, 10),
     method=(
         "the heaviest console document plus 313,300 - what a day payload cost when a "
         "layout last inlined one, which is the single regression this surface has "
-        "actually had. A ceiling above the sum cannot catch it."
+        "actually had. A number above the sum cannot catch it. 57,488 measured at "
+        "c40eda91, gzip -5, heaviest of five builds of the shipping tree, plus "
+        "313,300, rounded down to the thousand. It held 369,000 from 2026-09-06 at a "
+        "heaviest document of 56,664, 536,000 before that at 222,819, and 433,000 "
+        "before that at 119,700 - and 222,819 is the measure of how far this stand-in "
+        "drifts from the page, because the console then stopped inlining its telemetry "
+        "and the document fell to a quarter of it."
     ),
     when_it_fires=(
         "the console genuinely carries more, so re-measure the heaviest document and "
-        "re-derive this bound in the same commit. A ceiling is a ratchet rather than "
-        "a budget: no approved panel is cut to stay under a number."
+        "re-derive this bound in the same commit. It is the ceiling on a guardrail "
+        "rather than a guardrail itself, so it does not take the twice-the-page rule: "
+        "a page-weight number above this sum cannot see the regression it exists for. "
+        "No approved panel is cut to stay under a number (owner, 2026-08-31)."
     ),
 )
 

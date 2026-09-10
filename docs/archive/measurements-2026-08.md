@@ -3716,7 +3716,7 @@ mature day removed and measured. A measured day replaces an extrapolated one
 strip now reads one row per run where it read several.
 
 **Seven publishes, when the recorded rule would allow nine.** The horizon rule in
-[the gate this fires from](../how-to/run-the-gates.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)
+[the gate this fires from](../how-to/run-the-gates.md#the-console-guardrail-and-what-to-do-when-it-fires)
 is the largest whole number of measured publishes that keeps the 313,300-byte
 regression above 2x the slack. At today's rate that is nine on `/console/`:
 

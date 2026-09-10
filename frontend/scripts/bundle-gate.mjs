@@ -161,22 +161,24 @@ const commas = (value) => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 let failed = false;
 
 /**
- * The document, against the ceilings in `config/idhazh.json`.
+ * The document, against the guardrails in `config/idhazh.json`.
  *
- * A ceiling is a limit somebody chose, so it is a knob and lives with the other
- * knobs (Rule #6), in config/idhazh.json and nowhere else - the model default
- * in app_config.py is empty so the numbers are not copied into a second file.
+ * A guardrail is a limit somebody chose, so it is a knob and lives with the
+ * other knobs (Rule #6), in config/idhazh.json and nowhere else - the model
+ * default in app_config.py is empty so the numbers are not copied into a second
+ * file.
  *
- * config/idhazh.json decides what is capped. A route it names is measured and
+ * **Each number is twice the heaviest of five builds** (owner, 2026-09-10), so
+ * an ordinary content day cannot reach it and only a change of a different order
+ * can. Firing one is a question about what took on the bytes, never about what
+ * the number should be, and a commit that makes a page heavier may not raise its
+ * guardrail in the same breath. The keys are still spelled `ceilings_bytes`
+ * because that is the name the config already uses.
+ *
+ * config/idhazh.json decides what is guarded. A route it names is measured and
  * failed when it is over; a route it does not name is measured and printed
- * here, but never failed. A route earns a ceiling when somebody priced its
- * growth: /404 and /evals/ move only when the source moves, /archive/ grows by
- * one day link a published day so its number carries a measured year of that,
- * and each of the three /console/ routes grows with the ledger its own panels
- * read so each carries a measured few days and is meant to expire. One surface
- * split across several routes takes one key per route, or a blown budget cannot
- * name which route blew it. A page that renders a day is never capped, because
- * the only way under such a ceiling is to publish fewer items -
+ * here, but never failed. A page that renders a day is never guarded, because
+ * the only way under such a number is to publish fewer items -
  * `tests/payload-weight.spec.ts` covers that class by counting a marker instead.
  */
 const CONFIG = resolve(process.cwd(), '..', 'config', 'idhazh.json');
@@ -214,29 +216,29 @@ console.log('\nprerendered HTML, gzip -5, against page_weight.ceilings_bytes in 
 for (const [name, { bytes }] of [...heaviestPage].sort()) {
 	const measured = `  ${name.padEnd(18)} ${commas(bytes).padStart(9)} B  ${kb(bytes).padStart(9)}`;
 	if (rendersADay(name)) {
-		console.log(`${measured}  (renders a day - counted, not capped)`);
+		console.log(`${measured}  (renders a day - counted, not guarded)`);
 		continue;
 	}
 	const ceiling = ceilings[name];
 	if (!Number.isInteger(ceiling) || ceiling <= 0) {
 		uncapped.push(name);
-		console.log(`${measured}  (no ceiling in config - reported, not capped)`);
+		console.log(`${measured}  (no guardrail in config - reported, not guarded)`);
 		continue;
 	}
 	const headroom = ceiling - bytes;
 	const verdict = headroom < 0 ? `${commas(-headroom)} OVER` : `${commas(headroom)} spare`;
-	console.log(`${measured}  (ceiling ${commas(ceiling)}, ${verdict})`);
+	console.log(`${measured}  (guardrail ${commas(ceiling)}, ${verdict})`);
 	if (headroom < 0) over.push({ name, bytes, ceiling });
 }
 
 if (uncapped.length > 0) {
 	console.log(
-		`\nReported, not capped: ${uncapped.join(', ')}. config/idhazh.json names what\n` +
-			'is capped, and a route it leaves out is one whose growth nobody has priced\n' +
-			'yet - a fixed ceiling before that measurement fires on an ordinary publish\n' +
-			'rather than catching a regression. Measure what a published day costs the\n' +
-			'page, then add it under "page_weight": { "ceilings_bytes": { ... } } in\n' +
-			'config/idhazh.json with that many days of headroom.'
+		`\nReported, not guarded: ${uncapped.join(', ')}. config/idhazh.json names what\n` +
+			'is guarded, and a route it leaves out is one nobody has measured yet. Build\n' +
+				'the shipping tree five times, take the heaviest reading for the route, and\n' +
+			'add twice that under "page_weight": { "ceilings_bytes": { ... } } in\n' +
+			'config/idhazh.json - a guardrail catches a change of a different order, so a\n' +
+			'number close to the page is a budget and fires on an ordinary publish.'
 	);
 }
 
@@ -303,7 +305,7 @@ for (const key of payloadKeys) {
 		const verdict = headroom < 0 ? `${commas(-headroom)} OVER` : `${commas(headroom)} spare`;
 		console.log(
 			`  ${path.padEnd(26)} ${commas(bytes).padStart(9)} B  ${kb(bytes).padStart(9)}` +
-				`  (ceiling ${commas(ceiling)}, ${verdict})`
+				`  (guardrail ${commas(ceiling)}, ${verdict})`
 		);
 		if (headroom < 0) over.push({ name: path, bytes, ceiling });
 	}
@@ -351,19 +353,19 @@ if (Number.isInteger(coldCeiling) && coldCeiling > 0) {
 		`\ncold console load at console.default_window_days=${windowDays} ` +
 			`(${monthsTouched} month shards worst case):\n` +
 			`  ${parts.join(' + ')} = ${commas(cold)} B  ${kb(cold)}\n` +
-			`  (ceiling ${commas(coldCeiling)}, ` +
+			`  (guardrail ${commas(coldCeiling)}, ` +
 			`${headroom < 0 ? `${commas(-headroom)} OVER` : `${commas(headroom)} spare`})`
 	);
 	if (headroom < 0) {
 		failed = true;
 		console.error(
 			`\nbundle gate FAILED - a cold console load asks for ${commas(cold)} B, ` +
-				`${commas(-headroom)} B over the ${commas(coldCeiling)} B ceiling.`
+				`${commas(-headroom)} B over its ${commas(coldCeiling)} B guardrail.`
 		);
 		console.error(
 			'\nThe usual cause is not a heavier shard - it is a wider default window. Each\n' +
 				'extra month is a whole shard AND one more serial round trip, so check\n' +
-				'console.default_window_days before reaching for the ceiling. If the wider\n' +
+				'console.default_window_days before reaching for the guardrail. If the wider\n' +
 				'window is what was wanted, raise this in the same commit and say what the\n' +
 				'reader waits for in exchange.'
 		);
@@ -373,41 +375,43 @@ if (Number.isInteger(coldCeiling) && coldCeiling > 0) {
 if (namesNothing.length > 0) {
 	failed = true;
 	console.error(
-		'\nbundle gate FAILED - a ceiling in config/idhazh.json names nothing in the build:'
+		'\nbundle gate FAILED - a guardrail in config/idhazh.json names nothing in the build:'
 	);
 	for (const line of namesNothing) console.error(`  ${line}`);
 	console.error(
-		'\nDelete the ceiling, or find out why the route or the payload stopped being\n' +
-			'built. A ceiling over nothing still reads as a bound somebody checked.'
+		'\nDelete the guardrail, or find out why the route or the payload stopped being\n' +
+			'built. A guardrail over nothing still reads as a bound somebody checked.'
 	);
 }
 
 if (over.length > 0) {
 	failed = true;
-	console.error('\nbundle gate FAILED - a prerendered page or a fetched payload is over its ceiling:');
+	console.error(
+		'\nbundle gate FAILED - a prerendered page or a fetched payload is over its guardrail:'
+	);
 	for (const { name, bytes, ceiling } of over) {
 		console.error(
 			`  ${name} weighs ${commas(bytes)} B (${kb(bytes)}), ` +
-				`${commas(bytes - ceiling)} B over the ${commas(ceiling)} B ceiling`
+				`${commas(bytes - ceiling)} B over its ${commas(ceiling)} B guardrail`
 		);
 	}
 	console.error(
-		'\nTwo answers are legitimate and they are not interchangeable. If the page or the\n' +
-			'payload took on bytes nobody reads - a day payload inlined by a layout is how\n' +
-			'this last happened to a page, and a column added to a shard is how it happens to\n' +
-			'a payload - remove them. If it genuinely carries more, raise the ceiling in\n' +
-			'config/idhazh.json, in the commit that earned the bytes, and say in the message\n' +
-			'what they buy.'
+		'\nA guardrail sits at twice the page, so an ordinary publish cannot reach it and\n' +
+			'this is a change of a different order. Ask what took on the bytes first: a day\n' +
+			'payload inlined by a layout is how it last happened to a page, and a column\n' +
+			'added to a shard is how it happens to a payload. If the bytes are not read,\n' +
+			'remove them. If they are genuinely earned, RE-DERIVE the number - five builds,\n' +
+			'heaviest per route, never a mean, then twice it - and say in the same message\n' +
+			'what the bytes bought. Nudging it up to just clear the new page turns a\n' +
+			'guardrail back into a budget, which is what the 2026-09-10 ruling ended.'
 	);
 	if (over.some(({ name }) => name.startsWith('/console/'))) {
 		console.error(
-			'\nA console route is the third case, and raising it IS the answer. The owner\n' +
+			'\nA console route is the third case, and re-deriving IS the answer. The owner\n' +
 				'ruled on 2026-08-31 that no approved feature is cut, deferred or shrunk to\n' +
-				'stay under a page-weight number: a ceiling here is a ratchet, not a budget.\n' +
-				'Re-measure it - five builds, heaviest per route, never a mean - raise it, and\n' +
-				'say in the same commit what the bytes bought. Windowing a seed the first paint\n' +
-				'does not need is still the better first move, because a saving costs the\n' +
-				'operator nothing; leaving a panel unbuilt is not.\n' +
+				'stay under a page-weight number. Windowing a seed the first paint does not\n' +
+				'need is still the better first move, because a saving costs the operator\n' +
+				'nothing; leaving a panel unbuilt is not.\n' +
 				'See docs/architecture/publishing/frontend.md.'
 		);
 	}

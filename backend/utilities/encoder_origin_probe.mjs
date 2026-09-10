@@ -19,7 +19,7 @@
  *   node backend/utilities/encoder_origin_probe.mjs
  *   node backend/utilities/encoder_origin_probe.mjs --csp widened
  *   node backend/utilities/encoder_origin_probe.mjs --page https://miztiik.github.io/yen-idhazh/ \
- *     --only release-download,raw,huggingface --json out.json
+ *       --only raw,huggingface --json out.json
  *
  * `--csp as-deployed` (the default) loads the page exactly as published, so a
  * refusal is our own policy talking. `--csp widened` rewrites the `connect-src`
@@ -58,12 +58,12 @@ const FILES = [
 const DEFAULTS = {
 	page: 'https://miztiik.github.io/yen-idhazh/',
 	repo: 'miztiik/yen-idhazh',
-	tag: 'encoder-2026-08-22',
+	ref: 'main',
 	hub: 'Xenova/all-MiniLM-L6-v2',
 	revision: '751bff37182d3f1213fa05d7196b954e230abad9',
 	weights: 'frontend/static/assist/models/all-minilm-l6-v2-quantized/2026-08-22',
 	csp: 'as-deployed',
-	only: 'release-download,release-api,raw,huggingface'
+	only: 'raw,huggingface'
 };
 
 function parseArgs(argv) {
@@ -92,25 +92,12 @@ function localDigests(opts) {
 	return out;
 }
 
-function targetsFor(name, opts, assetIds) {
+function targetsFor(name, opts) {
 	const [owner, repo] = opts.repo.split('/');
-	if (name === 'release-download') {
-		return FILES.map((f) => ({
-			asset: f.asset,
-			url: `https://github.com/${owner}/${repo}/releases/download/${opts.tag}/${f.asset}`
-		}));
-	}
-	if (name === 'release-api') {
-		return FILES.filter((f) => assetIds.has(f.asset)).map((f) => ({
-			asset: f.asset,
-			url: `https://api.github.com/repos/${owner}/${repo}/releases/assets/${assetIds.get(f.asset)}`,
-			headers: { Accept: 'application/octet-stream' }
-		}));
-	}
 	if (name === 'raw') {
 		return FILES.map((f) => ({
 			asset: f.asset,
-			url: `https://raw.githubusercontent.com/${owner}/${repo}/${opts.tag}/${opts.weights}/${f.path}`
+			url: `https://raw.githubusercontent.com/${owner}/${repo}/${opts.ref}/${opts.weights}/${f.path}`
 		}));
 	}
 	if (name === 'huggingface') {
@@ -123,14 +110,13 @@ function targetsFor(name, opts, assetIds) {
 }
 
 /** Every origin the probe will ask for, so the widened arm allows exactly those and nothing else. */
-function originsOf(families, opts, assetIds) {
+function originsOf(families, opts) {
 	const set = new Set();
 	for (const family of families) {
-		for (const t of targetsFor(family, opts, assetIds)) set.add(new URL(t.url).origin);
+		for (const t of targetsFor(family, opts)) set.add(new URL(t.url).origin);
 	}
-	// The hosts a redirect lands on. A CSP source list is matched against every
+	// The host a redirect lands on. A CSP source list is matched against every
 	// hop, so the first hop's origin alone is not enough.
-	set.add('https://release-assets.githubusercontent.com');
 	set.add('https://us.aws.cdn.hf.co');
 	return [...set].sort();
 }
@@ -164,18 +150,6 @@ async function main() {
 	const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 	const page = await context.newPage();
 
-	// Asset ids come off the public release API. A value out of a response is
-	// refused unless it is digits before it is put back into a URL (Rule #11).
-	const assetIds = new Map();
-	if (families.includes('release-api')) {
-		const [owner, repo] = opts.repo.split('/');
-		const res = await context.request.get(
-			`https://api.github.com/repos/${owner}/${repo}/releases/tags/${opts.tag}`
-		);
-		for (const a of (await res.json()).assets ?? []) {
-			if (typeof a.name === 'string' && Number.isInteger(a.id) && a.id > 0) assetIds.set(a.name, String(a.id));
-		}
-	}
 
 	const allowed = originsOf(families, opts, assetIds);
 	const cspList = ["'self'", ...allowed].join(' ');
@@ -238,7 +212,7 @@ async function main() {
 
 	for (const family of families) {
 		report.families[family] = [];
-		for (const target of targetsFor(family, opts, assetIds)) {
+		for (const target of targetsFor(family, opts)) {
 			hops = [];
 			const got = await page.evaluate(IN_PAGE_FETCH, { url: target.url, headers: target.headers });
 			await page.waitForTimeout(250);
