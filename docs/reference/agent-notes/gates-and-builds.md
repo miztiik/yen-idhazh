@@ -107,7 +107,7 @@ Get-ChildItem build -Recurse -Include *.html,*.js |
 
 **A launch that reported nothing still launched.** Three launches each reported nothing and all three ran, so three builds wrote one shared output directory and the gate measured a half-written tree at 52,127 B against a real 130,396 - one paste away from being recorded as a ceiling (2026-08-26). Before trusting any byte measurement, look for the second build.
 
-**A page-weight failure is often not yours.** `/archive/` and `/console/` grow every time the pipeline publishes, so read `main`'s check-runs for the same gate before investigating your diff. This got much less likely on 2026-09-10, when every page number became a guardrail at twice the page rather than a tenth above it - a published day cannot cross one now. If one does fire, look for a step change rather than a day's growth, and never nudge the number up to clear it ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
+**A page-weight failure is often not yours.** This got much rarer on 2026-09-10, when `/archive/` and the three `/console/` routes lost their numbers entirely - those four grew every time the pipeline published, which is why they went. What is left names `/404` and `/evals/`, and neither moves unless somebody edits source, so a failure there almost certainly is yours. Never answer one by raising the number ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
 
 ## Two heavy gates on one box
 

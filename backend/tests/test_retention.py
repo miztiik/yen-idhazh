@@ -31,12 +31,13 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import ledger, publish_telemetry, retention, telemetry
 from idhazh.cli import main, stage_prune_state, stage_site_weight
 from idhazh.contracts.app_config import (
     PAGES_HARD_CAP_MB,
+    AppConfig,
     CollectConfig,
     ConsoleConfig,
     ObservabilityConfig,
@@ -50,7 +51,7 @@ from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percenti
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
-from idhazh.measured import ITEMS_A_DAY_CEILING, SITE_GROWTH_KB_A_DAY
+from idhazh.measured import SITE_GROWTH_KB_A_DAY
 from idhazh.measured import WARNING_DAYS_REQUIRED as WARNING_DAYS
 from idhazh.retention import (
     BYTES_PER_MB,
@@ -203,8 +204,11 @@ def test_headroom_is_measured_against_the_hard_cap(tmp_path: Path) -> None:
 
 # --- A level is not a date -----------------------------------------------------
 
-#: The item ceiling in force, `run.safety_ceiling_per_run` in config/idhazh.json.
-ITEMS_PER_DAY = int(ITEMS_A_DAY_CEILING.value)
+#: The item ceiling in force. Read from the config rather than copied beside it:
+#: a copy said 160 while the knob said 80, and its own record said it would notice.
+ITEMS_PER_DAY = AppConfig.from_json(
+    read_text(CONFIG_DIR / "idhazh.json")
+).run.safety_ceiling_per_run
 
 
 def sized_tree(root: Path, weights: dict[str, int]) -> Path:

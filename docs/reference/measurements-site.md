@@ -67,21 +67,35 @@ with twice the buffer and document it is a guard rail."
 | Route | Heaviest of five | Spread | Guardrail | Times the page |
 | --- | --- | --- | --- | --- |
 | `/404` | 2,154 B | 7 B | **4,400** | 2.04 |
-| `/archive/` | 5,761 B | 8 B | **12,000** | 2.08 |
-| `/console/` | 47,077 B | 8 B | **96,000** | 2.04 |
-| `/console/machine/` | 45,254 B | 3 B | **92,000** | 2.03 |
-| `/console/model/` | 57,488 B | 5 B | **116,000** | 2.02 |
+| `/archive/` | 5,761 B | 8 B | deleted the same day | - |
+| `/console/` | 47,077 B | 8 B | deleted the same day | - |
+| `/console/machine/` | 45,254 B | 3 B | deleted the same day | - |
+| `/console/model/` | 57,488 B | 5 B | deleted the same day | - |
 | `/evals/` | 3,227 B | 3 B | **6,600** | 2.05 |
 | `/` | 43,737 B | 2 B | none | renders a day - counted, not guarded |
 
-The three payload numbers were measured in the same runs and **none of them
-moved**, because each was already past twice what it bounds:
+**Four of the six numbers lasted one commit, and that is the finding rather than
+churn.** They were set to twice the page in the morning and deleted that evening,
+on the ruling that a threshold is the wrong instrument here at any value. The
+page weights above are the durable part: they are what the migrated tree weighs,
+and they are why `/console/` at 96,000 was as useless as `/console/` at 52,000.
 
-| Payload | Heaviest of five | Guardrail | Times the payload |
-| --- | --- | --- | --- |
-| `console/band.json` | 777 B | 2,000 | 2.47 at its retention bound |
-| `telemetry/2026-09.csv` | 167,505 B | 1,100,000 | 6.57 |
-| a cold console load | 503,292 B | 3,400,000 | 6.76 |
+The four deleted routes grow when the pipeline appends a day, so their numbers
+had to move when nobody wrote any code. The two that stay move only when a person
+edits source. What the four stood in for is asserted directly, and with no number
+in it, by `frontend/tests/payload-weight.spec.ts`. The reasoning is in
+[../concepts/config.md](../concepts/config.md) and
+[../how-to/run-the-gates.md](../how-to/run-the-gates.md#the-console-has-no-page-number-and-why-it-stopped-having-one).
+
+The three payload numbers were measured in the same runs and **none of them
+moved, then or since**, because none of them was ever chosen - each is arithmetic
+over a knob that already bounds it:
+
+| Payload | Heaviest of five | Number | Times the payload | What bounds it |
+| --- | --- | --- | --- | --- |
+| `console/band.json` | 777 B | 2,000 | 2.47 at its retention bound | `observability.public_*_keep_months` |
+| `telemetry/2026-09.csv` | 167,505 B | 1,100,000 | 6.57 | the longest month at the heaviest day ever run |
+| a cold console load | 503,292 B | 3,400,000 | 6.76 | `console.default_window_days` |
 
 `console/band.json` is priced at its bound rather than at today's size: its
 `months` list is the union of the published month shards, every
@@ -89,15 +103,14 @@ moved**, because each was already past twice what it bounds:
 about 809 bytes on the wire against 777 today.
 
 **What it means.** The spread between two builds of the same tree is at most 8
-bytes, which is 0.02 percent, so the distance above the page is a choice and not
-noise. The choice made earlier the same day was a tenth, and a tenth is a budget:
-measured against these six routes, an ordinary content day reaches it - so what
-fires the gate is a publish rather than a regression, and the operator who is
-stopped raises the number, which is how `/archive/` was raised twice in one day on
-2026-08-26. Twice the page cannot be reached by a day's content, so the only thing
-that fires it is a change of a different order, and the answer is to find what
-took on the bytes. Where the bytes are earned the number is re-derived to twice
-the new heaviest, never nudged up to just clear the new page.
+bytes, which is 0.02 percent - so any distance above the page is a choice, and
+that is the problem rather than the solution. A tenth is a budget: measured
+against these six routes, an ordinary content day reaches it, so what fires is a
+publish rather than a regression and the operator who is stopped raises the
+number. Twice the page cannot be reached by a day's content - and cannot be
+reached by much else either, which is the other failure in the same instrument.
+The four routes whose weight moves with the archive took neither setting in the
+end; the property behind them is asserted with no number at all.
 
 **`/console/` fell by a factor of 6.4 earlier that day, and that is the finding
 rather than a tidy-up.** It was sized on 2026-09-06 against a document that
@@ -106,9 +119,10 @@ moved the telemetry to a browser fetch on 2026-09-09, the document became 46,775
 bytes, and the number stayed. For four days it stood at 7.2 times the page it
 bounded, so nothing short of a sevenfold regression could have fired it.
 **Nothing in the build fails when a number drifts away from the page it bounds**,
-which is why it went unnoticed for four days. That is a different fault from the
-distance a guardrail keeps on purpose: 7.2 times was nobody's choice and nobody
-could see it, where twice the page is written down and re-derived.
+which is why it went unnoticed for four days. It is the same instrument failing
+the other way round from the `/archive/` case, and having both failures in one
+week is what settled the argument: a check that cannot tell correct from
+far-too-loose is not a check, whatever value it holds.
 
 **`/` reads 43,737 B here against 180,086 B measured earlier the same day, and
 neither is wrong.** `/` inlines the newest committed day, and the newest day
