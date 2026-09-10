@@ -133,7 +133,7 @@ the browser needs the rows the seed deliberately does not carry. The two offered
 options were refused for measured reasons - seeding buys back the 176,753 bytes
 above, and dropping the seeded months puts a 244 KB fetch behind the first click
 of the window control and leaves the section blank until it lands
-([frontend.md](frontend.md#it-follows-the-windows-length-not-a-pan)).
+([console.md](console.md#it-follows-the-windows-length-not-a-pan)).
 
 The two options remain open for a panel that genuinely needs a panned answer.
 Nothing on the page needs one today.
@@ -441,7 +441,7 @@ and no column is published: `state/` is not part of the site, and the figures
 below reach a page as numbers, never as rows.
 
 Since 2026-08-31 `/console/machine/` draws them
-([frontend.md](frontend.md#what-the-machine-route-draws)). Before that the
+([console.md](console.md#what-the-hardware-route-draws)). Before that the
 ledger had been committed for four days with no page reading a cell of it.
 
 | Figure | Made from | Composed as |
