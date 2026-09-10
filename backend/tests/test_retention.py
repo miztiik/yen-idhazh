@@ -50,6 +50,8 @@ from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percenti
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import archive as score_archive
 from idhazh.evals import writer as score_writer
+from idhazh.measured import ITEMS_A_DAY_CEILING, SITE_GROWTH_KB_A_DAY
+from idhazh.measured import WARNING_DAYS_REQUIRED as WARNING_DAYS
 from idhazh.retention import (
     BYTES_PER_MB,
     SiteSize,
@@ -105,18 +107,10 @@ def site(root: Path, days: dict[str, list[str]]) -> Path:
     return root
 
 
-#: The fastest growth of the PUBLISHED SITE this project has measured: 16,641,956
-#: bytes a published day, 2026-08-27, over the three mature committed days.
-#: Rounded up to binary KB, the unit the code uses. It replaces 8,537, which was
-#: unmeasured arithmetic over a hypothetical PNG on every item AND was taken over
-#: the committed payload tree rather than the site - a different tree, eighteen
-#: times smaller. Source and the rest of the table:
-#: docs/reference/measurements.md, "Days to the 1 GB Pages ceiling".
-FASTEST_MEASURED_KB_PER_DAY = 16_252
-#: Days the alarm must buy at that rate. A judgement about one maintainer
-#: reading one issue, not a measurement (Rule #10), and derived as one in
-#: docs/reference/measurements.md, "Where the alarm fires, and what it buys".
-WARNING_DAYS_REQUIRED = 14
+#: Both records, and what to do when either bites, are in `idhazh.measured` -
+#: the one place a measured number and its provenance live together.
+FASTEST_MEASURED_KB_PER_DAY = int(SITE_GROWTH_KB_A_DAY.value)
+WARNING_DAYS_REQUIRED = int(WARNING_DAYS.value)
 
 
 def days_of_warning(budget_mb: int, kb_per_day: int) -> int:
@@ -210,8 +204,7 @@ def test_headroom_is_measured_against_the_hard_cap(tmp_path: Path) -> None:
 # --- A level is not a date -----------------------------------------------------
 
 #: The item ceiling in force, `run.safety_ceiling_per_run` in config/idhazh.json.
-#: Spelled out here so the arithmetic below is readable rather than looked up.
-ITEMS_PER_DAY = 160
+ITEMS_PER_DAY = int(ITEMS_A_DAY_CEILING.value)
 
 
 def sized_tree(root: Path, weights: dict[str, int]) -> Path:

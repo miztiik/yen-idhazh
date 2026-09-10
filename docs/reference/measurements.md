@@ -39,6 +39,22 @@ would reproduce goes to
 [../archive/measurements-2026-08.md](../archive/measurements-2026-08.md)
 instead.
 
+**A number a gate or a test reads does not live on this page at all.** It lives
+in `backend/idhazh/measured.py`, one record per number, carrying what it
+measures, when it was taken, how, and what to do when it fires. That module is
+the only place the value and its provenance both live, and **it cites no doc**:
+a link into prose rots when a section is renamed or deleted, and this page's own
+retention rule above deletes sections. The failure it removes is one this project
+had - the sole written derivation of the site's growth rate sat in a section
+marked for deletion, and every test would have kept passing without it.
+
+**These numbers exist to let the project ride a boundary, not to stop at one.**
+A ceiling is a ratchet rather than a budget: when one fires, the answer is to
+re-measure it, raise it, and record in the same commit what the bytes bought -
+never to cut an approved feature to stay under a number. That is why every record
+carries what to do when it fires. A guardrail that only ever refuses work is a
+guardrail somebody eventually raises without measuring anything.
+
 **No figure on this page names the machine it was taken on unless that machine
 is a runner.** A developer box is where a byte count, a token count, a pixel or
 a row count gets taken, and by the rule above none of those belongs to it - so
