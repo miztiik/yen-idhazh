@@ -319,6 +319,7 @@
       }
     ],
     "key_point_restatement_ceiling": 0.6,
+    "key_point_words_max": 70,
     "length_policy": {
       "absolute_floor_words": 20,
       "floor_applies_above_source_words": 500,

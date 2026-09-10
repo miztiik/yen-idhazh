@@ -30,9 +30,16 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from string import Template
-from typing import Any, Final, NamedTuple
+from typing import Annotated, Any, Final, NamedTuple
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    ValidationError,
+    create_model,
+)
 
 from idhazh.contracts.app_config import (
     EvaluationConfig,
@@ -125,18 +132,22 @@ def _draft_model(
     min_chars: int,
     max_chars: int,
     title_max_chars: int,
+    key_point_max_chars: int,
 ) -> type[SummaryDraft]:
     """Keyed on plain ints, because a Pydantic config object is not hashable."""
     return create_model(
         "SummaryDraft",
         __base__=SummaryDraft,
         title=(str, Field(min_length=1, max_length=title_max_chars)),
-        key_points=(list[str], Field(min_length=key_points_min, max_length=key_points_max)),
+        key_points=(
+            list[Annotated[str, StringConstraints(min_length=1, max_length=key_point_max_chars)]],
+            Field(min_length=key_points_min, max_length=key_points_max),
+        ),
         summary=(str, Field(min_length=min_chars, max_length=max_chars)),
     )
 
 
-def _key_point_rail(
+def key_point_rail(
     ask: SummarizeConfig, source_words: int | None, brief: bool
 ) -> tuple[int, int]:
     """The key-point floor and ceiling the decoder is held to.
@@ -149,6 +160,10 @@ def _key_point_rail(
     When no article is named - the fingerprint, an offline harness, a schema
     check - the rail is the union across every band, the permissive envelope any
     band's valid reply fits inside.
+
+    Public because the prompt has to state the same two numbers the decoder
+    enforces. A prompt asking for more key points than the grammar admits loses
+    the item for doing exactly what it was told.
     """
     if brief:
         band = ask.band_for(0)
@@ -182,13 +197,14 @@ def draft_model(
     published it long.
     """
     ask = prompt_config or SummarizeConfig()
-    key_points_min, key_points_max = _key_point_rail(ask, source_words, brief)
+    key_points_min, key_points_max = key_point_rail(ask, source_words, brief)
     return _draft_model(
         key_points_min,
         key_points_max,
         ask.decoder_words_min() * _MIN_CHARS_PER_WORD,
         ask.decoder_words_max() * _MAX_CHARS_PER_WORD,
         ask.title_words_max * _MAX_CHARS_PER_WORD,
+        ask.key_point_words_max * _MAX_CHARS_PER_WORD,
     )
 
 

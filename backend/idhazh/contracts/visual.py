@@ -642,6 +642,22 @@ def _widest(node: dict[str, Any], defs: dict[str, Any]) -> int:
     return sum(length + 3 + value for length in kept) + max(len(kept) - 1, 0) + 2
 
 
+def widest_json_characters(schema: dict[str, Any]) -> int:
+    """The longest JSON text a generated schema can hold, in characters.
+
+    Public because call 2 decodes this plan **and** a summary through one output
+    budget, and that budget is derived from the bounds of the reply shape as a
+    whole. Written once here rather than copied there: two implementations of
+    one piece of arithmetic disagree the first time a bound moves, and the one
+    that is wrong is the one nobody reads.
+
+    It counts every declared property, not only the required ones, because a
+    grammar-constrained decoder emits them all. The two fields code stamps are
+    skipped, because a decoder never writes either.
+    """
+    return _widest(schema, schema.get("$defs", {}))
+
+
 def worst_case_reply_characters() -> int:
     """The longest plan the decoder can produce, in characters of JSON.
 
@@ -651,8 +667,7 @@ def worst_case_reply_characters() -> int:
     spans at least one character, so this is also a ceiling on tokens, which is
     what the planner's output budget is derived from.
     """
-    schema = VisualPlan.json_schema()
-    return _widest(schema, schema.get("$defs", {}))
+    return widest_json_characters(VisualPlan.json_schema())
 
 
 _declared = set(VisualPlan.model_fields)
