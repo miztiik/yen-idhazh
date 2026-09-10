@@ -252,38 +252,46 @@ Which tab is lit is read off the route rather than passed in by each page.
 
 ### How big the band is, and what makes it grow
 
-The ceiling is **8 KB over the wire**, measured as
-`gzipSync(readFileSync(path), { level: 5 }).length` and asserted in
-`console-band.spec.ts`. Measured 2026-09-09, node 24, on the committed payload:
-**791 gzipped bytes from 2,043 raw - 9.7 percent of the ceiling.**
+The guardrail is **2,000 bytes over the wire**, and it lives in
+`page_weight.payload_ceilings_bytes` in `config/idhazh.json` and nowhere else.
+`bundle-gate.mjs` applies it to the built payload and `console-band.spec.ts`
+reads the same key rather than restating it. Measured 2026-09-10, node 24.12.0,
+on the committed payload: **777 gzipped bytes from 1,799 raw - 38.9 percent of
+the guardrail.**
 
 Every fact on the payload but one is fixed: a set of sentences and counts about
 one day. The one term that moves with the archive is the months list, at one
 `YYYY-MM` string a month, and a list of dates with a shared prefix is what gzip
-is best at. Modelled on the committed payload the same day:
+is best at. Modelled on the committed payload the same day, re-serialised
+compact, which is why the no-months row reads under the committed 777:
 
-| months | raw | gzip -5 | of the ceiling |
-| ---: | ---: | ---: | ---: |
-| 2 (today) | 1,559 | 736 | 9.0 percent |
-| 12 (a year) | 1,659 | 763 | 9.3 percent |
-| 120 (a decade) | 2,739 | 994 | 12.1 percent |
-| 1,200 (a century) | 13,539 | 3,247 | 39.6 percent |
+| months | gzip -5 | of the guardrail |
+| ---: | ---: | ---: |
+| 0 | 719 | 36.0 percent |
+| 2 (today) | 726 | 36.3 percent |
+| 14 (the retention bound) | 758 | 37.9 percent |
+| 24 (two years) | 780 | 39.0 percent |
 
-A century of publishing leaves the payload at two fifths of its ceiling, so the
-months list needs no window of its own.
+**The list cannot pass 14, and that is retention rather than a hope.** `months`
+is the union of the published month shards, `idhazh prune-state` deletes a shard
+once it is past its own `observability.public_*_keep_months`, and every one of
+those is 14. So the whole growable part of this payload is the 32 bytes between
+the first row and the third, and the served payload at its bound is about 809 -
+40.5 percent of the guardrail, which needs no window of its own.
 
-**Since 2026-09-10 the band has a second, tighter ceiling, and it is the one that
-binds.** Row 18 gave `bundle-gate.mjs` a per-payload pass and named
-`console/band.json` at **2,000 bytes** in `page_weight.payload_ceilings_bytes`,
-against a measured 794 at `gzip -5`
-([../../reference/measurements.md](../../reference/measurements.md)). So one
-payload now carries two numbers: 8 KB asserted in `console-band.spec.ts` and
-2,000 applied by the gate. Nothing fails today, and the century row above sits
-between them - 3,247 bytes passes the ceiling the spec asserts and would fail the
-one the gate applies. **It is unreachable either way**, because
-`observability.public_telemetry_keep_months` caps the months list at 14, so the
-growth the 8 KB was bought for cannot arrive. Which of the two is the ceiling is
-nobody's decision yet; until it is taken, read the gate's.
+**The band carried two numbers for two days, and the fix was to delete one.**
+`console-band.spec.ts` asserted `8 * 1024` of its own from 2026-09-08, sized for
+a months list that could grow without limit. Row 18 then gave `bundle-gate.mjs` a
+per-payload pass and named `console/band.json` at 2,000 in
+`page_weight.payload_ceilings_bytes` on 2026-09-09. Nothing went red, which is
+the whole hazard: the spec's own century model produced 3,247 bytes, a case that
+passed the number the spec asserted and failed the number the gate applied, and
+the two disagreed fourfold with no test able to say so. On 2026-09-10 the spec's
+constant was deleted and the spec now reads the config key (Rule #6), and its
+century model was replaced by the retention bound above, because a century of
+months was never reachable. The gate's number did not move: at 2.47 times the
+bounded payload it was already a guardrail under the ruling of that day
+([../../reference/measurements-site.md](../../reference/measurements-site.md#the-guardrails-at-twice-the-page-2026-09-10)).
 
 ### The band is the second payload, not the first, and the reason is not ours
 

@@ -403,7 +403,7 @@ is a level, and no level has a date in it.** A tree carrying no day payloads
 prints `runway: unknown` rather than a comfortable number.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
-path, it holds every route named in `config/idhazh.json` under the gzip ceiling
+path, it holds every route named in `config/idhazh.json` under the gzip guardrail
 set there, and since 2026-09-10 it holds every payload a reader's browser
 fetches under one too.
 
@@ -416,15 +416,13 @@ reasoning is in
 If you are reading an older commit that fails on a route weight, that is why it
 is gone rather than something you need to re-record.
 
-**The page ceiling is one-sided, and it bounds the document rather than the
+**The page guardrail is one-sided, and it bounds the document rather than the
 script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
 `gzip -5` size each named route's prerendered HTML may reach. A page that got
-lighter needs no permission, so there is no lower bound. A route is named when
-its growth has been priced: `/404` and `/evals/` move only when the source moves,
-`/archive/` grows by one day link a published day, and `/console/` grows by about
-24 gzipped bytes a published telemetry row. A day page and the home page weigh what the
-day published, so a fixed ceiling on either would cap the news instead of
-catching a regression - the only way under it is to publish fewer items, which
+lighter needs no permission, so there is no lower bound. A day page and the home
+page weigh what the day published, so a fixed number on either would cap the news
+instead of catching a regression - the only way under it is to publish fewer
+items, which
 [layout.md](../architecture/publishing/layout.md) forbids. Those two are covered
 by the marker count in `frontend/tests/payload-weight.spec.ts`, which runs in the
 browser suite. A route the config does not name is reported by the gate without
@@ -435,84 +433,85 @@ no origin serves. Measured that day against the live Pages origin: it served
 `/console/` in 46,917 bytes where a local `gzip -5` makes 46,787 and a `gzip -9`
 makes 45,077, and `/archive/` in 5,760 against 5,755 at `-5`. So `-5` lands
 within 0.3 percent of the wire and `-9` understated it by 3.9 percent, which on a
-ceiling meant to catch growth is four percent of growth nobody saw. If you are
-reading a ceiling recorded before that date, it is a `-9` number and about four
+number meant to catch growth is four percent of growth nobody saw. If you are
+reading a figure recorded before that date, it is a `-9` number and about four
 percent low.
 
-**The payload ceiling bounds a file a browser fetches**, which no page ceiling
-can see. `page_weight.payload_ceilings_bytes` maps a build-relative path to the
-largest `gzip -5` size it may reach; a key naming a file bounds that file, and a
-key ending in `/` bounds every file under it, each on its own. It exists because
-the console stopped inlining its telemetry on 2026-09-09: 3.4 MB left a document
-a ceiling watched and landed in files nothing watched, and a reader still waits
-for them. `page_weight.cold_console_load_bytes` bounds the sum one cold opening
-of the console asks for - the design rather than the data, so what it catches is
-a widened `console.default_window_days` rather than a heavier shard. Its partner
-is `frontend/tests/console-cold-load.spec.ts`, which counts the serial round
-trips instead of the bytes: four is the ceiling, three is what a cold load takes
-today, and each extra telemetry month is one more.
+**The payload guardrail bounds a file a browser fetches**, which no page
+guardrail can see. `page_weight.payload_ceilings_bytes` maps a build-relative
+path to the largest `gzip -5` size it may reach; a key naming a file bounds that
+file, and a key ending in `/` bounds every file under it, each on its own. It
+exists because the console stopped inlining its telemetry on 2026-09-09: 3.4 MB
+left a document a guardrail watched and landed in files nothing watched, and a
+reader still waits for them. `page_weight.cold_console_load_bytes` bounds the sum
+one cold opening of the console asks for - the design rather than the data, so
+what it catches is a widened `console.default_window_days` rather than a heavier
+shard. Its partner is `frontend/tests/console-cold-load.spec.ts`, which counts
+the serial round trips instead of the bytes: four is the ceiling, three is what a
+cold load takes today, and each extra telemetry month is one more.
 
-When a named route or payload is over, two failures are worth telling apart:
+**Every number is twice the heaviest of five builds of the shipping tree**, and
+that is an owner ruling of 2026-09-10: "any ceiling is a guideline not a rule -
+increase with twice the buffer and document it is a guard rail." One convention
+now sizes every guarded route. It replaced four that had accumulated - the
+heaviest build plus a tenth for the two static pages, plus a measured year of
+growth for `/archive/`, plus a measured few days for each console route - and
+every one of those sat 6 to 14 percent above its page. That is a budget: an
+ordinary content day reaches it, so what fires is a publish rather than a
+regression, and the operator learns that a red gate is asking for a bigger
+number. The measurements behind the six values are in
+[../reference/measurements-site.md](../reference/measurements-site.md#the-guardrails-at-twice-the-page-2026-09-10).
+`page_weight.payload_ceilings_bytes` and `page_weight.cold_console_load_bytes`
+were already 2.5 and 6.8 times what they bound, so neither moved that day.
+
+When a named route or payload is over, the first thing to know is that it should
+not have happened: at twice the page an ordinary publish cannot reach a
+guardrail, so a red gate here is a change of a different order. Two failures are
+worth telling apart:
 
 - **A page or a payload took on bytes nobody reads.** A day payload inlined by a
  layout is how this last happened to a page, and it cost 313,000 bytes; a column
  added to a shard is how it happens to a payload. Remove them.
-- **It genuinely carries more.** Raise the number in `config/idhazh.json`,
- in the commit that earned the bytes, and say in the message what they buy. The
- number lives in that file alone - the `PageWeightConfig` default is empty - so
- there is no second copy to move.
+- **It genuinely carries more.** Re-derive that route's number - five builds of
+ the shipping tree, heaviest per route, never a mean, then twice it - and say in
+ the message what the bytes bought. The number lives in `config/idhazh.json`
+ alone, because the `PageWeightConfig` default is empty, so there is no second
+ copy to move.
 
-**A ceiling is not raised to buy time.** `/archive/` was capped, raised twice in
-one day on 2026-08-26 to silence a gate that fired on ordinary publishes, and
-then uncapped, because a page that inlined every committed day could not hold a
-fixed number. It is capped again since 2026-08-27 at 7,553 bytes, which is the
-heaviest of five builds plus a measured year of publishing plus the 64-byte
-noise floor. That headroom shrinks about 8 bytes on every publish since the day
-list folded into month disclosures on 2026-09-01, down from 12 to 18 before it,
-and it expires by design: when the gate fires on an ordinary day, the answer is
-to re-measure and re-derive the number, not to add a digit
-([../reference/measurements.md](../reference/measurements-site.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
+**A guardrail is re-derived, never nudged.** Raising it to just clear the new
+page turns it back into the budget the 2026-09-10 ruling ended. The habit is
+recorded rather than hypothetical: `/archive/` was capped, raised twice in one
+day on 2026-08-26 to silence a gate that fired on ordinary publishes, and then
+uncapped, because a page that inlined every committed day could not hold a fixed
+number.
 
-**The console is three routes and takes three ceilings, last re-derived on
-2026-09-10 against the tree that moved its telemetry to a browser fetch.** One
-key over three surfaces fails without saying which surface failed, so
-`/console/`, `/console/model/` and `/console/machine/` each carry their own:
-**52,000**, **63,000** and **50,000** bytes.
-
-Each is the heaviest of five builds of the tree that ships, plus a tenth - one
-convention across every capped route, replacing the four the old set had
-accumulated. The measurement is `gzip -5`, which is what `bundle-gate.mjs`
-itself reads.
-
-**`/console/` fell by a factor of 6.4 in that re-derivation, and the fall is the
-finding rather than a tidy-up.** It was 335,051 from 2026-09-06, sized against a
+**A number that drifts away from its page is a different fault from one set
+away from it.** `/console/` stood at 335,051 from 2026-09-06, sized against a
 document that inlined the telemetry and weighed 3.88 MB. The telemetry moved to
-a browser fetch on 2026-09-09, the document became 46,775 bytes, and the ceiling
-stayed - so for four days it stood at 7.2 times the page it bounded and could
-not have fired on anything short of a sevenfold regression. **A ceiling is only
-a tripwire while it is near the page**, and nothing in the build fails when one
-drifts away from it
-([../reference/measurements.md](../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
+a browser fetch on 2026-09-09, the document became 46,775 bytes, and the number
+stayed - so for four days it sat at 7.2 times the page and could not have fired
+on anything short of a sevenfold regression, and nothing in the build fails when
+that happens
+([../reference/measurements-site.md](../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)).
+Twice the page is a distance somebody chose, wrote down and re-derives; 7.2 times
+was a distance nobody chose and nobody could see.
 
-**None of the three had fired when they were re-derived, and that is the normal
-case.** A ceiling is re-derived because its runway expired, not because a gate
-went red: the pages measured 222,819, 44,956 and 35,822 against the numbers they
-replaced, and every one was under. `/console/model/` came out 73 bytes above the
-number already committed, which is 0.13 percent, so it was left alone - a ceiling
-that still carries its seven publishes does not move. All three are meant to
-expire again, and each slack is seven published days at its own measured rate.
+**The console is three routes and takes three guardrails.** One key over three
+surfaces still fails when any of them grows and then cannot say which one did.
+That is also the decisive argument for splitting the console into routes rather
+than tabs.
 
-**When a console ceiling fires, the panel does not move.** The owner ruled on
+**When a console guardrail fires, the panel does not move.** The owner ruled on
 2026-08-31 that no approved feature is removed, deferred or shrunk to stay under
-a page-weight number: a ceiling is a ratchet, so the answer is to re-measure it,
-raise it, and record in the same commit what the bytes bought. That reverses the
-guidance this page carried until then, which was to turn `console.default_window_days`
-down instead. Turning the window down is still the right first move when the
-page is inlining something the first paint does not need - it is a saving rather
-than a cut - but it is no longer a reason to leave a panel unbuilt. The two
-limits the ruling does **not** waive are Rule #2's 1 GB Pages cap, which is a
-platform limit, and the 200,000-byte lazy chart chunk, which stands because a new
-echarts registration is a decision about the chart vocabulary and not about size
+a page-weight number, so the answer is to re-derive and record in the same commit
+what the bytes bought. That reverses the guidance this page carried until then,
+which was to turn `console.default_window_days` down instead. Turning the window
+down is still the right first move when the page is inlining something the first
+paint does not need - it is a saving rather than a cut - but it is no longer a
+reason to leave a panel unbuilt. The two limits neither ruling waives are Rule
+#2's 1 GB Pages cap, which is a platform limit, and the 200,000-byte lazy chart
+chunk, which stands because a new echarts registration is a decision about the
+chart vocabulary and not about size
 ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)).
 
 ## The browser suite

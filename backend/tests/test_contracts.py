@@ -2069,17 +2069,22 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     inlined by a layout, which cost 313,300 gzipped bytes when it last happened,
     so a ceiling more than that above the page could never see it land again.
 
-    **The 369,000 bound is a stand-in for the page, and it is re-derived whenever
-    the ceilings are.** This test reads the config and never a build, so it cannot
-    subtract the real page weight; the constant is the heaviest console document
-    plus that regression - 56,664 measured 2026-09-10 at gzip -5 over five builds,
-    plus 313,300, rounded down to the thousand. It therefore decays as the page
-    grows, and the commit that re-derives the three ceilings re-derives this with
-    them. It held 433,000 from 2026-08-31, when the heaviest console document was
-    119,700, and 536,000 from 2026-09-06, when it was 222,819 - and 222,819 is the
-    measure of how far the stand-in can drift from the page, because by 2026-09-10
-    the console had stopped inlining its telemetry and the heaviest document was
-    a quarter of that.
+    **The 370,000 bound is a stand-in for the page, and it is re-derived whenever
+    the guardrails are.** This test reads the config and never a build, so it
+    cannot subtract the real page weight; the constant is the heaviest console
+    document plus that regression - 57,488 measured 2026-09-10 at c40eda91, gzip
+    -5, over five builds, plus 313,300, rounded down to the thousand. It therefore
+    decays as the page grows, and the commit that re-derives the three guardrails
+    re-derives this with them. It held 433,000 from 2026-08-31, when the heaviest
+    console document was 119,700, and 536,000 from 2026-09-06, when it was 222,819
+    - and 222,819 is the measure of how far the stand-in can drift from the page,
+    because by 2026-09-10 the console had stopped inlining its telemetry and the
+    heaviest document was a quarter of that.
+
+    **A guardrail at twice the page still clears this by a wide margin**, which is
+    the check that the two rules agree: the console guardrails are 92,000 to
+    116,000 since 2026-09-10, so the regression this bound exists to catch would
+    land 200,000 bytes over the number rather than under it.
 
     All three console routes are asserted, and that is the point of splitting
     them: one key over three surfaces still fails when any of them grows and
@@ -2101,9 +2106,9 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
             f"{route} is a prerendered route with no ceiling - the bundle gate reports "
             "an unnamed route without failing it, so this one would grow unwatched"
         )
-        assert ceilings[route] < 369_000, (
-            f"the ceiling on {route} is above the heaviest console document plus the "
-            "313,300 a day payload cost when a layout last inlined one - a ceiling that "
+        assert ceilings[route] < 370_000, (
+            f"the guardrail on {route} is above the heaviest console document plus the "
+            "313,300 a day payload cost when a layout last inlined one - a number that "
             "high cannot catch the one regression this surface has actually had"
         )
 
