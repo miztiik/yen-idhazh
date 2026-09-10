@@ -125,7 +125,6 @@ from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.watchlist import EntityKind, Watchlist
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields, text_digest
-from idhazh.measured import CONSOLE_CEILING_HEADROOM_BYTES as CONSOLE_CEILING_HEADROOM
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
@@ -2046,35 +2045,28 @@ def test_a_config_spelling_a_renamed_knob_twice_over_is_refused() -> None:
         AppConfig.model_validate(disagreeing)
 
 
-def test_the_committed_config_carries_the_capped_routes() -> None:
-    """`frontend/scripts/bundle-gate.mjs` reads the file, never the model, and
-    the model default is empty - so the committed config is the only place the
-    capped routes live. If it lost them the gate would check nothing while every
-    other knob still read correctly.
+def test_no_page_number_names_a_route_that_grows_when_a_run_publishes() -> None:
+    """This test was the opposite of itself until 2026-09-10, and the inversion is
+    the point.
 
-    `/archive/` is capped again since 2026-08-27, because it stopped inlining the
-    day payloads and now grows by one day link a day. The assertion below is on
-    its size rather than on its presence: a ceiling at the megabyte the page used
-    to weigh is a gate that never fires, so the number has to stay in the
-    thousands. The three `/console/` routes are capped for the same reason - the
-    regression a page ceiling exists to catch on that surface is a day payload
-    inlined by a layout, which cost 313,300 gzipped bytes when it last happened,
-    so a ceiling more than that above the page could never see it land again.
+    It used to insist `/archive/` and the three `/console/` routes each carried a
+    byte number, on the argument that an unnamed route grows unwatched. What
+    actually happened is that those four numbers moved when the pipeline
+    published rather than when anybody wrote code, so the gate fired on ordinary
+    publishing and the recorded answer was always a bigger number - `/archive/`
+    twice in one day on 2026-08-26. Meanwhile `/console/` drifted to 7.2 times
+    the page it bounded and stood there four days with the build green. A number
+    that cannot tell correct from far-too-loose is not an instrument.
 
-    **The bound is a stand-in for the page, it lives in `idhazh.measured`, and it
-    is re-derived whenever the guardrails are.** This test reads the config and
-    never a build, so it cannot subtract the real page weight; the record there
-    carries the value, what measured it and what to do when it fires.
+    **The property those numbers were a proxy for is asserted directly**, by
+    `frontend/tests/payload-weight.spec.ts`: no document that does not render a
+    day may contain a day payload marker. That is the one regression this surface
+    has ever had - a layout inlining a day, 313,300 gzipped bytes on 2026-08-26 -
+    and the marker check returns the same verdict whatever the archive holds.
 
-    **A guardrail at twice the page still clears it by a wide margin**, which is
-    the check that the two rules agree: the console guardrails are 92,000 to
-    116,000 since 2026-09-10, so the regression this bound exists to catch would
-    land 200,000 bytes over the number rather than under it.
-
-    All three console routes are asserted, and that is the point of splitting
-    them: one key over three surfaces still fails when any of them grows and
-    cannot say which one did, so the operator raises the shared number and the
-    regression lands under it.
+    So the assertion is now on absence. `/404` and `/evals/` stay, because they
+    pass the test in the name: they move only when a person edits source, never
+    when a run appends a day. Owner ruling, 2026-09-10.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     ceilings = committed.page_weight.ceilings_bytes
@@ -2082,19 +2074,13 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     assert PageWeightConfig().ceilings_bytes == {}, "the model default must stay empty"
     assert ceilings["/404"] > 0
     assert ceilings["/evals/"] > 0
-    assert ceilings["/archive/"] < 100_000, (
-        "the archive ceiling is back above the weight of the payloads row #4 removed - "
-        "a ceiling that high never fires again"
-    )
-    for route in ("/console/", "/console/model/", "/console/machine/"):
-        assert route in ceilings, (
-            f"{route} is a prerendered route with no ceiling - the bundle gate reports "
-            "an unnamed route without failing it, so this one would grow unwatched"
-        )
-        assert ceilings[route] < int(CONSOLE_CEILING_HEADROOM.value), (
-            f"the guardrail on {route} is above the heaviest console document plus the "
-            "313,300 a day payload cost when a layout last inlined one - a number that "
-            "high cannot catch the one regression this surface has actually had"
+    for route in ("/archive/", "/console/", "/console/model/", "/console/machine/"):
+        assert route not in ceilings, (
+            f"{route} has a byte number again. Its weight moves when the pipeline "
+            "publishes, so the number has to move too, and the only way past it is to "
+            "type a bigger one - which is what got these four deleted. The regression "
+            "worth catching here is a day payload inlined by a layout, and "
+            "frontend/tests/payload-weight.spec.ts asserts that directly."
         )
 
 

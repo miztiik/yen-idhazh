@@ -450,45 +450,58 @@ shard. Its partner is `frontend/tests/console-cold-load.spec.ts`, which counts
 the serial round trips instead of the bytes: four is the ceiling, three is what a
 cold load takes today, and each extra telemetry month is one more.
 
-**Every number is twice the heaviest of five builds of the shipping tree**, and
-that is an owner ruling of 2026-09-10: "any ceiling is a guideline not a rule -
-increase with twice the buffer and document it is a guard rail." One convention
-now sizes every guarded route. It replaced four that had accumulated - the
-heaviest build plus a tenth for the two static pages, plus a measured year of
-growth for `/archive/`, plus a measured few days for each console route - and
-every one of those sat 6 to 14 percent above its page. That is a budget: an
-ordinary content day reaches it, so what fires is a publish rather than a
-regression, and the operator learns that a red gate is asking for a bigger
-number. The measurements behind the six values are in
+**A route takes a number only if its weight does not move when a run
+publishes**, and that is an owner ruling of 2026-09-10: no number comparison.
+Two routes qualify - `/404` and `/evals/`, which move only when a person edits
+source.
+
+`/archive/` and the three `/console/` routes carried numbers until that day and
+do not now. They grow when the pipeline appends a day, so the number had to grow
+too, and **the only way past a firing was to type a bigger one**: `/archive/` was
+raised twice in one day on 2026-08-26 and then removed. The 2026-08-31 ruling
+made that the only legal answer, since no approved panel may be cut to fit a
+number. A gate whose one outcome is a bigger number catches nothing.
+
+**And the same instrument failed the other way at the same time.** `/console/`
+stood at 7.2 times the page it bounded for four days with the build green,
+because nothing fails when a number drifts loose. A check that cannot tell
+correct from far-too-loose is not an instrument, and no value of the constant
+fixes that - which is why setting them all to twice the page, earlier the same
+day, was not the answer either. The measurements are in
 [../reference/measurements-site.md](../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10).
+
+**What replaced them checks the cause instead of the symptom.** The one
+regression this surface has ever had is a layout inlining a day payload -
+313,300 gzipped bytes on 2026-08-26 - and that is a yes-or-no fact about a
+document, not a size with a middle value to threshold.
+`frontend/tests/payload-weight.spec.ts` looks for a day-payload marker in every
+document that does not render a day, and fails on one. **It has no number in it**,
+so it returns the same verdict whatever the archive holds, and it already covered
+this before the numbers went - one of its tests is named `the archive carries no
+day payload at all`.
+
 `page_weight.payload_ceilings_bytes` and `page_weight.cold_console_load_bytes`
-were already 2.5 and 6.8 times what they bound, so neither moved that day.
+all survive, and not by luck. Each is derived from a bounded knob rather than
+chosen, so publishing more cannot move one: the band by
+`observability.public_*_keep_months`, `telemetry/` by the longest month at the
+heaviest day ever run, and the cold load by `console.default_window_days`.
 
-When a named route or payload is over, the first thing to know is that it should
-not have happened: at twice the page an ordinary publish cannot reach a
-guardrail, so a red gate here is a change of a different order. Two failures are
-worth telling apart:
+When a route that still has a number goes over, or a payload does, two failures
+are worth telling apart:
 
-- **A page or a payload took on bytes nobody reads.** A day payload inlined by a
- layout is how this last happened to a page, and it cost 313,000 bytes; a column
- added to a shard is how it happens to a payload. Remove them.
-- **It genuinely carries more.** Re-derive that route's number - five builds of
- the shipping tree, heaviest per route, never a mean, then twice it - and say in
- the message what the bytes bought. The number lives in `config/idhazh.json`
- alone, because the `PageWeightConfig` default is empty, so there is no second
- copy to move.
+- **It took on bytes nobody reads.** A day payload inlined by a layout is how
+ this last happened to a page, and it cost 313,000 bytes; a column added to a
+ shard is how it happens to a payload. Remove them.
+- **It genuinely carries more.** Re-derive the number and say in the message what
+ the bytes bought. It lives in `config/idhazh.json` alone, because the
+ `PageWeightConfig` default is empty, so there is no second copy to move.
 
-**A guardrail is re-derived, never nudged.** Raising it to just clear the new
-page turns it back into the budget the 2026-09-10 ruling ended. The habit is
-recorded rather than hypothetical: `/archive/` was capped, raised twice in one
-day on 2026-08-26 to silence a gate that fired on ordinary publishes, and then
-uncapped, because a page that inlined every committed day could not hold a fixed
-number.
-
-What to do when a console route is the one that fires is
-[below](#the-console-guardrail-and-what-to-do-when-it-fires), with
-the reason a number on a console route is fair where one on a day page would not
-be.
+**Before adding a key here, ask the one question.** Does this number have to move
+when nobody wrote any code, because a run appended more? Yes means the route does
+not take a number - find the property it would have stood in for and assert that.
+That is Rule #12's own test with one noun changed, and it is why `MAX_HOPS = 4`
+in the cold-load spec is fine while a page ceiling was not: a hop is a month, so
+it moves when somebody widens the window and never when we publish.
 
 ## The browser suite
 
@@ -855,55 +868,54 @@ dependency is still right, and `docs/reference/measurements.md` is where that
 measurement goes. What is gone is failing every unrelated branch until somebody
 retypes it.
 
-## The console guardrail, and what to do when it fires
+## The console has no page number, and why it stopped having one
 
-**Every guarded route carries its own number, and since 2026-09-10 they share one
-convention: twice the heaviest of five builds of the tree that ships, measured at
-`gzip -5`.** That is an owner ruling of that day - "any ceiling is a guideline not
-a rule - increase with twice the buffer and document it is a guard rail" - and it
-replaced a set that sat 6 to 14 percent above each page, which in turn had
-replaced four different conventions. The current numbers, the spread they were
-taken over and the arms behind them are in
-[../reference/measurements-site.md](../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10);
-`config/idhazh.json` is where they live.
+**It carried three, one per route, and all three are gone since 2026-09-10.**
+They were the clearest case of the defect. A console route's weight rises when
+the pipeline appends a day, so the number had to rise too - and the 2026-08-31
+ruling says no approved panel is cut to stay under a page-weight number, which
+leaves raising it as the *only* legal answer. **A gate with one legal outcome is
+a notification with a build failure attached.**
 
-**The console takes three of them rather than one**, because one key over three
-surfaces fails when any of them grows and then cannot say which one did - the
-operator raises the shared number and the regression lands under it. Sizing them
-separately is what makes the split worth having.
+**`/console/` also showed the opposite failure, at the same time.** It was sized
+on 2026-09-06 against a document that inlined the telemetry and weighed 3.88 MB.
+The telemetry moved to a browser fetch on 2026-09-09 and the document became
+46,775 gzipped bytes, but the number stayed - so for four days it stood at 7.2
+times the page it bounded and nothing went red. **Nothing fails when a number
+drifts loose**, which is why that is the failure mode to look for rather than the
+one to assume cannot happen. Neither 11 percent nor 200 percent above the page
+fixes it, because both are the same instrument pointed at a symptom.
 
-**`/console/` fell by a factor of 6.4 in the 2026-09-10 re-derivation, and the
-fall is the finding rather than a tidy-up.** It was sized on 2026-09-06 against a
-document that inlined the telemetry and weighed 3.88 MB. The telemetry moved to a
-browser fetch on 2026-09-09, the document became 46,775 gzipped bytes, and the
-number stayed - so for four days it stood at 7.2 times the page it bounded and
-could not have caught any regression short of a sevenfold one. **Nothing fails
-when a number drifts away from the page it bounds**, which is what makes this the
-failure mode to look for rather than the one to assume cannot happen. That is a
-different fault from the distance a guardrail keeps on purpose: twice the page is
-a distance somebody chose, wrote down and re-derives, where 7.2 times was nobody's
-choice and nobody could see it.
+**The cause has a direct check and it needs no number.**
+`frontend/tests/payload-weight.spec.ts` fails when any document that does not
+render a day contains a day-payload marker. That is the one regression this
+surface has ever had - a layout inlining a day, 313,300 gzipped bytes on
+2026-08-26 - stated as the yes-or-no fact it actually is. It sweeps every
+prerendered document including all three console routes, and it already carries
+its own negative test, so a renamed field fails loudly instead of passing
+silently.
 
-**When one fires, the panel does not move.** The owner ruled on 2026-08-31 that
-no approved feature is removed, deferred or shrunk to stay under a page-weight
-number, so a crossed number means re-derive it and record in the same commit what
-the bytes bought. **This reversed what this page said until then**, which was to
-turn `console.default_window_days` down and never to raise the number. That
-instinct is still right when the page is inlining something the first paint does
-not need - windowing the seed on 2026-08-29 and folding the compression scatter on
-2026-08-30 were both savings - but a saving is not a cut, and neither is a
-reason to leave a panel unbuilt. What neither ruling waives: Rule #2's 1 GB
-Pages cap, which is a platform limit, and the 200,000-byte lazy chart chunk,
-which stands because a new echarts registration is a decision about the chart
-vocabulary rather than about size.
+**What is left when a console page gets heavy: nothing fails, and that was
+already true.** Under the 2026-08-31 ruling a crossed number was raised and the
+panel stayed, so the loss is a printed line in a log. What is bought is that
+`/console/` cannot sit at 7.2 times its page for four days again, because there
+is no number left to drift.
 
-Two answers stay wrong whatever the number is. **Nudging it up to just clear the
-new page** spends headroom somebody priced and turns a guardrail back into a
-budget, which is what got an earlier `/archive/` ceiling deleted after it was
-raised twice in one day; re-derive to twice the new heaviest instead. And
-**thinning a plot** - sampling points, or dropping the oldest days - is not a byte
-decision at all: it changes what the chart is a measurement of, and a scatter that
-quietly stopped drawing some of its rows is worse than one that got heavy.
+**Turning `console.default_window_days` down is still the right first move when
+the page is inlining something the first paint does not need** - windowing the
+seed on 2026-08-29 and folding the compression scatter on 2026-08-30 were both
+savings. A saving is not a cut, and neither is a reason to leave a panel unbuilt.
+**Thinning a plot is still wrong** - sampling points, or dropping the oldest days,
+is not a byte decision at all: it changes what the chart is a measurement of, and
+a scatter that quietly stopped drawing some of its rows is worse than one that
+got heavy.
+
+**Two limits are untouched and neither is ours to choose.** Rule #2's 1 GB Pages
+cap is GitHub's, and `retention.pages_hard_cap_mb` is bounded `le=1024` in the
+schema so a config edit can only ever make it stricter - which is the property
+the six page numbers never had. The 200,000-byte lazy chart chunk stands too,
+because a new echarts registration is a decision about the chart vocabulary
+rather than about size.
 
 Two rules came out of the savings and outlived the numbers that motivated them.
 **One mark per article per day, never one per row**: the telemetry holds a row
@@ -913,17 +925,10 @@ cutoff anchors on the newest committed day, never on the build clock** - anchore
 on today, a corpus that stopped last month would seed an empty console, which is
 precisely when an operator needs it.
 
-**Why a number here does not cap the news, when one on a day page would.** A day
-page and the home page render published items, so the only way under a number on
-them is to publish fewer - and [layout.md](../architecture/publishing/layout.md) forbids removing an item a
-run published, so it would be deciding how much news ships. No console
-route renders a published item. It is the operator's surface, and every figure on
-it is derived at build time from ledgers that stay committed and complete
-whatever the page shows.
-
 Authority: Jony and Fowler, 2026-08-29; the measurement and the worst-case
-sizing, Carmack; the ratchet ruling, owner, 2026-08-31; the guardrail ruling,
-owner, 2026-09-10.
+sizing, Carmack; the ratchet ruling, owner, 2026-08-31; the ruling that deleted
+the numbers, owner, 2026-09-10, on advice from Fowler and Carmack, who reached it
+independently.
 
 ## See also
 

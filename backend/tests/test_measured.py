@@ -22,6 +22,24 @@ def test_every_measured_number_says_what_it_is_of_and_what_to_do() -> None:
         )
 
 
+def test_every_number_says_why_it_is_a_number_at_all() -> None:
+    """The field that keeps this module from becoming a comfortable home for the
+    thing it exists to prevent.
+
+    A threshold is a proxy for a property nobody stated, and it fails in two
+    directions that are both green. `page_weight.ceilings_bytes` did both before
+    2026-09-10: four of its numbers fired on ordinary publishing and were raised
+    each time, while `/console/` sat at 7.2 times the page it bounded for four
+    days with the build green. A record that cannot say why a property check
+    would not do instead should be a property check.
+    """
+    for record in EVERY_MEASURED:
+        assert record.why_a_number.strip(), (
+            f"{record.measures} does not say why it is a number rather than a property "
+            "asserted directly - which is the question that deletes most thresholds"
+        )
+
+
 def test_a_measurement_is_dated_and_not_from_the_future() -> None:
     for record in EVERY_MEASURED:
         assert isinstance(record.taken_on, date)
@@ -39,13 +57,14 @@ def test_a_judgement_says_so_rather_than_wearing_a_measurement_s_clothes() -> No
 
 
 def test_a_record_refuses_to_exist_without_its_provenance() -> None:
-    for missing in ("measures", "method", "when_it_fires"):
+    for missing in ("measures", "method", "when_it_fires", "why_a_number"):
         fields = {
             "value": 1,
             "measures": "a thing",
             "taken_on": date(2026, 9, 10),
             "method": "counted it",
             "when_it_fires": "count it again",
+            "why_a_number": "nothing else answers it",
         }
         fields[missing] = "   "
         with pytest.raises(ValueError, match=missing):

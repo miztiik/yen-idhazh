@@ -2965,32 +2965,35 @@ class PageWeightConfig(Model):
     committed config is the single source, and this model owns only the shape
     and the validation (Rule #6).
 
-    **Every number here is a guardrail and not a budget** - owner ruling,
-    2026-09-10: "any ceiling is a guideline not a rule - increase with twice the
-    buffer and document it is a guard rail." A guardrail is twice the heaviest of
-    five builds of the tree that ships, so an ordinary content day cannot reach
-    it and only a change of a different order can: a layout that inlines a day
-    payload, a panel that stops fetching and starts embedding. The keys are still
-    spelled `ceilings_bytes` because that is the name every reader of the config
-    already knows; what changed is how high the number sits and what firing it
-    means. Before the ruling each route carried a few days or a year of its own
-    measured growth, six to fourteen percent above the page - close enough that
-    an ordinary publish tripped it, somebody raised the number, and the gate
-    taught the operator to raise numbers. **So the answer when one fires is to
-    find what took on the bytes, never to add a digit**, and a commit that makes
-    a page heavier may not raise its guardrail in the same breath.
+    **A number may live here only if it does not have to move when a run
+    publishes.** That is the test, and on 2026-09-10 four of the six keys failed
+    it and were deleted: `/archive/` and the three `/console/` routes. Their
+    weight rises when the pipeline appends a day, so the number had to rise too,
+    and the only way past a firing was to type a bigger one - `/archive/` was
+    raised twice in one day on 2026-08-26 and then removed. The same instrument
+    failed the other way at the same time: `/console/` stood at 7.2 times the
+    page it bounded for four days and nothing went red, because a number too
+    loose is as green as a number too tight. A check that cannot tell correct
+    from far-too-loose is not an instrument, and no value of the constant fixes
+    that. Owner ruling, 2026-09-10.
 
-    The derivation is now one rule for every route, which is most of what it
-    bought. What a page that renders a day still cannot have is a fixed number at
-    all: the only way under one is to publish fewer items, which is capping the
-    news rather than catching a regression, so `/` and `/<date>/` are counted and
-    reported and never failed.
+    **What replaced them asserts the property instead of a proxy for it.** The
+    one regression this surface has ever had is a layout inlining a day payload -
+    313,300 gzipped bytes on 2026-08-26 - and that is a yes-or-no fact about a
+    document rather than a size with a middle value to threshold.
+    `frontend/tests/payload-weight.spec.ts` looks for a day-payload marker in
+    every document that does not render a day. It has no number in it, so it
+    returns the same verdict whatever the archive holds.
 
-    **A surface that splits into routes takes a guardrail per route.** One number
-    covering three surfaces still fails when any of them grows, and then cannot
-    say which one did - so the operator raises the shared number and the
-    regression lands under it. Sizing them separately is what makes the split
-    worth having.
+    **`/404` and `/evals/` stay, and they pass the test rather than being spared
+    it.** They move only when a person edits source. A number that changes at
+    review speed is a design statement; a number that changes at publish speed is
+    the defect above.
+
+    A page that renders a day never took a number at all, for the neighbouring
+    reason: the only way under one is to publish fewer items, which caps the news
+    rather than catching a regression. `/` and `/<date>/` are counted, reported
+    and never failed.
 
     **Every number here is gzip -5, because that is what the reader pays.**
     Measured 2026-09-10 against the live Pages origin: it served `/console/` in
@@ -3001,11 +3004,15 @@ class PageWeightConfig(Model):
     one place these numbers flatter the payload rather than the page.
 
     **A document is capped and a payload is capped, and they are different
-    jobs.** A document guardrail catches a page that took on bytes it does not
-    render. A payload guardrail catches a file a browser fetches growing past
-    what somebody priced, which no document guardrail can see because the bytes
-    are not in the document at all - that is exactly what moving the console's
-    telemetry out of its HTML did.
+    jobs.** A document number catches a page that took on bytes it does not
+    render. A payload number catches a file a browser fetches growing past what
+    somebody priced, which no document number can see because the bytes are not
+    in the document at all - that is exactly what moving the console's telemetry
+    out of its HTML did. The payload numbers all survive the test above, and not
+    by luck: each is derived from a bounded knob rather than chosen, so publishing
+    more cannot move one. `console/band.json` is bounded by
+    `observability.public_*_keep_months`, and `telemetry/` by the longest month
+    at the heaviest day ever run.
     """
 
     ceilings_bytes: dict[str, int] = Field(
@@ -3016,12 +3023,12 @@ class PageWeightConfig(Model):
             "reads; this default is empty so the numbers are not duplicated here where "
             "they could drift from the file the gate enforces (Rule #6). A route the "
             "object does not name is measured and reported by the gate but not failed. "
-            "Each number is a guardrail rather than a budget: twice the heaviest of "
-            "five builds, so an ordinary publish cannot reach it and only a change of "
-            "a different order can (owner, 2026-09-10). One surface split across "
-            "several routes takes one key per route, or a fired guardrail cannot name "
-            "which route fired it. A page that renders a day is never capped, because "
-            "the only way under such a number is to publish less."
+            "**A route may be named here only if its weight does not move when a run "
+            "publishes** - /archive/ and the three /console/ routes were deleted on "
+            "2026-09-10 for failing that test, and the property they stood in for is "
+            "asserted directly by frontend/tests/payload-weight.spec.ts (owner, "
+            "2026-09-10). A page that renders a day is never named, because the only "
+            "way under such a number is to publish less."
         ),
     )
 
@@ -3364,6 +3371,35 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-10T22:00",
+            change=(
+                "page_weight.ceilings_bytes loses /archive/, /console/, "
+                "/console/machine/ and /console/model/ from config/idhazh.json. /404 "
+                "and /evals/ stay. No key was added, removed or retyped on the model - "
+                "the object was already free-form and its default was already empty - "
+                "so no committed config becomes invalid and no payload needs a "
+                "read-side migration."
+            ),
+            why=(
+                "Owner ruling, 2026-09-10: no number comparison. Those four routes grow "
+                "when the pipeline publishes, so their numbers had to move when nobody "
+                "wrote any code, and the only way past a firing was to type a bigger "
+                "one - /archive/ was raised twice in one day on 2026-08-26 and then "
+                "removed. The same instrument failed the other way at the same time: "
+                "/console/ stood at 7.2 times the page it bounded for four days with "
+                "the build green, because a number too loose is as green as a number "
+                "too tight. Measured: the ceilings block was edited 22 times in the 16 "
+                "days from 2026-08-26, against 11 edits to the whole gate script that "
+                "reads it. The one regression this surface has ever had is a layout "
+                "inlining a day payload, 313,300 gzipped bytes, which is a yes-or-no "
+                "fact rather than a size - and frontend/tests/payload-weight.spec.ts "
+                "already asserts it directly, with no number in it, returning the same "
+                "verdict whatever the archive holds. /404 and /evals/ stay because they "
+                "pass the test the four failed: they move only when a person edits "
+                "source."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-10T20:00",
             change=(

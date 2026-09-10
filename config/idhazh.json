@@ -247,10 +247,6 @@
   "page_weight": {
     "ceilings_bytes": {
       "/404": 4400,
-      "/archive/": 12000,
-      "/console/": 96000,
-      "/console/machine/": 92000,
-      "/console/model/": 116000,
       "/evals/": 6600
     },
     "cold_console_load_bytes": 3400000,
