@@ -3193,7 +3193,7 @@ every ledger the console reads - `state/scores.csv`, `state/item-health/`,
 drop one real mature day from all of them through `STATE_ROOT`, `TELEMETRY_ROOT`
 and `DIGEST_ROOT`, and rebuild. Cloning a day instead reads 18 percent cheaper,
 because gzip sees a near-copy of a block it already holds and a real day is not a
-near-copy of anything ([../../reference/measurements.md](../../reference/measurements.md#three-console-routes-three-ceilings-and-a-day-priced-on-each-2026-08-31)).
+near-copy of anything ([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#three-console-routes-three-ceilings-and-a-day-priced-on-each-2026-08-31)).
 
 **Seven days, and not the year `/archive/` carries, because of what the headroom
 has to be smaller than.** The regression a page ceiling exists to catch on this
