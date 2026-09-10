@@ -1128,6 +1128,13 @@ they are different lines - see the design rationale in
 [../architecture/publishing/layout.md](../architecture/publishing/layout.md).
 This section is the only home for why the alarm sits where it does.
 
+**The two numbers behind it live in `backend/idhazh/measured.py`**, as
+`SITE_GROWTH_KB_A_DAY` and `WARNING_DAYS_REQUIRED`, each carrying its method and
+what to do when it fires. The rate is the evidence and the alarm point is the
+knob, so when the check bites the rate gets re-measured and the knob moves -
+never the other way round. This section explains the choice; the module holds the
+values the tests read, and nothing here is what a test reads.
+
 **Derived, not measured separately.** Days of warning is
 `(1024 - alarm_mb) * 1024 / KB_per_day`, on the same binary megabyte the code
 uses. Whole days, rounded down - a partial day is not a day of warning.
