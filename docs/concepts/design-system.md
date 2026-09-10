@@ -4,6 +4,8 @@
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
+**A rule is here if it binds a token or a bound the whole site resolves.** A rule about one named console panel - how a figure is worded, ranked, tinted or drawn there - is in [console-design.md](console-design.md), which reads this page's vocabulary and adds no token of its own.
+
 The surface is small on purpose: a digest page, an item, and an eval dashboard. There is no application here - no session, no navigation tree, no state to lose ([vision.md](vision.md)).
 
 **The architecture fixes how much surface there is. It does not fix how good that surface is.** Scope-restraint is inherited and not up for debate. Craft-restraint is a choice, and every instance of it needs an argument on the day it is made.
@@ -20,7 +22,7 @@ This is a reading surface before it is anything else. Measure, leading, hierarch
 
 The DOM state is the single source of truth for the view. Nothing is styled imperatively: **state is reflected by toggling a class or a `data-` attribute, and CSS reacts declaratively.**
 
-- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`. `loading` is a global class in [../../frontend/src/styles/app.css](../../frontend/src/styles/app.css) rather than a component's scoped one, because the surface it belongs to switches every block on at once from one ancestor - see [the reserved box](#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
+- **State classes** carry the look: `loading`, `empty`, `degraded`, `truncated`, `low-confidence`. `loading` is a global class in [../../frontend/src/styles/app.css](../../frontend/src/styles/app.css) rather than a component's scoped one, because the surface it belongs to switches every block on at once from one ancestor - see [the reserved box](console-design.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
 - **Data-attribute styling** carries variants: an item keys its treatment off `data-visual` (the visual's state - `rendered`, `render_failed` or `absent`) and `data-band` (the confidence band from [evaluation.md](evaluation.md)).
 - **No inline styles** except genuinely dynamic values. Everything else is a token or a class.
 
@@ -140,21 +142,19 @@ change, and the next theme has to restate it or lose it.
 They are the third semantic pair, after the confidence ramp and the fill ramp,
 and they exist because a sign is not a verdict: **a fall in `Time to write one`
 is the machine getting faster, and a fall in `Summaries published` is a quiet
-news day.** Until 2026-08-31 the console painted both from the sign, so the two
-read alike and the improvement read as the loss.
+news day.** Until 2026-08-31 the console painted both from the sign, so the
+improvement read as the loss.
 
 - **Polarity is a property of the measure, declared where the measure is
-  defined.** `lower-is-better`, `higher-is-better`, or `no-agreed-direction`.
+  defined** - `lower-is-better`, `higher-is-better`, or `no-agreed-direction`.
   The console declares it in three places and nowhere else: `COLUMNS` on the
-  Model route for the eleven cards, `sideMeasures` in
-  [../../frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts)
-  for the seven swap rows, and the `TargetSense` a bar was already built with
-  for the two chart-arm figures. A component that decided its own is how two
-  cards come to disagree about whether down is good.
-- **A movement with no agreed direction paints neutral and says so.** The card
-  prints `no target` beside the percentage and the swap panel names the grey
-  rows under the chart. Susan, 2026-08-31: a grey number a reader has to
-  interpret is a fact withheld.
+  Model route, `sideMeasures` in
+  [../../frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts),
+  and the `TargetSense` a bar was already built with. A component that decided
+  its own is how two cards come to disagree about whether down is good.
+- **A movement with no agreed direction paints neutral and says so**, in words
+  on the card. Susan, 2026-08-31: a grey number a reader has to interpret is a
+  fact withheld.
 - **Zero is neutral on every measure.** Nothing moved, so there is no direction
   to be right about.
 - **The pair is not the confidence ramp and may never equal it.** Green there
@@ -167,33 +167,19 @@ read alike and the improvement read as the loss.
   refuses it again on the rendered page.
 - **Same meaning, quieter voice.** Measured 2026-08-31 over the committed hex
   values, the light pair sits at 40.5 and 44.2 percent saturation against the
-  confidence ramp's 66 and 70.6; the dark pair at 40.7 and 57.9 against 46.3
-  and 81.5. Both are printed as text, so both clear the 4.5:1 that WCAG 2.2 SC
-  1.4.3 sets for normal type: 5.905:1 and 6.544:1 on `--color-surface` in
-  light, 9.118:1 and 8.344:1 in dark.
+  confidence ramp's 66 and 70.6, and both still clear the 4.5:1 WCAG 2.2 SC
+  1.4.3 sets for normal type.
 - **Colour is never the only signal.** The sign is printed beside every
-  coloured percentage, and the swap panel keeps the arrowhead it always had.
+  coloured percentage.
 
-The values live in `config/appearance.json` under `theme`, one per theme, and
-reach CSS through `frame.generated.css` at build time - the same route the
-frame tokens take, and for the same reason: a colour that has to be right on
-the first painted frame cannot be injected from a layout.
+The values live in `config/appearance.json` under `theme` and reach CSS through
+`frame.generated.css` at build time - the same route the frame tokens take, and
+for the same reason: a colour that has to be right on the first painted frame
+cannot be injected from a layout.
 
 Rejected: reusing the confidence ramp, which is the alarm-fatigue trade above;
 and letting the sign alone decide, which is the defect the row removed. Owner,
 2026-08-31.
-
-Theming is override, not a second set of names: **dark is the base and light overrides the same token values.** `:root` carries dark, so a page paints dark before any script runs and keeps it when no script runs at all. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and [../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) asserts it: every theme colour has a light override, every non-exempt token has an `@theme inline` mirror, and nothing uses a token that is never declared.
-
-**The type scale is mirrored with its leading attached.** `--text-sm` and
-`--leading-sm` are one decision, so the mirror carries both - `--text-sm` and
-`--text-sm--line-height` - and the utility emits the pair. Mirror only the size
-and the utility silently takes the framework's own default leading, which is the
-"a size without a leading is half a decision" rule failing in the one place a
-diff does not show it: the source reads `text-sm` and the page renders a leading
-nobody chose. Measured 2026-08-31 on the archive search panel, the only place
-this had already happened - 14px text on a 20px leading where the token pairs it
-with 20.8px.
 
 ### The source swatch is a fill, and its floor is 1.5:1
 
@@ -292,15 +278,13 @@ the one bound a decoration normally escapes: **every stop clears 4.5:1 against
 `--color-bg` in both themes**, which is what WCAG 2.2 SC 1.4.3 sets for normal
 text.
 
-That bound was not being met. Measured 2026-08-31 over the committed hex
-values, the three stops that served this gradient in the light theme read
-3.9803:1, 4.0195:1 and 2.9318:1 - a site name a third of the way below its own
-floor, in the theme nobody was looking at. Nothing had ever asked.
+That bound was not being met. Measured 2026-08-31 over the committed hex values,
+the three light-theme stops read 3.9803:1, 4.0195:1 and 2.9318:1 - a site name a
+third of the way below its own floor, in the theme nobody was looking at.
+Nothing had ever asked.
 [../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) now
 asks on every run, from the committed values, so the spread is zero by
 construction.
-
-The rest of the wordmark, and why each part is what it is:
 
 - **Five stops at 135deg, one set per theme.** Seven stops across roughly 200px
   of glyphs puts a stop every 28px and the middle three read as one band. Dark
@@ -310,20 +294,17 @@ The rest of the wordmark, and why each part is what it is:
   360px phone, 44px from 1127px up. Not 52px: the header sits on every route,
   and 52px is 8 percent of a 640px phone screen spent before the first story.
 - **Weight 300, and no second face.** The committed variable face covers 100 to
-  900, so the weight axis is free. A display face bought for the letterforms of
-  ten characters on one string is a second woff2 on every route
-  ([../../CLAUDE.md](../../CLAUDE.md) Rule #2).
-- **No animation.** The named motion set is `fadeIn`, `shimmer` and `toastIn`,
-  and a cycling `background-position` is a loop rather than a response to
-  anything the reader did. `prefers-reduced-motion` is a hard kill-switch, so
-  the effect would have to be designed twice. **What is lost is the moving
-  shimmer.** What buys it back is the size, the five stops and the wider angle -
-  and those survive a screenshot, reduced motion and a battery.
-- **`--wordmark-size`, `--wordmark-leading` and `--wordmark-tracking` sit in the
-  `:root` scale block, outside both themes.** A scale is not a colour. The
-  tracking is `0.06em` rather than a pixel count so it holds at both ends of the
-  clamp - a fixed 4px is 0.14em at 28px and breaks the word into separate
-  letters.
+  900, so the weight axis is free. A display face bought for ten characters on
+  one string is a second woff2 on every route (`CLAUDE.md` Rule #2).
+- **No animation.** A cycling `background-position` is a loop rather than a
+  response to anything the reader did, and `prefers-reduced-motion` is a hard
+  kill-switch, so the effect would have to be designed twice. **What is lost is
+  the moving shimmer**; what buys it back is the size, the five stops and the
+  wider angle, which survive a screenshot, reduced motion and a battery.
+- **The three wordmark scale tokens sit in the `:root` block, outside both
+  themes.** A scale is not a colour. The tracking is `0.06em` rather than a
+  pixel count so it holds at both ends of the clamp - a fixed 4px is 0.14em at
+  28px and breaks the word into separate letters.
 
 Authority: Susan, 2026-08-31. Rejected: a second geometric display face, on
 bytes; and animating the gradient, on the reduced-motion cost above.
@@ -488,41 +469,13 @@ that keeps moving on no measurement is a bar that is making it up.
 
 The console is the third and it is the one that gets the skeleton, because it is
 the only surface here whose panels have nothing at all to show until a fetch
-lands. What it draws is [a reserved box with the axis frame in it](#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
+lands. What it draws is [a reserved box with the axis frame in it](console-design.md#a-console-panel-reserves-its-room-and-names-which-nothing-it-is-holding).
 
 **A day payload gets no byte readout, and that is the same rule read the other
 way.** A compressed response reports its compressed length, so a bar drawn on
 one would print precision the number does not carry - which is a bar making it
 up, exactly as above. The encoder is different because the library counts real
 bytes and because 43 MB is worth naming before a click.
-
-### A console panel reserves its room, and names which nothing it is holding
-
-> **A reserved box with no failure state lies, and a failure state with no reserved box shifts the layout.** They are one decision and they shipped as one row.
-
-The console held its telemetry inside its own document until 2026-09-09. Every row it draws arrives by fetch now, which split one "nothing" into four - and three of them used to draw the same unmarked gap, so **a quiet pipeline and a broken fetch were the same picture.** That is the exact pair this page exists to tell apart.
-
-| State | What happened | What is on screen | What the operator does |
-| --- | --- | --- | --- |
-| Waiting | the month files are in the air | the axis frame, its ticks, and marks that shimmer | wait |
-| Quiet | every month arrived and held nothing | the panels' own empty sentences, plus one line naming the preset that reaches a month with rows in it | widen the window |
-| Missing | the pipeline never wrote those months | the panels' own empty sentences, plus one line naming the months in words | nothing - it is real |
-| Unreachable | a month was asked for and did not come back | the reserved shape, and one warn-tinted line naming the month, what is drawn instead, and a retry that names its own subject | press it |
-
-**The box appears where a panel's own words would be false, and nowhere else.** That is the whole rule, and the first shape of this row got it wrong: it put the box in front of every non-ready state. Seven specs went red and each was right. A panel with rows on the way that printed "nothing is on record" would be wrong for the next second, and one whose month did not arrive would be wrong outright - those are the two the box takes. An empty window and a real gap are the other way round: the band chart already says "No summaries in this window" and the failure list already says what it found, and three precise sentences beat one general one. **What no panel can say for itself is which of the three settled nothings it is holding**, so that is said once, above the panels and beside the control that governs the window. The box carries no words at all for the same reason: a dozen panels each repeating one page-level fact is a dozen announcements of one thing.
-
-Five rules hold under that table.
-
-- **The box is exactly `console.chart_height` tall, in both the states it appears in.** [../../frontend/tests/console-reserved.spec.ts](../../frontend/tests/console-reserved.spec.ts) measures every panel's real bounding box twice in one page session - while the months are in the air and once they have landed - and fails on any panel that changed size except the one named as fetched. It reads boxes and never a CSS property, because a CSS property is not what moves under a cursor. Measured 2026-09-09 at 1280 CSS px on an Intel Core i7-1265U: seven panels, none changed width, one changed height by 172 px. **A second arm watches the chrome above the panels**, which nothing watched before: the title, the strip, the band, the window control, the carry line and the glance grid, each against its own former box. The set is cut at the first panel's own top rather than at the fold, and that correction is the second half of the same measurement. The fold-based form asked which blocks sat inside the first 900 px; the first panel begins at 894, so it was really asking how tall the runner's fonts were, and on `ubuntu-latest` the set came back empty and took `main` red. A cut made at the panel holds at any viewport and on any machine. Each block is compared on its own rather than the panel's top being compared to itself, because a top says only that the total height above it held - a block that grew by the amount its neighbour shrank would pass, and the failure would name no block. This one names it: a 24 px line injected into the chrome fails with the two blocks below it listed by name, and the box each held before and after.
-- **An empty plot draws its axis frame and its tick marks and no numbers.** A tick label needs a value and there is no value, so a number printed there would be invented. Both come out of the same `frame()` and the same margins the real charts use, so the frame a reader watches is the frame they get - and the box carries no tint of its own, so the axis sits on the same ground the real charts' axes do. Measured over the committed token values: `--chart-axis` reads 3.2:1 in dark and 2.58:1 in light on a panel, against 2.76:1 and 2.38:1 on a tinted box. The waiting frame is exactly as legible as the chart it stands in for, neither louder nor quieter.
-- **A skeleton mark takes `--color-rule-strong`, and that was measured rather than picked.** The sunken surface reads 1.06:1 in dark and 1.13:1 in light on a panel - a block nobody can see is not a block, and in light it was gone until the sweep crossed it. Rule-strong reads 1.61:1 and 1.48:1: plainly there, and still well under the weight of a drawn mark, which is what a placeholder owes.
-- **Every skeleton on the surface is on one timeline.** The sweep is switched on by a single attribute on an ancestor, so every block starts its animation in the same frame. Out of phase, a dozen sweeping boxes read as a dozen broken things rather than as one page waiting.
-- **The sweep starts late.** `console.shimmer_after_ms` is how long a wait has to outlast before it is worth drawing as one, so a fetch that lands first never animates at all. **It ships at 400 as a declared estimate and not a measurement** - see the design rationale below.
-- **Only a failure takes a hue.** A quiet window and a real gap are normal, and a page that tints normal things like faults teaches its operator to stop reading the tint.
-
-**And a retry names its own subject.** `Try again` is shorter and it is what the shape asks for, but a button read out of the sentence above it then names nothing. `Try August 2026 again` is three words longer and true on its own. It re-fetches only the months that failed: a retry that re-fetched the whole window would spend an operator's connection on months already in hand, and would blank panels that are answering correctly.
-
-Authority: Susan and Fowler, plan row #12.
 
 ## A machine's state is a sentence, never a dot
 
@@ -579,212 +532,68 @@ Source is [Lucide](https://lucide.dev) under the ISC licence; only the icons in 
 
 ## Charts are static first, enhanced only when interaction earns it
 
-A chart on an item is rendered at build time from a specification and shipped as an asset ([digest.md](digest.md)). Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
+A chart on an item is rendered at build time from a specification and shipped as
+an asset ([digest.md](digest.md)). Every chart on the dashboard is hand-written
+markup over a committed CSV or the published telemetry projection.
 
-**No chart library on a reader's route. The operator surface is a separate
-question, and it is open.** A scale library is not a chart library and never was.
+**No chart library on a reader's route.** An item's chart is already an asset, so
+an engine there is a runtime dependency for nothing. That half is settled.
 
-The reading-route half of that is settled and is not about bytes on a graph: a
-chart on an item is rendered at build time and shipped as an asset, so a reader
-has nothing to run. A charting engine on a reading page is a runtime dependency
-for nothing.
-
-The console half was decided wrongly, twice, and both times on an argument that
-turned out not to be the real one. A chart library was carried for the console
-between 2026-08-23 and 2026-08-24 for pan and zoom, then removed because the
-viewport control already did that with a keydown handler and four buttons - a
-correct removal. On 2026-08-29 the same blanket ban was re-argued from a
-`/console/` weight of 66,550 B that was **four and a half times out of date**;
-the route was 301,580 B by then. The owner overruled it. What replaces it is not
-another blanket, in either direction: it is three conditions and a measurement,
-below.
-
-Any library adopted for the console must (1) render SVG, not canvas, so
-`tokens.css` stays the only place a colour is decided, (2) render server-side at
-build time, so the page is complete before any script runs, and (3) carry a
+**The operator surface is a separate question, and it was answered wrongly
+twice.** An engine was carried for pan and zoom between 2026-08-23 and
+2026-08-24, then removed because the viewport control already did that with a
+keydown handler and four buttons. On 2026-08-29 the same blanket ban was
+re-argued from a `/console/` weight four and a half times out of date, and the
+owner overruled it. What replaces the blanket is not another blanket in either
+direction. Any library adopted for the console must (1) render SVG, not canvas,
+so `tokens.css` stays the only place a colour is decided, (2) render server-side
+at build time, so the page is complete before any script runs, and (3) carry a
 measured gzipped cost recorded next to the decision.
 
-Measured 2026-08-31 on this tree with this bundler - these are the built
-artefacts, not a bundler probe. Registering only the chart types in use, the
-engine is a lazy chunk of **192,029 B gzipped** (567,839 B raw). Importing the
-same package whole instead pulled **345,959 B gzipped** (1,044,275 B raw) when
-that arm was last built on 2026-08-29, so the registration file is worth about
-half the download and is the reason it is a file somebody has to edit.
-`d3-scale` and `d3-array`, which the surface already carries, are 20.5 KB
-together.
+Measured 2026-09-01 on five builds of `origin/main` at `8d658de`, and unmoved
+across twenty-six rows of chart work: registering only the chart types in use,
+the engine is a lazy chunk of **192,029 B gzipped** (567,839 B raw) on every one
+of the five. The number that decides affordability is not the chunk but what
+opening the console costs, and that moved **1,854 B**, from 69,622 to 71,476.
+About 40 B of that is the toolchain rather than the change. What importing the
+package whole would have cost, what deleting the legend component bought, and
+the stale figure this record replaced are in
+[../archive/measurements-2026-08.md](../archive/measurements-2026-08.md).
 
-**Deleting a component is worth measuring too.** The chunk read 197,561 B
-gzipped (585,481 B raw) until the legend component came out of the registration
-list on 2026-08-31, because no chart on this site draws a key any more - the
-readout strip is the key. That is **5,532 B, 2.8 percent**, and it takes the
-room left under the 200,000 B line this plan drew from 2,439 B to 7,971 B. Both
-arms were built back to back on one tree, and the arm holding the old list read
-197,561 B to the byte.
-
-**It has not moved since, across twenty-six rows of chart work.** Re-measured
-2026-09-01 on five builds of `origin/main` at `8d658de`: 192,029 B gzipped,
-567,839 B raw, on every one of the five. Twenty-six rows added panels, charts and
-a shared readout to three routes and not one of them registered a new echarts
-type, which is what the registration file is for. **Identify the chunk by
-content, never by size** - `text.includes('sankey')` finds it, and the encoder
-chunk beside it is bigger (901,929 B raw, 234,135 B gzipped) so "the largest
-chunk" finds the wrong file. Read the gzip level-9 byte rather than the
-bundler's own log line, which uses a different compressor and reads about 2 KB
-high.
-
-**That record went 25 percent stale in one day, and the way it happened is the
-warning.** It read 153,204 B (451,227 B raw) from 2026-08-29, when the
-registration list held the funnel, the tooltip and the SVG renderer. The
-six-shape vocabulary added bar, line, pie, grid, legend and mark-line hours
-later and nobody re-measured, so the number sat 38,685 B under the truth until
-the Sankey row rebuilt it on 2026-08-30. Adding a chart type means editing
-`frontend/src/lib/charts/core.ts`, and the whole point of it being a file
-somebody has to edit is that they measure it in the same commit.
-
-The number that decides whether this is affordable is not the chunk. It is what
-opening the console costs, and that moved **1,854 B**, from 69,622 to 71,476 -
-the component, the option builder and the token bridge. About 40 B of that is
-the toolchain rather than the change: every unrelated route on the same machine
-and the same node read 36 to 63 B above its record in the same build. The engine
-is fetched only when a chart hydrates, and no other route references it at all;
-`frontend/tests/charts.spec.ts` fails the build if a page ever preloads it.
-
-Those numbers belong to the console route alone - the reading routes never
-import any of it.
+Three rules came out of taking those numbers, and they cost more than the
+numbers did. **Identify the chunk by content, never by size** - the encoder
+chunk beside it is bigger, so "the largest chunk" finds the wrong file. **Read
+the gzip level-9 byte, not the bundler's log line**, which uses a different
+compressor and reads about 2 KB high. And **a bundler probe is not the
+artefact**: the figure that justified adopting the engine was taken with a
+standalone script, and the thing that shipped read more than twice it. Adding a
+chart type means editing
+[../../frontend/src/lib/charts/core.ts](../../frontend/src/lib/charts/core.ts),
+and the whole point of it being a file somebody has to edit is that they measure
+it in the same commit - the record went 25 percent stale in one day when six
+shapes were added and nobody re-measured. No reading route imports any of it,
+and [../../frontend/tests/charts.spec.ts](../../frontend/tests/charts.spec.ts)
+fails the build if a page ever preloads it.
 
 What a chart may take from a library is the arithmetic. `d3-scale` and
 `d3-array` map a domain to pixels and choose the tick values; they own no
 element, no canvas and no theme, and the marks, the SVG and the prerendering
 stay ours. `.nice()` and `ticks()` are the part a hand-rolled axis gets wrong,
-and getting them wrong shows as an axis labelled 0, 37, 74 that nobody can read
-a value off. Nothing on a reader's route imports either one.
+and getting it wrong shows as an axis labelled 0, 37, 74 that nobody can read a
+value off. The two are 20.5 KB together, and nothing on a reader's route imports
+either one.
 
 **A chart draws in CSS pixels at the width it occupies.** A `viewBox` is a scale
 factor, not a unit: four charts that each pick their own and then stretch to the
 column render the same `font-size` at four sizes. Measured 2026-08-25 at a
 1057px window, one console page put `font-size="10"` on screen at 4.5px in one
 panel and at 16.6px in the next. The width comes from one place -
-[frontend/src/lib/charts/frame.ts](../../frontend/src/lib/charts/frame.ts) - and
-the server draws at `console.chart_width` so the page is complete before any
-script runs.
-
-Hand-written SVG has a second property worth stating: it renders on the server,
-so a page is complete before any script runs. A canvas cannot inherit a CSS
-custom property inside the drawn pixels, so a canvas chart has to resolve the
-token values in JavaScript at mount and again after every theme change - which
-means the token file stops being the only place a colour is decided.
-
-### A chart with a shared column prints every series together, in a fixed strip
-
-One contract, one implementation:
-[frontend/src/lib/components/ChartReadout.svelte](../../frontend/src/lib/components/ChartReadout.svelte).
-It binds every chart on the console whose marks sit on a shared column - four
-series or one - and the rules are not negotiable per chart:
-
-- **A fixed strip below the plot, never a floating box over it.** A floating
-  tooltip covers the mark it explains, and one that dodges the cursor moves the
-  thing being read. Measured 2026-08-30: a floating box occupied 40 to 55
-  percent of the chart it explained.
-- **Every series at the hovered column, at once.** Comparing four series must
-  not cost four hovers. The strip is the legend as well, so the four numbers a
-  reader compares are printed once rather than twice.
-- **Capped at `chart.readout_max_share`** - 0.33 today. A share of the plot and
-  not a pixel count, so the cap holds at every window width.
-- **A vertical guide down the hovered column**, across every series.
-- **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
-  returns to rest. **A tooltip is never the only place a value appears**: a
-  tooltip needs a hover, and a hover is not a thing a thumb can do.
-- **It opens on a resting column and is never blank.** The prerendered document
-  carries that column's numbers in words, so a reader with no script still gets
-  one column read out to him, and the panel never changes size as it fills.
-
-An engine-drawn chart takes the same strip through
-[Chart.svelte](../../frontend/src/lib/charts/Chart.svelte). The action goes on
-the wrapping element and never on the SVG, because the engine swaps that SVG out
-on hydration; the column centres come from `bandShares`, which recomputes them
-from the measured width because the engine keeps its grid insets in pixels.
-
-### A chart with no column to hover says so, and no chart draws a key twice
-
-The strip **is** the legend. It prints each series in the colour that series is
-drawn in, at the column the reader is on, so a standing key beside it would draw
-the same pair a second time - and one fact drawn twice is how two of them drift.
-No chart on the console draws a key any more: the engine's `legend` component is
-not even registered in
-[core.ts](../../frontend/src/lib/charts/core.ts), and the three markup keys that
-survived under charts that already had a strip are gone.
-
-A chart with no shared column gets no strip - a ranked list, one target bar, a
-flow, two shares of one total. A strip there would print the row the cursor is
-already on. **That is a decision, so it is written down where the chart is**:
-such a chart carries `data-readout-none` with the reason in words, and a chart
-with a column carries `data-readout-columns` with the count.
-
-The pair exists because of what the absence looks like otherwise. A chart
-somebody decided needs no hover and a chart where the readout was forgotten are
-the same chart on screen.
-[console-readout.spec.ts](../../frontend/tests/console-readout.spec.ts)
-enumerates every chart on the three console routes, fails on one that declares
-neither, fails on a declared column with no strip, and fails on a swatch drawn
-inside a chart that has one. It also holds the reason to five words, because
-`none` passes an attribute check and tells a reader nothing.
-
-### A stacked chart offers lines only where no data is re-shaped
-
-Stacked says what the mix is and how big the total got. Lines say what one
-series did on its own, which a stack hides the moment one band halves while its
-neighbour doubles. Both questions are worth answering, so the chart offers both
-shapes - **but only where the same array draws both with nothing between them**.
-
-The test is mechanical and is the acceptance rule, not a preference: hand the
-engine the identical `data` list in both shapes and change only `type` and
-`stack`. The presence of a transform is the definition of "not cheap", and a
-chart that needs its data massaged to fit the second shape gets no switch at
-all. Owner, 2026-08-30. Two charts qualify today - `What is failing, by stage`
-and `Prompt cache`, both callers of `stacked()` - and
-`console-chrome.spec.ts` fails the build if their two shapes ever draw different
-numbers.
-
-One control per panel, never one per series and never a preference that follows
-the reader across the site. A Sankey is not a line and a histogram is not a
-stacked bar; forcing the control everywhere would mean massaging data to fit it.
-
-### A chart says how much of its window it measured, once, above the plot
-
-`Time per item, by stage` carried one footnote per series under the plot, and
-the three said one window-level fact three times in near-identical words:
-`We timed no fetch work on 22 of the 30 days`, then the same for `extract`, then
-the same for `summarize`. A fourth stage would have made it four. **The count
-was the defect, not the length**, so shortening each note would have fixed
-nothing.
-
-One sentence now, and five rules hold it. Susan, 2026-08-31.
-
-- **Once per chart, whatever the series count.** The fact is about the window,
-  not about a line.
-- **Above the plot, not below it.** A reader meets a broken line before he meets
-  the sentence that explains it.
-- **The denominator is the day's own item count**, never the sum of the stages'
-  totals: one item waits on all three, so summing counts it three times. Where
-  the stages reached different amounts of the same days the numerator prints as
-  a range - `3,900 to 3,955` - because picking one stage would be arbitrary.
-- **Nothing at all where the window was measured in full.** A sentence that only
-  ever says "all of it" is noise, and `SPARSE_COVERAGE` is the line it has to
-  fall under - see
-  [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)
-  for the threshold and the tinted span it goes with.
-- **The open-dot legend is a second sentence in the same paragraph**, printed
-  once and only where an open dot is drawn.
-
-Not in the hover strip: `ChartReadout` is one contract capped at
-`chart.readout_max_share` and it prints one column's values, so a window-level
-sentence there would be a second thing that strip means.
-
-The oracle asserts exactly one `[data-timing-coverage]` and holds its two
-numbers to a second, independent reading of the canary ledger. **The series
-count appears in no assertion** - that is what proves the sentence stopped
-scaling with the series
-([../../frontend/tests/console-timings.spec.ts](../../frontend/tests/console-timings.spec.ts)).
+[../../frontend/src/lib/charts/frame.ts](../../frontend/src/lib/charts/frame.ts)
+- and the server draws at `console.chart_width`, so the page is complete before
+any script runs. A canvas cannot inherit a custom property inside the drawn
+pixels, so a canvas chart resolves tokens in JavaScript at mount and after every
+theme change - which ends the token file being the only place a colour is
+decided.
 
 ## A figure on a chart is the article's or it is ours, and it never has to be guessed
 
@@ -805,7 +614,7 @@ that true. What binds a surface is the consequence of it.
 - **A figure we computed is never presented as a figure the article stated.** A
   percentage that is a share of the slices, or a bar that is a count of values in
   a range, is what the caption says it is. This is the same rule as
-  [a console figure says what it counts, in words](#a-console-figure-says-what-it-counts-in-words),
+  [a console figure says what it counts, in words](console-design.md#a-console-figure-says-what-it-counts-in-words),
   read from the reader's side.
 - **A chart with nothing to draw draws nothing.** A mark whose figure resolves to
   neither of the two ways is not softened, greyed or labelled "unavailable" - the
@@ -817,629 +626,73 @@ as `2M` is the same quantity in fewer glyphs. It is bound by the legibility floo
 like any other drawn label, and making a number shorter is not a licence to set it
 smaller.
 
-## A console figure says what it counts, in words
-
-The console is read by the developer and the operator, not by a digest reader.
-That sets who it is for; it does not relax how it is written. `CLAUDE.md`
-section 0b binds every string in this repo, so a figure on this page is labelled
-in words a person can act on and never in the name of the column behind it.
-
-Five rules hold for every number the console prints:
-
-- **A count of that day's items, not a score.** No value between zero and one
-  reaches the screen, and no cell prints a decimal. A share prints as whole
-  percent.
-- **No ledger column name on screen.** `hhem`, `hedge_dropped` and
-  `truncation_flagged` are how the file spells it. The page spells what it
-  means.
-- **A dash where the ledger holds no answer.** Null and zero are different
-  facts, and a zero that was really an absence is the one number nobody checks.
-- **`<1` where a real measurement rounds away.** A `0` there would say the work
-  was free.
-- **The item count sits beside every quality figure.** A share over four
-  articles is not a measurement, and a column that hides its denominator
-  invites a trend that is not there.
-
-### The empty state is the panel, not a replacement for it
-
-A panel that vanishes when it has nothing teaches the operator that the
-measurement does not exist. The heading and the explanatory sentence stay; only
-the figure changes. Jony, 2026-08-30.
-
-This is the normal case rather than the exception, and the ledger says so.
-Measured 2026-08-31 on the committed tree: `job_seconds` and `cpu_model` are
-empty on **24 of 54** counter rows, the three host cells on **34 of 54**, and
-the counters ledger starts 2026-08-27 against a score ledger that starts
-2026-08-22 - so five days inside a thirty-day window have scores and no server
-figures at all. A console that only designed the loaded state would be mostly
-undesigned.
-
-Five states have fixed wording, written by the owner on 2026-08-30 and held in
-[frontend/src/lib/console/recording.ts](../../frontend/src/lib/console/recording.ts).
-Only the dates and counts inside them are computed, and every one is derived
-from the ledger that is missing - **a date that is not true is worse than no
-date**. None is apologetic, none is styled as an error, each states a fact about
-the recording at body size in the panel it governs, and none is a banner across
-the page: three panels can be in three different states on one day.
-
-| State | What it says |
-| --- | --- |
-| Measurement off | `Measurement is off. Nothing has been recorded since <day>, so the figures below stop on that day. Turn it back on in config/idhazh.json.` |
-| Sampled below 1.0 | `Measured on 1 run in <n>. These figures count the runs we measured and are not scaled up to stand for the rest.` |
-| Counters but no scores | `The machine ran and we timed it. Nothing scored the summaries, so this day has no quality figure.` |
-| Scores but no counters | `The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server.` |
-| Recording started mid-window | `Recording started on <day>. The <n> days before it have no server figures, and the gap in the chart is a gap in the recording, not a quiet day.` |
-
-Two of those are worth reading twice. **A sampled figure is never scaled up** -
-multiplying a quarter-sample by four publishes an estimate as a measurement,
-which Rule #10 forbids. And **no string names a config key as if it were a
-word**: it is `Measurement is off`, never `runtime_counters_scrape is false`,
-because a term from a subsystem is not a term for a user (section 0b).
-
-### A figure in currency prints its rate, its source and the word for what it is
-
-There is exactly one money figure on this site: the counterfactual cost on
-`/console/machine/`. CLAUDE.md Rule #10 forbids the rest, and carries the
-owner's carve-out for that one on conditions this section holds:
-
-- **Never a currency symbol.** `0.48 USD`, never `$0.48`. A symbol in front of a
-  number is the shape a bill takes, and this is not a bill - nothing bills us,
-  because Actions minutes are free on a public repository.
-- **The rate is printed, in full, beside the figure.** Both halves of it: a
-  provider prices prompt tokens and written tokens apart, and one blended rate
-  would understate a run that wrote a lot.
-- **Where the rate came from is printed too** - `Using your rate` or `Using the
-  configured rate`. A money figure whose basis is invisible is the exact thing
-  Rule #10 exists to prevent.
-- **The word for what it is sits in the panel, not in a tooltip**: what the run
-  would have cost somewhere else, never an amount owed.
-- **Digits are grouped by hand, never by `toLocaleString`.** The server draws
-  the page and two builds have to agree; a locale-dependent separator moves the
-  prerendered document and the byte gate reads it as a regression.
-
-The label set for `What the model did`, with the sentence each one carries:
-
-| Label | The line under it |
-| --- | --- |
-| Summaries today | - |
-| Marked "not sure" | How many of today's summaries we told you not to trust. |
-| Numbers not in the article | The summary had a figure. The article did not. |
-| "Maybe" told as fact | The article said it might have happened. The summary said it did. |
-| Article read only in part | The article was too long, so the machine read the start and stopped. |
-| Read only in part, as a percent | The same articles, against the day's own count, so a busy day and a quiet one compare. |
-| Copied, not rewritten | How much of a normal summary is lifted word for word. |
-| Time to write one | How long the machine takes on one article. The second figure is the articles it read only the start of. |
-| Model minutes | - |
-| Too long to send | The article and the instructions together did not fit, so the machine was never asked. |
-| Failed | - |
-
-Two of those carry a rule the others do not. **The share divides by the rows
-its own flag answers for**, never by the day: `truncation_flagged` changed
-meaning on 2026-08-28, so a day holding rows from both sides of that stamp would
-otherwise report a fact about the migration wearing a percent sign. And **`Time
-to write one` carries a second figure only where the day cut something** - a
-dash under every other day would be a column of absences pretending to be a
-split.
-
-**`Too long to send` is expected to read zero, and that is the point of it.** At
-a truncation cap of 2,500 tokens no prompt could reach the window the machine
-read with, so the count was zero by arithmetic rather than by luck. It is on the
-page so that the day the cap moves, the number that says the move went too far
-is already being printed. The cap has moved twice since - to 5,000 on 2026-08-29
-and to 10,000 on 2026-09-09 - and the count is still zero by arithmetic, but the
-arithmetic is tighter: the longest prompt the cap can produce is about 14,100
-tokens of a 16,384 window, where it was about 4,200 of 8,192
-([../reference/measurements.md](../reference/measurements.md)). This counter is
-now the one that would catch the next move going too far, rather than a
-formality.
-
-### A section keeps the sentence that decides and loses the sentence that narrates
-
-Twelve rows rewrote this page on 2026-08-30, each writing its own headings,
-intros, readouts and empty states. Twelve hands write twelve voices, so one pass
-reads the whole page at the end and settles it against `CLAUDE.md` section 0b.
-
-What survives is decided once:
-
-- **A sentence that names a threshold, a denominator, a cost or an
-  empty-state reason is kept.** Several of the console's decision rules are
-  written nowhere else. Owner, 2026-08-30.
-- **A sentence that says what the chart is, or argues for the shape it took, is
-  cut.** The heading already names the subject, and the case against a rejected
-  chart type belongs in the code comment that rejected it. Owner, 2026-08-30.
-- **Prose cut from the page goes into the chart's accessible description**, so a
-  screen-reader user is never left with less than a sighted one. Jony.
-
-Three habits are what that pass actually caught, and they are the ones to check
-in any new section:
-
-- **One name for one span.** A count inside the window reads `in these 30 days`;
-  a section states its own span as `Over 30 days.` The page carried four
-  phrasings for one window - `in these N days`, `in the last N days`, `over the
-  last N days` and `The last N days` - and wrote the same instruction as `Widen
-  the window to look further back` in one section and `reach further back` in
-  the next.
-- **One name for one control.** `Failure rate against volume` stopped being
-  three panels, and the list under it still told the operator that `Panel chips`
-  filtered it. A name taken from a component outlives the component.
-- **A number says what it is out of, on the same line.** `prompt reused 51%` did
-  not, and the figure is a share of prompt tokens, so it reads `prompt tokens
-  reused` now. This is the one clause of section 0b a reviewer can check
-  mechanically, which is why it catches what the others miss.
-
-**Say it once per screen.** `Sources cut short most often` and the `What the
-model did` cards both explained that they follow the window's length rather than
-a pan, and `Failure rate against volume` printed the same date span the viewport
-heading a few lines above it had already printed. A fact stated twice on one
-screen reads as two facts.
-
-### Eleven measures are eleven cards, and the rows are one control away
-
-The eleven above shipped as eleven columns of one table until 2026-08-30, and
-that shape could not answer the question an operator brings to it. **Did it get
-worse is a vertical scan**, and in a wide table every column beside the one being
-scanned is a different quantity - a count, a percent, a second, a minute. At a
-thirty-day window it was 330 numbers under eleven header paragraphs.
-
-So the section leads with eleven cards on one `auto-fit minmax(220px, 1fr)`
-grid, and each card carries the same six things:
-
-- **The label, verbatim.** The copy above is protected; the shape was the defect
-  and the words were not. `frontend/tests/console-model.spec.ts` compares the
-  rendered labels byte for byte against the page's own `COLUMNS` and against the
-  table on this page, so a paraphrase fails the build rather than a review.
-- **The newest day's figure**, at reading size. Which day that is is printed
-  once above the grid, not eleven times.
-- **A line over the window**, drawn as markup by `Sparkline`. Eleven
-  engine-backed sparklines would be eleven chart instances and a lazy chunk on a
-  page that renders complete without one.
-- **The change across that line**, as a signed percentage painted from the
-  measure's own polarity - `Time to write one` falling is good, `Failed` rising
-  is bad, and three of the eleven have no agreed direction and print `no
-  target`. The polarity is declared on `COLUMNS`, beside the label and the
-  sentence, so a card cannot invent one.
-- **What it is out of**, for the six quality figures. On a table row the day's
-  count sat one column away; a card has no row, so it carries its own
-  denominator or it invites a trend that is not there.
-- **Its sentence**, moved out of the header into the body where there is room
-  for it.
-
-**A day the model changed draws a dashed rule across every line**, at the first
-drawn point on the new model, from the same rows the daily table draws its
-dividers from. Whether a swap moved anything is the question the table could not
-answer at all. The rule carries a date and an id and nothing else - an arrow or
-a delta across it would claim the swap caused whatever the line then did, and no
-committed figure says that.
-
-**No card is tinted.** `Copied, not rewritten` reads about 12 percent and nobody
-has agreed what a bad number would be, so a tint there would invent a threshold
-and publish it. The health ramp is lent to a threshold somebody agreed to, and
-to nothing else - and the same reasoning is why that card's movement percentage
-paints neutral rather than green or red.
-
-**The daily table stays, below, behind a `Show these figures day by day` control.**
-Nothing is deleted: after a card moves, the rows are what say which day. It is a
-native disclosure, so the rows are in the prerendered document either way,
-opening it costs no fetch, and the whole section works with no script at all.
-Since 2026-08-31 the rows follow the window control above them and the line that
-opens them names the span, because a table that ignored the preset above it was
-two windows on one page. Shut, it drops its border, its background and its
-shadow: closed it holds one line of link text, and a card around a footnote is
-what made it read as something hanging off the bottom of the page. The
-dash-not-zero rule, the `<1` rule and the version-stamped share are unchanged by
-any of this.
-
-### A distribution answers what a median refuses to
-
-`What one summary cost` is a log-binned histogram of the time to write one
-summary, with a cumulative curve on a second axis and a rule at the median and
-at the 95th, each printing its own value.
-
-A median answers "how long does one take" and refuses "how bad does it get".
-Measured 2026-08-31 over the 3,500 timed summaries in `state/item-health/`, this
-box, those are different questions by a factor of 2.5: the median is **122 s**
-and the 95th is **300 s**, with a slowest of 702 s. The second figure is the one
-that decides whether a shard fits `run.shard_timeout_minutes`, and no single
-number on the page was carrying it.
-
-Three rules hold for it:
-
-- **The bars double.** Writing times run from 0.3 s to 702 s, and on a linear
-  axis every bar but one is a hairline against the left edge. Each bar is one
-  doubling of the clock, so a bar is the same width wherever it sits. The lowest
-  bar has no lower edge worth a label and carries the console's own `<1`.
-- **The two rules are taken over the values, never off a bar.** A percentile read
-  out of a bin is a guess at where inside a doubling it fell, and these are the
-  two figures somebody quotes.
-- **Leading and trailing empty bars are dropped; a gap in the middle stays.** An
-  empty span between two occupied bars is the distribution saying nothing landed
-  there, which over the committed ledger is a real and visible fact: one summary
-  finished in 0.3 s and the next fastest took 16 s.
-
-**`score_ms` lives under the same heading, as two figures and no chart.** It was
-a fourth line on the Pipelines route's `Time per item, by stage` until
-2026-08-31, where a fourth line read as a fourth thing the run is held up by. It
-is not: the scorer reads a summary the model has already finished. Measured
-2026-08-31 over the 3,534 timed rows of `state/scores.csv`, this box, the middle
-is **2,463 ms** and the slowest one in twenty is **14,491 ms** - printed as 2 s
-and 14 s, because the console prints no decimal. Ten committed rows carry the
-zero the column defaulted to before it was written, and they are counted as
-untimed rather than as instant. Owner, 2026-08-31.
-
-### Compression is three marks a run, and the band prints its bounds
-
-`How long the summaries came out` draws one column per run: the shortest summary
-it wrote, the middle one and the longest.
-
-**It was a mark per summary until 2026-08-31, and the block was the defect.**
-Thousands of marks in one colour render their dense middle as a solid area, so
-the only marks anybody acts on - a summary of three words, or one at twice the
-length that was asked for - are the ones the block hides. Three marks a run keep
-both ends and lose the block. Owner, 2026-08-30.
-
-**Per run and never per day.** A day holds up to five runs, and a run is one
-model reading one set of articles under one set of settings, so it is the
-smallest thing on this page that a change can be attributed to.
-
-**The band's bounds print as numbers beside the chart.** A shaded region nobody
-can read a bound off is a decoration, and this one is a setting somebody chose.
-The band drawn behind each column is what that run's own articles were asked
-for, read through each article's own length rather than off `summarize.bands`
-directly - an article's length picks its band, so a run of short pieces is asked
-for less than a run of long ones. Susan, 2026-08-30.
-
-### A swap comparison carries direction in the arrow, and a verdict only where the measure has one
-
-`What the model change moved` is seven paired dot rows. Each measure is
-drawn against its own value on the older model, so no change is 100 percent on
-every row, and that is the only axis a median in seconds, a length in words and
-a count in a hundred summaries can share.
-
-- **The arrowhead carries the direction; the hue carries the verdict where
-  there is one.** Until 2026-08-31 every row was drawn in one categorical
-  colour, because a red-for-worse ramp would have needed somebody to agree
-  which way is worse for each of the seven. Five of them now say so themselves
-  - the polarity is declared on the measure in `sideMeasures`, not chosen by
-  the chart - and the two that genuinely have no agreed direction, `Summary
-  length` and `Copied, not rewritten`, stay grey and name themselves under the
-  plot. So a hue here is never a guess: a measure with no declared direction
-  gets no colour.
-- **The axis is symmetric about no change**, so a fifth off and a fifth on draw
-  the same track length. An axis running 78 to 120 would draw one of them as the
-  bigger move.
-- **Both absolute values print on the row label**, because a ratio with no
-  magnitude behind it can be a rounding error wearing a percentage.
-- **Both article counts print above the chart, and the panel refuses to draw at
-  all where either side holds fewer than `console.min_attempts_for_rate`
-  summaries.** Two models over two article sets is two measurements, not a
-  trend. Andre, 2026-08-30.
-
-Measured 2026-08-31 off the built page, across the one swap the ledger holds -
-`qwen3-8b-q4-k-m` on 2,228 summaries to 26 August, `qwen3-5-9b-q4-k-m` on 1,529
-since 27 August - the seven read:
-
-| Measure | Before | After | Against the old model | Which way is better | Painted |
-| --- | --- | --- | --- | --- | --- |
-| Time to write one | 120 s | 123 s | 103% | lower | bad |
-| Summary length | 100 words | 78 words | 78% | no agreed direction | neutral |
-| Copied, not rewritten | 9% | 11% | 120% | no agreed direction | neutral |
-| Marked "not sure" | 17 in 100 | 14 in 100 | 86% | lower | good |
-| Numbers not in the article | 5 in 100 | 3 in 100 | 64% | lower | good |
-| "Maybe" told as fact | 12 in 100 | 14 in 100 | 117% | lower | bad |
-| Outside the length we asked for | 29 in 100 | 11 in 100 | 38% | lower | good |
-
-It is a difference and not yet a cause, which is what the two article counts are
-there to say.
-
-### An axis title and a column header take one form
-
-`Article length, words`. **Sentence case, a comma, the unit in lower case, and
-no full stop.** `Sources cut short most often` shipped `Longest article, words`
-first, and the compression chart's two axes followed it on 2026-08-29. That
-column became a range plot on 2026-08-30 and its axis carries the same form.
-Three labels naming a quantity and its unit the same way is a form, so it is
-written down here rather than copied a fourth time by eye.
-
-- **The quantity, then the unit.** `Summary length, words` - never `Summary
-  length (words)` and never `words`. A bracket reads as a footnote, and a label
-  a reader meets before any of the numbers is not a footnote.
-- **An axis title may not be a ledger column name.** `source words` is how the
-  file spells `source_word_count` and `source_words`. A term from a subsystem is
-  not a term for a user (`CLAUDE.md` section 0b), and this is the rule two
-  bullets above - no ledger column name on screen - applied to the label rather
-  than to the cell.
-- **It says what the heading says.** Until 2026-08-29 the compression chart
-  called one quantity `Article length` in its heading and `source words` on its
-  axis, on one screen. Two names for one thing makes a reader work out that they
-  are the same thing before they can read the chart.
-- **A label that needs no unit is just the noun.** `Runs`, `Failed`, `Cut
-  short`. The comma form is for a quantity whose number means nothing without
-  the unit, and adding one where none is needed is noise.
-
-Where each figure is read from is in
-[../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
-
-### A date axis is thinned by measurement, and a dropped date keeps its mark
-
-One helper: `dayTicks` in
-[../../frontend/src/lib/charts/frame.ts](../../frontend/src/lib/charts/frame.ts).
-Every hand-written date axis on the console calls it - the stage timings, the
-throughput candles, the band columns, the failure panel, the run lengths and
-both run strips through `axisLabels`. There were four rules before 2026-08-31
-and three of them thinned by a count.
-
-**A count cannot hold at two widths.** `chart.tick_density` picks the columns
-that carry a tick mark, and then the labels are measured against the room the
-plot actually has and dropped in whole steps until no two of them touch. So the
-knob is a **ceiling and never a target**: it can take a label away and it can no
-longer force one on. Measured 2026-08-31 on the built console at 390px, before
-this rule: `Summary length against the length asked for` drew `2 Aug 2026` and
-`8 Aug` 13.6px on top of each other, `Time per item, by stage` 7.4px,
-`Model tokens per second per day` 26.1px and `Summary length per run` 1.9px.
-
-The width comes from the string rather than from the element, because the axis
-is decided on the server where there is no text engine to ask. `LABEL_ADVANCE_EM`
-is 0.58, which is ten percent over the widest character measured at
-`font-size="10"` in Chromium on 2026-08-31 - `20 Aug 2026` is 55.83px over 11
-characters and `18 Aug` is 31.53px over 6. It is deliberately over: an estimate
-under the truth lets two labels touch, and an estimate over it only drops one
-label the axis could have carried.
-
-**A dropped label keeps its tick mark.** A reader counting columns needs the
-grid even where the date is gone, so the marks come from the ceiling and only
-the dates thin.
-
-**The end labels anchor inwards.** The first and last tick of any axis sit ON
-the plot edges, so a centred label there hangs half its own width outside the
-frame and an `svg` cuts what hangs. Measured 2026-08-31 at 1440,
-`What the cap cost, by source` drew `10,000` 3.2px past its own `svg` and read
-`10,00`. `tickAnchor` is the rule and it binds a value axis as well as a date
-one.
-
-Two console axes are drawn by the engine rather than by us, and the engine owns
-where its labels go - `hideOverlap` is its own measured rule and it is left to
-do that job. What they take from here is the date grammar: `2026-08-25` is how
-the ledger spells a day and it is not how a page says one.
-
-The oracle is geometric and reads the page rather than the rule. At 1440, 768
-and 390 it collects the box of every element carrying `data-day-axis` and
-asserts that no two on one axis overlap and that none is drawn outside the `svg`
-that would clip it -
-[../../frontend/tests/console-axis.spec.ts](../../frontend/tests/console-axis.spec.ts).
-
-## Ranked by magnitude, in one shape
-
-The operator asks the same question of most of this page: which one is worst.
-Five of the console's six tables answered a different one. They sorted by date,
-so the source that cost the digest the most articles sat wherever it happened to
-fall, and the feed one run away from being rested sorted below a feed that has
-failed harmlessly for a month.
-
-`RankedList`, `TargetBar` and `Sparkline` in
-[../../frontend/src/lib/components/](../../frontend/src/lib/components/) are the
-shape that answers it. Their arithmetic is in
-[../../frontend/src/lib/charts/rank.ts](../../frontend/src/lib/charts/rank.ts),
-`targetbar.ts` and `sparkline.ts`, not in the markup, so the number a list
-prints and the bar it draws come from one place.
-
-Six rules hold them:
-
-- **Ranked by magnitude, never by date.** A date sort is a log. It is the right
-  shape for exactly one thing on this page - the item list behind a selected
-  cause - and the wrong shape for every ranking above it.
-- **The list prints its own divisor**, as a sentence: `A full bar is 38 cuts.` A
-  bar scaled to a hidden maximum can be read for order and cannot be read for
-  size, and nothing on the screen tells the reader which of the two they are
-  looking at.
-- **Capped, with the tail in a sentence.** `2 more sources had 11 cuts between
-  them.` The sum is printed only where adding the hidden magnitudes means
-  something: counts add, distances do not, and a list of distances says how many
-  rows are missing and nothing else.
-- **The two empty states say different things.** `Nothing has recorded an
-  article length yet.` means the ledger cannot answer. `No article was cut short
-  in these 7 days.` means it answered no. Reading the first as the second is
-  the same mistake as reading a null as a zero.
-- **No row is tinted.** The order is the ranking. A word beside the name carries
-  a status where a row has one, because colour is one signal and never the only
-  one.
-- **A threshold is a marker on the track, never a subtraction the reader
-  performs.** `12 failures` means nothing until the count that rests a feed is
-  on the same track. `TargetBar` draws the track at the threshold's own scale,
-  the fill at the value, and a rule at the threshold. It takes the confidence
-  ramp only where the threshold is a health fact - quarantine is, and a policy
-  limit somebody chose is not, so tinting one would invent a verdict nobody
-  agreed to.
-
-The bars and the trend lines are markup, not charts. Seventy target bars in a
-feed table would be seventy chart instances, and four static bars in a list row
-do not need an engine, a canvas or a lazy chunk. Markup is also what still draws
-with JavaScript off. The engine keeps the chart types markup cannot draw, and
-`sparkline.ts` and `targetbar.ts` now export the shape both drawings read, so
-the two can never disagree about where a marker sits or what counts as near.
-
-A trend line takes one colour and never the trend ramp. A rising failure count
-and a rising published count are the same shape, and green on the first would be
-a verdict the page never measured.
-
-## What the cap cost, by source
-
-`Sources cut short most often` is one row per source, ten of them, and it is the
-only place on the site that names a source next to a number about that source.
-It exists for one decision: **whether raising the truncation cap would actually
-reach a source's articles.**
-
-It is a horizontal range plot on a log word-length axis. One row per source, the
-shortest, middle and longest article that source published drawn as a track, and
-a dashed rule at each cut point across every row. Everything right of the widest
-rule is where the cap bites.
-
-| Part | What it says |
-| --- | --- |
-| the row label | the source id, as the ledger spells it |
-| the line under it | `17 of 38 cut` - articles it lost text on, over articles it published |
-| the track | shortest to longest article, with a dot at the middle one |
-| the emphasised span | the part of that range past the widest cut point |
-| a dashed rule | where a cut fell, read off the rows that were cut, and dated where the window holds more than one |
-
-Eight rulings hold it, Jony's of 2026-08-29 unless a later date is given:
-
-- **The cap is on the chart.** This is the whole defect the plot fixes. Five
-  columns of numbers were unreadable because the single number they all had to
-  be compared against appeared nowhere in the section. Susan, 2026-08-30.
-- **The rule comes off the rows, never off `extract.truncation_cap_tokens`.** A
-  window can hold rows a run wrote under an older cap, and the setting is one
-  number: over the committed ledger a thirty-day window holds cuts at 1,923
-  words and at 3,846, and the file says only 3,846. A rule from the file also
-  draws in a window where nothing was cut. Fowler, 2026-08-30.
-- **It sorts by count, never by rate.** Measured over the committed ledger the
-  shares run 3 to 67 percent on denominators of 6 to 38 articles, so a rate sort
-  puts a source with 4 cuts of 6 above one with 17 of 38 - and it is the
-  seventeen that cost the digest its articles. `Share cut` was dropped as a
-  column on 2026-08-30 for the same reason it was never the sort key. What a
-  reader loses is the share as a number; both counts are still on the row.
-- **No row is tinted.** The order is the ranking. The confidence ramp means
-  good, watch and bad about a summary, and a source at 55 percent is not broken,
-  it publishes long articles. The rule itself is drawn in tertiary text colour
-  rather than the low band: a red vertical would say the cap is a fault, and the
-  cap is a setting somebody chose.
-- **Ten rows and no `Show more`.** The worst seven hold 69 of 153 cuts, 45
-  percent; past ten the tail is sources with a single cut in a week, and a
-  control that reveals rows nobody acts on does nothing.
-- **The track is the whole article, cut or not.** A track drawn over the cut
-  articles alone would answer a question about the cap with a set the cap
-  produced, and it would hide how short the rest of the source's articles are -
-  which is the part that says whether the cap is the problem.
-- **No ledger or config name reaches it.** Not `truncation_flagged`, not
-  `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
-- **The two empty states say different things.** `Nothing has recorded an
-  article length yet.` means the ledger cannot answer; `No article was cut short
-  in these 7 days.` means it answered no. Reading the first as the second is
-  the same mistake as reading a null as a zero.
-
-**A chart row is 40px at the least, and it grows with the plot.** That is the
-readable minimum for this shape and it is stated here so a check can name it:
-the row carries an 11px name, a 10px count and a 10px bar, so a 34px pitch - what
-this plot shipped until 2026-09-01 - leaves no air at all between one source and
-the next. `ROW_PITCH_MIN` in
-[../../frontend/src/lib/charts/frame.ts](../../frontend/src/lib/charts/frame.ts)
-is the floor, `rowPitch` grows the row into a page-wide frame the way `cellFor`
-grows a run-strip cell, and a ceiling stops six rows from reading as six charts.
-Where the name cannot sit beside the plot without taking more than
-`MAX_GUTTER_SHARE` of the frame - which is every phone - it moves above the
-track and the row takes one more line of type. **Nothing is abbreviated at any
-width**: a source id is the ledger's own spelling of a name, so the gutter moves
-and the word does not. Jony, 2026-09-01.
-
-Rejected here: the cut share on the run-health strip (a 16px square has no room
-for a number, and it answers "did it work" rather than "what did it read"); a
-histogram of article lengths (the engineer's chart - it answers what the corpus
-looks like, and this section exists to answer whether raising the cap would
-reach a source); a linear length axis (the lengths span more than two decades,
-and linear crushes every short source onto the left edge - Carmack, 2026-08-30);
-keeping the table and printing the cap in the intro sentence (recorded as the
-fallback if the plot overran; it answers "how far past the cap" by subtraction
-rather than by looking - Susan, 2026-08-30); tinting rows by share cut (a source
-at 55 percent is not broken, so the tint would invent a fault); a gauge, dial,
-donut or progress bar (six percent on a dial is one pixel of arc); a
-before-and-after of a cap change on this page (two caps over two different
-article sets is two measurements, not a trend, and that claim belongs in
-[../reference/measurements.md](../reference/measurements.md)); and a table
-component shared with `Feeds that failed` (an abstraction for two call sites -
-reversed on 2026-08-29, when the count reached four; the shape is the ranked
-list above).
-
-**Quality is a table, never a line.** A line invites a trend across days whose
-articles have nothing in common. The one thing on the page that draws a spread
-is the throughput candle, because a spread is a property of a day's article mix
-and a single number cannot carry it.
-
-**A fixed benchmark figure never appears on the console.** It was taken on
-another machine against another workload, so a gap between it and a run reads as
-a regression nobody measured. Those numbers stay in
-[../reference/measurements.md](../reference/measurements.md) and the page links
-to them.
-
 ## Design rationale
 
-**`console.shimmer_after_ms` ships at 400 and 400 is a declared estimate, not a measurement.** Rule #10 refuses an unmeasured number the right to justify a design, so this one justifies nothing: it is the value the surface ships on and no argument on this page rests on it. Nothing about the shape of the console depends on it either - the reserved box is drawn the moment the document is, and the knob decides only whether a wait short enough to be over already gets animated on its way past. The console started fetching its months on 2026-09-09, so no median payload arrival exists yet to derive it from. Row 19 of [../../TODO/20260908-shell-and-fetch-plan.md](../../TODO/20260908-shell-and-fetch-plan.md) takes that measurement and re-derives this number from it. The alternative was to take the measurement inside this row; it was refused because a user-interface row is not a measurement harness, and because a number measured on a laptop's loopback would be the wrong number twice over. Authority: Fowler, 2026-09-08.
+**Three sentences were struck on 2026-08-29, and the reason is one mechanism
+rather than three mistakes.** This page opened with "Restraint is not a style
+choice on this project; it falls out of the architecture", [ui-shell.md](ui-shell.md)
+and [vision.md](vision.md) said the operator surfaces "earn no design budget",
+and the reading measure was written as a property of the shell. All three are
+defensible sentences and all three are the same error: an architectural
+constraint restated as a design value. Rule #1 constrains what may *execute* at
+read time and says nothing about what may be *drawn* - a gradient, an elevation
+scale and a self-hosted face cost a reader nothing at read time and the runner
+nothing at build time. But a constraint stated as a value stops needing a
+justification, so every additive proposal had to argue against the project's own
+doctrine while every subtractive one was pre-approved. The measurements that
+settled it are at the sufficiency gate above; the rejected alternative was
+softening the three sentences rather than striking them, refused because a
+softened absolute is still read as an absolute. Owner, 2026-08-29, over Jony's
+prior ruling.
 
-**Every skeleton is switched on by one attribute on an ancestor, and that is what makes them one timeline.** The rejected alternative was the obvious one: give each block its own timer and let it start sweeping when it starts waiting. Each block is then correct on its own and the page is wrong - twelve sweeps at twelve offsets read as twelve separate broken things rather than as one page waiting, which is the opposite of what a skeleton is for. Hanging the switch on the ancestor costs one flag on the page that does the fetching and buys a property a test can state in one line: every animation on the surface reports the same `startTime`. What it does not cover is a block that enters the waiting state on its own later, out of step with the others; on this surface there is none, because every panel waits on the same set of month files and the flag turns on and off for all of them together.
+**The token list on this page specified a shadow scale and a space scale that
+were never built.** That is the quieter half of the same failure: the doctrine
+was right and the implementation stopped short.
 
-**The refusal of a shared table component was reversed on 2026-08-29, and the
-reason it was right at the time is the reason it is wrong now.** It was refused
-as "an abstraction for two call sites", which is a good rule: a component built
-for two callers usually fits neither and has to be argued with by both. Counted
-again on 2026-08-30 once every section had landed, the three components draw
-**nine times across five sections**: `RankedList` twice, in the band-distance
-outliers and the failure ledger; `TargetBar` three times, on the feed
-quarantine countdown and the chart arm's two thresholds; and `Sparkline` four
-times, in the failure ledger, `What the model did` and the chart arm. Two of
-those sections did not exist when the refusal was written. What the refusal
-protected against was a generic `Table`, and that is still refused: the
-console's problem was never table markup, it was that a table is the wrong
-shape for "which one is worst", and a generic table would make the wrong shape
-cheaper to produce. What landed instead is a shape with an opinion - one order,
-one divisor, one tail sentence, two empty states - which is the opposite kind
-of abstraction. Authority: Fowler
-([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md))
-on the reversal, Susan on the shape, 2026-08-29.
+**Sufficiency became a gate because the review roster was six vetoes and no
+demand.** Jony removes, Fowler deletes, Carmack refuses on budget, Reader and
+Editor report. Nothing asked whether the result was good enough to be worth a
+stranger's attention, and a system of pure vetoes converges on the minimum that
+passes every veto. Giving Jony the demand mandate as well was rejected: one head
+holding both "remove before adding" and "this is not enough" resolves to the veto
+every time. Susan was added at a distinct altitude instead, and a veto now has to
+name what the reader loses. Owner and Fowler, 2026-08-29.
 
-**The refusal to window `Sources cut short most often` was reversed on
-2026-08-30, and it turns on one word: hidden.** The section read a fixed seven
-days, and widening it was refused because a span the reader cannot see makes
-the section's own sentence lie - `17 of 38 cut` over a span nobody names is a
-count with no denominator in time, and a number in a config file is exactly
-that kind of unseen span. What changed is that the span stopped being unseen.
-One control at the top of the page holds it, all four presets are on the screen
-at once, and every windowed section states the span it read in its own sentence
-and in its accessible description. A control the operator is looking at cannot
-make the sentence lie, so long as the sentence reads the same window the query
-reads - and `frontend/tests/console-window.spec.ts` asserts exactly that, for
-every surface that declares itself windowed. The section prints its own
-denominator too, which at seven days runs as low as six articles, so the
-narrowest window says how thin it is instead of hiding it. The rejected
-alternative was leaving the seven days fixed while every other section followed
-the control: two spans on one page is the defect the shared window exists to
-remove, and the section that disagreed would be the one nobody checked.
-Authority: Susan on the reversal, Fowler on recording it, 2026-08-30.
+**Driving the look from fields the payload already carries** - visual kind, band,
+truncation - rather than from per-item styling is what keeps the surface one
+component instead of many, and it means a new visual kind or band arrives with a
+slot already waiting. The rejected alternative, bespoke treatment per item type,
+produces a page that must be edited every time the pipeline learns something new.
+Jony.
 
-**The geometry was pulled out of the two chart helpers rather than copied.**
-`sparkline.ts` and `targetbar.ts` already owned the rules - the track is the
-larger end plus 15 percent, the marker sits at `target / track`, inside 10
-percent of the target is a warning, a domain is the drawn extent and not zero -
-and each also built a chart option. A second copy of those rules for the markup
-bars would drift, and the drift shows as a marker in one panel and a verdict in
-another disagreeing about the same number with nothing on screen looking wrong.
-So each module now exports the shape, and both drawings read it. The rejected
-alternative was having the markup call the chart builder and throw the option
-away; it wastes nothing worth measuring, and it makes a component that draws no
-chart import a chart builder, which the next reader has to work out.
+**Keeping the motion set to three named animations is a deliberate under-build.**
+A reading surface that animates is a reading surface that interrupts. Jony, with
+Reader as the check.
 
-**Measured on this tree at `f51d669`, 2026-08-29, Windows 11, node 24.** The
-three components add **0 bytes** to every route, because nothing renders them
-yet - the four call sites land in later rows. The number that will matter is the
-one the first call site pays, and it is recorded there. Width-based `@media`
-rules in `frontend/src`: **1 before this row and 2 after**, the existing one
-being a digest item at 1024px. There are no responsive utility prefixes anywhere
-in `frontend/src` - measured as 0 matches - so a rule written in a component's
-own stylesheet is the only responsive behaviour the surface has.
+**Taking `d3-scale` and `d3-array` while still refusing a chart library on a
+reading route is one distinction, not two rules.** A chart library owns the
+element, the redraw and the theme, which is why the last one drew a second copy
+of a chart that already existed. A scale library returns a number. The rejected
+alternatives were all libraries that draw: `echarts` (canvas), `@observablehq/plot`
+(needs a DOM shim to prerender), `chart.js` (canvas), `uplot`, and a component
+library, which is worst of all when every chart on the surface is bespoke. A CDN
+was rejected on top of all of them: the HTTP cache is partitioned per site, so
+the shared-cache argument is dead, and the repo's `script-src` allows `self`
+only. "Fix the units without the dependency" was rejected last, because `.nice()`
+and `ticks()` are exactly the part hand-rolling gets wrong. Jony and Carmack,
+2026-08-25, owner accepted; overruled for the operator surface only on
+2026-08-29, on the three conditions in the chart section above.
 
-Against the sufficiency checks: a ranked row is a four-column grid across the
-whole console frame rather than a table that stops where its longest cell
-stops; the bar sits on a sunken rail so a short bar is still visibly a bar
-against a ground; the longest bar is at the top at full width, which is the one
-thing the eye lands on; and a selectable row has a hover state, a visible focus
-ring and a pressed state. The one check it does not answer on its own is
-whether the page uses its screen - that is decided by the sections that render
-it, in later rows.
-
-**Three sentences were struck on 2026-08-29, and the reason is one mechanism rather than three mistakes.** This page opened with "Restraint is not a style choice on this project; it falls out of the architecture", [ui-shell.md](ui-shell.md) and [vision.md](vision.md) said the operator surfaces "earn no design budget", and the reading measure was written as a property of the shell. All three are defensible sentences and all three are the same error: an architectural constraint restated as a design value. Rule #1 constrains what may *execute* at read time and says nothing about what may be *drawn* - a gradient, an elevation scale and a self-hosted face are bytes in a committed stylesheet that cost a reader nothing at read time and the runner nothing at build time. But a constraint stated as a value stops needing a justification, so every additive proposal had to argue against the project's own doctrine while every subtractive one was pre-approved.
-
-The measurements that settled it, taken in the integrated browser on 2026-08-28: 40.6 percent of a 1536px viewport used; the content column fixed at 624px from 1024px upward; **two** responsive breakpoints in the whole of `frontend/src`, one of which changes padding and the other of which divides an already-capped column into three 164px charts; seven horizontal scrollbars on the console while 582px of screen sat empty beside them. The rejected alternative was softening the three sentences rather than striking them, and it was rejected because a softened absolute is still read as an absolute. Authority: owner, 2026-08-29, over Jony's prior ruling.
-
-**The token list on this page specified a shadow scale and a space scale that were never built.** That is not a doctrine change and it is worth naming separately: the doctrine was right and the implementation stopped short, which is the quieter half of the same failure.
-
-**Sufficiency became a gate because the review roster was six vetoes and no demand.** Jony removes, Fowler deletes, Carmack refuses on budget, Reader and Editor report. Nothing asked whether the result was good enough to be worth a stranger's attention, and a system of pure vetoes converges on the minimum that passes every veto. The rejected alternative was giving Jony the demand mandate as well; one head holding both "remove before adding" and "this is not enough" resolves to the veto every time, which is the observed outcome. Susan was added at a distinct altitude instead, and a veto now has to name what the reader loses. Authority: owner and Fowler, 2026-08-29.
+Three lessons from that reversal are recorded because they are more transferable
+than the ruling. **A byte count is a measurement and goes stale like any other** -
+a design argument leaning on a number someone took months ago has not met Rule
+#10. **An argument that generalises from the worst implementation of a thing is
+not an argument about the thing** - "a canvas cannot inherit a custom property"
+is true of canvas and false of the SVG renderers those libraries also ship. And
+**check whether the thing a dependency is supposed to buy is already built**: the
+case for the engine was that it buys a pointer readout, and `frame.ts` already
+had one covering mouse, pen, touch and keyboard - two of the four charts were
+simply never wired to it.
 
 ### The footer ships as one row of links, and it fails two sufficiency checks
 
@@ -1453,12 +706,11 @@ in one row have no order to be read in. And **it does not look like it was made
 this year**: a bare link strip under a hairline is the plainest footer a page
 can have, and it is the exact "thin, cold, unloved" shape Susan exists to catch
 ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)).
-Measured 2026-09-09 in Chromium at 1280x900 on the canary build, the same figure
-on all five routes that have a footer: the block is **102 px tall and holds
-three links**, against 3 blocks and 2 paragraphs before. The other two checks
-pass and are unchanged by the row: the footer uses the width of the frame it
-sits in, and the top rule plus `--color-text-tertiary` still hold it away from
-the reading surface.
+Measured 2026-09-09 in Chromium at 1280x900 on the canary build, the same on all
+five routes that have a footer: the block is **102 px tall and holds three
+links**, against 3 blocks and 2 paragraphs before. The other two checks pass -
+the footer uses the width of the frame it sits in, and the top rule plus
+`--color-text-tertiary` still hold it away from the reading surface.
 
 **What the reader loses, named rather than implied.** The build line said which
 commit produced the page, so a reader who thought something looked wrong could
@@ -1469,26 +721,14 @@ to say it is unsure, and Reader
 ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md))
 argued to keep it beside the day. The retention promise is now stated on
 `/archive/` alone, so a reader on a dated page is told nothing about what may
-later be deleted. On an empty dated page the panel keeps its two ways on but
-loses the one that named a date: "Latest day - 8 September 2026" is now
-"Today's digest", the same destination under an address no later run can change
-([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
+later be deleted.
 
-**Why it ships anyway, and why the fix is not a smaller version of the same
-thing.** Every one of those sentences is read off the newest day or off the
-build, and the footer is on every page - so each rewrote the bytes of every
-document on the site whenever anything published. Measured 2026-09-09 on an
-Intel Core i7-1265U, Windows 11, node 24.12.0, over the 19 committed days:
-publishing one more day changed the SHA-256 of the 21 August document while
-leaving its size at 32,014 bytes exactly, so the page said the same thing and
-arrived as different bytes. A page a reader already holds should not go stale
-for a reason that is nothing to do with what it says.
-
-**The alternatives were considered and refused by the owner, and they are not
-reopened here.** A manifest the page fetches to print a commit: refused, because
-the commit is not worth a file, a schema, a request and a cleanup story. Keeping
-the verification sentence beside the day: refused. Replacing the retention
-promise with a promise to delete: refused. Authority: owner, 2026-09-08.
+**Why it ships anyway.** Every one of those sentences is read off the newest day
+or off the build, and the footer is on every page - so each rewrote the bytes of
+every document on the site whenever anything published, leaving a page a reader
+already holds stale for a reason that is nothing to do with what it says. The
+measurement, and the alternatives the owner refused, are in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
 
 **What would fix the two failed checks costs nothing this row cares about,** and
 it is written here so the next person does not have to rediscover it: the footer
@@ -1497,70 +737,9 @@ the site is, set above the links at the heading step, would give the eye
 somewhere to land and give the strip a reason to be a footer rather than a
 leftover. It is a fixed string, so it moves no bytes on any later run.
 
-Driving the look from fields the payload already carries - visual kind, band, truncation - rather than from per-item styling decisions is what keeps the surface one component instead of many, and it means a new visual kind or band arrives with a slot already waiting for it. The rejected alternative, bespoke treatment per item type, produces a page that must be edited every time the pipeline learns something new. Authority: Jony.
-
-Keeping the motion set to three named animations is a deliberate under-build. A reading surface that animates is a reading surface that interrupts. Authority: Jony, with Reader ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md)) as the check.
-
-Taking `d3-scale` and `d3-array` while still refusing a chart library is one
-distinction, not two rules. A chart library owns the element, the redraw and the
-theme, which is why the last one drew a second copy of a chart that already
-existed. A scale library returns a number. The rejected alternatives were all
-libraries that draw: `echarts` (336 KB gz, canvas), `@observablehq/plot`
-(128 KB gz, and it needs a DOM shim to prerender), `chart.js` (67 KB gz,
-canvas), `uplot` (removed one row below, and re-adding it would re-litigate a
-settled decision), and a component library, which is worst of all when every
-chart on the surface is bespoke. A CDN was rejected on top of all of them: the
-HTTP cache is partitioned per site, so the shared-cache argument is dead, and
-the repo's `script-src` allows `self` only. "Fix the units without the
-dependency" was rejected last, because `.nice()` and `ticks()` are exactly the
-part hand-rolling gets wrong. Authority: Jony and Carmack, 2026-08-25, owner
-accepted.
-
-**The blanket ban on a chart library was reversed for the operator surface on
-2026-08-29, and the reason it was wrong is worth more than the reversal.** It
-rested on three claims. The first was a byte count - "the `/console/` route is
-66,550 B" - which was **four and a half times out of date**; the route was
-301,580 B on the day the argument was made. The second was "a canvas cannot
-inherit a CSS custom property", which is true of canvas and false of the SVG
-renderers those libraries also ship, so it generalised from the worst case. The
-third, that the page would stop being complete before script runs, holds only
-for a library that cannot render server-side, and the leading one has an
-explicit build-time SVG mode.
-
-The paragraph above this one is still correct about a reading route and is not
-touched. What changed is that the two surfaces stopped sharing one answer.
-
-The measurements that now stand in place of the stale one were taken on
-2026-08-29 on this tree with this bundler, and the current ones are in the chart
-section above: 153,204 B gzipped for the engine as a lazy chunk carrying only
-the chart types in use, against 345,959 B for the same package imported whole,
-and 1,854 B for what opening the console actually costs. A reader's route
-imports none of it. The chunk figure has since been re-measured twice - see the
-chart section for what it reads today and why it moved.
-
-Three lessons are recorded because they are more transferable than the ruling.
-**A byte count is a measurement and goes stale like any other** - Rule #10 asks
-for the hardware and the date, and a design argument that leans on a number
-someone took months ago has not met it. **An argument that generalises from
-the worst implementation of a thing is not an argument about the thing.** And
-the one this row taught at its own expense: **a bundler probe is not the
-artefact.** The 188.4 KB that justified this decision was measured with a
-standalone bundler script; the thing that shipped read 345,959 B until the
-imports were narrowed, and 153,204 B after. Measure the file the build wrote.
-
-A fourth, about the argument rather than the bytes: the case made for the
-engine here was that it buys a pointer readout. It does not - `frontend/src/lib/charts/frame.ts`
-already had one, covering mouse, pen, touch and keyboard, and two of the four
-charts were simply never wired to it. The engine earns its place on chart types
-the surface cannot draw today, which is a smaller claim than the one first
-made. **Check whether the thing a dependency is supposed to buy is already
-built** before pricing it.
-
-Authority: owner, 2026-08-29, overruling the 2026-08-25 ruling on the operator
-surface only.
-
 ## See also
 
+- [console-design.md](console-design.md) - the operator half: how a console figure is worded, ranked, tinted and drawn.
 - [ui-shell.md](ui-shell.md) - the chrome that consumes these tokens.
 - [../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md) - who rules the sufficiency checks, and why the roster needed a demand side.
 - [../agents/guardrails.md](../agents/guardrails.md) - the authority table, and the rule that a veto must name what the reader loses.

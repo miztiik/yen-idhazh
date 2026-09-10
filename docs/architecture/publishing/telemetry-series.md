@@ -242,7 +242,7 @@ is a count of that day's items, never a row and never a score. The derivation is
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts),
 which sits under `$lib/server/` so SvelteKit refuses to bundle it for a browser.
 The wording of the labels is settled in
-[../../concepts/design-system.md](../../concepts/design-system.md); this table
+[../../concepts/console-design.md](../../concepts/console-design.md); this table
 says only where each figure comes from.
 
 | On screen | Counts | Read from |
@@ -633,6 +633,6 @@ asserts that no mark falls inside a tinted span -
 - [../contracts/schemas.md](../contracts/schemas.md) - why a migrated row keeps the `version` cell it was written with.
 - [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern, and the freeze rule this writer does not yet hold.
 - [../sources/item-health.md](../sources/item-health.md) - the private item-grain ledger.
-- [../../concepts/design-system.md](../../concepts/design-system.md) - how a console figure is worded and printed.
+- [../../concepts/console-design.md](../../concepts/console-design.md) - how a console figure is worded and printed.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - ledgers as records, logs as evidence.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #1 and Rule #11.
