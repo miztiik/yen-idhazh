@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-10
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
@@ -43,6 +43,16 @@ Binds every persona and every answer an agent gives a user, plus docs, commit me
 - Use ASD-STE100.
 
 A persona's own worldview shapes what it says, never how plainly it says it.
+
+## Decision requests and tables (`CLAUDE.md` section 0c)
+
+Write every answer in plain, simple English - a person outside this project understands it on one read. No subsystem terms, no invented jargon, no vendor name used as vocabulary. Define any unavoidable term in the same sentence.
+
+When you need the user to choose, ask in one message, in this order: situation, problem, impact, options each with its cost and what it gives up, recommendation naming one option. An option with no cost named is not an option.
+
+Every table in every answer is lettered in the order it appears - `Table A`, `Table B` - and each row's id is that letter plus its number (`A1`, `A2`, `B1`) in the first column. No id repeats in one message, so the user answers `A3` or `A2 and B1` and quotes nothing back.
+
+A message with no options is a status update, not a decision request, and does not use the five-part shape.
 
 ## Rules (cite by number when relevant)
 
