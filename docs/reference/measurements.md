@@ -395,62 +395,6 @@ and 1.49. So the worst instant is set by llama-server, and python contributes
 present at a peak. It is a python that starts and exits inside one sampling
 interval; what it is, the capture cannot say.
 
-### The run arrived, and 16,384 is now committed - what it is projected to cost
-
-**Answered on one reading, and the reading is the kernel's own.** Run
-`2026-09-09-34323771996` is the first this project has taken with
-`MemAvailable` beside the process marks: 4 shards, 601 samples, `n_ctx` 8,192,
-on GitHub-hosted `ubuntu-latest`. `MemTotal` 15.61 GiB. At the tightest instant
-of the whole run the kernel still reported **5.63 GiB available**, and the four
-shards' lows were 5.63, 5.95, 7.64 and 7.84 GiB. llama-server's worst `VmHWM`
-was 12.68 GiB and python's 1.76 GiB.
-
-**Those two readings disagree, and the disagreement is the point.** The process
-marks sum to 14.44 GiB, while the kernel says only 9.98 GiB of the machine was
-unavailable - a gap of 4.46 GiB in the direction the earlier sections predicted.
-`load_mode` is null, so llama.cpp maps the 5.29 GiB weight file rather than
-reading it into anonymous memory: those pages count in `VmRSS` in full and the
-kernel can drop them, so a sum of resident sets overstates what has to fit. The
-two figures cannot be reconciled to the byte from what this run recorded - a
-`VmHWM` is a peak and `MemAvailable` is an instant, and nothing pairs them - but
-they do not need to be. **`MemAvailable` is the only one of the two that answers
-the question**, because it is the kernel's own estimate of what a new allocation
-could get.
-
-**What the raise costs is KV cache and nothing else, and it is arithmetic.** On
-`Qwen3.5-9B-Q4_K_M` the card gives 4 KV heads, a head dimension of 256, and 8
-attention layers: 4 x 256 x 2 (K and V) x 2 bytes is 4 KiB a token a layer, so
-32 KiB a token across the eight - **0.25 GiB at 8,192 and 0.50 GiB at 16,384**.
-The raise is +0.25 GiB. Read two ways, it clears the plan's 1.0 GiB bar both
-times: on the kernel's own reading 5.63 - 0.25 leaves **5.38 GiB, 5.4 times the
-bar**; on the harsher machine-minus-llama-peak framing, 15.61 - 12.68 - 0.25
-leaves **2.68 GiB, 2.7 times it**. The answer does not turn on which framing
-is accepted.
-
-**This was a projection until row 4 dispatched. It has now been read, and it was
-right to the byte.** Run `2026-09-09-34379502244` printed
-`llama_kv_cache: CPU KV buffer size = 512.00 MiB` on all four shards - see
-[what the doubled window and the doubled cap cost](#what-the-doubled-window-and-the-doubled-cap-cost-measured-2026-09-09).
-The 2,304 MiB alternative is refuted and the raise cost 0.25 GiB. The one
-cross-check this repository already held is about other weights and agreed with
-the method rather than with the number: the 8B prints
-`llama_kv_cache: CPU KV buffer size = 1152.00 MiB` at `n_ctx` 8,192, which is
-144 KiB a token - 4.5 times the 9B's, because the 8B carries 36 attention layers
-of 8 KV heads at head dimension 128 and the 9B carries 8 of 4 at 256. Same
-arithmetic, different architecture.
-
-**32,768 was refused, and not on memory.** Its memory objection died with this
-reading. The one that stands is that it buys nothing: the widest two-call
-request this pipeline can build is about 8,580 tokens, so 16,384 is 1.9 times
-that and 32,768 is 3.8 times. Doubling again pays 0.5 GiB more for headroom over
-headroom. **That 8,580 was measured under the 5,000-token cap and is superseded
-at 10,000** - the two-call worst case is now 15,889 tokens, 97 percent of the
-window. The refusal stands; the margin behind it does not.
-
-**The cache types stay `f16`.** `q8_0` on K or V changes how the partial sums
-accumulate, which changes the words. That is a separate measurement against the
-scorers, not a memory knob to reach for while raising a window.
-
 ## What llama-server reports about its own runtime settings, 2026-09-09
 
 **Flash attention is observable, and only in the log, and only at verbosity 4 or
@@ -3238,66 +3182,6 @@ the item inside `digest.json`, with no absent day and no absent item (measured
 and that is what was given up - see
 [../architecture/sources/freshness.md](../architecture/sources/freshness.md).
 
-### The day grain, and the two numbers that argued against it
-
-**Measured 2026-09-07** on an Intel Core i7-1265U, over this checkout. Every
-figure above this heading was taken over the flat `state/published.csv`, which
-`backend/utilities/split_published_ledger.py` moved into
-`state/published/YYYY/MM/DD.csv` on 2026-09-08.
-
-The ledger that day: **7,243 rows, 756 KB, 106.9 B a row**, 7,162 distinct
-addresses over 15 published days - **483 rows a day**. `load_published` took
-**37.0 ms at best and 69.0 ms at worst over five runs, a spread of 32.0 ms**,
-which is most of the reading: the same code is nearly twice as slow when another
-job shares the box, so a wall clock here measures the machine as much as the
-file. It peaked at **500.9 B a row while reading, 3.63 MB**. At the measured rate
-that is 18.8 MB on disk and 88 MB of peak after a year, 56.5 MB and 265 MB after
-three.
-
-**81 addresses carry more than one row, and every one of those gaps is zero
-days.** No address in the committed ledger was published and then published
-again on a later date. Read that as evidence the guard works rather than that it
-is idle - the ledger cannot show a repeat the guard blocked.
-
-**A synthetic year, 176,295 rows, three layouts.** The window column is a
-120-day cover, the shape `collect.published_window_days` now expresses.
-
-| Layout | Whole history | 120-day window | Opens in window | Bytes read in window |
-| --- | --- | --- | --- | --- |
-| One file | 2,654 ms | not possible | 1 | 17.1 MB |
-| 12 month files | 1,741 ms | 293 ms | 4 | 5,715,970 |
-| **365 day files** | 2,514 ms | 587 ms | 121 | 5,673,448 |
-
-**Day files went the wrong way on speed, and it is recorded rather than
-dropped.** For the same 120-day window they read 42 KB fewer than month files
-and take **587 ms against 293 ms - twice as long**. The extra 294 ms is 117 more
-file opens at about 2.5 ms each on Windows. Parse cost follows bytes; the rest
-follows opens. The unbounded read is where the grain hurts most, 2,514 ms with a
-1,684 to 18,592 ms spread, and that is the mode shipping today. Accepted,
-because it is seconds inside a job that runs for hours.
-
-**And repository size went the wrong way too.** 60 days, 5 runs a day, 300
-commits:
-
-| Layout | Working tree | `.git` before gc | after gc |
-| --- | --- | --- | --- |
-| One file | 2,757 KB | 3,772 KB | **275 KB** |
-| Month files | 2,757 KB | 329 KB | **280 KB** |
-| Day files | 2,759 KB | 338 KB | **296 KB** |
-
-Git has no append: every commit writes a whole new object, which is why one file
-is **eleven times worse before packing**. Packing recovers essentially all of it,
-and day files finish **21 KB larger than one file and 16 KB larger than month
-files - the largest of the three**. So **repository size is not a reason for day
-files**, and it is written down here because the opposite is the intuitive
-answer and the intuitive answer is wrong.
-
-What did earn the grain is in
-[../architecture/sources/freshness.md](../architecture/sources/freshness.md):
-one partition rule shared with the digest tree, a day removal that is one `rm`
-rather than an edit `merge=union` cannot express, and a merge surface of one day
-rather than about 150 runs.
-
 ## The safety ceiling fires on every run
 
 **Measured 2026-08-25** by reading `items_planned` out of every run record in
@@ -3381,46 +3265,6 @@ the 40-item ceiling those runs ran at. The `work` job was bounded at 330.** That
 times the worst thing it has ever had to allow. It was also a second answer:
 `config/idhazh.json` said `run.shard_timeout_minutes: 150` and nothing read it,
 so a person sizing a model against config read a number production ignored.
-
-### The full days, run by run
-
-Sixteen runs planned a full day - 100 items or more - between 2026-08-23 15:23
-and 2026-08-26 20:09 UTC. Every one fanned out to four workers, so this is one
-shard count and not a mixture. `Items a worker` is
-`ceil(items_planned / 4)`, and `items_planned` is read from that day's committed
-`run.json` rather than from a log. Five of the sixteen runs ended `cancelled` or
-were dispatches, but all 64 `work` jobs concluded `success`, so every clock here
-is a worker that finished its share.
-
-| Run | Plan started (UTC) | Items planned | Items a worker | Slowest worker | Minutes an item |
-| --- | --- | --- | --- | --- | --- |
-| `33008629212` | 2026-08-26 20:09 | 160 | 40 | 83.5 min | 2.09 |
-| `32986307407` | 2026-08-26 15:57 | 160 | 40 | **94.5 min** | **2.36** |
-| `32960510065` | 2026-08-26 10:56 | 160 | 40 | 92.5 min | 2.31 |
-| `32941554666` | 2026-08-26 07:15 | 194 | 49 | 88.7 min | 1.81 |
-| `32926523936` | 2026-08-26 03:30 | 198 | 50 | 107.7 min | 2.15 |
-| `32887038177` | 2026-08-25 19:33 | 200 | 50 | 103.8 min | 2.08 |
-| `32863921985` | 2026-08-25 15:11 | 200 | 50 | 110.6 min | 2.21 |
-| `32839359536` | 2026-08-25 10:55 | 200 | 50 | 102.4 min | 2.05 |
-| `32820339599` | 2026-08-25 07:14 | 200 | 50 | 93.6 min | 1.87 |
-| `32804437110` | 2026-08-25 03:17 | 200 | 50 | 106.9 min | 2.14 |
-| `32766098026` | 2026-08-24 19:08 | 200 | 50 | 105.3 min | 2.11 |
-| `32742672105` | 2026-08-24 15:08 | 200 | 50 | 113.1 min | 2.26 |
-| `32719349248` | 2026-08-24 11:00 | 200 | 50 | **117.5 min** | 2.35 |
-| `32701966659` | 2026-08-24 07:35 | 200 | 50 | 108.9 min | 2.18 |
-| `32680268454` | 2026-08-24 01:38 | 200 | 50 | 98.3 min | 1.97 |
-| `32648218952` | 2026-08-23 15:23 | 200 | 50 | 114.7 min | 2.29 |
-
-| Quantity, over those 16 runs | Lowest | Median | Highest |
-| --- | --- | --- | --- |
-| Slowest worker of the run | 83.5 min | 104.5 min | **117.5 min** |
-| Minutes that worker spent an item | 1.81 | 2.15 | **2.36** |
-
-**The spread on the per-item rate is 1.30x, not the 3.4x the host lottery moves
-prefill by.** A worker is prefill plus decode, and this page already records that
-the hosts which read a prompt fastest write a summary slowest, so the two swings
-partly cancel over 40 items. That is why a shard clock is a steadier thing to
-size a bound against than a tokens-a-second figure.
 
 ### Where the work job's bound comes from
 
