@@ -272,6 +272,19 @@ is best at. Modelled on the committed payload the same day:
 A century of publishing leaves the payload at two fifths of its ceiling, so the
 months list needs no window of its own.
 
+**Since 2026-09-10 the band has a second, tighter ceiling, and it is the one that
+binds.** Row 18 gave `bundle-gate.mjs` a per-payload pass and named
+`console/band.json` at **2,000 bytes** in `page_weight.payload_ceilings_bytes`,
+against a measured 794 at `gzip -5`
+([../../reference/measurements.md](../../reference/measurements.md)). So one
+payload now carries two numbers: 8 KB asserted in `console-band.spec.ts` and
+2,000 applied by the gate. Nothing fails today, and the century row above sits
+between them - 3,247 bytes passes the ceiling the spec asserts and would fail the
+one the gate applies. **It is unreachable either way**, because
+`observability.public_telemetry_keep_months` caps the months list at 14, so the
+growth the 8 KB was bought for cannot arrive. Which of the two is the ceiling is
+nobody's decision yet; until it is taken, read the gate's.
+
 ### The band is the second payload, not the first, and the reason is not ours
 
 Row 11's oracle asked for the band to be the first request the console issues
