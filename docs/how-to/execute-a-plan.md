@@ -13,14 +13,14 @@ The agent that runs a plan is an **orchestrator**, not an implementer. It holds 
 Why the split exists: the orchestrator's context is the scarce resource. If it implemented rows inline, its context would fill with per-row detail and it would lose the plan. Delegation keeps the orchestrator lean - it only ever holds the plan + per-row reports, never the full implementation transcript. This is context protection, and it is the whole point.
 
 ```
-orchestrator (main thread)                 worker subagent (one per row)          persona custom agents
-  read plan-doc + Status Reckoner            runSubagent(default) per row            runSubagent("Fowler ...") etc.
-  pick next dispatchable row(s)      ---->   bootstrap; implement the row    ---->   resolve ONE ambiguity,
-  create worktree + branch                   code + tests + docs                     return a written ruling
-  dispatch worker; mark IN-FLIGHT            run Oracle + acceptance gates           (an input, not an approval)
-  receive structured report        <----     consult personas on ambiguity  <----
-  run DoD + ship-a-pr; merge on green        return report (does NOT merge)
-  flip Status DONE #pr; distill; advance
+orchestrator (main thread) worker subagent (one per row) persona custom agents
+ read plan-doc + Status Reckoner runSubagent(default) per row runSubagent("Fowler...") etc.
+ pick next dispatchable row(s) ----> bootstrap; implement the row ----> resolve ONE ambiguity,
+ create worktree + branch code + tests + docs return a written ruling
+ dispatch worker; mark IN-FLIGHT run Oracle + acceptance gates (an input, not an approval)
+ receive structured report <---- consult personas on ambiguity <----
+ run DoD + ship-a-pr; merge on green return report (does NOT merge)
+ flip Status DONE #pr; distill; advance
 ```
 
 ## Roles
@@ -79,7 +79,7 @@ Every plan-doc carries exactly one execution stamp (author-a-plan.md step 5). It
 Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = <n>; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 ```
 
-Drop the `AUTHOR-AND-STOP ...` clause once the user authorizes execution.
+Drop the `AUTHOR-AND-STOP...` clause once the user authorizes execution.
 
 ## Parallel fan-out
 

@@ -46,11 +46,11 @@ Three files carry one item-health row, and each owns one thing:
 
 | Where | What it owns |
 | --- | --- |
-| `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns()` |
+| `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns` |
 | `schemas/item-health-row.schema.json` | the generated schema. Never hand-edited (Rule #3) |
 | `backend/idhazh/ledger.py` | the append, the header guard, and the monthly shard path |
 
-**One definition of the column list.** `ItemHealthRow.csv_columns()` returns
+**One definition of the column list.** `ItemHealthRow.csv_columns` returns
 `tuple(model_fields)`, so the CSV header IS the contract's field order. A writer
 and a reader cannot disagree, and there is no second list to forget.
 
@@ -60,8 +60,8 @@ not by the clock when it was written, so a run that publishes just after
 midnight UTC still files under the day it published. Header on line 1, `\n`
 endings, `utf-8`, no quoting beyond what `csv` needs.
 
-**Every cell is a string.** `csv_row()` writes `""` for an absent optional and
-`from_csv_row()` reads `""` back as `None`. There is no sentinel number and no
+**Every cell is a string.** `csv_row` writes `""` for an absent optional and
+`from_csv_row` reads `""` back as `None`. There is no sentinel number and no
 `NULL` literal, because both of those get averaged by accident one day.
 
 The 26 columns, in file order:
@@ -138,8 +138,8 @@ truncates, and counts what is left into `Article.word_count`.
 So the test for a cut is the comparison and nothing else:
 
 ```text
-cut  <=>  source_words_before_cap > source_words
-by   =    source_words_before_cap - source_words
+cut <=> source_words_before_cap > source_words
+by = source_words_before_cap - source_words
 ```
 
 The alternative was `source_words == int(truncation_cap_tokens / 1.3)`. That
@@ -316,14 +316,14 @@ That is a failed scheduled run, not a failed lint. The migration ships in the
 same commit (`CLAUDE.md` section 11):
 
 1. Append the new columns at the **end** of the model, never in the middle. The
-   guard compares the whole list, and a reader maps by name, so the only reason
-   order matters is that an appended column leaves the old header a prefix of the
-   new one - which is what makes step 2 mechanical and reviewable.
+ guard compares the whole list, and a reader maps by name, so the only reason
+ order matters is that an appended column leaves the old header a prefix of the
+ new one - which is what makes step 2 mechanical and reviewable.
 2. Rewrite each existing shard under `state/` with the widened header and an
-   empty cell for every new column on every old row. Empty is correct: those
-   runs measured nothing, and `from_csv_row` reads an empty cell as `None`.
+ empty cell for every new column on every old row. Empty is correct: those
+ runs measured nothing, and `from_csv_row` reads an empty cell as `None`.
 3. Read every migrated row back through `from_csv_row` before committing. A
-   header that widened without its rows widening is worse than a raised error.
+ header that widened without its rows widening is worse than a raised error.
 
 **A check on the migration reads rows, never shards.** Step 2 rewrites the
 shards that exist on the day it runs, so a shard the pipeline opens afterwards
@@ -436,24 +436,24 @@ Projected forward at the current cadence and ceiling:
 Three limits, in the order they will actually bite:
 
 1. **The reader's download, first.** The console fetches a whole month shard.
-   330 KB gzipped at the end of a busy month is already more than the rest of
-   the page. The lever is the projection, not the ledger: the served file
-   carries 10 columns today and could carry fewer, or become a pre-aggregated
-   day-grain file with the per-item rows kept for the operator only. Nothing
-   here is measured against a slow connection yet, so that is the next
-   measurement rather than the next change.
+ 330 KB gzipped at the end of a busy month is already more than the rest of
+ the page. The lever is the projection, not the ledger: the served file
+ carries 10 columns today and could carry fewer, or become a pre-aggregated
+ day-grain file with the per-item rows kept for the operator only. Nothing
+ here is measured against a slow connection yet, so that is the next
+ measurement rather than the next change.
 2. **Git history, second.** Every run rewrites the whole shard as a new blob, so
-   the repository grows with `commits x shard size`, not with rows: five commits
-   a day against a shard averaging half its final size is roughly 530 MB of
-   uncompressed blob a month. Delta compression on an append-only file is
-   cheap - 14 versions and 1.44 MB sit inside a 26 MiB pack - but "cheap" is not
-   a measured number here and must not be quoted as one. The lever if it bites
-   is a shorter shard period (weekly, `YYYY-Www.csv`), which the reader already
-   handles because it globs the directory.
+ the repository grows with `commits x shard size`, not with rows: five commits
+ a day against a shard averaging half its final size is roughly 530 MB of
+ uncompressed blob a month. Delta compression on an append-only file is
+ cheap - 14 versions and 1.44 MB sit inside a 26 MiB pack - but "cheap" is not
+ a measured number here and must not be quoted as one. The lever if it bites
+ is a shorter shard period (weekly, `YYYY-Www.csv`), which the reader already
+ handles because it globs the directory.
 3. **The 1 GB published site, last and least.** `state/` is never served, so it
-   does not count against that cap at all. Only the projection under
-   `frontend/public/telemetry/` does, and at 4.0 MB gzipped a year it is not the
-   thing that fills a gigabyte - the day payloads and their SVG assets are.
+ does not count against that cap at all. Only the projection under
+ `frontend/public/telemetry/` does, and at 4.0 MB gzipped a year it is not the
+ thing that fills a gigabyte - the day payloads and their SVG assets are.
 
 What is deliberately **not** planned: pruning. The ledger is the only durable
 record of what a bad day did, and a retention pass over it would delete exactly

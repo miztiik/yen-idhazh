@@ -423,7 +423,7 @@ twice one day apart, whatever the date under it says.
 **A column with no square is a day nothing ran, and it is drawn.** Until
 2026-09-01 the strip drew one column per day a manifest exists for, so at the
 default thirty-day window over the committed ledger it drew eleven columns:
-measured 2026-09-01 at 1440 on Intel Core i7-1265U, Windows 11, node 24.12.0,
+measured 2026-09-01 at 1440 on node 24.12.0,
 **464px of a 1,326px frame - 35.0 percent**, with the other 862px empty on the
 right. That reads as a chart that failed to load. The window's own calendar
 draws thirty columns at 1,290px, **97.3 percent**, and the gaps in it are the
@@ -533,7 +533,7 @@ a fill value has to land in.
 
 **A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
 
-Beneath the strip, the section leads with its own denominator: **how many feeds did not fail, out of how many the pipeline read, over how many runs** - 152 of 179 across 44 runs, measured 2026-09-03. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "did not fail" means "did not fail twice". The rule is `reliability()` in `frontend/src/lib/feed-health.ts`, reading the same `failing()` the quarantine reads ([../sources/health.md](../sources/health.md)).
+Beneath the strip, the section leads with its own denominator: **how many feeds did not fail, out of how many the pipeline read, over how many runs** - 152 of 179 across 44 runs, measured 2026-09-03. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "did not fail" means "did not fail twice". The rule is `reliability` in `frontend/src/lib/feed-health.ts`, reading the same `failing` the quarantine reads ([../sources/health.md](../sources/health.md)).
 
 **The sentence names its span, since 2026-09-09, because it never had one.** It said feeds "have never failed", and the read behind it is `feedResults(shardMonths(widest))` - the newest five month shards, which is what the widest window preset can reach and no further. "Never" claimed every run there has been over a read that opens a bounded set of files, so the page was making a claim only a growing read could support (`CLAUDE.md` Rule #12, owner decision 2026-09-08). It now says the feeds "did not fail a read in these 44 runs", with the count from the record rather than a literal. The windowed sentence is also the more useful one: a feed that broke once in August and has answered every run since is permanently disqualified by "never failed", and the question on the desk is whether anything is broken now. `tests/console-window-claims.spec.ts` holds it - it reads the three built console documents, strips scripts and every attribute but `aria-label`, and refuses a claim in the present perfect.
 
@@ -553,7 +553,7 @@ Above the failure list sits the census the list needs: **one row per state, per 
 - **It does not follow the window control.** Permission, reading and retirement are read over the whole record, and the publishing record has a fixed span of its own. It declares no `data-windowed` surface for that reason, and its own spec asserts the span instead.
 - **Its population is smaller than the failure list's, and it says so.** The census counts the addresses a run may ask; the list below reads the whole ledger, tombstoned feeds included. Measured 2026-09-03, the 24 tombstoned sources in the item ledger were offered 560 addresses over the window and published none, so the smaller population loses no publication and stops the denominator counting sources nobody may ask.
 
-**Nothing fetches it, so nothing stages it.** `frontend/public/source-health.json` is read at build time by `sourceHealthView()` in `frontend/src/lib/server/payload.ts` and never by a browser, so it is not copied into `frontend/static/` and `frontend/scripts/copy-visuals.mjs` is untouched. Its path is derived from `DIGEST_ROOT` the way `INDEX_ROOT` is, so a canary build reads the canary's own census.
+**Nothing fetches it, so nothing stages it.** `frontend/public/source-health.json` is read at build time by `sourceHealthView` in `frontend/src/lib/server/payload.ts` and never by a browser, so it is not copied into `frontend/static/` and `frontend/scripts/copy-visuals.mjs` is untouched. Its path is derived from `DIGEST_ROOT` the way `INDEX_ROOT` is, so a canary build reads the canary's own census.
 
 **A missing or malformed view is a named absence, not a blank page.** The reader is the same guard `loadDay` uses - `null`, a list, and an object with no source list all parse cleanly and all three would reach the page as a section rendering nothing - and a view that cannot be read costs one section and logs one line.
 
@@ -566,7 +566,7 @@ answered this morning is healthy, and a lifetime total printed beside a rest
 marker is a number the pipeline never used to rest anything. The rule is
 restated on the read side in `frontend/src/lib/feed-health.ts`, which runs the
 same loop `discover.streak` runs, so a test can drive it with rows it made up.
-Both read the same evidence as well: `feedResults()` settles the ledger to one
+Both read the same evidence as well: `feedResults` settles the ledger to one
 row per feed per run before any panel counts it, by the same rule
 `discover.settled` uses, so a run a second attempt wrote down twice is one run
 on the page and one run in the pipeline ([../sources/health.md](../sources/health.md)).
@@ -640,7 +640,7 @@ Three rules keep the control honest and all three are in the contract, so a bad
 config fails the build rather than the page:
 
 - `default_window_days` is a member of `window_presets`, or the page opens on a
-  window with every button unchecked.
+ window with every button unchecked.
 - The presets are ascending and distinct.
 - Every preset sits between `min_window_days` and `max_window_days`.
 
@@ -765,14 +765,14 @@ after.
 Two consequences worth stating, because both are the reason this is safe:
 
 - **Nothing became unreachable.** The monthly shards are untouched. Panning back
-  fetches `telemetry/<YYYY-MM>.csv` exactly as it always did, so the dropped
-  days are one arrow key away rather than gone. That fetch path already existed
-  and was dead code: with every month in the seed, there was never a month left
-  to fetch.
+ fetches `telemetry/<YYYY-MM>.csv` exactly as it always did, so the dropped
+ days are one arrow key away rather than gone. That fetch path already existed
+ and was dead code: with every month in the seed, there was never a month left
+ to fetch.
 - **The cutoff is anchored on the newest committed day, never on the build
-  clock.** Anchored on today, a corpus that stopped last month would seed an
-  empty console - the page would go blank precisely when the pipeline broke,
-  which is when an operator needs it.
+ clock.** Anchored on today, a corpus that stopped last month would seed an
+ empty console - the page would go blank precisely when the pipeline broke,
+ which is when an operator needs it.
 
 The read is bounded too. A window is a count of days, so it straddles a month
 boundary and reads two shards at worst; every older shard is skipped unopened,
@@ -959,10 +959,10 @@ eye as the pointer moves is a legend nobody can read. Nothing is hidden until a
 pointer arrives, so the no-JavaScript answer is the page as it prerenders.
 
 **The throughput candle's readout moved below its plot on 2026-08-30, and it is
-no longer `caption()` verbatim.** It was a box over the plot carrying the
+no longer `caption` verbatim.** It was a box over the plot carrying the
 `<title>` sentence unchanged, on the rule that one day gets one sentence rather
 than two. That box is the one measured above, and this strip is bounded by the
-same `chart.readout_max_share`. `caption()` closes with a run list that grows
+same `chart.readout_max_share`. `caption` closes with a run list that grows
 with the day's run count, so it is the one clause with no bound, and at a third
 of the plot it wrapped to four lines per series. The strip is a `<dl>` printing
 the day, then one row per series carrying the median and the extent - every
@@ -1052,7 +1052,7 @@ drawn. A window with no timings in it at all says so and offers the widening,
 rather than drawing an empty frame.
 
 **Its y axis is decades, and that is where the domain rule has its threshold.**
-The padded, `.nice()`, non-zero-anchored linear domain above stands for series
+The padded, `.nice`, non-zero-anchored linear domain above stands for series
 of comparable size. **It yields to a decade-rounded log domain when the drawn
 extent spans more than two decades.** Measured 2026-08-25 on the committed
 ledger, one linear axis over these four gave `summarize` 78.1% of the plot
@@ -1083,19 +1083,19 @@ items. Each day now arrives as a `StageTiming` - the median, how many items the
 stage timed, and how many items there were - and each fact draws as itself:
 
 - **Nothing timed** breaks the line, because "no number" and "no time spent" are
-  different facts.
+ different facts.
 - **A measured zero** breaks the line too, and draws an open dot in the stage
-  colour, centred on the baseline rule. It is never clamped into the bottom
-  decade: a clamped point draws a plunge to the floor of the plot, which states
-  that the stage got a thousand times faster. Zero has no position on a decade
-  axis, and the baseline rule is the one place on that axis which is not a claim
-  about size. A median of zero does not mean the stage took no time - it means
-  it finished faster than a 1 ms clock can measure, which is an ordinary state
-  for a cheap stage. `state/scores.csv` recorded exactly that for `score_ms` on
-  all ten rows of 2026-08-22 - the reading that made the rule necessary, taken
-  on a column that has since moved to the Summaries route.
+ colour, centred on the baseline rule. It is never clamped into the bottom
+ decade: a clamped point draws a plunge to the floor of the plot, which states
+ that the stage got a thousand times faster. Zero has no position on a decade
+ axis, and the baseline rule is the one place on that axis which is not a claim
+ about size. A median of zero does not mean the stage took no time - it means
+ it finished faster than a 1 ms clock can measure, which is an ordinary state
+ for a cheap stage. `state/scores.csv` recorded exactly that for `score_ms` on
+ all ten rows of 2026-08-22 - the reading that made the rule necessary, taken
+ on a column that has since moved to the Summaries route.
 - **A day timed in part** draws the items it timed, and the line under the chart
-  says how many that was.
+ says how many that was.
 
 One line of type per stage names whichever of the three happened, because a hole
 in a line is a mystery and three holes that look alike are worse than one: `We
@@ -1126,11 +1126,11 @@ decide which axis is correct.
 
 **The counts ride on the payload rather than being reconstructed from the
 value.** The chart used to rebuild "this is absent" from the number it was
-handed, which is how the three facts collapsed in the first place: `median()`
+handed, which is how the three facts collapsed in the first place: `median`
 returned `0` for an empty sample, and `score_ms` went through `Number(cell ?? 0)
 || 0`, which invented a zero sample point out of an empty cell rather than only
-losing one. `sample()` is now the only way to build a `StageTiming`, and
-`median()` takes one rather than a `number[]`, so a bare array of numbers - and
+losing one. `sample` is now the only way to build a `StageTiming`, and
+`median` takes one rather than a `number[]`, so a bare array of numbers - and
 the fabricated zero that used to fill an empty cell - no longer type-checks.
 `svelte-check` is the gate for that: `StageTimingDay` is a hand-written
 prerender input, not a Pydantic contract and not a committed payload, so the
@@ -1149,13 +1149,13 @@ band, one column a day, over the window the page shares. The measure cards above
 it say how often the checker stopped; this says what was wrong.
 
 **It reads the committed day payloads, not `state/scores/`.** `band_reason` is
-decided by `verdict()` and written onto the published item by
+decided by `verdict` and written onto the published item by
 `assemble.build_day`. The score ledger's 35 columns carry the inputs a reason is
 decided from - `hhem`, `coverage`, `unsupported_numbers`, `hedge_dropped` - and
 the band, and no reason column at all. So the route walks `DIGEST_ROOT` the way
 `publishedItems` already does for the Pipelines route, and what ships is one
 count per reason per day rather than the payloads. Re-deriving the reason from
-the ledger's inputs was refused: it puts a second copy of `verdict()` in a second
+the ledger's inputs was refused: it puts a second copy of `verdict` in a second
 language, and the day the two disagree the console is wrong about the item a
 reader was shown ([../../concepts/evaluation.md](../../concepts/evaluation.md)).
 
@@ -1169,7 +1169,7 @@ and `stack` moving, which is the condition
 [../../concepts/design-system.md](../../concepts/design-system.md) sets for that
 control. Picking `Lines` reaches the live chart, not only the prerendered one. A
 chart carries an explicit lifetime now - it hydrates, draws when a reader comes
-within a screen of it, takes a changed option through `update()`, and is
+within a screen of it, takes a changed option through `update`, and is
 destroyed once - and a small `$effect` in
 [../../../frontend/src/lib/charts/Chart.svelte](../../../frontend/src/lib/charts/Chart.svelte)
 hands the live chart each new option, so a control that moves the shape or the
@@ -1178,7 +1178,7 @@ window is followed without a rebuild.
 **A reason with no items draws nothing, so the panel names it in a sentence.**
 `not_scored` has never fired: it needs a missing faithfulness score, and the
 scorer has run on every production item. A series that is zero everywhere is
-dropped by `stacked()`, so without the sentence a reader cannot tell a fault that
+dropped by `stacked`, so without the sentence a reader cannot tell a fault that
 never happened from one nobody looked for.
 
 **The column total is the day's reason count, never its doubtful count**, and
@@ -1194,7 +1194,7 @@ and that oracle is stronger for being exact. The panel honours the same control
 and proves it in its own spec, by driving the control to each preset and reading
 the control's own attribute back against the panel's.
 
-**What it cost, measured 2026-09-05 on an Intel Core i7-1265U.** The panel adds
+**What it cost, measured 2026-09-05 on a developer machine.** The panel adds
 **5,557 gzipped bytes** to `/console/model/`: the median of five builds is 38,867
 B against 33,310 B for `origin/main`'s own source built in place on the same tree
 and the same machine. Five builds of the shipping tree spanned 15 B, so the 64 B
@@ -1302,7 +1302,7 @@ empty four fifths is what tells an operator the movement is small, and that is
 worth more than the space. Recorded here rather than waved through, per
 `CLAUDE.md` section 9.
 
-**What it cost, measured 2026-09-06 on an Intel Core i7-1265U.** The three panels
+**What it cost, measured 2026-09-06 on a developer machine.** The three panels
 add **5,930 gzipped bytes** to `/console/model/`: the median of five builds is
 44,948 B against 39,018 B for `origin/main`'s own source built in place on the
 same tree and the same machine. Five builds of the shipping tree spanned 11 B and
@@ -1330,7 +1330,7 @@ fetch, on one convention - the heaviest of five builds plus a tenth, at `gzip
 -5` - and `/console/` fell by a factor of 6.4. The per-published-day rates above
 are the record of how this route grew while it inlined its telemetry, and they
 are kept for that. The live numbers and the current method are in
-[../../reference/measurements.md](../../reference/measurements.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)
+[../../reference/measurements.md](../../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)
 and what to do when one fires is in
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -1364,7 +1364,7 @@ stamp against this day's first would have found two, and would have called
 2026-08-26 a single unchanged day while it ran three pipelines.
 
 **Derived once on the server, over the whole ledger, and passed down.**
-`pipelineChanges()` in `$lib/server/model-work` is the one derivation and
+`pipelineChanges` in `$lib/server/model-work` is the one derivation and
 `/console/`'s load calls it; a component that derived its own would be deriving
 it off its own day list, and two of them would eventually disagree about when it
 happened. Over the whole ledger rather than the window, so a chart opening on
@@ -1452,7 +1452,7 @@ for: cutting a hundred tokens from the summary saves more time than cutting a
 hundred from the article. The sentence is derived from the measured ratio rather
 than written down, so it flips if the ratio ever does.
 
-Both are drawn as **doubling bins**, by the same `distribution()` the Summaries
+Both are drawn as **doubling bins**, by the same `distribution` the Summaries
 route's two clocks use. It moved to
 [frontend/src/lib/charts/series.ts](../../../frontend/src/lib/charts/series.ts)
 on 2026-09-05 so a route outside `$lib/server/` could reach it - four panels now
@@ -1589,17 +1589,17 @@ under three pixels tall, so a label inside it would be unreadable - the defect
 the funnel already had to fix once. Three measurements set the geometry, all
 taken in the browser on 2026-08-30:
 
-- **Two lines, not one.** `Answered without a chart  696  (33%)` ran 280px into
-  a 246px column pitch and printed over the next stage's label. Split, the
-  widest line is the name alone.
+- **Two lines, not one.** `Answered without a chart 696 (33%)` ran 280px into
+ a 246px column pitch and printed over the next stage's label. Split, the
+ widest line is the name alone.
 - **The right margin is 170 pixels, not a share of the width.** A label does not
-  shrink with the frame, so a percentage leaves too little on a narrow screen -
-  the first arm reserved 30 percent and still clipped `Did not survive the
-  checks`, which measures 151px at 12px type.
+ shrink with the frame, so a percentage leaves too little on a narrow screen -
+ the first arm reserved 30 percent and still clipped `Did not survive the
+ checks`, which measures 151px at 12px type.
 - **The node gap is 34 pixels, against the engine's default of 14.** `Published`
-  and `Did not survive the checks` are 13.8px and 2.2px tall over the committed
-  ledger, so at 14px their two-line labels shared nine pixels of one line. A
-  two-line label is 31px and the gap has to carry it.
+ and `Did not survive the checks` are 13.8px and 2.2px tall over the committed
+ ledger, so at 14px their two-line labels shared nine pixels of one line. A
+ two-line label is 31px and the gap has to carry it.
 
 `depth` is set on every node rather than inferred, because an inferred layout
 justifies dead ends to the far edge - it would draw the first stage's loss
@@ -1827,40 +1827,40 @@ at 390** - so on a phone the names took more of the chart than the plot did, and
 the six tracks drew inside 91px of it.
 
 - **`labelGutter` sizes the name column from the widest name's own advance**,
-  and returns null where that would take more than `MAX_GUTTER_SHARE` of the
-  frame. Null is the cue to put the names above their tracks instead. A source
-  id is the ledger's own spelling of a name and there is no shorter true form of
-  it, so the gutter moves and the word does not - nothing is abbreviated at any
-  width.
+ and returns null where that would take more than `MAX_GUTTER_SHARE` of the
+ frame. Null is the cue to put the names above their tracks instead. A source
+ id is the ledger's own spelling of a name and there is no shorter true form of
+ it, so the gutter moves and the word does not - nothing is abbreviated at any
+ width.
 - **`rowPitch` grows a row with the plot, between a floor and a ceiling**, the
-  way `cellFor` grows a run-strip cell. The floor is `ROW_PITCH_MIN`: two lines
-  of type and a 10px bar leave a 34px row with no air at all between one source
-  and the next. The ceiling is where six rows stop reading as one set.
+ way `cellFor` grows a run-strip cell. The floor is `ROW_PITCH_MIN`: two lines
+ of type and a 10px bar leave a 34px row with no air at all between one source
+ and the next. The ceiling is where six rows stop reading as one set.
 - **The cap label's flip is decided by the label's own advance.** `cut at 3,846
-  words (from 25 Aug)` needs 186px at `font-size="10"`; the constant it replaced
-  was 130. Nothing was clipped by it on the committed tree, and a constant that
-  is 56px under the string it guards is the same defect waiting for one more
-  word.
+ words (from 25 Aug)` needs 186px at `font-size="10"`; the constant it replaced
+ was 130. Nothing was clipped by it on the committed tree, and a constant that
+ is 56px under the string it guards is the same defect waiting for one more
+ word.
 - **The right-most decade label is Row #1's rule, not a second one.**
-  `tickAnchor` anchors the end labels inwards, so `10,000` needs no room outside
-  the plot and the 12px right margin is the track's own round cap. The
-  `10,00` clip measured on 2026-08-31 was fixed there;
-  [../../../frontend/tests/console-source-cuts.spec.ts](../../../frontend/tests/console-source-cuts.spec.ts)
-  asserts it stays fixed rather than fixing it again.
+ `tickAnchor` anchors the end labels inwards, so `10,000` needs no room outside
+ the plot and the 12px right margin is the track's own round cap. The
+ `10,00` clip measured on 2026-08-31 was fixed there;
+ [../../../frontend/tests/console-source-cuts.spec.ts](../../../frontend/tests/console-source-cuts.spec.ts)
+ asserts it stays fixed rather than fixing it again.
 - **`thinLabels` drops the axis labels that will not fit, and keeps both ends.**
-  A label survives only where its left edge clears the last kept label's right
-  edge by `AXIS_LABEL_GAP_PX`; a dropped label leaves its mark, so nothing about
-  the data goes with it. Measured 2026-09-01 at 390 on the built console: a
-  doubling axis running to 1,024 seconds carries twelve edge labels across the
-  274px of plot the phone leaves, which is 24.9px an edge against the 28.3px
-  `512` and `1,024` need side by side. Drawn every edge, the two ends of the
-  axis are crowded; thinned, seven of the twelve survive and none is.
-  It lives in `frame.ts` rather than inside the chart because a ledger is not
-  obliged to span twelve doublings and the committed canary does not - its
-  slowest check is under a second, so the drawn page cannot put the rule under
-  load, and an axis the data never stresses is a null result rather than a pass.
-  [../../../frontend/tests/console-model-panels.spec.ts](../../../frontend/tests/console-model-panels.spec.ts)
-  drives it directly at the plot width the page reports.
+ A label survives only where its left edge clears the last kept label's right
+ edge by `AXIS_LABEL_GAP_PX`; a dropped label leaves its mark, so nothing about
+ the data goes with it. Measured 2026-09-01 at 390 on the built console: a
+ doubling axis running to 1,024 seconds carries twelve edge labels across the
+ 274px of plot the phone leaves, which is 24.9px an edge against the 28.3px
+ `512` and `1,024` need side by side. Drawn every edge, the two ends of the
+ axis are crowded; thinned, seven of the twelve survive and none is.
+ It lives in `frame.ts` rather than inside the chart because a ledger is not
+ obliged to span twelve doublings and the committed canary does not - its
+ slowest check is under a second, so the drawn page cannot put the rule under
+ load, and an axis the data never stresses is a null result rather than a pass.
+ [../../../frontend/tests/console-model-panels.spec.ts](../../../frontend/tests/console-model-panels.spec.ts)
+ drives it directly at the plot width the page reports.
 
 **The log domain still snaps to decades, and the dead space is the price.** The
 plot fills its frame; the tracks do not fill the plot, and that is a different
@@ -2056,7 +2056,7 @@ until 2026-08-31, divided by `run.safety_ceiling_per_run` articles a day - and
 that knob bounds one **run**, not one day. Up to five runs a day is normal, so
 the band priced a day at 160 articles while the days it measured ran a median of
 334, and the printed runway was 2.09 times too long
-([../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling)).
+([../../reference/measurements.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling)).
 Articles need no daily rate at all, which is why the fix removed the assumption
 instead of correcting it. Where no published day grew the tree over an article
 it published there is no rate, so the fact says there is no runway instead of
@@ -2072,8 +2072,8 @@ number above it is already in.
 **The card names the tree it measured, and this is the one thing it cannot fix
 itself.** `site_bytes` in a run manifest is `frontend/public/digest/`, and the
 Pages cap is measured on the built bundle, which also carries every prerendered
-page and the on-device model. Measured 2026-08-30 on Intel Core i7-1265U,
-Windows 11 10.0.26200, node v24.12.0, one build:
+page and the on-device model. Measured 2026-08-30 on a developer machine,
+node v24.12.0, one build:
 
 | | Bytes | Files | Per published article | Runway to the 1 GB cap |
 | --- | --- | --- | --- | --- |
@@ -2189,7 +2189,7 @@ heading.
 | Fading the per-point band lines instead of collapsing them | The wash is a node count, not an alpha value. One fact drawn 1166 times is still drawn 1166 times at any opacity, and the fact has one value per configured band. | Jony, Carmack |
 | A drawing library for the console charts - `echarts`, `@observablehq/plot`, `chart.js`, a component library | 336 KB gz on canvas, 128 KB gz and a DOM shim to prerender, 67 KB gz on canvas, and a component set is worst of all where every chart is bespoke. All of them own the element and the theme; the console needed the arithmetic. This was reversed for the console on 2026-08-29 on three named conditions, and it still binds a reader route. | Jony, Carmack |
 | `d3-scale` from a CDN | The HTTP cache is partitioned per site, so the shared-cache argument is dead, and the repo's `script-src` allows `self` only. | Carmack |
-| Fixing the units by hand instead of taking the dependency | `.nice()` and `ticks()` are exactly the part hand-rolling gets wrong, and an axis labelled 0, 37, 74 is an axis nobody reads a value off. | Jony |
+| Fixing the units by hand instead of taking the dependency | `.nice` and `ticks` are exactly the part hand-rolling gets wrong, and an axis labelled 0, 37, 74 is an axis nobody reads a value off. | Jony |
 | A `console.chart_width` default per chart shape | One knob names the width the reading column leaves; a chart sharing a row divides it. Four knobs would be four ways to disagree about one column. | Jony |
 | Putting the page ceilings anywhere but `config/` | A ceiling is a limit a person chose and raises on purpose, which is the definition of a knob (Rule #6). | Carmack, Rule #2 |
 | A `run.success_floor_pct` reference line on a stage failure panel | That floor is a published rate over attempted items; a stage panel is a different denominator. A wrong reference line is worse than none. | Jony |

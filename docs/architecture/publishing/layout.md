@@ -16,24 +16,24 @@ The layout on disk and the address in the reader's browser are **separate contra
 Coupling them means a change of mind about URL aesthetics rewrites every committed payload. Separating them costs one pure function.
 
 ```
-frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, every item
-frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
-frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg           optional visual
-frontend/public/assist/index/<YYYY-MM>.json             one month of items, for browsing and search
-frontend/public/assist/index/<YYYY-MM>.bin              that month's vectors, raw int8
-state/scores/<YYYY-MM>.csv                              the ledger - one row per measurement, never published twice
-state/score-index/<YYYY-MM>.csv                         the identity of every measurement that shard holds, 76 bytes each
-state/score-archive/<YYYY-MM>.json                      a score month past its full-grain window, as totals plus a dedupe index
+frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json the whole day, every item
+frontend/public/digest/<YYYY>/<MM>/<DD>/run.json append-only runs[] for that date
+frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg optional visual
+frontend/public/assist/index/<YYYY-MM>.json one month of items, for browsing and search
+frontend/public/assist/index/<YYYY-MM>.bin that month's vectors, raw int8
+state/scores/<YYYY-MM>.csv the ledger - one row per measurement, never published twice
+state/score-index/<YYYY-MM>.csv the identity of every measurement that shard holds, 76 bytes each
+state/score-archive/<YYYY-MM>.json a score month past its full-grain window, as totals plus a dedupe index
 ```
 
 ```
-/                          the newest published day, rendered inline    moving
-/<YYYY-MM-DD>/             that day, every vertical                     canonical
-/<YYYY-MM-DD>/<vertical>/  that day, one vertical - a projection        canonical
-/<YYYY-MM-DD>/#<item id>   an item anchor
-/archive/                  every surviving day                          moving
-/evals/                    a signpost to /console/, where the scores went
-/console/                  the run-health dashboard                     moving
+/ the newest published day, rendered inline moving
+/<YYYY-MM-DD>/ that day, every vertical canonical
+/<YYYY-MM-DD>/<vertical>/ that day, one vertical - a projection canonical
+/<YYYY-MM-DD>/#<item id> an item anchor
+/archive/ every surviving day moving
+/evals/ a signpost to /console/, where the scores went
+/console/ the run-health dashboard moving
 ```
 
 **One day directory is the deletion atom.** Nothing outside it points into its interior except the append-only ledger, which is what makes pruning a single operation with no second edit.
@@ -94,7 +94,7 @@ The planning step scores every story before a single model loads ([../sources/di
 
 ### The rail is what reads it, and what it can and cannot say (2026-09-02)
 
-The day's stream orders by `published_at`, newest first, and prints it on a rail. So `time_source` stopped being a field with no reader and became the thing that decides how a story's stamp is drawn ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Counted 2026-09-02 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over every committed day - 12 days, 4,713 stories:
+The day's stream orders by `published_at`, newest first, and prints it on a rail. So `time_source` stopped being a field with no reader and became the thing that decides how a story's stamp is drawn ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Counted 2026-09-02 on a developer machine / / Python 3.14.2 over every committed day - 12 days, 4,713 stories:
 
 | `time_source` | Stories | Share | What the rail prints |
 | --- | --- | --- | --- |
@@ -136,7 +136,7 @@ A day runs the same story from more than one of our feeds, and until 2026-09-01 
 
 ### What chose 0.94
 
-`assemble.duplicate_similarity_min` is set by hand labels, not by taste. Every group the pass forms over the eleven committed days was read from the published titles and summaries and marked same-story or not. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / Python 3.14.2, 3,978 items:
+`assemble.duplicate_similarity_min` is set by hand labels, not by taste. Every group the pass forms over the eleven committed days was read from the published titles and summaries and marked same-story or not. Measured 2026-09-01 on a developer machine / / Python 3.14.2, 3,978 items:
 
 | Threshold | Groups | Items grouped | Largest group | False merges |
 | ---: | ---: | ---: | ---: | ---: |
@@ -155,7 +155,7 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 ### What it costs the runner
 
-The pass is one pass over the day's vectors and it is quadratic in the day's item count. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / Python 3.14.2, over each committed day at 0.94: **10.5 s on the largest day ever published** (2026-08-24, 731 items), 3.6 s on 2026-08-30 (431 items) and 0.5 s on 2026-08-23 (147). The assemble job's timeout is 20 minutes and the month index rebuild beside it takes 88 to 122 milliseconds, so this is now the stage's largest single cost and still under one percent of its budget.
+The pass is one pass over the day's vectors and it is quadratic in the day's item count. Measured 2026-09-01 on a developer machine / / Python 3.14.2, over each committed day at 0.94: **10.5 s on the largest day ever published** (2026-08-24, 731 items), 3.6 s on 2026-08-30 (431 items) and 0.5 s on 2026-08-23 (147). The assemble job's timeout is 20 minutes and the month index rebuild beside it takes 88 to 122 milliseconds, so this is now the stage's largest single cost and still under one percent of its budget.
 
 It compares int8 vectors directly rather than decoding them. `embed.dequantise` divides by the quantisation scale and then normalises, so the scale cancels and the angle between two stored vectors is the angle between the unit vectors they decode to - a test asserts that rather than leaving it as a claim.
 
@@ -163,7 +163,7 @@ It compares int8 vectors directly rather than decoding them. `embed.dequantise` 
 
 Two passes read the finished day inside `assemble.build_day`, and both were written in the same week by different rows. The grouping runs first; the leading stories ([../sources/discovery.md](../sources/discovery.md#a-second-order-over-the-same-day-the-leading-stories)) are chosen over what it produced. The reason is that the grouping decides which item of a group a reading surface would draw, so the block is picked over the day as the reader will see it rather than over one that is annotated a line later.
 
-**The order changes nothing today, and that is measured rather than assumed.** The two passes touch different fields: the grouping writes `also_covered_by` and `same_story_as` and nothing else, and lead selection reads neither. Rebuilding both passes in each order over the eleven committed days - 4,086 items, 2026-09-01, Intel Core i7-1265U / Windows 11 / Python 3.14.2 - gives the identical block on every day. Ten of the eleven produce no block at all, because a lead may only run on the feed's own clock and `time_source` landed on 2026-08-31; the one day that does produce a block holds five leads over eight groups, and **none of the five is a collapsed item and no group holds two of them**.
+**The order changes nothing today, and that is measured rather than assumed.** The two passes touch different fields: the grouping writes `also_covered_by` and `same_story_as` and nothing else, and lead selection reads neither. Rebuilding both passes in each order over the eleven committed days - 4,086 items, 2026-09-01, a developer machine / / Python 3.14.2 - gives the identical block on every day. Ten of the eleven produce no block at all, because a lead may only run on the feed's own clock and `time_source` landed on 2026-08-31; the one day that does produce a block holds five leads over eight groups, and **none of the five is a collapsed item and no group holds two of them**.
 
 **What is not yet a rule.** Nothing forbids a lead being an item the grouping collapsed, or two members of one group both leading - the source cap does not catch that, because a group is always across sources. Neither costs a reader anything while `same_story_as` is recorded and not drawn. Both become rules to write on the day the collapse is drawn, which is row 24's reachability question above.
 
@@ -214,7 +214,7 @@ The copy, its three clauses and where the threshold lives are in
 
 `frontend/public/assist/index/<YYYY-MM>.json` is one month of published items in published order, and `<YYYY-MM>.bin` is that month's vectors laid end to end as raw int8. The contract is `backend/idhazh/contracts/search_index.py`; the writer is `assemble.rebuild_search_index`. The archive's story list reads the JSON, and on-device search reads both.
 
-The shard that exists costs **109.3 KB gzipped for 2,237 items, and 545 KB for their 2,235 vectors** ([../../reference/measurements.md](../../reference/measurements.md#the-month-search-index-as-written)). An entry is **50.03 gzipped bytes**, which is 10 percent more than the 45.5 the shape study above priced, because a real entry carries real key names and a vector offset the study's did not.
+The shard that exists costs **109.3 KB gzipped for 2,237 items, and 545 KB for their 2,235 vectors** ([../../reference/measurements.md](../../reference/measurements-site.md#the-month-search-index-as-written)). An entry is **50.03 gzipped bytes**, which is 10 percent more than the 45.5 the shape study above priced, because a real entry carries real key names and a vector offset the study's did not.
 
 **A month shard does not break the bounded-request rule above, and here is why.** That rule rejects a scheme whose request count or index size grows with *total history*. A month shard's size is a function of one month, and the month ends; the hundredth month costs a reader exactly what the first one did. Request count is bounded the same way: a page reads the months it shows, which is one for a day page and a fixed pan for an archive view, not one per published day and never one per item. What the rule forbids is the file that has to get bigger every day forever, which is the global index in the rejected-alternatives table - measured at 12.7 MB of browse entries for a single year at the structural ceiling.
 
@@ -297,7 +297,7 @@ Two copies of every day used to carry the vector block, and no browser has ever 
 
 `frontend/public/` keeps the whole day, block and all. It is committed, it is in git, and it is the only store the vectors have.
 
-Measured 2026-08-27 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the six committed days, 2,237 items and 2,235 vectors. Page weights are `gzip -9` of the prerendered HTML, taken by the bundle gate itself, heaviest page per route. Site totals are the sum of file sizes under `frontend/build/`, which agreed with CI's own `du -sb build` on the same tree to 0.0006 percent.
+Measured 2026-08-27 on a developer machine / / node 24.12.0, over the six committed days, 2,237 items and 2,235 vectors. Page weights are `gzip -9` of the prerendered HTML, taken by the bundle gate itself, heaviest page per route. Site totals are the sum of file sizes under `frontend/build/`, which agreed with CI's own `du -sb build` on the same tree to 0.0006 percent.
 
 | Measured | Before | After | Saved |
 | --- | ---: | ---: | ---: |
@@ -324,7 +324,7 @@ The staged file is now [../../../schemas/digest-view.schema.json](../../../schem
 
 **From here on, a breaking change to this shape needs the read-side migration in the shell, not only in the build.** Section 11 already required a migration; what is new is that the two halves are not upgraded together, so the migration has to live where the reader is. Additive is unchanged and stays cheap: declare the field optional, stamp the version, append the changelog entry, and an older shell ignores a key it does not know. **Changing the address is not a schema change at all - it is a broken bookmark**, and there is no version to branch on for that.
 
-**Nine names joined the thirteen in the same commit, and each has a named renderer.** Measured 2026-08-31 on Intel Core i7-1265U / Windows 11 / node 24.12.0, 11 committed days and 3,733 items, `gzip -9` over the compact projection, each name added to the thirteen-field arm on its own:
+**Nine names joined the thirteen in the same commit, and each has a named renderer.** Measured 2026-08-31 on a developer machine / / node 24.12.0, 11 committed days and 3,733 items, `gzip -9` over the compact projection, each name added to the thirteen-field arm on its own:
 
 | Added | What draws it | Cost |
 | --- | --- | ---: |
@@ -342,7 +342,7 @@ All nine together are +107.42 bytes an item rather than the +109.42 those nine s
 
 **What it cost, end to end.** Two builds of this branch, one an arm, back to back on the same machine, over the 11 days and 3,596 items on disk at the time: the staged payloads went 361.98 to 468.51 gzipped bytes an item, 29.4 percent more, and the 178 rendered images were untouched. A day landed while this row was in flight and took the tree to 3,733 items; the same arithmetic over that tree reads 361.10 to 468.58, which is the check that this is a rate and not a level - the two trees agree to 0.2 percent. The projection is still 40.9 percent under the committed day, which compacts to 792.65 gzipped bytes an item. No prerendered page moved: the six routes the bundle gate names read -1 to +6 bytes across the two builds, because a prerendered document reads the committed day and not this file.
 
-**The runway, re-derived rather than restated (Rule #10).** Two arms of `idhazh site-weight` on the machine that publishes - `ubuntu-latest`, 2026-08-31, `main` at `bb7fd4a` against this branch at `82ebd5c`, both over the same 3,733 items in the same 409 files - read **44,009 against 44,700 bytes a published item**, a built site of 156.7 against 159.1 MB, and **129 against 127 published days to the 1024 MB Pages cap** (96 against 94 to the 800 MB alarm). A local pair on Intel Core i7-1265U / Windows 11 the same day read 44,578 to 45,267 and 128 to 126, which agrees to 1.3 percent and is the check that the platform is not the story. Those day figures divide the headroom by `run.safety_ceiling_per_run` - a per-run ceiling of 160 spent as a per-day rate. **Over the committed days a published day holds a median of 334 items and ranges from 4 to 731**, so the same headroom is 60.8 published days against 61.8: **this change costs about one published day of runway, and the cap arrives about 2026-10-31.** Both figures charge `assist/` and `_app/` - 65.6 MB, 41.2 percent of the site, neither of which grows with a day - to the items, so both are floors.
+**The runway, re-derived rather than restated (Rule #10).** Two arms of `idhazh site-weight` on the machine that publishes - `ubuntu-latest`, 2026-08-31, `main` at `bb7fd4a` against this branch at `82ebd5c`, both over the same 3,733 items in the same 409 files - read **44,009 against 44,700 bytes a published item**, a built site of 156.7 against 159.1 MB, and **129 against 127 published days to the 1024 MB Pages cap** (96 against 94 to the 800 MB alarm). A local pair on a developer machine / the same day read 44,578 to 45,267 and 128 to 126, which agrees to 1.3 percent and is the check that the platform is not the story. Those day figures divide the headroom by `run.safety_ceiling_per_run` - a per-run ceiling of 160 spent as a per-day rate. **Over the committed days a published day holds a median of 334 items and ranges from 4 to 731**, so the same headroom is 60.8 published days against 61.8: **this change costs about one published day of runway, and the cap arrives about 2026-10-31.** Both figures charge `assist/` and `_app/` - 65.6 MB, 41.2 percent of the site, neither of which grows with a day - to the items, so both are floors.
 
 That is what this row spends. What it buys is the migration, and one day priced on a build of this branch says how much: **2026-08-30 is twelve prerendered documents totalling 8,822,134 bytes raw and 2,528,812 gzipped, against one served payload of 717,709 raw and 194,016 gzipped.** Twelve times the bytes, after this row grew the payload by 62 percent. The documents are the six HTML pages and their six `__data.json` twins, and every one of them carries the whole item list.
 
@@ -350,7 +350,7 @@ That is what this row spends. What it buys is the migration, and one day priced 
 
 The two rows above moved the item list out of a dated document and left the document. This row deletes the document. **116 of them**: 20 for the published days and 96 for their topics, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. `adapter-static`'s fallback, `404.html`, answers every dated address; the client router resolves the route out of the URL; the page fetches the served day.
 
-Measured on a real build, Intel Core i7-1265U, 2026-09-09, `BUILD_VERSION` pinned across both arms:
+Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinned across both arms:
 
 | Measured | Before | After | Saved |
 | --- | ---: | ---: | ---: |
@@ -363,7 +363,7 @@ Measured on a real build, Intel Core i7-1265U, 2026-09-09, `BUILD_VERSION` pinne
 
 **The reader pays for it on a cold dated load, and only there.** A dated URL is now the fallback, the bundle, and then the day payload - which runs to 1.9 MB on the heaviest committed day - where it used to be one document of about 30 gzipped KB. In-app navigation never asks the host for a dated address, so only a typed link, a bookmark or a shared link takes that path (owner decision, 2026-09-09). What the page does not do is wait for the day: the fetch is started by the page component rather than awaited in its `load`, so the chrome and the date are on screen while the payload comes down, and past `ui.payload_slow_ms` one sentence says so. Awaiting it in the `load` was the simpler code and a blank page.
 
-**Two entries left [../../concepts/growing-reads.md](../../concepts/growing-reads.md) and nothing replaced them.** Both dated routes' `entries()` carried a `-1` because a cover on the list of pages a build writes stops writing them past it. There is no list of pages now, so the uncovered read did not move somewhere cheaper - it stopped existing, which is the only way one of those entries is meant to leave that page.
+**Two entries left [../../concepts/growing-reads.md](../../concepts/growing-reads.md) and nothing replaced them.** Both dated routes' `entries` carried a `-1` because a cover on the list of pages a build writes stops writing them past it. There is no list of pages now, so the uncovered read did not move somewhere cheaper - it stopped existing, which is the only way one of those entries is meant to leave that page.
 
 ### The topic routes spend it (2026-09-01)
 
@@ -373,7 +373,7 @@ A topic route is the day filtered to one desk, and until 2026-09-01 the filter r
 
 **The seed is also the head UNION anything the document has to be able to anchor.** A prefix cannot hold a leading story: the reading-page plan's lead block picks across the whole day, and its five leads on the 601-story arm sat at positions 249, 285, 337, 344 and 493. A lead link into a document that carries only a prefix lands on nothing until the fetch arrives, and on nothing at all when it fails. `dayShell` therefore takes a set of ids to keep whatever their position, and the union is what it seeds.
 
-Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the 11 committed days, 4,086 items and 51 topic routes. Both arms built with `kit.version.name` pinned to one constant, because it defaults to `Date.now()` and rides into every chunk filename ([../../reference/agent-notes/gates-and-builds.md](../../reference/agent-notes/gates-and-builds.md#running-the-gates)). A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
+Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 11 committed days, 4,086 items and 51 topic routes. Both arms built with `kit.version.name` pinned to one constant, because it defaults to `Date.now` and rides into every chunk filename ([../../reference/agent-notes/gates-and-builds.md](../../reference/agent-notes/gates-and-builds.md#running-the-gates)). A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
 
 | Measured | Before | After | Saved |
 | --- | ---: | ---: | ---: |
@@ -401,7 +401,7 @@ Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the
 
 **Two days of 117 stories priced the leads.** 2026-08-28 has none and saved 79.8 percent; 2026-09-01 has five, four of them past the head, and saved 73.9 percent. Four extra item payloads in the document is what a working leading block costs.
 
-Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the 12 committed days and 4,203 items. Two builds of one worktree back to back; the control arm is this branch's own changed files replaced by `main`'s in place, never a fresh extract, which carries its own byte offset from whatever gitignored state differs between two trees. A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
+Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 12 committed days and 4,203 items. Two builds of one worktree back to back; the control arm is this branch's own changed files replaced by `main`'s in place, never a fresh extract, which carries its own byte offset from whatever gitignored state differs between two trees. A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
 
 | Measured | Before | After | Saved |
 | --- | ---: | ---: | ---: |
@@ -437,7 +437,7 @@ Almost all of that is the rate rather than the level: the 18.6 MB taken off the 
 
 Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both were on a reader's screen. Both are fixed, and the two arms that named them are ordinary assertions now rather than arms written to fail.
 
-Measured 2026-09-02 on Intel Core i7-1265U / Windows 11 / node 24.12.0 and Chromium at 1536x900. The count is read on the 2026-09-01 day, 627 stories over five desks with five leads; the pager is priced on the busiest day the site serves, 2026-08-24 at 731 stories, which is the worst case the committed corpus holds.
+Measured 2026-09-02 on a developer machine / / node 24.12.0 and Chromium at 1536x900. The count is read on the 2026-09-01 day, 627 stories over five desks with five leads; the pager is priced on the busiest day the site serves, 2026-08-24 at 731 stories, which is the worst case the committed corpus holds.
 
 ### The dated document states the day's count, not the list in its hand
 
@@ -573,13 +573,13 @@ removed - and that is a different need from bounding the site.
 
 Name an absolute `https://` prefix and `frontend/scripts/copy-visuals.mjs` stops staging the rendered drawings into the bundle, while `ItemVisual.svelte` asks that prefix for them instead. They are one key because two would let the bundle keep a copy of every drawing the page is asking a host for, and the valve would move nothing. The page's own `connect-src` is derived from the same key for the same reason: `'self'` is what makes exfiltration from a planted instruction a browser-level impossibility, so it is also what refuses an off-origin drawing, and an operator who has to edit it by hand gets a site that fetches nothing and says why only in a console no reader opens.
 
-**What it buys, measured 2026-09-06 on an Intel Core i7-1265U, Windows 11, node 24.12.0, over the 17 committed days.** Shut, the built site is 685 files and 111,255,143 bytes. Open, it is 309 files and 106,474,222 bytes. So it removes 376 drawings and **4,780,921 bytes, which is 4.3 percent of the site** - about seven weeks of headroom at the 16,641,956 bytes a published day this page measures below, against a cap the same measurement puts at about 2026-10-22.
+**What it buys, measured 2026-09-06 on an node 24.12.0, over the 17 committed days.** Shut, the built site is 685 files and 111,255,143 bytes. Open, it is 309 files and 106,474,222 bytes. So it removes 376 drawings and **4,780,921 bytes, which is 4.3 percent of the site** - about seven weeks of headroom at the 16,641,956 bytes a published day this page measures below, against a cap the same measurement puts at about 2026-10-22.
 
 **Say the small number first: 4.3 percent is not the answer to the cap.** The prerendered dated routes are 39.5 percent and they are what the cap date is a function of. This valve is worth having because it is one config edit and it costs nothing shut, not because it is the lever that saves the site. Anyone reaching for it as the fix has read the wrong number.
 
-**What it costs open, also measured.** The candidate host caches for five minutes, so a repeat reader refetches a drawing the bundle would have served from cache - real on a slow connection, and the reason the reading experience never waits on it: a drawing arrives after the sentence that repeats its numbers, and the page is complete without it. `connect-src` gains that one origin, computed at build time from our own config; no payload field, no model output and no fetched text can reach it (Rule #11), and the path is still matched by `publishedVisual()` before either half is joined.
+**What it costs open, also measured.** The candidate host caches for five minutes, so a repeat reader refetches a drawing the bundle would have served from cache - real on a slow connection, and the reason the reading experience never waits on it: a drawing arrives after the sentence that repeats its numbers, and the page is complete without it. `connect-src` gains that one origin, computed at build time from our own config; no payload field, no model output and no fetched text can reach it (Rule #11), and the path is still matched by `publishedVisual` before either half is joined.
 
-**The carrier does not move, only the URL.** The drawing is fetched as text and inlined, exactly as it is today. An `img` would be the obvious way to point at another host and it is refused: an SVG inside an `img` is a separate document, reads none of the page's custom properties, and comes back with the colours the renderer baked in - black axis type on a near-black card in the dark theme. That was removed on 2026-09-05 and moving bytes is not a reason to bring it back. Cross-origin `fetch()` returns text, and text inlined into our document is themed by our stylesheet whichever host sent it.
+**The carrier does not move, only the URL.** The drawing is fetched as text and inlined, exactly as it is today. An `img` would be the obvious way to point at another host and it is refused: an SVG inside an `img` is a separate document, reads none of the page's custom properties, and comes back with the colours the renderer baked in - black axis type on a near-black card in the dark theme. That was removed on 2026-09-05 and moving bytes is not a reason to bring it back. Cross-origin `fetch` returns text, and text inlined into our document is themed by our stylesheet whichever host sent it.
 
 **Shut is proven, not assumed.** At the default the whole built tree is byte-identical to one built without the valve: 685 files, 111,255,143 bytes, zero differing hashes over two builds at a pinned `BUILD_VERSION`, same hardware and date. The join is written `${__ASSET_BASE_URL__ || base}` so the minifier folds an empty constant away rather than shipping a branch. A release valve that changes the default output is not a valve, it is a change.
 
@@ -605,7 +605,7 @@ One file rather than month shards, because the question it answers - is the back
 
 **Recorded, not fixed. No row has addressed it.**
 
-The prerendered dated routes are **50,598,258 bytes, 39.5 percent of the published site** - measured 2026-08-27 on an Intel Core i7-1265U, Windows 11, node 24.12.0, over the six committed days and 2,237 items ([../../reference/measurements.md](../../archive/measurements-2026-08.md#what-is-left-and-where-it-is)). They were 65,197,022 bytes and 44.4 percent before PR #171 narrowed the staged payload.
+The prerendered dated routes are **50,598,258 bytes, 39.5 percent of the published site** - measured 2026-08-27 on an node 24.12.0, over the six committed days and 2,237 items ([../../reference/measurements.md](../../archive/measurements-2026-08.md#what-is-left-and-where-it-is)). They were 65,197,022 bytes and 44.4 percent before PR #171 narrowed the staged payload.
 
 That is **twelve prerendered documents per published day**: six HTML pages - the all-topics page and one per vertical - and their six `__data.json` twins. Every published day adds twelve more, forever, and nothing else on the site grows per day at anything like that rate. So this is the number the 1 GB cap date is a function of: at 16,641,956 bytes a published day the site reaches the cap on about 2026-10-22, and about 39.5 percent of each of those days is this.
 
@@ -641,7 +641,7 @@ Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists
 
 **An index that fell behind its shard is repaired by deleting it, and nothing detects that state on its own.** Detecting it means reading the rows, which is the cost this file exists to remove, so the pair is kept in step by the two writers instead: `append` writes the rows and their identities in one call, and a month with no index is filled from its rows once. The only way to fall behind is therefore rows appended by something that never maintained the index - which is what a long-lived branch meets when it merges a `main` older than this file, and what happened here: the scheduled pipeline added 74 rows to the September shard while this work was open. Delete that month's index and the next run rebuilds it. Leaving it costs what this writer already declares: it under-reports, so those measurements are taken a second time and `idhazh dedupe-ledgers` settles the repeats against `OBSERVATION_KEY`.
 
-**Measured 2026-09-03** on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM, Windows 11 (build 26200), CPython 3.14.2, over both committed shards, three reads each:
+**Measured 2026-09-03** on an (build 26200), CPython 3.14.2, over both committed shards, three reads each:
 
 | Shard | Rows | Cohorts | Source bytes | Archive bytes | Archive as a share |
 | --- | --- | --- | --- | --- | --- |
@@ -777,18 +777,18 @@ trading it for.
 Two smaller narrowings, also measured and also not taken:
 
 - **Ten columns no committed-file reader opens** - `attempt`, `hhem_full`,
-  `hhem_delta`, `compression`, `extraction_suspect`, `determinism_violation`,
-  `scored_at`, `evidential_density`, `speculative_density`, `self_repetition` -
-  are 379,095 bytes, 13.9 percent. **"No reader" is not "delete" here.** This
-  ledger is evidence, unlike `state/seen/`, which is a lookup: Rule #10 turns on
-  being able to re-read a measurement to defend a design, and four of these got
-  written descriptions on 2026-08-30. Deleting evidence a day after documenting
-  it is churn.
+ `hhem_delta`, `compression`, `extraction_suspect`, `determinism_violation`,
+ `scored_at`, `evidential_density`, `speculative_density`, `self_repetition` -
+ are 379,095 bytes, 13.9 percent. **"No reader" is not "delete" here.** This
+ ledger is evidence, unlike `state/seen/`, which is a lookup: Rule #10 turns on
+ being able to re-read a measurement to defend a design, and four of these got
+ written descriptions on 2026-08-30. Deleting evidence a day after documenting
+ it is churn.
 - **`source_url` and `title`** are 643,696 bytes, 23.6 percent - the largest pair
-  in the file - and both are read. `drift` names a domain from the first;
-  `evals/evidence.py` and `label_queue` both open the second. This is where the
-  `PublishedRow` and `SeenRow` narrowings do not repeat: those two dropped a
-  column nobody opened, and this ledger has none.
+ in the file - and both are read. `drift` names a domain from the first;
+ `evals/evidence.py` and `label_queue` both open the second. This is where the
+ `PublishedRow` and `SeenRow` narrowings do not repeat: those two dropped a
+ column nobody opened, and this ledger has none.
 
 **What would change the answer.** The console learning to read a daily aggregate,
 which makes a short full-grain window enough; `state/` acquiring a measured
@@ -830,7 +830,7 @@ A dated URL used to be answered by a document a build wrote for that date, and t
 
 **Every one of them is optional, and that is the read-side rule rather than a softness.** The service worker keeps day payloads, so a shell built after this change can be handed a file written before it, carrying none of the nine. Absent is unknown: a page may not read an absent `partial` as false, an absent `items_failed` as 0, or an absent `verticals` as a day with no desk. `retention_window_months` carries the sharpest version of that - `-1` is the day saying nothing is deleted, and null is the payload not saying, so the footer prints neither sentence for a null.
 
-**What it cost.** Measured 2026-09-09 on Intel Core i7-1265U / Windows 11 over the 20 committed days and 7,967 items, `gzip -9` over the compact projection, both arms built in one process so the nine names are the only difference between them: the served tree went **3,657,996 to 3,664,435 bytes**, which is **6,439 bytes over twenty days - 322 a day on average, 478 on the worst day, and 0.18 percent of what the tree already weighed.** The spread is worth reading: +140 on a four-story day and +478 on a 582-story one, because `verticals` grows with the number of desks and `leads` with how many the day named, and neither grows with the stories. **A day pays this once where an item field pays it per story**, which is why nine names here cost a fifth of what `also_covered_by` cost on its own.
+**What it cost.** Measured 2026-09-09 on a developer machine / over the 20 committed days and 7,967 items, `gzip -9` over the compact projection, both arms built in one process so the nine names are the only difference between them: the served tree went **3,657,996 to 3,664,435 bytes**, which is **6,439 bytes over twenty days - 322 a day on average, 478 on the worst day, and 0.18 percent of what the tree already weighed.** The spread is worth reading: +140 on a four-story day and +478 on a 582-story one, because `verticals` grows with the number of desks and `leads` with how many the day named, and neither grows with the stories. **A day pays this once where an item field pays it per story**, which is why nine names here cost a fifth of what `also_covered_by` cost on its own.
 
 What it buys is the 116 dated and topic documents this row deletes, and the `__data.json` twin each of them had. 6,439 bytes spread across the days a reader opens, against a tree the build rewrites in full on every run.
 
@@ -876,7 +876,7 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 
 The 1 GB cap is on the **built bundle** - `frontend/build/`, the directory the Pages deploy uploads. The alarm measured `frontend/public/digest/`, which is what the pipeline writes. Measured 2026-08-27 on this checkout: **7,027,075 bytes against 128,064,853**, eighteen times apart, and twenty-one times apart the day before. At the rate the payload tree grows, an alarm point of 800 MB on it could not have been reached until the site was already about six times past the cap. **The alarm ran every pipeline run, cost real seconds, and would never have warned anybody.** That is worse than no alarm, because a green light is read as safety.
 
-The recorded arithmetic had the same units error and it is corrected in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling): the site crosses 1 GB on about **2026-10-22, 56 published days from 2026-08-27**, not the 593 or 516 days that page carried.
+The recorded arithmetic had the same units error and it is corrected in [../../reference/measurements.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling): the site crosses 1 GB on about **2026-10-22, 56 published days from 2026-08-27**, not the 593 or 516 days that page carried.
 
 **Re-derived 2026-08-29 at the close of the design-system reset, and the number moved for a reason worth stating.** The built site is 143,717,288 B and the cap is about 94 published days out, near 2026-11-30. That is not the reset making the site smaller - the reset made every route slightly larger. It is that the two most recent days carried 117 and 212 items where the days behind them carried 731, and a day rate averaged over whatever days are on disk moves when the item mix moves. The stable unit is **24,378 B per published item, spread 23,066 to 26,538** over the seven mature days. Divide that by the item ceiling in force to get a day rate, rather than averaging days. Full working in [../../reference/measurements.md](../../reference/measurements.md).
 
@@ -892,7 +892,7 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 
 **The deploy is not gated.** `pages.yml` prints `du -sb build` and always did. Adding the check there would need a Python install on the deploy path for no new coverage: every byte that reaches `main` passes through the `assemble` job or through `ci.yml`, and both now measure it before the push rather than after.
 
-**`bundle-gate` was weighed for the deploy on 2026-09-10 and left out, and this time "no new coverage" is a measurement rather than an argument.** It needs no Python, and `pages.yml` already runs `npm ci` and `npm run build`, so the cost is a couple of seconds - the Python objection above does not apply to it at all. What made the case worth reopening is that `pages.yml` builds with `BASE_PATH=/<repo>` and `ci.yml` does not, so on paper CI measures a different document from the one the reader is served. Measured on Intel Core i7-1265U / Windows 11 / node 24.12.0, one `BASE_PATH` build against the heaviest of five plain builds, `gzip -5` per route: `/404` +19 B, `/archive/` +5 B, `/evals/` +3 B, `/console/` +3 B, `/` +8 B, `/console/machine/` -2 B, `/console/model/` -5 B. **The largest move is 19 bytes and 0.88 percent, on the smallest page; every other route moves less than the 16-byte spread between two plain builds of the same tree.** The sub-path is eleven repeated characters and gzip charges almost nothing for a repeat. So the document CI measures is the document the reader gets, and the ceilings carry 11 percent headroom over a difference of 0.9 percent at worst.
+**`bundle-gate` was weighed for the deploy on 2026-09-10 and left out, and this time "no new coverage" is a measurement rather than an argument.** It needs no Python, and `pages.yml` already runs `npm ci` and `npm run build`, so the cost is a couple of seconds - the Python objection above does not apply to it at all. What made the case worth reopening is that `pages.yml` builds with `BASE_PATH=/<repo>` and `ci.yml` does not, so on paper CI measures a different document from the one the reader is served. Measured on a developer machine / / node 24.12.0, one `BASE_PATH` build against the heaviest of five plain builds, `gzip -5` per route: `/404` +19 B, `/archive/` +5 B, `/evals/` +3 B, `/console/` +3 B, `/` +8 B, `/console/machine/` -2 B, `/console/model/` -5 B. **The largest move is 19 bytes and 0.88 percent, on the smallest page; every other route moves less than the 16-byte spread between two plain builds of the same tree.** The sub-path is eleven repeated characters and gzip charges almost nothing for a repeat. So the document CI measures is the document the reader gets, and the ceilings carry 11 percent headroom over a difference of 0.9 percent at worst.
 
 **And the cost of being wrong is not symmetric.** A gate on the deploy job stops the deploy, so a ceiling crossed on a Tuesday would leave the reader on Monday's digest until somebody looked - which is the trade this page already settled the other way three paragraphs down: a digest that never arrives is the larger failure. A non-fatal copy was rejected for the reason a warning was rejected there: nobody reads it.
 
@@ -921,7 +921,7 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 
 ### The size instrument printed a level, and a level has no date in it (2026-08-30)
 
-`site-weight` printed a megabyte figure and a headroom figure. Both are levels. **Neither is a rate, so neither could answer the only question anyone asks a size instrument: when does this stop working?** The date existed - it was worked out by hand in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling) three separate times, and got the wrong answer twice - while the step that had all the inputs printed two numbers that could not produce it.
+`site-weight` printed a megabyte figure and a headroom figure. Both are levels. **Neither is a rate, so neither could answer the only question anyone asks a size instrument: when does this stop working?** The date existed - it was worked out by hand in [../../reference/measurements.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling) three separate times, and got the wrong answer twice - while the step that had all the inputs printed two numbers that could not produce it.
 
 Three things were added and none of them fails a build.
 
@@ -937,13 +937,13 @@ Three things were added and none of them fails a build.
 
 **A runway from nothing raises rather than returning a comfortable number.** Zero published items divides into an infinite runway, and an infinite runway reads exactly like a healthy site - the same failure as the green light on the wrong tree, one function along. So the per-item property raises on an empty tree, the CLI checks before it asks, and a tree carrying no day payloads prints `runway: unknown` instead. The zero-file tree still fails outright, as it already did.
 
-**What it printed the first time, 2026-08-30 at `76cdc72`:** 141.1 MB in 311 files, 883 MB of headroom, 48,457 B a published item, 7.39 MB a published day, and **119 published days to the cap**. The rate is an average over the whole tree, so it charges the on-device encoder and the JavaScript bundle - 46.5 percent of the site, and neither of them grows with a day - to every future item. **That makes the printed runway a floor: at least 119 days, and about 223 once the fixed directories are taken out.** It prints the conservative one on purpose, and `by_directory` is on the same output so a reader can do that subtraction rather than take the floor as the answer. Full working in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling).
+**What it printed the first time, 2026-08-30 at `76cdc72`:** 141.1 MB in 311 files, 883 MB of headroom, 48,457 B a published item, 7.39 MB a published day, and **119 published days to the cap**. The rate is an average over the whole tree, so it charges the on-device encoder and the JavaScript bundle - 46.5 percent of the site, and neither of them grows with a day - to every future item. **That makes the printed runway a floor: at least 119 days, and about 223 once the fixed directories are taken out.** It prints the conservative one on purpose, and `by_directory` is on the same output so a reader can do that subtraction rather than take the floor as the answer. Full working in [../../reference/measurements.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling).
 
 ### The state prunes were already constant-cost, and the premise that said otherwise was wrong (2026-09-08)
 
 A plan row asked for the dated-directory walk [row 14 gave the visual tree](#what-bounds-the-committed-state-tree) to be given to the state prunes as well, on the premise that `retention.month_shards` and the prune inventories "list and sort every partition directory across every store, on every maintenance pass, including passes where nothing is due". Re-measured before anything was changed, that premise does not hold, so the performance work was not done. Rule #10: when a measurement contradicts the design, the design changes.
 
-Counted rather than timed, because a timing is flaky and says nothing about what was read. `os.scandir`, `os.listdir`, `os.stat` and `os.lstat` were counted around one pass of `prune_seen`, `prune_feed_health`, `prune_telemetry` and `prune_scores` over a built state tree - every store filled through its own real appender - on an Intel Core i7-1265U, 12 logical CPUs, 31.8 GiB RAM, Windows 11, CPython 3.14.2, 2026-09-08:
+Counted rather than timed, because a timing is flaky and says nothing about what was read. `os.scandir`, `os.listdir`, `os.stat` and `os.lstat` were counted around one pass of `prune_seen`, `prune_feed_health`, `prune_telemetry` and `prune_scores` over a built state tree - every store filled through its own real appender - on an CPython 3.14.2, 2026-09-08:
 
 | Tree | Ages in force | Directory opens | Shard stats |
 | --- | --- | --- | --- |
@@ -1021,8 +1021,8 @@ Counting a syscall is deterministic, so the spread is zero.
 - [frontend.md](frontend.md) - the two dashboards these routes serve.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload contracts and the versioning rules a deletion has to honour.
 - [../../reference/measurements.md](../../archive/measurements-2026-08.md#sizing-the-archive-index) - what a browse entry, a vector and a month shard actually cost.
-- [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling) - the cap date, the per-published-day growth rate, and the units error that made both wrong until 2026-08-27.
+- [../../reference/measurements.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling) - the cap date, the per-published-day growth rate, and the units error that made both wrong until 2026-08-27.
 - [../../reference/measurements.md](../../archive/measurements-2026-08.md#the-site-page-by-page-after-the-payload-narrowing-2026-08-27) - what each page and the whole site weigh today.
-- [../../reference/measurements.md](../../reference/measurements.md#the-month-search-index-as-written) - the shard that exists: its bytes, its rebuild cost, and the bijection it holds.
+- [../../reference/measurements.md](../../reference/measurements-site.md#the-month-search-index-as-written) - the shard that exists: its bytes, its rebuild cost, and the bijection it holds.
 - [../../concepts/config.md](../../concepts/config.md) - where the retention knobs live and the build-time versus shipped-config rule.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - the engineering contract, including schema versioning (section 11) and git hygiene (section 8).

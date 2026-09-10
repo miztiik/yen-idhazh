@@ -9,11 +9,11 @@ Concept-level *why* lives in [../../concepts/principles.md](../../concepts/princ
 ## One source of truth, two generated outputs
 
 ```
-backend/idhazh/contracts/*.py        <- Pydantic models. HAND-WRITTEN. The source of truth.
-        |
-        +--> schemas/*.schema.json           <- GENERATED. Never hand-edited.
-                  |
-                  +--> frontend/src/lib/payload/types.ts   <- mirrors the schema. HAND-WRITTEN, for now.
+backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of truth.
+ |
+ +--> schemas/*.schema.json <- GENERATED. Never hand-edited.
+ |
+ +--> frontend/src/lib/payload/types.ts <- mirrors the schema. HAND-WRITTEN, for now.
 ```
 
 The direction is one-way and never reversed. To change a persisted shape you edit the Pydantic model and regenerate; editing a generated artifact is an anti-pattern (`CLAUDE.md` section 10) and the drift gate will fail it anyway.
@@ -79,7 +79,7 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 ### A new row ledger ships with its header, not with its first run
 
-`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns()`.
+`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns`.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 
@@ -90,7 +90,7 @@ The training corpus ships the same way and for the same reason: `corpus/corpus.j
 ### The one row contract whose CSV omits `version`
 
 Every other row ledger writes `version` as its first cell, because
-`csv_columns()` is `tuple(cls.model_fields)` and `version` is the first field the
+`csv_columns` is `tuple(cls.model_fields)` and `version` is the first field the
 base contract declares. `PublicTelemetryRow` overrides that and writes nineteen
 cells, none of them `version`.
 
@@ -168,14 +168,14 @@ slower, not faster.
 Two consequences worth stating so nobody re-derives them:
 
 - **Adding a window to an unsharded ledger buys nothing on its own.** Filtering
-  rows after reading them saves no I/O. A window is only a saving once it can
-  decide which files to skip, so the window and the shard land together or
-  neither does.
+ rows after reading them saves no I/O. A window is only a saving once it can
+ decide which files to skip, so the window and the shard land together or
+ neither does.
 - **A monthly shard is not the only shard period available.** A ledger whose
-  month file grows past what a reader should download moves to a shorter period
-  (`YYYY-Www.csv`) rather than losing rows - see
-  [../sources/item-health.md](../sources/item-health.md). The readers glob the
-  directory, so the period is a layout change and not a contract change.
+ month file grows past what a reader should download moves to a shorter period
+ (`YYYY-Www.csv`) rather than losing rows - see
+ [../sources/item-health.md](../sources/item-health.md). The readers glob the
+ directory, so the period is a layout change and not a contract change.
 
 **What a shard obliges its writer to do is a separate rule, and it is defined
 once.** A closed month is rewritten only when a correction targets it; every
@@ -334,10 +334,10 @@ The shapes this subsystem owns, from `CLAUDE.md` section 11:
 that same window.
 
 - `items_planned`, `items_succeeded`, `items_failed` and `items_skipped` count
-  only that run.
+ only that run.
 - `verticals[].planned` counts the items that run planned for that vertical.
 - `verticals[].published` counts the items that run introduced into the day
-  payload for that vertical.
+ payload for that vertical.
 
 The whole-day count lives in `digest.json`: `items.length` and
 `verticals[].count`. A later run appends to the day payload, but it must not make

@@ -12,8 +12,8 @@ An **item** is one source URL and everything derived from it. It is the atom of 
 
 - It is fetched, extracted, summarized, scored and given a visual independently of every other item.
 - It lands as one file per item under a predictable path - the day, the vertical,
-  and the item's ordinal within that vertical. Identity for dedupe is a field on
-  the payload, never a path segment. Worker skip is not implemented.
+ and the item's ordinal within that vertical. Identity for dedupe is a field on
+ the payload, never a path segment. Worker skip is not implemented.
 - It is written **temp-then-rename**, so a file either exists complete or does not exist. There is no half-written item.
 - Its failure is its own. A dead link, a paywall, a failed extraction, a dead model server, or a visual that would not render - each degrades that item and records why, and the run continues.
 
@@ -61,36 +61,36 @@ Four invariants hold regardless of how the batches are sized:
 
 - **A worker failure is contained to its batch**, and does not cancel its siblings.
 - **The batch size is a measured decision, not a preference.** It is set by how
-  long loading the model takes relative to how long an item takes - if loading
-  dominates, the batch is too small. Per-item atomicity survives inside a batch
-  through the temp-then-rename write.
+ long loading the model takes relative to how long an item takes - if loading
+ dominates, the batch is too small. Per-item atomicity survives inside a batch
+ through the temp-then-rename write.
 - **A worker may change the processing order inside its shard.** It currently
-  fetches and extracts its assigned items, then sorts the items that can be
-  summarized by prompt band before the model loop. The files are addressed by
-  item id, not by processing order, so grouping same-band prompts changes cache
-  locality and not correctness.
+ fetches and extracts its assigned items, then sorts the items that can be
+ summarized by prompt band before the model loop. The files are addressed by
+ item id, not by processing order, so grouping same-band prompts changes cache
+ locality and not correctness.
 - **Fingerprint-based inference skip is not wired.** Workers currently compute a
-  pipeline fingerprint and still do the work. The eval writer can suppress a
-  duplicate measurement after re-summarization; that is ledger de-duplication,
-  not a worker skip. The intended identity contract and current gaps are in
-  [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
+ pipeline fingerprint and still do the work. The eval writer can suppress a
+ duplicate measurement after re-summarization; that is ledger de-duplication,
+ not a worker skip. The intended identity contract and current gaps are in
+ [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
 - **The visual planner records what it spent, and stops when it has spent it.** Each run
-  manifest carries `items_routed` and `route_ms`, the stage total over the items
-  the planner reached. Those are the wire keys the manifest froze; the Python is
-  `items_decided` and `decision_ms`. `route_ms` is null when the stage never ran, which is a
-  different fact from zero. The stage stops itself at `run.visual_planner_budget_minutes`,
-  because a job killed at its own timeout skips its upload step and therefore
-  discards every decision it had already made - measured on 2026-08-25, 88 decided
-  items and 9 rendered charts thrown away, and the day published 145 items with
-  no visuals at all. An item the stage never reached writes no payload, which is
-  what `items_routed` already reports (Rule #10). It also skips what the day
-  already published, because the assembler keeps the published copy and discards
-  the new one - so re-deciding it is work no reader can ever see.
+ manifest carries `items_routed` and `route_ms`, the stage total over the items
+ the planner reached. Those are the wire keys the manifest froze; the Python is
+ `items_decided` and `decision_ms`. `route_ms` is null when the stage never ran, which is a
+ different fact from zero. The stage stops itself at `run.visual_planner_budget_minutes`,
+ because a job killed at its own timeout skips its upload step and therefore
+ discards every decision it had already made - measured on 2026-08-25, 88 decided
+ items and 9 rendered charts thrown away, and the day published 145 items with
+ no visuals at all. An item the stage never reached writes no payload, which is
+ what `items_routed` already reports (Rule #10). It also skips what the day
+ already published, because the assembler keeps the published copy and discards
+ the new one - so re-deciding it is work no reader can ever see.
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
 - **Run counts stay run-scoped.** The day payload grows across runs. The run
-  manifest does not. Each `runs[]` record says what that run planned, skipped,
-  failed and introduced. Its `verticals[].published` count is the number of
-  items introduced by that run for that vertical, not the accumulated day total.
+ manifest does not. Each `runs[]` record says what that run planned, skipped,
+ failed and introduced. Its `verticals[].published` count is the number of
+ items introduced by that run for that vertical, not the accumulated day total.
 
 ## What one run leaves for the next
 

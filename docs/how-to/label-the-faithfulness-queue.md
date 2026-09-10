@@ -19,17 +19,17 @@ Two ways in. They produce the same thing.
 
 ### A day CI produced
 
-The work job uploads one artifact per shard, named `evidence-0` .. `evidence-N`,
+The work job uploads one artifact per shard, named `evidence-0`.. `evidence-N`,
 kept for **14 days**. After that the day is gone and cannot be relabelled.
 
 1. Find the run: `gh run list --workflow digest.yml --repo <owner>/<repo>`.
 2. Download every evidence artifact into one directory:
 
-   ```bash
-   gh run download <run-id> --repo <owner>/<repo> --pattern 'evidence-*' --dir /tmp/evidence
-   ```
+ ```bash
+ gh run download <run-id> --repo <owner>/<repo> --pattern 'evidence-*' --dir /tmp/evidence
+ ```
 
-   One directory per shard is fine. The tool reads the whole tree.
+ One directory per shard is fine. The tool reads the whole tree.
 
 ### A day you ran yourself
 
@@ -50,16 +50,16 @@ It prints what the ledger holds, then what the package can show:
 
 ```text
 ------------------------------------------------------------------------
-scorer_version   hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30
-eligible rows    116
-run-days         1 of 10 -> 2026-08-26
-fingerprints     1
-drawn            38 of 60
+scorer_version hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30
+eligible rows 116
+run-days 1 of 10 -> 2026-08-26
+fingerprints 1
+drawn 38 of 60
 ------------------------------------------------------------------------
-evidence         backend/var/evidence -> 0 file(s)
-labellable       0 of 38
-  38 skipped: this row was scored before the run recorded which text it read, so
-  nothing here can prove an article is that text
+evidence backend/var/evidence -> 0 file(s)
+labellable 0 of 38
+ 38 skipped: this row was scored before the run recorded which text it read, so
+ nothing here can prove an article is that text
 ```
 
 Pass `--evidence /tmp/evidence` to read a downloaded package instead.
@@ -79,21 +79,21 @@ row at a time, one keystroke per row:
 
 ```text
 ------------------------------------------------------------------------
-[7/38]  2026-08-27  https://blog.example-lab.org/2026/08/model-release
+[7/38] 2026-08-27 https://blog.example-lab.org/2026/08/model-release
 ------------------------------------------------------------------------
 Source headline: Example Lab releases a smaller model
 
 THE ARTICLE, as the scorer read it
 Example Lab published a smaller model today and said inference cost fell by
-about a third against the model it replaces. ...
+about a third against the model it replaces....
 
 OUR SUMMARY
 Example Lab released a smaller model, claiming a 34 percent lower cost per
 million tokens and 2.1x the throughput of the model it replaces on commodity
-CPUs. ...
+CPUs....
 
 Does this assert anything the article does not support?
-  [y] yes   [n] no   [s] skip   [q] stop
+ [y] yes [n] no [s] skip [q] stop
 ```
 
 Answer against the article on the screen, not against the link. The link is

@@ -38,7 +38,7 @@ Its bounds are structural, not tunable. A knob that weakens the trust boundary i
 
 ## The fence is guaranteed, not requested
 
-`untrusted_block()` is the only way source text is ever handed to a model. It applies sanitization itself rather than trusting a caller to have done it earlier, and sanitization removes the fence markers - so the text inside can never close the fence around it.
+`untrusted_block` is the only way source text is ever handed to a model. It applies sanitization itself rather than trusting a caller to have done it earlier, and sanitization removes the fence markers - so the text inside can never close the fence around it.
 
 The version string, `SANITIZER_VERSION`, is a pipeline-fingerprint input ([../contracts/determinism.md](../contracts/determinism.md)). Changing the transformation without bumping it would leave every prior summary looking current.
 
@@ -113,7 +113,7 @@ keeps the affected player wrappers, headline and short introduction from a
 2026-09-08 France24 capture. It omits unrelated layout and assets. The tests in
 [`test_extract.py`](../../../backend/tests/test_extract.py) require the notices
 to disappear, the article to survive and a short article to remain publishable.
-The [capture provenance and replay results](../../reference/measurements.md#drift-review-and-source-extraction-2026-09-08)
+The [capture provenance and replay results](../../archive/measurements-2026-08.md#drift-review-and-source-extraction-2026-09-08)
 record why these containers are removed. The test opens a fixed fixture, never
 the growing archive, and makes no network request.
 
