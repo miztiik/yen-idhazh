@@ -778,6 +778,8 @@ The read is bounded too. A window is a count of days, so it straddles a month
 boundary and reads two shards at worst; every older shard is skipped unopened,
 however many the repository has accumulated.
 
+## Every chart draws through one coordinate frame, in CSS pixels
+
 **Every chart draws through one coordinate frame, in CSS pixels.**
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
 owns the width, the margin box and the two domain rules - linear, rounded
@@ -916,6 +918,8 @@ its band on the same day - 260 words where the rung asks for 50 to 90 - because
 every other row it writes lands inside or short, and a third state the fixture
 cannot reach is a state an implementation can pass by never entering.
 
+## Every chart with a shared column carries a pointer readout
+
 **Every chart with a shared column carries a pointer readout, and it is not an
 SVG `<title>`.** It was two charts when the strip was written and seven of
 twenty-four by 2026-08-30; it is the default on all three console routes from
@@ -1010,6 +1014,8 @@ one rule, on 2026-08-27, measured 2026-08-30 on a production build. The canary's
 throughput days are older than the ledger's first row, so no day there names a
 model and the rule cannot draw in the browser gate; the test says where it stops
 rather than passing quietly on an absence.
+
+## Stage timings are one trend chart, and its axis is decades
 
 **Stage timings are one trend chart, not a list per day.** Four polylines over a
 calendar x axis, oldest on the left, with a mark at every point and a date under
@@ -1194,24 +1200,10 @@ and that oracle is stronger for being exact. The panel honours the same control
 and proves it in its own spec, by driving the control to each preset and reading
 the control's own attribute back against the panel's.
 
-**What it cost, measured 2026-09-05 on a developer machine.** The panel adds
-**5,557 gzipped bytes** to `/console/model/`: the median of five builds is 38,867
-B against 33,310 B for `origin/main`'s own source built in place on the same tree
-and the same machine. Five builds of the shipping tree spanned 15 B, so the 64 B
-noise floor holds.
-
-**The ceiling moved to 47,974 B, by the method that owns it.** Heaviest of five
-builds (38,873 B), plus seven published days, plus the 64 B floor. A published
-day now costs this route **1,291 gzipped bytes**, re-measured by removing
-2026-08-31 - 601 articles, the heaviest committed day - from every ledger the
-route reads and rebuilding: 38,866 B fell to 37,575 B. It was 1,179 B when the
-ceiling was last re-derived on 2026-08-31, and the panel is what added the other
-112 B a day. The page therefore ships with 9,101 B of slack, which is seven
-published days and expires by design.
-
-That is one of the three ceilings the plan that grew them re-records, done for
-the one route this panel grew. `/console/` and `/console/machine/` are untouched
-and their own re-derivation is still owed.
+**The panel cost 5,557 gzipped bytes on `/console/model/`**, measured 2026-09-05
+over five builds against `origin/main`'s own source on the same tree. It is
+recorded so nobody prices a panel like this at nothing; the route's ceiling is
+not derived from it and never was.
 
 ## Every instrument the checker writes, and the panel that owes it a number
 
@@ -1302,35 +1294,13 @@ empty four fifths is what tells an operator the movement is small, and that is
 worth more than the space. Recorded here rather than waved through, per
 `CLAUDE.md` section 9.
 
-**What it cost, measured 2026-09-06 on a developer machine.** The three panels
-add **5,930 gzipped bytes** to `/console/model/`: the median of five builds is
-44,948 B against 39,018 B for `origin/main`'s own source built in place on the
-same tree and the same machine. Five builds of the shipping tree spanned 11 B and
-three of the control spanned 8 B, so the 64 B noise floor holds. `/console/` and
-`/console/machine/` moved by 2 B and 4 B between the arms, which is the same
-floor - the change reaches one route.
-
-That control arm reads 39,018 B where 2026-09-05 recorded 38,867 B for the same
-commit. The 151 B is a different machine, not a change: nothing between the two
-dates touched this route's source or the ledgers it reads.
-
-**The ceiling moved to 56,385 B, by the method that owns it.** Heaviest of five
-builds (44,953 B), plus seven published days, plus the 64 B floor. A published
-day now costs this route **1,624 gzipped bytes**, re-measured by the same method
-as before - removing 2026-08-31, the heaviest committed day, from every ledger
-the route reads and rebuilding: 44,948 B fell to 43,324 B. It was 1,291 B on
-2026-09-05, and these three panels are what added the other 333 B a day: one
-reduced day in the seed, two screen-reader rows, and two chart points. The page
-ships with 11,437 B of slack, which is seven published days and expires by
-design.
-
-**Every ceiling in this section is superseded.** All three were re-derived on
-2026-09-10 against the tree that moved the console's telemetry to a browser
-fetch, on one convention - the heaviest of five builds plus a tenth, at `gzip
--5` - and `/console/` fell by a factor of 6.4. The per-published-day rates above
-are the record of how this route grew while it inlined its telemetry, and they
-are kept for that. The live numbers and the current method are in
-[../../reference/measurements.md](../../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)
+**The three panels cost 5,930 gzipped bytes on `/console/model/`**, measured
+2026-09-06 over five builds against `origin/main`'s own source on the same tree.
+The other two console routes moved 2 B and 4 B, inside the build noise floor, so
+the change reaches one route. Every ceiling this section used to derive was
+superseded on 2026-09-10, when all three were re-aimed on one convention at
+`gzip -5` and `/console/` fell by a factor of 6.4; the live numbers are in
+[../../reference/measurements-site.md](../../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)
 and what to do when one fires is in
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -1605,20 +1575,14 @@ taken in the browser on 2026-08-30:
 justifies dead ends to the far edge - it would draw the first stage's loss
 beside the last stage's.
 
-**What it cost, measured 2026-08-30 on one Windows dev machine, node 24, after
-merging `origin/main`, with main's own source built on this same tree first and
-this branch second.** The lazy chart chunk went from 191,889 to 197,561 gzipped
-bytes, **5,672 bytes for the Sankey layout**, and registering `SankeyChart` in
-place of `FunnelChart` is the whole of it. Both arms read byte-identical on
-every build, so the spread is zero and the difference is the change. That leaves
-**2,439 bytes under the 200,000-byte line** the console plan draws, which is 1.2
-percent - the next chart type registered will cross it, and the answer then is
-to measure what the current set costs before adding to it. First-load JavaScript
-on `/console/` went from 76,727 to 77,343, **616 bytes**, which is the option
-builder growing; the engine is still a lazy chunk nothing preloads. The
-console's prerendered HTML went from 162,225 to 163,089 gzipped bytes, **864
-bytes** for three more nodes and seven two-line labels, and against the 301,580
-ceiling that leaves 138,491 spare - 0.29 percent of the ceiling spent.
+**The Sankey layout cost 5,672 gzipped bytes of lazy chart chunk**, measured
+2026-08-30 by registering `SankeyChart` in place of `FunnelChart` - the whole of
+the difference, with both arms byte-identical on every build. That left **2,439
+bytes under the 200,000-byte line** the chart vocabulary is held to, which is
+1.2 percent: **the next chart type registered crosses it**, and the answer then
+is to measure what the current set costs before adding to it. The option builder
+grew 616 bytes of first-load JavaScript; the engine is still a lazy chunk
+nothing preloads.
 
 **The recorded chunk size was already wrong before this landed, and by more than
 this change costs.** `docs/concepts/design-system.md` carried 153,204 B from
@@ -1706,21 +1670,10 @@ than a decision. Nothing was deleted, and the table gained the `Items published`
 column that coverage divides by, so the share and its denominator sit on one
 row.
 
-**What it cost, measured 2026-08-30 on one Windows dev machine, node 24, with
-six sibling agents on the box, with main's own source built first on this same
-tree and this branch built four times after it.** First-load JavaScript on
-`/console/` went from 80,843 to 82,761, 82,758, 82,761 and 82,755 gzipped bytes:
-**1,915 B for the section**, which is 2.4 percent of the route, and 6 B of
-spread over the four treatment builds. The control arm is the six routes this
-row does not touch - `/`, `/404`, `/<date>/`, `/<date>/<topic>/`, `/archive/`
-and `/evals/` moved -4 to -12 B between the arms, every one of them inside the
-64-byte tolerance against its committed record, so the delta on the console is
-the change and not the toolchain. **No chart type was registered**, so the lazy
-engine chunk did not move at all: 197,961 gzipped bytes in both arms, against
-the 200,000 the console plan draws. The prerendered console document went from
-179,776 to 180,653 gzipped bytes, **877 bytes** for two bars, two trends, one
-extra table column over twenty rows and a summary element, and against the
-301,580 ceiling that leaves 120,927 spare - 0.29 percent of the ceiling spent.
+**The section cost 1,915 gzipped bytes of first-load JavaScript on `/console/`**,
+measured 2026-08-30 over four builds spanning 6 B, against six untouched routes
+that moved -4 to -12 B - so the delta is the change and not the toolchain. **No
+chart type was registered**, so the lazy engine chunk did not move at all.
 
 Authority: the two bars and the verdict, Susan, 2026-08-30; the disclosure
 element, Jony, 2026-08-30.
@@ -2056,7 +2009,7 @@ until 2026-08-31, divided by `run.safety_ceiling_per_run` articles a day - and
 that knob bounds one **run**, not one day. Up to five runs a day is normal, so
 the band priced a day at 160 articles while the days it measured ran a median of
 334, and the printed runway was 2.09 times too long
-([../../reference/measurements.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling)).
+([../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling)).
 Articles need no daily rate at all, which is why the fix removed the assumption
 instead of correcting it. Where no published day grew the tree over an article
 it published there is no rate, so the fact says there is no runway instead of

@@ -184,7 +184,7 @@ production run scored, each pair scored twice and nothing else varied - once at
 today's `900/150/anchored` geometry, once at a 1,923-word window that holds every
 premise whole. Taken by `backend/utilities/grader_length_bias.py`; the figures,
 the hardware and the spread are in
-[../reference/measurements.md](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs).
+[../archive/measurements-2026-08.md](../archive/measurements-2026-08.md#which-way-the-graders-length-bias-runs).
 
 | Windows the article takes today | Items | Today's score minus the whole-article score |
 | --- | ---: | ---: |
@@ -1313,7 +1313,7 @@ both arms and B equals C exactly. Competition is the only mechanism left.
 **The slide has a rate, and the rate is the point.** Measured over all eleven
 committed days on one instrument in one run - the eleven points, their corpus
 sizes and the fit are in
-[../reference/measurements.md](../reference/measurements-site.md#how-fast-archive-search-slides-under-a-frozen-label-set) -
+[../reference/measurements-site.md](../reference/measurements-site.md#how-fast-archive-search-slides-under-a-frozen-label-set) -
 recall falls **0.0134 for every published day** and **0.0000479 for every
 published item** once the labels close on 2026-08-26. The series reproduces the
 record: its 2026-08-26 point is 0.75571 over 2,237 items, against the 0.756 over
