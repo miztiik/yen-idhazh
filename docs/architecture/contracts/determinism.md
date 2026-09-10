@@ -49,7 +49,7 @@ Every field is read from the thing it describes, not from a literal beside the c
 | `runtime_build` | `LLAMA_CPP_BUILD`, set by `digest.yml` beside the download it checks against a recorded sha256 | `build-not-recorded`. It is not a llama.cpp release tag and cannot be read as one. |
 | `chat_template_sha256` | the Jinja source `llama-server` returns from `GET /props` - the template it will apply to every request | a digest of `chat-template-not-recorded`. |
 | `runner_class` | `RUNNER_ENVIRONMENT` / `RUNNER_OS` / `RUNNER_ARCH` | `local/<system>/<machine>` from `platform`. A machine that publishes none of the three is a developer machine and says so. |
-| `host_cpu` (not digested) | the `model name` line of `/proc/cpuinfo` | `platform.processor()`, then the architecture. |
+| `host_cpu` (not digested) | the `model name` line of `/proc/cpuinfo` | `platform.processor`, then the architecture. |
 
 Degrading is not the same as inventing. A degraded run stamps a value nothing else can produce, so its rows sit apart from every run whose runtime was named, and a reader can see which is which without being told (Rule #10, section 1a).
 

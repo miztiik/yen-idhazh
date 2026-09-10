@@ -85,15 +85,15 @@ the execution frequency or assurance changes.
 - Browser means code running on the reader's device.
 - Tests/tooling includes collection, utilities, notebooks and workflows.
 - `N` is the growing population named in that row. `B` is bytes. `K` is requested
-  output or an explicit size limit. `R` is runs, `D` dates, `M` months, `P` presets,
-  `Q` queries and `d` vector dimensions. `delta` means new, changed or deleted input.
+ output or an explicit size limit. `R` is runs, `D` dates, `M` months, `P` presets,
+ `Q` queries and `d` vector dimensions. `delta` means new, changed or deleted input.
 - **Indexed** means a maintained exact index. A B-tree normally costs
-  $O(\log N + K)$ for a lookup/range result. A hash lookup is expected $O(1)$ only
-  after its storage is available; constructing or downloading it is not free.
+ $O(\log N + K)$ for a lookup/range result. A hash lookup is expected $O(1)$ only
+ after its storage is available; constructing or downloading it is not free.
 - **Bounded** requires both a record limit and a byte limit. A month, a day,
-  a fixed chart width or a result limit alone does not supply those limits.
+ a fixed chart width or a result limit alone does not supply those limits.
 - Complexity is source-derived. No runtime speedup, memory saving, capacity date
-  or dependency installation cost is claimed here.
+ or dependency installation cost is claimed here.
 
 ## Backend State And Publication
 

@@ -139,7 +139,7 @@ the day, the payload's length and digest, and the validator's identity. A later
 run skips a day whose receipt names this validator and whose recorded length
 still matches `os.stat`, and never opens the payload. Change the validator and
 every receipt stops matching, so the archive is re-validated **once**, not on a
-window. Measured 2026-09-08 on an Intel Core i7-1265U over 18 committed days and
+window. Measured 2026-09-08 on a developer machine over 18 committed days and
 19,867,266 bytes: 0.45 s median over three runs against 0.02 s with every receipt
 current. **What is left is honest and small**: the pass still lists the days and
 stats each one, so it still costs one `stat` a day, for ever. It says so.
@@ -176,7 +176,7 @@ reported good on the half that happened to be first.
 `retention.count_published_items` parses every staged day payload. Each says so
 at the top of its own docstring with the measurement beside it: over
 `frontend/public/digest/` at 443 files and 25,070,521 bytes, 2026-09-07 on an
-Intel Core i7-1265U, `site_size` took 300.4 ms best and 563.4 ms worst over five
+a developer machine, `site_size` took 300.4 ms best and 563.4 ms worst over five
 runs and `measure` took 276.8 ms best and 352.3 ms worst - in a job that runs for
 hours. The reason they stayed is in
 [what did not land](#two-rows-did-not-land-what-was-asked-and-the-page-is-more-useful-for-saying-so)
@@ -363,7 +363,7 @@ would answer nothing at all for a ledger whose last run was two months ago.
 
 **Two entries retired on 2026-09-09, and they were the two the build paid for
 every run.** `routes/[date]` and `routes/[date]/[vertical]` each took a `-1`
-because `entries()` is the list of pages the build writes, and a cover there
+because `entries` is the list of pages the build writes, and a cover there
 stops writing them past it - the calendar would link to nothing and a dated link
 would 404. Neither route is prerendered any more. One document answers every
 dated URL and the browser fetches the day it names, so there is no list of pages
@@ -375,7 +375,7 @@ own browser makes: one date, one payload, decided by the address they asked for.
 
 ### What the cover bought
 
-Measured 2026-09-09 on an Intel Core i7-1265U, Node 24.12.0, over a synthetic
+Measured 2026-09-09 on a developer machine, Node 24.12.0, over a synthetic
 digest tree of 410 published days and 15 month shards, 214,632,096 bytes. Both
 covers run alternately in one process, nine passes each, so page cache and
 machine load are the same for both.
@@ -425,7 +425,7 @@ part of the tree the migration did not touch.** Row #14 deleted 116 dated
 documents, so `frontend/build` no longer gains an HTML file and a `__data.json`
 per published day - but `frontend/public/digest/` gains a day payload and its
 rendered pictures every run, `copy-visuals.mjs` stages them into the build, and
-both hashed trees carry them. Measured 2026-09-08 on an Intel Core i7-1265U:
+both hashed trees carry them. Measured 2026-09-08 on a developer machine:
 `assertBuild` costs 16.2 s, of which 3.23 s hashes 66.55 MB of inputs and 12.93 s
 hashes 222.4 MB across 1,589 output files. **The dominant term is per-file, not
 per-byte**: sha256 on that class of CPU runs at 1 to 2 GB/s, so the bytes are
@@ -474,7 +474,7 @@ person's decision. So the three walks declare their growth instead.
 optimised.** The row asked for the dated walk that `retention._dated_days` gave
 the visual tree to be given to the state prunes as well, on the premise that they
 list and sort every partition directory on every pass. Counted rather than timed
-on 2026-09-08, on an Intel Core i7-1265U: a not-due pass makes **5 directory
+on 2026-09-08, on a developer machine: a not-due pass makes **5 directory
 opens and 0 shard stats**, and the 5 does not move when the tree holds forty-six
 times more. **A month partition is a file, not a directory**, so there was no
 partition directory for a dated walk to skip, and the sort the premise objected

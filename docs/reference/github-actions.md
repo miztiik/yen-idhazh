@@ -102,13 +102,13 @@ how many runs happen, and this page is where that is written down.
 
 ```mermaid
 flowchart LR
-    PR["ordinary pull request"] --> CI["CI<br/>ci.yml"]
-    PUSH["merge or push to main"] --> CI
-    PUSH --> FILTER{"Pages path changed?"}
-    FILTER -->|"yes"| PAGES["Pages publication<br/>pages.yml"]
-    FILTER -->|"no"| NO_PAGES["no Pages run"]
-    REFRESH_DONE["Content refresh completed"] --> PAGES
-    PAGES --> STATIC["static GitHub Pages bundle"]
+ PR["ordinary pull request"] --> CI["CI<br/>ci.yml"]
+ PUSH["merge or push to main"] --> CI
+ PUSH --> FILTER{"Pages path changed?"}
+ FILTER -->|"yes"| PAGES["Pages publication<br/>pages.yml"]
+ FILTER -->|"no"| NO_PAGES["no Pages run"]
+ REFRESH_DONE["Content refresh completed"] --> PAGES
+ PAGES --> STATIC["static GitHub Pages bundle"]
 ```
 
 ## Content refresh
@@ -191,14 +191,14 @@ visuals failure, then commits the digest and state.
 
 ```mermaid
 flowchart LR
-    SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
-    MANUAL["manual dispatch"] --> PLAN
-    PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
-    WORK --> VISUALS["visuals"]
-    VISUALS --> ASSEMBLE["assemble"]
-    ASSEMBLE --> COMMIT["commit digest and state"]
-    COMMIT --> COMPLETE["Content refresh completed"]
-    COMPLETE --> PAGES["Pages publication"]
+ SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
+ MANUAL["manual dispatch"] --> PLAN
+ PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
+ WORK --> VISUALS["visuals"]
+ VISUALS --> ASSEMBLE["assemble"]
+ ASSEMBLE --> COMMIT["commit digest and state"]
+ COMMIT --> COMPLETE["Content refresh completed"]
+ COMPLETE --> PAGES["Pages publication"]
 ```
 
 The plan job also commits first-sighting and feed-health state before it starts
@@ -340,9 +340,9 @@ origin/main`, and raised:
 
 ```
 pydantic_core.ValidationError: 3 validation errors for VisualDecision
-decided_at   Field required
-route_ms     Extra inputs are not permitted
-routed_at    Extra inputs are not permitted
+decided_at Field required
+route_ms Extra inputs are not permitted
+routed_at Extra inputs are not permitted
 ```
 
 Two of those three fields had been renamed on `main` between 08:23 and 09:03.
@@ -352,15 +352,15 @@ Nothing was wrong with the payloads and nothing was wrong with the new contract.
 so a merge lands inside a live run more often than not. Two consequences:
 
 - **Check for an in-flight run before merging a contract change.**
-  `gh run list --workflow digest.yml --status in_progress` answers it. A change
-  that removes, renames or retypes a field on any payload under `backend/var/`
-  waits for the run to finish.
+ `gh run list --workflow digest.yml --status in_progress` answers it. A change
+ that removes, renames or retypes a field on any payload under `backend/var/`
+ waits for the run to finish.
 - **The failure is loud and the day is lost, not corrupted.** `assemble` raises
-  rather than publishing a half-read day, and the next scheduled run rebuilds
-  from its own payloads under the new contract. So the cost is one digest, and
-  the answer is to time the merge rather than to build a guard - a guard would
-  have to read the old shape, which is exactly the migration `CLAUDE.md`
-  section 11 already requires when the payload is committed. These are not.
+ rather than publishing a half-read day, and the next scheduled run rebuilds
+ from its own payloads under the new contract. So the cost is one digest, and
+ the answer is to time the merge rather than to build a guard - a guard would
+ have to read the old shape, which is exactly the migration `CLAUDE.md`
+ section 11 already requires when the payload is committed. These are not.
 
 **The error now names the condition, which is a smaller claim than fixing it.**
 Every read of a payload one job of a run wrote and a later job reads goes
@@ -407,11 +407,11 @@ too, and the reason it is never scheduled is in
 
 ```mermaid
 flowchart LR
-    PERSON["manual dispatch"] --> VALIDATE["Model validation"]
-    PERSON --> MEASURE["Measurements"]
-    PERSON --> DRIFT["Drift review"]
-    PERSON --> BACKFILL["Vector backfill"]
-    WEEKLY["Sunday 08:00 UTC"] --> DRIFT
+ PERSON["manual dispatch"] --> VALIDATE["Model validation"]
+ PERSON --> MEASURE["Measurements"]
+ PERSON --> DRIFT["Drift review"]
+ PERSON --> BACKFILL["Vector backfill"]
+ WEEKLY["Sunday 08:00 UTC"] --> DRIFT
 ```
 
 Each Measurements dispatch selects exactly one target:
@@ -676,7 +676,7 @@ Python file spells those flags, and no command in any workflow spells one.
 
 There used to be a second renderer, `backend/utilities/llama_server_argv.py`,
 and it existed for exactly one reason. Both `digest.yml` inference jobs ran
-`Start the model` before `Install`, so `pip install -e .` had not run and the
+`Start the model` before `Install`, so `pip install -e.` had not run and the
 package was not importable yet. `Install` now runs one step earlier, straight
 after `setup-python`, and the copy is gone. Moving a step within a job is the
 same work in a different position, so no wall-clock claim is made for it
@@ -745,15 +745,15 @@ evidence in the file.
 The named inputs:
 
 - **Enumerated** - `backfill.commit`, `digest.faithfulness`, `digest.shards`,
-  `measure.target`, `measure.runtime_candidate`.
+ `measure.target`, `measure.runtime_candidate`.
 - **Read by name** - `measure.models`, `measure.runtime_threads`,
-  `measure.runtime_threads_batch`, and the six `validate.candidate_*` fields,
-  which the `candidate` step asserts are one bare word each before it
-  republishes them.
+ `measure.runtime_threads_batch`, and the six `validate.candidate_*` fields,
+ which the `candidate` step asserts are one bare word each before it
+ republishes them.
 - **Matched** - `digest.date`, `drift.recent_days`, `drift.baseline_days`,
-  `measure.corpus_links`, `measure.threads`, `validate.shards`,
-  `validate.repeats`, `validate.corpus_per_shard`,
-  `validate.job_budget_minutes`, `validate.candidate_bytes`.
+ `measure.corpus_links`, `measure.threads`, `validate.shards`,
+ `validate.repeats`, `validate.corpus_per_shard`,
+ `validate.job_budget_minutes`, `validate.candidate_bytes`.
 
 `validate.yml` shapes its five numbers in one step of the `plan` job, which is
 the job every other job needs, so "before its first use" is anywhere after that
@@ -766,11 +766,11 @@ value the program was built from. They now arrive through `env` and the program
 reads them with `os.environ`. That step also gained the `set -euo pipefail`
 every other step in the repository starts with, so a crash inside the comparison
 now turns the step red instead of passing through `tee` as a success and
-skipping the issue step on `if: success()`.
+skipping the issue step on `if: success`.
 
 ### The linter reads scripts, and the test reads the rest
 
-CI runs `shellcheck --severity=style .github/scripts/*.sh` in the gates job.
+CI runs `shellcheck --severity=style.github/scripts/*.sh` in the gates job.
 `ruff` and `mypy` stop at Python, and that directory holds the retry loop both
 daily commit steps run - the one whose failure costs a whole day's digest.
 `--severity=style` is the strictest level, so a warning fails the build rather
@@ -779,7 +779,7 @@ than becoming a note somebody scrolls past.
 It arrives as `shellcheck-py` in the `dev` extra, pinned by the same manifest
 that pins `ruff` and `mypy`. A CI step that downloaded the binary would be an
 unpinned fetch, which is the shape this repository has already had to remove
-once. Measured 2026-08-27 on Windows 11, Python 3.12: 34,782,285 installed
+once. Measured 2026-08-27 on Python 3.12: 34,782,285 installed
 bytes from an 8.0 MB wheel - a statically linked Haskell binary, and about
 48 times the size of the next-largest dev dependency. One observation, so no
 spread, and a Linux runner installs a different wheel.
@@ -861,56 +861,56 @@ the behaviour behind them, which is what actually decides a workflow's shape.
 Verified 2026-08-20.
 
 - **Actions minutes are free and unmetered**, because this repository is public.
-  The widely quoted 2,000 minutes per month is a private-repository figure and
-  does not apply. Wall-clock is the constraint, not a monthly balance.
+ The widely quoted 2,000 minutes per month is a private-repository figure and
+ does not apply. Wall-clock is the constraint, not a monthly balance.
 - **A cache entry unread for 7 days is deleted**, and a restore is paid once per
-  *job* rather than once per run. That is why `digest.yml` gives a worker a
-  shard of several items instead of fanning out one job per item: the weights
-  restore is the largest fixed cost, and every extra job pays it again.
+ *job* rather than once per run. That is why `digest.yml` gives a worker a
+ shard of several items instead of fanning out one job per item: the weights
+ restore is the largest fixed cost, and every extra job pays it again.
 - **`GITHUB_TOKEN` allows 1,000 API requests per hour per repository**, shared
-  across every job of every concurrently running workflow. A step that polls in
-  a loop spends a budget the scheduled pipeline also needs.
+ across every job of every concurrently running workflow. A step that polls in
+ a loop spends a budget the scheduled pipeline also needs.
 - **The Pages deploy itself times out at 10 minutes**, separately from the job
-  timeout, and separately from the 1 GB site cap.
+ timeout, and separately from the 1 GB site cap.
 - **A job stopped by `timeout-minutes` is *cancelled*, and a cancelled job skips
-  every step that carries no condition.** `if: failure()` does not run either -
-  only `if: always()` does. So an artifact upload written the ordinary way is
-  silently dropped exactly when a long job most needed to hand over what it
-  made. Observed 2026-08-25 on the job now called `visuals` in `digest.yml`, run
-  `32804437110`: the step list records the render step as `cancelled`, the log
-  upload (which has `always()`) as `success`, and the decisions upload as
-  **`skipped`**.
-  88 planning decisions and 9 rendered charts existed on that runner and none of
-  them left it. **Any upload step that carries a job's only copy of its output
-  needs `if: always()`.**
+ every step that carries no condition.** `if: failure` does not run either -
+ only `if: always` does. So an artifact upload written the ordinary way is
+ silently dropped exactly when a long job most needed to hand over what it
+ made. Observed 2026-08-25 on the job now called `visuals` in `digest.yml`, run
+ `32804437110`: the step list records the render step as `cancelled`, the log
+ upload (which has `always`) as `success`, and the decisions upload as
+ **`skipped`**.
+ 88 planning decisions and 9 rendered charts existed on that runner and none of
+ them left it. **Any upload step that carries a job's only copy of its output
+ needs `if: always`.**
 - **A pipeline intermediate is gone within two days, so "re-render the day from
-  its decisions" is not a repair option for any day older than 24 hours.** Verified
-  2026-08-27. `digest.yml` sets `retention-days: 1` on the `visuals` upload, the
-  one that carries `backend/var/run/<date>/items/*.visual.json` and
-  `frontend/public/digest/`; `plan` and `items-<shard>` are also 1, and
-  `visual-planner-log` and `runtime-log-<shard>` are 2. Nothing under `backend/var/` is
-  committed either: `.gitignore` line 47 is `backend/var/`, and
-  `git ls-files backend/var` returns no files. **The committed record of a run
-  is the digest under `frontend/public/digest/` plus the rows under `state/`,
-  and never the intermediates.** Repairing an older day therefore means planning
-  its visuals again and paying the `visuals` stage again - there is no cheaper
-  path, and a
-  plan that assumes one is proposing something that cannot be done. Job *logs*
-  are the exception: they outlive every artifact here, which is why a question
-  about what a past run did is asked with `gh run view --job <id> --log`.
+ its decisions" is not a repair option for any day older than 24 hours.** Verified
+ 2026-08-27. `digest.yml` sets `retention-days: 1` on the `visuals` upload, the
+ one that carries `backend/var/run/<date>/items/*.visual.json` and
+ `frontend/public/digest/`; `plan` and `items-<shard>` are also 1, and
+ `visual-planner-log` and `runtime-log-<shard>` are 2. Nothing under `backend/var/` is
+ committed either: `.gitignore` line 47 is `backend/var/`, and
+ `git ls-files backend/var` returns no files. **The committed record of a run
+ is the digest under `frontend/public/digest/` plus the rows under `state/`,
+ and never the intermediates.** Repairing an older day therefore means planning
+ its visuals again and paying the `visuals` stage again - there is no cheaper
+ path, and a
+ plan that assumes one is proposing something that cannot be done. Job *logs*
+ are the exception: they outlive every artifact here, which is why a question
+ about what a past run did is asked with `gh run view --job <id> --log`.
 - **A re-run is per job, never per step, and it reuses the original commit.**
-  `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
-  again from its first step; there is no way to resume at the step that failed.
-  That is survivable here only because the expensive jobs are separate: a failed
-  `assemble` re-runs alone - 82 s in run `33270983446` - while `plan`, the four
-  `work` shards and `visuals` keep their results and are not repeated. It works
-  for one day, because the `plan` and `visuals` artifacts it downloads carry
-  `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
-  workflow file as the original event**, so it cannot pick up a fix that landed
-  afterwards, and a job that failed against a `main` which has since moved will
-  re-measure the tree it started from rather than the one that is published now.
-  A re-run that goes green for that reason has laundered the failure rather than
-  answered it.
+ `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
+ again from its first step; there is no way to resume at the step that failed.
+ That is survivable here only because the expensive jobs are separate: a failed
+ `assemble` re-runs alone - 82 s in run `33270983446` - while `plan`, the four
+ `work` shards and `visuals` keep their results and are not repeated. It works
+ for one day, because the `plan` and `visuals` artifacts it downloads carry
+ `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
+ workflow file as the original event**, so it cannot pick up a fix that landed
+ afterwards, and a job that failed against a `main` which has since moved will
+ re-measure the tree it started from rather than the one that is published now.
+ A re-run that goes green for that reason has laundered the failure rather than
+ answered it.
 
 ## See also
 

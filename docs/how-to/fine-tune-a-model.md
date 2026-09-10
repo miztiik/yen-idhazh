@@ -25,7 +25,7 @@ samples, one JSON object per line. Every line is one article's exchange, and no
 line holds two articles.
 
 ```json
-{"messages":[{"role":"system","content":"..."},{"role":"user","content":"..."},{"role":"assistant","content":"{\"title\": ...}"}],"url_key":"3f1a9c...","date":"2026-08-27","model_id":"qwen3-5-9b-q4-k-m","vertical":"energy","version":"2026-08-28"}
+{"messages":[{"role":"system","content":"..."},{"role":"user","content":"..."},{"role":"assistant","content":"{\"title\":...}"}],"url_key":"3f1a9c...","date":"2026-08-27","model_id":"qwen3-5-9b-q4-k-m","vertical":"energy","version":"2026-08-28"}
 ```
 
 **It trains on its own.** No sidecar, no lookup, no join. `messages` is the
@@ -51,7 +51,7 @@ referenced. Measured 2026-08-27 against `state/scores.csv` on `origin/main`
 | `vertical` | The one taxonomy field present on every item, so the only one a quota can act on |
 
 `prompt_fingerprint` was cut because it is `sha256(messages[0])`.
-`source_words` was cut because it is `len(messages[1].split())`. `written_by` was
+`source_words` was cut because it is `len(messages[1].split)`. `written_by` was
 cut because which file a row lives in already says whether a person wrote it - a
 stored copy of a derivable value is a second thing that can disagree with the
 first.
@@ -101,8 +101,8 @@ It is still a stage that runs alone with a file in and a file out
 (`CLAUDE.md` section 4):
 
 ```bash
-python -m idhazh harvest --date 2026-08-28            # respects the cadence
-python -m idhazh harvest --date 2026-08-28 --force    # harvest now
+python -m idhazh harvest --date 2026-08-28 # respects the cadence
+python -m idhazh harvest --date 2026-08-28 --force # harvest now
 ```
 
 ### The cadence is a number, not a cron line
@@ -128,15 +128,15 @@ depend on which clock the job read.
 version loses data:
 
 - **Oldest-first eviction** pairs with a date-trailing holdout, so a held-out row
-  is by definition among the newest and can never be evicted while it is still
-  held out. Without that pairing the window would quietly shrink the test set
-  every week, and a comparison would run on fewer articles each month with
-  nothing anywhere saying so.
+ is by definition among the newest and can never be evicted while it is still
+ held out. Without that pairing the window would quietly shrink the test set
+ every week, and a comparison would run on fewer articles each month with
+ nothing anywhere saying so.
 - **An article already in the window keeps its original row.** A re-run of a day
-  would otherwise rewrite every row it touched, and a corpus that changes when
-  nothing changed cannot be reviewed by diff.
+ would otherwise rewrite every row it touched, and a corpus that changes when
+ nothing changed cannot be reviewed by diff.
 - **Order is by date then address**, never by arrival, so two runs that harvest
-  the same items in a different order write the same file.
+ the same items in a different order write the same file.
 
 ### The prune rewrites history, and that costs something
 
@@ -156,10 +156,10 @@ which is 154 MB a year at `harvest_every_days: 7`.
 What it costs, said rather than implied:
 
 - A squash boundary is per-commit, not per-path. The range it collapses carries
-  `backend/`, `docs/` and `state/` as well as `corpus/`.
+ `backend/`, `docs/` and `state/` as well as `corpus/`.
 - `git blame` and `git bisect` reach back `prune_keep_days` to
-  `prune_keep_days + prune_every_days` and no further. At the committed 60 and 30
-  that is 60 to 90 days.
+ `prune_keep_days + prune_every_days` and no further. At the committed 60 and 30
+ that is 60 to 90 days.
 - A commit SHA older than the boundary stops resolving, so a link to one dies.
 - A clone taken before a prune has to be re-fetched.
 
@@ -205,102 +205,102 @@ only way they differ:
 | network | none | one round trip per item |
 
 - **`backfill`** replays a finished run's item payloads through the same harvest
-  the schedule runs - same function, same bytes, and a test asserts a backfilled
-  row equals a harvested one.
+ the schedule runs - same function, same bytes, and a test asserts a backfilled
+ row equals a harvested one.
 
-  ```bash
-  gh run download <run-id> --repo miztiik/yen-idhazh --pattern 'items-*' --dir /tmp/items
-  python backend/utilities/data_wrangler.py backfill --items-dir /tmp/items
-  ```
+ ```bash
+ gh run download <run-id> --repo miztiik/yen-idhazh --pattern 'items-*' --dir /tmp/items
+ python backend/utilities/data_wrangler.py backfill --items-dir /tmp/items
+ ```
 
-  Repeat per run; the roll deduplicates by `url_key`, so replaying the same run
-  twice is harmless. Rows are dated by their own eval row, so one session can
-  replay several days and each row still lands on the day it was produced.
+ Repeat per run; the roll deduplicates by `url_key`, so replaying the same run
+ twice is harmless. Rows are dated by their own eval row, so one session can
+ replay several days and each row still lands on the day it was produced.
 
-  **How far back it reaches is set by `items-*` artifact retention, which is
-  seven days.** Measured 2026-08-29: one run's four shards are 555,842 bytes, so
-  a week of five runs a day is 18.6 MB against the 500 MB Rule #2 allows.
+ **How far back it reaches is set by `items-*` artifact retention, which is
+ seven days.** Measured 2026-08-29: one run's four shards are 555,842 bytes, so
+ a week of five runs a day is 18.6 MB against the 500 MB Rule #2 allows.
 - **`refill`** reaches everything older than that, because the committed ledger
-  and the committed digest hold between them every half of a training row except
-  the article body - and the body has an address. `state/scores.csv` names the
-  canonical URL, the model and the fingerprint; the day payload under
-  `frontend/public/digest/` holds the title, the summary and the key points.
+ and the committed digest hold between them every half of a training row except
+ the article body - and the body has an address. `state/scores.csv` names the
+ canonical URL, the model and the fingerprint; the day payload under
+ `frontend/public/digest/` holds the title, the summary and the key points.
 
-  ```bash
-  python backend/utilities/data_wrangler.py refill --limit 0    # the plan, no network
-  python backend/utilities/data_wrangler.py refill --limit 200  # then do 200 of them
-  ```
+ ```bash
+ python backend/utilities/data_wrangler.py refill --limit 0 # the plan, no network
+ python backend/utilities/data_wrangler.py refill --limit 200 # then do 200 of them
+ ```
 
-  With no `--limit` it queues however many rows the window still has room for.
-  `--limit 0` fetches nothing and prints the plan, which is how to read what a
-  session would cost before spending it.
+ With no `--limit` it queues however many rows the window still has room for.
+ `--limit 0` fetches nothing and prints the plan, which is how to read what a
+ session would cost before spending it.
 
-  **Three checks are what make re-fetching safe**, and none of them is a
-  guess:
+ **Three checks are what make re-fetching safe**, and none of them is a
+ guess:
 
-  1. **The join is proved, not assumed.** `output_digest` is taken over exactly
-     the title, the summary and the key points, so a published item is paired
-     with a ledger row only when it recomputes to the value that row recorded. A
-     later run that re-summarized the same article is dropped rather than
-     mismatched. Measured 2026-08-29 over the 2,791 committed ledger rows: 89 of
-     them are exactly this case.
-  2. **Nothing about the page is reconstructed.** The body goes through the same
-     extractor a run uses, so `brief`, the source form and the length band are
-     computed from the bytes that came back. This is what a rebuild from an
-     expired `evidence-*` artifact could not do: `EvidenceItem` carries no
-     `brief`, and reconstructing it from the two recoverable terms disagrees with
-     the recorded value on 3 of 229 items (measured 2026-08-29) - a guessed
-     length band, which is the failure this corpus exists to prevent.
-  3. **Every counterweight is measured again** against the body that came back,
-     never read off the ledger. An article edited past its summary now fails the
-     same gate a live run applies, so it is dropped instead of taught.
+ 1. **The join is proved, not assumed.** `output_digest` is taken over exactly
+ the title, the summary and the key points, so a published item is paired
+ with a ledger row only when it recomputes to the value that row recorded. A
+ later run that re-summarized the same article is dropped rather than
+ mismatched. Measured 2026-08-29 over the 2,791 committed ledger rows: 89 of
+ them are exactly this case.
+ 2. **Nothing about the page is reconstructed.** The body goes through the same
+ extractor a run uses, so `brief`, the source form and the length band are
+ computed from the bytes that came back. This is what a rebuild from an
+ expired `evidence-*` artifact could not do: `EvidenceItem` carries no
+ `brief`, and reconstructing it from the two recoverable terms disagrees with
+ the recorded value on 3 of 229 items (measured 2026-08-29) - a guessed
+ length band, which is the failure this corpus exists to prevent.
+ 3. **Every counterweight is measured again** against the body that came back,
+ never read off the ledger. An article edited past its summary now fails the
+ same gate a live run applies, so it is dropped instead of taught.
 
-  An address that has moved, gone behind a paywall or started refusing robots is
-  dropped and counted by failure code. Re-running picks up whatever is still
-  missing, so a long fill can be done in chunks, and the window is committed
-  every 25 items so an interruption costs at most the last few fetches rather
-  than the whole run.
+ An address that has moved, gone behind a paywall or started refusing robots is
+ dropped and counted by failure code. Re-running picks up whatever is still
+ missing, so a long fill can be done in chunks, and the window is committed
+ every 25 items so an interruption costs at most the last few fetches rather
+ than the whole run.
 
-  **What one full fill cost, measured 2026-08-29** on the 2,791-row committed
-  ledger, at 1.36 s per address:
+ **What one full fill cost, measured 2026-08-29** on the 2,791-row committed
+ ledger, at 1.36 s per address:
 
-  | | |
-  | --- | --- |
-  | queued after the four skip rules | 1,768 |
-  | bodies re-fetched | 1,729 (97.8 percent) |
-  | dropped, page gone or paywalled | 39 |
-  | dropped by re-measurement against the new body | 43 |
-  | rows before / after | 166 / 1,852 |
-  | wall clock | 26 minutes |
+ | | |
+ | --- | --- |
+ | queued after the four skip rules | 1,768 |
+ | bodies re-fetched | 1,729 (97.8 percent) |
+ | dropped, page gone or paywalled | 39 |
+ | dropped by re-measurement against the new body | 43 |
+ | rows before / after | 166 / 1,852 |
+ | wall clock | 26 minutes |
 
-  The 43 are the safety argument paying for itself: pairs the original run
-  passed, whose article no longer supports the published summary.
+ The 43 are the safety argument paying for itself: pairs the original run
+ passed, whose article no longer supports the published summary.
 
-  **Size, measured on the same 1,852 rows.** 19.2 MB raw, 10,851 bytes a row;
-  4.3 MB once git compresses it, 2,444 bytes a row, a 4.4x ratio. The compressed
-  figure is the one that matters, because it is what each commit that rewrites
-  the window adds to history, and it is what `finetune.prune_every_days` bounds.
+ **Size, measured on the same 1,852 rows.** 19.2 MB raw, 10,851 bytes a row;
+ 4.3 MB once git compresses it, 2,444 bytes a row, a 4.4x ratio. The compressed
+ figure is the one that matters, because it is what each commit that rewrites
+ the window adds to history, and it is what `finetune.prune_every_days` bounds.
 - **`stats`** prints the row count against the window, the date range, the word
-  and target spreads, the counts per vertical and per model, how many rows a
-  session would really draw, and a warning when the live prompt no longer matches
-  the digest the window was harvested under. Run it before spending a session:
-  the two ways a session is wasted are training on 400 rows while believing there
-  were 4000, and training on rows the prompt has moved out from under.
+ and target spreads, the counts per vertical and per model, how many rows a
+ session would really draw, and a warning when the live prompt no longer matches
+ the digest the window was harvested under. Run it before spending a session:
+ the two ways a session is wasted are training on 400 rows while believing there
+ were 4000, and training on rows the prompt has moved out from under.
 - **`split`** writes `corpus/holdout.txt`, by date and never at random.
-  Production always runs on tomorrow's news; a random split puts the same story
-  from three feeds on both sides of the line and reports memorisation as success.
-  Only `url_key` values are written, so no article text leaves the window.
+ Production always runs on tomorrow's news; a random split puts the same story
+ from three feeds on both sides of the line and reports memorisation as success.
+ Only `url_key` values are written, so no article text leaves the window.
 - **`verify`** checks the escaping rule of the format offline: one physical line
-  per row, every line loading, no CRLF, a final newline, no duplicate address,
-  and the file re-serializing to the bytes it already holds.
+ per row, every line loading, no CRLF, a final newline, no duplicate address,
+ and the file re-serializing to the bytes it already holds.
 - **`verify --tokens`** additionally measures tokens per row against
-  `finetune.sequence_length`, using the tokenizer named by
-  `models.<role>.hf_base_repo`. With `refill` it is one of the **two commands
-  here that reach the network**, which is why both are operator tools and not
-  tests (Rule #7).
+ `finetune.sequence_length`, using the tokenizer named by
+ `models.<role>.hf_base_repo`. With `refill` it is one of the **two commands
+ here that reach the network**, which is why both are operator tools and not
+ tests (Rule #7).
 - **`remove`** prints what it would delete and stops. `--yes` does it, and it
-  refuses either way to take the window below `finetune.min_rows`, saying how far
-  below it would land.
+ refuses either way to take the window below `finetune.min_rows`, saying how far
+ below it would land.
 
 ## The reference set
 
@@ -315,23 +315,23 @@ person, because a test reference nobody read is not a reference.
 `backend/utilities/reference_set.py` has two verbs and writes no summaries:
 
 ```bash
-python backend/utilities/reference_set.py queue          # sample the articles
-python backend/utilities/reference_set.py check          # refuse what a run would refuse
-python backend/utilities/reference_set.py check --write  # emit reference.jsonl
+python backend/utilities/reference_set.py queue # sample the articles
+python backend/utilities/reference_set.py check # refuse what a run would refuse
+python backend/utilities/reference_set.py check --write # emit reference.jsonl
 ```
 
 - **`queue`** samples articles out of the committed corpus, stratified on the two
-  things the prompt branches on - the word-count band and the source form - plus
-  vertical, the one diversity column that is fully populated. It is deterministic
-  and it extends rather than replaces, so running it again after the corpus rolls
-  tops the queue up instead of discarding an afternoon of authoring. The test
-  slice is a proportional share of every stratum, not the tail: measured
-  2026-08-29 over 500 rows, the 100 held back span all five bands (10, 36, 37,
-  12, 5) and all five verticals.
+ things the prompt branches on - the word-count band and the source form - plus
+ vertical, the one diversity column that is fully populated. It is deterministic
+ and it extends rather than replaces, so running it again after the corpus rolls
+ tops the queue up instead of discarding an afternoon of authoring. The test
+ slice is a proportional share of every stratum, not the tail: measured
+ 2026-08-29 over 500 rows, the 100 held back span all five bands (10, 36, 37,
+ 12, 5) and all five verticals.
 - **`check`** holds each answer to the two rails production uses - the shape the
-  constrained decoder is allowed to emit, and the word range the row's own system
-  turn asked for - then refuses a `url_key` on both sides of the train/test line,
-  and refuses an article the training window also holds.
+ constrained decoder is allowed to emit, and the word range the row's own system
+ turn asked for - then refuses a `url_key` on both sides of the train/test line,
+ and refuses an article the training window also holds.
 
 **The queue never carries the system prompt.** It carries the band, and `check`
 re-renders the prompt from it when it builds the row. That is the same

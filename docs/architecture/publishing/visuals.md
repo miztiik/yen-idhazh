@@ -13,8 +13,8 @@ no picture, because the product is trust and an invented axis label costs it per
 Visual planning is a separate CLI stage from `work`, not a step inside it:
 
 ```
-idhazh work    --date <D>  # the 8B summarizes
-idhazh visuals --date <D>  # the 4B plans a visual and renders it
+idhazh work --date <D> # the 8B summarizes
+idhazh visuals --date <D> # the 4B plans a visual and renders it
 idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
@@ -28,7 +28,7 @@ the common and correct answer.
 This is the whole safety design, and it is structural rather than instructed.
 
 1. The extractor pulls every quantity out of the article text with a regex, and gives each one an
-   index and a unit.
+ index and a unit.
 2. The model is shown that indexed menu and asked to choose bars **by index**.
 3. The spec is built here in Python from the chosen indices.
 
@@ -192,13 +192,13 @@ move changed no behaviour and moved neither stamp - **a date-stamp that changes 
 is a date-stamp that lies**, which is the same argument that keeps both of them out of `config/`.
 
 - **Which roles a type may fill** is a relation between `VisualType` and `EncodingRole`, two closed
-  vocabularies that are both Python enums in `contracts/visual.py`. A JSON file cannot reference
-  either, so a copy there is a second spelling that drifts. "A bar has no bins" is also what a bar
-  *is* rather than something an operator should be able to edit: a config edit that let a bar draw
-  bins would publish a plan no compiler has a template for.
+ vocabularies that are both Python enums in `contracts/visual.py`. A JSON file cannot reference
+ either, so a copy there is a second spelling that drifts. "A bar has no bins" is also what a bar
+ *is* rather than something an operator should be able to edit: a config edit that let a bar draw
+ bins would publish a plan no compiler has a template for.
 - **Which units measure the same thing** is arithmetic. A kilotonne is a thousand tonnes whatever
-  anybody configures. `MAGNITUDE` in `idhazh.elements` is the precedent - a magnitude word's
-  multiplier lives in code beside the pattern that reads it.
+ anybody configures. `MAGNITUDE` in `idhazh.elements` is the precedent - a magnitude word's
+ multiplier lives in code beside the pattern that reads it.
 
 Eleven of the eighteen declarable types have a role rule: the grammar-of-graphics forms, where the
 channels follow from the role names and anybody would write the same table. The other seven -
@@ -408,12 +408,12 @@ Both were declared build-failing where they were first written, and neither had 
 a corpus build does today.
 
 - **`derived_provenance_complete` degrades the item.** A plan whose drawn figure resolves neither to
-  a Tier 1 element nor to a derived value with a complete chain is refused by the validator, the item
-  publishes with no picture, and the check that refused it is recorded - because taking a whole day's
-  digest off the air to punish one story is the trade section 1a already refuses.
+ a Tier 1 element nor to a derived value with a complete chain is refused by the validator, the item
+ publishes with no picture, and the check that refused it is recorded - because taking a whole day's
+ digest off the air to punish one story is the trade section 1a already refuses.
 - **`span_integrity_pass` breaks the build on its write side and degrades the item on its read
-  side.** That is what `ElementTable.span_drift` already does, and it is the three-part regime the
-  element table shipped with rather than one build-failing gate.
+ side.** That is what `ElementTable.span_drift` already does, and it is the three-part regime the
+ element table shipped with rather than one build-failing gate.
 
 **The span invariant is the exception because it is the only one asked on both sides of a boundary,
 not because span drift is graver.** A producer cut every excerpt out of the string it hashed moments
@@ -443,24 +443,24 @@ fill only one bar, and a chart needs at least `visuals.min_chart_points` of them
 chart an article can carry is the size of the largest unit group in its own numbers. Below that
 threshold the answer is `none` whatever the model replies.
 
-`reachable_kinds()` computes that before the request is built. When no enabled kind survives it,
+`reachable_kinds` computes that before the request is built. When no enabled kind survives it,
 the planner writes a `VisualDecision` with `kind: none`, `asked_the_model: false`, and a rationale that says
 the model never ran. The run manifest counts those separately as `items_prefiltered`.
 
 Three properties of how it is written, and each one is load-bearing:
 
 - **It is a predicate over every enabled kind, not a chart special case.** Chart is the only kind
-  left, so the predicate answers for one today - but a kind added later declares its own
-  reachability here rather than being let through by an `if` that only knows about charts. The
-  diagram arm is what made that shape necessary and then proved its own cost: a diagram's steps come
-  from prose, so nothing about one is decidable in advance, and with `diagram` in
-  `visuals.enabled_kinds` **no item was ever skipped** - measured at 145 of 145 asked on 2026-08-25.
+ left, so the predicate answers for one today - but a kind added later declares its own
+ reachability here rather than being let through by an `if` that only knows about charts. The
+ diagram arm is what made that shape necessary and then proved its own cost: a diagram's steps come
+ from prose, so nothing about one is decidable in advance, and with `diagram` in
+ `visuals.enabled_kinds` **no item was ever skipped** - measured at 145 of 145 asked on 2026-08-25.
 - **It reads the facts only - never the article's words.** A predicate that branched on fetched
-  prose would let a stranger's page steer our control flow, which is Rule #11 with no prompt in
-  sight. There was no keyword rescue for the diagram arm for the same reason.
+ prose would let a stranger's page steer our control flow, which is Rule #11 with no prompt in
+ sight. There was no keyword rescue for the diagram arm for the same reason.
 - **The empty string is a unit group.** `numeric_facts` writes `""` when nothing after the number
-  reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
-  that publish today.
+ reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
+ that publish today.
 
 With the arm off, measured on the 145 items of run `32804437110` with no model and no network:
 **68 items (46.9%) never reach the model**, and 77 do. The histogram of widest unit group per
@@ -493,7 +493,7 @@ Three things changed, and each one addresses a different link in that chain:
 | Change | What it stops |
 | --- | --- |
 | `stage_visual_planner` stops at `run.visual_planner_budget_minutes` (40) | The job is never cancelled, so it always reaches its upload step. |
-| The `visuals` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
+| The `visuals` upload runs on `always` | Even a job cancelled for some other reason hands over what it made. |
 | `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
 | The planner skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
 
@@ -710,7 +710,7 @@ item. Against the pre-repair payload the first one fires and names all fourteen 
 parametrized over the days it finds, so a second test asserts that count is not zero - a scan with no
 input reports the same "no problems" as a scan that finds none.
 
-Measured 2026-08-22 (Windows 11, 8 vCPU, `vl-convert-python` 1.9.0.post1): a Vega-Lite render takes
+Measured 2026-08-22 (8 vCPU, `vl-convert-python` 1.9.0.post1): a Vega-Lite render takes
 2568 ms for the first call in a process and 49 ms warm, and produces about 7 KB of SVG. The cold
 cost is engine boot, paid once per run rather than once per item.
 

@@ -55,15 +55,15 @@ than reaching the published tree.
 Two consequences worth stating plainly:
 
 - **`version` is a field of the shape and never a cell.** The header check below
-  is a prefix, so one more name at position zero would shift every position the
-  console reads. `schemas/public-telemetry.schema.json` is where the stamp lives.
+ is a prefix, so one more name at position zero would shift every position the
+ console reads. `schemas/public-telemetry.schema.json` is where the stamp lives.
 - **A published shard has to load, not merely parse.** `publish_telemetry
-  --migrate` reads every committed shard back through the contract and rewrites
-  it, and a test runs the same round trip on a copy of the committed files. Run
-  2026-09-05 on this checkout, after the eight timing and token columns landed:
-  `2026-08.csv` 5,227 rows and `2026-09.csv` 2,982 rows, 614,613 and 400,160
-  bytes, unchanged to the byte either side. Unchanged is the result the migration
-  wanted - it says the committed bytes already are the contract's own output.
+ --migrate` reads every committed shard back through the contract and rewrites
+ it, and a test runs the same round trip on a copy of the committed files. Run
+ 2026-09-05 on this checkout, after the eight timing and token columns landed:
+ `2026-08.csv` 5,227 rows and `2026-09.csv` 2,982 rows, 614,613 and 400,160
+ bytes, unchanged to the byte either side. Unchanged is the result the migration
+ wanted - it says the committed bytes already are the contract's own output.
 
 `source_words_before_cap` joined the projection on 2026-08-28. It is a word
 count of our own extraction, the same class of cell as `source_words`, which
@@ -108,7 +108,7 @@ into the console document so the page is complete before any script runs. Seeded
 with their real values, the eight cost 176,753 more gzipped bytes on `/console/`
 - 198,624 to 375,377, an 89 percent page, and 98,182 over the recorded ceiling.
 Seeded as nulls the page is 214,985, which is 16,361 more and 62,210 under.
-Measured 2026-09-05 on Intel Core i7-1265U / Windows 11 / node 24, one build per
+Measured 2026-09-05 on a developer machine / / node 24, one build per
 arm; the eight untouched routes moved -2 to +5 bytes between them, so the figure
 is the columns and not the build.
 
@@ -152,10 +152,10 @@ normal rather than exceptional: **append at the end is a rule rather than
 tidiness**.
 
 - **Appending** a column keeps every earlier position where the reader expects
-  it, so an old browser build reads a new shard and ignores the new cell.
+ it, so an old browser build reads a new shard and ignores the new cell.
 - **Inserting or reordering** shifts a position the prefix covers, and the check
-  throws `telemetry projection header did not match the contract` - loudly,
-  which is correct.
+ throws `telemetry projection header did not match the contract` - loudly,
+ which is correct.
 - **Removing** one does the same, one position earlier.
 
 **The prefix protects one direction, and widening the reader is the other one.**
@@ -205,23 +205,23 @@ Three things about that deletion are worth stating on this page rather than only
 on the pruner's:
 
 - **It ships in dry run.** The step logs the files a live run would remove and
-  removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
-  on a schedule and a deleted file stops being recoverable once that prune passes
-  over it (`CLAUDE.md` section 8). Measured 2026-09-02 on this checkout, a live
-  run would take nothing today; the first shard it takes is `2026-08.csv` on
-  **2027-10-01**.
+ removes none of them, because `.github/workflows/prune.yml` force-pushes `main`
+ on a schedule and a deleted file stops being recoverable once that prune passes
+ over it (`CLAUDE.md` section 8). Measured 2026-09-02 on this checkout, a live
+ run would take nothing today; the first shard it takes is `2026-08.csv` on
+ **2027-10-01**.
 - **A copy is never deleted before its source.** The aggregate is written and
-  read back, then the ledger shard is unlinked, then this copy. A run that dies
-  between the last two leaves a published month with nothing behind it, and the
-  next run takes it - that pass walks this directory rather than the shards being
-  folded, which is the only way it can see a copy whose source is already gone.
-- **The reader never asks for one that went.** `telemetryMonths()` lists this
-  directory at build time and `monthsToFetch` filters on that list, so a deleted
-  month is absent from `data.telemetryMonths` and no widening ever names it.
-  `frontend/tests/console-window.spec.ts` holds that over every anchor a year
-  offers, at `console.max_window_days`.
+ read back, then the ledger shard is unlinked, then this copy. A run that dies
+ between the last two leaves a published month with nothing behind it, and the
+ next run takes it - that pass walks this directory rather than the shards being
+ folded, which is the only way it can see a copy whose source is already gone.
+- **The reader never asks for one that went.** `telemetryMonths` lists this
+ directory at build time and `monthsToFetch` filters on that list, so a deleted
+ month is absent from `data.telemetryMonths` and no widening ever names it.
+ `frontend/tests/console-window.spec.ts` holds that over every anchor a year
+ offers, at `console.max_window_days`.
 
-**The sharp edge is the round trip, not the parse.** `telemetryCsv()`
+**The sharp edge is the round trip, not the parse.** `telemetryCsv`
 re-serializes from `TELEMETRY_COLUMNS` as well, so a column the parser ignored
 is dropped rather than carried through. Any code that reads a shard and writes
 one back narrows it to the names the reader knows. The test permits a
@@ -331,24 +331,24 @@ A day earns a row by having summaries - score rows, or a runtime that timed the
 summarize stage. Everything else prints as absence rather than as zero:
 
 - **No summaries that day**: no row at all, and a gap in the throughput candle.
-  A row of zeroes reads as a day that went badly rather than one with nothing
-  in it.
+ A row of zeroes reads as a day that went badly rather than one with nothing
+ in it.
 - **The scorer did not run**: the quality cells print `-` while the speed cells
-  still print. The runtime measured the time; nothing measured the quality.
+ still print. The runtime measured the time; nothing measured the quality.
 - **No health row for a scored day**: the speed cells and the failure count
-  print `-`. Nothing wrote a millisecond down, so no millisecond is claimed.
+ print `-`. Nothing wrote a millisecond down, so no millisecond is claimed.
 - **A measurement that rounds away**: `<1`, never `0`. Zero would say the model
-  ran for nothing.
+ ran for nothing.
 - **The model changed**: one divider row carrying the date and the new id, and
-  the candle drops its percent-shift sentence across that boundary. Two models
-  over two article sets is two measurements, not a trend.
+ the candle drops its percent-shift sentence across that boundary. Two models
+ over two article sets is two measurements, not a trend.
 - **A column changed meaning**: the cell it feeds prints `-` on every day whose
-  rows all predate the change. Unknown, not zero. Those rows measured something
-  else, and a zero would say the thing never happened. **The count has now
-  returned on its own**, which is what this rule was written to allow: 430
-  committed rows are stamped `2026-08-29T09:00`, so the days those rows cover
-  print a number under `Article read only in part` and every earlier day still
-  reads `-`. Nothing was edited to make that happen.
+ rows all predate the change. Unknown, not zero. Those rows measured something
+ else, and a zero would say the thing never happened. **The count has now
+ returned on its own**, which is what this rule was written to allow: 430
+ committed rows are stamped `2026-08-29T09:00`, so the days those rows cover
+ print a number under `Article read only in part` and every earlier day still
+ reads `-`. Nothing was edited to make that happen.
 
 ## Every span the control offers is measured at build time
 
@@ -386,7 +386,7 @@ by one function. They ask the same question - how long did one take, and how bad
 does it get - so a second implementation of a log binning and a second pair of
 rules could only drift from the first.
 
-`distribution()` in `model-work.ts` owns the bars: the first bar holds everything
+`distribution` in `model-work.ts` owns the bars: the first bar holds everything
 under a second, every edge after it doubles, leading and trailing empty bars are
 dropped as axis while a gap between two occupied bars stays as data, and the
 median and the 95th are taken over the values rather than off a bar.
@@ -418,13 +418,13 @@ longer ledger keeps diluting.
 Two drawings replaced it and neither has that defect:
 
 - **`Summaries a day, split by whether each landed inside its target band`** on
-  the Pipelines route, which counts the rows it could not place and prints that
-  count in a sentence under itself.
+ the Pipelines route, which counts the rows it could not place and prints that
+ count in a sentence under itself.
 - **`How long the summaries came out`** on the Model route, three marks a run
-  rather than one a summary. The owner ruled on 2026-08-30 that compression is
-  drawn per run as lowest, middle and highest and never per item: thousands of
-  marks in one colour render their dense middle as a solid area, and the marks
-  that area hides are the only ones anybody acts on.
+ rather than one a summary. The owner ruled on 2026-08-30 that compression is
+ drawn per run as lowest, middle and highest and never per item: thousands of
+ marks in one colour render their dense middle as a solid area, and the marks
+ that area hides are the only ones anybody acts on.
 
 Both read the cut from the two length cells of one row rather than from
 `truncation_flagged`, which is the per-item form of the version-stamp rule
@@ -590,29 +590,29 @@ Three charts on `/console/` now state it, out of one rule in
 the empty span, and `coverageSentence` writes the one line under the title.
 
 - **`SPARSE_COVERAGE` is the line, and it is half.** Half is where the empty
-  part becomes the larger part of the picture and the marks start reading as a
-  chart squashed into one corner. Above it a chart says nothing: a window
-  missing a day or two draws that day as a break in a line, and a caveat under
-  every chart is one nobody reads. It is a drawing constant beside
-  `LABEL_ADVANCE_EM` and `CELL_MAX` rather than a knob in `config/`, because
-  nothing an operator would tune sits behind it.
+ part becomes the larger part of the picture and the marks start reading as a
+ chart squashed into one corner. Above it a chart says nothing: a window
+ missing a day or two draws that day as a break in a line, and a caveat under
+ every chart is one nobody reads. It is a drawing constant beside
+ `LABEL_ADVANCE_EM` and `CELL_MAX` rather than a knob in `config/`, because
+ nothing an operator would tune sits behind it.
 - **The sentence names both numbers.** `We timed 8 of these 30 days` - days
-  drawn and days measured, so a reader can count the columns and check it
-  (`CLAUDE.md` Rule #10). A share would not be checkable against anything on
-  the screen.
+ drawn and days measured, so a reader can count the columns and check it
+ (`CLAUDE.md` Rule #10). A share would not be checkable against anything on
+ the screen.
 - **Each chart brings its own subject and verb**, because the three measure
-  three different things: one timed a day, one wrote summaries on it, one
-  planned items for it. No one verb is true of all three.
+ three different things: one timed a day, one wrote summaries on it, one
+ planned items for it. No one verb is true of all three.
 - **The empty span is tinted at the surface level, never hatched.** It is a
-  `<rect>` filled with `--color-surface-sunken`, drawn before the grid so a tint
-  never sits over a mark. A hatch is a pattern a reader stops to decode, and
-  this one has nothing to say beyond "no measurement reached here".
+ `<rect>` filled with `--color-surface-sunken`, drawn before the grid so a tint
+ never sits over a mark. A hatch is a pattern a reader stops to decode, and
+ this one has nothing to say beyond "no measurement reached here".
 - **A pointer on an unmeasured column is told so.** The hover mechanism always
-  worked on those columns and still read as broken, because four columns in five
-  carried a date and a set of blanks - or worse, on the band chart, a set of
-  zeros, which says every summary of that day landed nowhere. The strip prints
-  one row instead: `Nothing was timed on this day`, `Nothing was summarised on
-  this day`, `No item was planned on this day`.
+ worked on those columns and still read as broken, because four columns in five
+ carried a date and a set of blanks - or worse, on the band chart, a set of
+ zeros, which says every summary of that day landed nowhere. The strip prints
+ one row instead: `Nothing was timed on this day`, `Nothing was summarised on
+ this day`, `No item was planned on this day`.
 
 Rejected: fitting the domain to the measured days (Editor - it hides the record
 and breaks the preset); saying nothing and letting the reader see the gap
