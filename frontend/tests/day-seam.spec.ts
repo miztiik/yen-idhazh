@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { orderByTime } from '../src/lib/day-shape';
-import { dayShell, loadDay, publishedDates, wholeDay } from '../src/lib/server/payload';
+import { dayShell, homeShell, loadDay, publishedDates, wholeDay } from '../src/lib/server/payload';
 import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/types';
 
 /**
@@ -10,15 +12,17 @@ import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/typ
  *
  * The reading routes load a day in two halves - the facts that do not grow with
  * the number of stories, and the stories themselves split at
- * `ui.shell_seed_items`. The home page still puts them back together; the dated
- * routes keep a seed and fetch the rest. So the seam owes two things.
+ * `ui.shell_seed_items`. Every one of them keeps a seed and fetches the rest,
+ * including the home page since 2026-09-10. So the seam owes two things.
  *
  * Put back together it must change nothing: the day a route renders is the day
  * the loader read, key order and all. Key order is asserted rather than deep
  * equality alone because it is what the bytes are - a prerendered document
  * serialises an object in its own key order, and the committed payload writes
  * its keys sorted, so a day rebuilt with the stories appended is a different
- * document holding the same day.
+ * document holding the same day. `wholeDay` has no caller in `frontend/src` now
+ * that `/` has stopped inlining, and the round trip is asserted here because it
+ * is what says the split loses nothing.
  *
  * And split, it must lose nothing. A topic's seed comes from the topic's own
  * list, and a story named in `keep` is in the seed whatever its position - the
@@ -206,5 +210,71 @@ test.describe('the seed is the head union what the page must anchor', () => {
 		const plain = dayShell(date, 2, { vertical, root: CANARY })!;
 		const kept = dayShell(date, 2, { vertical, keep: ['no-such-story'], root: CANARY })!;
 		expect(kept.seed.map((item) => item.item_id)).toEqual(plain.seed.map((item) => item.item_id));
+	});
+});
+
+test.describe('the home page anchors its leads', () => {
+	/** A day the canary cannot stand in for.
+	 *
+	 * The canary's biggest day holds 8 stories against a 15-story seed and
+	 * publishes no leads, so a seed built from it is always the whole day and this
+	 * rule is invisible in it. The shape is built rather than found: 40 stories,
+	 * with the two leads at positions 25 and 39 so neither is inside any head a
+	 * page would take. Fixed in size, so it costs the same whatever the archive
+	 * grows to (Rule #12).
+	 */
+	function dayWithOutlyingLeads(root: string, date: string): { leads: string[]; total: number } {
+		const total = 40;
+		const at = [25, 39];
+		const items = Array.from({ length: total }, (_, index) => ({
+			item_id: `story-${String(index).padStart(2, '0')}`,
+			title: `Story ${index}`,
+			url: `https://example.invalid/${index}`,
+			source: 'Example',
+			vertical: 'ai',
+			// Descending, so the reading order is the published order and the leads
+			// keep the positions this test put them in.
+			published_at: `2026-08-20T${String(23 - Math.floor(index / 2)).padStart(2, '0')}:00:00Z`,
+			summary: `Summary ${index}`,
+			key_points: [`Point ${index}`]
+		}));
+		const leads = at.map((index) => items[index].item_id);
+		const dir = join(root, ...date.split('-'));
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(
+			join(dir, 'digest.json'),
+			JSON.stringify({
+				date,
+				items,
+				leads: leads.map((item_id) => ({ item_id, why: 'because' })),
+				verticals: [{ id: 'ai', display_name: 'AI', count: total }]
+			})
+		);
+		return { leads, total };
+	}
+
+	test('every lead is in the seed, however far down the day it sits', () => {
+		const root = mkdtempSync(join(tmpdir(), 'home-shell-'));
+		const date = '2026-08-20';
+		const { leads, total } = dayWithOutlyingLeads(root, date);
+
+		const shell = homeShell(date, 15, root)!;
+		const seeded = shell.seed.map((item) => item.item_id);
+
+		// The regression this exists for: a home page that called `dayShell` without
+		// `keep` shipped a leading block whose links land on nothing until the fetch
+		// arrives, and on nothing at all when it fails.
+		for (const lead of leads) {
+			expect(seeded, `${lead} leads the day and the document does not carry it`).toContain(lead);
+		}
+		// And it is still a seed, or the page has quietly gone back to inlining.
+		expect(seeded.length).toBe(15 + leads.length);
+		expect(shell.rest.length).toBe(total - seeded.length);
+		expect([...seeded, ...shell.rest.map((item) => item.item_id)].sort()).toHaveLength(total);
+	});
+
+	test('a day nobody published gives the home page no shell', () => {
+		const root = mkdtempSync(join(tmpdir(), 'home-shell-'));
+		expect(homeShell('2026-08-20', 15, root)).toBeNull();
 	});
 });

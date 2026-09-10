@@ -15,10 +15,21 @@
 	 * connection did, with a retry. A reader whose train went into a tunnel is
 	 * never told the day does not exist.
 	 *
-	 * **`/` is deliberately not this.** It is one document per build rather than
-	 * one per published day, so it costs the site nothing that grows, and it is
-	 * the address a stranger meets first - it keeps the whole day inline and
-	 * stays readable with no script at all.
+	 * **`/` differs in three ways and none of them is a special case.** It is one
+	 * document per build rather than one per published day, so it costs the site
+	 * nothing that grows. It is the address a stranger meets first, so its seed
+	 * and its leading block ship in the first bytes rather than a request away.
+	 * And when its fetch fails the reader still has the seed and `MoreDays` under
+	 * it, which a dated URL cannot offer. It carries a seed and fetches the rest,
+	 * exactly as this route does, since 2026-09-10.
+	 *
+	 * This paragraph used to claim `/` "stays readable with no script at all",
+	 * and that claim was the whole case for exempting it from ruling D2. It was
+	 * false. Measured 2026-09-10 on a clean production build with the scripts
+	 * stripped, on a 72-story day: 17 stories readable under a header saying 72,
+	 * above a pager offering 55 more that does nothing without script, and 63.9
+	 * percent of the document was script. A sentence in a comment held a ruling
+	 * off for two days, so it is written here as what it was.
 	 */
 	import { restoreAnchor, watchDay, type DayStatus } from '$lib/assist/day';
 	import { base } from '$app/paths';
