@@ -389,6 +389,38 @@ what this machine holds. The result is about a chat template rather than about
 weights, but a template ships with its weights, so it is re-measured when the
 model moves.
 
+**209 re-prefilled tokens is not a runner number, and the run that will price it
+is nameable.** It was taken on a developer laptop, against the retired 8B weights
+rather than the configured 9B, in one run with no spread - so it says the reuse
+stops short, and it sizes nothing. Nothing new has to be built to price it on the
+runner: `Completion.cached_tokens` comes off `timings.cache_n` in
+[`../../../backend/idhazh/llm/server.py`](../../../backend/idhazh/llm/server.py),
+`Summary.cached_tokens` persists it per item, and
+[`../../../backend/idhazh/publish_day_metrics.py`](../../../backend/idhazh/publish_day_metrics.py)
+already derives `input_tokens - cached_tokens`, which is the count of tokens the
+server actually read again. What is missing is a call 2 to read it from. No daily
+run produces a call-2 row yet, because nothing dispatches either call:
+`build_call_one_request`, `parse_call_one`, `build_call_two_request` and
+`parse_call_two` are referenced only inside `visual_planner.py` and its tests,
+and `cli.py` never calls them. The wiring is row 6 of
+[`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md),
+so **the trigger is the first daily run after row 6 lands** - not the next
+content refresh. Re-read the figure then, and again when plan 11 is distilled per
+[`../../how-to/distill-a-plan.md`](../../how-to/distill-a-plan.md).
+
+**Open gap, owned by nobody: the prompt loop still refines the prompt that is
+retiring.** `backend/utilities/prompt_loop.py` today refines the single-call
+summariser prompt, `prompts/summarize.txt`. Once call 2 writes both the summary
+and the plan, the loop's target must become `prompts/call_two.txt`. This is owned
+by no row of plan 11 and no row of plan 12. It is written here so the distill
+picks it up.
+
+**Which prompt asks what.** Call 1 labels what is in the item - what its
+already-extracted quantities and dates mean - and never asks for a picture. Call
+2 asks for two things in one reply, in this order: the summary first, then the
+plan for one picture. `prompts/visual_planner.txt` and `prompts/summarize.txt`
+are the single-call pair these two replace, and row 6 of plan 11 deletes them.
+
 ### `summary` is decoded before `visual`, and that order is the recovery
 
 Field order is decode order, so the summary is written and closed before the
