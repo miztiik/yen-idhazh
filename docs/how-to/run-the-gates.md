@@ -645,7 +645,7 @@ reported `1 skipped` and exit 0, and the same test with the assertion reported
 right only when the environment genuinely varies. It is never right for a
 selector this repository controls, and the same mistake had already switched off
 an injection canary in `canaries.spec.ts`
-([../reference/agent-notes.md](../reference/agent-notes.md#running-the-gates)).
+([../reference/agent-notes/gates-and-builds.md](../reference/agent-notes/gates-and-builds.md#running-the-gates)).
 
 **The canary day carries every ledger the console reads.** The run manifest, the
 feed-health rows and the score rows are all written by `build_canary_day.py`;

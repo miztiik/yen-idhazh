@@ -339,7 +339,7 @@ that explains a divergence, and digesting it would hide the divergence instead
 line and no CPU line appears in any of the eight artifacts. Do not assert that
 the two runs shared a binary, and do not assert that they did not. The workflow
 cache makes this harder rather than easier, and that trap is recorded in
-[agent-notes.md](agent-notes.md).
+[agent-notes.md](../reference/agent-notes.md).
 
 The consequence for the sweep table below is that `np1` stays pending. A flag
 whose measured effect is smaller than the noise floor of the comparison has not
