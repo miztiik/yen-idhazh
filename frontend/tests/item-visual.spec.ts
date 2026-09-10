@@ -176,19 +176,20 @@ test.describe('the drawing is in the document', () => {
 		await expect(page.locator('main img'), 'a drawing arrived on the image carrier').toHaveCount(0);
 	});
 
-	test('the home page asks for no drawing at all, because its document carries them', async ({
-		page
-	}) => {
-		// The half that did not move. `/` renders the whole newest day from its own
-		// document, with the seed's drawings read off disk and serialised into it,
-		// so a reader who lands there spends no request on one.
+	test('the home page asks for no drawing its own document carries', async ({ page }) => {
+		// `/` carried its whole day inline until 2026-09-10 and carries a seed now,
+		// so a story past the seed asks for its own drawing and that is the change
+		// working. What may never happen is the page asking again for a picture it
+		// already drew: a served day carries `visual.path` and never `visual.markup`,
+		// so a page that swapped the seed for the fetched day outright would throw
+		// away every drawing on screen and re-fetch it. This caught exactly that.
 		const asked: string[] = [];
 		page.on('request', (request) => {
 			if (request.url().endsWith('.svg')) asked.push(request.url());
 		});
 		await page.goto('/', { waitUntil: 'networkidle' });
 		expect(await page.locator('main article figure svg').count()).toBeGreaterThan(0);
-		expect(asked, 'the home page fetched a drawing its document already carries').toEqual([]);
+		expect(asked, 'the home page re-fetched a drawing its own document carries').toEqual([]);
 	});
 });
 

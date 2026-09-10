@@ -86,13 +86,22 @@ const primed = new WeakSet<Page>();
  *
  * Every navigation re-runs the injected script, so the module's held days start
  * empty on each `goto` - which is what lets one test drive a fresh fetch twice.
+ *
+ * **`/archive/` rather than `/`, and the page has to be one that fetches no day
+ * and stays put.** `/` carried its whole day inline until 2026-09-10 and fetches
+ * the rest now, so opening it puts one interception and one held day into every
+ * arm here - which reads as the loader asking for a date it should have refused,
+ * and as a session holding a day it never visited. `/evals/` is not the answer
+ * either: it is a `meta refresh` to the console, so the context is destroyed
+ * under the next `page.evaluate`. `/archive/` is prerendered, asks for no
+ * digest until a reader opens a search result, and does not move.
  */
 async function armed(page: Page): Promise<void> {
 	if (!primed.has(page)) {
 		await page.addInitScript({ content: await LOADER });
 		primed.add(page);
 	}
-	await page.goto('/');
+	await page.goto('/archive/');
 }
 
 interface Watched {
