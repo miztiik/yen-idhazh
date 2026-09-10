@@ -644,6 +644,48 @@ def test_the_decoder_rail_moves_with_the_ladder_it_is_derived_from() -> None:
     assert rail["maxLength"] > base["maxLength"]
 
 
+def test_a_key_point_carries_a_rail_of_its_own() -> None:
+    """It was the one decoded string in the reply with no upper end.
+
+    That is a budget question rather than a length one. The planner's second
+    call decodes the summary and the visual plan through one output budget, and
+    that budget is derived from the reply shape's own bounds - an unbounded
+    string in it makes the arithmetic a hope.
+    """
+    ask = SummarizeConfig()
+    rail = output_schema(ask)["properties"]["key_points"]["items"]
+
+    assert rail["maxLength"] == ask.key_point_words_max * 12
+
+
+def test_the_key_point_rail_never_catches_a_key_point_the_pipeline_has_published() -> None:
+    """Deliberately loose, because a maxLength is a hard grammar stop.
+
+    Measured 2026-09-10 over the 32,353 key points in the committed digest days:
+    the longest is 66 words and 418 characters. A rail set at what has been seen
+    turns the next slightly longer key point into a parse failure for the whole
+    item, which is the trade `decoder_words_max` refuses for the summary and
+    refuses here for the same reason.
+    """
+    longest_published_words = 66
+    longest_published_chars = 418
+    ask = SummarizeConfig()
+    rail = output_schema(ask)["properties"]["key_points"]["items"]
+
+    assert ask.key_point_words_max > longest_published_words
+    assert rail["maxLength"] > longest_published_chars
+
+
+def test_the_key_point_rail_moves_with_the_knob_it_is_derived_from() -> None:
+    wide = output_schema(SummarizeConfig(key_point_words_max=200))
+    narrow = output_schema(SummarizeConfig(key_point_words_max=20))
+
+    assert (
+        wide["properties"]["key_points"]["items"]["maxLength"]
+        > narrow["properties"]["key_points"]["items"]["maxLength"]
+    )
+
+
 def test_changing_what_we_ask_for_changes_the_fingerprints_inputs() -> None:
     """The old bounds lived only in the prompt text and in a gate nothing hashed."""
     tighter = SummarizeConfig(
