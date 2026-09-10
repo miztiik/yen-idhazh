@@ -115,6 +115,15 @@ Get-ChildItem build -Recurse -Include *.html,*.js |
 
 `backend/utilities/gate_lock.py` serialises the heavy gates, one of three at a time. Chain every heavy gate into ONE locked script rather than taking the lock repeatedly - a single wait was measured at 25 to 50 minutes with siblings running, so five separately wrapped gates pay it five times. By design it cannot fail your gate: if the lock cannot be taken it runs anyway. CI never takes it, because each job has its own runner (Rule #2).
 
+**"Runs anyway" is an hour away, and a run cut short before then looks like a test failure.** `WAIT_TIMEOUT_SECONDS` is 3600. A `test:changed` on 2026-09-10 logged nothing but `waiting for the gate lock, held by pid <n> in <sibling worktree>` for 2,234 s and then reported exit 1 when the shell around it was cut off - no test ever ran, and the exit code is indistinguishable from a red suite. **The tell is a log with waiting lines and no test output at all.** Read the log before believing the exit code, and while a sibling holds the lock run the affected specs straight through the Playwright CLI, which takes no lock:
+
+```powershell
+cd frontend
+node node_modules\playwright\cli.js test tests/<the spec>.spec.ts --reporter=list
+```
+
+That needs the canary already built, and it does not re-check the build fingerprint, so build the canary first if anything under `backend/` or `config/` moved.
+
 **Killing a queued build under the lock leaves the tree unservable.** The waiter and the build it wraps are one process tree, so the kill can land after `vite build` has cleared `.svelte-kit/output/` - `vite preview` then reports `Server files not found` on a checkout that built cleanly minutes earlier, while `frontend/build/` is still there and still looks complete. The fix is one more `npm run build`.
 
 `os.kill(pid, 0)` is not a liveness probe on Windows: CPython routes every signal but the two console events to `TerminateProcess`, so the textbook probe can kill the process it was only asking about. `OpenProcess` alone is not enough either - it still opens a handle for an exited process while anything holds one - so only the wait separates them, 258 (`WAIT_TIMEOUT`) running against 0 exited.
@@ -135,6 +144,8 @@ Every path the script holds is relative, so run from `frontend/` it finds no inj
 **The canary and the committed digest are two builds for two questions - do not swap them.** They share one output directory, so whichever ran last is on disk. The canary is fixed in size and carries a planted instance of every state the page draws, so it is what a per-item rule and any screenshot run against; a screenshot of the reading page built from the committed digest times out in every form. Running the suite against a real build fails about sixteen canary tests for reasons unrelated to your change.
 
 **The canary's `day-metrics` record is written before the ledgers it reduces**, so every panel fed from those ledgers shows its empty state on the canary and nowhere else - which reads exactly like a panel that fails to render its data. To see the loaded state, patch the block into `backend/var/canary/state/day-metrics/<Y>/<M>/<D>.json`, rebuild, and put the file back; the tree is gitignored, so nothing can be committed by accident. **An empty state passing is a null result, not a pass**: before writing a spec for a new route, confirm `build-canary.mjs` writes the ledger that route reads. Keep the canary's column list and the contract assertion in the same test, because that builder hardcodes its own list. The generator once appended instead of rewriting, so by the fifth run a feed crossed the quarantine threshold and failed an unrelated browser test on developer machines while CI stayed green; fixed 2026-08-24, and the shape generalises to any fixture builder that opens its output for append.
+
+**The canary's biggest day holds 8 stories and publishes no leads, so no browser spec can see a seed smaller than its day.** `digest.shell_seed_items` is 15, and every reading route seeds and fetches, so on the canary the seed is always the whole day and the fetch has nothing to carry. Two consequences, both live: `reading-page.spec.ts`'s leading-block arm skips itself for want of a lead, and a rule about what the seed keeps cannot be asserted from a build at all. **Drive that class of rule from a built fixture instead** - `day-seam.spec.ts` builds a 40-story day with its leads at positions 25 and 39 and calls `homeShell` with a `root` of its own, which is fixed in size and can carry a case the canary has never produced (Rule #12). Widening the canary was not chosen: every browser spec shares it, so a bigger day re-prices the whole suite to close one gap. Found 2026-09-10.
 
 ## Serving a build to measure it
 

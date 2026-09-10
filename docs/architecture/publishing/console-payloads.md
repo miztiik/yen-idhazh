@@ -8,9 +8,9 @@ needs a contract (Rule #11). This page is the list. The machine-readable copy is
 `backend/idhazh/contracts/console_payloads.py`, and it is the one a build reads.
 
 Every one of them has a producer now. **Nothing reads them yet** - the console
-still derives the same numbers at build time, and row 10 of
-[../../../TODO/20260908-shell-and-fetch-plan.md](../../../TODO/20260908-shell-and-fetch-plan.md)
-is where it stops. The producer landing first is deliberate: a consumer written
+still derives the same numbers at build time, and the row of the
+shell-and-fetch migration that made the console fetch them is where it
+stops. The producer landing first is deliberate: a consumer written
 against a payload nobody has written is a consumer written against a guess.
 
 ## The twelve
@@ -318,8 +318,8 @@ and 779. The verdict is therefore a second round trip on that entry, not the
 first, which is short of what row 11 decision 2 promised.
 
 **Nothing in row 11 can move it.** The file exists because the console routes
-have server loads; it goes when they go, which is the rest of
-[../../../TODO/20260908-shell-and-fetch-plan.md](../../../TODO/20260908-shell-and-fetch-plan.md).
+have server loads; it goes when they go, which is the rest of the
+shell-and-fetch migration.
 So the oracle asserts what is true and pins the gap rather than hiding it: the
 band is ahead of every payload the page draws a panel from, and the only request
 allowed in front of it is that one named file. Anything else of ours in front
@@ -361,9 +361,8 @@ Before this, the list of what the console needs existed nowhere: the producer,
 the consumer, the retention step and the drift gate would each have worked it
 out again, and four independent derivations of one list is four chances to miss
 the same entry. Naming it first is what makes a missing dataset fail at import
-instead of at review. Fowler, 2026-09-08, plan-doc
-[../../../TODO/20260908-shell-and-fetch-plan.md](../../../TODO/20260908-shell-and-fetch-plan.md)
-row 8.
+instead of at review. Fowler, 2026-09-08, during the shell-and-fetch
+migration.
 
 **Re-deriving it from the code found two datasets the plan's own table missed.**
 `dayMetrics` and `loadSpanRollup` are console reads out of `state/` and were not
