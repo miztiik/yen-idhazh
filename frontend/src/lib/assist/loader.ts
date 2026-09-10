@@ -25,6 +25,13 @@ import { fetchVerifiedWeights, injectedSource, type WeightsRefusal } from './wei
 
 /** What a reader is told before a single byte moves.
  *
+ * **This is the same-origin figure, and it is the one almost everybody pays.**
+ * Since 2026-09-10 the encoder has a second origin, so there are two costs and
+ * two constants: this one for our own origin, and `DOWNLOAD_MB_ELSEWHERE` below
+ * for Hugging Face, which serves the weights uncompressed. The failover runs
+ * only after this site has already failed that reader, so this constant opens
+ * the sentence and the other one qualifies it.
+ *
  * Measured 2026-08-22, not rounded up from a guess: 22,972,370 bytes of
  * quantised encoder, 711,661 of tokenizer, and 21,596,019 of ONNX WASM runtime.
  * The browser caches all three, so a second visit is free. If any of those

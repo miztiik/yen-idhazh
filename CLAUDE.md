@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-10
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -14,7 +14,7 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 
 - **Production backend.** See Rule #1. `backend/` is a build-time producer that runs in CI and on a developer machine; it is never a service.
 - **Hosted inference, anywhere.** No API call to a model provider from the pipeline, the published site, or the reader's browser. Inference running wholly on the reader's device over weights we committed and serve from our own origin is not hosted inference, and is governed by Rule #1.
-- **On-device inference on the digest's critical path.** The reading experience never waits on a model. Every on-device feature is secondary, reader-initiated, and removable without changing a single digest assertion. The bundle must render complete with the model directory deleted.
+- **On-device inference on the digest's critical path.** The reading experience never waits on a model. Every on-device feature is secondary, reader-initiated, and removable without changing a single digest assertion. **The bundle must render complete with the model directory deleted - which is a test anybody can run, not a description of what ships.** The weights are committed and served from our own origin, and a plan to delete them was descoped on 2026-09-09. Since 2026-09-10 there is a second origin, so the test has a second half: with the committed weights gone **and** the hub blocked, every digest assertion still renders and search says it cannot run.
 - **Account systems** (login, signup, email collection, server-backed sync). The site is anonymous and read-only.
 - **Push notifications.** The reader decides when to read.
 - **Runtime telemetry / analytics SDKs / third-party scripts that fetch at runtime.** Static-first means no runtime calls home.
