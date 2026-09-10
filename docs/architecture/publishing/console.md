@@ -1425,55 +1425,20 @@ Authority: Jony, 2026-08-29, over Fowler's ordering constraint that this ships
 before the cap moves - the first day at a new cap has to be measured by a
 console that can already see it, or Rule #10 defeats the change.
 
-**Three headings were renamed on the same day, and all three for one reason: a
-heading has to say what is under it.** `Compression` was a subsystem word that
-names neither axis of the chart it sat over, and that chart now also carries the
-cap line - it is `Article length against summary length`, which is the string
-the chart's own accessible name already used. `Charts` on a page of six charts
-reads as "the charts" rather than as the planner's output, so it is `Charts drawn
-for articles`. `Runs` sat four headings below `Run health` and neither name said
-which was which; it became `Runs and site size`, which is what its columns were.
-No doc anchor and no test selector read any of the three. `Runs and site size`
-is itself gone since 2026-08-30 - two nouns joined by "and" is two sections, and
-the section below says where each half went.
-
-**`Charts drawn for articles` became `Visuals drawn for articles` on 2026-08-31,
-and the whole section stopped saying `router`.** `router` names a pipeline
-stage, and `CLAUDE.md` section 0b bars a subsystem word from a string a person
-reads - ten reader strings carried it, from the section's own rule down to the
-flow diagram's empty note. Where the word modified a quantity it is gone,
-because a section headed for the arm does not need to name the arm again:
-`Router minutes per chart` is `Minutes per visual`, the column `Router minutes`
-is `Minutes spent`, and `No router time is on record` is `has no minutes on
-record`. Where it names the actor it is `the visual planner` - `Reached is
-every item the visual planner looked at`. `chart` as the name of a drawn thing
-became `visual` in the same pass, including the flow branch `Answered without a
-visual`, because more visual kinds are coming and a name about to stop being
-true is worth changing once.
-
-**What that costs, stated rather than implied.** `Visuals published` counts only
-items whose `visual` is a `chart` in state `rendered`, which is what
-[visuals.md](visuals.md) requires so a diagram never lands on the chart arm's
-bill. Measured 2026-08-31 over the eleven committed published days: 185 visuals,
-185 of them charts, no other kind and no other state - so the heading and the
-count agree today and the rename is early rather than wrong. The day a non-chart
-visual publishes for real, either the count widens or the heading narrows;
+**`Visuals published` counts only items whose `visual` is a `chart` in state
+`rendered`**, which is what [visuals.md](visuals.md) requires so a diagram never
+lands on the chart arm's bill. Measured 2026-08-31 over the eleven committed
+published days: 185 visuals, 185 of them charts, no other kind and no other
+state - so the heading and the count agree today. The day a non-chart visual
+publishes for real, either the count widens or the heading narrows;
 `frontend/tests/console.spec.ts` holds the count to charts and says so.
 
-**No identifier moved on that day, and every one of them has moved since.**
-`RouteId`, `data-` attributes, `chart_arm_rule_days`,
-`chart_arm_minutes_target`, `chart_arm_coverage_pct`, `route_ms`,
-`items_routed`, `charts_drafted` and `routerMinutes` were left alone on
-2026-08-31, because renaming those reaches `backend/`, `config/` and the
-committed ledgers and is its own change with its own gates. That change ran on
-2026-09-05 as a plan of six rows. `routerMinutes` is `plannerMinutes`, and the
-two manifest keys `route_ms` and `items_routed` are the one thing that did not
-move: they are published in fifteen days of `run.json`, so the Python behind
-them is `decision_ms` and `items_decided` and the wire keeps the old spelling
-([../contracts/schemas.md](../contracts/schemas.md)). The section also still says `the chart-only
-gate`, which is the gate's real name in [visuals.md](visuals.md) and is the
-sentence that explains why every visual here is a chart. Authority: owner,
-2026-08-31, over Fowler's split of copy from identifiers.
+**Two manifest keys spell a stage the Python no longer calls it, and that is
+deliberate.** `route_ms` and `items_routed` are published in fifteen days of
+`run.json`, so the wire keeps the old spelling while the Python behind them is
+`decision_ms` and `items_decided`
+([../contracts/schemas.md](../contracts/schemas.md)). Anybody tidying the
+mismatch renames a persisted field.
 
 ## The site's size is a rate, and the level beside it says which tree
 
@@ -1580,33 +1545,21 @@ so the multiple itself is not stable. **The committed-tree runway above is how
 that cell was derived on the day it was measured**; it counts articles since
 2026-08-31, for the reason two paragraphs up.
 
-**The caveat left the band on 2026-08-31 and lives on the panel it belongs to.**
-The band's fact was written caveat-first: three sentences naming the committed
-payload tree, the larger built site, and the build command that prints the
-runway that binds, before the one number the fact is for. It was about sixty of
-the band's hundred words, and it stood on all three routes. It is one line now -
-the level, the limit and the articles the headroom buys - and every clause it
-dropped is on `What one more article costs` directly below it, which already
-owns the rate, the days it was measured over, its spread and the sentence
-saying the cap is measured on a larger tree so the room is the most we have and
-never the least. `idhazh site-weight` and `committed payload tree` are not
-reader strings on any surface now: a build command is not something a reader can
-run, and neither phrase says anything the panel's own wording does not. The band
-still never says "the site" has room for N, because it does not know that.
-Measured 2026-08-31 the band read about 312,000 articles of room in the
-committed payload tree, while `site-weight` on 2026-08-30 read 119 published
-days in a bundle 14.63 times larger - two trees, two units, and that gap is what
-the panel's wording exists to keep visible
+**The band never says "the site" has room for N, because it does not know
+that.** Its one line is the level, the limit and the articles the headroom buys;
+every caveat it would need - the rate, the days it was measured over, its spread,
+and the fact that the cap is measured on a larger tree so the room is the most we
+have and never the least - is on `What one more article costs` directly below it.
+`idhazh site-weight` and `committed payload tree` are not reader strings on any
+surface: a build command is not something a reader can run. The gap that wording
+exists to keep visible is real and measured - 312,000 articles of room in the
+committed payload tree against 119 published days in a bundle 14.63 times larger
 ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
 
-**What the deleted table was for, and where each column went.** `Runs`,
-`Planned` and `Failed` were per-day run counts, and all three are already on the
-run strip four headings above - `Planned` rides the run square's own label as
-`N of M succeeded`, which is where run-level facts live. `Site` is the card.
-`Files` is gone with no replacement: it was the count of files under the payload
-tree, and the question it answered - did the tree grow because we published more
-or because pages got heavier - is the question the per-article chart now answers
-directly.
+**The deleted per-day table is not coming back.** `Runs`, `Planned` and `Failed`
+are on the run strip four headings above, `Site` is the card, and `Files` -
+whether the tree grew because we published more or because pages got heavier -
+is what the per-article chart now answers directly.
 
 ### Design rationale
 
