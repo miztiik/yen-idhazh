@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-10
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -373,7 +373,7 @@ A topic route is the day filtered to one desk, and until 2026-09-01 the filter r
 
 **The seed is also the head UNION anything the document has to be able to anchor.** A prefix cannot hold a leading story: the reading-page plan's lead block picks across the whole day, and its five leads on the 601-story arm sat at positions 249, 285, 337, 344 and 493. A lead link into a document that carries only a prefix lands on nothing until the fetch arrives, and on nothing at all when it fails. `dayShell` therefore takes a set of ids to keep whatever their position, and the union is what it seeds.
 
-Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the 11 committed days, 4,086 items and 51 topic routes. Both arms built with `kit.version.name` pinned to one constant, because it defaults to `Date.now()` and rides into every chunk filename ([../../reference/agent-notes.md](../../reference/agent-notes.md)). A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
+Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the 11 committed days, 4,086 items and 51 topic routes. Both arms built with `kit.version.name` pinned to one constant, because it defaults to `Date.now()` and rides into every chunk filename ([../../reference/agent-notes/gates-and-builds.md](../../reference/agent-notes/gates-and-builds.md#running-the-gates)). A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
 
 | Measured | Before | After | Saved |
 | --- | ---: | ---: | ---: |
