@@ -73,7 +73,7 @@ discover. All are folded in. The five that would have cost the most:
 | 14 | One document serves every date | 13 | G | LANDED | - | #546 | worker |
 | 17 | Delete the committed weights | 16 | G | DESCOPED | - | - | owner, 2026-09-09 |
 | 18 | The gates measure a shell, not a document | 12, 14 | H | LANDED | - | #564 | worker |
-| 19 | Record what was decided and what it cost | 1-18 | I | IN-FLIGHT | yi-s19-docs | - | worker |
+| 19 | Record what was decided and what it cost | 1-18 | I | IN-FLIGHT | yi-s19-docs | #568 | worker |
 
 **Seventeen rows landed, one was descoped and one is this closure.** Row 15
 escalated on 2026-09-09 - a GitHub Release asset carries no
@@ -560,6 +560,31 @@ Verified against the working tree on 2026-09-08. A worker uses these and does no
 | 3 | 8 KB rather than the 5 KB first proposed, because the months list from row 10 decision 1 rides here | Carmack, 2026-09-08 |
 | 4 | This row creates the console layout component. The previous draft had two rows in one group editing a file neither had checked existed | Fowler, 2026-09-08 |
 
+### Amended 2026-09-10 by what row 18 measured
+
+**The oracle and decision 2 hold for a client-side navigation into the console
+and not for a cold load.** Both say the band is the first request the page makes.
+Measured in Chromium against the real build on 2026-09-10, a cold `/console/`
+never asks for it at all: `console/+layout.ts` is a universal load on a
+prerendered route, so SvelteKit resolves the fetch at build time and writes the
+verdict into the document. The operator's answer arrives in **zero** round trips
+rather than one - better than the row promised, and not what the row asserted.
+The mitigation both sides accepted survives on a different mechanism from the one
+it was argued on, which is worth saying because the argument is what a later
+reader will find.
+
+**Decision 3's 8 KB is now shadowed by a tighter number.** Row 18 capped the
+payload at 2,000 bytes in `page_weight.payload_ceilings_bytes` against a measured
+794, so the payload carries two ceilings and only the gate's binds. The months
+list decision 3 bought the headroom for is capped at 14 entries by
+`observability.public_telemetry_keep_months`, so the growth it was sized against
+cannot arrive.
+
+Both are written up in
+[`console-payloads.md`](../docs/architecture/publishing/console-payloads.md), with
+the figures in
+[`docs/reference/measurements.md`](../docs/reference/measurements.md).
+
 ---
 
 ## 14. Row #12 - The console surface: reserved shape and three states
@@ -876,6 +901,40 @@ Verified against the working tree on 2026-09-08. A worker uses these and does no
 ---
 
 ## 20. Row #18 - The gates measure a shell, not a document
+
+> **CLOSED 2026-09-10, PR #564.** Both halves shipped in one commit, as the row
+> required. The re-derived page ceilings, the payload ceilings and the cold-load
+> reading are in
+> [`docs/reference/measurements.md`](../docs/reference/measurements.md) with their
+> spread, their method and their basis, and nothing here repeats them.
+>
+> **Three of the estimates in the table below moved and one did not.** The verdict
+> band was estimated at 8 KB and ships capped at **2,000 bytes** against a measured
+> 794; the cold-load total went from 3.0 MB to **3,400,000**; the six page ceilings
+> were re-derived route by route. The telemetry month held at **1.1 MB**, and it is
+> the one number here that is still not a measurement of a full month - both
+> committed shards are partial, so it is a full 31-day month at the heaviest daily
+> rate ever run rather than at anything the archive has yet weighed.
+>
+> **Decision 3 handed the re-derivation to row 19 and row 18 did it itself, which
+> is the right way round.** A ceiling and the compression level it is measured at
+> have to move in one commit - `gzip -5` output is strictly larger, and at `-5` the
+> tree already stood over two of the old `-9` ceilings - so the row that flips the
+> level is the row that owns the numbers. What row 19 owes from this section is
+> decision 4's reading of the `browser` job, and it is in section 21.
+>
+> **Chain depth turned out not to be a byte count, and the first instrument for it
+> could not fail.** Grouping a trace's requests into waves lets one slow download
+> absorb a whole serial chain beside it; the shipped spec counts the longest run of
+> requests that each had to wait for the one before it. A cold `/console/` settles
+> in **three** hops against the ceiling of four, and each telemetry month is a hop,
+> so the single hop of headroom is one more month rather than one more file.
+>
+> **The band now carries two ceilings and nobody has ruled which is the ceiling.**
+> `console-band.spec.ts` asserts 8 KB and the gate applies 2,000. Nothing fails
+> today; the spec's own century model, at 3,247 bytes, passes the one and would
+> fail the other, and is unreachable either way because retention caps the months
+> list at 14. Recorded, not resolved.
 
 - **Scope:** Re-aim every ceiling at what the migrated site is, and add the two that bound a fetched page.
 - **Depends on rows 12, 14 and 17.** Four of its six ceilings measure things that do not exist until rows 10, 11 and 12 have landed.
