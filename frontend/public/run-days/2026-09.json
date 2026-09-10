@@ -751,8 +751,8 @@
     "models": [
       "qwen3-5-9b-q4-k-m"
     ],
-    "published_charts": 1,
-    "published_items": 72,
+    "published_charts": 4,
+    "published_items": 148,
     "runs": [
       {
         "charts_drafted": 6,
@@ -768,10 +768,25 @@
         "started_at": "2026-09-10T07:21:32Z",
         "status": "partial",
         "succeeded": 72
+      },
+      {
+        "charts_drafted": 7,
+        "decided": 76,
+        "decision_ms": 2122431,
+        "failed": 4,
+        "n": 2,
+        "planned": 80,
+        "prefiltered": 34,
+        "run_id": "2026-09-10-34471177694",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-10T11:25:37Z",
+        "status": "partial",
+        "succeeded": 76
       }
     ],
-    "site_bytes": 27639302,
-    "site_files": 489,
+    "site_bytes": 27864869,
+    "site_files": 493,
     "version": "2026-09-09"
   }
 ]
