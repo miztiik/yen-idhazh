@@ -65,9 +65,9 @@ function columns(): { key: string; label: string; line: string; polarity: string
  * ruling and not against its own last edit.
  */
 function documented(): { label: string; line: string }[] {
-	const doc = readFileSync(path.join(repo, 'docs', 'concepts', 'design-system.md'), 'utf8');
+	const doc = readFileSync(path.join(repo, 'docs', 'concepts', 'console-design.md'), 'utf8');
 	const start = doc.indexOf('| Label | The line under it |');
-	expect(start, 'design-system.md no longer carries the label set').toBeGreaterThan(-1);
+	expect(start, 'console-design.md no longer carries the label set').toBeGreaterThan(-1);
 	const found: { label: string; line: string }[] = [];
 	for (const row of doc.slice(start).split('\n').slice(2)) {
 		if (!row.startsWith('|')) break;

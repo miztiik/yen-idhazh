@@ -931,7 +931,7 @@ The other two console routes moved 2 B and 4 B, inside the build noise floor, so
 the change reaches one route. Every ceiling this section used to derive was
 superseded on 2026-09-10, when all three were re-aimed on one convention at
 `gzip -5` and `/console/` fell by a factor of 6.4; the live numbers are in
-[../../reference/measurements-site.md](../../reference/measurements-site.md#the-page-ceilings-re-aimed-at-the-migrated-tree-2026-09-10)
+[../../reference/measurements-site.md](../../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10)
 and what to do when one fires is in
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md).
 

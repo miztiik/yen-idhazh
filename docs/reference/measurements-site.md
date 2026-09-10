@@ -52,47 +52,86 @@ tree already stood over two of the `-9` ceilings - `/console/model/` measured
 56,652 against 56,385 and `/console/machine/` 44,960 against 44,706 - so either
 half on its own leaves the build red.
 
-## The page ceilings re-aimed at the migrated tree, 2026-09-10
+## The page guardrails, and what each route weighs, 2026-09-10
 
-Toolchain: node 24.12.0. Date: 2026-09-10.
+Toolchain: node 24.12.0. Date: 2026-09-10, tree `c40eda91`.
 Method: `gzip -5` over each prerendered `index.html` in `frontend/build`,
 heaviest page per route class, **five builds of one tree**, heaviest per route
-and never a mean - which is the method `bundle-gate.mjs` prints when a console
-route fires.
+and never a mean - which is the method `bundle-gate.mjs` prints when a route
+fires. `frontend/build` and `frontend/.svelte-kit/output` are deleted between
+builds and no `BUILD_VERSION` is set, so the tree matches what CI measures.
 
-| Route | Heaviest of five | Spread | Ceiling before (`-9`) | Ceiling now (`-5`) | Headroom |
-| --- | --- | --- | --- | --- | --- |
-| `/404` | 2,153 B | 7 B | 2,200 | **2,400** | 11.5 pct |
-| `/archive/` | 5,744 B | 7 B | 7,553 | **6,400** | 11.4 pct |
-| `/console/` | 46,775 B | 9 B | 335,051 | **52,000** | 11.2 pct |
-| `/console/machine/` | 44,966 B | 11 B | 44,706 | **50,000** | 11.2 pct |
-| `/console/model/` | 56,664 B | 16 B | 56,385 | **63,000** | 11.2 pct |
-| `/evals/` | 3,232 B | 8 B | 3,279 | **3,600** | 11.4 pct |
-| `/` | 180,086 B | 8 B | none | **none** | renders a day - counted, not capped |
+Owner ruling, the same day: "any ceiling is a guideline not a rule - increase
+with twice the buffer and document it is a guard rail."
 
-**What it means.** The spread between two builds of the same tree is at most 16
-bytes, which is 0.03 percent, so the headroom is a choice and not noise. Every
-ceiling is now the heaviest build plus a tenth, which replaces four different
-conventions the old set had accumulated - the old `/archive/` carried 43 percent
-and the old `/404` carried 3.9.
+| Route | Heaviest of five | Spread | Guardrail | Times the page |
+| --- | --- | --- | --- | --- |
+| `/404` | 2,154 B | 7 B | **4,400** | 2.04 |
+| `/archive/` | 5,761 B | 8 B | **12,000** | 2.08 |
+| `/console/` | 47,077 B | 8 B | **96,000** | 2.04 |
+| `/console/machine/` | 45,254 B | 3 B | **92,000** | 2.03 |
+| `/console/model/` | 57,488 B | 5 B | **116,000** | 2.02 |
+| `/evals/` | 3,227 B | 3 B | **6,600** | 2.05 |
+| `/` | 43,737 B | 2 B | none | renders a day - counted, not guarded |
 
-**`/console/` fell by a factor of 6.4, and that is the finding rather than a
-tidy-up.** It was sized on 2026-09-06 against a document that inlined the
-telemetry and weighed 3.88 MB. Row 10 moved the telemetry to a browser fetch on
-2026-09-09, the document became 46,775 bytes, and the ceiling stayed. For four
-days it stood at 7.2 times the page it bounded, so nothing short of a sevenfold
-regression could have fired it. **A ceiling only works while it is near the
-page**, and nothing in the build fails when one drifts away.
+The three payload numbers were measured in the same runs and **none of them
+moved**, because each was already past twice what it bounds:
+
+| Payload | Heaviest of five | Guardrail | Times the payload |
+| --- | --- | --- | --- |
+| `console/band.json` | 777 B | 2,000 | 2.47 at its retention bound |
+| `telemetry/2026-09.csv` | 167,505 B | 1,100,000 | 6.57 |
+| a cold console load | 503,292 B | 3,400,000 | 6.76 |
+
+`console/band.json` is priced at its bound rather than at today's size: its
+`months` list is the union of the published month shards, every
+`observability.public_*_keep_months` is 14, so a full list takes the payload to
+about 809 bytes on the wire against 777 today.
+
+**What it means.** The spread between two builds of the same tree is at most 8
+bytes, which is 0.02 percent, so the distance above the page is a choice and not
+noise. The choice made earlier the same day was a tenth, and a tenth is a budget:
+measured against these six routes, an ordinary content day reaches it - so what
+fires the gate is a publish rather than a regression, and the operator who is
+stopped raises the number, which is how `/archive/` was raised twice in one day on
+2026-08-26. Twice the page cannot be reached by a day's content, so the only thing
+that fires it is a change of a different order, and the answer is to find what
+took on the bytes. Where the bytes are earned the number is re-derived to twice
+the new heaviest, never nudged up to just clear the new page.
+
+**`/console/` fell by a factor of 6.4 earlier that day, and that is the finding
+rather than a tidy-up.** It was sized on 2026-09-06 against a document that
+inlined the telemetry and weighed 3.88 MB. Row 10 of the shell-and-fetch plan
+moved the telemetry to a browser fetch on 2026-09-09, the document became 46,775
+bytes, and the number stayed. For four days it stood at 7.2 times the page it
+bounded, so nothing short of a sevenfold regression could have fired it.
+**Nothing in the build fails when a number drifts away from the page it bounds**,
+which is why it went unnoticed for four days. That is a different fault from the
+distance a guardrail keeps on purpose: 7.2 times was nobody's choice and nobody
+could see it, where twice the page is written down and re-derived.
+
+**`/` reads 43,737 B here against 180,086 B measured earlier the same day, and
+neither is wrong.** `/` inlines the newest committed day, and the newest day
+changed between the two: `2026-09-10` holds 72 items where the mature days behind
+it hold 282 to 627. So a `/` weight is a statement about one day's item count and
+not about the page, which is exactly why no route that renders a day carries a
+number. Anybody quoting a `/` figure says which day it inlined.
 
 There are **no dated ceilings and there never were**. `page_weight.ceilings_bytes`
 has never named `/` or any `/<date>/` route, so row 14 removing every dated
 document removed no key and the gate's unmatched-ceiling check never had anything
 to say about them.
 
+The unit moved from `gzip -9` to `gzip -5` the same day, for the reason in
+[What compression level the reader actually pays](#what-compression-level-the-reader-actually-pays-2026-09-10).
+Any page figure recorded before it is a `-9` number and about four percent low.
+
 ### What `BASE_PATH` does to the same document
 
-Same box and date. One build with `BASE_PATH=/yen-idhazh`, the way `pages.yml`
-builds, against the heaviest of the five plain builds `ci.yml` makes:
+Same date, node 24.12.0. One build with `BASE_PATH=/yen-idhazh`, the way
+`pages.yml` builds, against the heaviest of five plain builds `ci.yml` makes.
+Taken before the day's newest digest landed, so the `/` figures here are the
+mature-day ones:
 
 | Route | Plain | `BASE_PATH` | Delta |
 | --- | --- | --- | --- |
@@ -358,6 +397,11 @@ two, and the pin is chosen as the head of `main` at the fetch date rather than
 derived from the bytes.
 
 ### The release, published and checked both ways
+
+**The release and its tag were deleted on 2026-09-10 and none of these URLs
+resolve now.** The readings stand as the record of what was measured; the reason
+they were deleted, and what the deletion cost, are in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
 
 Tag `encoder-2026-08-22` on `miztiik/yen-idhazh`, targeting commit
 `5f1eaf60067cc036a2927dc838935ad1fb8ece86`. A Release asset name cannot contain

@@ -31,10 +31,12 @@ because the commit that is now the head added other ONNX variants and left the
 quantised one alone. So the revision above is the head of `main` on the fetch
 date rather than something derived from the bytes.
 
-The same five files are published as a GitHub Release under the tag
-`encoder-2026-08-22`. That release is a copy, not a source: a browser cannot read
-a release asset cross-origin, so nothing fetches it. The tag is what earns its
-keep - it holds the commit these files are committed in.
+The same five files were once published as a GitHub Release under the tag
+`encoder-2026-08-22`. Both are deleted since 2026-09-10. The release was a copy
+and never a source - a browser cannot read a release asset cross-origin, so
+nothing ever fetched it - and the tag pinned the whole tree of one commit,
+`corpus/` included, past the reach of the prune that bounds this repository. The
+files here are the source, and this file is their provenance.
 
 ## Why the directory carries a date
 
