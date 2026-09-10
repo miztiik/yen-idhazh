@@ -243,4 +243,4 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) - the previous plan.
 - [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) - the next plan.
-- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - spawned from this plan; it spends these two calls on labels.
+- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - spawned from this plan; it spends these calls on labels, and it amends O43 from two calls to as many as the DAG needs, adjacent per item. Its labelling rows are gated on rows 4, 5 and 6 above.
