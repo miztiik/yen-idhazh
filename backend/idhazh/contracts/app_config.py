@@ -2956,7 +2956,7 @@ def refuse_an_archive_window_no_preset_offers(ui: UiConfig, console: ConsoleConf
 
 
 class PageWeightConfig(Model):
-    """A gzip-size ceiling per prerendered route, enforced by
+    """A gzip-size guardrail per prerendered route, enforced by
     `frontend/scripts/bundle-gate.mjs`.
 
     The gate reads `config/idhazh.json`, never this model, so a number here
@@ -2965,19 +2965,28 @@ class PageWeightConfig(Model):
     committed config is the single source, and this model owns only the shape
     and the validation (Rule #6).
 
-    A route is worth a fixed ceiling when somebody has priced its growth in
-    published days. `/404` and `/evals/` render no day and no ledger, so their
-    weight is a function of source alone and their ceiling is the heaviest build
-    plus the 64-byte noise floor. `/archive/` grows, but only by one day link a
-    day since it stopped inlining the day payloads, so its ceiling carries a year
-    of that growth as measured headroom. The three `/console/` routes grow with
-    the ledger their panels read, so each ceiling carries a measured few days and
-    expires by design. What a page that renders a day cannot have is a fixed
-    ceiling at all: the only way under one is to publish fewer items, which is
-    capping the news rather than catching a regression, so `/` and `/<date>/` are
-    counted and reported and never failed.
+    **Every number here is a guardrail and not a budget** - owner ruling,
+    2026-09-10: "any ceiling is a guideline not a rule - increase with twice the
+    buffer and document it is a guard rail." A guardrail is twice the heaviest of
+    five builds of the tree that ships, so an ordinary content day cannot reach
+    it and only a change of a different order can: a layout that inlines a day
+    payload, a panel that stops fetching and starts embedding. The keys are still
+    spelled `ceilings_bytes` because that is the name every reader of the config
+    already knows; what changed is how high the number sits and what firing it
+    means. Before the ruling each route carried a few days or a year of its own
+    measured growth, six to fourteen percent above the page - close enough that
+    an ordinary publish tripped it, somebody raised the number, and the gate
+    taught the operator to raise numbers. **So the answer when one fires is to
+    find what took on the bytes, never to add a digit**, and a commit that makes
+    a page heavier may not raise its guardrail in the same breath.
 
-    **A surface that splits into routes takes a ceiling per route.** One number
+    The derivation is now one rule for every route, which is most of what it
+    bought. What a page that renders a day still cannot have is a fixed number at
+    all: the only way under one is to publish fewer items, which is capping the
+    news rather than catching a regression, so `/` and `/<date>/` are counted and
+    reported and never failed.
+
+    **A surface that splits into routes takes a guardrail per route.** One number
     covering three surfaces still fails when any of them grows, and then cannot
     say which one did - so the operator raises the shared number and the
     regression lands under it. Sizing them separately is what makes the split
@@ -2992,11 +3001,11 @@ class PageWeightConfig(Model):
     one place these numbers flatter the payload rather than the page.
 
     **A document is capped and a payload is capped, and they are different
-    jobs.** A document ceiling catches a page that took on bytes it does not
-    render. A payload ceiling catches a file a browser fetches growing past what
-    somebody priced, which no document ceiling can see because the bytes are not
-    in the document at all - that is exactly what moving the console's telemetry
-    out of its HTML did.
+    jobs.** A document guardrail catches a page that took on bytes it does not
+    render. A payload guardrail catches a file a browser fetches growing past
+    what somebody priced, which no document guardrail can see because the bytes
+    are not in the document at all - that is exactly what moving the console's
+    telemetry out of its HTML did.
     """
 
     ceilings_bytes: dict[str, int] = Field(
@@ -3007,14 +3016,12 @@ class PageWeightConfig(Model):
             "reads; this default is empty so the numbers are not duplicated here where "
             "they could drift from the file the gate enforces (Rule #6). A route the "
             "object does not name is measured and reported by the gate but not failed. "
-            "A route earns a ceiling when its growth is priced: /404 and /evals/ grow "
-            "only when the source does, /archive/ grows by one day link a day so its "
-            "ceiling carries a measured year of that, and each of the three /console/ "
-            "routes grows with the ledger its own panels read so each carries a "
-            "measured few days and is meant to expire. One surface split across "
-            "several routes takes one key per route, or a blown budget cannot name "
-            "which route blew it. A page that renders a day is never capped, because "
-            "the only way under such a ceiling is to publish less."
+            "Each number is a guardrail rather than a budget: twice the heaviest of "
+            "five builds, so an ordinary publish cannot reach it and only a change of "
+            "a different order can (owner, 2026-09-10). One surface split across "
+            "several routes takes one key per route, or a fired guardrail cannot name "
+            "which route fired it. A page that renders a day is never capped, because "
+            "the only way under such a number is to publish less."
         ),
     )
 
@@ -3027,8 +3034,10 @@ class PageWeightConfig(Model):
             "month series takes one number rather than one a month. Empty by default "
             "for the same reason as ceilings_bytes: config/idhazh.json is the single "
             "source and the gate reads the file. A key that matches no file in the "
-            "build fails the gate - a ceiling over nothing still reads as a bound "
-            "somebody checked."
+            "build fails the gate - a guardrail over nothing still reads as a bound "
+            "somebody checked. Each number is a guardrail on the same rule the routes "
+            "follow: at least twice the heaviest the file can realistically reach, so "
+            "only a change of a different order fires it (owner, 2026-09-10)."
         ),
     )
 
@@ -3038,10 +3047,10 @@ class PageWeightConfig(Model):
         description=(
             "The largest gzip -5 total the console's payload fetches may reach on a "
             "cold load at console.default_window_days. It bounds the design rather "
-            "than the data: the per-file ceilings say how heavy one shard may be, and "
-            "this says how many of them one opening of the page is allowed to want. "
-            "Zero means unchecked, and the committed config is where the real number "
-            "lives."
+            "than the data: the per-file guardrails say how heavy one shard may be, "
+            "and this says how many of them one opening of the page is allowed to "
+            "want. Zero means unchecked, and the committed config is where the real "
+            "number lives."
         ),
     )
 
@@ -3355,6 +3364,37 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-10T20:00",
+            change=(
+                "Every page_weight number is a guardrail rather than a budget, and the "
+                "six committed route values were raised to twice the heaviest of five "
+                "builds: /404 2,400 -> 4,400, /archive/ 6,400 -> 12,000, /console/ "
+                "52,000 -> 96,000, /console/machine/ 50,000 -> 92,000, /console/model/ "
+                "63,000 -> 116,000, /evals/ 3,600 -> 6,600. No key was added, removed or "
+                "retyped, and no committed config becomes invalid. "
+                "page_weight.payload_ceilings_bytes and cold_console_load_bytes were "
+                "already 2.5 and 6.8 times what they bound, so neither value moved; only "
+                "the words describing them did."
+            ),
+            why=(
+                "Owner ruling, 2026-09-10: 'any ceiling is a guideline not a rule - "
+                "increase with twice the buffer and document it is a guard rail.' The six "
+                "route numbers sat 6 to 14 percent above the pages they bound, which is a "
+                "budget: an ordinary content day reaches it, somebody raises the number, "
+                "and the gate teaches an operator that raising numbers is what a red gate "
+                "asks for. At twice the page only a change of a different order fires it - "
+                "a layout inlining a day payload, a panel that stops fetching and starts "
+                "embedding - so a fired guardrail is a question about the bytes rather "
+                "than about the number. Measured 2026-09-10 at c40eda91, gzip -5, node "
+                "24.12.0, five builds of the shipping tree, heaviest of the five with the "
+                "spread over them in brackets: /404 2,154 (7), /archive/ 5,761 (8), "
+                "/console/ 47,077 (8), /console/machine/ 45,254 (3), /console/model/ "
+                "57,488 (5), /evals/ 3,227 (3). Each new value is twice the heaviest, "
+                "rounded up to a number a person can read, which lands them 2.02 to 2.08 "
+                "times the page."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-10T14:00",
             change=(
