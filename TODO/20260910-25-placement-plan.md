@@ -205,7 +205,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 | Group | Rows | What the first row writes | What the second row writes | Where they come closest |
 | --- | --- | --- | --- | --- |
-| A | 1, 5 | `backend/idhazh/assemble.py`, `backend/idhazh/cli.py`, `backend/tests/test_pipeline.py`, `docs/architecture/publishing/visuals.md`, `docs/architecture/sources/discovery.md` | `frontend/src/lib/components/{DigestItem,DigestList,TimeRail}.svelte`, `frontend/src/lib/{day-shape,format}.ts`, `backend/idhazh/contracts/appearance_config.py`, `schemas/appearance-config.schema.json`, `config/appearance.json`, `frontend/tests/{time-rail,item-card,item-zones}.spec.ts`, `docs/concepts/ui-shell.md`, `docs/architecture/publishing/layout.md` | Both write a `docs/architecture/publishing/` page. Row #1 writes `visuals.md`; row #5 writes `layout.md`. Row #1 opens no frontend file and row #5 opens no pipeline module |
+| A | 1, 5 | `backend/idhazh/assemble.py`, `backend/idhazh/cli.py`, `backend/tests/test_pipeline.py`, `docs/architecture/publishing/visuals.md`, `docs/architecture/sources/discovery.md` | `frontend/src/lib/components/{DigestItem,DigestList,TimeRail}.svelte`, `frontend/src/lib/{day-shape,format}.ts`, `backend/idhazh/contracts/appearance_config.py`, `schemas/appearance-config.schema.json`, `config/appearance.json`, `frontend/tests/{time-rail,item-card,item-zones,reading-page}.spec.ts`, `docs/concepts/ui-shell.md`, `docs/architecture/publishing/layout.md` | Both write a `docs/architecture/publishing/` page. Row #1 writes `visuals.md`; row #5 writes `layout.md`. Row #1 opens no frontend file and row #5 opens no pipeline module. **Row #5 gained `reading-page.spec.ts` on 2026-09-11** - it is the second spec reading `[data-rail-note]` - and row #1 opens no spec, so the group holds |
 | B | 2 | singleton - it creates `placement.py`, which four later rows read | - | - |
 | C | 3, 6 | `backend/idhazh/rank.py`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/tests/test_rank.py`, `docs/architecture/sources/discovery.md` | `frontend/src/lib/day-shape.ts`, `frontend/src/lib/components/FilterBar.svelte`, `backend/idhazh/contracts/appearance_config.py`, `schemas/appearance-config.schema.json`, `config/appearance.json`, `frontend/tests/{filter-bar,topics}.spec.ts`, `docs/architecture/publishing/frontend.md` | Both add a config key, edit a contract model and regenerate one schema. **Two different config files, two different contract modules, two different schema files**, so the drift gate sees two disjoint diffs |
 | D | 4, 7 | `backend/idhazh/rank.py`, `config/idhazh.json`, `backend/tests/test_rank.py`, `docs/architecture/sources/discovery.md`, `docs/architecture/publishing/layout.md` | `backend/idhazh/placement.py`, `backend/idhazh/contracts/taxonomy.py`, `schemas/taxonomy.schema.json`, `config/taxonomy.json`, `backend/tests/{test_placement,test_contracts}.py`, `docs/concepts/placement.md` | Both write a file in `config/`. Row #4 writes `idhazh.json` and row #7 writes `taxonomy.json`. Row #4 adds no contract field, so it regenerates no schema |
@@ -352,9 +352,11 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 ## 6. Row #5 - The rail goes and the time lands under the heading
 
 - **Scope:** `TimeRail.svelte` is deleted. Every story prints its own published time in small type beside its heading. `time_source` decides how it is drawn.
-- **Files touched:** `frontend/src/lib/components/DigestItem.svelte`, `frontend/src/lib/components/DigestList.svelte`, `frontend/src/lib/components/TimeRail.svelte` (deleted), `frontend/src/lib/day-shape.ts`, `frontend/src/lib/format.ts`, `backend/idhazh/contracts/appearance_config.py`, `schemas/appearance-config.schema.json`, `config/appearance.json`, `frontend/tests/time-rail.spec.ts` (deleted), `frontend/tests/item-card.spec.ts`, `frontend/tests/item-zones.spec.ts`, `docs/concepts/ui-shell.md`, `docs/architecture/publishing/layout.md`
+- **Files touched:** `frontend/src/lib/components/DigestItem.svelte`, `frontend/src/lib/components/DigestList.svelte`, `frontend/src/lib/components/TimeRail.svelte` (deleted), `frontend/src/lib/day-shape.ts`, `frontend/src/lib/format.ts`, `backend/idhazh/contracts/appearance_config.py`, `schemas/appearance-config.schema.json`, `config/appearance.json`, `frontend/tests/time-rail.spec.ts` (deleted), `frontend/tests/item-card.spec.ts`, `frontend/tests/item-zones.spec.ts`, `frontend/tests/reading-page.spec.ts`, `docs/concepts/ui-shell.md`, `docs/architecture/publishing/layout.md`
+- **`frontend/tests/reading-page.spec.ts` is in the list and was not before.** `git grep -n data-rail-note -- frontend/tests` returns **two** specs, not one: `time-rail.spec.ts:299` and `:312`, which this row deletes with the component, and **`reading-page.spec.ts:296`, which it does not** (measured 2026-09-11). Deleting `TimeRail.svelte` takes that locator's target with it, so the row's own no-prisoners rule reaches a second file. **Row #10 also names `reading-page.spec.ts` and it is in group F**, so group A still holds.
 - **Acceptance gates:** `GATE-WEB`, `GATE-BROWSER`, `GATE-SCHEMA`, `GATE-SUITE`, and the `CLAUDE.md` section 12 browser smoke. Plus, in this row:
   - `rail_group_minutes` and `railRows` and `RailRow` go in the same commit as the component (section 0.1, no prisoners);
+  - **`Times shown in UTC.` renders exactly once on a day page and the assertion moves with it**, not deleted with `time-rail.spec.ts`. `reading-page.spec.ts:296` already reads `[data-rail-note]` and keeps doing so against the day's head;
   - `schemas/appearance-config.schema.json` carries today's `version` and a `changelog` entry naming the removed key;
   - the sufficiency checks in [`../docs/concepts/design-system.md`](../docs/concepts/design-system.md) pass, or a `## Design rationale` entry says why not.
 - **Oracle:** **The eyebrow still holds four children at every width and the time is one of them.** Driven from the canary day, which plants a story of every `time_source` state on purpose - including `unknown`, which has **never happened in 8,550 committed items** and which no archive-driven test can reach. The assertion is on the count and on the fourth child's identity, at each breakpoint the spec already drives. It fails against the base tree, where the fourth child is the day link and the time is on a rail.
@@ -372,7 +374,9 @@ Ruled by Susan, 2026-09-11, with Jony on what may leave the page.
 | An item with no publisher time | The stamp is drawn unattributed - no mark, no word. That is the render `layout.md` already rules for the 3,733 items whose `time_source` is absent, and it is the honest one: printing it as a feed time is a claim the run never recorded, and refusing to print it deletes a fact from 44 percent of the archive |
 | `time_source: first_seen` | The clock with the existing mark. `format.ts` already owns that mark and it moves with the time |
 | `time_source: unknown` | Nothing is drawn. There is no number to print, and the canary day is what proves the branch renders |
-| What stops 627 timestamps becoming wallpaper | **Nothing about the timestamp - it is the fourth of four facts in a line that already repeats on every item, and it is drawn in the same type as the other three.** A fifth typographic weight on that line would be the wallpaper. The rail's own arithmetic is the argument: measured 2026-09-02 over 12 days and 4,713 stories at the 60-minute default, it printed 907 markers, so **80.8 percent of stories carried no time at all**, and on 2026-09-01 that is 31 labels across 627 stories. The choice is not "33 timestamps or 627"; it is "596 stories with no time, or every story with its own" |
+| What stops 627 timestamps becoming wallpaper | **Nothing about the timestamp - it is the fourth of four facts in a line that already repeats on every item, and it is drawn in the same type as the other three.** A fifth typographic weight on that line would be the wallpaper. The rail's own arithmetic is the argument: measured 2026-09-02 over 12 days and 4,713 stories at the 60-minute default, it printed 907 markers, so **80.8 percent of stories carried no time at all**, and on 2026-09-01 that is 31 labels across 627 stories (re-counted 2026-09-11: that day holds **627** items). The choice is not "33 timestamps or 627"; it is "596 stories with no time, or every story with its own" |
+| **What happens to `Times shown in UTC.`** | **It moves to the day's head, once per page, and it is not deleted.** `TimeRail.svelte:34` draws it as `<p class="note" data-rail-note>Times shown in UTC.</p>` - one caption for the whole column - and it is the reason `railTime` prints bare digits at all: the function's own docstring says `Yesterday`, `First seen` and `No time given` are gone because "the column already says `Times shown in UTC` once, above itself". **Delete the component and that sentence stops being true**, and 627 bare clocks a day carry no zone. So the caption lands in the day's chrome above the stream, in the day's chrome type, **once** |
+| Why not a suffix on each stamp | 627 repetitions of `UTC` on a page to state one fact that is true of every stamp on it. The caption is a property of the **page**, not of a story, and it is drawn where page-level facts are drawn. `docs/concepts/ui-shell.md:79` already rules this - "Not a suffix on 359 labels" - and this row moves the sentence rather than overturning it |
 
 ### Decisions
 
@@ -383,6 +387,7 @@ Ruled by Susan, 2026-09-11, with Jony on what may leave the page.
 | 3 | The time is **the item's own, to the minute**, never a rounded or grouped one. Grouping is what the rail did and it is what left 80.8 percent of stories unlabelled | Susan |
 | 4 | **Susan rules the slot; Jony rules what leaves it.** The day link's removal on a day page is Jony's call under the four-fact cap and it is recorded above with what the reader loses, which is nothing they do not already have from the URL | `CLAUDE.md` section 14 |
 | 5 | This row lands **before** row #2. The rail groups by time; row #2 replaces the time order with a scored one; a rail over an order it did not sort reopens groups further down, which `day-shape.ts` already states in its own docstring | Section 1 |
+| 6 | **The zone caption survives the component that drew it.** It is the fact that makes every bare clock on the page readable, `railTime`'s docstring names it as the reason the clocks are bare, and it is asserted in two specs. Deleting the rail without moving the caption is the no-prisoners rule applied to the wrong noun: the rail was the duplicate, and the caption was the thing the rail happened to be carrying. **`docs/concepts/ui-shell.md` is rewritten in this commit** so the page that states the rule states where the sentence now lives | Susan, 2026-09-11; section 0.1 |
 
 ### Rejected alternatives
 
@@ -618,7 +623,19 @@ Two changes, about six lines. **Drop `.tab-line` below about 40rem**, and **cut 
 
 **A `Judgement` or `Voices` fault caps at `WORTH_A_LOOK`.** A skewed day still published; a failed run did not.
 
-**One exception, at `BROKEN`: a decline rate of zero on any gating kind.** That is not a skew. A gate that never declines is a classifier stamping everything it is shown, and it makes every other figure on the tab fiction - including the figures a reader would use to decide the day was fine. The fraction itself arrives with plan 23; this row encodes the rule and the producer writes `null` until it does.
+**One exception, at `BROKEN`: a decline rate at either end on any gating kind.** That is not a skew. **Zero** means a gate that never declines - a classifier stamping everything it is shown - and **one** means a gate that declines on everything, which is the same instrument reading dead from the other side. Both make every other figure on the tab fiction, including the figures a reader would use to decide the day was fine. **The rule is two-sided because the failure is**: the row carried only the zero end until 2026-09-11, and a classifier that had stopped answering would have printed a reassuring tab. The two bounds are `console.decline_rate_floor` and `console.decline_rate_ceiling` with sane defaults, because a bare 0 and a bare 1 are thresholds in code (`CLAUDE.md` Rule #6). **They land in `config/idhazh.json` under row #12, not this row, and the reason is group G**: row #14 already writes `config/idhazh.json`, `backend/idhazh/contracts/app_config.py` and `schemas/app-config.schema.json`, so adding them here would put three files on both sides of this pair. Row #12 is a singleton, already edits all three, and is the row that draws the fractions. **This row encodes the rule in `publish_console_band.py` and reads the two keys through their defaults until row #12 commits them**, which costs nothing because the fraction itself is `null` until plan 23 row #10 lands. The fraction arrives with plan 23; this row encodes the rule and the producer writes `null` until it does.
+
+### `Voices` has a worst state too, and these are its candidates
+
+**A tab with no worst state on its label is the thing `console.md` warns about in its own words**: *"Without it a route is where a metric goes to die: nobody opens a page to find out whether it was worth opening."* The rule above caps `Voices` at `WORTH_A_LOOK` and then names nothing for it to be in, so the label would read `Voices` for ever. The page already sets the precedent for what to do instead - it lists `Machine`'s three candidates by name and says which is ranked lowest and why - so `Voices` gets the same treatment here rather than in row #13.
+
+| Rank | Candidate | Why it is at this rank |
+| --- | --- | --- |
+| `WORTH_A_LOOK` | **A feed sitting at `collect.reliability_floor`** - the multiplier clamped at 0.5, which is as far down as it goes | It is the one state where the ranker is actively discounting a feed and nothing on any page says so. It is also the panel row #13 exists to draw, so a label that never points at it points at nothing |
+| `WORTH_KNOWING` | **The count of feeds that answered nothing in the window** - the quiet ones, not the failing ones | A feed can go quiet for a reason that is not ours, so it is a fact to know rather than a fault. It carries a count because the count is normally non-zero, which is why it may not be the label's alarm state |
+| `WORTH_KNOWING` | **A feed below `collect.source_yield_alarm_min_decisions`** - under 30 judged items, so its quality figures print a dash | Row #13 draws a dash for it and a dash is invisible at a glance. It is ranked below the floor case on purpose: too little evidence is not the same as bad evidence, and ranking it higher would publish a judgement the record cannot carry |
+
+**The label never carries a count**, which is the same rule `Judgement` works under: a count that is normally non-zero is a number a reader learns to ignore. The quiet-feed count is a figure on the page, not a state on the label.
 
 ### Decisions
 
@@ -630,6 +647,7 @@ Two changes, about six lines. **Drop `.tab-line` below about 40rem**, and **cut 
 | 4 | **`Voices` over `Sources`, by owner override.** Susan proposed `Sources` and her reasoning is in the Rejected alternatives below, recorded rather than re-argued | Owner, 2026-09-11, `CLAUDE.md` section 0 |
 | 5 | **The two new routes are opened empty by this row.** A strip that names a page nobody can reach is worse than three tabs, and the alternative - landing the strip with its two tab rows - would put three rows on `ConsoleNav.svelte` in one group. **Each empty route names the row that fills it**, so a reader of the strip can find the specification: `Judgement` points at row #12 and at plan 23 row #15, `Voices` at row #13 | Section 1 |
 | 6 | **An editorial fault caps at `WORTH_A_LOOK`, with one `BROKEN` exception.** Stated above, and the producer is where it is enforced, because the band is derived once and read everywhere | Carmack; `backend/idhazh/publish_console_band.py` |
+| 7 | **`Voices` has its own worst-state candidates, named here and not in row #13.** The band is derived once in the producer this row already edits, so the ranking belongs beside the cap rather than one group later, and a tab whose label is always the same word is the failure `console.md` names. **The two decline bounds the `BROKEN` rule reads are row #12's config keys**, for the group-G reason stated above; this row adds no file to its list | Susan, 2026-09-11; `docs/architecture/publishing/console.md` |
 
 ### Rejected alternatives
 
@@ -683,8 +701,8 @@ This was recorded here rather than in plan 23 because a worker may not edit anot
 | 2 | **Declared against read** | **two grids: 5 by 5 for the desk, 6 by 5 for the kind.** The diagonal is drawn at low weight and **only the off-diagonal is tinted** | Put the diagonal in the colour scale and it is one bright stripe with the interesting cells invisible beside it. The disagreement is the instrument |
 | 3 | **Lens firing rate** | **one diverging bar per lens** - keyword-only left, model-only right, agreed as a centre block - **ordered by total**, with **the lens's weight printed as a word at the row end** | A grouped bar loses the sign and the sign is the meaning. The weight at the row end is what makes the measured finding legible: **the four lenses at weight 0.0 fired 2,343 times against 650 for the two that carry weight, 3.6 times as often** (section 0.3). They tag an article and move no story, and a reader of this row can see that without doing arithmetic |
 | 4 | **Label confidence** | a histogram, and the owner's override in the section below decides what goes in it | Kept |
-| 5 | **Sentiment states** | a panel | Kept as a panel; the kappa that used to sit with it is one line (decision 5) |
-| 6 | **Viewpoint** | **five opposed pairs with a balance point, always beside `none` and `undetermined`** | The highest-stakes drawing on the console. Its own section below |
+| 5 | **Sentiment states** | **four counts on one row - positive, negative, judged-and-neutral, and not judged - with the not-judged count drawn immediately beside judged-and-neutral and in the same type** | Kept, and now specified. `a panel` was the whole entry until 2026-09-11, which is not a shape. **The two neutral-looking states are the point**: plan 23 row #11's oracle exists to stop judged-and-neutral and not-judged being the same pixel on a reader's page, and a console that puts them at opposite ends of a row undoes that on the operator's. They are adjacent, and the gap between them is the figure worth reading. The kappa that used to sit here is one line (decision 5) |
+| 6 | **Viewpoint** | **five rows, one per stance field: two opposed poles about a balance point, with that field's own `not_applicable` count printed beside it** | The highest-stakes drawing on the console. Its own section below |
 | 7 | **Events** | a `RankedList` | Kept. It is a ranking, and `RankedList` is what this console draws a ranking with |
 | 8 | **Watchlist entries the day did not reach** | a short list, ranked by how long since each last fired | Replaces the entities panel. See below |
 | 9 | **Proposed verticals** | **one line, not a panel** | A count that is normally zero does not earn a frame |
@@ -692,6 +710,30 @@ This was recorded here rather than in plan 23 because a worker may not edit anot
 **Folded, not dropped.** The day-made-of-five-kinds panel folds into the declared-against-read kind grid, and keyword-only-against-model-only folds into the lens diverging bar. **Susan found the owner's paired bar cannot be drawn at all**: the model produces five kinds and the feed declares six, the declared set adding `government` and `community` and holding no `opinion`, so **three of eleven values have no counterpart** and a paired bar would pair them with nothing. The grid has a cell for every pair and a row and column for the three that stand alone.
 
 **Refused from this tab: the desk mix against its floor and its ceiling.** It is an editorial knob rather than a judgement the model made, so it goes to `Pipelines` as one `TargetBar` per desk. **Row #14 ships it**, because a `TargetBar` needs a threshold to mark and row #14 is the row that owns the target.
+
+### The contract carries a field for every figure, and that is what makes the panel set checkable
+
+**Plan 23 row #15 names three charts, twelve numbers and one generated sentence; this row writes the contract those arrive in.** Until 2026-09-11 that sentence was the whole specification on both sides: plan 23 counted twelve and listed nine, and this row's contract was described by its panels rather than by its fields. **A figure with no field is a figure the page cannot draw**, because this tab's producer reads the day file and never a shard (plan 23 row #14's oracle).
+
+So `backend/idhazh/contracts/console_judgement.py` carries, at minimum:
+
+- **One field for each of the twelve numbers plan 23 row #15 now enumerates**, by the same names, each **optional with an absent value reading as not computed** - never zero, because most of them are absent on the day this row lands and a zero decline rate is the `BROKEN` state of row #11's band.
+- **One field per chart**: the 5 by 5 desk grid, the 6 by 5 kind grid, and the per-lens diverging bar's three parts.
+- **One field per panel above** that is not already covered - the sentiment four-count row, the five viewpoint rows with their five `not_applicable` counts, the events ranking, the quiet-watchlist list, and the proposed-vertical count.
+- **`headline_sentence`**, a string that is never null and never empty (below).
+- **`logprob_mode`**, stamped on the confidence panel, so a reader knows which decode produced the figure.
+
+**A contract test asserts every panel the page draws has a field and every field has a panel.** Neither half is decoration: a field with no panel is a number nobody reads and a panel with no field is the white screen the oracle exists to prevent.
+
+### The generated sentence, and it is a field rather than a flourish
+
+**One sentence, at the top of the tab, above the political gate.** Plan 23 row #15 specifies what it computes, its wording template and its empty states; this row carries it as **`headline_sentence`** and draws it. Three properties bind here:
+
+- **It is computed in the producer, never in the browser.** Two derivations of one verdict is two verdicts - the rule `band.ts` already establishes and row #13 decision 4 restates.
+- **It is never null and never empty.** Where nothing is out of bound it says so; where figures are absent it counts them. A sentence that disappears when the news is good is a sentence a reader stops looking for.
+- **It carries no adjective and no verdict word.** The figure and its bound, which is what `console-design.md` requires of every other string here.
+
+**`Voices` gets one too, on the same rule and in row #13.** A generated sentence on one of two new tabs is a pattern half-introduced, and the next person has to guess whether it was deliberate.
 
 ### The watchlist panel, and the measurement that shaped it
 
@@ -707,12 +749,30 @@ This was recorded here rather than in plan 23 because a worker may not edit anot
 
 **The hazard, stated in the row so no worker has to rediscover it.** *The digest is 60 percent progressivism* is a claim about **the world**, not about this pipeline, and a chart that can be read that way will be screenshotted out of the page that explains it. **The drawing has to make that reading impossible**, and no caption can do that job - a caption does not travel with an image.
 
-- **Never a ranked bar of eight.** A ranked bar orders positions by size and invites the reader to sum the top of it, which is exactly the sentence above.
-- **The vocabulary is five independent fields, not eight values in one field.** They do not compete for one total and a shape that stacks them says they do.
-- **Draw it as five opposed pairs with a balance point** - one axis a field, the balance point in the middle, the two ends the field's two poles. A pair says which way this day leaned on one question; it cannot be summed with the pair below it.
-- **Always beside `none` and `undetermined`, so the denominator is visible.** Those two are what say how much of the day the question was not asked of, and a pair drawn without them is a share of an unstated set.
+**The vocabulary this panel draws, re-derived 2026-09-11, because the design below was written against one that no longer exists.** Plan 23 row #10 ships **five independent fields, each with two poles and its own `not_applicable`** - ten poles in all, not eight values in one field - and its **decision 3 folded `none` and `undetermined` into that single `not_applicable` per axis**, because five axes each carrying two decline values was ten ways to say nothing. **This row named `none` and `undetermined` in four places, including its own oracle, and "a ranked bar of eight" in two.** Neither vocabulary exists. The design below is the same design against the words that do.
 
-**Its own oracle: the panel prints `none` and `undetermined` in every state it can render, including the empty one.** A pair with no denominator beside it is the defect this panel exists to avoid, and a test that only checked the pairs would pass on the day the denominator stopped rendering.
+**The five rows, and the panel is nothing else.**
+
+| Row | Left pole | Right pole | Printed beside it |
+| --- | --- | --- | --- |
+| `stance_on_change` | `conservatism` | `progressivism` | its own `not_applicable` count |
+| `stance_on_economic_power` | `socialism` | `libertarianism` | its own `not_applicable` count |
+| `stance_on_state_power` | `statism` | `constitutionalism` | its own `not_applicable` count |
+| `stance_on_borders` | `nationalism` | `internationalism` | its own `not_applicable` count |
+| `stance_on_personal_sphere` | `civil_libertarianism` | `communitarianism` | its own `not_applicable` count |
+
+**The four rules that make the screenshot reading impossible**, and they are rules rather than a caption because a caption does not travel with an image:
+
+1. **No row may be summed with another.** The five are independent fields; nothing stacks, nothing shares an axis, and no total is drawn anywhere on the panel.
+2. **Every row prints its own `not_applicable` count, on the row, always.** That number is the denominator: it says how much of the day the question was not asked of. A pole drawn without it is a share of an unstated set, which is the one drawing that can be screenshotted into a claim about the world.
+3. **No row is ranked against another**, by size or by anything else. Ranking implies one scale across five questions.
+4. **The axis is counts, not shares.** A percentage invites the sum that rule 1 forbids.
+
+**What the panel refuses to draw, listed so nobody adds one back:** a ranked bar over all ten poles; a stacked bar of any kind; a single "lean" figure for the day; a trend line over days; a share that omits `not_applicable`; and any total, anywhere.
+
+**Its empty state, and it is the ordinary state on the day this row lands.** Where a field has no data at all, **the row still draws** - both pole labels, the balance point, and the words `not measured` where its counts would be. Where the gate closed on every item, the row draws with `not_applicable` at the full count and both poles at zero, which is a true and useful picture rather than a blank. **The panel never renders fewer than five rows**, because a missing row reads as a question nobody asked rather than a question with no answer yet.
+
+**Its own oracle: every one of the five rows prints its own `not_applicable` count in every state the panel can render, including the empty one.** A pole with no denominator beside it is the defect this panel exists to avoid, and a test that only checked the poles would pass on the day the denominator stopped rendering.
 
 ### The confidence panel is drawn, and the noise is taken out of it
 
@@ -720,8 +780,8 @@ This was recorded here rather than in plan 23 because a worker may not edit anot
 
 **The owner overrode it on 2026-09-11**: we surface the correct signal so it can be read correctly, and failing to is a failure of charting rather than a reading problem. So the row works out how to separate the signal from the noise, and plots it.
 
-- **Plot the probability only at the discriminating position** - a position where the grammar offered **two or more** legal tokens - **renormalised over the legal set at that position**. A forced token carries no information and is the entire source of the pile-up, so excluding it removes noise rather than hiding a result.
-- **Show beside the histogram the count and the share of items that had no discriminating position at all.** That number is itself a finding about the vocabulary: a label the grammar could only reach one way was never a choice.
+- **Plot the figure plan 23 row #9 records: the product of the renormalised probabilities over the label's whole span, where a position the grammar left no choice at contributes exactly 1.000.** A forced position carries no information and is the entire source of the pile-up; because it multiplies by one, it drops out of the product rather than having to be excluded from it. **This bullet said \"the probability at the discriminating position\" until 2026-09-11**, and plan 23 row #9 retired that rule on the same day: measured against the pinned model, four of its vocabularies have no position where the grammar's legal set maps one-to-one onto the labels, because a one-letter token fits two of their values.
+- **Show beside the histogram the count and the share of labels whose `contested_positions` is zero** - the ones the grammar left no choice at anywhere in the span. That number is itself a finding about the vocabulary: a label the grammar could only reach one way was never a choice. It reads straight off the ledger column plan 23 row #14 carries; nothing here recomputes it.
 - **Stamp `logprob_mode` on the panel**, so a reader knows which decode produced the figure.
 - **The axis is in whole percent.** `console-design.md` forbids a value between zero and one reaching the screen.
 - **The median and the 5th percentile rule over the values, never a mean and never read off a bar.** A mean over a renormalised distribution is pulled by the forced-adjacent positions that survive the filter, and a percentile read out of a bin is a guess at where inside it the value fell.
@@ -737,7 +797,7 @@ This was recorded here rather than in plan 23 because a worker may not edit anot
 | 1 | **The political gate leads the tab.** It is the only figure that says whether every other figure means anything | Susan, 2026-09-11 |
 | 2 | **The tab is `Judgement`, singular.** The other three name a place; this one names an act | Susan, 2026-09-11 |
 | 3 | **The confidence panel is drawn, by owner override.** The design is in the section above and this row implements it | Owner, 2026-09-11, `CLAUDE.md` section 0 |
-| 4 | **The viewpoint panel is five opposed pairs with a balance point, always beside `none` and `undetermined`.** Never a ranked bar of eight. The section above is the whole reason | Susan, 2026-09-11; owner |
+| 4 | **The viewpoint panel is five rows, one per stance field, each with its own `not_applicable` count printed beside its two poles.** Never a ranked bar over the ten poles, never a stack, never a total. The section above is the whole reason, and it is written against the vocabulary plan 23 row #10 ships - **this decision named `none` and `undetermined` until 2026-09-11 and plan 23 row #10 decision 3 folded both into one `not_applicable` per axis** | Susan, 2026-09-11; owner; corrected 2026-09-11 |
 | 5 | **Kappa is one line, not a chart.** It is measured once over 60 items and never moves, so a chart where a sentence would do. **It stays on the console rather than in a pull-request body, because the day it fires it should fire in public** | Susan, 2026-09-11 |
 | 6 | **The tab never uses the word "confidence" bare.** `band` - high, medium, low - is already on every published item and `/console/model/` already draws its low count as `Marked "not sure"`. Measured 2026-09-11: high 4,993, medium 2,275, low 1,282 over 8,550 items. This tab's figure is **label confidence** in every string, and the spec asserts it | Susan, 2026-09-11 |
 | 7 | **No chart on this tab is stuffed into `Summaries`.** That route is about a published summary and every figure here is about a label | Owner, 2026-09-11 |
@@ -762,6 +822,7 @@ This was recorded here rather than in plan 23 because a worker may not edit anot
 - **Files touched:** `frontend/src/routes/console/voices/+page.svelte`, `frontend/src/routes/console/voices/+page.server.ts`, `frontend/src/routes/console/+page.svelte`, `frontend/src/routes/console/+page.server.ts`, `backend/idhazh/publish_source_health.py`, `backend/idhazh/contracts/source_health_view.py`, `schemas/source-health-view.schema.json`, `tests/fixtures/contracts/source-health-view/four-facts.json`, `config/idhazh.json`, `backend/tests/test_publish_source_health.py`, `frontend/tests/console-sources.spec.ts`, `frontend/tests/console-feeds.spec.ts`, `frontend/tests/console-source-cuts.spec.ts`, `frontend/tests/console-voices.spec.ts`, `docs/architecture/publishing/console.md`, `docs/architecture/publishing/console-payloads.md`, `docs/architecture/publishing/console-charts.md`, `docs/concepts/console-design.md`, `docs/architecture/sources/health.md`
 - **Acceptance gates:** `GATE-PY` with `backend/tests/test_publish_source_health.py`, `GATE-SCHEMA`, `GATE-WEB`, `GATE-BROWSER`, `GATE-SUITE`, and the section 12 browser smoke. Plus, in this row:
   - `schemas/source-health-view.schema.json` carries today's `version` and a `changelog` entry naming the new field;
+  - **`headline_sentence` is present and non-empty on every built payload**, including one built from an empty window (decision 8);
   - **the moved panels keep their own specs**, renamed rather than rewritten, and `Pipelines` keeps none of them (section 0.1, no prisoners);
   - `config/idhazh.json` gains a `payload_ceilings_bytes` entry for the tab's payload.
 - **Oracle:** **Every source panel is on exactly one route, and the reliability factor the page draws equals the one the ranker used.** Two halves, **both driven from the canary build and from built feed-health rows, never from the committed ledger** (Rule #12). The first counts each moved panel's own data attribute across all five built routes and asserts one. The second re-derives `feed_reliability` over the rows the payload was built from and holds the drawn value to it, to three decimal places. **The second half is the one that matters**: a console figure that is a second derivation of a ranking factor is two verdicts, and the day they disagree neither is trustworthy.
@@ -802,6 +863,7 @@ The threshold is **config, and the project already has the number**: `collect.so
 | 5 | **A feed under `collect.source_yield_alarm_min_decisions` judged items prints a dash.** Reusing the existing 30 rather than minting a second threshold | `CLAUDE.md` Rule #6; `config/idhazh.json` |
 | 6 | **No single combined score.** Four facts, four figures | `frontend/src/routes/console/+page.svelte` |
 | 7 | **This plan reads `ledger.reliability` and never modifies it.** Feed scoring belongs to another plan | Owner, 2026-09-11 |
+| 8 | **This tab carries a `headline_sentence` on the same rule row #12's does.** One sentence at the top, computed in the producer, never null, never empty, no adjective: the worst of this tab's figures against its own bound, or `Nothing on this page is outside its bound.`, or a count of the figures not computed yet. **A generated sentence on one of two new tabs is a pattern half-introduced**, and the next person cannot tell whether the other tab was an omission or a decision. `schemas/source-health-view.schema.json` carries the field | Susan, 2026-09-11; row #12 |
 
 ### Rejected alternatives
 
@@ -843,7 +905,17 @@ The threshold is **config, and the project already has the number**: `collect.so
 
 ### What it measures, and what a person writes
 
-- **Four target distributions**, one per vocabulary: desk, kind, lens, viewpoint. Each is a set of shares that sum to 1.0, written into `config/idhazh.json` with a sane default and a schema bound, per Rule #6.
+- **Four target distributions**, one per vocabulary: desk, kind, lens, viewpoint. Each is a set of shares that sum to 1.0, written into `config/idhazh.json` with a sane default and a schema bound, per Rule #6. **Each one names the denominator it sums over, because the four do not share one and "shares that sum to 1.0" was the whole specification until 2026-09-11.**
+
+| Vocabulary | Shares sum over | Why it is not the same as the one above it |
+| --- | --- | --- |
+| Desk | **published items in the day** | One desk an item, every item has one. This is the only one of the four where the obvious denominator is the right one, and it is why the other three went unnoticed |
+| Kind | **published items in the day** | One `article_kind` an item, never absent, with the feed's kind as the fallback. Same shape as desk |
+| Lens | **lens firings, not items** | A lens is **multi-label** and most items carry none: measured over 8,478 committed items, keyword lenses reach **27.0 percent**, so **73.0 percent carry no lens at all** (plan 23 row #19 decision 3). Shares over items cannot sum to 1.0 and shares over firings can. **The `no lens` share is published beside the distribution as its own figure** - it is 73 percent of the day and a target that cannot see it is a target over a quarter of the digest |
+| Viewpoint | **five separate distributions, one per stance field** | Plan 23 row #10 ships **five independent fields**, not one. A single viewpoint target cannot be written down: a piece arguing two things at once is on two axes, so the ten poles do not compete for one total. **Each axis's target is three shares over the gate-opened items - its two poles and its own `not_applicable`** - and a target that omits `not_applicable` is a target over a set nobody stated |
+
+**So the config holds eight distributions behind the word "four", and the divergence is reported per vocabulary rather than pooled.** Pooling them would add a lens firing to an item count, which is two units in one sum.
+- **`docs/concepts/placement.md` states which denominator each uses, in the same words.** A divergence whose denominator is only in the code is a number nobody can check, and this is the row that writes the page.
 - **The divergence is reported per day** on the existing day-metrics record, which is already day-sharded under `state/day-metrics/<YYYY>/<MM>/<DD>.json` and already published as a monthly projection. **No new ledger, no new shard, no new prune.**
 - **The desk one is drawn** on `Pipelines`, as one `TargetBar` per desk: the track at the desk's target share, the fill at the day's, and the marker where row #7's ceiling sits. Five bars and one number, which is what a `TargetBar` is for.
 - **Where a vocabulary does not exist yet, its target is absent and its divergence is null.** Viewpoint arrives with plan 23. An absent target reads as "nobody has said what this should look like", never as "it should be flat".
@@ -860,6 +932,7 @@ The threshold is **config, and the project already has the number**: `collect.so
 | 4 | **It rides on the existing day-metrics record.** A per-day quality number about the page is what that record is; a second day-sharded ledger would be a second prune and a second growing-reads declaration for one number a day | `CLAUDE.md` Rule #12; `backend/idhazh/publish_day_metrics.py` |
 | 5 | **The desk mix's `TargetBar` lands here, not on `Judgement`.** A `TargetBar` needs a threshold to mark and this is the row that owns it. Row #12 records the refusal and points here | Susan, 2026-09-11 |
 | 6 | Every field added to `DayMetrics` is **optional and an absent value reads as unknown**, because 22 committed day records do not carry it and none of them is rewritten | `CLAUDE.md` section 11 |
+| 7 | **Each target names its denominator, and the four do not share one.** Desk and kind sum over published items; lens sums over **firings**, because 73.0 percent of items carry no lens and a share over items cannot reach 1.0; viewpoint is **five distributions**, one per stance field, each over that axis's gate-opened items including its own `not_applicable`. **A divergence whose denominator is unstated is not a measurement**, and "shares that sum to 1.0" was the whole specification until 2026-09-11 | Andre, 2026-09-11; `CLAUDE.md` Rule #10 |
 
 ### Rejected alternatives
 
