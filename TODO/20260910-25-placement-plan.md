@@ -987,6 +987,7 @@ Named here so they are not mistaken for work this plan is doing.
 
 ## See also
 
+- [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **Row #5 here is the shortest path to something a reader can see**, and row #12 is on the critical path in both directions: it waits on plan 23 row #14 and plan 23 row #15 waits on it.
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - the plan that named this work and left it; its row #6 changes what names a desk and its row #16 is where an auto-created vertical comes from. **Four edges run between the two plans**: its row #21 owns the counterfactual ledger row #9a here extends; its row #17 is the weights loop that retired row #9b here; its row #15 supplies the classification figures row #12 here draws, and its row #14 is what row #12 waits on; and its rows #20 and #17 write `docs/concepts/placement.md`, which row #2 here creates.
 - [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - the five month-sharded ledgers, moved to day files. Nothing in this plan writes one of them, and its row #1 is what plan 23's four new ledgers - including the one row #9a here extends - take their day-tree rule from.
 - [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) - the plan that took the prerender gap out of section 18, and the ruling section 0.1 now inherits.

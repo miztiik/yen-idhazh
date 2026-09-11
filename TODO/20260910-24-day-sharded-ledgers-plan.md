@@ -479,6 +479,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 ## See also
 
+- [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **Row #1 here is the second-heaviest constraint in the project**, blocking 17 of the 58 live rows, and rows #5 to #8 are the one place where four rows collide with each other so hard that no arrangement runs two of them together.
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - the plan this split out of; its section 0 names this work and its section 26 names the same open gaps. **Three edges run between the two plans**: its rows #14, #16, #17 and #21 wait on row #1 here for `backend/idhazh/day_partition.py` and each add a prune to `backend/idhazh/retention.py` that rows #5 to #8 here rewrite; its row #1b and row #8 here both rewrite `state/scores/`; and its row #1b deletes `state/fingerprints.csv`, which section 0.2 here rules on.
 - [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the decision and research record for the conversation this plan split out of, including the measurements its budget arithmetic rests on.
 - [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) - the plan that put a cover on every read over a growing collection; row #1 repoints its links to the renamed partitions page.
