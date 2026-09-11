@@ -32,7 +32,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 **This section is a snapshot of 2026-09-11, and the dispatch list is no longer here.** Run `python backend/utilities/plan_status.py --ready`, which computes the same answer from the Reckoners every time it runs and so cannot go stale. What is still worth reading below is the REASONING: which rows collide, why the opening wave is seven and not more, and what that wave costs. [`20260911-handover.md`](20260911-handover.md) is the entry point for an agent arriving with no context.
 
-**Nineteen rows had every dependency satisfied when this was derived.** One of them, plan 23 row `#P1`, merged as pull request #608 later the same day; it is struck from the table below and the counts that follow it are the counts as derived.
+**Nineteen rows had every dependency satisfied when this was derived.** Two of them landed the same day and are struck from the table below: plan 23 row `#P1` as pull request #608, and plan 24 row `#1` as #609. **Neither pull request updated its own Reckoner line**, which is why [`20260911-handover.md`](20260911-handover.md) makes that update part of the row rather than a step after the merge. The counts that follow are the counts as derived.
 
 | Row | Plan | Group | Title |
 | --- | --- | --- | --- |
@@ -45,7 +45,6 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 | #5 | 23 | A | The item id becomes sixteen characters of base32 |
 | #7a | 23 | E | The classification code gets its own package |
 | #20 | 23 | A | The order of the day, written down |
-| #1 | 24 | A | One answer to what a day file is, and what a day window costs |
 | #2 | 24 | A | The score index can be rebuilt from the ledger it indexes |
 | #4 | 24 | B | The telemetry publisher declares the cover it already has |
 | #1 | 25 | A | Three docstrings defend a requirement the page retired |
@@ -63,8 +62,8 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 | Row | Why it is in the opening wave |
 | --- | --- |
-| 23 #P1 | **The longest pole.** 18 of the 58 live rows wait on it, and it is three prose files. **Landed as #608; the wave is six rows now** |
-| 24 #1 | The second pole at 17, and it creates `backend/idhazh/day_partition.py`, which four rows of plan 23 wait on |
+| 23 #P1 | **The longest pole.** 18 of the 58 live rows wait on it, and it is three prose files. **Landed as #608; the wave is five rows now** |
+| 24 #1 | The second pole at 17, and it creates `backend/idhazh/day_partition.py`, which four rows of plan 23 wait on. **Landed as #609; the wave is five rows now** |
 | 11 #4 | The third pole at 15. It heads plan 11's only remaining chain, and that chain gates plan 23 row #7b, which gates eleven more rows |
 | 24 #2 | Five files. Plan 24 row #8 waits on it and nothing else does |
 | 25 #11 | Thirteen files, all console. Both of plan 25's tab rows wait on it |
@@ -101,8 +100,8 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 | Row | Wave | Live rows it blocks | What it is |
 | --- | --- | --- | --- |
-| 23 #P1 | 1 | 18 | The property section 0a names, restated |
-| 24 #1 | 1 | 17 | One answer to what a day file is |
+| 23 #P1 | 1 | 18 | The property section 0a names, restated. **Landed as #608** |
+| 24 #1 | 1 | 17 | One answer to what a day file is. **Landed as #609** |
 | 23 #2 | 2 | 17 | Every label vocabulary becomes config |
 | 23 #3 | 3 | 16 | Lens and event ids become slugs |
 | 11 #4 | 1 | 15 | The reachability gate and the downgrade ladder |
@@ -111,7 +110,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 | 23 #7a | 1 | 13 | The classification code gets its own package |
 | 11 #6 | 3 | 13 | The small model, its job and its cache go |
 
-**The longest pole is plan 23 row #P1, and it is three prose files.** It blocks 18 of the 58 live rows, it is ready today, and it writes `CLAUDE.md`, `AGENTS.md` and `docs/agents/guardrails.md` - no code, no contract, no schema. **It is the cheapest row on this page and the most expensive one to leave alone.** Second is plan 24 row #1 at 17, and third is plan 23 row #2 at 17, which waits only on #P1.
+**The longest pole is plan 23 row #P1, and it is three prose files.** It blocked 18 of the 58 live rows and it writes `CLAUDE.md`, `AGENTS.md` and `docs/agents/guardrails.md` - no code, no contract, no schema. **It was the cheapest row on this page and the most expensive one to leave alone.** Second is plan 24 row #1 at 17, and third is plan 23 row #2 at 17, which waits only on #P1. **The first two of those landed on 2026-09-11, as #608 and #609**, which puts plan 23 row #2 and the four plan 23 rows waiting on `day_partition.py` at the head of the queue.
 
 **Two of the top five belong to plan 11, which is four live rows.** `11 #4` blocks 15 rows and `11 #5` blocks 14, because plan 11 row 6 is what plan 23 row #7b waits on and eleven rows wait on that. **Plan 11 is the smallest open plan and the second-heaviest constraint in the project.**
 

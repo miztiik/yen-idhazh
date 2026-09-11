@@ -154,7 +154,7 @@ Four facts decide it, and all four were checked on 2026-09-11 rather than assume
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | One answer to what a day file is, and what a day window costs | - | A | PENDING | - | - | - |
+| 1 | One answer to what a day file is, and what a day window costs | - | A | DONE #609 | p24-r1 | #609 | worker |
 | 2 | The score index can be rebuilt from the ledger it indexes | - | A | PENDING | - | - | - |
 | 3 | The migration utility, and it refuses to write a tree it cannot read back | 1 | B | PENDING | - | - | - |
 | 4 | The telemetry publisher declares the cover it already has | - | B | PENDING | - | - | - |
