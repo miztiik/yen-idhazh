@@ -1,0 +1,248 @@
+# Execution order across the five open plans
+
+**Last Updated**: 2026-09-11
+
+**What this is.** One schedule over the five plan-docs that are open at once. Each of them proves its own rows do not collide; **nothing proved they do not collide with each other**, and nothing said what an orchestrator may dispatch on any given morning. This document is that answer and nothing else.
+
+**What this is not.** It decides no design, moves no decision, and owns no row. Every row still belongs to its own plan and is executed from there per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md). Where this document and a plan disagree about a row's dependencies or its files, **the plan wins and the row that noticed fixes this page in the same pull request**.
+
+**Why it lives in `TODO/` and not in `docs/` or `AGENTS.md`.** It is a schedule over five working documents and it is deleted the day the last of them closes, so it is working material by `CLAUDE.md` section 3's own definition. `docs/` is the memory and a page there that named five `TODO/` files would outlive every one of them. `AGENTS.md` is a derived cache and is explicitly not authoritative, so a schedule there would be the source of truth for nothing. The research record is a frozen reading of one design conversation about classification, and four of these five plans are not classification. **A worker opens the plan it was dispatched from, and every one of the five links to this page from its own "See also"** - which is the only test that matters.
+
+---
+
+## 0. The five plans, and the numbers this page is derived from
+
+Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Files touched` bullet and each plan's own Status Reckoner. **It is derived rather than authoritative**: a worker checks a pair by diffing the two rows' lists, never by trusting a table here.
+
+| Plan | Rows | Live rows | Groups | Parallel N it declares |
+| --- | --- | --- | --- | --- |
+| [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) | 8 | 4 | 8 | 1 |
+| [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) | 28 | 28 | 16 | 2 |
+| [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) | 8 | 8 | 6 | 2 |
+| [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) | 15 | 14 | 9 | 2 |
+| [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) | 4 | 4 | 2 | 2 |
+
+**58 live rows.** A row is live unless its own plan marks it DONE, RETIRED or DEFERRED - so plan 11's three merged rows and its deferred row #3c are out, and plan 25's retired row #9b is out.
+
+**The within-plan group discipline still holds, re-proved after this page was written.** Every group of every plan was re-checked by intersecting the rows' own file lists: **zero collisions in 41 groups across the five plans.**
+
+---
+
+## 1. What can start today
+
+**Nineteen rows have every dependency satisfied right now.** This is the list an orchestrator needs first and no document had it.
+
+| Row | Plan | Group | Title |
+| --- | --- | --- | --- |
+| #3b | 11 | C2 | Every call reports its own cost |
+| #4 | 11 | D | The gate that refuses before the plan is drafted, and the ladder that steps down |
+| #P1 | 23 | A | The property section 0a names, restated |
+| #P2 | 23 | B | The reference dataset, built so a number cannot flatter us |
+| #P4 | 23 | B | What one more call costs on the runner |
+| #P5 | 23 | C | Which distribution the runtime reports at a masked token |
+| #1a | 23 | C | The fingerprint stops gating and stops being read |
+| #5 | 23 | A | The item id becomes sixteen characters of base32 |
+| #7a | 23 | E | The classification code gets its own package |
+| #20 | 23 | A | The order of the day, written down |
+| #1 | 24 | A | One answer to what a day file is, and what a day window costs |
+| #2 | 24 | A | The score index can be rebuilt from the ledger it indexes |
+| #4 | 24 | B | The telemetry publisher declares the cover it already has |
+| #1 | 25 | A | Three docstrings defend a requirement the page retired |
+| #5 | 25 | A | The rail goes and the time lands under the heading |
+| #11 | 25 | G | The console strip takes five tabs |
+| #1 | 26 | A | What prerendering actually weighs, both arms |
+| #2 | 26 | A | The guard retires, and nothing a reader sees moves |
+| #3 | 26 | B | The three surfaces that say every route is prerendered |
+
+**Nineteen are unblocked; seven may run at once.** The other twelve are blocked by a *file*, not by a dependency, and section 3 is where that is proved. **Exactly one of the nineteen collides with nothing else in the set: plan 26 row #2.**
+
+### The opening wave, recommended
+
+**Seven rows, and no other ready row can join them.** Verified by intersecting the seven file lists pairwise, and then by testing every one of the other twelve against the set - each is refused by a named file.
+
+| Row | Why it is in the opening wave |
+| --- | --- |
+| 23 #P1 | **The longest pole.** 18 of the 58 live rows wait on it, and it is three prose files |
+| 24 #1 | The second pole at 17, and it creates `backend/idhazh/day_partition.py`, which four rows of plan 23 wait on |
+| 11 #4 | The third pole at 15. It heads plan 11's only remaining chain, and that chain gates plan 23 row #7b, which gates eleven more rows |
+| 24 #2 | Five files. Plan 24 row #8 waits on it and nothing else does |
+| 25 #11 | Thirteen files, all console. Both of plan 25's tab rows wait on it |
+| 26 #2 | Collides with nothing anywhere in the set |
+| 26 #3 | Four files, all prose and one test |
+
+**What this wave costs, named rather than hidden.** It contains **no reader-visible change**. Plan 25 row #5 is the one ready row a reader could see (section 5) and it cannot be in this wave: it and plan 24 row #1 both write `docs/architecture/publishing/layout.md`. **Running row #5 instead of plan 24 row #1 buys a visible change and delays the second-heaviest pole in the project by one wave.** The recommendation is to take the pole and run row #5 in the second wave, because nothing plan 24 row #1 blocks is reachable before the third wave and a day spent on it there is a day the schedule does not get back.
+
+**Plan 23 row #1a is deliberately not in it, and it is the reason the wave is seven and not more.** It writes 26 files, and it is the refusing row for nine of the twelve rows that cannot join: `CLAUDE.md`, `backend/idhazh/cli.py`, `backend/tests/test_contracts.py`, `backend/idhazh/assemble.py`, `backend/idhazh/contracts/app_config.py` and `docs/architecture/contracts/schemas.md` each put it against a different sibling. **It is the widest ready row and it pairs with almost nothing, so it wants a wave of its own** - and the second wave is where it fits, beside plan 25 row #5.
+
+---
+
+## 2. The critical path, and the longest pole
+
+**Nine waves of dependency, and one chain that is all nine.**
+
+| Wave | Row | What it is |
+| --- | --- | --- |
+| 1 | 23 #P1 | The property `CLAUDE.md` section 0a names, restated |
+| 2 | 23 #2 | Every label vocabulary becomes config |
+| 3 | 23 #3 | Lens and event ids become slugs |
+| 4 | 23 #6 | The desk is a new field |
+| 5 | 23 #7b | The two calls become a DAG |
+| 6 | 23 #8 | Call 1 labels: desk, lenses, article kind |
+| 7 | 23 #14 | The classification ledger, and the day file the console reads |
+| 8 | 25 #12 | `Judgement` - what the model made of each article |
+| 9 | 23 #15 | The console tab, at `/console/judgement/` |
+
+**The last two steps cross a plan boundary in both directions**, which is why no single plan could have found this chain. Plan 25 row #12 waits on plan 23 row #14 for its figures; plan 23 row #15 then waits on plan 25 row #12 for the producer and the payload. **Two plans, four edges between them, and the longest chain in the project runs through all four.**
+
+### The longest pole
+
+**Ranked by how many live rows wait on each, directly or through another row.**
+
+| Row | Wave | Live rows it blocks | What it is |
+| --- | --- | --- | --- |
+| 23 #P1 | 1 | 18 | The property section 0a names, restated |
+| 24 #1 | 1 | 17 | One answer to what a day file is |
+| 23 #2 | 2 | 17 | Every label vocabulary becomes config |
+| 23 #3 | 3 | 16 | Lens and event ids become slugs |
+| 11 #4 | 1 | 15 | The reachability gate and the downgrade ladder |
+| 11 #5 | 2 | 14 | One chart, drawn end to end |
+| 23 #P4 | 1 | 13 | What one more call costs on the runner |
+| 23 #7a | 1 | 13 | The classification code gets its own package |
+| 11 #6 | 3 | 13 | The small model, its job and its cache go |
+
+**The longest pole is plan 23 row #P1, and it is three prose files.** It blocks 18 of the 58 live rows, it is ready today, and it writes `CLAUDE.md`, `AGENTS.md` and `docs/agents/guardrails.md` - no code, no contract, no schema. **It is the cheapest row on this page and the most expensive one to leave alone.** Second is plan 24 row #1 at 17, and third is plan 23 row #2 at 17, which waits only on #P1.
+
+**Two of the top five belong to plan 11, which is four live rows.** `11 #4` blocks 15 rows and `11 #5` blocks 14, because plan 11 row 6 is what plan 23 row #7b waits on and eleven rows wait on that. **Plan 11 is the smallest open plan and the second-heaviest constraint in the project.**
+
+---
+
+## 3. Where two plans write one file
+
+**Every pair of rows in different plans was intersected.** 84 files are written by rows in more than one plan, and 391 cross-plan row pairs share at least one of them. The count is not the useful part - the shape is.
+
+**A glob hides a collision rather than avoiding one, and this page has the measurement.** Plan 11's rows named `backend/tests/**`, `schemas/*.schema.json`, `docs/**` and five more. Replacing those eight globs with the files the rows actually write **raised** the cross-plan pair count from 346 to 391 and the shared-file count from 79 to 84. The collisions were always there; a glob is simply a file list nobody can diff. Measured 2026-09-11, before and after that one edit.
+
+### The hot files
+
+| Written by | Plans | File | What it means for a wave |
+| --- | --- | --- | --- |
+| 19 rows | 11, 23, 25 | `backend/tests/test_contracts.py` | Every row that adds a contract field |
+| 18 rows | 11, 23, 24, 25 | `backend/idhazh/cli.py` | The single busiest module in the project. Assume any two rows collide here until their lists say otherwise |
+| 15 rows | 11, 23, 25 | `backend/idhazh/contracts/app_config.py` | Every row that adds a knob, and it regenerates a schema |
+| 15 rows | 11, 23, 25 | `config/idhazh.json` | The same rows |
+| 14 rows | 11, 23, 25 | `schemas/app-config.schema.json` | The drift gate fails on one byte, so this is a hard collision and never a soft one |
+| 13 rows | 23, 24, 25 | `backend/tests/test_marks.py` | Every row that adds a backend test module |
+| 12 rows | 23, 24, 25 | `docs/concepts/growing-reads.md` | Every row that reads a collection a run appends to |
+| 8 rows | 23, 24, 25 | `backend/tests/test_pipeline.py` | - |
+| 7 rows | 11, 23 | `backend/idhazh/visual_planner.py` and `backend/tests/test_visual_planner.py` | Resolved inside plan 23 by its row #7a, and not resolved between the two plans |
+| 7 rows | 23, 24 | `backend/idhazh/retention.py` and `backend/tests/test_retention.py` | The collision plan 23 section 0.1 already names |
+| 7 rows | 23, 24 | `docs/architecture/contracts/schemas.md` | - |
+| 7 rows | 23, 24, 25 | `docs/architecture/publishing/layout.md` | - |
+| 7 rows | 23, 25 | `backend/idhazh/rank.py` and `config/taxonomy.json` | - |
+| 7 rows | 23, 24, 25 | `backend/idhazh/ledger.py` and `backend/tests/test_ledger.py` | - |
+
+**`schemas/app-config.schema.json` is the one to watch.** A schema is generated, the drift gate compares bytes, and thirteen rows across three plans regenerate this one. Two such rows in one wave do not merge - they produce two diffs of one file and the second rebases onto a schema that moved.
+
+### What a wave actually costs
+
+**The dependency graph is nine waves. Dispatching it without breaking a file collision takes twenty-six.** That is the number this page exists to produce, and no plan could have found it.
+
+| Wave | Rows | Sub-waves needed | The clique that forces it |
+| --- | --- | --- | --- |
+| 1 | 19 | 5 | `backend/idhazh/cli.py`, `backend/tests/test_marks.py`, `docs/reference/measurements.md`, and plan 23 row #1a against nine siblings |
+| 2 | 9 | 3 | `config/idhazh.json` and `schemas/app-config.schema.json` across 23 #1b, 23 #21, 25 #2 |
+| 3 | 9 | 4 | **Plan 24 rows #5, #6, #7 and #8 all write `retention.py`, `ledger.py` and `cli.py`.** Four rows, every pair collides, so four sub-waves and no arrangement does better |
+| 4 | 7 | 4 | 23 #6 collides with four of the other six |
+| 5 | 2 | 2 | `backend/idhazh/cli.py` |
+| 6 | 1 | 1 | - |
+| 7 | 2 | 1 | 23 #12 and 23 #14 are already a legal pair |
+| 8 | 8 | 5 | `config/idhazh.json`, `app_config.py`, `test_classify.py`, `classify/labels.py` |
+| 9 | 1 | 1 | - |
+
+**Wave 3's four is a floor, not an estimate.** Plan 24's rows #5 to #8 are four rows where every pair shares a file, so no ordering runs two of them together. Their own plan already says this - it is why they are four singletons in four groups. **The other rows are an upper bound taken by one assignment**; a different arrangement may do better and may not do worse than the cliques above.
+
+### The pairs that look safe and are not
+
+These are the ones a person composing a wave by reading two plan titles would get wrong.
+
+| Pair | Shared file | Why it is not obvious |
+| --- | --- | --- |
+| 23 #P1 x 26 #1 | `CLAUDE.md` | A classification rule restatement and a prerender measurement. Nothing connects them but the contract file |
+| 23 #P4 x 26 #3 | `backend/tests/test_workflows.py` | A runner measurement and a prose correction |
+| 11 #4 x 25 #1 | `docs/architecture/publishing/visuals.md` | A downgrade ladder and three docstrings |
+| 23 #1a x 25 #11 | `backend/tests/test_console_payloads_producer.py` | A fingerprint removal and a console strip |
+| 23 #5 x 25 #1 | `docs/architecture/publishing/visuals.md` | An item-id widening and three docstrings |
+| 24 #1 x 25 #5 | `docs/architecture/publishing/layout.md` | A day-partition module and a time rail |
+| 24 #6 x 25 #13 | `docs/architecture/sources/health.md` | A ledger migration and a console tab |
+| 25 #6 x 26 #2 and 26 #4 | `docs/architecture/publishing/frontend.md` | Plan 26 already splits its own two writers across groups; plan 25 row #6 is a third writer in a different plan |
+
+---
+
+## 4. The cross-plan dependencies, verified against the plans
+
+**All three are already written into the Reckoners that own them.** This page adds no edge; it names them in one place.
+
+| Edge | Where it is declared | Verified |
+| --- | --- | --- |
+| Plan 23 row #7b waits on plan 11 row 6 | Plan 23 section 1 Depends-on, and its section 0.4 | Yes. **Naming row 6 is enough**: plan 11 row 6 waits on row 5, and row 5 on row 4, so the whole chain is implied by one edge |
+| **Four** rows of plan 23 wait on plan 24 row #1 | Plan 23 section 0.1, and the Depends-on of rows #14, #16, #17 and #21 | Yes, and the count is four rather than five. Plan 23 creates four new day-sharded trees - `classifications`, `vertical-proposals`, `lens-weights` and `counterfactual-scores`. **Plan 25 creates none.** Its row #9a adds columns to plan 23 row #21's ledger and its row #14 writes the day-metrics record that already exists |
+| Plan 25 row #12 waits on plan 23 row #14 | Plan 25 section 1, and its section 0.4 | Yes. And the return edge - plan 23 row #15 waits on plan 25 row #12 - is declared in plan 23 section 1 |
+
+**A fourth edge is declared and is easy to miss.** Plan 23 rows #14, #16, #17 and #21 each add a prune to `backend/idhazh/retention.py`, which plan 24 rows #5 to #8 all rewrite. Neither side blocks the other; whichever lands second re-reads the file. Plan 23 section 0.1 says so.
+
+**A fifth is outside these five plans.** Plan 24 row #1 renames `docs/concepts/month-partitions.md`, and [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) carries seven of the seventeen links to it. That plan is open work and is not scheduled here. Plan 24 row #1 decision 2a names it.
+
+---
+
+## 5. The shortest path to something a reader can see
+
+**One row: plan 25 row #5.** It is ready today, it depends on nothing, and it is the only ready row that changes the page a reader opens. It retires the time rail and puts the timestamp under the heading, in the item's own eyebrow. **It is not in the recommended opening wave** because it and plan 24 row #1 both write `docs/architecture/publishing/layout.md`, and that is the trade section 1 names: one visible change now, against the project's second-heaviest pole delayed by a wave. **Run it in the second wave**, where it is free.
+
+**Two rows, for the larger increment: plan 11 row #4 then row #5.** Row #5 is "One chart, drawn end to end" - the first drawn chart in this project, and the row its own plan added because a contract with no rendered output delivers nothing a person can check. Row #4 is ready now and row #5 is the only thing waiting on it.
+
+**What is not the answer.** Plan 26 is four rows of prose, a measurement and a deleted build-time guard, and its own section 0.0 says a reader loses nothing and sees nothing. It is worth running - it is cheap, it collides with almost nothing, and it closes a gap two other plans name - but it is not a visible increment and it does not claim to be.
+
+---
+
+## 6. The documentation set
+
+**Every `docs/` page these five plans create.** Each plan routes its own pages and states whether the page exists; this table is the union, checked for two plans creating one page.
+
+| Page | Created by | Tier | Status |
+| --- | --- | --- | --- |
+| `docs/concepts/taxonomy.md` | 23 #2 | concepts | New. Extended by 23 #3, #6, #19 |
+| `docs/concepts/classification.md` | 23 #2 | concepts | New. Extended by 23 #8, #9, #10, #11, #13 |
+| `docs/concepts/placement.md` | **23 #20 or 25 #2, whichever lands first** | concepts | New. Both plans say so, both name the other, and both extend it. **Resolved** |
+| `docs/how-to/measure-a-classifier.md` | 23 #P2 | how-to | New. Extended by 23 #P3, #18 |
+| `docs/how-to/promote-a-vertical.md` | 23 #16 | how-to | New |
+| `docs/reference/benchmarks/` | **23 #P5 and 26 #1** | reference | New directory, two different records. **See below** |
+| `docs/concepts/partitions.md` | 24 #1 | concepts | **Renamed** from `month-partitions.md`, not created |
+| `corpus/reference-dataset-1/README.md` | 23 #P2 | not `docs/` | New datasheet. Extended by 23 #P3 |
+
+**One defect, and it is a sentence rather than a file.** `docs/reference/benchmarks/` does not exist, and **two rows each say they write the first record in it** - plan 23 row #P5 and plan 26 row #1. The records are different and neither blocks the other, but both rows are in wave 1 and **whichever lands second carries a false sentence in its own plan**. The fix is one word in whichever plan's row lands second: it writes *a* record, and the row that created the directory is named. Found 2026-09-11; neither plan named it.
+
+**No other page is created twice, and no page is created under two names.** Both such defects were found and fixed on 2026-09-11 inside the plans that carried them: plan 23 row #20 wrote `docs/concepts/the-order-of-the-day.md` for the question `docs/concepts/placement.md` answers, and two how-to pages for a weekly tuning loop that no longer exists - `tune-the-lens-weights.md` and `tune-the-placement-weights.md` - are created by nothing. Re-checked here and still clean.
+
+**Plans 11 and 26 create no page.** Plan 11 names `docs/**` rather than a page, which section 7 below is about. Plan 26 writes one benchmark record and corrects four sentences in three existing pages.
+
+---
+
+## 7. What this page does not do
+
+It schedules nothing outside these five plans. [`20260823-known-defects-plan.md`](20260823-known-defects-plan.md), [`20260827-summarizer-fine-tuning-plan.md`](20260827-summarizer-fine-tuning-plan.md) and [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) are open and are not on it; the one edge that reaches one of them is in section 4.
+
+It changes no decision, no oracle, no measurement and no vocabulary in any plan. It moves no row between groups. Where it disagrees with a plan, the plan wins.
+
+**It does not stay true on its own.** Every number here is derived from the plans' Reckoners and file lists on 2026-09-11. A row that widens its file list invalidates section 3, and a row that lands invalidates section 1. **A worker that widens a file list re-checks its own group first, as its plan already requires, and then says in its pull request that this page is stale if it was.**
+
+---
+
+## See also
+
+- [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
+- [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row in the five plans is written in.
+- [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - one model, two calls. Four live rows, and two of them are in the top five poles.
+- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - what an article is about. 28 rows, and seven of the nine critical-path waves.
+- [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - five ledgers file by day. Its row #1 is a prerequisite of four rows in plan 23.
+- [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - where a story goes. Four edges run between it and plan 23.
+- [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) - the guard retires, the prerendering does not. The cheapest plan on this page.
