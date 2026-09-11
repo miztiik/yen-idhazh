@@ -30,13 +30,14 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 ## 1. What can start today
 
-**Nineteen rows have every dependency satisfied right now.** This is the list an orchestrator needs first and no document had it.
+**This section is a snapshot of 2026-09-11, and the dispatch list is no longer here.** Run `python backend/utilities/plan_status.py --ready`, which computes the same answer from the Reckoners every time it runs and so cannot go stale. What is still worth reading below is the REASONING: which rows collide, why the opening wave is seven and not more, and what that wave costs. [`20260911-handover.md`](20260911-handover.md) is the entry point for an agent arriving with no context.
+
+**Nineteen rows had every dependency satisfied when this was derived.** One of them, plan 23 row `#P1`, merged as pull request #608 later the same day; it is struck from the table below and the counts that follow it are the counts as derived.
 
 | Row | Plan | Group | Title |
 | --- | --- | --- | --- |
 | #3b | 11 | C2 | Every call reports its own cost |
 | #4 | 11 | D | The gate that refuses before the plan is drafted, and the ladder that steps down |
-| #P1 | 23 | A | The property section 0a names, restated |
 | #P2 | 23 | B | The reference dataset, built so a number cannot flatter us |
 | #P4 | 23 | B | What one more call costs on the runner |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token |
@@ -62,7 +63,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 | Row | Why it is in the opening wave |
 | --- | --- |
-| 23 #P1 | **The longest pole.** 18 of the 58 live rows wait on it, and it is three prose files |
+| 23 #P1 | **The longest pole.** 18 of the 58 live rows wait on it, and it is three prose files. **Landed as #608; the wave is six rows now** |
 | 24 #1 | The second pole at 17, and it creates `backend/idhazh/day_partition.py`, which four rows of plan 23 wait on |
 | 11 #4 | The third pole at 15. It heads plan 11's only remaining chain, and that chain gates plan 23 row #7b, which gates eleven more rows |
 | 24 #2 | Five files. Plan 24 row #8 waits on it and nothing else does |
@@ -229,16 +230,17 @@ These are the ones a person composing a wave by reading two plan titles would ge
 
 ## 7. What this page does not do
 
-It schedules nothing outside these five plans. [`20260823-known-defects-plan.md`](20260823-known-defects-plan.md), [`20260827-summarizer-fine-tuning-plan.md`](20260827-summarizer-fine-tuning-plan.md) and [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) are open and are not on it; the one edge that reaches one of them is in section 4.
+It schedules nothing outside these five plans. Measured 2026-09-11 with `python backend/utilities/plan_status.py`: **eighteen plan-docs under `TODO/` carry a live row, and this page covers five of them.** [`20260823-known-defects-plan.md`](20260823-known-defects-plan.md), [`20260827-summarizer-fine-tuning-plan.md`](20260827-summarizer-fine-tuning-plan.md) and [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) are open and are not on it; the one edge that reaches one of them is in section 4. Plans 12 to 22 are a chain behind plan 11 and are not on it either. Unscheduled is not closed.
 
 It changes no decision, no oracle, no measurement and no vocabulary in any plan. It moves no row between groups. Where it disagrees with a plan, the plan wins.
 
-**It does not stay true on its own.** Every number here is derived from the plans' Reckoners and file lists on 2026-09-11. A row that widens its file list invalidates section 3, and a row that lands invalidates section 1. **A worker that widens a file list re-checks its own group first, as its plan already requires, and then says in its pull request that this page is stale if it was.**
+**It does not stay true on its own, so refreshing it is part of the row that invalidated it.** Every number here is derived from the plans' Reckoners and file lists on 2026-09-11. A row that widens its file list invalidates section 3; a row that lands invalidates sections 0, 1 and 2. **The row that invalidated a section corrects that section in its own pull request** - saying in a pull request that this page is stale is not updating it, and the next agent reads the page, not the pull request. [`20260911-handover.md`](20260911-handover.md) lists which section goes stale on what.
 
 ---
 
 ## See also
 
+- [`20260911-handover.md`](20260911-handover.md) - **start here with no context.** The queue reader, the reading order, the standing traps, and which section of this page a row has to refresh.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row in the five plans is written in.
 - [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - one model, two calls. Four live rows, and two of them are in the top five poles.

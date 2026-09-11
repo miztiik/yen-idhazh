@@ -32,7 +32,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | Six numbers the job already has and throws away | - | A | DONE #525 (three of six) | yi-h01-memory | #525 | worker |
 | 2 | A model swap can no longer inherit in silence | - | A | DONE #528 | yi-h02-inherit | #528 | worker |
 | 3 | The window doubles and flash attention pays for it | 1, 2 | B | DONE #547 - trigger 1 CLEARED by measurement | yi-h06-window | #547 | worker |
-| 4 | One run prices the runtime and nothing else | 3 | C | DONE - run `34379502244` read out; trigger 1 clears at 6.84 GiB | yi-h08-readout | - | orchestrator |
+| 4 | One run prices the runtime and nothing else | 3 | C | DONE #552 - run `34379502244` read out; trigger 1 clears at 6.84 GiB | yi-h08-readout | #552 | orchestrator |
 | 5 | The article cap doubles to 10,000 tokens | 3 | B2 | DONE #548 | yi-h07-cap | #548 | worker |
 
 ### Trigger 1 is CLEARED. The window fits, and here is the reading that settles it

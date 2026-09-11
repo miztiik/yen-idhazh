@@ -14,25 +14,31 @@ Why the split exists: the orchestrator's context is the scarce resource. If it i
 
 ```
 orchestrator (main thread) worker subagent (one per row) persona custom agents
- read plan-doc + Status Reckoner runSubagent(default) per row runSubagent("Fowler...") etc.
- pick next dispatchable row(s) ----> bootstrap; implement the row ----> resolve ONE ambiguity,
- create worktree + branch code + tests + docs return a written ruling
- dispatch worker; mark IN-FLIGHT run Oracle + acceptance gates (an input, not an approval)
+ read the queue; adopt or close runSubagent(default) per row runSubagent("Fowler...") etc.
+ read plan-doc + Status Reckoner bootstrap; implement the row resolve ONE ambiguity,
+ pick next dispatchable row(s) ----> code + tests + docs ----> return a written ruling
+ create worktree + branch stamp its OWN Reckoner line (an input, not an approval)
+ dispatch worker; mark IN-FLIGHT run Oracle + acceptance gates
  receive structured report <---- consult personas on ambiguity <----
  run DoD + ship-a-pr; merge on green return report (does NOT merge)
- flip Status DONE #pr; distill; advance
+ confirm the line landed; distill; advance
 ```
 
 ## Roles
 
 ### The orchestrator (main thread) does exactly this, and only this
-1. Bootstrap; read the plan-doc Section 0 (operating contract) + Section 1 (Status Reckoner).
-2. Select the next dispatchable row(s): every `Depends-on` is `DONE`; rows sharing a `Parallel-group` dispatch together, up to `Parallel N`. Waiting for checks is not a dependency.
-3. Create an isolated git worktree off `origin/main` + a named branch per row. Never share a worktree between rows or with a parallel agent (worktree contamination silently sweeps one row's edits into another's PR). Fill the Status Reckoner `Worktree`.
-4. Dispatch one worker subagent per row (`runSubagent`, default agent) with a self-contained brief (below). Set `Status = IN-FLIGHT`; fill `Subagent`.
-5. Receive the worker's report. Verify its test records and the merge candidate's CI checks against the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md). Do not repeat an unchanged worker check. If a merge changes the tested inputs, select checks for those changed inputs. On green gates, remove the row's worktree and then AUTO-merge (`gh pr merge --squash --delete-branch`). If checks or publish/deploy jobs are still running for one independent row, keep dispatching other ready rows instead of idling.
-6. Flip `Status = DONE #<pr>`; unblock dependents; [distill](distill-a-plan.md) the closed row.
-7. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
+1. Read the queue before adding to it: what is already half-done, and what the tables say is done. Adopt or close it first (below).
+2. Bootstrap; read the plan-doc Section 0 (operating contract) + Section 1 (Status Reckoner).
+3. Select the next dispatchable row(s): every `Depends-on` is `DONE`; rows sharing a `Parallel-group` dispatch together, up to `Parallel N`. Waiting for checks is not a dependency.
+4. Create an isolated git worktree off `origin/main` + a named branch per row. Never share a worktree between rows or with a parallel agent (worktree contamination silently sweeps one row's edits into another's PR). Fill the Status Reckoner `Worktree`.
+5. Dispatch one worker subagent per row (`runSubagent`, default agent) with a self-contained brief (below). Set `Status = IN-FLIGHT`; fill `Subagent`.
+6. Receive the worker's report. Verify its test records and the merge candidate's CI checks against the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md). Do not repeat an unchanged worker check. If a merge changes the tested inputs, select checks for those changed inputs. On green gates, remove the row's worktree and then AUTO-merge (`gh pr merge --squash --delete-branch`). If checks or publish/deploy jobs are still running for one independent row, keep dispatching other ready rows instead of idling.
+7. Confirm the merged diff carried the row's own Reckoner line (below); unblock dependents; [distill](distill-a-plan.md) the closed row.
+8. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
+
+**Step 1 exists because an interrupted run leaves no note.** A worker that is killed mid-row never writes its report, never opens a pull request, and never clears the `IN-FLIGHT` it was given, so the next agent to arrive sees a queue that looks idle and a box that is not. What it leaves behind is a checkout with edits in it and a branch nobody proposed - indistinguishable, at a glance, from a checkout somebody finished with. Before selecting any row, list the worktrees and branches on the box, ask which plan row each one belongs to, and ask the forge whether its pull request is open, merged or absent. Then decide per item: adopt the work, or remove it. Starting a fresh row beside an abandoned one is how the same row gets done twice, and how two branches end up writing the same file.
+
+The project's plan-queue reader answers all three questions in one command - what each Reckoner says, what can start now, and which worktrees and branches no row claims. Where the project has no such tool, the same answer is a `git worktree list`, a branch list, and one query for open pull requests, read against the Reckoners by hand.
 
 **Between selecting a row and dispatching it, check the row against the tree. Two things, and both take seconds.**
 
@@ -56,6 +62,10 @@ closure uses documentation checks and CI, not a fresh local application suite.
 
 **When the orchestrator reports to the user, it translates; it does not forward.** A worker writes in the vocabulary of the subsystem it just changed, which is correct for the doc that row updated and wrong for a person asking what happened. Say what each number means next to the number (`CLAUDE.md` section 0b). Forwarding a worker's phrasing is the single easiest way for an orchestrator to break the voice rule while every row underneath it is green.
 
+**A row's pull request updates that row's Reckoner line, inside that same pull request.** Not after the merge, and not by the orchestrator later. The worker edits one line of one table - its own row's `Status`, `Worktree`, `PR` and `Subagent` - and nothing else in the Reckoner, so the merged diff is self-describing: the change and the record that it happened arrive in one commit, and there is no window in which they disagree. The pull request number is not known while the branch is being written, which is exactly what the placeholder-then-stamp pattern in [ship-a-pr.md](ship-a-pr.md) is for: write `PR #_pending_`, open the pull request, then stamp the number in a second commit that the squash absorbs.
+
+The cost of leaving it until afterwards is that nothing carries the update - it belongs to a step that runs after the only artefact anybody reviews has already merged, so an orchestrator that dies, is interrupted, or simply moves on leaves a row that is finished and a table that says it is not. Measured 2026-09-11: the first row executed under this contract merged in a pull request that touched no Reckoner line, and hours later that row still read `PENDING` with an empty `PR` column while the work was on the trunk. The instruction to flip it was written down and read by the agent that failed to do it, which is the finding worth keeping - **wording alone did not hold, so the update moved inside the diff that is reviewed.** Step 7 above verifies rather than performs it, and the project's plan-queue reader fails when a merged pull request names a row that never learned it landed.
+
 ### The worker subagent (one per row) does the actual work
 Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Scope, Files touched, Acceptance gates, Oracle, Decisions, Rejected alternatives) plus the standing instruction: run bootstrap, honor CLAUDE.md, stay in scope, consult personas on ambiguity, return a report. The worker:
 1. Runs bootstrap; reads the row + the docs its surface touches.
@@ -64,7 +74,8 @@ Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Sc
 4. Runs the row's Oracle and the local checks selected by the project's gate guide. Leaves full-suite checks assigned to CI there; a list of acceptance gates is not an instruction to repeat every CI job locally. Records the tested inputs, selection, result and test counts. An active check is followed to completion, never launched again because its output is quiet.
 5. Turns every defect discovered during execution into explicit work: fix it in the row if it is in scope, or record a follow-up row / scope-change item. Do not bury defects in a footnote.
 6. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state. **The report opens with one plain sentence saying what the row settled, before any table.** A report that opens with a table hands the orchestrator the subsystem's vocabulary, and the orchestrator then forwards it to a person who asked what happened (`CLAUDE.md` section 0b).
-7. Does NOT merge, does NOT edit the Status Reckoner, does NOT start another row. Merge and closure are the orchestrator's.
+7. Updates its OWN row's Reckoner line in its own pull request - `Status`, `Worktree`, `PR`, `Subagent` - and no other line of that table. Refreshes any derived page whose numbers this row invalidates, in the same pull request, for the same reason.
+8. Does NOT merge, does NOT edit another row's line, does NOT start another row. Merge and closure are the orchestrator's.
 
 ### Persona custom agents resolve ambiguity (they are not an approval gate)
 When a row is genuinely ambiguous - a design fork, a contested decision, a fact-finding sweep - the worker dispatches the relevant persona custom agent(s) **by their exact name as listed in CLAUDE.md section 14** (plus "Explore" for read-only breadth) via `runSubagent`. A persona returns a WRITTEN ruling the worker bakes into the row; it is an input to the worker's action, never a request-for-approval surface (bootstrap's AUTO policy). A contested decision runs the relevant personas in DEBATE to ONE ruling (author-a-plan.md step 3).
