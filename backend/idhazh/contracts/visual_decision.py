@@ -39,11 +39,72 @@ class VisualState(StrEnum):
     RENDER_FAILED = "render_failed"
 
 
+class NoneReason(StrEnum):
+    """Which gate decided this item carries no picture.
+
+    `none` is the majority outcome by design - two items in three - so a `none`
+    with no cause makes the largest number an operator reads the one that
+    explains nothing.
+
+    **One member per gate, never one per call site.** The reachability gate
+    refuses in two places and both record `not_reachable`, because what an
+    operator acts on is the gate rather than the line of code.
+
+    **And one member per gate that has a writer.** The design record names six
+    gates and the two-call flow adds a seventh; the potential class, the novelty
+    floor, the sufficiency bar and the per-visual byte cap are not built, so a
+    member for each would be a word nobody can produce, nobody can retire and
+    nobody can tell from a bug. Each arrives as an additive member with the row
+    that builds its gate.
+
+    The single-call planner these four replace writes nothing here. Its causes
+    are sentences in `rationale` and several of them - no summary to illustrate,
+    a reply that lost its shape, a kind with no renderer - are not gates at all,
+    so typing them into this vocabulary would be work the row that retires that
+    planner deletes.
+    """
+
+    #: The reachability gate refused before a plan was drafted: no choice over
+    #: this article's elements could have survived the validator. The call still
+    #: ran and still wrote the summary, with the plan fields suppressed.
+    NOT_REACHABLE = "not_reachable"
+    #: The model was asked and answered `none`. The ordinary answer, and the one
+    #: the design wants to stay common.
+    MODEL_DECLINED = "model_declined"
+    #: A plan was drafted, the validator refused it, and the downgrade ladder
+    #: reached no depth that validates. WHICH check refused is `ValidatorCheck`'s
+    #: to say; one fact with two homes is a fact that can disagree with itself.
+    VALIDATION_FAILED = "validation_failed"
+    #: The reply ran out of output budget after the summary closed, so the plan
+    #: was never written. The item publishes; the picture is what was lost.
+    OUTPUT_BUDGET_CUT = "output_budget_cut"
+
+
 class VisualDecision(Contract):
     """The visual planner's decision plus the Render stage's outcome, one per item."""
 
     __schema_stem__: ClassVar[str] = "visual-decision"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-11",
+            change=(
+                "Added none_reason and the NoneReason enum it is typed with. Optional, "
+                "null by default, and refused on a decision that carries a visual."
+            ),
+            why=(
+                "A `none` recorded no cause, and `none` is the majority outcome by design "
+                "- so the largest number an operator reads explained nothing, and no gate "
+                "could be retired, tuned or shown to work. It is a typed enum rather than "
+                "a sentence in `rationale` because a console counts members and cannot "
+                "count prose. Four members, one per gate that has a writer in this build; "
+                "the potential class, the novelty floor, the sufficiency bar and the "
+                "per-visual byte cap arrive with the rows that build them. The read-side "
+                "migration is the default: a payload written before the field existed "
+                "carries null, which is the honest reading - nothing recorded says which "
+                "gate refused it - and the single-call planner writes null for the same "
+                "reason."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-05T18:00",
             change=(
@@ -219,6 +280,14 @@ class VisualDecision(Contract):
             "checks rejected."
         ),
     )
+    none_reason: NoneReason | None = Field(
+        default=None,
+        description=(
+            "Which gate decided this item carries no picture. Null on a decision that "
+            "carries one, and null on a payload written before the field existed or by "
+            "the single-call planner, which has no gate vocabulary."
+        ),
+    )
     failure_detail: UntrustedLine | None = None
 
     @model_validator(mode="after")
@@ -235,8 +304,11 @@ class VisualDecision(Contract):
                 raise ValueError("an item decided to nothing carries no spec")
             if self.visual_state is not VisualState.ABSENT:
                 raise ValueError("an item decided to nothing has no visual to be in a state about")
-        elif not self.spec:
-            raise ValueError("a planned visual must carry the spec it was planned as")
+        else:
+            if not self.spec:
+                raise ValueError("a planned visual must carry the spec it was planned as")
+            if self.none_reason is not None:
+                raise ValueError("only an item decided to nothing records the gate that refused it")
 
         if self.visual_state is VisualState.RENDERED:
             if self.asset_path is None:

@@ -1,0 +1,42 @@
+
+The plan.
+
+  Write "summary" first and "visual" second. Finish the summary before you
+  start the plan. You never type a number into the plan.
+
+  Decide whether this item wants a picture at all. Nothing is the ordinary
+  answer: two items in three carry no picture, and a picture that only decorates
+  the prose costs a reader time and returns none.
+
+  "decision" - "visual" or "none". If "none", leave "purpose", "type", "title"
+  and "caption" null and every list empty, and say why in "why".
+
+  "purpose" - what the reader is asked to do with it. Commit to this before you
+  choose a type, or the type picks the purpose for you.
+
+  "type" - the form.
+
+  "encodings" - which elements fill which channel. Every channel is a key and
+  you write all of them; a channel this picture does not draw gets an empty
+  list.
+
+  "element_ids" - every element the picture draws from, listed once.
+
+  "labels" - the elements whose own words name the marks and the axes.
+
+  "annotations" - the elements to mark first.
+
+  "why" - why this form, or why nothing. Nobody sees this.
+
+  "title" and "caption" - what the picture is called, and one sentence under
+  it.
+
+  "confidence" - how sure you are, between 0 and 1.
+
+  Everywhere the plan points at something, copy an address from the table
+  above. Never type a figure, a position, a size or a colour. The picture is
+  drawn from the item's own characters at the addresses you name, so an address
+  the table does not carry draws nothing.
+
+  Plan the item, not your summary. The summary is a compression and it has
+  dropped things the table still holds.
