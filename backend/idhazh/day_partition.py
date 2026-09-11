@@ -49,11 +49,11 @@ from collections.abc import Iterator
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
-from typing import NoReturn
+from typing import Final, NoReturn
 
 #: A year is four digits; a month and a day are two.
-YEAR_WIDTH = 4
-SEGMENT_WIDTH = 2
+YEAR_WIDTH: Final = 4
+SEGMENT_WIDTH: Final = 2
 
 
 def _is_segment(name: str, width: int) -> bool:

@@ -118,14 +118,14 @@ def _days_walked(state: Path) -> list[str]:
     )
 
 
+Writer = Callable[[Path, str], None]
+Reader = Callable[[Path], list[str]]
+
 #: Every reader of a `state/` day tree: the directory it owns, the writer that
 #: puts one day in it, and the read that says which days it found.
 #:
 #: A row is added here when a reader is added, and that is the point - a reader
 #: this table does not drive is the reader that starts disagreeing.
-Writer = Callable[[Path, str], None]
-Reader = Callable[[Path], list[str]]
-
 READERS: Final[tuple[tuple[str, str, Writer, Reader], ...]] = (
     ("day_partition.day_files", ledger.PUBLISHED_DIRNAME, _write_published, _days_walked),
     ("ledger.load_published", ledger.PUBLISHED_DIRNAME, _write_published, _days_published),
