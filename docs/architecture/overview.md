@@ -34,13 +34,13 @@ flowchart LR
  subgraph fe["frontend/ - GitHub Pages"]
  direction TB
  B["prerender at build time<br/><i>home, archive, scores, console</i>"]
- S["static pages<br/><i>a day page reads the JSON in the browser</i>"]
- B --> S
+ S["a day page<br/><i>fetches the JSON in the browser</i>"]
  end
 
  F1 --> P
  AS --> D1 & D2 & D3
  D1 & D2 & D3 --> B
+ D1 & D2 -->|"at read time"| S
 
  style ci fill:#eef2ff,stroke:#4c6ef5
  style fe fill:#f0fdf4,stroke:#16a34a

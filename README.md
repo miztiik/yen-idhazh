@@ -51,7 +51,7 @@ flowchart TD
 
     subgraph read["Read time - a static page"]
         direction TB
-        G["<b>Static pages</b><br/>home, archive and scores prerendered<br/>a day page renders in the browser"]
+        G["<b>Two kinds of page</b><br/>home, archive, scores prerendered<br/>a day page renders in the browser"]
         H["<b>On-device search</b><br/>optional, reader-initiated"]
         G -.->|"only if you click"| H
     end
