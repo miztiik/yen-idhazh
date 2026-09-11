@@ -1,6 +1,6 @@
 # How to ship a PR
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-11
 
 The end-to-end runbook for taking a worker branch from "ready to commit" to "merged + cleaned up". Procedural counterpart to [CLAUDE.md](../../CLAUDE.md) section 8 (Git Hygiene) + section 9 (Definition of Done) + section 12 (published-surface verification).
 
@@ -34,8 +34,8 @@ edits. Check `git worktree list` before choosing the new directory:
 ```powershell
 git fetch origin main
 git worktree list
-git worktree add -b <type>/<scope>-<slug>../<worktree-name> origin/main
-Set-Location -LiteralPath../<worktree-name>
+git worktree add -b <type>/<scope>-<slug> ../<worktree-name> origin/main
+Set-Location -LiteralPath ../<worktree-name>
 ```
 
 If work already exists in the shared checkout, preserve and verify its exact
@@ -55,7 +55,7 @@ All file edits, deletes, schema bumps, test changes. The plan-doc / concept / ho
 git add <named paths>
 git status --short # Verify EVERY named path shows M / A / D / R in column 1.
  # Any ' M' (space-M) entry means the path is NOT staged.
-git commit -F.tmp_commit_msg.txt # or: git commit -m "<single-line message>"
+git commit -F .tmp_commit_msg.txt # or: git commit -m "<single-line message>"
 ```
 
 The `git status --short` verification protects against the staged-then-silently-unstaged bug (a path can show `MM` if it was staged and then edited again; if you commit without re-`git add`, the second edit ships invisibly missing).
@@ -66,7 +66,7 @@ If you author the commit message in a scratch file with PowerShell, prefer `[Sys
 
 ```powershell
 git push -u origin <branch>
-gh pr create --base main --head <branch> --title "<title>" --body-file.tmp_pr_body.md
+gh pr create --base main --head <branch> --title "<title>" --body-file .tmp_pr_body.md
 ```
 
 Capture the PR number from the URL it prints.
@@ -101,6 +101,20 @@ Record the project's actual commands under each category the first time you run 
 ## Merge
 
 Merge is serialized even when work dispatch is parallel. Before each merge, confirm the branch is based on the current target branch and all required gates are green. If the target branch moved, update the PR branch, rerun the affected gates, and merge only after they are green again. Never merge a red or stale branch.
+
+**When the target branch moves under an open PR, bring it in with a merge.** A merge adds those commits to your branch and rewrites nothing you already pushed, so the update is an ordinary push with nothing to force over:
+
+```powershell
+git fetch origin main
+git merge origin/main
+git push
+```
+
+**Do not rebase a branch you have already pushed and force the result.** A rebase gives every commit on the branch a new identity, so the push has to overwrite what the remote already holds - which [CLAUDE.md](../../CLAUDE.md) section 8 rules out. The merge above ends in the same place and needs no exception to get there.
+
+**Update the branch when something asks for it, not because it is behind.** A conflict, a gate that went red because of a change on the target branch rather than yours, or a reviewer asking are each a reason to merge. A branch that is merely behind, conflict-free and green is not - a squash merge resolves against the target branch as it stands at merge time, so being behind costs nothing on its own.
+
+The cost, named rather than hidden: one extra merge commit on the branch. The squash collapses it with everything else, so it never reaches the target branch's history.
 
 ```powershell
 gh pr merge NNN --squash --delete-branch
@@ -155,7 +169,7 @@ After several merges the local repo accumulates branches whose remote-tracking r
 ```powershell
 git fetch --prune
 git branch -vv | Select-String ': gone\]' | ForEach-Object {
- $tokens = ($_.Line.TrimStart('*',' ').Trim -split '\s+')
+ $tokens = ($_.Line.TrimStart('*',' ').Trim() -split '\s+')
  $branchName = $tokens[0]
  if ($branchName -and -not ($branchName -match '^(main|HEAD)$')) {
  git branch -D $branchName
@@ -170,7 +184,7 @@ Do NOT prune branches without a `: gone` marker; those have live upstreams and m
 ### Step 5 - clean up tmp files
 
 ```powershell
-Remove-Item.tmp_*.txt,.tmp_*.md,.tmp_*.log -ErrorAction SilentlyContinue
+Remove-Item .tmp_*.txt, .tmp_*.md, .tmp_*.log -ErrorAction SilentlyContinue
 ```
 
 The `.tmp_*` pattern is the convention for ephemeral PR-authoring files. Add `.tmp_*` to `.gitignore` once it exists.
