@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-11
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -150,7 +150,9 @@ mirrors the digest tree its rows are derived from.
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
-| `state/visual-prunes.csv` | one file | is the picture backlog shrinking? | no - the question has no time bound, and one row a run stays small |
+| `state/day-validations.csv` | one file | which frozen days have passed, and against what? | no - a receipt file, read once a run |
+| `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
+| `state/visual-prunes/` | day files | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
 
 A window turns a shard into a skipped file open. `ledger.shards_in_window`
 walks the days the window can touch and opens only those stems, so a plan run
@@ -177,12 +179,29 @@ Two consequences worth stating so nobody re-derives them:
  [../sources/item-health.md](../sources/item-health.md). The readers glob the
  directory, so the period is a layout change and not a contract change.
 
+**The four single files above are deliberately unsharded, and the burden is on a
+change that shards one.** `state/fingerprints.csv`, `state/runtime-counters.csv`,
+`state/feed-retirements.csv` and `state/day-validations.csv` are not work left
+undone. None of their reads carries a window, so by the rule above a partition
+would open every file anyway and cost a directory walk a single `open` does not
+need. Two of the four - `runtime-counters.csv` and `day-validations.csv` - grow
+for ever with no prune, and **that is a retention question rather than a grain
+question**: sharding them would make their reads worse and leave the growth
+exactly where it is.
+
+**A collection can file by day for a reason that is not the read**, and
+`state/visual-prunes/` is the worked case: its question is the whole series, so
+the layout buys the read nothing at all. What it buys is a merge surface and a
+removal - two runs collide on a file only when they are the same day, and taking
+a day back off the record is one `rm` rather than an edit inside a shared file,
+which `merge=union` cannot express.
+
 **What a shard obliges its writer to do is a separate rule, and it is defined
 once.** A closed month is rewritten only when a correction targets it; every
 other run touches the current partition alone. That rule, the closed rule for
 each partitioned collection above, and what the pattern does with a correction, a
 deletion, a late arrival and a row whose date changes are in
-[../../concepts/month-partitions.md](../../concepts/month-partitions.md).
+[../../concepts/partitions.md](../../concepts/partitions.md).
 
 **What a growing collection obliges its reader to declare is a third rule, and it
 is also defined once.** A window is one of three shapes a cover can take, and the
@@ -365,7 +384,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../extraction/elements.md](../extraction/elements.md) - the element shape: six kinds, two tiers, and why the verbatim slice is called `span_excerpt`.
 - [../sources/freshness.md](../sources/freshness.md) - why the published ledger files by day, and what its cover buys.
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
-- [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
+- [../../concepts/partitions.md](../../concepts/partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection declares, and the three shapes a cover can take.
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.

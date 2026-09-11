@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-11
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -15,7 +15,7 @@ shards on demand as the operator pans the viewport.
 **This is a month partition, and it now honours the freeze rule.** The pattern -
 what closes a partition, and what a correction, a deletion or a late arrival does
 to a closed one - is
-[../../concepts/month-partitions.md](../../concepts/month-partitions.md). Two
+[../../concepts/partitions.md](../../concepts/partitions.md). Two
 freezes compose. `publish` writes only the months a caller names as changed - a
 month outside that set is skipped without being read, unless its shard is missing
 on a fresh checkout - and `_write_if_changed` then writes a named month only when
@@ -631,7 +631,7 @@ asserts that no mark falls inside a tinted span -
 - [console-payloads.md](console-payloads.md) - every dataset the console fetches, and the forbidden-cell list for each.
 - [frontend.md](frontend.md) - the console view that consumes these shards.
 - [../contracts/schemas.md](../contracts/schemas.md) - why a migrated row keeps the `version` cell it was written with.
-- [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - the month partition as a pattern, and the freeze rule this writer does not yet hold.
+- [../../concepts/partitions.md](../../concepts/partitions.md) - the month partition as a pattern, and the freeze rule this writer does not yet hold.
 - [../sources/item-health.md](../sources/item-health.md) - the private item-grain ledger.
 - [../../concepts/console-design.md](../../concepts/console-design.md) - how a console figure is worded and printed.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - ledgers as records, logs as evidence.
