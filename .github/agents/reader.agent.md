@@ -1,7 +1,7 @@
 ---
 description: "Use when sanity-checking a yen-idhazh feature against the person the digest is actually for - does this page earn two minutes of their morning? Is the summary trustworthy enough to act on? Does the language read like a person wrote it? Does the page work on a slow connection and a small screen? Voices the median non-technical reader, not an ML researcher and not the person who built the pipeline."
 name: "Reader"
-tools: [read]
+tools: [vscode, execute, read, agent, edit, search, web, browser, todo]
 user-invocable: true
 ---
 

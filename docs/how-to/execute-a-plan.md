@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the orchestrator contract)
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-11
 
 The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it. The autonomy POLICY (AUTO by default, when to ESCALATE) lives in [../agents/bootstrap.md](../agents/bootstrap.md); this doc is the HOW.
 
@@ -69,7 +69,15 @@ Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Sc
 ### Persona custom agents resolve ambiguity (they are not an approval gate)
 When a row is genuinely ambiguous - a design fork, a contested decision, a fact-finding sweep - the worker dispatches the relevant persona custom agent(s) **by their exact name as listed in CLAUDE.md section 14** (plus "Explore" for read-only breadth) via `runSubagent`. A persona returns a WRITTEN ruling the worker bakes into the row; it is an input to the worker's action, never a request-for-approval surface (bootstrap's AUTO policy). A contested decision runs the relevant personas in DEBATE to ONE ruling (author-a-plan.md step 3).
 
-If the harness does not permit a worker to dispatch a nested subagent, the worker instead surfaces the ambiguity in its report; the orchestrator runs the persona consult and re-dispatches the row with the ruling appended to the brief. Either way personas are consulted - never skipped, never treated as a gate.
+In VS Code, enable `chat.subagents.allowInvocationsFromSubagents` in the active
+user or workspace settings before asking a worker to delegate. Every custom
+agent that delegates must include `agent` in its `tools` list. A prompt with its
+own `tools` list must include it too, because that list takes precedence. If an
+`agents` list is present, it must allow the requested delegate. Verify the setup
+with one real, read-only nested invocation. See
+[VS Code's nested-subagent documentation](https://code.visualstudio.com/docs/agents/run/subagents#_nested-subagents).
+
+If the harness does not permit a worker to dispatch a nested subagent, the worker instead surfaces the ambiguity in its report; the orchestrator runs the persona consult and re-dispatches the row with the ruling appended to the brief. Reading a persona's file is not a consultation. Either way personas are consulted - never skipped, never treated as a gate.
 
 ## The one-line stamp a plan-doc carries
 
