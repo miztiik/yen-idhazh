@@ -86,13 +86,13 @@ fact, and it lives here.
 from __future__ import annotations
 
 import csv
-import re
 from collections.abc import Callable, Collection, Iterable, Iterator
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
-from typing import Final, NoReturn
+from typing import Final
 
+from idhazh import day_partition
 from idhazh.contracts.app_config import UNBOUNDED_WINDOW
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -430,7 +430,7 @@ def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -
     The caller hands the date, so the caller decides: a date inside a day that
     has already closed performs a correction to that day, which is the one
     rewrite the freeze rule permits and the same choice `append_seen` gives its
-    caller. See `docs/concepts/month-partitions.md`.
+    caller. See `docs/concepts/partitions.md`.
     """
     payloads = [row.model_dump(mode="json") for row in rows]
     return _append(published_path(state_dir, date), PublishedRow.csv_columns(), payloads)
@@ -451,70 +451,6 @@ def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str
             if url_key not in first_seen or at < first_seen[url_key]:
                 first_seen[url_key] = at
     return first_seen
-
-
-#: What a directory inside a day tree under `state/` must be named to be a year,
-#: and a month or a day. The names are matched rather than globbed, so that a
-#: file none of them describes is refused instead of quietly passed over.
-_YEAR: Final = re.compile(r"\d{4}")
-_TWO_DIGITS: Final = re.compile(r"\d{2}")
-
-
-def _refuse_stray(entry: Path, root: Path) -> NoReturn:
-    """Nothing inside a day tree may be ignored, so an odd name stops the read."""
-    raise ValueError(
-        f"{STATE_DIRNAME}/{root.name} holds "
-        f"{entry.relative_to(root).as_posix()}, which is not a YYYY/MM/DD day file. "
-        "A file the reader cannot place is how it starts missing rows, so it "
-        "refuses the read rather than skipping the file."
-    )
-
-
-def _day_files(root: Path) -> Iterator[Path]:
-    """Every `<root>/YYYY/MM/DD.csv`, oldest first.
-
-    Walked rather than globbed. A glob answers "what matched" and says nothing
-    about what did not, so an unexplained file would sit in a state directory
-    unread and unmentioned. This names every entry it meets and refuses the
-    ones it cannot place.
-
-    A missing directory yields nothing, because a clone with no history is what
-    a fresh checkout has and not a fault.
-
-    Shared by `state/published/` and `state/visual-prunes/`. The two ledgers
-    hold different rows and answer different questions, but a day tree is one
-    shape and a second copy of this walk is a second place for the refusal to
-    stop being exact.
-    """
-    if not root.is_dir():
-        return
-    for year in sorted(root.iterdir()):
-        if not (year.is_dir() and _YEAR.fullmatch(year.name)):
-            _refuse_stray(year, root)
-        for month in sorted(year.iterdir()):
-            if not (month.is_dir() and _TWO_DIGITS.fullmatch(month.name)):
-                _refuse_stray(month, root)
-            for day in sorted(month.iterdir()):
-                if not (day.is_file() and day.suffix == ".csv"):
-                    _refuse_stray(day, root)
-                if not _TWO_DIGITS.fullmatch(day.stem):
-                    _refuse_stray(day, root)
-                try:
-                    date_type.fromisoformat(f"{year.name}-{month.name}-{day.stem}")
-                except ValueError:
-                    _refuse_stray(day, root)
-                yield day
-
-
-def _days_in_window(today: str, within_days: int) -> list[str]:
-    """The dates a cover of `within_days` names, newest first.
-
-    Days rather than months, because this ledger files by day. The same walk as
-    `shards_in_window` and for the same reason: subtracting days keeps the
-    arithmetic honest across a month and a year boundary with no calendar table.
-    """
-    end = date_type.fromisoformat(today)
-    return [(end - timedelta(days=offset)).isoformat() for offset in range(within_days + 1)]
 
 
 def load_published(state_dir: Path, *, today: str | None, within_days: int) -> dict[str, str]:
@@ -545,14 +481,17 @@ def load_published(state_dir: Path, *, today: str | None, within_days: int) -> d
     rather than a row.
     """
     if within_days == UNBOUNDED_WINDOW:
-        paths: Iterable[Path] = _day_files(state_dir / PUBLISHED_DIRNAME)
+        paths: Iterable[Path] = day_partition.day_files(state_dir / PUBLISHED_DIRNAME)
     elif today is None:
         raise ValueError(
             f"a published cover of {within_days} days needs the day it is anchored on. "
             f"Pass today, or {UNBOUNDED_WINDOW} to read every day file."
         )
     else:
-        paths = (published_path(state_dir, on) for on in _days_in_window(today, within_days))
+        paths = (
+            published_path(state_dir, on)
+            for on in day_partition.days_in_window(today, within_days)
+        )
 
     published: dict[str, str] = {}
     for path in paths:
@@ -798,7 +737,7 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     that quietly drops a day is a report of the wrong series.
     """
     rows: list[VisualPruneRow] = []
-    for path in _day_files(state_dir / VISUAL_PRUNES_DIRNAME):
+    for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME):
         for raw in _read_rows(path):
             try:
                 rows.append(VisualPruneRow.from_csv_row(raw))
@@ -860,7 +799,10 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
         ]
     return [
         *flat,
-        *((path, VISUAL_PRUNE_KEY) for path in _day_files(state_dir / VISUAL_PRUNES_DIRNAME)),
+        *(
+            (path, VISUAL_PRUNE_KEY)
+            for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME)
+        ),
         *((path, FEED_HEALTH_KEY) for path in sorted((state_dir / HEALTH_DIRNAME).glob("*.csv"))),
         *(
             (path, ITEM_HEALTH_KEY)

@@ -46,6 +46,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_corpus_harvest",
         "test_data_wrangler",
         "test_day_metrics_producer",
+        "test_day_partition",
         "test_discover",
         "test_embed",
         "test_elements",
