@@ -372,6 +372,13 @@ Named here so they are not lost. None of them is a row of plan 23, 24 or 25.
   the conversation carried; and `.github/workflows/ci.yml`'s only mention is a
   comment explaining what prerendering used to give for free before the reading
   routes were split on 2026-09-01. **The app UI should not use it.**
+  **Superseded the same day.** No UI shell plan-doc exists or is planned, and
+  [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md)
+  took the gap. Reading the tree changed the answer: the dated reading routes
+  stopped prerendering on 2026-09-09 and six routes deliberately did not, with
+  the reasons written beside the code, so the guard is legacy and the routes are
+  a live decision. That plan rules the six stay, deletes the guard, and prices
+  the reversal for the day the owner wants it.
 - **`watchlist_bonus` was documented as dead arithmetic**, fixed on 2026-08-26,
   and it now fires: `watchlist_hit` is true on **1,118 of the 5,101 committed
   items that record it, 21.92 percent** (measured 2026-09-11). The gap is that
@@ -416,6 +423,7 @@ Three consequences, stated plainly:
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - the plan this conversation produced; its section 0.3 carries the budget arithmetic and its section 26 the open gaps section 8 extends.
 - [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - the ledger work the same conversation split out.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - the placement work the same conversation split out; section 4's synthesis is the finding it should be read against.
+- [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) - the plan that took the prerender finding in section 8 and, having read the tree, ruled the opposite way on half of it.
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - decision O43, which section 2 amends.
 - [`../docs/reference/measurements.md`](../docs/reference/measurements.md) - the instrument log section 3 cites rather than restates.
 - [`../docs/architecture/contracts/determinism.md`](../docs/architecture/contracts/determinism.md) - the page the determinism decision rewrites.
