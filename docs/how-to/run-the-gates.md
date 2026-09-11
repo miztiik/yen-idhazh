@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -358,14 +358,17 @@ npm run bundle-gate
 python -m idhazh site-weight --site-tree build
 ```
 
-`check` is `svelte-check`. `build` is the strongest of the three: every route is
-prerendered, so a route that cannot render fails the build rather than the page.
-**It stopped answering for every story on 2026-09-01.** A reading document
-carries `ui.shell_seed_items` stories and the browser fetches the rest, so the
-build never opens the stories past the seed. `python -m idhazh validate-days`
-opens all of them, against the committed shape the build reads and the served
-shape a browser fetches, and it runs in `ci.yml` and before every publish. A run
-that finds no day at all fails rather than passes.
+`check` is `svelte-check`. `build` is the strongest of the three: it compiles
+every route and prerenders six of them, so one of those six that cannot render
+fails the build rather than the page. **The two dated reading routes are not
+among the six.** They render in the browser, so a failure to render there
+reaches a reader rather than the build. **It stopped answering for every story
+on 2026-09-01.** A reading document carries `ui.shell_seed_items` stories and
+the browser fetches the rest, so the build never opens the stories past the
+seed. `python -m idhazh validate-days` opens all of them, against the committed
+shape the build reads and the served shape a browser fetches, and it runs in
+`ci.yml` and before every publish. A run that finds no day at all fails rather
+than passes.
 
 **It takes `--day` and the flag repeats**, so a pull request that touched no
 committed day checks nothing and a publish checks the day it just wrote:

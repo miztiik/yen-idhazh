@@ -1842,11 +1842,13 @@ def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
 ) -> None:
     """Two severities, and only one of them may cost a reader the day.
 
-    `npm run build` prerenders every route, so a route that cannot render fails
-    here instead of in a reader's browser. That day is broken and must not
-    publish, so the build runs before the commit. `idhazh validate-days` sits
-    beside it at the same severity and for the same reason - it is what opens
-    the stories a seeded document never serialises.
+    `npm run build` compiles every route and prerenders six of them, so a route
+    that cannot build, and one of those six that cannot render, fails here
+    instead of in a reader's browser. That day is broken and must not publish,
+    so the build runs before the commit. The two dated reading routes render in
+    the browser and the build no longer answers for them; `idhazh validate-days`
+    sits beside it at the same severity and for the same reason - it is what
+    opens the stories a seeded document never serialises.
 
     `npm run bundle-gate` holds each capped page under the ceiling somebody
     priced for it. A page over it still reads correctly - what grew is the
