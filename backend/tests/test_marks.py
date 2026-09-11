@@ -61,6 +61,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_measure_llm",
         "test_notebooks",
         "test_plan",
+        "test_plan_status",
         "test_prompt_loop",
         "test_publish_source_health",
         "test_publish_telemetry",
