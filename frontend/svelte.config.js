@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assetBaseUrl, connectSources, encoderOrigins } from './asset-base.js';
-import { handleUnseenRoutes } from './prerender-guard.js';
 
 /** The CSP hash of every inline script `src/app.html` carries.
  *
@@ -43,12 +42,12 @@ function inlineScriptHashes() {
 // id without editing this file - see docs/reference/agent-notes.md.
 const version = process.env.BUILD_VERSION ? { name: process.env.BUILD_VERSION } : undefined;
 
-// Every page is prerendered, and since 2026-09-01 that is a statement about the
-// DOCUMENT rather than about the item list inside it. A reading route ships the
-// head of its day and the browser fetches the rest from a file this same site
-// publishes, so the reading path makes at most one same-origin request and the
-// first frame is readable without it (Rule #1). `/`, `/archive/`, `/404` and
-// `/evals/` still make none at all.
+// Six routes ship a prerendered document: `/`, `/archive/`, `/evals/` and the
+// three `/console/` pages. The two dated routes ship none - they declare
+// `ssr = false`, so the `404.html` fallback set below answers every dated
+// address and the browser renders it. What a page fetches after that is a
+// reading-path decision and is written down once, in
+// docs/architecture/publishing/frontend.md, rather than restated here.
 export default {
 	kit: {
 		adapter: adapter({ fallback: '404.html', strict: false }),
@@ -78,10 +77,7 @@ export default {
 				(path.startsWith('fonts/') && path.endsWith('.woff2')) ||
 				path.startsWith('icons/')
 		},
-		// A dated route has no page until a day is published, and a clone has to
-		// build before its first run. The guard tells that apart from a page that
-		// went missing - see `prerender-guard.js`.
-		prerender: { handleHttpError: 'warn', handleUnseenRoutes },
+		prerender: { handleHttpError: 'warn' },
 		// GitHub Pages serves no headers we control, so this ships as a meta tag
 		// in every prerendered page. `connect-src 'self'` is the one that matters:
 		// it makes exfiltration from a planted instruction a browser-level
