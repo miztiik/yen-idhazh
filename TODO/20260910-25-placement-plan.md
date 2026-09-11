@@ -14,9 +14,9 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Nothing decides the reading order on purpose. `rank_score` decides which stories enter the day and which five lead it, and then the browser throws its order away and re-sorts by time. The backend publishes a desk-blocked order no surface draws. So a story's position is the residue of two systems disagreeing, and the arithmetic that could express an editorial intent is spent on admission only. This plan gives the ranker the stream, puts a frame around it that a person sets, and deletes the ordering work nobody reads |
-| Hard scope - in | The three docstrings that defend a retired requirement; one order over the whole day; a desk cap and a feed cap over the head; the score's terms and their order; carriage as a tie-break; the time rail retired and the timestamp placed; the topic pills ordered by what is running; a desk floor and a desk ceiling; cross-filing to a second desk; the counterfactual ledger; the weekly weights loop; the `assemble` consolidation |
-| Hard scope - out | **The read desk.** Deciding a story's subject by reading it is plan 23 row #6 and is not deferred by anything here - this plan works on whatever field names the desk. **The five month-sharded ledgers**, which are plan 24. **The visual planner's call structure**, which is plan 11. **Personalisation of any kind**: there is one published order and every reader gets it |
-| ESCALATE triggers | 1. **Day-over-day desk churn above 1 item in 10** that a weight change rather than supply accounts for. A reader cannot tell "the world changed" from "our weights changed", and past that rate they stop trying. 2. **Any single desk or lens above roughly a third of the day when supply does not put it there.** 3. A row proposes to **rebuild the day whole** - the arithmetic that refuses it is in section 0.3 and a row may not re-open it without new measurement. 4. A weights proposal is **auto-merged**, or any workflow in this plan gains a push to `main`. 5. A removal row proposes to leave a test, a config key, a schema field or a doc paragraph behind. 6. Row #9b is dispatched before row #9a has committed a counterfactual row - the loop would then adapt on the outcome, which decision 4 of row #9b bans |
+| Hard scope - in | The three docstrings that defend a retired requirement; one order over the whole day; a desk cap and a feed cap over the head; the score's terms and their order; carriage as a tie-break; the time rail retired and the timestamp placed; the topic pills ordered by what is running; a desk floor and a desk ceiling; cross-filing to a second desk; the counterfactual ledger; the weekly weights loop; the `assemble` consolidation; **the console strip taking five tabs**; **the `Judgement` tab**; **the `Voices` tab and the feed half moved onto it**; **the per-feed reliability factor drawn for the first time**; **a target distribution over the published day and the divergence from it** |
+| Hard scope - out | **The read desk.** Deciding a story's subject by reading it is plan 23 row #6 and is not deferred by anything here - this plan works on whatever field names the desk. **The five month-sharded ledgers**, which are plan 24. **The visual planner's call structure**, which is plan 11. **Personalisation of any kind**: there is one published order and every reader gets it. **Computing a classification**: every figure the `Judgement` tab draws is produced by plan 23, and this plan draws them and computes none. **Feed scoring**: `ledger.reliability` is read and never modified |
+| ESCALATE triggers | 1. **Day-over-day desk churn above 1 item in 10** that a weight change rather than supply accounts for. A reader cannot tell "the world changed" from "our weights changed", and past that rate they stop trying. 2. **Any single desk or lens above roughly a third of the day when supply does not put it there.** 3. A row proposes to **rebuild the day whole** - the arithmetic that refuses it is in section 0.3 and a row may not re-open it without new measurement. 4. A weights proposal is **auto-merged**, or any workflow in this plan gains a push to `main`. 5. A removal row proposes to leave a test, a config key, a schema field or a doc paragraph behind. 6. Row #9b is dispatched before row #9a has committed a counterfactual row - the loop would then adapt on the outcome, which decision 4 of row #9b bans. 7. A console row proposes a **sixth tab**, a **second window control**, or a **mass fetch** over a growing collection. 8. The divergence of row #14 is **wired into the ranker** rather than reported - it is a quality number about the page, and a target a score optimises against stops being a measurement of it |
 | Chosen strategy | Delete the false justification first, then build the frame, then give the score the stream inside it, then the desk rules, then the loop that moves a weight, then the consolidation that removes the dead work. Every ordering change lands in the backend and is published; the frontend stops sorting in the last row rather than the first |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2.` |
 
@@ -39,6 +39,10 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 **Every oracle is driven from a fixture, never from the committed archive** (`CLAUDE.md` Rule #12 and section 13). A per-item rule is proved on `backend/var/canary/` or on `tests/fixtures/`, both fixed in size and both able to carry a case the archive has never produced - `time_source: unknown` has never once happened in 8,550 committed items and row #5 has to render it. A question genuinely about the whole tree is asked once, on the total, by `idhazh validate-days`, and not by pytest.
 
 **Additive contract fields are stamped in the commit that adds them.** Every row that adds a field to a persisted model names its `version` date-stamp and its `changelog` entry in its own acceptance gate, per `CLAUDE.md` section 11.
+
+**Every chart carries a heading and one plain sentence saying what it means and what good looks like** - more is better, or less is better. **A chart that needs more than a sentence has failed**, and the row replaces the chart rather than adding a paragraph. Every console row here fetches by window, fetches nothing before it is needed except the first panel, walks no growing collection, and **reuses the shared window control** rather than adding a second one. Those are the console's own standing rules and they are restated here so a worker reading one row does not have to find them ([`../docs/concepts/console-design.md`](../docs/concepts/console-design.md), [`../docs/architecture/publishing/console.md`](../docs/architecture/publishing/console.md)).
+
+**Prerender is legacy, and no row here adds a claim to it.** It is live today - `.github/workflows/ci.yml` runs the guard, `frontend/prerender-guard.js` exists, and **23 pages under `docs/` name it** (counted 2026-09-11; this plan's own brief said 11). **No row in this plan asserts that prerendered output is byte-identical, and no row removes prerendering.** The app shell should not use it and retiring it is a user-interface change; it is named in section 18 as a gap nobody owns, and no `TODO/` plan owns it today.
 
 ### 0.1a The gate sets, written out once so a row can name one
 
@@ -133,6 +137,13 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | Desks | **5** - `ai` (feed floor 35), `energy`, `business-economy`, `world`, `india` (21 each) | `config/taxonomy.json` |
 | Rail markers today | `rail_group_minutes` **60**; recorded 2026-09-02 over 12 days and 4,713 stories: **907 markers**, so 80.8 percent of stories carry no label | `frontend/src/lib/day-shape.ts` docstring; `config/appearance.json` |
 | Topic pills | `topic_pills_max` **8**, and `splitPills` already cuts by story count and folds the overflow into a disclosure | `config/appearance.json`, `frontend/src/lib/day-shape.ts` |
+| Lenses that fire against lenses that count | The four active lenses at weight **0.0** - `markets` 911, `china` 833, `war` 365, `cyber` 234 - fired **2,343** times against **650** for the two that carry 0.3, `trade` 382 and `chips` 268. **3.6 times as often.** They tag an article and move no story. `ai-roi` is retired and fired 18 times before it was | `frontend/public/digest/**/digest.json`, `config/taxonomy.json` |
+| Desk shares of the published day | `india` **31.7 percent**, `world` 26.4, `ai` 15.2, `energy` 13.8, `business-economy` 12.9. The largest sits within two points of ESCALATE trigger 2, on supply alone | `frontend/public/digest/**/digest.json` |
+| What a feed says it is | `reporting` **7,227**, `analysis` 416, `announcement` 382, `research` 283, `community` **139**, `government` **103**. Six values, and the feed declares them | same; `SourceKind` in `backend/idhazh/contracts/taxonomy.py` |
+| The confidence already on every item | `band` reads `high` on **4,993**, `medium` on 2,275, `low` on **1,282**. `/console/model/` already draws the `low` count, as `Marked "not sure"` | same; `docs/concepts/console-design.md` |
+| The watchlist, and whether it goes quiet | **30 active entries, and all 30 fired.** The `entities` field starts 2026-08-27, so the record is 15 finished days; over 7, 14 and 15 days **none is silent**. Quietest: `asml` 10, `adani` 14, `ftc` 25, `mistral` 28, `iea` 30. `watchlist_hit` is a **boolean**, not an entry id, and it is true on 1,066 items - 12.5 percent | `config/watchlist.json`, `frontend/public/digest/**/digest.json` |
+| Feeds by tier | **151 feeds**: 40 institution, 100 trade press, **11 community**. These are addresses; the 103 and the 139 two rows up are published items | `config/sources.json` |
+| The console today | **three routes**, `page_weight.ceilings_bytes` naming only `/404` and `/evals/` since 2026-09-10, and `payload_ceilings_bytes` naming `console/band.json` at 2,000 B and `telemetry/` at 1,100,000 | `config/idhazh.json`, `frontend/src/lib/console/band.ts` |
 
 **What the carriage figures mean, said next to them.** `reach = 1.0 + repetition_weight * (carried_by - 1)` at `repetition_weight` 1.0 **doubles the authority term at two carriers**. That single step is larger than the recency bonus at full strength (0.6), larger than the watchlist bonus (0.5), larger than the front-page vote (0.4) and larger than the heaviest lens (0.3) - and it is a multiplier where all four of those are additions. The consequence is measured, not argued: **under 6 percent of the pool holds 60 percent of the day's top 20**. And what the number measures is **syndication, not agreement** - `layout.md` already says `carried_by` counts feeds carrying **one address**, so two outlets writing their own piece produce two addresses and both read 1. `docs/concepts/digest.md` refuses to print the agreement claim in words ("never 'three sources covered this': that is a different claim and the number does not support it") while the ranker makes it in arithmetic. Row #4 is that contradiction closed.
 
@@ -161,10 +172,18 @@ Derived 2026-09-11 in this worktree from the committed archive under `frontend/p
 | 9a | The counterfactual the loop cannot run without | 3 | E | PENDING | - | - | - |
 | 9b | The weekly loop proposes a pull request and commits nothing | 9a | F | PENDING | - | - | - |
 | 10 | The `assemble` consolidation | 2, 5, 7, 8 | F | PENDING | - | - | - |
+| 11 | The console strip takes five tabs | - | G | PENDING | - | - | - |
+| 14 | A target distribution, and the day's distance from it | 7 | G | PENDING | - | - | - |
+| 12 | `Judgement` - what the model made of each article | 11 | H | PENDING | - | - | - |
+| 13 | `Voices` - who supplied the day, and what it is worth | 11 | I | PENDING | - | - | - |
 
 **What a parallel group means, stated so a worker can check it.** **Within one group, no two rows may write the same file.** A glob counts as every file it covers, so `backend/tests/**` and `schemas/**` collide with any named file underneath them - and a row that edits any model under `backend/idhazh/contracts/` counts as writing every schema its edit regenerates, because the drift gate fails on a byte. **So there are no globs in this plan.** Every row's `Files touched` list names files. **A row that widens its file list during execution re-checks its own group before it opens a pull request**, and section 0.1 expects that widening to happen.
 
-**Eleven rows, six groups, one singleton, and the singleton is row #2.** It creates `backend/idhazh/placement.py`, which rows #7, #8 and #10 all read and two of them extend, and it is the row that decides there is one order at all. A second row landing beside it would be building against a shape that is still moving. Every other group holds two.
+**Fifteen rows, nine groups, three singletons.** Row #2 is the first: it creates `backend/idhazh/placement.py`, which rows #7, #8 and #10 all read and two of them extend, and it is the row that decides there is one order at all. A second row landing beside it would be building against a shape that is still moving.
+
+**Rows #12 and #13 are the other two singletons, and the reason is the four console doc pages.** A console change goes to the page that owns the question - the payload shape to `console-payloads.md`, the chart choice to `console-charts.md`, the tab and its worst state to `console.md`, the sufficiency argument to `console-design.md` - so **both tab rows write all four**, and two rows writing one page is the collision this section exists to refuse. Splitting the pages between them was rejected: it would put the `Voices` chart argument on the page that owns tabs, which is the routing defect, not a way round it. Every other group holds two.
+
+**Row #11 has no predecessor and both tab rows depend on it**, because it owns the three files a fifth tab moves - the strip's geometry, the route list, and the severity the band ranks a route by. Two tab rows each editing `ConsoleNav.svelte` and `band.ts` would be the same collision one group later.
 
 **Row #5 has no predecessor on purpose, and the reason is a defect it would otherwise inherit.** The rail groups stories by time and `day-shape.ts` states in its own docstring that a rail over an order it did not sort reopens groups further down and prints numbers that jump as the reader scrolls. Row #2 replaces the time order with a scored one. So the rail has to go **before** row #2, not after it, and a schedule that put row #5 late would ship a run of days where the rail was visibly wrong.
 
@@ -179,7 +198,10 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | C | 3, 6 | `backend/idhazh/rank.py`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/tests/test_rank.py`, `docs/architecture/sources/discovery.md` | `frontend/src/lib/day-shape.ts`, `frontend/src/lib/components/FilterBar.svelte`, `backend/idhazh/contracts/appearance_config.py`, `schemas/appearance-config.schema.json`, `config/appearance.json`, `frontend/tests/{filter-bar,topics}.spec.ts`, `docs/architecture/publishing/frontend.md` | Both add a config key, edit a contract model and regenerate one schema. **Two different config files, two different contract modules, two different schema files**, so the drift gate sees two disjoint diffs |
 | D | 4, 7 | `backend/idhazh/rank.py`, `config/idhazh.json`, `backend/tests/test_rank.py`, `docs/architecture/sources/discovery.md`, `docs/architecture/publishing/layout.md` | `backend/idhazh/placement.py`, `backend/idhazh/contracts/taxonomy.py`, `schemas/taxonomy.schema.json`, `config/taxonomy.json`, `backend/tests/{test_placement,test_contracts}.py`, `docs/concepts/placement.md` | Both write a file in `config/`. Row #4 writes `idhazh.json` and row #7 writes `taxonomy.json`. Row #4 adds no contract field, so it regenerates no schema |
 | E | 8, 9a | `backend/idhazh/placement.py`, `backend/idhazh/contracts/{article,digest_day,digest_view}.py`, `schemas/{article,digest-day,digest-view}.schema.json`, `frontend/src/lib/payload/types.ts`, `backend/tests/{test_placement,test_contracts}.py`, `docs/concepts/placement.md` | `backend/idhazh/{rank,cli,ledger}.py`, `backend/idhazh/contracts/placement_counterfactual.py`, `schemas/placement-counterfactual-row.schema.json`, `backend/tests/{test_ledger,test_marks}.py`, `docs/concepts/growing-reads.md` | Both add a contract and regenerate a schema. Four named schema files against one, all five distinct. Row #8 opens no ledger and row #9a opens no published payload model |
-| F | 9b, 10 | `.github/workflows/placement-weights.yml`, `backend/utilities/propose_placement_weights.py`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/tests/test_workflows.py`, `tests/fixtures/workflows/placement-weights-widened-permissions.yml`, `docs/how-to/tune-the-placement-weights.md`, `docs/concepts/growing-reads.md` | `backend/idhazh/{assemble,cli}.py`, `frontend/src/lib/server/payload.ts`, `frontend/src/lib/components/DigestList.svelte`, `frontend/src/lib/day-shape.ts`, `backend/tests/{test_pipeline,test_same_story,test_leading_stories}.py`, seven `frontend/tests/*.spec.ts` files, `docs/architecture/publishing/layout.md` | Nothing. Row #9b writes no pipeline module and no frontend file; row #10 writes no workflow, no utility and no contract. **Row #10 is the widest row in the plan at 16 files**, and it is the one most likely to widen further - the group survives that because row #9b's whole surface is `.github/`, `backend/utilities/` and one contract |
+| F | 9b, 10 | `.github/workflows/placement-weights.yml`, `backend/utilities/propose_placement_weights.py`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/tests/test_workflows.py`, `tests/fixtures/workflows/placement-weights-widened-permissions.yml`, `docs/how-to/tune-the-placement-weights.md`, `docs/concepts/growing-reads.md` | `backend/idhazh/{assemble,cli}.py`, `frontend/src/lib/server/payload.ts`, `frontend/src/lib/components/DigestList.svelte`, `frontend/src/lib/day-shape.ts`, `backend/tests/{test_pipeline,test_same_story,test_leading_stories}.py`, seven `frontend/tests/*.spec.ts` files, `docs/architecture/publishing/layout.md` | Nothing. Row #9b writes no pipeline module and no frontend file; row #10 writes no workflow, no utility and no contract. **Row #10 is 16 files**, and it is the one most likely to widen further - the group survives that because row #9b's whole surface is `.github/`, `backend/utilities/` and one contract |
+| G | 11, 14 | `frontend/src/lib/components/ConsoleNav.svelte`, `frontend/src/lib/console/band.ts`, `backend/idhazh/publish_console_band.py`, `backend/idhazh/contracts/console_band.py`, `schemas/console-band.schema.json`, `tests/fixtures/contracts/console-band/newest-day.json`, `backend/tests/test_console_payloads_producer.py`, `frontend/tests/{console-nav,console-title,console-band}.spec.ts`, `docs/architecture/publishing/console.md` | `backend/idhazh/diversity.py`, `backend/idhazh/assemble.py`, `backend/idhazh/contracts/{app_config,day_metrics}.py`, `schemas/{app-config,day-metrics}.schema.json`, `config/idhazh.json`, `backend/tests/{test_diversity,test_contracts,test_marks}.py`, `docs/concepts/placement.md` | Both regenerate a schema. **Two different contract modules, two different schema files, two different fixtures**, so the drift gate sees two disjoint diffs. The one file that could bring them together is `backend/tests/test_contracts.py`: row #14 lists it and row #11 does not, so row #11 re-checks this group before it opens a pull request if it finds it needs one |
+| H | 12 | singleton at 18 files - it writes all four console doc pages | - | - |
+| I | 13 | singleton at 19 files, the widest row in the plan - it writes all four console doc pages, and it is the only row that edits the Pipelines route | - | - |
 
 ### Why the frame is a module and not a longer `build_day`
 
@@ -586,7 +608,275 @@ Every one of these is asserted by `backend/tests/test_workflows.py` or by the pr
 
 ---
 
-## 13. The docs each row writes
+## 13. Row #11 - The console strip takes five tabs
+
+- **Scope:** The console becomes five routes. `Judgement` and `Voices` join `Pipelines`, `Summaries` and `Hardware`; the strip holds five on a phone; and the band learns what an editorial fault is worth against a failed run.
+- **Files touched:** `frontend/src/lib/components/ConsoleNav.svelte`, `frontend/src/lib/console/band.ts`, `frontend/src/routes/console/judgement/+page.svelte`, `frontend/src/routes/console/voices/+page.svelte`, `backend/idhazh/publish_console_band.py`, `backend/idhazh/contracts/console_band.py`, `schemas/console-band.schema.json`, `tests/fixtures/contracts/console-band/newest-day.json`, `backend/tests/test_console_payloads_producer.py`, `frontend/tests/console-nav.spec.ts`, `frontend/tests/console-title.spec.ts`, `frontend/tests/console-band.spec.ts`, `docs/architecture/publishing/console.md`
+- **Acceptance gates:** `GATE-PY` with `backend/tests/test_console_payloads_producer.py`, `GATE-SCHEMA`, `GATE-WEB`, `GATE-BROWSER`, `GATE-SUITE`, and the `CLAUDE.md` section 12 browser smoke. Plus, in this row:
+  - `schemas/console-band.schema.json` carries today's `version` and a `changelog` entry naming the two new route ids;
+  - both new routes answer 200, carry their own heading and print a named absence - **a tab in a strip whose page does not exist is a strip that lies**, and rows #12 and #13 land later;
+  - **no page ceiling is added.** `page_weight.ceilings_bytes` has named only `/404` and `/evals/` since 2026-09-10, because the four it used to name grew every time the pipeline published. The two payload directories are priced under `payload_ceilings_bytes` by rows #12 and #13, beside `console/band.json` at 2,000 B.
+- **Oracle:** **Five tabs stand on no more than two rows at 1440px and no more than three at 360px, and no tab's box overlaps another's.** Geometric, read off the built page rather than off the rule, at the widths `console-nav.spec.ts` already drives. **It fails against the base tree in both directions**: three tabs cannot produce five boxes, and five tabs at the committed basis produce five rows on a phone rather than three.
+- **What this row does not do:** it draws no panel and reads no ledger the console does not already read.
+
+### The geometry, and the basis is the thing that moves
+
+`.tab-slot` is `flex: 1 1 14rem` and `.tab-line` is the description under each label (`ConsoleNav.svelte`, verified 2026-09-11). **A 14rem basis is 224px at a 16px root**, so on a 360px phone one tab fills the row and five tabs stack five deep - directly above the band, which is the first thing an operator reads. Three tabs already cost three rows there, and the component's own comment records that as why its padding is charged three times.
+
+Two changes, about six lines. **Drop `.tab-line` below about 40rem**, and **cut the basis to about 9rem** - 144px, which fits two across a 360px phone with the `--space-2` gap between them. Five tabs then stand on three rows at 360 and two at 390 and above.
+
+**The description is not lost.** It is already the anchor's `title`, and the page it opens prints it in full. What a hidden line costs is the one-line summary a reader gets before choosing, which is what the label has to carry instead - and that is why the labels are one word each.
+
+### The severity an editorial fault is worth
+
+`band.ts` ranks a route's worst state `BROKEN` 3, `WORTH_A_LOOK` 2, `WORTH_KNOWING` 1, `CLEAR` 0, and `publish_console_band.py` writes the same four numbers. The band prints the one worst thing across every route, so a new route with a loud rule would take the band away from a failed run.
+
+**A `Judgement` or `Voices` fault caps at `WORTH_A_LOOK`.** A skewed day still published; a failed run did not.
+
+**One exception, at `BROKEN`: a decline rate of zero on any gating kind.** That is not a skew. A gate that never declines is a classifier stamping everything it is shown, and it makes every other figure on the tab fiction - including the figures a reader would use to decide the day was fine. The fraction itself arrives with plan 23; this row encodes the rule and the producer writes `null` until it does.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **Five routes, still real anchors, still no hidden panels.** `console.md` records why the strip is anchors rather than script-driven tabs, and nothing about a fourth or fifth route changes that argument | `docs/architecture/publishing/console.md` |
+| 2 | **The strip still never takes the health ramp.** A route is a noun. `console-nav.spec.ts` reads the computed style of every tab and fails on any of the six verdict tokens, and it now reads five | `docs/architecture/publishing/console.md` |
+| 3 | **`Judgement` is singular, and the singular is the ruling.** The other three name a place; this one names an act. `Judgements` would be a count of things and the tab is not a list | Susan, 2026-09-11 |
+| 4 | **`Voices` over `Sources`, by owner override.** Susan proposed `Sources` and her reasoning is in the Rejected alternatives below, recorded rather than re-argued | Owner, 2026-09-11, `CLAUDE.md` section 0 |
+| 5 | **The two new routes are opened empty by this row.** A strip that names a page nobody can reach is worse than three tabs, and the alternative - landing the strip with its two tab rows - would put three rows on `ConsoleNav.svelte` in one group | Section 1 |
+| 6 | **An editorial fault caps at `WORTH_A_LOOK`, with one `BROKEN` exception.** Stated above, and the producer is where it is enforced, because the band is derived once and read everywhere | Carmack; `backend/idhazh/publish_console_band.py` |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | **`Sources` rather than `Voices`.** Susan's case, verbatim in substance: `Voices` appears nowhere in this repository, `Publishers` is false for part of the set, and the project's own word is already `source_id`, `config/sources.json` and `source-health.json` | **Overridden by the owner on 2026-09-11.** The reasoning stands and is recorded here rather than deleted. **One of its numbers was wrong and the correction is worth keeping**: the 103 and the 139 are **published items** carrying `source_kind: government` and `source_kind: community` over the 21 finished days, not entries in a source list. The address list is 151 feeds - 40 institution, 100 trade press, 11 community (measured 2026-09-11). `Publishers` is still false, for a smaller set than the number suggested | Owner, 2026-09-11; measured |
+| 2 | Fold `Hardware` into `Pipelines` to keep the strip at four | It would undo a split that already happened for the reason this plan is repeating - a route answering three questions answers none of them first. Nothing folds | Section 15 |
+| 3 | Put the two new tabs behind a `More` disclosure | A disclosure is where a control goes to be forgotten, and the two tabs being added are the two an operator has never been able to open at all | Susan |
+| 4 | Let a `Judgement` fault take the band at `BROKEN` | Then a skewed day and a failed run print the same sentence, and the band stops being the thing that answers "did it work" | Carmack |
+
+---
+
+## 14. Row #12 - `Judgement`, what the model made of each article
+
+- **Scope:** The fourth tab. **What the model made of each article, how sure it was, and where it disagreed with us.** Eight panels and one line, and the third clause is the reason the tab exists.
+- **Files touched:** `frontend/src/routes/console/judgement/+page.svelte`, `frontend/src/routes/console/judgement/+page.server.ts`, `frontend/src/lib/console/judgement.ts`, `backend/idhazh/publish_console_judgement.py`, `backend/idhazh/contracts/console_judgement.py`, `schemas/console-judgement.schema.json`, `tests/fixtures/contracts/console-judgement/newest-day.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/tests/test_console_judgement.py`, `backend/tests/test_contracts.py`, `backend/tests/test_marks.py`, `frontend/tests/console-judgement.spec.ts`, `docs/architecture/publishing/console.md`, `docs/architecture/publishing/console-payloads.md`, `docs/architecture/publishing/console-charts.md`, `docs/concepts/console-design.md`
+- **Acceptance gates:** `GATE-PY` with `backend/tests/{test_console_judgement,test_contracts,test_marks}.py`, `GATE-SCHEMA`, `GATE-WEB`, `GATE-BROWSER`, `GATE-SUITE`, and the section 12 browser smoke. Plus, in this row:
+  - both schemas carry today's `version` and a `changelog` entry;
+  - `config/idhazh.json` gains a `payload_ceilings_bytes` entry for the tab's own payload directory, and `npm run bundle-gate` holds it;
+  - **the page renders complete with its payload directory emptied**, which is the oracle below run as a gate;
+  - **no string on the tab uses the word "confidence" bare** (decision 6), asserted by the spec over the rendered text.
+- **Oracle:** **Every panel that cannot be computed says which figure is missing, by name, and the page logs no error and no 404.** Driven by pointing the route at an emptied payload directory in the browser and reading the page console. **A panel that white-screens on missing data fails on exactly the day an operator most needs it**, and on this tab that is not a hypothetical: every figure it draws is produced by plan 23, so **the honest state on the day this row lands is that most of them are absent**.
+- **What this row does not do:** it computes no classification, fills no decline fraction and changes no score. Plan 23 produces every figure here.
+
+### The relationship with plan 23, stated rather than left to collide
+
+**Plan 23 carries a console row for the same surface, under the route id `classification`.** Both cannot create one route. The rule, so whichever is dispatched first can act without asking:
+
+- **The address is `/console/judgement/` and the label is `Judgement`.** One route, one directory, one payload directory.
+- **If plan 23's console row has landed when this row is dispatched, this row moves that route to `/console/judgement/` and extends it.** If it has not, row #11 has already opened the empty page and this row fills it.
+- Either way **the panel set below is the one that ships**, because it is the one Susan ruled and the owner amended.
+
+This is recorded here rather than in plan 23 because a worker may not edit another plan's doc mid-flight. It is also a **cross-plan** collision rather than a within-group one, so section 1's disjointness rule does not catch it and nothing else would.
+
+### The panel set, ruled by Susan on 2026-09-11 with the owner amending two
+
+| # | Panel | Shape | Why |
+| --- | --- | --- | --- |
+| 1 | **The political gate, as three decline fractions** - `opinion`, `analysis`, government `announcement` | three figures, each with its denominator beside it | **It leads the tab.** It is the number that says whether the intelligence is real or flattering itself. Every other figure on the page is downstream of a classifier that might be stamping |
+| 2 | **Declared against read** | **two grids: 5 by 5 for the desk, 6 by 5 for the kind.** The diagonal is drawn at low weight and **only the off-diagonal is tinted** | Put the diagonal in the colour scale and it is one bright stripe with the interesting cells invisible beside it. The disagreement is the instrument |
+| 3 | **Lens firing rate** | **one diverging bar per lens** - keyword-only left, model-only right, agreed as a centre block - **ordered by total**, with **the lens's weight printed as a word at the row end** | A grouped bar loses the sign and the sign is the meaning. The weight at the row end is what makes the measured finding legible: **the four lenses at weight 0.0 fired 2,343 times against 650 for the two that carry weight, 3.6 times as often** (section 0.3). They tag an article and move no story, and a reader of this row can see that without doing arithmetic |
+| 4 | **Label confidence** | a histogram, and the owner's override in the section below decides what goes in it | Kept |
+| 5 | **Sentiment states** | a panel | Kept as a panel; the kappa that used to sit with it is one line (decision 5) |
+| 6 | **Viewpoint** | **five opposed pairs with a balance point, always beside `none` and `undetermined`** | The highest-stakes drawing on the console. Its own section below |
+| 7 | **Events** | a `RankedList` | Kept. It is a ranking, and `RankedList` is what this console draws a ranking with |
+| 8 | **Watchlist entries the day did not reach** | a short list, ranked by how long since each last fired | Replaces the entities panel. See below |
+| 9 | **Proposed verticals** | **one line, not a panel** | A count that is normally zero does not earn a frame |
+
+**Folded, not dropped.** The day-made-of-five-kinds panel folds into the declared-against-read kind grid, and keyword-only-against-model-only folds into the lens diverging bar. **Susan found the owner's paired bar cannot be drawn at all**: the model produces five kinds and the feed declares six, the declared set adding `government` and `community` and holding no `opinion`, so **three of eleven values have no counterpart** and a paired bar would pair them with nothing. The grid has a cell for every pair and a row and column for the three that stand alone.
+
+**Refused from this tab: the desk mix against its floor and its ceiling.** It is an editorial knob rather than a judgement the model made, so it goes to `Pipelines` as one `TargetBar` per desk. **Row #14 ships it**, because a `TargetBar` needs a threshold to mark and row #14 is the row that owns the target.
+
+### The watchlist panel, and the measurement that shaped it
+
+**A ranked list of named organisations is a different kind of claim from a count of `release` events**, so the entities panel is refused in that form. What replaces it is the silence: **watchlist entries the window did not reach.**
+
+**Measured 2026-09-11, that list is empty.** The `entities` field starts on 2026-08-27, so the record is 15 finished days, and over 7, 14 and 15 days **all 30 active entries fired**. The quietest are `asml` at 10 items, `adani` 14, `ftc` 25, `mistral` 28, `iea` 30. So the panel as the ruling words it would print its empty state every day.
+
+**That is not a reason to drop it and it is a reason to shape it.** The console already carries one counter expected to read zero - `Too long to send` - and says in its own words why: it is on the page so that the day the cap moves, the number that catches it is already being printed. This panel is the same shape. **It ranks by how long since each entry last fired and always draws the quietest few with their counts**, so it is never blank, and its alarm state is a non-empty silent list.
+
+`watchlist_hit` cannot drive it: it is a **boolean**, true on 1,066 of 8,550 items - 12.5 percent - and it says that something matched, never what. The `entities` list is what names the entry.
+
+### The viewpoint panel, and it is the highest-stakes drawing on this console
+
+**The hazard, stated in the row so no worker has to rediscover it.** *The digest is 60 percent progressivism* is a claim about **the world**, not about this pipeline, and a chart that can be read that way will be screenshotted out of the page that explains it. **The drawing has to make that reading impossible**, and no caption can do that job - a caption does not travel with an image.
+
+- **Never a ranked bar of eight.** A ranked bar orders positions by size and invites the reader to sum the top of it, which is exactly the sentence above.
+- **The vocabulary is five independent fields, not eight values in one field.** They do not compete for one total and a shape that stacks them says they do.
+- **Draw it as five opposed pairs with a balance point** - one axis a field, the balance point in the middle, the two ends the field's two poles. A pair says which way this day leaned on one question; it cannot be summed with the pair below it.
+- **Always beside `none` and `undetermined`, so the denominator is visible.** Those two are what say how much of the day the question was not asked of, and a pair drawn without them is a share of an unstated set.
+
+**Its own oracle: the panel prints `none` and `undetermined` in every state it can render, including the empty one.** A pair with no denominator beside it is the defect this panel exists to avoid, and a test that only checked the pairs would pass on the day the denominator stopped rendering.
+
+### The confidence panel is drawn, and the noise is taken out of it
+
+**Susan ruled the panel should refuse to draw under `logprob_mode = post_mask`.** A grammar-constrained decode reports 1.000 at any position the grammar narrows to one token, so the histogram piles at 100 percent and means nothing.
+
+**The owner overrode it on 2026-09-11**: we surface the correct signal so it can be read correctly, and failing to is a failure of charting rather than a reading problem. So the row works out how to separate the signal from the noise, and plots it.
+
+- **Plot the probability only at the discriminating position** - a position where the grammar offered **two or more** legal tokens - **renormalised over the legal set at that position**. A forced token carries no information and is the entire source of the pile-up, so excluding it removes noise rather than hiding a result.
+- **Show beside the histogram the count and the share of items that had no discriminating position at all.** That number is itself a finding about the vocabulary: a label the grammar could only reach one way was never a choice.
+- **Stamp `logprob_mode` on the panel**, so a reader knows which decode produced the figure.
+- **The axis is in whole percent.** `console-design.md` forbids a value between zero and one reaching the screen.
+- **The median and the 5th percentile rule over the values, never a mean and never read off a bar.** A mean over a renormalised distribution is pulled by the forced-adjacent positions that survive the filter, and a percentile read out of a bin is a guess at where inside it the value fell.
+
+**Its own oracle: a run where the grammar forced every position produces no histogram and one number**, and the panel says so by name rather than drawing an empty frame. Driven from a built fixture, because a decode where every position is forced is a case the archive cannot supply.
+
+**`logprob_mode` does not exist in the tree** - verified 2026-09-11, `git grep logprob` finds it only inside plan 23's text. So this panel is designed against a field plan 23 creates and prints its named absence until it does.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **The political gate leads the tab.** It is the only figure that says whether every other figure means anything | Susan, 2026-09-11 |
+| 2 | **The tab is `Judgement`, singular.** The other three name a place; this one names an act | Susan, 2026-09-11 |
+| 3 | **The confidence panel is drawn, by owner override.** The design is in the section above and this row implements it | Owner, 2026-09-11, `CLAUDE.md` section 0 |
+| 4 | **The viewpoint panel is five opposed pairs with a balance point, always beside `none` and `undetermined`.** Never a ranked bar of eight. The section above is the whole reason | Susan, 2026-09-11; owner |
+| 5 | **Kappa is one line, not a chart.** It is measured once over 60 items and never moves, so a chart where a sentence would do. **It stays on the console rather than in a pull-request body, because the day it fires it should fire in public** | Susan, 2026-09-11 |
+| 6 | **The tab never uses the word "confidence" bare.** `band` - high, medium, low - is already on every published item and `/console/model/` already draws its low count as `Marked "not sure"`. Measured 2026-09-11: high 4,993, medium 2,275, low 1,282 over 8,550 items. This tab's figure is **label confidence** in every string, and the spec asserts it | Susan, 2026-09-11 |
+| 7 | **No chart on this tab is stuffed into `Summaries`.** That route is about a published summary and every figure here is about a label | Owner, 2026-09-11 |
+| 8 | Every panel that cannot be computed prints **which figure is missing, by name**. Most of them cannot on the day this row lands | `CLAUDE.md` section 1a, degrade rather than fail |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A paired bar of declared kind against read kind | **It cannot be drawn.** Three of eleven values have no counterpart. Susan found it; the grid is what replaces it | Susan, 2026-09-11 |
+| 2 | A separate panel for the day's five kinds | It is the kind grid's own column totals, drawn twice. A fact stated twice on one screen reads as two facts | `docs/concepts/console-design.md` |
+| 3 | A separate panel for keyword-only against model-only | It is the diverging bar's two sides, and splitting them loses the comparison that is the point of it | Susan, 2026-09-11 |
+| 4 | A ranked list of named organisations | It is a different kind of claim from a count of events, and the tab already carries the count | Susan, 2026-09-11 |
+| 5 | The desk mix against its floor and ceiling, on this tab | An editorial knob is not a judgement the model made. It goes to `Pipelines` under row #14 | Susan, 2026-09-11 |
+| 6 | A kappa chart | One number that is measured once and never moves. A chart there claims a series that does not exist | Susan, 2026-09-11 |
+
+---
+
+## 15. Row #13 - `Voices`, who supplied the day and what it is worth
+
+- **Scope:** The fifth tab. **Who supplied the day, how often they answer, and what that is worth to the ranking.** The feed half of `Pipelines` moves onto it, and `ledger.reliability` is drawn for the first time.
+- **Files touched:** `frontend/src/routes/console/voices/+page.svelte`, `frontend/src/routes/console/voices/+page.server.ts`, `frontend/src/routes/console/+page.svelte`, `frontend/src/routes/console/+page.server.ts`, `backend/idhazh/publish_source_health.py`, `backend/idhazh/contracts/source_health_view.py`, `schemas/source-health-view.schema.json`, `tests/fixtures/contracts/source-health-view/four-facts.json`, `config/idhazh.json`, `backend/tests/test_publish_source_health.py`, `frontend/tests/console-sources.spec.ts`, `frontend/tests/console-feeds.spec.ts`, `frontend/tests/console-source-cuts.spec.ts`, `frontend/tests/console-voices.spec.ts`, `docs/architecture/publishing/console.md`, `docs/architecture/publishing/console-payloads.md`, `docs/architecture/publishing/console-charts.md`, `docs/concepts/console-design.md`, `docs/architecture/sources/health.md`
+- **Acceptance gates:** `GATE-PY` with `backend/tests/test_publish_source_health.py`, `GATE-SCHEMA`, `GATE-WEB`, `GATE-BROWSER`, `GATE-SUITE`, and the section 12 browser smoke. Plus, in this row:
+  - `schemas/source-health-view.schema.json` carries today's `version` and a `changelog` entry naming the new field;
+  - **the moved panels keep their own specs**, renamed rather than rewritten, and `Pipelines` keeps none of them (section 0.1, no prisoners);
+  - `config/idhazh.json` gains a `payload_ceilings_bytes` entry for the tab's payload.
+- **Oracle:** **Every source panel is on exactly one route, and the reliability factor the page draws equals the one the ranker used.** Two halves, **both driven from the canary build and from built feed-health rows, never from the committed ledger** (Rule #12). The first counts each moved panel's own data attribute across all five built routes and asserts one. The second re-derives `feed_reliability` over the rows the payload was built from and holds the drawn value to it, to three decimal places. **The second half is the one that matters**: a console figure that is a second derivation of a ranking factor is two verdicts, and the day they disagree neither is trustworthy.
+- **What this row does not do:** it changes no feed score and writes no new ledger. `ledger.reliability` is read.
+
+### The fifth tab is a split, not an addition
+
+**`Pipelines` answers three questions today** - did the runs work, which feeds broke, and what each stage cost - and its own route description says exactly that. **The feed half is already four panels**: `Four facts about every source we may ask`, `Sources cut short most often`, the failure list, and the clean-read count under it. Moving them leaves `Pipelines` answering one question.
+
+**So `Voices` costs one new panel and one new persisted field, not six.** The new panel is the reliability factor. The new field carries it onto the published source-health view so the page reads the producer's number rather than computing a second one.
+
+### The panel nobody has ever seen
+
+**`ledger.reliability` is the only self-adjusting number in this project and it is drawn nowhere.** It is the per-feed multiplier the ranker applies to authority, recalculated every run from the trailing `collect.reliability_window_days` - 30 - of feed health, clamped to `[collect.reliability_floor, 1.0]` - `[0.5, 1.0]` - and reading 1.0 for a feed with no evidence in the window. It writes nothing to `config/` and it lives for the length of one run.
+
+**Verified 2026-09-11: no file under `frontend/` reads it.** `frontend/src/lib/feed-health.ts` exports a function of the same name and it is a different quantity - a clean-read census over feeds, returning `clean`, `checked`, `failed`, `ineligible` and `runs`. Two things called reliability, one drawn and one invisible, and it is the invisible one that moves a story up the page.
+
+**It is the panel that makes the tab worth having**, and it is a `TargetBar` per feed: the track at 1.0, the fill at the factor, and the marker at the floor, which is the same shape the truncation cap and the quarantine threshold already draw with.
+
+### A lean needs a denominator, and a thin one gets a dash
+
+**A feed under about 30 judged items shows a dash, not a lean.** A lean computed on four articles is a libel with axes.
+
+The threshold is **config, and the project already has the number**: `collect.source_yield_alarm_min_decisions` is 30 and it exists for exactly this - a per-source figure that may not be read as a rate until the source has decided enough. This row reuses it rather than minting a second 30.
+
+**The item count sits beside every quality figure**, which is the console's own standing rule and not a new one.
+
+**A single combined quality score is refused.** `Pipelines` already argues this for source health, in its own words on the page: *a single score across the four would tell you something is wrong and nothing about what to do.* Four facts stay four facts.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **`Voices`, by owner override.** Susan's case for `Sources` is recorded under row #11 | Owner, 2026-09-11 |
+| 2 | **A split, not an addition.** The four feed panels move; `Pipelines` keeps none of them, and its route description loses the feed clause | Editor |
+| 3 | **Nothing folds.** Folding `Hardware` into `Pipelines` to keep the count down would undo the split of 2026-08-30 for the same reason this row is making one | Editor; `docs/architecture/publishing/console.md` |
+| 4 | **The reliability factor is published on the source-health view, not recomputed in the browser.** Two derivations of one verdict is two verdicts, and the console already learned this when the band moved to a producer | `frontend/src/lib/console/band.ts` |
+| 5 | **A feed under `collect.source_yield_alarm_min_decisions` judged items prints a dash.** Reusing the existing 30 rather than minting a second threshold | `CLAUDE.md` Rule #6; `config/idhazh.json` |
+| 6 | **No single combined score.** Four facts, four figures | `frontend/src/routes/console/+page.svelte` |
+| 7 | **This plan reads `ledger.reliability` and never modifies it.** Feed scoring belongs to another plan | Owner, 2026-09-11 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Leave the feed panels on `Pipelines` and give `Voices` only the reliability panel | Then two routes both answer "which feeds broke" and neither owns it. The split is what pays for the tab | Editor |
+| 2 | Compute the reliability factor in `+page.server.ts` from the feed-health shards | It is a second derivation of a ranking factor, on the other side of a boundary, and it would walk the shards at build time. The producer already has the number | Carmack; `CLAUDE.md` Rule #12 |
+| 3 | One combined source score, ranked | It would tell an operator something is wrong and nothing about what to do - the page's own sentence, and the reason the census is four facts | `docs/architecture/publishing/console.md` |
+| 4 | Print a lean on every feed, thin record and all | A lean over four articles is a claim the record cannot carry, and a chart is the most convincing way to make one | Andre |
+
+---
+
+## 16. Row #14 - A target distribution, and the day's distance from it
+
+- **Scope:** A target distribution over desks, kinds, lenses and viewpoints that **a person writes into `config/`**, and a **divergence** of the published day against it, recorded per day and drawn on `Pipelines` as one `TargetBar` per desk.
+- **Files touched:** `backend/idhazh/diversity.py`, `backend/idhazh/publish_day_metrics.py`, `backend/idhazh/contracts/day_metrics.py`, `schemas/day-metrics.schema.json`, `tests/fixtures/contracts/day-metrics/full.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/tests/test_diversity.py`, `backend/tests/test_day_metrics_producer.py`, `backend/tests/test_contracts.py`, `backend/tests/test_marks.py`, `frontend/src/routes/console/+page.svelte`, `frontend/src/routes/console/+page.server.ts`, `frontend/tests/console-desk-mix.spec.ts`, `docs/concepts/placement.md`
+- **Acceptance gates:** `GATE-PY` with `backend/tests/{test_diversity,test_day_metrics_producer,test_contracts,test_marks}.py`, `GATE-SCHEMA`, `GATE-WEB`, `GATE-BROWSER`, `GATE-SUITE`, `GATE-DAYS`. Plus, in this row:
+  - both schemas carry today's `version` and a `changelog` entry, and the day-metrics fields are **optional**, because 22 committed day records do not carry them;
+  - `backend/tests/test_marks.py` passes, so the new module is classified;
+  - `docs/concepts/placement.md` gains the target and the divergence, on the page row #2 created.
+- **Oracle:** **A day drawn exactly to the target scores zero, and moving one story from the largest desk to the smallest strictly lowers the score.** Both halves on a built fixture. The first is the identity every divergence must satisfy and it catches a normalisation that is off; the second is monotonicity and it catches a measure that rewards the concentration it is meant to report. **Built rather than sampled**, because no committed day is drawn to a target that did not exist when it published.
+- **What this row does not do:** **it changes no order.** It reports. The divergence reaches no score, and ESCALATE trigger 8 fires on a row that wires it into the ranker.
+
+### Why a target and not a learned score
+
+**The field with this project's constraint does not build a learned importance score; it builds a target distribution and measures the divergence from it.** Our constraint is the same one that literature works under: no clicks, editorial values that a person states rather than infers, and a list to publish rather than a feed to personalise.
+
+| Work | What it gives this row |
+| --- | --- |
+| RADio - Rank-Aware Divergence Metrics to Measure Normative Diversity in News Recommendations, Vrijenhoek, Benedict, Gutierrez Granada, Odijk, de Rijke ([arXiv 2209.13520](https://arxiv.org/abs/2209.13520), RecSys 2022) | A **rank-aware Jensen-Shannon divergence**: it accounts for a reader's falling attention down a list and it compares whole distributions rather than point estimates. Both matter here, because this plan just gave the day one order and the head is where a skew is felt |
+| D-RDW - Diversity-Driven Random Walks for News Recommender Systems, Li, Heitz, Inel, Bernstein ([arXiv 2508.13035](https://arxiv.org/abs/2508.13035), RecSys 2025) | **Customizable target distributions of article properties**, so an editor can put norms into the process transparently. That is this row's shape exactly: a person writes the target, the arithmetic reports the distance |
+| Recommenders with a mission: assessing diversity in news recommendations, Vrijenhoek, Kaya, Metoui, Moller, Odijk, Helberger ([arXiv 2012.10185](https://arxiv.org/abs/2012.10185)) | The five normative concepts the metrics are grounded in, and the argument that click-based evaluation measures the wrong thing |
+| Leveraging Media Frames to Improve Normative Diversity in News Recommendations, Dattawad, Daffara, Ceron ([arXiv 2509.02266](https://arxiv.org/abs/2509.02266), INRA at RecSys 2025) | Frames as a controllable aspect beside category and sentiment - which is what this plan's lenses and viewpoints are, under a different name |
+
+**Read on the open web and verified against arXiv on 2026-09-11.** They are cited for their shape, not for a number: nothing here adopts a threshold from any of them.
+
+**This is the first quality number about the page rather than about a summary, and it needs no labels.** Every existing quality figure in this repository - faithfulness, the confidence band, hedges, verbatim runs - judges one summary against one article. This one judges the day against what a person said the day should look like, and it can be computed from the published payload alone.
+
+### What it measures, and what a person writes
+
+- **Four target distributions**, one per vocabulary: desk, kind, lens, viewpoint. Each is a set of shares that sum to 1.0, written into `config/idhazh.json` with a sane default and a schema bound, per Rule #6.
+- **The divergence is reported per day** on the existing day-metrics record, which is already day-sharded under `state/day-metrics/<YYYY>/<MM>/<DD>.json` and already published as a monthly projection. **No new ledger, no new shard, no new prune.**
+- **The desk one is drawn** on `Pipelines`, as one `TargetBar` per desk: the track at the desk's target share, the fill at the day's, and the marker where row #7's ceiling sits. Five bars and one number, which is what a `TargetBar` is for.
+- **Where a vocabulary does not exist yet, its target is absent and its divergence is null.** Viewpoint arrives with plan 23. An absent target reads as "nobody has said what this should look like", never as "it should be flat".
+
+**The starting targets are estimates and are config because they are.** Measured 2026-09-11 over the 21 finished days, the day is `india` 31.7 percent, `world` 26.4, `ai` 15.2, `energy` 13.8, `business-economy` 12.9 - so the largest desk already sits within two points of ESCALATE trigger 2 on supply alone, and a target set to today's shape would ratify that rather than measure it.
+
+### Decisions
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **A target a person writes, never a target the pipeline learns.** A target the system derives from what it published is the runaway row #9b's decision 4 already names, one level up | Andre; section 0 |
+| 2 | **It reports and decides nothing.** No stage reads the divergence, no gate fails on it, and a run that cannot compute it publishes anyway | Section 1a, degrade rather than fail |
+| 3 | **Rank-aware, because this plan gave the day one order.** A flat count over 365 stories says nothing about the head, and the head is the only part most readers reach | [arXiv 2209.13520](https://arxiv.org/abs/2209.13520) |
+| 4 | **It rides on the existing day-metrics record.** A per-day quality number about the page is what that record is; a second day-sharded ledger would be a second prune and a second growing-reads declaration for one number a day | `CLAUDE.md` Rule #12; `backend/idhazh/publish_day_metrics.py` |
+| 5 | **The desk mix's `TargetBar` lands here, not on `Judgement`.** A `TargetBar` needs a threshold to mark and this is the row that owns it. Row #12 records the refusal and points here | Susan, 2026-09-11 |
+| 6 | Every field added to `DayMetrics` is **optional and an absent value reads as unknown**, because 22 committed day records do not carry it and none of them is rewritten | `CLAUDE.md` section 11 |
+
+### Rejected alternatives
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Learn an importance score from what readers opened | There are no clicks, by design - no accounts, no telemetry, no runtime call home. The literature's own answer to that constraint is a target distribution | `CLAUDE.md` Rule #1 |
+| 2 | Set the target to the trailing average of what we published | It measures the pipeline against itself and reports zero for ever. A target is a statement about what should be, and only a person can make it | Andre |
+| 3 | Wire the divergence into `rank_score` as a term | A measurement a score optimises against stops measuring. ESCALATE trigger 8 fires on it | Owner; section 0 |
+| 4 | A single diversity number for the day | Four vocabularies collapse to one figure that says something is off and not which. It is the same refusal `Voices` makes about a combined source score | Editor |
+| 5 | A new day-sharded ledger of its own | One number a day, on a record that already exists, already shards by day and already publishes a monthly projection | Carmack |
+
+---
+
+## 17. The docs each row writes
 
 **Every "exists today" answer in this table was run against the tree on 2026-09-11**, not carried from a draft. **Every page here is written by the row that owns the question, and where two rows write one page they are in different parallel groups** - which is the second half of section 1's check.
 
@@ -601,12 +891,17 @@ Every one of these is asserted by `backend/tests/test_workflows.py` or by the pr
 | `docs/concepts/ui-shell.md` | yes, 170 lines | 5 | Extended: where the time sits, at what size, and what is drawn for each `time_source` state |
 | `docs/concepts/growing-reads.md` | yes, 546 lines | 9a, 9b | A declaration for the counterfactual shard and one for the loop's trailing-window read |
 | `docs/reference/documentation-structure.md` | yes | 2 | One row routing `placement.md`, added by the row that creates the page |
+| `docs/architecture/publishing/console.md` | yes, 1,669 lines | 11, 12, 13 | Row #11 rewrites `The console is three routes` as five and records the severity cap; rows #12 and #13 each add their own tab and its worst state |
+| `docs/architecture/publishing/console-payloads.md` | yes, 412 lines | 12, 13 | One payload shape each |
+| `docs/architecture/publishing/console-charts.md` | yes, 493 lines | 12, 13 | The chart choices, including the two Susan folded and the one the owner reinstated |
+| `docs/concepts/console-design.md` | yes, 681 lines | 12, 13 | The sufficiency argument for each tab, and the rule that this console never prints the word "confidence" bare |
+| `docs/architecture/sources/health.md` | yes | 13 | Where the reliability factor is published and which panel draws it |
 
-**Two pages are created by this plan.** `docs/concepts/placement.md` and `docs/how-to/tune-the-placement-weights.md`. Everything else exists and is extended or corrected. **No row writes a page an existing page already owns.**
+**Two pages are created by this plan.** `docs/concepts/placement.md` and `docs/how-to/tune-the-placement-weights.md`. Everything else exists and is extended or corrected. **No row writes a page an existing page already owns**, and the four console pages are shared by three rows that sit in three different parallel groups for that reason.
 
 ---
 
-## 14. Open gaps nobody owns
+## 18. Open gaps nobody owns
 
 Named here so they are not mistaken for work this plan is doing.
 
@@ -615,7 +910,9 @@ Named here so they are not mistaken for work this plan is doing.
 | Wire relationships between feeds | `config/sources.json` has 151 feeds and no field saying which are customers of the same original. Without it "carried by two of our feeds" cannot be narrowed to "carried by two independent publishers" | It is a source-contract change and a research problem - somebody has to establish the relationships before a field can hold them. Row #4 ships without it and says so on the page |
 | Branch protection on `main` | It is off, and it is the only control that would actually stop a workflow pushing to the default branch | It interacts with `prune.yml`'s scheduled force-push, which is `CLAUDE.md` section 8's one exception. It is a repository setting and a decision about the whole repository |
 | A reader-visible reason for a story's position | The leading block explains its five; the other 355 stories have a position and no sentence. `digest.md` refuses numerals for good reasons and those reasons apply here too | It needs a vocabulary this plan does not have. Naming it is not the same as owning it |
-| `events` and `entities` rendered nowhere | Inherited from plan 23 section 26 and still true | Owned by no row of any plan |
+| `events` and `entities` rendered nowhere | Inherited from plan 23 section 26 and still true | Owned by no row of any plan. Row #12 draws both on the **operator** console, which is a different surface from the page a reader opens |
+| Retiring prerender from the app shell | It is live: `.github/workflows/ci.yml` runs the guard, `frontend/prerender-guard.js` exists, and **23 pages under `docs/` name it** (counted 2026-09-11). The app shell should not use it | It is a user-interface change and it belongs to a shell plan. **No plan-doc in `TODO/` owns it today.** Section 0.1 forbids any row here from asserting byte identity over prerendered output or from removing prerendering |
+| A second derivation of `ledger.reliability` | `frontend/src/lib/feed-health.ts` exports a `reliability` that is a clean-read census, and `backend/idhazh/ledger.py` exports a `reliability` that is the ranking multiplier. Two names, two quantities | Row #13 draws the second and renames neither. A rename crosses `backend/` and `frontend/` for no behaviour, and naming the collision is what stops the next reader assuming they agree |
 
 ---
 
@@ -625,6 +922,9 @@ Named here so they are not mistaken for work this plan is doing.
 - [`../docs/concepts/digest.md`](../docs/concepts/digest.md) - the leading block, the four why-lines, and the claim about carriage that the page refuses and the ranker made.
 - [`../docs/architecture/sources/discovery.md`](../docs/architecture/sources/discovery.md) - the score as it stands, and the section rows #1, #3 and #4 rewrite.
 - [`../docs/architecture/publishing/layout.md`](../docs/architecture/publishing/layout.md) - the published item's five rank fields, and the rail this plan retires.
+- [`../docs/architecture/publishing/console.md`](../docs/architecture/publishing/console.md) - the three routes this plan takes to five, the strip, the band and the severity ranking.
+- [`../docs/concepts/console-design.md`](../docs/concepts/console-design.md) - how a console figure is worded, coloured, ranked and drawn, and the rules rows #11 to #14 work inside.
+- [`../docs/architecture/sources/freshness.md`](../docs/architecture/sources/freshness.md) - `ledger.reliability`, its window, its floor, and why it can only ever reduce a score.
 - [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - what a read over a growing collection must declare.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the shape every row above is written in.
