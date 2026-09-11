@@ -514,6 +514,134 @@
           "published": 25
         }
       ]
+    },
+    {
+      "charts_drafted": 2,
+      "commit_sha": "374820772a1328e14af4fe1639d281e52ed5138b",
+      "completed_at": "2026-09-11T22:14:24Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "ca8b78586e35b06b11647e32adf8bdb36f8cf1380d3cbc9b729702184a5e9d5b"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "a23714893ac4b3d879d547a2d8ca03c19fc7117ab8d9efd7aace5503ee070649"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "ec1000ff9d74204737aa1571e1e2fef995ba30fcaf6ab0c091bde9a54591e341"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "3155c26724f0d86a4159367e8e7a6ff93fb339a75a3cf22e1d787a2d5ab4bce8"
+        }
+      ],
+      "determinism_violations": 0,
+      "evaluation_enabled": true,
+      "evaluation_sample_rate": 1.0,
+      "evaluation_sampled": true,
+      "items_failed": 5,
+      "items_planned": 80,
+      "items_prefiltered": 49,
+      "items_routed": 75,
+      "items_skipped": 0,
+      "items_succeeded": 75,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3.5-9B-Q4_K_M.gguf",
+            "hf_base_repo": "Qwen/Qwen3.5-9B",
+            "id": "qwen3-5-9b-q4-k-m",
+            "inference": {
+              "cache_type_k": null,
+              "cache_type_v": null,
+              "declared_for": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+              "flash_attention": "on",
+              "load_mode": null,
+              "log_verbosity": 4,
+              "max_output_tokens": 900,
+              "metrics": true,
+              "n_batch": 512,
+              "n_ctx": 16384,
+              "n_parallel": 1,
+              "n_threads": 4,
+              "n_threads_batch": null,
+              "n_ubatch": 512,
+              "poll": null,
+              "priority": null,
+              "request_timeout_minutes": 22.1,
+              "seed": 0,
+              "startup_warmup": true,
+              "temperature": 0.0,
+              "thinking": false,
+              "top_p": 1.0
+            },
+            "quantisation": "Q4_K_M",
+            "repo": "unsloth/Qwen3.5-9B-GGUF",
+            "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+            "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 5,
+      "note": null,
+      "pipeline_fingerprints": [
+        "8f92141bcac586fe9ab2a59775532d0b99a282739dde63801afe51ced6222fab"
+      ],
+      "rank_version": "idhazh-rank-3",
+      "route_ms": 1106298,
+      "run_id": "2026-09-11-34647329297",
+      "runner": "ubuntu-latest",
+      "scorer_version": "hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;window=900/150/anchored;bands=0.80/0.50;lead=0.30",
+      "site_bytes": 29770158,
+      "site_files": 526,
+      "source_list_stale": false,
+      "started_at": "2026-09-11T21:02:44Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 45,
+          "feed_floor": 35,
+          "id": "ai",
+          "planned": 13,
+          "published": 12
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 26,
+          "feed_floor": 21,
+          "id": "energy",
+          "planned": 11,
+          "published": 10
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 24,
+          "feed_floor": 21,
+          "id": "business-economy",
+          "planned": 10,
+          "published": 7
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 27,
+          "feed_floor": 21,
+          "id": "world",
+          "planned": 21,
+          "published": 21
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 23,
+          "feed_floor": 21,
+          "id": "india",
+          "planned": 25,
+          "published": 25
+        }
+      ]
     }
   ],
   "version": "2026-09-09T20:10"
