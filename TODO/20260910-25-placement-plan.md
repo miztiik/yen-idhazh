@@ -622,6 +622,7 @@ Named here so they are not mistaken for work this plan is doing.
 ## See also
 
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - the plan that named this work and left it; its row #6 changes what names a desk and its row #16 is where an auto-created vertical comes from.
+- [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the decision and research record for the conversation this plan split out of; its section 4 is the finding that a list like this one is graded against a target distribution rather than a learned score.
 - [`../docs/concepts/digest.md`](../docs/concepts/digest.md) - the leading block, the four why-lines, and the claim about carriage that the page refuses and the ranker made.
 - [`../docs/architecture/sources/discovery.md`](../docs/architecture/sources/discovery.md) - the score as it stands, and the section rows #1, #3 and #4 rewrite.
 - [`../docs/architecture/publishing/layout.md`](../docs/architecture/publishing/layout.md) - the published item's five rank fields, and the rail this plan retires.
