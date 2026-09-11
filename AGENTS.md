@@ -42,6 +42,8 @@ Four things bite first: the runner budget (4 vCPU, 6 h, 10 GB cache), fetched we
 
 Two rules carry an exception and there are only these two. `.github/workflows/prune.yml` force-pushes `main` on a schedule to bound the history the committed corpus adds (CLAUDE.md sections 0a and 8); nothing else may, and no person may. And the operator console prints a counterfactual cost in currency, labelled a counterfactual and never a bill (Rule #10, owner decision 2026-08-30); no other surface prints money.
 
+One property bounds every model verdict, so a plan full of model-written labels is checked against it rather than against a list of banned mechanisms. **The property is one sentence: a model verdict that reaches no reader and selects nothing to publish is not a section 0a deviation.** Two things stay banned whether or not a verdict satisfies the property, and those two are the whole of the ban. **A model may not grade a published summary, and it may not grade a published visual.** **A model may not select what publishes** - a label says what a story is about; it never decides whether the story runs. Those verdicts are deterministic or human. A verdict that is neither of those two is permitted. [`CLAUDE.md`](CLAUDE.md) section 0a is canonical.
+
 ## See also
 
 - [`README.md`](README.md) - what yen-idhazh is.
