@@ -36,7 +36,7 @@ orchestrator (main thread) worker subagent (one per row) persona custom agents
 7. Confirm the merged diff carried the row's own Reckoner line (below); unblock dependents; [distill](distill-a-plan.md) the closed row.
 8. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
-**Step 1 exists because an interrupted run leaves no note.** A worker that is killed mid-row never writes its report, never opens a pull request, and never clears the `IN-FLIGHT` it was given, so the next agent to arrive sees a queue that looks idle and a box that is not. What it leaves behind is a checkout with edits in it and a branch nobody proposed - indistinguishable, at a glance, from a checkout somebody finished with. Before selecting any row, list the worktrees and branches on the box, ask which plan row each one belongs to, and ask the forge whether its pull request is open, merged or absent. Then decide per item: adopt the work, or remove it. Starting a fresh row beside an abandoned one is how the same row gets done twice, and how two branches end up writing the same file.
+**Step 1 exists because an interrupted run leaves no note.** A worker that is killed mid-row never writes its report, never opens a pull request, and never clears the `IN-FLIGHT` it was given, so the next agent to arrive sees a queue that looks idle and a box that is not. What it leaves behind is a checkout with edits in it and a branch nobody proposed - indistinguishable, at a glance, from a checkout somebody finished with. Before selecting any row, list the worktrees and branches on the box, ask which plan row each one belongs to, and ask the pull request host whether its pull request is open, merged or absent. Then decide per item: adopt the work, or remove it. Starting a fresh row beside an abandoned one is how the same row gets done twice, and how two branches end up writing the same file.
 
 The project's plan-queue reader answers all three questions in one command - what each Reckoner says, what can start now, and which worktrees and branches no row claims. Where the project has no such tool, the same answer is a `git worktree list`, a branch list, and one query for open pull requests, read against the Reckoners by hand.
 
@@ -50,7 +50,7 @@ A plan-doc is written before the work and read after the tree has moved under it
 
 Neither check makes a row correct. They establish only that the row can be acted on, and that its result can be told apart from its starting position - which is the same standard `CLAUDE.md` Rule #10 sets for any other measurement.
 
-The orchestrator does NOT open the row's source files, write its code, or run its inner test loop inline - that is the worker's job. The orchestrator's own edits are limited to the Status Reckoner and the merge.
+The orchestrator does NOT open the row's source files, write its code, or run its inner test loop inline - that is the worker's job. Its own edits are limited to the plan-doc and the merge: correcting a row before dispatch, filling `Worktree` and `Subagent`, and marking `IN-FLIGHT`. The row's completed line is stamped by the worker, in the row's own pull request.
 
 Do not remove or alter a worker's checkout while its tests or build are running.
 Closing a plan does not invalidate an existing check. A documentation-only
