@@ -57,9 +57,8 @@ from typing import Final
 #: Where the plan-docs live, relative to the repository root.
 PLANS: Final = "TODO"
 
-#: What a finished branch is measured against, and the remote that carries it.
+#: What a worktree's commits are counted against.
 TRUNK: Final = "origin/main"
-REMOTE: Final = "origin"
 
 #: The pull request state that means the row landed. `gh` spells it upper case.
 MERGED: Final = "MERGED"
@@ -202,7 +201,6 @@ class Plan:
     path: PurePosixPath
     number: int | None
     key: str
-    header_line: int
     rows: tuple[Row, ...]
     has_pull_column: bool
 
@@ -423,7 +421,6 @@ def parse_plan(path: PurePosixPath, text: str) -> Plan | None:
         path=path,
         number=number,
         key=key,
-        header_line=header_index + 1,
         rows=tuple(rows),
         has_pull_column="pr" in columns,
     )
