@@ -371,6 +371,11 @@
   "visuals": {
     "asset_base_url": "",
     "canvas_width": 800,
+    "downgrade_floor_percentiles": [
+      25,
+      60,
+      90
+    ],
     "enabled_kinds": [
       "chart"
     ],
