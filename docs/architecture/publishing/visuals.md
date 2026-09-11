@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-09-09
+**Last Updated**: 2026-09-11
 
 How an item gets a chart or - most of the time - nothing at all.
 
@@ -472,6 +472,198 @@ against `items_routed + items_prefiltered`, or state which one you meant. Both k
 names the run manifest froze on 2026-09-05; the Python behind them is `items_decided` and
 `items_prefiltered` ([../contracts/schemas.md](../contracts/schemas.md)).
 
+## The two-call gate suppresses the plan and never skips the call
+
+The single-call gate above skips a request. The two-call flow cannot, because **call 2 is the call
+that writes the summary** - so what the gate takes away is the plan's decode, not the request. The
+grammar is what takes it: `call_two_model(plan=False)` is the summary draft alone, with no `visual`
+property, so the decoder has nowhere to write a plan. A smaller budget on its own would not do it -
+the decoder would start the plan and meet the cap part-way through, which spends the decode the gate
+exists to save and returns a cut reply.
+
+`reachable_types` is the predicate, and **it reads the validator's own tables** - `TYPE_RULES`,
+`ROLE_KINDS`, `VALUE_ROLES` and `commensurable`, out of
+[`visual_vocabulary.py`](../../../backend/idhazh/visual_vocabulary.py). A gate written from
+somebody's reading of those rules drifts the first day a rule moves, silently, in the direction that
+costs items their pictures. For each type with a role rule it asks three questions of the element
+table alone: is every required channel fillable by some element of a kind that channel takes, does
+the channel the type counts its marks in reach the floor, and - where that channel is drawn on a
+measured axis - do enough of those marks measure the same thing.
+
+Three of the nine checks cannot refuse a plan the gate admitted, so the gate does not ask them.
+`element_exists` is satisfied by choosing from the table. `plan_version_current` is stamped by code.
+`numerals_matched` is about prose, and a plan can always write prose with no numeral in it. One
+check does the opposite and is asked early: an element whose cell disagrees with its own characters
+fails `no_invented_values` wherever it is drawn, so the gate reads it with the producer's own reader
+and does not count it as a mark.
+
+**It reads no word of the article.** Every input is a kind, a unit or a figure re-read from the
+span - so a page that asks to be drawn is answered with the same tuple as one that does not. That is
+Rule #11 with no prompt in sight, and it is the same property the single-call gate holds.
+
+**The gate is proved by exhaustion, not by sampling.**
+`test_the_gate_admits_nothing_the_validator_would_have_passed` builds a table the gate calls
+unreachable and enumerates every assignment of every subset of its elements to every required
+channel of every ruled type, asserting the validator refuses all of them. One survivor would mean
+the gate costs an item a picture a reader would have seen, which is the one way a cheap gate is
+expensive.
+
+| What the gate changes about call 2 | Before | Gated |
+| --- | --- | --- |
+| The decoder shape | `{summary, visual}` | the summary draft alone |
+| The output budget | 4,694 tokens | 905 tokens |
+| The trailing user turn | 2,555 characters | 961 characters |
+| The system turn, the article, call 1's reply | unchanged | unchanged |
+
+Both budgets are derived from the reply shape's own bounds by the same arithmetic rather than one
+being the other minus the plan's - two ways of computing one quantity disagree the first time a
+bound moves, and the one that is wrong is the one nobody reads. The saving is 3,789 tokens off the
+ceiling, which is 81 percent of it; **a ceiling is not a measurement of seconds**, and the "21
+measured seconds" this page used to quote was a saving for skipping a whole call, which cannot
+happen. That figure is withdrawn rather than re-used.
+
+**The prompt loses its plan half too, and that is the same rule read a second time.** A turn that
+asks for a title, a caption and a reason the grammar has nowhere to put does not simply get ignored:
+constrained decoding renormalises onto the tokens the grammar allows, so the text goes into the only
+channel left open, which is the summary a reader reads. `summarize_and_plan_visual.txt` is now the
+summary half with a `$plan` slot, and `plan_visual.txt` is what goes in it - one file substituted in
+or out rather than two whole prompts, so the summary half cannot drift between the two requests. A
+test asserts the two renders share it byte for byte.
+
+**Suppressing the plan moves nothing in front of the article.** All three differences sit after the
+system turn, the article and call 1's reply, so the cached prefix a gated item reuses is the prefix
+an ungated one reuses, and the floor row #3 measured is the same floor for both.
+
+## Every `none` says which gate refused it
+
+`none` is the majority outcome by design - two items in three - so a `none` with no cause makes the
+largest number an operator reads the one that explains nothing, and no gate can be retired, tuned or
+shown to work. `VisualDecision.none_reason` is a typed enum rather than a sentence in `rationale`,
+because a console counts members and cannot count prose.
+
+| Member | The route it names |
+| --- | --- |
+| `not_reachable` | No choice over this article's elements could have survived the validator. The call still ran and still wrote the summary. |
+| `model_declined` | The model was asked and answered `none`. The ordinary answer, and the one the design wants to stay common. |
+| `validation_failed` | A plan was drafted, the validator refused it, and the ladder reached no depth that validates. |
+| `output_budget_cut` | The reply ran out of output budget after the summary closed, so the plan was never written. The item publishes; the picture is what was lost. |
+
+**One member per gate, never one per call site.** The reachability gate refuses in two places - the
+single-call prefilter above and the two-call suppression - and both record `not_reachable`, because
+what an operator acts on is the gate rather than the line of code. And **which** check refused is
+`ValidatorCheck`'s to say: one fact with two homes is a fact that can disagree with itself.
+
+**Four members, because four routes have a writer.** The design record names six gates and the
+two-call flow adds a seventh. The potential class, the novelty floor, the sufficiency bar and the
+per-visual byte cap are not built, so a member for each would be a word nobody can produce, nobody
+can retire and nobody can tell from a bug. Each arrives as an additive member with the row that
+builds its gate. The oracle holds the enum to that: every route is driven from its own fixture and
+the set collected must equal the enum exactly.
+
+The single-call planner these four replace writes null. Its causes are sentences in `rationale`, and
+several of them - no summary to illustrate, a reply that lost its shape, a kind with no renderer -
+are not gates at all, so typing them into this vocabulary would be work the row that retires that
+planner deletes. A payload written before the field existed writes null for the same reason, and
+that is the honest reading: nothing committed says which gate refused it.
+
+## The ladder steps down, and four rules stop it becoming a new picture
+
+A downgrade is **the same claim re-rendered in a weaker form**. It is never permission to go and
+find something else to draw, and four invariance rules are what make that a property rather than an
+intention.
+
+| # | Rule | How it is held |
+| --- | --- | --- |
+| 1 | The element set does not change | The candidate is built by relabelling the type and emptying the channels the target does not declare. `element_ids`, `labels` and `annotations` come through untouched. |
+| 2 | The purpose survives | The plan's own `purpose` is never written, **and** every edge in the allow-list names the purposes it preserves. |
+| 3 | The floor escalates | Each depth reads a higher percentile of the depth-0 published mark counts for the type being stepped down to. |
+| 4 | It re-validates | The candidate re-enters the **same** validator, and a depth that fails falls to the next depth rather than publishing. |
+
+**Emptying a channel is not dropping an element**, and that difference is the whole of rule 1. What
+a `bubble` loses on the way to a `scatter` is the size *channel*; the elements that filled it stay
+declared, stay checked by `no_invented_values`, and are simply not drawn. Read the other way - as
+"an element may not leave `element_ids`" - the rule would ban every edge the source document lists.
+
+**Rule 2 needs the edges to carry purposes, because comparing each step's endpoints cannot make a
+chain safe.** `pie` to `stacked_bar` keeps a composition and `stacked_bar` to `bar` does not, so a
+ladder that only asked "does this plan still say `composition`?" would walk a composition into a
+comparison in two moves and record both as legal. Naming the purposes an edge preserves asks every
+step about the one purpose the plan started with.
+
+### The static allow-list, and the four edges it refuses
+
+`DOWNGRADE_EDGES` is a static table with its own date-stamp. Without one the ladder can walk a
+comparison into a timeline and record it as a legal edge; the cross-family ban is what "purpose
+survives" implies and never states.
+
+| From | To | Preserves | What the step gives up |
+| --- | --- | --- | --- |
+| `bubble` | `scatter` | `relationship` | The size channel. The two measured axes the relationship is stay. |
+| `pie` | `stacked_bar` | `composition` | The circle. Parts of a declared whole, stacked in one bar. |
+| `stacked_bar` | `bar` | `comparison` | The series split, which is what a stacked bar is refused for when its parts are not exhaustive. |
+| `comparison` | `bar` | `comparison` | Nothing a reader sees - `comparison` has no role rule yet, so this is the "nearest built neighbour" `UNRULED_TYPES` promises. |
+| `whowhat` | `bar` | `comparison` | The grid. A one-attribute comparison grid drawn as the comparison it is. |
+
+**An edge that cannot change an outcome is not on the list.** A target whose required channels equal
+the source's rescues nothing - a plan refused as a `line` is refused identically as an `area` - so
+that pair is absent rather than listed and never fired. A test holds the whole table to that.
+
+Four refusals are worth naming, because each is a judgement rather than a derivation:
+
+- **`line` to `bar`** is in the source document with the condition "if the time axis is safely
+  categorical". Nothing in this build can decide that, and a condition nobody can evaluate is a
+  condition nobody should encode.
+- **`slope` to `bar`** destroys the before-and-after pairing the slope exists to show, so it is not
+  an edge at all.
+- **`flow`** is the diagram family, whose only fallback is `none` - never sideways into a chart.
+- **Any chart to `table` at depth 2** is in the source document, and `table` has no role rule, so
+  the validator refuses it by name. A target that cannot pass rescues nothing.
+
+### The floor, what it is a percentile of, and what an empty corpus means
+
+`visuals.downgrade_floor_percentiles` is the ladder as one list: how many rungs it has and how high
+each one is. Entry *n* is the percentile a downgrade at depth *n+1* must reach, so **the length is
+the deepest permitted downgrade and the depth after it refuses** - `[50, 75]` is the design's own
+ladder, the median at the first step down and the 75th percentile at the second, refuse at the
+third. An empty list is the ladder switched off, which is one knob doing two jobs on purpose: a
+separate on-off flag can disagree with the rungs beside it, and zero rungs is already an unambiguous
+no. It ships empty, because the flag stays off until the whole two-call path works. The rungs must
+rise, and `VisualsConfig` refuses a list that does not - a floor that falls with depth is a ladder
+that gets easier the further down it goes.
+
+**The floor is on the mark count**, which is the quantity the validator's own `enough_data` already
+counts, over elements code extracted. The population is the depth-0 published mark counts for the
+target type: including downgrades makes a loop where downgrades score lower, drag the floor down and
+admit more downgrades, so the bar would loosen exactly as quality fell. It is nearest-rank, so an
+integer population gives an integer floor and nothing is interpolated into a mark count no published
+visual ever drew.
+
+**A floor that cannot be computed is not cleared.** Waiving it on an empty population would make
+depth 1 publish on the validator alone, which is depth 1 quietly becoming the default path. The
+consequence is stated rather than hidden: `state/visuals/` does not exist yet, so today the
+population is always empty, every depth refuses, and **the ladder behaves exactly as if it were
+off**. What ships now is the mechanism, its edges and three of its four invariants under test; the
+floor arm becomes live when the ledger does.
+
+**A downgrade with no annotation fails**, at every depth and not only at depth 2. The source
+document states it both ways - a table that puts it at depth 2 and a rule that puts it at depth 1
+with the reason "this is what prevents depth 1 from quietly becoming the default path" - and the
+rule is the one with a reason attached. It is also the weaker of the two claims in this codebase
+already: the programme requires an annotated mark on **every** visual, not only a downgraded one.
+
+**What the percentile cannot do, said next to it.** A mark count is bounded to the
+`min_chart_points`-to-`max_chart_points` window, 3 to 8 today, so a percentile over it is a
+low-resolution instrument and two adjacent rungs can land on one integer - at which point the ladder
+stops escalating. That is visible rather than silent, because each depth records the floor it
+applied, and the answer is to move the percentiles rather than the mechanism.
+
+**The kill criterion is pre-committed here, before any data is read.** If downgraded visuals are
+kept materially less often than depth-0 ones, the ladder is manufacturing exactly the pointless
+visuals it was gated against: the flag goes off and **the ladder is deleted, not tuned**. The
+instrument is `visual_keep_rate` at depth 1 or more against depth 0, and it needs the keep-rate panel
+and the ledger behind it, so the criterion cannot fire until both exist. Writing the line down first
+is what stops the number being argued after it is seen.
+
 ## The stage stops itself before the job does
 
 The stage's wall-clock is `items with an OK summary x per-item cost`, and neither factor was
@@ -716,6 +908,54 @@ cost is engine boot, paid once per run rather than once per item.
 
 ## Design rationale
 
+**Why the floor is a mark count and never `confidence`.** The ladder needs a number that rises with
+depth, and the only per-plan number in the contract is `confidence` - which the shape itself says is
+"recorded, and it gates nothing". Three reasons, and the cheapest one comes first: gating on it
+breaks the shape's own written guarantee. It is also the one free number the model writes, so
+prohibition 2 - "the worst a prompt injection can do is pick the wrong bars; it cannot draw the
+wrong number" - would stop being true of publish decisions (Rule #11). And a model may not select
+what publishes (`CLAUDE.md` section 0a). The mark count is code's own count over code's own
+elements, and it is the quantity `enough_data` already rules on. Authority: Andre and Fowler, ruled
+independently and agreeing, 2026-09-11.
+
+**What the mark count cannot see, said rather than implied.** It is a floor, not a quality score. It
+cannot tell whether the marks differ from each other, whether the labels are legible, or whether
+anybody would choose to look - which is Susan's standing warning about this whole subsystem: every
+binding gate here is integrity or cost, and a plain grey bar chart passes all of them.
+
+**Why `none_reason` lives on the decision and not on the plan.** Two of its four members fire when
+no plan object exists at all - the gate takes the plan fields off the request, and the budget cut
+loses the plan's bytes - so a field on `VisualPlan` would be unwritable on exactly the routes it is
+for. `VisualDecision` exists for every item either way, and `asked_the_model` and `drafted_chart`
+are the same kind of fact in the same payload. Authority: Fowler, 2026-09-11.
+
+**Why the edge table has a date-stamp of its own.** `PLAN_VOCABULARY_VERSION` is what
+`plan_version_current` compares a plan against, so moving it re-plans every item carrying an older
+one - a model call apiece. Adding a downgrade edge must not cost that, and `UNIT_TABLE_VERSION` set
+the precedent for the same reason.
+
+**Why the ladder ships inert rather than waiting for its ledger.** With no depth-0 population every
+floor is uncomputable and every depth refuses, so today the ladder answers exactly as it would with
+the flag off. That is deliberate: the edges, the invariants and the refusals are under test now, at
+no reader-visible cost, and the one arm that needs a corpus is the one arm that waits. The
+alternative - hold the whole mechanism back until `state/visuals/` lands - would put the edge table
+and the invariance rules into the same commit as the ledger, where a review has to hold both.
+
+**Why the call-2 prompt lost its plan half.** A turn that asks for fields the grammar cannot hold is
+not ignored: constrained decoding renormalises onto the allowed tokens, so the text goes into the
+only channel still open, which is the summary a reader reads. The same rule already governs the key
+points, where asking for more than the grammar admits "would lose the item for doing what it was
+told". The cost is that the unsuppressed turn moved as well: 2,614 characters to 2,555, with three
+plan-referencing sentences relocated into the plan block. No rule was dropped - "summary first",
+"finish the summary before you start the plan" and "you never type a number into the plan" all
+survive, in the half where they are true. Authority: Andre, 2026-09-11.
+
+**Why the reachability gate reads the validator's tables rather than a copy of its rules.** The gate
+is a prediction of the validator, and a prediction written from somebody's reading of the rules is
+wrong the first day a rule moves - silently, and in the direction that costs items their pictures.
+Asking `TYPE_RULES`, `ROLE_KINDS`, `VALUE_ROLES` and `commensurable` directly means a rule can only
+move in one place.
+
 **Why the model picks an index instead of writing a spec.** The obvious design is to ask the model
 for a Vega-Lite object. It is also the design where a hallucinated axis value is one sampling
 accident away, and where the only defence is checking the output against the article afterwards -
@@ -848,6 +1088,20 @@ file before it can be enabled.
 
 | Option | Why rejected |
 | --- | --- |
+| Skip call 2 entirely when the gate refuses | Call 2 is the call that writes the summary, so skipping it costs the item the thing a reader came for. The gate suppresses the plan fields inside the call and never the call (O43). |
+| Suppress the plan with a smaller budget and leave the grammar whole | The decoder starts the plan and meets the cap part-way through, which spends the decode the gate exists to save and hands back a cut reply. The grammar is the control; a budget is a request. |
+| Derive the suppressed budget as the full one minus the plan's characters | Two ways of computing one quantity, which disagree the first time a bound moves - and the one that is wrong is the one nobody reads. Both come off the same two-half arithmetic over their own schema. |
+| Leave the plan half in the call-2 prompt when the grammar cannot hold it | Constrained decoding renormalises onto the allowed tokens, so a title, a caption and a reason with nowhere to go end up in the summary a reader reads. |
+| `confidence` as the ladder's escalating floor | The contract says it gates nothing, it is the one free number the model writes, and a model may not select what publishes (`CLAUDE.md` section 0a). Gating it would also destroy it as a diagnostic. |
+| Waive the floor when no depth-0 visuals have been published | Depth 1 would publish on the validator alone, which is depth 1 quietly becoming the default path - the failure the escalating floor exists to prevent. |
+| A separate on-off flag beside the ladder's rungs | Two knobs that can disagree about one thing. Zero rungs is already an unambiguous no, and the rung count is already the maximum depth. |
+| A `none_reason` member for each of the six gates the design record names | Four of the six have no code behind them, so four members would be words nobody can produce, nobody can retire and nobody can tell from a bug. Each arrives with the row that builds its gate. |
+| Put `none_reason` on `VisualPlan` as a third code-stamped field | Two of its four routes fire when no plan object exists at all, so the field would be unwritable on exactly the cases it is for. |
+| A `line` to `bar` downgrade edge | The source document allows it "if the time axis is safely categorical", and nothing in this build can decide that. A condition nobody can evaluate is a condition nobody should encode. |
+| Any chart to `table` at depth 2 | `table` has no role rule, so the validator refuses it by name. A target that cannot pass rescues nothing, and listing it would be a rung nobody can stand on. |
+| Let the ladder move an element from one channel to another | It re-encodes the claim - the same date now means "a name on the axis" rather than "a point in time" - so the purpose survives in the field and not in the drawing. |
+| Let a downgrade skip re-validation | Then a downgrade can publish the thing the original plan was refused for. |
+| A repair retry instead of a ladder | A retry must perturb the input, and there is no rejection reason to feed back: the ladder was chosen over a repair retry precisely so that no validator failure ever re-calls the model. |
 | A funnel of bars for the four chart counts on the console | The stages fall by an order of magnitude - 88 reached, 47 asked, 17 drafted, 9 published on 2026-08-25 - so the bar the decision rests on is the one a reader can barely see. A table gives every stage the same weight. |
 | A model filter or a model legend on the console Charts table | A filter over two values hides half the data and saves nobody any work. When a second model has run enough days to compare, the ledger it is read from has to be truthful first. |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |

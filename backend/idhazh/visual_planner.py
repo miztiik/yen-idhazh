@@ -36,6 +36,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
+from math import ceil
 from pathlib import Path
 from string import Template
 from typing import Annotated, Any, Final, Literal, NamedTuple, get_args
@@ -69,10 +70,18 @@ from idhazh.contracts.element import (
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import (
     CODE_STAMPED_FIELDS,
+    EncodingRole,
+    PlanDecision,
     VisualPlan,
+    VisualType,
     widest_json_characters,
 )
-from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
+from idhazh.contracts.visual_decision import (
+    NoneReason,
+    VisualDecision,
+    VisualKind,
+    VisualState,
+)
 from idhazh.elements import (
     MAGNITUDE,
     NOT_A_UNIT,
@@ -83,13 +92,22 @@ from idhazh.elements import (
     SpanDriftError,
     normalise_unit,
     read_quantity,
+    read_value,
     sentence_starts,
     settle,
 )
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import Completion, continued_payload, request_payload
 from idhazh.sanitize import sanitize, untrusted_block
-from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
+from idhazh.visual_validator import Rejection, validate_plan
+from idhazh.visual_vocabulary import (
+    DOWNGRADE_EDGES,
+    PLAN_VOCABULARY_VERSION,
+    ROLE_KINDS,
+    TYPE_RULES,
+    VALUE_ROLES,
+    commensurable,
+)
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "visual_planner.txt"
 CALL_ONE_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "label_article_elements.txt"
@@ -313,6 +331,7 @@ def _nothing(
     decided_at: str,
     version: str,
     drafted_chart: bool = False,
+    none_reason: NoneReason | None = None,
 ) -> VisualDecision:
     return VisualDecision(
         version=version,
@@ -323,6 +342,7 @@ def _nothing(
         model_id=model_id,
         decided_at=decided_at,
         drafted_chart=drafted_chart,
+        none_reason=none_reason,
     )
 
 
@@ -333,6 +353,10 @@ def decided_without_the_model(
 
     The rationale says the model never ran, so a reader of the payload is never
     left to infer it from a decision that looks like every other `none`.
+
+    It records `not_reachable` because it IS the reachability gate, read over
+    this flow's quantities rather than over an element table. One member per
+    gate, never one per call site - what an operator acts on is the gate.
     """
     return _nothing(
         summary,
@@ -343,6 +367,7 @@ def decided_without_the_model(
         ),
         decided_at=decided_at,
         version=VisualDecision.schema_version(),
+        none_reason=NoneReason.NOT_REACHABLE,
     ).model_copy(update={"asked_the_model": False})
 
 
@@ -1458,6 +1483,11 @@ def anchored(
 
 
 CALL_TWO_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize_and_plan_visual.txt"
+#: The plan half of that turn, in its own file because it is substituted in or
+#: out. One file rather than two whole prompts, so the summary half a reader
+#: ends up reading cannot differ between the two requests by drifting - it is
+#: the same bytes, and a test asserts it.
+PLAN_HALF_PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "plan_visual.txt"
 
 #: How many characters of a decoded string one word may cost, matching
 #: `summarize._MAX_CHARS_PER_WORD` because both rails are cut from the same
@@ -1472,15 +1502,24 @@ class CallTwoReply(NamedTuple):
     neither of the fields code stamps; it exists to be a grammar and it stops at
     `parse_call_two`. What a caller gets is a summary draft the summarizer's own
     gates can read and a plan the validator can rule on.
+
+    `visual` is `None` when the reachability gate took the plan fields off the
+    request. That is an answer rather than an absence: no plan was asked for, so
+    none came back, and the item's `none_reason` is `not_reachable`.
     """
 
     summary: summarize.SummaryDraft
-    visual: VisualPlan
+    visual: VisualPlan | None
 
 
 @lru_cache(maxsize=1)
 def _call_two_template() -> Template:
     return Template(CALL_TWO_PROMPT_PATH.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def _plan_half() -> str:
+    return PLAN_HALF_PROMPT_PATH.read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
@@ -1524,6 +1563,7 @@ def call_two_model(
     *,
     source_words: int | None = None,
     brief: bool = False,
+    plan: bool = True,
 ) -> type[BaseModel]:
     """What the decoder is constrained to emit on call 2.
 
@@ -1542,10 +1582,19 @@ def call_two_model(
     conditioning, not sourcing: `element_ids` may cite only an element the
     article's own table carries, so a plan cannot draw a figure the summary
     happened to mention and the table does not hold.
+
+    **`plan=False` is the reachability gate spent, and it is the grammar that
+    spends it.** The shape becomes the summary draft alone - the same one the
+    single-call path already sends and `recovered_completion` already produces -
+    so the decoder cannot write a plan rather than being asked not to. A budget
+    on its own would not do it: the decoder writes the plan and meets the cap
+    part-way through, which spends the decode the gate exists to save and
+    returns a cut reply.
     """
-    return _call_two_model(
-        summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
-    )
+    draft = summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
+    if not plan:
+        return draft
+    return _call_two_model(draft)
 
 
 def call_two_schema(
@@ -1553,10 +1602,11 @@ def call_two_schema(
     *,
     source_words: int | None = None,
     brief: bool = False,
+    plan: bool = True,
 ) -> dict[str, Any]:
     """Generated from the model, never hand-written (Rule #3)."""
     return call_two_model(
-        prompt_config, source_words=source_words, brief=brief
+        prompt_config, source_words=source_words, brief=brief, plan=plan
     ).model_json_schema()
 
 
@@ -1565,6 +1615,7 @@ def call_two_user_turn(
     *,
     source_words: int | None = None,
     brief: bool = False,
+    plan: bool = True,
 ) -> str:
     """The second question, and nothing the first turn already carried.
 
@@ -1580,6 +1631,14 @@ def call_two_user_turn(
     the grammar admits would lose the item for doing what it was told, and with
     no article named the two would disagree: the prompt would state the shortest
     band's numbers while the decoder held the union of every band's.
+
+    **`plan=False` drops the plan half of the turn as well as the plan half of
+    the grammar**, and that is the same rule read a second time. A turn that
+    asks for a title, a caption and a reason the grammar has nowhere to put does
+    not produce them - constrained decoding renormalises onto the tokens the
+    grammar allows, so the text goes into the only channel left open, which is
+    the summary a reader reads. The plan half is also two thirds of a turn that
+    sits after the article and therefore prefills on every single item.
     """
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0) if brief else ask.band_for(source_words or 0)
@@ -1593,6 +1652,7 @@ def call_two_user_turn(
         target_words_min=band.target_words_min,
         target_words_max=band.target_words_max,
         max_verbatim_words=ask.max_verbatim_words,
+        plan=_plan_half() if plan else "",
     )
 
 
@@ -1612,7 +1672,9 @@ def call_two_prose_words(prompt_config: SummarizeConfig | None = None) -> int:
     )
 
 
-def call_two_output_tokens(prompt_config: SummarizeConfig | None = None) -> int:
+def call_two_output_tokens(
+    prompt_config: SummarizeConfig | None = None, *, plan: bool = True
+) -> int:
     """Call 2's output budget, derived from the reply shape's own bounds.
 
     **Not picked.** Every array in the shape carries a `maxItems` and every
@@ -1645,10 +1707,18 @@ def call_two_output_tokens(prompt_config: SummarizeConfig | None = None) -> int:
     11,692 characters at its widest: 7,848 of prose, which is 850 tokens at 1.3
     a word, and 3,844 of structure, of which the plan alone is 3,767. So the
     budget is 4,694 tokens and it is mostly the picture.
+
+    **The suppressed budget is the same arithmetic over the narrower shape**,
+    not that number minus the plan's. Subtracting would be a second way of
+    computing one quantity, and the two disagree the first time a bound moves.
+    It loses the plan's slack with the plan: today the picture's 3,767
+    structural characters sit behind the summary and absorb a prose overrun the
+    prose half's sizing did not predict, and with them gone a cut can land
+    inside the summary, where `recovered_completion` has nothing to recover.
     """
     ask = prompt_config or SummarizeConfig()
     words = call_two_prose_words(ask)
-    structure = widest_json_characters(call_two_schema(ask)) - words * CHARS_PER_WORD
+    structure = widest_json_characters(call_two_schema(ask, plan=plan)) - words * CHARS_PER_WORD
     return approx_tokens(words) + structure
 
 
@@ -1657,12 +1727,24 @@ def call_two_output_tokens(prompt_config: SummarizeConfig | None = None) -> int:
 #: same: a number that only exists inside a function is a number nobody
 #: re-derives, and a bound can then move without anybody seeing what it cost.
 CALL_TWO_BUDGET_TOKENS: Final = 4694
+#: The same arithmetic with the plan off the grammar. The gap between the two is
+#: what the reachability gate saves per item, and it is a decode rather than a
+#: call (O43): 3,789 tokens off a 4,694-token ceiling, which is 81 percent of it.
+#: A ceiling is not a measurement of seconds - what an ordinary plan really
+#: decodes is in `docs/architecture/publishing/visuals.md`.
+SUPPRESSED_BUDGET_TOKENS: Final = 905
 
 if call_two_output_tokens() != CALL_TWO_BUDGET_TOKENS:
     raise TypeError(
         "a bound moved and call 2's output budget did not follow it - the reply shape "
         f"now needs {call_two_output_tokens()} tokens against a recorded "
         f"{CALL_TWO_BUDGET_TOKENS}; re-derive it in `call_two_output_tokens`"
+    )
+if call_two_output_tokens(plan=False) != SUPPRESSED_BUDGET_TOKENS:
+    raise TypeError(
+        "a bound moved and the suppressed output budget did not follow it - the summary "
+        f"alone now needs {call_two_output_tokens(plan=False)} tokens against a recorded "
+        f"{SUPPRESSED_BUDGET_TOKENS}; re-derive it in `call_two_output_tokens`"
     )
 if tuple(call_two_model().model_fields) != ("summary", "visual"):
     raise TypeError(
@@ -1679,6 +1761,7 @@ def build_call_two_request(
     prompt_config: SummarizeConfig | None = None,
     source_words: int | None = None,
     brief: bool = False,
+    plan: bool = True,
 ) -> dict[str, Any]:
     """Call 2's request body, built by appending to call 1's.
 
@@ -1698,14 +1781,24 @@ def build_call_two_request(
     pins `n_parallel` to 1, so the server holds one cache slot: every call 1
     first and every call 2 after would evict the prefix before it was reused,
     every time, with nothing in any log to say so.
+
+    **Suppressing the plan moves nothing in front of the article.** The three
+    things `plan=False` changes - the trailing user turn, the decoder shape and
+    the output budget - all sit after the system turn, the article and call 1's
+    reply, so the cached prefix a gated item reuses is the same prefix an
+    ungated one reuses.
     """
     return continued_payload(
         first,
         reply=reply,
-        user=call_two_user_turn(prompt_config, source_words=source_words, brief=brief),
-        output_schema=call_two_schema(prompt_config, source_words=source_words, brief=brief),
-        schema_name="call_two",
-        max_output_tokens=call_two_output_tokens(prompt_config),
+        user=call_two_user_turn(
+            prompt_config, source_words=source_words, brief=brief, plan=plan
+        ),
+        output_schema=call_two_schema(
+            prompt_config, source_words=source_words, brief=brief, plan=plan
+        ),
+        schema_name="call_two" if plan else "call_two_summary_only",
+        max_output_tokens=call_two_output_tokens(prompt_config, plan=plan),
     )
 
 
@@ -1715,6 +1808,7 @@ def parse_call_two(
     *,
     source_words: int | None = None,
     brief: bool = False,
+    plan: bool = True,
 ) -> CallTwoReply:
     """A whole reply, held to the band the article is in, as the two contracts it stands for.
 
@@ -1724,23 +1818,27 @@ def parse_call_two(
     build holds, because a model asked for either would be guessing at a fact we
     already have. `VisualPlan`'s own validators run at that moment, so a plan
     that declines and still names a type fails here, naming the plan.
+
+    A suppressed reply is a summary draft and nothing else, so `visual` comes
+    back `None`.
     """
     content = _THINK.sub("", raw).strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
+    draft_shape = summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
+    if not plan:
+        return CallTwoReply(summary=draft_shape.model_validate_json(content), visual=None)
     body = (
         call_two_model(prompt_config, source_words=source_words, brief=brief)
         .model_validate_json(content)
         .model_dump(mode="json")
     )
-    draft = summarize.draft_model(
-        prompt_config, source_words=source_words, brief=brief
-    ).model_validate(body["summary"])
-    plan = VisualPlan.model_validate(
+    draft = draft_shape.model_validate(body["summary"])
+    plan_made = VisualPlan.model_validate(
         body["visual"] | {"plan_version": PLAN_VOCABULARY_VERSION}
     )
-    return CallTwoReply(summary=draft, visual=plan)
+    return CallTwoReply(summary=draft, visual=plan_made)
 
 
 def summary_object(raw: str) -> str | None:
@@ -1820,5 +1918,305 @@ def plan_lost_to_the_budget(
         ),
         decided_at=decided_at,
         version=version,
+        none_reason=NoneReason.OUTPUT_BUDGET_CUT,
     )
+
+
+# --- The gate that refuses before the plan is drafted ------------------------
+
+
+def _drawable(table: ElementTable) -> list[Element]:
+    """The elements a plan could cite without the validator refusing it outright.
+
+    An element whose cell disagrees with its own characters fails
+    `no_invented_values` wherever it is drawn, so counting it here would make
+    the gate claim a width no plan can reach. Reading it with the producer's own
+    reader is what the validator does, and asking the same question with the
+    same function is what keeps the gate from drifting away from the thing it
+    predicts.
+    """
+    seen: set[str] = set()
+    kept: list[Element] = []
+    for element in table.elements:
+        if element.element_id in seen:
+            continue
+        seen.add(element.element_id)
+        if read_value(element.kind, element.span_excerpt) == element.value:
+            kept.append(element)
+    return kept
+
+
+def _widest_agreeing(elements: Sequence[Element]) -> int:
+    """The largest group of these that could share one measured axis.
+
+    The same greedy grouping `same_unit_bars` does, over `commensurable` rather
+    than over string equality, because that is the question `units_convertible`
+    asks. Deterministic: the groups are opened in the order the table holds.
+    """
+    groups: list[list[Element]] = []
+    for element in elements:
+        for group in groups:
+            if commensurable(group[0].unit, element.unit):
+                group.append(element)
+                break
+        else:
+            groups.append([element])
+    return max((len(group) for group in groups), default=0)
+
+
+def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[VisualType, ...]:
+    """Every type some plan over this article's elements could name and still validate.
+
+    **This is gate 1, and it reads the validator's own tables.** A plan is a set
+    of references into one table, so whether any choice of references could
+    survive is a question about the table alone - which kinds it holds, how many
+    of them, and how many of those measure the same thing. Asking it with
+    `TYPE_RULES`, `ROLE_KINDS`, `VALUE_ROLES` and `commensurable` is what stops
+    the gate and the validator answering differently: a gate written from a
+    reading of the rules drifts the first time a rule moves, silently, in the
+    direction that costs items their pictures.
+
+    Three of the nine checks cannot refuse a plan the gate has admitted, so the
+    gate does not ask them. `element_exists` is satisfied by choosing from the
+    table. `plan_version_current` is stamped by code. `numerals_matched` is
+    about prose, and a plan can always write prose with no numeral in it.
+
+    **It reads no word of the article.** Every input is a kind, a unit or a
+    count, so a stranger's page cannot steer our control flow (Rule #11) - the
+    same property the single-call gate above holds and for the same reason.
+    """
+    drawable = _drawable(table)
+    reached: list[VisualType] = []
+    for visual_type, rules in TYPE_RULES.items():
+        fillable = {
+            role: [one for one in drawable if one.kind in ROLE_KINDS[role]]
+            for role in rules.required
+        }
+        if any(not elements for elements in fillable.values()):
+            continue
+        marks = fillable[rules.marks]
+        floor = (
+            visuals.histogram_bins
+            if visual_type is VisualType.HISTOGRAM
+            else visuals.min_chart_points
+        )
+        width = _widest_agreeing(marks) if rules.marks in VALUE_ROLES else len(marks)
+        if width >= floor:
+            reached.append(visual_type)
+    return tuple(reached)
+
+
+def plan_is_reachable(table: ElementTable, *, visuals: VisualsConfig) -> bool:
+    """Could this article carry any picture at all?
+
+    False suppresses the plan fields inside call 2 and never skips the call,
+    because call 2 is the call that writes the summary (O43). What is saved is
+    the plan's decode, not the request.
+    """
+    return bool(reachable_types(table, visuals=visuals))
+
+
+def suppressed_by_the_gate(
+    summary: Summary, *, model_id: str, decided_at: str, version: str
+) -> VisualDecision:
+    """The `none` an item gets when no choice over its elements could have validated.
+
+    `asked_the_model` stays true, and that is the difference between this and
+    the single-call planner's prefilter above: the model WAS asked, for the
+    summary, in the same request. Only the plan fields were taken off the
+    grammar.
+    """
+    return _nothing(
+        summary,
+        model_id=model_id,
+        reason=(
+            "no picture over this article's elements could have passed the validator, "
+            "so the plan was left off the request"
+        ),
+        decided_at=decided_at,
+        version=version,
+        none_reason=NoneReason.NOT_REACHABLE,
+    )
+
+
+def declined_by_the_model(
+    summary: Summary, *, why: str, model_id: str, decided_at: str, version: str
+) -> VisualDecision:
+    """The `none` an item gets when the model was asked and answered `none`.
+
+    The ordinary answer. `why` is the plan's own prose and is sanitized on the
+    way into the rationale, because it is a string a model wrote about a page we
+    did not write (Rule #11).
+    """
+    return _nothing(
+        summary,
+        model_id=model_id,
+        reason=why,
+        decided_at=decided_at,
+        version=version,
+        drafted_chart=False,
+        none_reason=NoneReason.MODEL_DECLINED,
+    )
+
+
+def refused_by_the_validator(
+    summary: Summary,
+    rejections: Sequence[Rejection],
+    *,
+    model_id: str,
+    decided_at: str,
+    version: str,
+) -> VisualDecision:
+    """The `none` an item gets when a plan was drafted and no depth of it validates.
+
+    The rationale names the checks rather than restating them, because a
+    `Rejection`'s detail is built out of element ids, role names and digits and
+    a rationale is a published cell.
+    """
+    return _nothing(
+        summary,
+        model_id=model_id,
+        reason=(
+            "the plan was refused on "
+            + ", ".join(sorted({rejection.check.value for rejection in rejections}))
+            + ", and the ladder reached no form that passes"
+        ),
+        decided_at=decided_at,
+        version=version,
+        drafted_chart=True,
+        none_reason=NoneReason.VALIDATION_FAILED,
+    )
+
+
+# --- The ladder that steps down ----------------------------------------------
+
+
+class Downgrade(NamedTuple):
+    """One plan re-drawn in a weaker form, and the three facts that justify it.
+
+    `floor` is the mark count this depth demanded, kept beside the plan because
+    an operator reading two depths that recorded one floor is reading the
+    percentiles colliding rather than a bug.
+    """
+
+    plan: VisualPlan
+    depth: int
+    edge: tuple[VisualType, VisualType]
+    floor: int
+
+
+def _restyled(plan: VisualPlan, target: VisualType) -> VisualPlan:
+    """The same plan drawn as `target`: the element set unchanged, extra channels empty.
+
+    **Emptying a channel is not dropping an element**, and the difference is the
+    whole of invariance 1. `element_ids` is the set of elements the model chose,
+    and it comes through untouched, so a downgrade can never reach for a fact the
+    model did not pick. What a `bubble` loses on the way to a `scatter` is the
+    size CHANNEL; the elements that filled it stay declared, stay checked by
+    `no_invented_values`, and are simply not drawn.
+    """
+    rules = TYPE_RULES[target]
+    legal = rules.required | rules.optional
+    encodings = {
+        role.value: (getattr(plan.encodings, role.value) if role in legal else [])
+        for role in EncodingRole
+    }
+    return VisualPlan.model_validate(
+        plan.model_dump(mode="json") | {"type": target.value, "encodings": encodings}
+    )
+
+
+def _marks(plan: VisualPlan) -> int:
+    """How many marks this plan draws, counted in the channel its type counts in."""
+    if plan.type is None:
+        return 0
+    return len(plan.encodings.filled().get(TYPE_RULES[plan.type].marks, []))
+
+
+def depth_floor(published: Sequence[int], percentile: int) -> int | None:
+    """The mark count a downgrade at this depth has to reach, or nothing.
+
+    Nearest-rank over the depth-0 published mark counts for the target type, so
+    an integer population gives an integer floor and nothing is interpolated
+    into a number no visual ever had.
+
+    **`None` is "there is no floor to clear", and the caller reads it as a
+    refusal rather than as a pass.** A floor computed from nothing is not a
+    floor, and waiving it would make depth 1 publish on the validator alone -
+    which is exactly depth 1 quietly becoming the default path, the thing the
+    escalating floor exists to stop.
+
+    The population is passed in rather than read here, because where it comes
+    from is a ledger this row does not build. Depth-0 published visuals only:
+    including downgrades makes a loop where downgrades score lower, drag the
+    floor down and admit more downgrades, so the bar loosens exactly as quality
+    falls.
+    """
+    ordered = sorted(published)
+    if not ordered:
+        return None
+    rank = max(1, ceil(percentile / 100 * len(ordered)))
+    return ordered[rank - 1]
+
+
+def downgrade(
+    plan: VisualPlan,
+    table: ElementTable,
+    *,
+    visuals: VisualsConfig,
+    published_marks: Mapping[VisualType, Sequence[int]],
+) -> Downgrade | None:
+    """The weakest legal re-drawing of this plan that still earns its place, or nothing.
+
+    A downgrade is the same claim re-rendered in a weaker form. It is never
+    permission to go and find something else to draw, and the four invariance
+    rules are what make that a property rather than an intention:
+
+    1. **The element set is unchanged.** `_restyled` carries `element_ids`
+       through and only ever empties a channel.
+    2. **The purpose survives.** The plan's own `purpose` is never written, and
+       every edge names the purposes it preserves - so a chain is safe as well
+       as a step, which comparing each step's endpoints alone cannot give.
+    3. **The floor escalates.** Each depth reads a higher percentile of the
+       depth-0 published mark counts for the type being stepped down to, and a
+       floor that cannot be computed is not cleared.
+    4. **It re-validates.** The candidate re-enters the same validator, and a
+       depth that fails falls to the next depth rather than publishing.
+
+    The walk is breadth-first over the edge table, so the depth is the number of
+    steps taken and the first candidate that clears its own depth wins. A
+    candidate that fails does not end the walk - its own targets are what the
+    next depth is made of, which is what "falls to the next depth" means.
+
+    `visuals.downgrade_floor_percentiles` is the whole of the switch: its length
+    is how many depths exist and an empty list is the ladder off.
+    """
+    rungs = visuals.downgrade_floor_percentiles
+    if plan.decision is not PlanDecision.VISUAL or plan.type is None or not rungs:
+        return None
+    frontier: list[VisualType] = [plan.type]
+    walked: set[VisualType] = {plan.type}
+    for depth, percentile in enumerate(rungs, start=1):
+        onward: list[VisualType] = []
+        for source in frontier:
+            for edge in DOWNGRADE_EDGES.get(source, ()):
+                if edge.target in walked or plan.purpose not in edge.purposes:
+                    continue
+                walked.add(edge.target)
+                onward.append(edge.target)
+                candidate = _restyled(plan, edge.target)
+                # A downgrade carries a machine-checkable justification, and the
+                # annotation is it: the mark that makes the weaker form still
+                # worth showing. Without it depth 1 is just the default path.
+                if not candidate.annotations:
+                    continue
+                if validate_plan(candidate, table, visuals=visuals):
+                    continue
+                floor = depth_floor(published_marks.get(edge.target, ()), percentile)
+                if floor is None or _marks(candidate) < floor:
+                    continue
+                return Downgrade(candidate, depth, (source, edge.target), floor)
+        frontier = onward
+    return None
+
 
