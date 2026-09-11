@@ -29,6 +29,7 @@ from utilities.plan_status import (
     idle_branches,
     index_rows,
     judge_tree,
+    open_pull_notes,
     parse_depends,
     parse_plan,
     read_plans,
@@ -510,3 +511,19 @@ def test_a_branch_with_no_worktree_is_named(tree: Path) -> None:
     assert idle_branches(["main", "feat/first", "feat/abandoned"], trees, "origin/main") == [
         "feat/abandoned"
     ]
+
+
+def test_an_open_pull_request_is_matched_to_the_row_it_is_finishing(tree: Path) -> None:
+    """A pull request opened from a checkout since removed is still outstanding."""
+    rows = [row for plan in read_plans(tree) for row in plan.rows]
+    trees = [Worktree(Path("/w/a1"), "abc", "feat/first")]
+    pulls = [
+        PullRequest(number=101, state="OPEN", head="feat/first", title="the first row"),
+        PullRequest(number=999, state="OPEN", head="chore/tidy", title="unrelated tidy"),
+    ]
+    notes = open_pull_notes(pulls, rows, trees)
+    assert [note.subject for note in notes] == ["#101", "#999"]
+    assert "plan 31 row #1" in notes[0].detail
+    assert "a worktree still holds its branch" in notes[0].detail
+    assert "no plan row records it" in notes[1].detail
+    assert "no worktree holds it" in notes[1].detail

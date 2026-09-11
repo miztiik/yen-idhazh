@@ -816,6 +816,30 @@ def stranded_rows(rows: Iterable[Row], trees: Sequence[Worktree]) -> list[Note]:
     return notes
 
 
+def open_pull_notes(
+    pulls: Iterable[PullRequest], rows: Sequence[Row], trees: Sequence[Worktree]
+) -> list[Note]:
+    """Open pull requests, and which plan row each one is finishing.
+
+    A worktree is not the only place half-done work hides. A pull request opened
+    from a checkout that has since been removed is still outstanding, and it is
+    invisible to every other question here.
+    """
+    held = {tree.branch for tree in trees if tree.branch is not None}
+    notes: list[Note] = []
+    for pull in pulls:
+        claimed = [
+            row.name
+            for row in rows
+            if row.pull == pull.number
+            or EMPHASIS.sub("", row.worktree).strip().lower() == pull.head.lower()
+        ]
+        owner = ", ".join(claimed) if claimed else "no plan row records it"
+        where = "a worktree still holds its branch" if pull.head in held else "no worktree holds it"
+        notes.append(Note(f"#{pull.number}", f"{owner}; {where}; {pull.title}"))
+    return notes
+
+
 def idle_branches(branches: Iterable[str], trees: Sequence[Worktree], trunk: str) -> list[str]:
     """Local branches with no worktree. A dead agent often leaves exactly one."""
     held = {tree.branch for tree in trees if tree.branch is not None}
@@ -917,13 +941,20 @@ def print_report(
     print(f"  {len(drift)} {noun}. A Reckoner line is corrected by hand, never by this tool.")
 
 
-def print_in_flight(notes: Sequence[Note], stranded: Sequence[Note], idle: Sequence[str]) -> None:
+def print_in_flight(
+    notes: Sequence[Note],
+    pulls: Sequence[Note],
+    stranded: Sequence[Note],
+    idle: Sequence[str],
+) -> None:
     print("\nIN FLIGHT - what a previous agent left behind")
-    if not notes and not stranded and not idle:
-        print("  nothing. No extra worktree, no stranded row, no idle branch.")
+    if not notes and not pulls and not stranded and not idle:
+        print("  nothing. No extra worktree, no open pull request, no stranded row.")
         return
     for note in notes:
         print(f"  worktree {note.subject:<24} {note.detail}")
+    for note in pulls:
+        print(f"  open pr  {note.subject:<24} {note.detail}")
     for note in stranded:
         print(f"  row      {note.subject:<24} {note.detail}")
     if idle:
@@ -1018,8 +1049,15 @@ def main() -> None:
                     rows,
                 )
             )
+        open_pulls: list[PullRequest] = []
+        if not args.no_gh:
+            try:
+                open_pulls = read_open_pulls(args.repo)
+            except (LookupError, json.JSONDecodeError):
+                open_pulls = []
         print_in_flight(
             notes,
+            open_pull_notes(open_pulls, rows, trees),
             stranded_rows(rows, trees),
             idle_branches(read_branches(args.repo), trees, args.trunk),
         )
