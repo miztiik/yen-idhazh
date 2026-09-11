@@ -61,7 +61,7 @@ from decimal import Decimal
 from typing import Final, NamedTuple
 
 from idhazh.contracts.element import ElementKind
-from idhazh.contracts.visual import EncodingRole, VisualType
+from idhazh.contracts.visual import EncodingRole, VisualPurpose, VisualType
 from idhazh.elements import normalise_unit
 
 #: The date-stamp of the role table below - which roles a type may fill. It is
@@ -150,6 +150,73 @@ ROLE_KINDS: Final[dict[EncodingRole, frozenset[ElementKind]]] = {
 VALUE_ROLES: Final[frozenset[EncodingRole]] = frozenset(
     {_R.QUANTITY, _R.QUANTITY_X, _R.SIZE, _R.BINS}
 )
+
+#: The date-stamp of the edge table below. Its own, for the reason the module
+#: docstring gives about the other two: `PLAN_VOCABULARY_VERSION` is what
+#: `plan_version_current` compares a plan against, so moving it re-plans every
+#: item that carries an older one - a model call apiece. Adding an edge must not
+#: cost that.
+DOWNGRADE_TABLE_VERSION: Final = "2026-09-11"
+
+
+class DowngradeEdge(NamedTuple):
+    """One legal step down, and the purposes it leaves standing.
+
+    The purposes are half the edge rather than a note beside it. "Purpose
+    survives" is checked against the plan's own `purpose` field, and that check
+    alone cannot stop a chain: `pie` -> `stacked_bar` keeps a composition, and
+    `stacked_bar` -> `bar` does not, so a ladder that only compared each step's
+    endpoints would walk a composition into a comparison in two moves and record
+    both as legal. Naming the purposes an edge preserves makes the chain safe by
+    construction, because every step is asked the same question about the one
+    purpose the plan started with.
+    """
+
+    target: VisualType
+    purposes: frozenset[VisualPurpose]
+
+
+_P = VisualPurpose
+
+#: Which type a plan may be re-drawn as when the validator refuses it, and what
+#: that step is allowed to be a step down FROM.
+#:
+#: **An allow-list, because the ban is the point.** Without one the ladder can
+#: walk a comparison into a timeline and record it as a legal edge, and the
+#: cross-family ban is what "purpose survives" implies and never states.
+#:
+#: **Five edges, and an edge that cannot change an outcome is not one of them.**
+#: A target whose required role set equals the source's rescues nothing - a
+#: plan refused as a `line` is refused identically as an `area`, so that pair is
+#: absent rather than listed and never fired. What is left are the three trims
+#: (a channel the target does not declare, emptied) and the two relabels of an
+#: unruled type onto its nearest built neighbour.
+#:
+#: **Three types that look like they want an edge have none, each for its own
+#: reason.** `line` -> `bar` is in the source document with the condition "if
+#: the time axis is safely categorical", and nothing in this build can decide
+#: that - a condition nobody can evaluate is a condition nobody should encode.
+#: `slope` -> `bar` destroys the before-and-after pairing the slope exists to
+#: show, so it is not an edge at all. And `flow` is the diagram family, whose
+#: only fallback is `none`.
+#:
+#: The target of every edge is a type with a role rule, because a target the
+#: validator refuses by name rescues nothing: "any chart -> `table` at depth 2"
+#: is in the source document and `table` has no rule, so it is not here.
+DOWNGRADE_EDGES: Final[dict[VisualType, tuple[DowngradeEdge, ...]]] = {
+    # Drops the size channel and keeps the two measured axes the relationship is.
+    _T.BUBBLE: (DowngradeEdge(_T.SCATTER, frozenset({_P.RELATIONSHIP})),),
+    # The parts of a declared whole, stacked in one bar instead of swept round a
+    # circle. The one edge the source document names outright.
+    _T.PIE: (DowngradeEdge(_T.STACKED_BAR, frozenset({_P.COMPOSITION})),),
+    # Drops the series split, which is what a stacked bar is refused for when the
+    # parts are not exhaustive.
+    _T.STACKED_BAR: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
+    # Two unruled comparison forms onto the built comparison form. This is the
+    # "downgraded to its nearest built neighbour" that `UNRULED_TYPES` promises.
+    _T.COMPARISON: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
+    _T.WHOWHAT: (DowngradeEdge(_T.BAR, frozenset({_P.COMPARISON})),),
+}
 
 #: The date-stamp of the conversion table below. Separate from
 #: `PLAN_VOCABULARY_VERSION` for the reason in the module docstring, and in code
@@ -256,3 +323,37 @@ for _role in VALUE_ROLES:
 #: so it is a dead row that reads as cover.
 if _unreachable := sorted(unit for unit in UNIT_DIMENSIONS if normalise_unit(unit) != unit):
     raise TypeError(f"no producer emits these unit spellings: {_unreachable}")
+for _source, _edges in DOWNGRADE_EDGES.items():
+    for _edge in _edges:
+        if _edge.target is _source:
+            raise TypeError(f"{_source.value} is not a step down from itself")
+        if _edge.target not in TYPE_RULES:
+            raise TypeError(
+                f"{_source.value} may not step down to {_edge.target.value}, which the "
+                "validator refuses by name - a target with no role rule rescues nothing"
+            )
+        if not _edge.purposes:
+            raise TypeError(
+                f"{_source.value} -> {_edge.target.value} names no purpose it preserves, "
+                "so nothing stops the ladder walking one family into another"
+            )
+#: The ladder walks this graph breadth-first and stops at the depth the config
+#: names, so a cycle would be bounded rather than infinite - and it would also
+#: let a plan arrive back at a type the validator has already refused, one depth
+#: poorer. Refused here, where the table is read rather than walked, by counting
+#: the longest chain: a graph with a cycle has no finite one.
+def _longest_chain(source: VisualType, walked: frozenset[VisualType]) -> int:
+    if source in walked:
+        raise TypeError(f"the downgrade edges cycle back to {source.value}")
+    onward = walked | {source}
+    return 1 + max(
+        (_longest_chain(edge.target, onward) for edge in DOWNGRADE_EDGES.get(source, ())),
+        default=-1,
+    )
+
+
+#: The deepest the ladder can ever reach, whatever `visuals.downgrade_floor_percentiles`
+#: says. Two today: `pie` -> `stacked_bar` -> `bar`.
+LONGEST_DOWNGRADE_CHAIN: Final = max(
+    _longest_chain(source, frozenset()) for source in DOWNGRADE_EDGES
+)
