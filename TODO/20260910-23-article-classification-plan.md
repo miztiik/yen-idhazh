@@ -240,7 +240,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 5 | The item id becomes sixteen characters of base32 | - | A | PENDING | - | - | - |
-| P1 | The property section 0a names, restated | - | A | PENDING | - | - | - |
+| P1 | The property section 0a names, restated | - | A | DONE #608 | p23-p1 | #608 | worker |
 | 20 | The order of the day, written down | - | A | PENDING | - | - | - |
 | P2 | The reference dataset, built so a number cannot flatter us | - | B | PENDING | - | - | - |
 | P4 | What one more call costs on the runner | - | B | PENDING | - | - | - |
@@ -1609,6 +1609,7 @@ Named here so they are not mistaken for work this plan is doing.
 
 ## See also
 
+- [`20260911-handover.md`](20260911-handover.md) - how to pick this queue up with no context: the queue reader, the reading order, and the standing traps.
 - [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans: what can start today, the critical path, and the cross-plan file collisions no plan's own group check can see. **Seven of its nine waves run through this plan**, and its longest pole is row #P1 here.
 - [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - the plan this one spawned from; its rows 4, 5 and 6 gate every labelling row here.
 - [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - the five month-sharded ledgers section 0 puts out of scope, planned. **Its row #1 creates `backend/idhazh/day_partition.py`, which rows #14, #16, #17 and #21 here depend on** (section 0.1).
