@@ -1,6 +1,6 @@
 # 11 - One model, two calls
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-11
 **Level**: 5 (the model pick, the trust boundary, and the call structure every later plan rests on)
 
 **Chain**: previous [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) | next [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md).
@@ -23,6 +23,80 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 **Exactly two model calls per item. Always.** Call 1 labels; call 2 writes the summary **and** the plan. Call 2 runs for every item that publishes, because it is the call that writes the summary - a gate may suppress the plan fields inside it and may never skip it. The deterministic pass before call 1 is **the candidate pass**, never "call 0"; a document that spells three things "call" cannot say "two calls" and be counted.
 
+### 0.1 Standing rules, and they bind every row
+
+Added 2026-09-11. The three merged rows did not have these written down; the four that remain do.
+
+**Deliver the intent of this plan, not the letter of a row.** A structural fix matters more than a small diff. Where a row cannot be done correctly inside its stated scope, **expand the scope and say so in the pull request** - do not ship a band-aid to stay inside a file list somebody wrote before the code was read. `CLAUDE.md` Rule #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
+
+**No prisoners.** Every removed feature takes its code, its tests, its fixtures, its config keys, its schema fields, its docs and its `state/` writers with it, **in the same commit**. Git is the backup. A row that removes something and leaves a dead test, an orphan config key or a doc paragraph describing the removed thing has not finished, and its acceptance gate says so. **Row #6 is the removal row this plan was written around**, and its decision 2 has said "no half job" since the first draft.
+
+**Verify every fact this plan hands you against the tree before acting on it.** Plans have been wrong. A count, a line number or an "exists today" answer in any row below is a reading of the day it was written, and this tree moves several times an hour. Re-run the grep. **A row that discovers a wrong fact fixes the plan in the same pull request**, in the row that carried it, and says so in the body.
+
+**A widened file list is re-checked before the pull request opens.** `parallel N = 1` here, so no two rows of this plan run at once - but four rows of this plan share files with plans 23, 24 and 25, which do run beside it. [`20260911-execution-order.md`](20260911-execution-order.md) section 3 carries the cross-plan intersection; a row that widens its list re-checks it there.
+
+**Additive contract fields are stamped in the commit that adds them.** Every row that adds a field to a persisted model names its `version` date-stamp and its `changelog` entry in its own acceptance gate, per `CLAUDE.md` section 11. Row #3b already carries this as its decision 2.
+
+### 0.1a The gate sets, written out once so a row can name one
+
+Every row's acceptance gate below names one or more of these sets **and then lists what that row adds**. The commands are the literal ones from [`../docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md), copied here on 2026-09-11 so a worker reading one row in an isolated worktree does not have to open another file to know what to type. Where the two disagree, the gate guide wins and the row that noticed fixes this block.
+
+**`GATE-PY`** - every row that changes a `.py` file. From the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy
+.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/<the modules this row names>
+```
+
+**`GATE-SCHEMA`** - every row that edits a model under `backend/idhazh/contracts/`. This is the contract drift gate and a non-empty diff fails it:
+
+```powershell
+.\.venv\Scripts\python.exe -m idhazh.contracts.export
+git diff --exit-code -- schemas/
+```
+
+**`GATE-SUITE`** - the whole backend suite, which is what CI runs. Run it locally only when you cannot push:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+**`GATE-SHELL`** - every row that touches `.github/`:
+
+```powershell
+.\.venv\Scripts\shellcheck.exe --severity=style (Get-ChildItem .github/scripts/*.sh).FullName
+```
+
+**`GATE-WEB`** - every row that changes anything under `frontend/src/`. From `frontend/`:
+
+```powershell
+npm run check
+npm run build
+npm run bundle-gate
+python -m idhazh site-weight --site-tree build
+```
+
+**`GATE-BROWSER`** - every row that changes what a reader or an operator sees. The canary day is the fixture; the real digest is not:
+
+```powershell
+.\.venv\Scripts\python.exe backend\utilities\build_canary_day.py
+cd frontend
+npm run test:logic
+npm run build:canary
+npm run test:browser
+```
+
+**`GATE-DAYS`** - every row that changes a published payload shape:
+
+```powershell
+python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
+```
+
+**Not a gate, in this plan or anywhere in this repository: `ruff format`.** It rewrites dozens of files nobody in this plan authored. Format the files you wrote, or leave formatting alone.
+
+**`mypy --strict` is not the command, and three rows below said it was.** The repository invokes plain `mypy`; strictness is configured, not passed - `pyproject.toml:207` sets `strict = true` and line 69 says in its own comment that "`mypy --strict` needs no override". The behaviour a row wanted is what runs either way, so this is a wording fix rather than a weaker gate. Corrected 2026-09-11 in the four live rows; the three merged rows keep the wording they shipped with.
+
 ---
 
 ## 1. Status Reckoner
@@ -37,6 +111,10 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | PENDING | - | - | - |
 | 5 | One chart, drawn end to end | 4 | E | PENDING | - | - | - |
 | 6 | The small model, its job and its cache go | 5 | F | PENDING | - | - | - |
+
+**Four rows are live and three are merged.** Rows 1, 2 and 3 shipped; row 3c is deferred until the first daily run after row 6. **`parallel N = 1`, so no two rows of this plan run at the same time** - rows 4, 5 and 6 are one chain and row 3b is the only row that could have run beside one of them.
+
+**This plan is four live rows and the second-heaviest constraint in the project.** Row #4 blocks 15 of the 58 live rows across the five open plans and row #5 blocks 14, because row #6 is what [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) row #7b waits on, and eleven rows wait on that. Measured 2026-09-11 over the five plans' own Reckoners; the working is in [`20260911-execution-order.md`](20260911-execution-order.md) section 2. **Row #4 is ready today and nothing is waiting on anybody to start it.**
 
 ---
 
@@ -127,9 +205,10 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 4a. Row #3b - Every call reports its own cost
 
 - **Scope:** Two model calls per item currently fold into one set of flat `Summary` fields, so the row keeps one call's `cached_tokens`, `prefill_ms`, `decode_ms`, `input_tokens` and `output_tokens` and does not say which. Record them per call, so the operator console can plot call 1 against call 2.
-- **Files touched:** `backend/idhazh/contracts/summary.py`, `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/public_telemetry.py`, `schemas/*.schema.json`, `backend/idhazh/summarize.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/publish_day_metrics.py`, `frontend/src/**`, `backend/tests/**`, `docs/architecture/summarize/**`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; the browser smoke on the console route.
-- **Oracle:** One published item carries two `cached_tokens` figures and they differ - call 1 caches nothing on a cold slot, call 2 caches the whole article. One folded field cannot show that difference, which is the whole reason to split it.
+- **Files touched:** `backend/idhazh/contracts/summary.py`, `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/public_telemetry.py`, `schemas/summary.schema.json`, `schemas/item-health-row.schema.json`, `schemas/public-telemetry.schema.json`, `backend/idhazh/summarize.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/publish_day_metrics.py`, `frontend/src/lib/console/item-cost.ts`, `backend/tests/test_contracts.py`, `backend/tests/test_summarize.py`, `backend/tests/test_visual_planner.py`, `backend/tests/test_telemetry.py`, `docs/architecture/summarize/throughput.md`. **Named rather than globbed on 2026-09-11**; the four globs this row carried - `schemas/*.schema.json`, `frontend/src/**`, `backend/tests/**`, `docs/architecture/summarize/**` - covered all 44 schema files, the whole published site and both summarize pages, which is not what the row writes.
+- **Acceptance gates:** `GATE-PY` over `test_contracts.py`, `test_summarize.py`, `test_visual_planner.py` and `test_telemetry.py`; `GATE-SCHEMA`; `GATE-WEB`; `GATE-BROWSER`. This row adds: the `version` date-stamp and the `changelog` entry on all three contracts, in this commit.
+- **Oracle:** One published item carries two `cached_tokens` figures and they differ - call 1 caches nothing on a cold slot, call 2 caches the whole article. One folded field cannot show that difference, which is the whole reason to split it. **Driven from `backend/var/canary/`**, which can carry the cold-slot case the committed archive may never have produced.
+- **What this row does not do:** it changes no prompt, no call structure and no gate. It splits five recorded numbers into two sets of five and draws neither - the console panel that plots call 1 against call 2 is somebody else's row.
 
 ### Decisions
 
@@ -143,9 +222,10 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 4b. Row #3c - Own the prompt bytes
 
 - **Scope:** Send a rendered completion instead of a chat completion, so cache reuse is true by construction and the oracle becomes an offline byte assertion rather than a live-server measurement.
-- **Files touched:** `backend/idhazh/llm/server.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/prompts/**`, `backend/tests/**`, `docs/architecture/summarize/**`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
-- **Oracle:** Call 2's rendered prompt starts with call 1's rendered prompt, byte for byte. That is a string comparison over two files and needs no server, where today's oracle needs a running model and a warm cache slot.
+- **Files touched:** `backend/idhazh/llm/server.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/prompts/summarize_and_plan_visual.txt`, `backend/idhazh/prompts/label_article_elements.txt`, `backend/tests/test_visual_planner.py`, `backend/tests/test_summarize.py`, `docs/architecture/summarize/prompt.md`. **Named rather than globbed on 2026-09-11**; `backend/idhazh/prompts/**` is four files today and this row writes two of them.
+- **Acceptance gates:** `GATE-PY` over `test_visual_planner.py` and `test_summarize.py`; `GATE-SCHEMA`, which must produce an empty diff because this row edits no contract.
+- **Oracle:** Call 2's rendered prompt starts with call 1's rendered prompt, byte for byte. That is a string comparison over two files and needs no server, where today's oracle needs a running model and a warm cache slot. **The fixture is the two rendered prompts, written to `tests/fixtures/prompts/` by the row and compared offline.**
+- **What this row does not do:** it changes no reply shape, no contract and no schema, and it does not remove the chat-completion path for any other caller. It changes how one call site renders its prompt.
 - **Deferred until:** the first daily run after row 6 prices the 209 re-prefilled tokens on the runner. The figure that argues for this row was taken on a developer laptop against the retired weights, one run and no spread, so it cannot yet say the work is worth doing.
 
 ### Decisions
@@ -166,9 +246,10 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 5. Row #4 - The gate that refuses before the plan is drafted, and the ladder that steps down
 
 - **Scope:** The reachability gate, `none_reason` as a typed enum, and the downgrade ladder with its four invariance rules.
-- **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/visual.py`, `schemas/*.schema.json`, `config/idhazh.json`, `backend/tests/**`, `docs/architecture/publishing/**`
-- **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite.
-- **Oracle:** Every route to `none` carries a distinct `none_reason`, asserted by driving each gate independently and collecting the set - it must equal the enum exactly. A gate whose refusal is indistinguishable from another's leaves the largest number on the console explaining nothing.
+- **Files touched:** `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/visual.py`, `backend/idhazh/contracts/app_config.py`, `schemas/visual-plan.schema.json`, `schemas/visual-decision.schema.json`, `schemas/app-config.schema.json`, `config/idhazh.json`, `backend/tests/test_visual_planner.py`, `backend/tests/test_visual_validator.py`, `backend/tests/test_contracts.py`, `docs/architecture/publishing/visuals.md`. **Named rather than globbed on 2026-09-11**; `docs/architecture/publishing/**` is eight pages today and this row writes one of them.
+- **Acceptance gates:** `GATE-PY` over `test_visual_planner.py`, `test_visual_validator.py` and `test_contracts.py`; `GATE-SCHEMA`. This row adds: the `version` date-stamp and the `changelog` entry on `visual.py`, and the new `none_reason` members listed in the schema diff.
+- **Oracle:** Every route to `none` carries a distinct `none_reason`, asserted by driving each gate independently and collecting the set - it must equal the enum exactly. A gate whose refusal is indistinguishable from another's leaves the largest number on the console explaining nothing. **Each gate is driven from its own fixture under `tests/fixtures/visual-validator/plans/`**, which holds eleven plan fixtures today - one per refusal the validator already has - and this row adds one per new route, so the set is built from cases rather than read off a run.
+- **What this row does not do:** it renders nothing and it retires nothing. The ladder steps a plan down to a depth that still validates; drawing the result is row #5 and removing the small model is row #6.
 
 ### Decisions
 
@@ -194,9 +275,10 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 6. Row #5 - One chart, drawn end to end
 
 - **Scope:** One `bar` rendered from a compiled plan through an inline SVG path, so this plan ends with something visible rather than a contract nobody can see.
-- **Files touched:** `backend/idhazh/render/**`, `frontend/src/lib/components/ItemVisual.svelte`, `frontend/tests/**`, `docs/architecture/publishing/**`
-- **Acceptance gates:** `npm run check`; build; `bundle-gate`; the browser suite; the whole-day check from plan 01; the section 12 smoke.
-- **Oracle:** A published item's drawn bar heights are re-derived in the test from the committed element table and compared to the drawn attributes - so the chart is proved to be showing the article's numbers rather than merely showing numbers.
+- **Files touched:** `backend/idhazh/render/chart.py`, `backend/idhazh/render/write.py`, `backend/idhazh/render/__init__.py`, `frontend/src/lib/components/ItemVisual.svelte`, `backend/tests/test_render.py`, `frontend/tests/item-visual.spec.ts`, `frontend/tests/charts.spec.ts`, `docs/architecture/publishing/visuals.md`. **Named rather than globbed on 2026-09-11**; `backend/idhazh/render/**` is three modules today and `frontend/tests/**` is the whole browser suite.
+- **Acceptance gates:** `GATE-PY` over `test_render.py`; `GATE-WEB`; `GATE-BROWSER`; and the whole-day check from plan 01. **`CLAUDE.md` section 12 applies in full** - this row changes the published site, so it is smoke-tested in a real browser and the page is confirmed to render with its data file absent.
+- **Oracle:** A published item's drawn bar heights are re-derived in the test from the committed element table and compared to the drawn attributes - so the chart is proved to be showing the article's numbers rather than merely showing numbers. **Driven from the canary day built by `backend/utilities/build_canary_day.py`**, never from the committed archive, per `CLAUDE.md` Rule #12.
+- **What this row does not do:** it draws one `bar` and no second type, it adds no new visual vocabulary, and it changes no planner decision. The renderer swap and the rest of the chart types are plan 12.
 
 ### Decisions
 
@@ -216,9 +298,10 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 7. Row #6 - The small model, its job and its cache go
 
 - **Scope:** The flag flips, the small model's role leaves config, the CI job is deleted, the prompt file goes, and `finetune.student`/`teacher` are re-pointed - **all in one commit**.
-- **Files touched:** `config/idhazh.json`, `.github/workflows/digest.yml`, `backend/idhazh/prompts/**`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/tests/test_workflows.py`, `backend/tests/**`, `docs/**`
-- **Acceptance gates:** the full suite; `shellcheck`; one dispatch of `digest.yml` end to end; `idhazh site-weight`.
-- **Oracle:** The dispatched run completes with **no** job between `work` and `assemble`, the repo cache falls from roughly 82 percent of the 10 GB ceiling to roughly 57, and the worst shard stays under 180 minutes. Three independent numbers, because a retirement that only removes a config key has not retired anything.
+- **Files touched:** `config/idhazh.json`, `.github/workflows/digest.yml`, `backend/idhazh/prompts/visual_planner.txt`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/tests/test_workflows.py`, `backend/tests/test_contracts.py`, `backend/tests/test_visual_planner.py`, `docs/architecture/summarize/prompt.md`, `docs/architecture/summarize/throughput.md`, `docs/how-to/fine-tune-a-model.md`. **Named rather than globbed on 2026-09-11**; `docs/**` was the whole documentation tree and `backend/idhazh/prompts/**` is four files, of which this row deletes one.
+- **Acceptance gates:** `GATE-SUITE`; `GATE-SHELL`; `GATE-SCHEMA`; one dispatch of `digest.yml` end to end; `python -m idhazh site-weight`. **`GATE-SUITE` rather than `GATE-PY` here**, because this row deletes a workflow job and a config role and the blast radius is not a list of modules.
+- **Oracle:** The dispatched run completes with **no** job between `work` and `assemble`, the repo cache falls from roughly 82 percent of the 10 GB ceiling to roughly 57, and the worst shard stays under 180 minutes. Three independent numbers, because a retirement that only removes a config key has not retired anything. **The first two are read from the dispatched run; the third is read from `state/runtime-counters.csv` over the seven days after it**, not from the table in any plan.
+- **What this row does not do:** it changes no prompt text that survives, adds no field and draws nothing. It removes a model, a job, a cache role, a prompt file and four config keys, and it re-points two more.
 
 ### Decisions
 
@@ -240,6 +323,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 ## See also
 
+- [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **Rows #4 and #5 here are the fifth and sixth heaviest constraints in the project**, and section 3 there carries the cross-plan file collisions this plan's `parallel N = 1` cannot see.
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) - the previous plan.
 - [`20260905-12-readable-visuals-plan.md`](20260905-12-readable-visuals-plan.md) - the next plan.

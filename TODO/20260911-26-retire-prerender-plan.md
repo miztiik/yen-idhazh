@@ -51,7 +51,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 ### 0.1 Standing rules, and they bind every row
 
-**Deliver the intent, not the letter.** Where a row cannot be done correctly inside its stated file list, expand the scope and say so in the pull request. `CLAUDE.md` Rule #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
+**Deliver the intent, not the letter.** **A structural fix matters more than a small diff.** Where a row cannot be done correctly inside its stated file list, expand the scope and say so in the pull request - do not ship a band-aid to stay inside a list somebody wrote before the code was read. `CLAUDE.md` Rule #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
 
 **No prisoners.** Every removal takes its code, its tests, its fixtures, its config keys, its schema fields and its docs **in the same commit**. Git is the backup. Row #2 is the only removal row in this plan and its acceptance gate names all five.
 
@@ -62,6 +62,8 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 **No row changes what any document contains.** This is what makes every gate in this plan cheap: the four ceilings in `page_weight.ceilings_bytes` must hold to the byte, and a moved byte is a defect rather than a re-pricing.
 
 **Every measurement names its arms, its pin and its spread.** `kit.version.name` defaults to `Date.now`, so two builds of one unchanged tree disagree on about 20 percent of `build/` by filename. Row #1 pins `BUILD_VERSION` across both arms and says so, per [`../docs/reference/agent-notes/gates-and-builds.md`](../docs/reference/agent-notes/gates-and-builds.md).
+
+**Row #1 may not be the first record in `docs/reference/benchmarks/`, and its own text says it is.** [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) row #P5 writes a different record into the same directory, the directory does not exist yet, and **both rows are unblocked today**, so either may create it. Row #1 writes *a* record. **Whichever of the two lands second drops the word "first" from its own text and names the row that created the directory.** Found 2026-09-11; neither plan named it ([`20260911-execution-order.md`](20260911-execution-order.md) section 6).
 
 ### 0.1a The gate sets, written out once so a row can name one
 
@@ -468,7 +470,8 @@ Named here so they are not mistaken for work this plan is doing.
 
 ## See also
 
-- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - its section 26 named prerender as a gap and sent it to a plan that does not exist; this plan takes it, and its row #15 is the console tab the owner's 2026-09-11 ruling re-addressed to `/console/judgement/`.
+- [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **All four rows here are unblocked today and row #2 collides with nothing anywhere in the set**, which makes this the cheapest plan to run and the one that unsticks two other plans' open gaps.
+- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - its section 26 named prerender as a gap and sent it to a plan that does not exist; this plan takes it, and its row #15 is the console tab the owner's 2026-09-11 ruling re-addressed to `/console/judgement/`. **Its row #P5 also writes into `docs/reference/benchmarks/`**, which row #1 here says it creates - section 0.1.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - its section 0.1 and section 18 carry the same gap and the same 23-page count, and its row #12 builds `/console/judgement/`.
 - [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the research record whose 2026-09-11 reading of `frontend/prerender-guard.js` and `frontend/svelte.config.js` is where both plans' prerender paragraphs came from.
 - [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - the living doc that owns the six routes, the 2026-09-09 split and the 2026-09-10 seam, and the page row #4 writes the ruling into.
