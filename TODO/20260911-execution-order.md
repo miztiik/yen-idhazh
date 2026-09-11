@@ -190,7 +190,7 @@ These are the ones a person composing a wave by reading two plan titles would ge
 
 **A fourth edge is declared and is easy to miss.** Plan 23 rows #14, #16, #17 and #21 each add a prune to `backend/idhazh/retention.py`, which plan 24 rows #5 to #8 all rewrite. Neither side blocks the other; whichever lands second re-reads the file. Plan 23 section 0.1 says so.
 
-**A fifth is outside these five plans.** Plan 24 row #1 renames `docs/concepts/month-partitions.md`, and [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) carries seven of the seventeen links to it. That plan is open work and is not scheduled here. Plan 24 row #1 decision 2a names it.
+**A fifth is outside these five plans.** Plan 24 row #1 renamed `docs/concepts/month-partitions.md` to [`../docs/concepts/partitions.md`](../docs/concepts/partitions.md), and [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) carried **four of the fourteen links** to it. That plan is open work and is not scheduled here. Plan 24 row #1 decision 2a names it. **The count said seven of seventeen until 2026-09-11**, which was counting mentions rather than links; row #1 re-measured both and repointed every link in the same commit.
 
 ---
 
@@ -215,11 +215,11 @@ These are the ones a person composing a wave by reading two plan titles would ge
 | `docs/concepts/placement.md` | **23 #20 or 25 #2, whichever lands first** | concepts | New. Both plans say so, both name the other, and both extend it. **Resolved** |
 | `docs/how-to/measure-a-classifier.md` | 23 #P2 | how-to | New. Extended by 23 #P3, #18 |
 | `docs/how-to/promote-a-vertical.md` | 23 #16 | how-to | New |
-| `docs/reference/benchmarks/` | **23 #P5 and 26 #1** | reference | New directory, two different records. **See below** |
+| `docs/reference/benchmarks/` | **23 #P5 and 26 #1** | reference | **Created 2026-09-11 by 24 #1**, which wrote the day-window record. Two different records still to come. **See below** |
 | `docs/concepts/partitions.md` | 24 #1 | concepts | **Renamed** from `month-partitions.md`, not created |
 | `corpus/reference-dataset-1/README.md` | 23 #P2 | not `docs/` | New datasheet. Extended by 23 #P3 |
 
-**One defect, and it is a sentence rather than a file.** `docs/reference/benchmarks/` does not exist, and **two rows each say they write the first record in it** - plan 23 row #P5 and plan 26 row #1. The records are different and neither blocks the other, but both rows are in wave 1 and **whichever lands second carries a false sentence in its own plan**. The fix is one word in whichever plan's row lands second: it writes *a* record, and the row that created the directory is named. Found 2026-09-11; neither plan named it.
+**One defect, and it is a sentence rather than a file.** `docs/reference/benchmarks/` **was created on 2026-09-11 by plan 24 row #1**, which put the day-window reading in it - so **three** rows now claim to write the first record there, and plan 23 row #P5 and plan 26 row #1 both carry a false sentence rather than only the later of the two. The records are different and none blocks another. The fix is one word in each of the two remaining rows: it writes *a* record, and the row that created the directory is plan 24 row #1. Found 2026-09-11; neither plan named it.
 
 **No other page is created twice, and no page is created under two names.** Both such defects were found and fixed on 2026-09-11 inside the plans that carried them: plan 23 row #20 wrote `docs/concepts/the-order-of-the-day.md` for the question `docs/concepts/placement.md` answers, and two how-to pages for a weekly tuning loop that no longer exists - `tune-the-lens-weights.md` and `tune-the-placement-weights.md` - are created by nothing. Re-checked here and still clean.
 

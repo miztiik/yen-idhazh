@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-11
 
 One question, asked of every read:
 
@@ -18,7 +18,7 @@ only control - which is a person remembering to ask. A cover written in
 diff can see it, a schema can bound it and a test can name it. **That is all
 this page adds: the escape hatch now has an address.**
 
-[month-partitions.md](month-partitions.md) is the companion. That page says what
+[partitions.md](partitions.md) is the companion. That page says what
 a layout obliges a **writer** to do. This one says what a growing collection
 obliges a **reader** to declare. Why a collection partitions at all is
 [the shard rule](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window),
@@ -482,7 +482,7 @@ to is a sort of names already in hand. Rule #10 says the design changes when a
 measurement contradicts it, so the optimisation was not written. The row shipped
 the defect the measurement uncovered instead: three month-name recognisers
 disagreed, and one was deleting files the other two protected. The rule they now
-share is [what counts as a month name](month-partitions.md#what-counts-as-a-month-name),
+share is [what counts as a month name](partitions.md#what-counts-as-a-month-name),
 and the full working is
 [in the layout doc](../architecture/publishing/layout.md#the-state-prunes-were-already-constant-cost-and-the-premise-that-said-otherwise-was-wrong-2026-09-08).
 
@@ -537,7 +537,7 @@ them apart.
 
 ## See also
 
-- [month-partitions.md](month-partitions.md) - the companion: what a layout obliges a writer to do, the freeze rule, and what counts as a month name.
+- [partitions.md](partitions.md) - the companion: what a layout obliges a writer to do, the freeze rule, and what counts as a month name.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md#the-published-ledger-files-by-day-and-the-read-carries-a-cover) - the published cover, the day grain, and the argument it reversed.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md#what-bounds-the-committed-state-tree) - what bounds each committed collection, and the state-prune measurement.

@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-11
 
 The operator console reads twelve datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
@@ -404,7 +404,7 @@ decision 2's cold-load ceiling. Measured 2026-09-09.
 
 - [telemetry-series.md](telemetry-series.md) - the one projection that already
  existed, and how its shards are frozen.
-- [../../concepts/month-partitions.md](../../concepts/month-partitions.md) - what
+- [../../concepts/partitions.md](../../concepts/partitions.md) - what
  closes a month, and what a late arrival does to a closed one.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - the
  property behind every window on this page.

@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-11
 
 Every number this project's design rests on, with the date it was taken and the
 spread. Rule #10 in one page: **an unmeasured number is labelled an estimate and
@@ -82,6 +82,21 @@ about 2 percent at the same level, and an interpreter change moved a
 `CPython 3.14.2` is provenance and `Intel Core i7-1265U` was not. Where a
 duration or a memory figure was taken off a runner, the runner is named, because
 those do belong to the box. Owner ruling, 2026-09-10.
+
+## What a 90-day window costs at each grain, 2026-09-11
+
+**A 90-day sight window opens 4 files and reads 312,048 rows at month grain, and
+91 files and 286,832 rows at day grain** - 87 more file handles for 25,216 fewer
+rows, 8.1 percent of what the month arm reads. The wall clock does not separate
+them: the day arm's median was 99.1 ms faster, 3.5 percent, against spreads of
+638.7 and 499.3 ms. CPython 3.14.2, 9 interleaved passes an arm, over a built
+120-day ledger of 3,152 rows a day.
+
+The milliseconds are a developer-machine reading and an order-of-magnitude check
+by the rule above. The two counts are arithmetic and travel. The full record -
+conditions, method, both arms, and what it does not settle - is
+[benchmarks/2026-09-11-day-window-read.md](benchmarks/2026-09-11-day-window-read.md).
+Re-run it with `python backend/utilities/measure_day_window.py`.
 
 ## What the doubled window and the doubled cap cost, measured 2026-09-09
 
