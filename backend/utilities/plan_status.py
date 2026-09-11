@@ -888,8 +888,9 @@ def print_report(
             f"{tally['landed'] + tally['dropped']:>5} {len(plan.live):>5} {can_start:>6}"
         )
     total = counts(row for plan in plans for row in plan.rows)
+    noun = "plan" if len(plans) == 1 else "plans"
     print(
-        f"  {len(plans)} plans with live work: {total['pending']} pending, "
+        f"  {len(plans)} {noun} read: {total['pending']} pending, "
         f"{total['in-flight']} in flight, {total['blocked']} blocked, "
         f"{total['unknown']} unreadable, {total['landed']} done, {total['dropped']} dropped"
     )
@@ -902,7 +903,7 @@ def print_report(
         names = ", ".join(plan.path.name for plan in blind)
         print(f"  {len(blind)} plans have no PR column, so a done row proves nothing: {names}")
 
-    if show_rows:
+    if show_rows and live_rows:
         print("\nLIVE ROWS")
         print(
             f"    {'#':<6} {'grp':<4} {'state':<9} {'depends-on':<22} "
