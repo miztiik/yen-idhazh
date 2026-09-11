@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-10T22:40:57Z",
+  "generated_at": "2026-09-11T08:42:29Z",
   "months": [
     "2026-08",
     "2026-09"
   ],
   "routes": [
     {
-      "carries": "The model spent 14 h 25 m of this.",
+      "carries": "The model spent 2 h 38 m of this.",
       "description": "Did the runs work, which feeds broke, and what each stage cost.",
       "href": "/console/",
       "id": "pipelines",
@@ -15,59 +15,43 @@
       "worst": "17 feeds resting"
     },
     {
-      "carries": "This day ran in 5 runs, 1.41x apart on read speed.",
+      "carries": "This day ran as one run, so there is nothing to compare it against.",
       "description": "What the model wrote, how long it took, and what it got wrong.",
       "href": "/console/model/",
       "id": "model",
       "label": "Summaries",
       "severity": 3,
-      "worst": "35 items failed"
+      "worst": "8 items failed"
     },
     {
-      "carries": "365 articles on this day.",
+      "carries": "72 articles on this day.",
       "description": "The hardware the model ran on, and how much it varied between runs.",
       "href": "/console/machine/",
       "id": "machine",
       "label": "Hardware",
       "severity": 1,
-      "worst": "shards read 3.94x apart"
+      "worst": "shards read 4.34x apart"
     }
   ],
   "size": {
-    "articles_to_cap": 308755,
-    "bytes": 28600206,
-    "cap_fraction": 0.026636017486453056,
-    "left_mb": 996.7247180938721,
-    "measured_days": 20,
-    "sentence": "27.3 MB of the 1 GB limit - room for about 309,000 more articles."
+    "articles_to_cap": 308433,
+    "bytes": 28847821,
+    "cap_fraction": 0.026866626925766468,
+    "left_mb": 996.4885740280151,
+    "measured_days": 21,
+    "sentence": "27.5 MB of the 1 GB limit - room for about 308,000 more articles."
   },
   "verdict": {
-    "date": "2026-09-10",
+    "date": "2026-09-11",
     "health": "amber",
     "more_runs": 0,
     "runs": [
       {
         "health": "amber",
         "label": "Run 1 is worth a look"
-      },
-      {
-        "health": "amber",
-        "label": "Run 2 is worth a look"
-      },
-      {
-        "health": "amber",
-        "label": "Run 3 is worth a look"
-      },
-      {
-        "health": "amber",
-        "label": "Run 4 is worth a look"
-      },
-      {
-        "health": "amber",
-        "label": "Run 5 is worth a look"
       }
     ],
-    "sentence": "2026-09-10 ran 5 runs and published 365 of 400 planned items. 35 items failed."
+    "sentence": "2026-09-11 ran 1 run and published 72 of 80 planned items. 8 items failed."
   },
   "version": "2026-09-09",
   "worst": {
