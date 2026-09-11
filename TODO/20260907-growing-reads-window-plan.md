@@ -233,7 +233,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | 1 | **`.gitattributes` gets an explicit line for `state/published/**/*.csv`**, not the existing `state/**/*.csv` catch-all. The catch-all would already cover it, and that is the problem: a merge rule a new collection inherits without anyone choosing it is the same defect as a growing cost nobody chose | Owner, 2026-09-07 |
 | 2 | `merge=union` stays correct for the reason the existing comment gives - rows are independent and the reader keeps the earliest of two. Restated at the new line rather than assumed from the neighbour | Fowler |
 | 3 | `REFRESH_PATHS` names the directory `state/published`, matching `state/scores` and `state/item-health`. The mirror in `test_workflows.py` reds in CI if the two drift - move both in one commit | Fowler |
-| 4 | A run whose date falls in a closed day performs a correction, the case `append_seen` already handles and the freeze rule already permits | [month-partitions.md](../docs/concepts/month-partitions.md) |
+| 4 | A run whose date falls in a closed day performs a correction, the case `append_seen` already handles and the freeze rule already permits | [partitions.md](../docs/concepts/partitions.md) |
 
 ## 7 - Row #6 - The one-shot split
 
@@ -247,12 +247,12 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | 1 | **Runs when no scheduled digest is in flight**, as a deliberate act. `merge=union` is a content driver and cannot resolve a delete against a modify, so a split racing a running job conflicts, burns the retry budget, and loses the whole day's push | Fowler |
 | 2 | The race is survivable rather than merely avoided, and that is why row 4 came first: if the flat file returns through a merge the reader still reads it and no address is lost. The next split removes it again. A cutover whose failure mode is redundancy rather than loss is the only kind worth running against a live schedule | Fowler |
 | 3 | Rows are copied, never rewritten. Same cells, same order, same bytes; only the file they live in changes. The `version` cell travels with the row | Section 11 |
-| 4 | The utility stays committed after it runs, as `migrate_published_ledger.py` did, so a person with an old checkout can run it | [month-partitions.md](../docs/concepts/month-partitions.md) |
+| 4 | The utility stays committed after it runs, as `migrate_published_ledger.py` did, so a person with an old checkout can run it | [partitions.md](../docs/concepts/partitions.md) |
 
 ## 8 - Row #7 - The cover, the fallback deleted, and the docs
 
 - **Scope:** `load_published` gains `today` and `within_days`, drops the flat-file fallback, and reads the day files its cover names. Every doc that describes the old shape moves in the same commit.
-- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/test_pipeline.py`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/month-partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/measurements.md`, `docs/reference/data-growth-audit.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
+- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/test_pipeline.py`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/measurements.md`, `docs/reference/data-growth-audit.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** with the committed config the mapping is **equal cell-for-cell to what it returned before this plan started** - the guarantee is untouched, which is the whole point of shipping `-1`. A second arm sets 120 over a built fixture spanning six months and proves the older day files are not opened, by counting file reads rather than by timing them.
 
@@ -260,7 +260,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | --- | --- | --- |
 | 1 | **`-1` enumerates; a finite cover names days.** The unbounded path walks the tree validating every stem; the bounded path asks for the dates in range and opens only those. Two paths, two tests, neither one a glob | Owner, 2026-09-07 |
 | 2 | `freshness.md` currently argues at length that this file must not shard, and lists the shard as a rejected alternative. That section is **rewritten to say what changed and why**, not deleted. A reversed decision whose reasoning vanishes is how the same argument gets had twice | CLAUDE.md section 4 |
-| 3 | `month-partitions.md` moves the published row into the partition table and states the coupling to `seen_window_days` next to it. It also gains the day grain as a second partition unit, which the digest tree already uses | Carmack |
+| 3 | `partitions.md` moves the published row into the partition table and states the coupling to `seen_window_days` next to it. It also gains the day grain as a second partition unit, which the digest tree already uses | Carmack |
 | 4 | `measurements.md` gains the 2026-09-07 figures, including the two that went **against** the design - day files take twice the wall clock of month files, and after packing they are the largest in git. A measurement that contradicts the design is recorded, not dropped | Rule #10 |
 | 5 | `docs/archive/measurements-2026-08.md` is history and is **not** edited | Fowler |
 
@@ -378,7 +378,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 18 - Row #17 - The rule gets its concept doc
 
 - **Scope:** `docs/concepts/growing-reads.md` - the rule, the inventory, the three tiers, and how `-1` relates to Rule #12's escape hatch. Written last so it describes what shipped.
-- **Files:** `docs/concepts/growing-reads.md` (new), `docs/architecture/contracts/schemas.md`, `docs/concepts/month-partitions.md`, `CLAUDE.md`, `docs/reference/documentation-structure.md`
+- **Files:** `docs/concepts/growing-reads.md` (new), `docs/architecture/contracts/schemas.md`, `docs/concepts/partitions.md`, `CLAUDE.md`, `docs/reference/documentation-structure.md`
 - **Gates:** doc checks only; this row changes no application code. CI - full suite.
 - **Oracle:** every read in the inventory appears with its declared cover or its stated bound, and the count in the doc matches the count in the code. A person reading only that page can answer "does this read need a cover" for a collection invented tomorrow.
 
@@ -386,7 +386,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | --- | --- | --- |
 | 1 | **A property, not a list.** The doc states the question - does this read cost more when a run appended more - and the inventory is a dated example table underneath it. The archive guard deleted on 2026-09-06 failed precisely because it was a list of paths pretending to be a rule | [CLAUDE.md](../CLAUDE.md) Rule #12 design rationale |
 | 2 | It names the three shapes a cover can take - a span of days, the files a run staged, one run or one payload - so the next reader does not reach for a clock by reflex. Rows 8, 9 and 10 are the worked examples of each | this plan |
-| 3 | `docs/concepts/`, beside [month-partitions.md](../docs/concepts/month-partitions.md): that page says what a layout obliges a writer to do, this says what a growing collection obliges a reader to declare | [documentation-structure.md](../docs/reference/documentation-structure.md) |
+| 3 | `docs/concepts/`, beside [partitions.md](../docs/concepts/partitions.md): that page says what a layout obliges a writer to do, this says what a growing collection obliges a reader to declare | [documentation-structure.md](../docs/reference/documentation-structure.md) |
 | 4 | CLAUDE.md gains a paragraph rather than a new rule. Rule #12 already forbids the growing cost nobody chose; this only says where the choosing is now written down | Owner, 2026-09-07 |
 
 ## What this plan does not fix
@@ -399,6 +399,6 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## See also
 
 - [../docs/reference/data-growth-audit.md](../docs/reference/data-growth-audit.md) - finding 1 and the Indexed State package this plan takes a slice of.
-- [../docs/concepts/month-partitions.md](../docs/concepts/month-partitions.md) - the pattern, the freeze rule, and the four cases an append-only layout gets wrong.
+- [../docs/concepts/partitions.md](../docs/concepts/partitions.md) - the pattern, the freeze rule, and the four cases an append-only layout gets wrong.
 - [../docs/architecture/sources/freshness.md](../docs/architecture/sources/freshness.md) - why publishing twice is prevented by a record rather than a window.
 - [20260906-constant-cost-reads-plan.md](20260906-constant-cost-reads-plan.md) - ranks 1 and 10 of the same audit, in flight.

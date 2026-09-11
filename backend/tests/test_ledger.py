@@ -565,7 +565,7 @@ def test_append_published_writes_the_day_its_rows_name_and_no_other_file(
     append that also touched the flat file, or that opened a neighbouring day
     to check something, would pass an assertion about the day file and fail
     here - and touching a day nobody is publishing is what a partitioned writer
-    must never do (`docs/concepts/month-partitions.md`).
+    must never do (`docs/concepts/partitions.md`).
 
     The relpath is asserted against the file that was really written rather
     than against a second spelling of the layout, so a log line cannot drift
