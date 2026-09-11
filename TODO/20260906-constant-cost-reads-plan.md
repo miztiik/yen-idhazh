@@ -258,7 +258,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
 
 - **Scope:** Name the existing month-partition layout as the project's pattern, add the freeze rule, and give it one concept doc every later row cites.
 - **Files touched:**
-  - `docs/concepts/month-partitions.md` (new)
+  - `docs/concepts/month-partitions.md` (new; renamed to `docs/concepts/partitions.md` by plan 24 row #1 on 2026-09-11, because the page covers both grains and only its title said otherwise)
   - `docs/architecture/` the state and telemetry living docs
   - `docs/reference/documentation-structure.md` cross-link if routing needs it
 - **Acceptance gates:** documentation only - no application suite. The shared test selector must select nothing but the whitespace check.

@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-11
 
 Where the pipeline writes what a reader reads and what a reader's URL looks like. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -628,7 +628,7 @@ Counting a syscall is deterministic, so the spread is zero.
 
 **What does move is the backlog, and that is already the shape row 14 landed.** Nothing due costs nothing, at 3 months and at 140 alike. The 11 stats at fourteen months are `state/seen/` on its own, whose window is 90 days rather than fourteen months, so 11 of its 14 shards are past it. The 389 at 140 months are exactly the due shards - 137 seen, 126 feed-health, 126 scores - each read once for the `bytes_freed` figure the committed result carries. A pass that has caught up reads nothing. So the cost already answers Rule #12 the right way: it rises with the work outstanding, never with what an earlier run appended, and it falls as the policy works.
 
-**The row was not empty, because the same measurement found a real defect underneath it.** Three month-name recognisers disagreed, so `2025-13.csv` was left alone in one store and deleted from another. That is [what counts as a month name](../../concepts/month-partitions.md#what-counts-as-a-month-name) in the concept doc, and the fix is one shared rule in `idhazh.month_partition`.
+**The row was not empty, because the same measurement found a real defect underneath it.** Three month-name recognisers disagreed, so `2025-13.csv` was left alone in one store and deleted from another. That is [what counts as a month name](../../concepts/partitions.md#what-counts-as-a-month-name) in the concept doc, and the fix is one shared rule in `idhazh.month_partition`.
 
 ## Rejected alternatives
 

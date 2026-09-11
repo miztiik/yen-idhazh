@@ -145,7 +145,7 @@ def publish(
     Two freezes compose. The month filter keeps a closed month from being read
     at all; the byte comparison keeps a re-derived month from being rewritten
     when nothing moved. The first is the freeze rule of
-    `docs/concepts/month-partitions.md`; the second is how it decides "only when
+    `docs/concepts/partitions.md`; the second is how it decides "only when
     a correction targets it" - a correction changes the bytes, an ordinary
     re-run does not.
     """
