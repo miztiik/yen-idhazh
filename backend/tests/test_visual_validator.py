@@ -24,13 +24,22 @@ from pydantic import ValidationError
 
 from idhazh.contracts.app_config import AppConfig, VisualsConfig
 from idhazh.contracts.element import ElementKind, ElementTable
-from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
+from idhazh.contracts.visual import (
+    EncodingRole,
+    PlanDecision,
+    VisualPlan,
+    VisualPurpose,
+    VisualType,
+)
 from idhazh.visual_validator import (
     Rejection,
     ValidatorCheck,
     validate_plan,
 )
 from idhazh.visual_vocabulary import (
+    DOWNGRADE_EDGES,
+    DOWNGRADE_TABLE_VERSION,
+    LONGEST_DOWNGRADE_CHAIN,
     PLAN_VOCABULARY_VERSION,
     ROLE_KINDS,
     TYPE_RULES,
@@ -453,3 +462,65 @@ def test_the_unit_table_scales_within_one_dimension_are_arithmetic() -> None:
     assert UNIT_DIMENSIONS["mw"] == ("power", Decimal(1_000_000))
     dimensions = {dimension for dimension, _ in UNIT_DIMENSIONS.values()}
     assert dimensions == {"power", "energy", "mass", "length", "duration"}
+
+
+class TestTheDowngradeAllowList:
+    """The table the ladder walks, held to what an edge has to be to be one.
+
+    It is a static allow-list rather than a rule, because without one the ladder
+    can walk a comparison into a timeline and record it as legal - and the
+    cross-family ban is what "purpose survives" implies and never states.
+    """
+
+    def test_every_target_is_a_type_the_validator_can_pass(self) -> None:
+        """A target the validator refuses by name rescues nothing, so it is not an edge.
+
+        "Any chart to `table` at depth 2" is in the source document and `table`
+        has no role rule, which is why it is absent here.
+        """
+        for source, edges in DOWNGRADE_EDGES.items():
+            for edge in edges:
+                assert edge.target in TYPE_RULES, (
+                    f"{source.value} steps down to {edge.target.value}, which has no rule"
+                )
+                assert edge.target not in UNRULED_TYPES
+
+    def test_no_edge_leads_somewhere_that_would_be_refused_identically(self) -> None:
+        """An edge whose target wants the same channels cannot change any outcome.
+
+        `line` to `area` is the shape this refuses: both require a time and a
+        quantity, so a plan refused as one is refused as the other, and listing
+        it would be a rung nobody can stand on.
+        """
+        for source, edges in DOWNGRADE_EDGES.items():
+            if source not in TYPE_RULES:
+                continue
+            for edge in edges:
+                assert TYPE_RULES[edge.target].required != TYPE_RULES[source].required, (
+                    f"{source.value} -> {edge.target.value} asks for the same channels"
+                )
+
+    def test_every_edge_names_the_purposes_it_leaves_standing(self) -> None:
+        for source, edges in DOWNGRADE_EDGES.items():
+            for edge in edges:
+                assert edge.purposes, f"{source.value} -> {edge.target.value} preserves nothing"
+                assert edge.purposes <= set(VisualPurpose)
+
+    def test_the_edges_do_not_cycle(self) -> None:
+        """The ladder is bounded by the config's rung count, and a cycle would let a
+        plan arrive back at a type the validator already refused, one depth poorer."""
+        assert LONGEST_DOWNGRADE_CHAIN >= 1
+        assert LONGEST_DOWNGRADE_CHAIN < len(VisualType)
+
+    def test_a_slope_has_no_edge_because_a_bar_loses_the_pairing(self) -> None:
+        """Named rather than derived: it is a judgement the source document made,
+        and a test is where a judgement stops being somebody's memory."""
+        assert VisualType.SLOPE not in DOWNGRADE_EDGES
+        assert VisualType.LINE not in DOWNGRADE_EDGES
+        assert VisualType.FLOW not in DOWNGRADE_EDGES
+
+    def test_the_edge_table_has_a_stamp_of_its_own(self) -> None:
+        """Folded into the plan vocabulary's, adding an edge would re-plan every
+        item carrying an older stamp - a model call apiece."""
+        stamps = {DOWNGRADE_TABLE_VERSION, PLAN_VOCABULARY_VERSION}
+        assert len(stamps) == 2

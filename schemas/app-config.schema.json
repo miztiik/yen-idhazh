@@ -2020,6 +2020,14 @@
           "title": "Canvas Width",
           "type": "integer"
         },
+        "downgrade_floor_percentiles": {
+          "description": "The ladder, as one list: how many rungs it has and how high each one is. Entry n is the percentile of depth-0 published mark counts a downgrade at depth n+1 must reach, so the length is the deepest permitted downgrade and the depth after it refuses. Two entries is the design's own ladder - the median at the first step down, the 75th percentile at the second, refuse at the third. An empty list is the ladder switched off, which is one knob doing two jobs on purpose: a separate on-off flag can disagree with the rungs beside it, and zero rungs is already an unambiguous no. It must rise, because a floor that does not is not an escalating one. The floor it reads is a mark count, which the validator already bounds to min_chart_points to max_chart_points, so two adjacent percentiles can land on one integer and the ladder quietly stops escalating - that is visible as two depths recording one floor, and the answer is to move these numbers rather than the mechanism.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Downgrade Floor Percentiles",
+          "type": "array"
+        },
         "enabled_kinds": {
           "description": "Kinds the planner may choose. `none` is always available and never listed. Chart is the only one left: the diagram arm shipped off - the model drafted it zero times in 88 items and rendered it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made the planner's own pre-filter unfireable, because a diagram's steps come from prose and nothing about it is decidable in advance - and its renderer was deleted with the Mermaid round trip on 2026-09-05.",
           "items": {

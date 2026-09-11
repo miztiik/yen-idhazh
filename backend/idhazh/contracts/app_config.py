@@ -2139,6 +2139,25 @@ class VisualsConfig(Model):
     )
     min_diagram_steps: int = Field(default=3, ge=2)
     max_diagram_steps: int = Field(default=6, ge=2)
+    downgrade_floor_percentiles: list[int] = Field(
+        default_factory=lambda: [50, 75],
+        description=(
+            "The ladder, as one list: how many rungs it has and how high each one is. "
+            "Entry n is the percentile of depth-0 published mark counts a downgrade at "
+            "depth n+1 must reach, so the length is the deepest permitted downgrade and "
+            "the depth after it refuses. Two entries is the design's own ladder - the "
+            "median at the first step down, the 75th percentile at the second, refuse at "
+            "the third. An empty list is the ladder switched off, which is one knob doing "
+            "two jobs on purpose: a separate on-off flag can disagree with the rungs "
+            "beside it, and zero rungs is already an unambiguous no. It must rise, "
+            "because a floor that does not is not an escalating one. The floor it reads "
+            "is a mark count, which the validator already bounds to min_chart_points to "
+            "max_chart_points, so two adjacent percentiles can land on one integer and "
+            "the ladder quietly stops escalating - that is visible as two depths "
+            "recording one floor, and the answer is to move these numbers rather than "
+            "the mechanism."
+        ),
+    )
     canvas_width: int = Field(
         default=800,
         ge=200,
@@ -2224,12 +2243,16 @@ class VisualsConfig(Model):
 
     @model_validator(mode="after")
     def _bounds_are_orderable(self) -> Self:
-        """Each pair of knobs in the right order, and the bin count inside the mark window.
+        """Each pair of knobs in the right order, the bin count inside the mark window,
+        and the downgrade ladder's rungs rising.
 
         A histogram draws `histogram_bins` bars whatever any one plan says, so
         whether that many bars is readable is a question about the config and not
         about an article. Asked once here, a wrong knob names the operator who set
-        it and the run never starts.
+        it and the run never starts. The ladder's rungs are asked here for the same
+        reason: a floor that falls with depth is a ladder that gets easier the
+        further down it goes, which is the failure the escalating floor exists to
+        prevent, and it would be found one refused item at a time.
         """
         if self.max_chart_points < self.min_chart_points:
             raise ValueError("max_chart_points is below min_chart_points")
@@ -2239,6 +2262,14 @@ class VisualsConfig(Model):
             raise ValueError(
                 "histogram_bins is a histogram's mark count, so it sits between "
                 "min_chart_points and max_chart_points like every other type's"
+            )
+        rungs = self.downgrade_floor_percentiles
+        if any(not 0 <= rung <= 100 for rung in rungs):
+            raise ValueError("a downgrade floor is a percentile, so it is between 0 and 100")
+        if rungs != sorted(set(rungs)):
+            raise ValueError(
+                "each rung of the downgrade ladder is higher than the one above it, or "
+                "the escalating floor does not escalate"
             )
         if VisualKind.NONE in self.enabled_kinds:
             raise ValueError("`none` is always reachable and is never listed as enabled")

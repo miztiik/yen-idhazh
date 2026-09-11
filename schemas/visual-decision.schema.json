@@ -1,5 +1,16 @@
 {
   "$defs": {
+    "NoneReason": {
+      "description": "Which gate decided this item carries no picture.\n\n`none` is the majority outcome by design - two items in three - so a `none`\nwith no cause makes the largest number an operator reads the one that\nexplains nothing.\n\n**One member per gate, never one per call site.** The reachability gate\nrefuses in two places and both record `not_reachable`, because what an\noperator acts on is the gate rather than the line of code.\n\n**And one member per gate that has a writer.** The design record names six\ngates and the two-call flow adds a seventh; the potential class, the novelty\nfloor, the sufficiency bar and the per-visual byte cap are not built, so a\nmember for each would be a word nobody can produce, nobody can retire and\nnobody can tell from a bug. Each arrives as an additive member with the row\nthat builds its gate.\n\nThe single-call planner these four replace writes nothing here. Its causes\nare sentences in `rationale` and several of them - no summary to illustrate,\na reply that lost its shape, a kind with no renderer - are not gates at all,\nso typing them into this vocabulary would be work the row that retires that\nplanner deletes.",
+      "enum": [
+        "not_reachable",
+        "model_declined",
+        "validation_failed",
+        "output_budget_cut"
+      ],
+      "title": "NoneReason",
+      "type": "string"
+    },
     "VisualKind": {
       "enum": [
         "chart",
@@ -23,6 +34,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added none_reason and the NoneReason enum it is typed with. Optional, null by default, and refused on a decision that carries a visual.",
+      "version": "2026-09-11",
+      "why": "A `none` recorded no cause, and `none` is the majority outcome by design - so the largest number an operator reads explained nothing, and no gate could be retired, tuned or shown to work. It is a typed enum rather than a sentence in `rationale` because a console counts members and cannot count prose. Four members, one per gate that has a writer in this build; the potential class, the novelty floor, the sufficiency bar and the per-visual byte cap arrive with the rows that build them. The read-side migration is the default: a payload written before the field existed carries null, which is the honest reading - nothing recorded says which gate refused it - and the single-call planner writes null for the same reason."
+    },
     {
       "change": "Removed spec_format and the SpecFormat enum it was typed with. VisualKind lost diagram and image, so it holds chart and none. spec is unchanged and still carries the Vega-Lite JSON the renderer draws.",
       "version": "2026-09-05T18:00",
@@ -153,6 +169,18 @@
       "title": "Model Id",
       "type": "string"
     },
+    "none_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NoneReason"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which gate decided this item carries no picture. Null on a decision that carries one, and null on a payload written before the field existed or by the single-call planner, which has no gate vocabulary."
+    },
     "rationale": {
       "anyOf": [
         {
@@ -186,7 +214,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-05T18:00",
+      "default": "2026-09-11",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -205,5 +233,5 @@
   ],
   "title": "VisualDecision",
   "type": "object",
-  "version": "2026-09-05T18:00"
+  "version": "2026-09-11"
 }

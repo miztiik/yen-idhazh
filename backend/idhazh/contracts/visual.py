@@ -133,9 +133,11 @@ by construction - the schema is what constrains the decoder, and the schema
 cannot say "at most four roles for a bar". Which roles a type may fill is the
 validator's rule.
 
-`visuals.max_output_tokens` is 400 today, and call 2 decodes the summary through
-the same ceiling. Deriving that budget from this arithmetic is the planner's
-work, not this contract's.
+`visuals.max_output_tokens` is 400 and it is the single-call planner's budget, not
+this shape's. Call 2 decodes a summary and this plan through one budget derived
+from both shapes' bounds, which is the planner's work and not this contract's -
+`visual_planner.call_two_output_tokens` does the arithmetic and
+`widest_json_characters` below is the half of it this module owns.
 """
 
 from __future__ import annotations
