@@ -126,7 +126,7 @@ Read 2026-09-11 from `main` at `b0e0411a`, in an isolated worktree. Every figure
 | Routes that do not prerender | **2** - `/[date]/` and `/[date]/[vertical]/`, both `export const ssr = false` and neither declaring `prerender` | `git grep -n 'export const ssr' -- frontend/src` |
 | Documents a published day adds | **0**. Twelve until 2026-09-09 | `frontend/src/routes/[date]/+page.ts`, `docs/architecture/publishing/frontend.md` |
 | What the dated routes cost when they were prerendered | **50,598,258 bytes, 39.5 percent of the published site**, measured 2026-08-27 over six committed days and 2,237 items | `docs/architecture/publishing/retention.md` |
-| The guard | **1 file, 1 export, 33 lines**; wired at `frontend/svelte.config.js:7` and `:84` | `frontend/prerender-guard.js` |
+| The guard | **1 file, 1 export, 36 lines**; wired at `frontend/svelte.config.js:7` and `:84` | `frontend/prerender-guard.js` |
 | Its spec | **5 tests**, in the `publishing` group, driving the real handler off the real config | `frontend/tests/prerender-guard.spec.ts`, `frontend/scripts/test-groups.ts:30` |
 | Files naming prerender, repository-wide | **133** | `git grep -iln prerender` |
 | Pages under `docs/` naming it | **23** - the figure this plan's brief carried, and it is correct | `git grep -iln prerender -- docs/` |
@@ -248,18 +248,21 @@ Delete `frontend/prerender-guard.js`, its import and its wiring, its spec, its t
 ### Acceptance gates
 
 ```powershell
+.\.venv\Scripts\python.exe backend\utilities\build_canary_day.py
 cd frontend
 npm run check
-npm run build
+npm run build:canary
 npm run bundle-gate
 npm run test:logic
 npm run test:browser
 ```
 
+**The build is `npm run build:canary`, and the oracle below is why.** An earlier draft of this block ran `npm run build` while the oracle named the canary build, so the row had two different builds in it and neither said which one the gates were read from. The canary day is fixed in size and carries a day the archive has never produced, which is what `CLAUDE.md` Rule #12 asks for; the real digest tree grows every four hours.
+
 `GATE-WEB` and `GATE-BROWSER`, plus all four of:
 
-1. **`git grep -c 'prerender-guard\|handleUnseenRoutes'` returns nothing outside `TODO/20260906-data-growth-research.md`, `docs/reference/data-growth-audit.md` and `docs/reference/test-execution-audit.md`.** Those three are dated records pinned to a named revision and are correct about it; a record of what was audited is evidence, not debt.
-2. **`npm run build` still emits six `index.html` files outside `404.html`.** Deleting a handler must not un-prerender a route, and nothing else in the suite would notice if it did.
+1. **No file under `frontend/` and no page under `docs/` names `handleUnseenRoutes` or imports `prerender-guard.js`.** That is a gate on the behaviour - the guard is gone from the code and from the living documentation - and it is what `git grep -l -e 'prerender-guard' -e 'handleUnseenRoutes' -- frontend docs` proves. **`TODO/` is out of scope and so are the two dated audits.** A plan-doc records a reading of its own day, and five of the twelve files that name the guard today are plan-docs including this one, which no row of this plan edits; `docs/reference/data-growth-audit.md` and `docs/reference/test-execution-audit.md` are pinned to a named revision and are correct about it. **An earlier draft of this gate asked for the name to appear nowhere outside three exempted files, and it could not pass**: the guard is named in twelve files, this row deletes two and edits three, and four of the remaining seven are plan-docs the row never opens.
+2. **`npm run build:canary` still emits six `index.html` files outside `404.html`.** Deleting a handler must not un-prerender a route, and nothing else in the suite would notice if it did.
 3. **`npm run bundle-gate` prints `/404` and `/evals/` at the same byte counts as before the change.** No document content moved, so a moved byte is a defect. Capture the before figures first.
 4. **The `publishing` browser group still runs, with one fewer spec.** A removed name that breaks the group selector fails silently and takes the other ten specs with it.
 
@@ -303,16 +306,18 @@ Correct four sentences on four files. Each is false against the tree, and each i
 | --- | --- | --- |
 | `README.md:54` | A diagram node reading `Prerendered pages` over `digest, archive, scores` | The digest's reading pages are not prerendered. This is the first diagram a stranger sees |
 | `docs/architecture/overview.md:36` | `prerender at build time` feeding `static pages` over `digest, archive, scores` | The same claim one tier down |
-| `docs/how-to/run-the-gates.md:361` | "every route is prerendered, so a route that cannot render fails the build rather than the page" | False for the two dated routes, whose failure to render would not fail the build. The very next sentence already qualifies the claim for stories and not for routes |
+| `docs/how-to/run-the-gates.md:362` | "every route is prerendered, so a route that cannot render fails the build rather than the page" | False for the two dated routes, whose failure to render would not fail the build. The very next sentence already qualifies the claim for stories and not for routes |
 | `backend/tests/test_workflows.py:1845` | "`npm run build` prerenders every route, so a route that cannot render fails here instead of in a reader's browser" | The same sentence in a docstring, defending a real ordering requirement with a false reason |
 
-**`docs/how-to/run-the-gates.md:830` is examined and left alone**, and the reason is the rule in section 0.1. It reads "Its own docstring said so: every route is prerendered, so first-load JavaScript is hydration cost" - reported speech inside a rejected-alternatives block explaining why a gate was deleted. It quotes a false claim rather than making one. A worker who disagrees after reading the surrounding paragraph may correct the tense and say so in the pull request.
+**`docs/how-to/run-the-gates.md:831` is examined and left alone**, and the reason is the rule in section 0.1. It reads "Its own docstring said so: every route is prerendered, so first-load JavaScript is hydration cost" - reported speech inside a rejected-alternatives block explaining why a gate was deleted. It quotes a false claim rather than making one. A worker who disagrees after reading the surrounding paragraph may correct the tense and say so in the pull request.
+
+**`run-the-gates.md` names prerender at five lines, not two, and the other three are true.** `git grep -in prerender -- docs/how-to/run-the-gates.md` returns 362, 421, 831, 862 and 894 (re-measured 2026-09-11). Line 421 describes what `page_weight.ceilings_bytes` measures, 862 prices a rejected alternative against a prerendered page, and 894 says the gate covers every prerendered document including the three console routes. **All three state a method and none of them claims every route is prerendered**, so this row reads them and leaves them, and its pull request says it did.
 
 ### Files touched
 
 - `README.md` - the one diagram node.
 - `docs/architecture/overview.md` - the one diagram node.
-- `docs/how-to/run-the-gates.md` - the one sentence at line 361. The paragraph's remaining sentences about `validate-days` are correct and stay.
+- `docs/how-to/run-the-gates.md` - the one sentence at line 362. The paragraph's remaining sentences about `validate-days` are correct and stay.
 - `backend/tests/test_workflows.py` - the one docstring sentence. **The assertions do not change**, and the ordering requirement the docstring defends - build before commit, weight gate after - is correct and is re-justified rather than removed.
 
 ### Acceptance gates
@@ -339,7 +344,7 @@ Correct four sentences on four files. Each is false against the tree, and each i
 | 1 | **Four sentences, not 23 pages.** 23 pages under `docs/` name prerendering and most of them state a true method or a dated measurement. A sweep would rewrite correct prose and bury the four corrections that matter | This plan, section 0.1 |
 | 2 | **The two diagrams are corrected rather than deleted.** They are the only picture of the read-time half a stranger gets. A node saying what is actually prerendered costs the same pixels as one that is wrong | Jony; `CLAUDE.md` section 0b |
 | 3 | **The test docstring is corrected in place and the assertions are untouched.** The requirement it defends is real; only its reason had rotted. Deleting the docstring would take the requirement's only explanation with it | `CLAUDE.md` section 13 |
-| 4 | **The reported-speech sentence at `run-the-gates.md:830` is left, and the judgement is recorded rather than hidden.** A rejected-alternatives block that quotes a false docstring is evidence about why a gate was deleted | This plan, section 0.1 |
+| 4 | **The reported-speech sentence at `run-the-gates.md:831` is left, and the judgement is recorded rather than hidden.** A rejected-alternatives block that quotes a false docstring is evidence about why a gate was deleted | This plan, section 0.1 |
 
 ### Rejected alternatives
 
@@ -359,13 +364,15 @@ It touches no route file, no `svelte.config.js`, no living doc under `docs/archi
 
 ### Scope
 
-Write section 0.2's ruling into the living doc that owns the published surface, with row #1's number beside it, and correct the one stale row in that page's own table. **This is the row that stops the next plan inheriting "prerender is legacy" from a page nobody corrected**, which is how both plan 23 and plan 25 came to say it.
+**Extend the argument the page already makes**, with row #1's number beside it and the reversal priced, and correct the one stale row in that page's own table. **This is the row that stops the next plan inheriting "prerender is legacy" from a page nobody finished**, which is how both plan 23 and plan 25 came to say it.
+
+**The page is not silent on this and an earlier draft of this row read it as though it were.** `docs/architecture/publishing/frontend.md:48` already carries three of section 0.2's four reasons, in its own words: "It stays prerendered, because one document a build is not one a published day and it costs the site nothing that grows. Its seed and its leading block ship in the first bytes rather than a request away, because it is the address a stranger meets first. And when its fetch fails the reader still has the seed with `MoreDays` under it." **So this row extends an argument rather than writing a ruling** - and the difference matters, because a row that writes a ruling over a page that already argues it produces two statements of one decision and the second reader has to work out which governs.
 
 What lands in `docs/architecture/publishing/frontend.md`:
 
-1. **A `## Design rationale` entry**: the six routes stay, the four reasons from section 0.2, and the measurement from row #1. `CLAUDE.md` section 4 puts a decision in the living doc it impacts and nowhere else.
+1. **The argument at line 48 is extended into a `## Design rationale` entry**, keeping its three sentences, adding section 0.2's fourth reason and **row #1's measurement**, and naming the decision as a decision rather than as three things that "make `/` different". `CLAUDE.md` section 4 puts a decision in the living doc it impacts and nowhere else.
 2. **A `## Rejected alternatives` row for turning prerendering off**, carrying section 6's price - HTTP 404 on every address, no first-screen content, the grid re-wrap, the console's blank first paint, and nothing rendering without a script.
-3. **The stale table row corrected.** Line 68 reads "Prerendered HTML on `/`, with the whole day in it". `/` has carried a seed and fetched the rest since 2026-09-10, and the same page argues for that change 24 lines above the table that contradicts it.
+3. **The stale table row corrected.** Line 68 reads "Prerendered HTML on `/`, with the whole day in it". `/` has carried a seed and fetched the rest since 2026-09-10, and the same page argues for that change 22 lines above the table that contradicts it.
 
 ### Files touched
 
@@ -385,7 +392,7 @@ What lands in `docs/architecture/publishing/frontend.md`:
 
 ### Oracle
 
-**The oracle is the page's own contradiction, and it is checkable.** Before this row, `frontend.md` says at line 44 that `/` carries a seed and fetches the rest, and at line 68 that `/` ships the whole day. Both cannot be true. After it, one statement of what `/` ships survives, and `git grep -c 'the whole day in it' -- docs/architecture/publishing/frontend.md` returns 0.
+**The oracle is the page's own contradiction, and it is checkable.** Before this row, `frontend.md` says at line 46 that `/` carries a seed and fetches the rest, and at line 68 that `/` ships the whole day. Both cannot be true. After it, one statement of what `/` ships survives, and `git grep -c 'the whole day in it' -- docs/architecture/publishing/frontend.md` returns 0.
 
 There is no fixture, because the artefact is prose. What keeps the row honest is that every number in it is either quoted from row #1's record or already carries a date in the page.
 
@@ -451,8 +458,8 @@ Named here so they are not mistaken for work this plan is doing.
 
 | Gap | What it is | Why it is not a row here |
 | --- | --- | --- |
-| `TODO/20260910-25-placement-plan.md:406` | A decision reading "every page here is prerendered", which is false for the two dated routes | A plan-doc records a reading of the day it was written, and it is corrected by the plan that owns it. Correcting another plan's decision text from a passing sweep is how a decision loses its author |
-| `docs/how-to/run-the-gates.md:830` | Reported speech quoting a deleted gate's false docstring | Row #3 examined it and left it, with the reason. A worker who disagrees may correct the tense and say so |
+| `TODO/20260910-25-placement-plan.md` row #6 decision 5 | A decision reading "every page here is prerendered", which is false for the two dated routes | **Corrected on 2026-09-11 by the plan that owns it**, in the same pull request that fixed this line. It is named here because a plan-doc records a reading of the day it was written, and correcting another plan's decision text from a passing sweep is how a decision loses its author - so the correction was made in plan 25 and this row records that it was |
+| `docs/how-to/run-the-gates.md:831` | Reported speech quoting a deleted gate's false docstring | Row #3 examined it and left it, with the reason. A worker who disagrees may correct the tense and say so |
 | Whether `/evals/` earns a prerendered document | It is one of the six and nobody has asked what it is for since the dashboard was built. Its ceiling is 6,600 B, the smallest on the site | This plan rules on prerendering as one decision. Whether a single route deserves its document is a question about that route |
 | A published `robots.txt` or sitemap | Neither exists. The site has no crawl instructions of any kind | It is a decision about the whole site and nothing in this plan creates a need for one. Section 0's ESCALATE trigger 6 keeps a row from adding one quietly |
 | `handleHttpError: 'warn'` | The other prerender knob in `svelte.config.js`. Nothing in this plan examined what it currently swallows | Row #2 leaves it untouched on purpose. It is a different failure and deserves its own reading |
