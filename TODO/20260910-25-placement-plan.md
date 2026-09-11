@@ -42,7 +42,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 **Every chart carries a heading and one plain sentence saying what it means and what good looks like** - more is better, or less is better. **A chart that needs more than a sentence has failed**, and the row replaces the chart rather than adding a paragraph. Every console row here fetches by window, fetches nothing before it is needed except the first panel, walks no growing collection, and **reuses the shared window control** rather than adding a second one. Those are the console's own standing rules and they are restated here so a worker reading one row does not have to find them ([`../docs/concepts/console-design.md`](../docs/concepts/console-design.md), [`../docs/architecture/publishing/console.md`](../docs/architecture/publishing/console.md)).
 
-**Prerender is legacy, and no row here adds a claim to it.** It is live today - `.github/workflows/ci.yml` runs the guard, `frontend/prerender-guard.js` exists, and **23 pages under `docs/` name it** (counted 2026-09-11; this plan's own brief said 11). **No row in this plan asserts that prerendered output is byte-identical, and no row removes prerendering.** The app shell should not use it and retiring it is a user-interface change; it is named in section 18 as a gap nobody owns, and no `TODO/` plan owns it today.
+**Prerender is legacy in one half and a live decision in the other, and no row here adds a claim to either.** Six routes are prerendered - `/`, `/archive/`, `/evals/` and the three console routes - and the two dated reading routes are not. **No row in this plan asserts that prerendered output is byte-identical, and no row removes prerendering.** It is owned since 2026-09-11 by [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md), which rules that the six routes stay and that `frontend/prerender-guard.js` goes; before that it was named in section 18 as a gap nobody owned. **The console rows below inherit the ruling and prerender nothing new.**
 
 ### 0.1a The gate sets, written out once so a row can name one
 
@@ -671,13 +671,13 @@ Two changes, about six lines. **Drop `.tab-line` below about 40rem**, and **cut 
 
 ### The relationship with plan 23, stated rather than left to collide
 
-**Plan 23 carries a console row for the same surface, under the route id `classification`.** Both cannot create one route. The rule, so whichever is dispatched first can act without asking:
+**Plan 23 carries a console row for the same surface, and until 2026-09-11 it carried it under the route id `classification`.** Both cannot create one route. The rule, so whichever is dispatched first can act without asking:
 
-- **The address is `/console/judgement/` and the label is `Judgement`.** One route, one directory, one payload directory.
-- **If plan 23's console row has landed when this row is dispatched, this row moves that route to `/console/judgement/` and extends it.** If it has not, row #11 has already opened the empty page and this row fills it.
+- **The address is `/console/judgement/` and the label is `Judgement`.** One route, one directory, one payload directory. **Owner ruling, 2026-09-11**: `judgement` wins, and plan 23 row #15 was re-addressed to it in the same pull request that recorded this - its decision 6.
+- **If plan 23's console row has landed when this row is dispatched, this row extends that route.** If it has not, row #11 has already opened the empty page and this row fills it. Neither row moves the route any more, because both now name the same one.
 - Either way **the panel set below is the one that ships**, because it is the one Susan ruled and the owner amended.
 
-This is recorded here rather than in plan 23 because a worker may not edit another plan's doc mid-flight. It is also a **cross-plan** collision rather than a within-group one, so section 1's disjointness rule does not catch it and nothing else would.
+This was recorded here rather than in plan 23 because a worker may not edit another plan's doc mid-flight; the owner's ruling lifted that, and both plans now carry it. It is also a **cross-plan** collision rather than a within-group one, so section 1's disjointness rule does not catch it and nothing else would.
 
 ### The panel set, ruled by Susan on 2026-09-11 with the owner amending two
 
@@ -826,6 +826,7 @@ The threshold is **config, and the project already has the number**: `collect.so
   - both schemas carry today's `version` and a `changelog` entry, and the day-metrics fields are **optional**, because 22 committed day records do not carry them;
   - `backend/tests/test_marks.py` passes, so the new module is classified;
   - `docs/concepts/placement.md` gains the target and the divergence, on the page row #2 created.
+- **A second plan writes the same three files, and it is also numbered row #14.** [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) row #14 adds a `DayTaxonomy` block to `backend/idhazh/contracts/day_metrics.py`, `schemas/day-metrics.schema.json` and `backend/idhazh/publish_day_metrics.py`, and a block to the same `state/day-metrics/<YYYY>/<MM>/<DD>.json`. **Neither row blocks the other and both may land**, because the two blocks are disjoint - the taxonomy there, the divergence here - and both are declared optional against the day files already on disk. **Whichever lands second re-runs `python -m idhazh.contracts.export` and reads the other's `changelog` entry before adding its own**, because the drift gate fails on a byte and two entries dated the same day need the minute form (`CLAUDE.md` section 11). Found 2026-09-11; neither plan named it before.
 - **Oracle:** **A day drawn exactly to the target scores zero, and moving one story from the largest desk to the smallest strictly lowers the score.** Both halves on a built fixture. The first is the identity every divergence must satisfy and it catches a normalisation that is off; the second is monotonicity and it catches a measure that rewards the concentration it is meant to report. **Built rather than sampled**, because no committed day is drawn to a target that did not exist when it published.
 - **What this row does not do:** **it changes no order.** It reports. The divergence reaches no score, and ESCALATE trigger 8 fires on a row that wires it into the ranker.
 
@@ -911,14 +912,15 @@ Named here so they are not mistaken for work this plan is doing.
 | Branch protection on `main` | It is off, and it is the only control that would actually stop a workflow pushing to the default branch | It interacts with `prune.yml`'s scheduled force-push, which is `CLAUDE.md` section 8's one exception. It is a repository setting and a decision about the whole repository |
 | A reader-visible reason for a story's position | The leading block explains its five; the other 355 stories have a position and no sentence. `digest.md` refuses numerals for good reasons and those reasons apply here too | It needs a vocabulary this plan does not have. Naming it is not the same as owning it |
 | `events` and `entities` rendered nowhere | Inherited from plan 23 section 26 and still true | Owned by no row of any plan. Row #12 draws both on the **operator** console, which is a different surface from the page a reader opens |
-| Retiring prerender from the app shell | It is live: `.github/workflows/ci.yml` runs the guard, `frontend/prerender-guard.js` exists, and **23 pages under `docs/` name it** (counted 2026-09-11). The app shell should not use it | It is a user-interface change and it belongs to a shell plan. **No plan-doc in `TODO/` owns it today.** Section 0.1 forbids any row here from asserting byte identity over prerendered output or from removing prerendering |
+| Retiring prerender from the app shell | Six routes are prerendered and the two dated reading routes are not. **Owned since 2026-09-11** | [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) took it. That plan rules the six routes stay and the build-time guard goes, and prices the reversal. Section 0.1 still forbids any row here from asserting byte identity over prerendered output or from removing prerendering |
 | A second derivation of `ledger.reliability` | `frontend/src/lib/feed-health.ts` exports a `reliability` that is a clean-read census, and `backend/idhazh/ledger.py` exports a `reliability` that is the ranking multiplier. Two names, two quantities | Row #13 draws the second and renames neither. A rename crosses `backend/` and `frontend/` for no behaviour, and naming the collision is what stops the next reader assuming they agree |
 
 ---
 
 ## See also
 
-- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - the plan that named this work and left it; its row #6 changes what names a desk and its row #16 is where an auto-created vertical comes from.
+- [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - the plan that named this work and left it; its row #6 changes what names a desk and its row #16 is where an auto-created vertical comes from. Its row #15 builds the same `/console/judgement/` tab as row #12 here.
+- [`20260911-26-retire-prerender-plan.md`](20260911-26-retire-prerender-plan.md) - the plan that took the prerender gap out of section 18, and the ruling section 0.1 now inherits.
 - [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the decision and research record for the conversation this plan split out of; its section 4 is the finding that a list like this one is graded against a target distribution rather than a learned score.
 - [`../docs/concepts/digest.md`](../docs/concepts/digest.md) - the leading block, the four why-lines, and the claim about carriage that the page refuses and the ranker made.
 - [`../docs/architecture/sources/discovery.md`](../docs/architecture/sources/discovery.md) - the score as it stands, and the section rows #1, #3 and #4 rewrite.
