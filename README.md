@@ -51,7 +51,7 @@ flowchart TD
 
     subgraph read["Read time - a static page"]
         direction TB
-        G["<b>Prerendered pages</b><br/>digest, archive, scores"]
+        G["<b>Two kinds of page</b><br/>home, archive, scores prerendered<br/>a day page renders in the browser"]
         H["<b>On-device search</b><br/>optional, reader-initiated"]
         G -.->|"only if you click"| H
     end
@@ -61,7 +61,8 @@ flowchart TD
 ```
 
 The line between the two boxes is the whole design: **everything expensive
-happens before you arrive.** The summaries are already in the HTML.
+happens before you arrive.** The summaries are written and committed; a page
+only reads them.
 
 ### The one rule that shapes everything
 
