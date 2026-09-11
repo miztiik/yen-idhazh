@@ -518,9 +518,21 @@ expensive.
 Both budgets are derived from the reply shape's own bounds by the same arithmetic rather than one
 being the other minus the plan's - two ways of computing one quantity disagree the first time a
 bound moves, and the one that is wrong is the one nobody reads. The saving is 3,789 tokens off the
-ceiling, which is 81 percent of it; **a ceiling is not a measurement of seconds**, and the "21
-measured seconds" this page used to quote was a saving for skipping a whole call, which cannot
-happen. That figure is withdrawn rather than re-used.
+ceiling, which is 81 percent of it.
+
+**A ceiling is not a measurement of seconds, so here is one.** The "21 measured seconds" this page
+used to quote was a saving for skipping a whole call, which cannot happen, and that figure is
+withdrawn rather than re-used. What the gate really saves is the plan's decode. Measured 2026-09-11
+by tokenising the committed call-2 reply with `Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`: the
+whole reply is **327 tokens**, the summary alone is **152**, and the plan half is **176** - so a
+plan is 54 percent of what an ordinary reply decodes. At the 6.01 tok/s the summarizer decodes at
+(`ubuntu-latest`, 2026-08-23) that is **29.3 seconds an item**, on the items the gate fires for.
+**It is one reply and not a distribution**: no stage dispatches call 2 yet, so the fixture is
+written by hand, and this sizes the saving rather than measuring a run. (176 by direct count and 175
+by subtracting the summary from the whole - the one-token gap is a merge across the object
+boundary.) How often the gate fires is the other half of the bill and is a run measurement nobody
+has taken on the two-call flow; the single-call gate's own rate was 46.9 percent of items, measured
+on 2026-08-25.
 
 **The prompt loses its plan half too, and that is the same rule read a second time.** A turn that
 asks for a title, a caption and a reason the grammar has nowhere to put does not simply get ignored:

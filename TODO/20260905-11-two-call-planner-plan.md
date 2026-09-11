@@ -256,7 +256,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **The gate suppresses the plan fields inside call 2; it never skips the call**, because call 2 writes the summary. What is saved is the plan's decode, not the call | O43, section 14.5 |
-| 2 | The old "21 measured seconds" saving was for skipping a whole call, which cannot happen. **The figure is withdrawn** rather than re-used; the plan-decode saving is a different number and this row measures it | Section 14.5 |
+| 2 | The old "21 measured seconds" saving was for skipping a whole call, which cannot happen. **The figure is withdrawn** rather than re-used; the plan-decode saving is a different number and this row measures it. **Measured 2026-09-11**: tokenising the committed call-2 reply with `Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize` gives 327 tokens whole, 152 for the summary alone and 176 for the plan half - 54 percent of an ordinary reply's decode, which is 29.3 s an item at the summarizer's measured 6.01 tok/s. One reply and not a distribution, because no stage dispatches call 2 yet | Section 14.5 |
 | 3 | Four invariance rules on the ladder: element set unchanged, purpose survives, escalating floor, and **re-validation** - a downgraded plan re-enters the **same** validator and the **same** compiler, and a depth that fails falls to the next depth rather than publishing | Row 50, 12.7 G8 |
 | 4 | Depths 2 and 3 need their percentiles named; the source document ships a ladder with one named rung | 12.6 G2 |
 | 5 | A **static allow-list of legal downgrade edges**, or the ladder can walk a comparison into a timeline and record it as legal. The cross-family ban is what "purpose survives" implies and never states | 12.6 G4 |

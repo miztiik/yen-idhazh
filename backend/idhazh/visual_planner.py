@@ -1730,8 +1730,9 @@ CALL_TWO_BUDGET_TOKENS: Final = 4694
 #: The same arithmetic with the plan off the grammar. The gap between the two is
 #: what the reachability gate saves per item, and it is a decode rather than a
 #: call (O43): 3,789 tokens off a 4,694-token ceiling, which is 81 percent of it.
-#: A ceiling is not a measurement of seconds - what an ordinary plan really
-#: decodes is in `docs/architecture/publishing/visuals.md`.
+#: A ceiling is not a measurement of seconds - an ordinary reply's plan half was
+#: measured at 176 tokens of 327, which is 29.3 s at the summarizer's decode
+#: rate. The working is in `docs/architecture/publishing/visuals.md`.
 SUPPRESSED_BUDGET_TOKENS: Final = 905
 
 if call_two_output_tokens() != CALL_TWO_BUDGET_TOKENS:
