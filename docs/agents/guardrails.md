@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-11
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
@@ -93,7 +93,7 @@ A message with no options is a status update, not a decision request, and does n
 - **Runtime telemetry / analytics SDKs / third-party runtime scripts.**
 - **Republishing article bodies to a reader.** Publish the link and our own summary. `corpus/` is the one exception: it holds source text as training samples, and nothing renders it, links to it, or serves it.
 - **Paywalled or login-walled sources.** If `robots.txt` or a paywall says no, the answer is no.
-- **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement. It never grades a published summary or visual and never selects what publishes. One offline exception: the write-critique-revise prompt loop (`backend/utilities/prompt_loop.py`) may use a model judge to PROPOSE a revised summariser prompt, because a deterministic, model-free gate DISPOSES; the judge promotes nothing and nothing it produces reaches a reader. See `CLAUDE.md` section 0a.
+- **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement. **The property is one sentence: a model verdict that reaches no reader and selects nothing to publish is not a section 0a deviation.** Two things stay banned whether or not a verdict satisfies the property, and those two are the whole of the ban. **A model may not grade a published summary, and it may not grade a published visual.** **A model may not select what publishes** - a label says what a story is about; it never decides whether the story runs. Those verdicts are deterministic or human. A verdict that is neither of those two is permitted. So a model that labels, drafts or proposes needs no exception written for it: the write-critique-revise prompt loop (`backend/utilities/prompt_loop.py`) is the worked example, where a model judge PROPOSES a revised summariser prompt, a deterministic, model-free gate DISPOSES, the judge promotes nothing and nothing it produces reaches a reader. See `CLAUDE.md` section 0a.
 - **Training on the runner, GPU runners, and models that do not fit the runner.** Training elsewhere is allowed; the runner only opens finished weights. A fine-tuned model is an ordinary candidate and enters through the same qualification as any other.
 - **Accessibility framework / audit tooling.** Descoped at project level; basic ARIA and keyboard navigation ARE in scope. See `CLAUDE.md` section 0a.
 
