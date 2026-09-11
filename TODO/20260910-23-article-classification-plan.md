@@ -1179,6 +1179,7 @@ Named here so they are not mistaken for work this plan is doing.
 - [`20260905-11-two-call-planner-plan.md`](20260905-11-two-call-planner-plan.md) - the plan this one spawned from; its rows 4, 5 and 6 gate every labelling row here.
 - [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) - the five month-sharded ledgers section 0 puts out of scope, planned.
 - [`20260910-25-placement-plan.md`](20260910-25-placement-plan.md) - the plan this one spawned; it decides where a story goes, and its rows #7 and #8 are what stops a read desk turning a five-desk day into a one-desk day.
+- [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the decision and research record for the conversation that wrote this plan: the owner decisions with their dates, the measurements with their provenance, the papers, and the alternatives that were rejected and why.
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record O43, E1 and E5 come from.
 - [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - what a read over a growing collection must declare.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a worker runs a row, and where the no-two-rows-one-file rule comes from.

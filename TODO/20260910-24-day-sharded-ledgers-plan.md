@@ -474,6 +474,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 ## See also
 
 - [`20260910-23-article-classification-plan.md`](20260910-23-article-classification-plan.md) - the plan this split out of; its section 0 names this work and its section 26 names the same open gaps.
+- [`20260911-classification-research-record.md`](20260911-classification-research-record.md) - the decision and research record for the conversation this plan split out of, including the measurements its budget arithmetic rests on.
 - [`20260907-growing-reads-window-plan.md`](20260907-growing-reads-window-plan.md) - the plan that put a cover on every read over a growing collection; row #1 repoints its links to the renamed partitions page.
 - [`../docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - what a read over a growing collection must declare, and the four cover rows this plan rewrites.
 - [`../docs/concepts/month-partitions.md`](../docs/concepts/month-partitions.md) - the page row #1 renames to `partitions.md`; the layout rule it carries is the one every row here obeys.
