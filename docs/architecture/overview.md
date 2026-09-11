@@ -1,6 +1,6 @@
 # Architecture overview
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-12
 
 How the whole system fits together, in one page. Every box here has a deeper
 document behind it; this page exists so you can find the right one.
@@ -33,8 +33,8 @@ flowchart LR
 
  subgraph fe["frontend/ - GitHub Pages"]
  direction TB
- B["prerender at build time"]
- S["static pages<br/><i>digest, archive, scores</i>"]
+ B["prerender at build time<br/><i>home, archive, scores, console</i>"]
+ S["static pages<br/><i>a day page reads the JSON in the browser</i>"]
  B --> S
  end
 
