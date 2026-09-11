@@ -171,7 +171,7 @@ Re-derived 2026-09-10 from the committed ledgers and the committed archive in th
 
 **The token budget every labelling row is priced against, and it is no longer an allowance - it is a measurement.** A "shard" here is one worker's slice of a run - 80 items over `run.max_parallel` 4, so 20 items - and `run.shard_timeout_minutes` 200 is the timeout on that worker's job. Ten percent of the 107.1-minute escalate headroom is 10.7 minutes a shard, which over 20 items is **32.1 seconds an item**, and at the measured 5.45 tok/s that is a ceiling of **about 175 new output tokens an item**. **A complete, realistic call-1 label reply is 67 tokens** - so this plan's labels fit inside a little over a third of the allowance, and every row states its share against the 67 rather than against the ceiling.
 
-**The two token counts, and where they come from.** Measured 2026-09-11 with `llama-tokenize` against the pinned `Qwen3-8B-Q4_K_M`, on an Intel Core i7-1265U. **Tokenization is deterministic, so there is no spread** - the same string against the same vocabulary gives the same count every time.
+**The three token counts, and where they come from.** Measured 2026-09-11 with `llama-tokenize` against the pinned `Qwen3-8B-Q4_K_M`, on an Intel Core i7-1265U. **Tokenization is deterministic, so there is no spread** - the same string against the same vocabulary gives the same count every time.
 
 | What was tokenized | Tokens |
 | --- | --- |
