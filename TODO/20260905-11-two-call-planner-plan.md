@@ -323,6 +323,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 
 ## See also
 
+- [`20260911-handover.md`](20260911-handover.md) - how to pick this queue up with no context: the queue reader, the reading order, and the standing traps.
 - [`20260911-execution-order.md`](20260911-execution-order.md) - the schedule across the five open plans. **Rows #4 and #5 here are the fifth and sixth heaviest constraints in the project**, and section 3 there carries the cross-plan file collisions this plan's `parallel N = 1` cannot see.
 - [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the decision record this group executes.
 - [`20260905-10-visual-plan-contract-plan.md`](20260905-10-visual-plan-contract-plan.md) - the previous plan.
