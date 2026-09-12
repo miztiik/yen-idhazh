@@ -12,7 +12,7 @@ Code Copilot Chat (`.github/agents/*.agent.md`). ASCII only in agent markdown:
 ## The ritual
 
 1. **[`CLAUDE.md`](../../CLAUDE.md), end to end.** The contract. Know which of
- Rules #1-#11 are load-bearing here and cite them by number. Section 0d
+ Rules #1-#12 are load-bearing here and cite them by number. Section 0d
  (intent above the contract, the contract above code) and the section 1
  preamble are read first, every session.
 2. **[`guardrails.md`](guardrails.md).** Non-goals, git hygiene, stop
