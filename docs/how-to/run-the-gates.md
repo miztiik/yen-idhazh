@@ -692,8 +692,9 @@ cannot test.
 
 **Known defect: the canary item ids do not satisfy the item-id grammar.**
 `frontend/scripts/build-canary.mjs` writes ids like `tail-1-0` and `cut-a-0`,
-and `ITEM_ID_PATTERN` in `backend/idhazh/contracts/base.py` needs at least two
-trailing digits - so 76 of the 87 canary rows would be refused by `ItemHealthRow`
+and `ITEM_ID_PATTERN` in `backend/idhazh/contracts/base.py` takes two trailing
+shapes and neither of them - at least two decimal digits, or sixteen Crockford
+base32 symbols - so 76 of the 87 canary rows would be refused by `ItemHealthRow`
 if anything validated them. Nothing does: the browser suite reads the CSV
 directly, and the published projection carries `item_id` as an opaque key on
 purpose, because a committed shard has no writer left to re-mint an id if that

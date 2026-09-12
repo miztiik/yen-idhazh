@@ -32,8 +32,8 @@ SUFFIX: Final = ".svg"
 def asset_relpath(date: str, item_id: str) -> str:
     """`digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, POSIX and digest-free.
 
-    The name is the item's own id - the same `<vertical>-<ten digits>` a reader
-    already lands on as an anchor - so the path is a function of the item and of
+    The name is the item's own id - the same `<vertical>-<id>` a reader already
+    lands on as an anchor - so the path is a function of the item and of
     nothing else. A counter has to be seeded from somewhere, and the only thing
     available to seed it from was the day's directory: two runs of one day read
     that directory before either had pushed, both wrote `energy-03.svg` for
