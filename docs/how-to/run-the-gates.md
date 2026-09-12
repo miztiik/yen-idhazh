@@ -129,6 +129,23 @@ carrying code, and any change to the contracts, the tooling or a committed
 payload under `frontend/public/`, open all of them; every other change opens
 none.
 
+**A push to `main` keeps the run it started.** A pull request cancels its own
+older run, because a newer commit supersedes it. A push does not, and the two
+rules are linked: `scope` answers from each push's own changed paths, so a
+documentation push that cancelled a code push would leave that code with no
+verdict on the trunk - the surviving run checks nothing, correctly, because
+nothing in its own range needed checking. Measured 2026-09-12, before this was
+fixed: two pushes carrying 14 code files between them were cancelled by a third
+that changed one plan-doc. The cost, stated rather than implied: several pushes
+landing together now run several suites at once instead of one, against the
+account's twenty concurrent jobs (`CLAUDE.md` Guardrail #2).
+
+**The pipeline's own pushes start no run at all.** A commit pushed with the
+workflow token does not trigger another workflow, which is GitHub's loop guard
+rather than a filter this repository wrote. So the daily digest, visuals and
+state commits cost nothing here, and `digest.yml` and `backfill.yml` run
+`validate-days` before their own commit because `ci.yml` never sees it.
+
 For a local contract change, the launcher compares schema files before and
 after export. Correct uncommitted generated files can pass; an exporter that
 changes them requires review and a new run. CI still compares its clean

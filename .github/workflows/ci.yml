@@ -24,8 +24,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request groups by its ref, so a newer commit cancels the run its
+  # older commit started - the older commit is superseded and its verdict is
+  # worth nothing. A push groups by its own commit instead, so it shares a
+  # group with nothing and is neither cancelled nor queued behind the next
+  # push.
+  #
+  # A trunk push is not superseded by the next one, because `scope` answers
+  # from each push's own changed paths. Measured 2026-09-12, before this was
+  # fixed: two pushes carrying 14 code files between them were cancelled by a
+  # third that changed one plan-doc, and that third run correctly skipped every
+  # application job - so the code reached `main` with no verdict on `main`.
+  group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # What a change has to pay for. Two questions, not one.
