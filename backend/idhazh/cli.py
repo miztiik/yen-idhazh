@@ -3360,6 +3360,8 @@ def stage_assemble(
         console=settings.appearance.console,
         run=settings.app.run,
         collect=settings.app.collect,
+        # Already folded above, so the Voices route costs no second read.
+        sources=source_health.sources,
     )
     yield_alarm = publish_source_health.yield_alarm(
         source_health,

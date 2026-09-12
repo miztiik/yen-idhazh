@@ -3,11 +3,11 @@ import { BAND_UNREAD, readBand } from '$lib/console/band';
 
 export const prerender = true;
 
-/** The band, the strip and the months list, fetched once for all three routes.
+/** The band, the strip and the months list, fetched once for every route.
  *
  * **It is a universal load and that is the whole design.** At build time it runs
  * in Node and SvelteKit resolves the fetch against the staged payload, so the
- * band is real markup in each of the three documents and an operator on a dead
+ * band is real markup in each prerendered document and an operator on a dead
  * connection still reads the verdict. In a browser the same code runs again on a
  * client-side move between routes, so the strip follows him without a second
  * document.
