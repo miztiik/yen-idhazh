@@ -75,7 +75,7 @@
     },
     "DigestVerticalRef": {
       "additionalProperties": false,
-      "description": "One desk of the day, and why it ran what it ran.\n\n`count` is every story the desk published, including one the duplicate pass\ngrouped behind another - nothing is unpublished by that pass, so the number\nis the payload's own and not what the default view happens to draw.\n\nThe three shortfall fields are the day's strongest reading of each: the\nlargest any run of the day recorded. A later run has already taken what an\nearlier one published, so it sees a smaller pool of the same stories -\nsumming the runs would count one back-catalogue story once per run.\n\nAll three are null together on a day published before they existed, and a\nnull is unknown rather than a zero, which would claim the feeds offered this\ndesk nothing.",
+      "description": "One topic of the day, and why it ran what it ran.\n\n**It carries two counts and they answer two questions.** `count` is every\nstory whose carrying feed declares this vertical. `desk_count` is every\nstory the day publishes under this name, which is what a reader sees. They\nare equal on every day nothing relabelled, and a page that wants the number\non the screen reads `desk_count` and falls back to `count`.\n\nBoth include a story the duplicate pass grouped behind another - nothing is\nunpublished by that pass, so the numbers are the payload's own and not what\nthe default view happens to draw.\n\nThe three shortfall fields are vertical facts, because collection is per\nfeed and a feed declares a vertical. Each is the day's strongest reading:\nthe largest any run of the day recorded. A later run has already taken what\nan earlier one published, so it sees a smaller pool of the same stories -\nsumming the runs would count one back-catalogue story once per run.\n\nAll three are null together on a day published before they existed, and a\nnull is unknown rather than a zero, which would claim the feeds offered this\nvertical nothing.",
       "properties": {
         "below_feed_floor": {
           "anyOf": [
@@ -87,7 +87,7 @@
             }
           ],
           "default": null,
-          "description": "Some run today found fewer live feeds than this desk's floor, so that run planned nothing for it. Published for the operator surfaces; the reading page never draws a sentence from it, because how many of our feeds answered is a fact about our pipeline rather than about a story.",
+          "description": "Some run today found fewer live feeds than this vertical's floor, so that run planned nothing for it. Published for the operator surfaces; the reading page never draws a sentence from it, because how many of our feeds answered is a fact about our pipeline rather than about a story.",
           "title": "Below Feed Floor"
         },
         "considered": {
@@ -101,13 +101,28 @@
             }
           ],
           "default": null,
-          "description": "Distinct addresses the feeds offered this desk today, less what the day had already published or already failed on. It is not an upper bound on `count`: each run counts its own pool and the day's stories accumulate across runs.",
+          "description": "Distinct addresses the feeds offered this vertical today, less what the day had already published or already failed on. It is not an upper bound on `count`: each run counts its own pool and the day's stories accumulate across runs.",
           "title": "Considered"
         },
         "count": {
+          "description": "Stories whose carrying feed declares this vertical. It is not what the page draws where a story was relabelled - `desk_count` is - and it keeps this meaning because 22 frozen published days already carry it.",
           "minimum": 0,
           "title": "Count",
           "type": "integer"
+        },
+        "desk_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stories this day publishes under this name, which is the number a reader sees. Equal to `count` on a day nothing relabelled. Null on a day published before this field existed, where a page falls back to `count`.",
+          "title": "Desk Count"
         },
         "display_name": {
           "minLength": 1,
@@ -130,7 +145,7 @@
             }
           ],
           "default": null,
-          "description": "Of those, how many were past collect.max_age_hours. A desk fed by a back catalogue thins for this reason and no other, and a thin desk that cannot say why reads as a broken run.",
+          "description": "Of those, how many were past collect.max_age_hours. A vertical fed by a back catalogue thins for this reason and no other, and a thin topic that cannot say why reads as a broken run.",
           "title": "Too Old"
         }
       },
@@ -188,6 +203,20 @@
           "default": null,
           "description": "How many feeds carried this one address. Null is unknown, never 1.",
           "title": "Carried By"
+        },
+        "desk": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the day publishes this story, which is the topic a reader finds it under. Null says nothing relabelled it and the page falls back to `vertical`. Null is never read as a desk of its own.",
+          "title": "Desk"
         },
         "introduced_by_run": {
           "description": "A global fact, true for every reader, asserted without any storage.",
@@ -445,6 +474,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added DigestViewItem.desk, so a served item says which topic the day publishes it under. DigestVerticalRef, which this file reuses, gained desk_count beside count; count keeps meaning the vertical count.",
+      "version": "2026-09-12T06:56",
+      "why": "This is the copy a browser fetches, and the reading page is what groups stories under a topic - so a desk the committed day knows and this file drops is a grouping the page cannot make. Additive and optional: an older shell ignores a key it does not know, and a newer shell reading a payload written before today sees null and falls back to `vertical`, which is what every one of those days meant. So nothing else is owed on the read side (section 11). Costs one name on the item list, which is the per-item half of the wire; the day-level desk_count rides on `verticals`, which was already carried."
+    },
+    {
       "change": "lenses on a served item is a list of Slug rather than of the closed LensId enum, which is deleted. The schema gates the slug pattern and no longer enumerates the members.",
       "version": "2026-09-12T03:55",
       "why": "This is the payload a browser fetches, so the enum was a second copy of the vocabulary that had to be regenerated and redeployed before a config edit could take effect. Read-compatible, and here that is a promise to a device rather than to a job: a service worker keeps days, so a shell holding a payload written weeks ago reads every id it carries unchanged. The reading side takes the other half of the same change - it renders an id the committed vocabulary cannot name rather than dropping the chip, so a day cannot quietly stop saying what it said (section 11)."
@@ -588,7 +622,7 @@
       "title": "Runs"
     },
     "version": {
-      "default": "2026-09-12T03:55",
+      "default": "2026-09-12T06:56",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -615,5 +649,5 @@
   ],
   "title": "DigestView",
   "type": "object",
-  "version": "2026-09-12T03:55"
+  "version": "2026-09-12T06:56"
 }

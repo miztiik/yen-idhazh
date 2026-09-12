@@ -34,10 +34,17 @@ is the ordinary state of a day with too few stories worth leading. It is
 chosen after the duplicate pass has run, so the block reads the day the way
 the reader will see it.
 
-`considered`, `too_old` and `below_feed_floor` on a desk are what the planning
-step already knew and threw away. They are why a desk is thin, so a quiet desk
-and a broken feed stop looking identical. All three are null on a day published
-before they existed.
+`considered`, `too_old` and `below_feed_floor` on a vertical are what the
+planning step already knew and threw away. They are why a vertical is thin, so
+a quiet vertical and a broken feed stop looking identical. All three are null on
+a day published before they existed.
+
+**`vertical` and `desk` are two different words and this file uses each for one
+thing only.** A vertical is what the feed carrying the story declares about
+itself, and it is what `item_id` is addressed from, so it never moves. A desk is
+where the day publishes the story. They agree on every story nothing has
+relabelled, and `desk` is null there - absent is unknown, and a reader falls
+back to the vertical rather than reading a null as a desk.
 """
 
 from __future__ import annotations
@@ -87,32 +94,55 @@ class DigestRunRef(Model):
 
 
 class DigestVerticalRef(Model):
-    """One desk of the day, and why it ran what it ran.
+    """One topic of the day, and why it ran what it ran.
 
-    `count` is every story the desk published, including one the duplicate pass
-    grouped behind another - nothing is unpublished by that pass, so the number
-    is the payload's own and not what the default view happens to draw.
+    **It carries two counts and they answer two questions.** `count` is every
+    story whose carrying feed declares this vertical. `desk_count` is every
+    story the day publishes under this name, which is what a reader sees. They
+    are equal on every day nothing relabelled, and a page that wants the number
+    on the screen reads `desk_count` and falls back to `count`.
 
-    The three shortfall fields are the day's strongest reading of each: the
-    largest any run of the day recorded. A later run has already taken what an
-    earlier one published, so it sees a smaller pool of the same stories -
+    Both include a story the duplicate pass grouped behind another - nothing is
+    unpublished by that pass, so the numbers are the payload's own and not what
+    the default view happens to draw.
+
+    The three shortfall fields are vertical facts, because collection is per
+    feed and a feed declares a vertical. Each is the day's strongest reading:
+    the largest any run of the day recorded. A later run has already taken what
+    an earlier one published, so it sees a smaller pool of the same stories -
     summing the runs would count one back-catalogue story once per run.
 
     All three are null together on a day published before they existed, and a
     null is unknown rather than a zero, which would claim the feeds offered this
-    desk nothing.
+    vertical nothing.
     """
 
     id: Slug
     display_name: str = Field(min_length=1)
-    count: int = Field(ge=0)
+    count: int = Field(
+        ge=0,
+        description=(
+            "Stories whose carrying feed declares this vertical. It is not what the "
+            "page draws where a story was relabelled - `desk_count` is - and it keeps "
+            "this meaning because 22 frozen published days already carry it."
+        ),
+    )
+    desk_count: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Stories this day publishes under this name, which is the number a reader "
+            "sees. Equal to `count` on a day nothing relabelled. Null on a day "
+            "published before this field existed, where a page falls back to `count`."
+        ),
+    )
     considered: int | None = Field(
         default=None,
         ge=0,
         description=(
-            "Distinct addresses the feeds offered this desk today, less what the day "
-            "had already published or already failed on. It is not an upper bound on "
-            "`count`: each run counts its own pool and the day's stories accumulate "
+            "Distinct addresses the feeds offered this vertical today, less what the "
+            "day had already published or already failed on. It is not an upper bound "
+            "on `count`: each run counts its own pool and the day's stories accumulate "
             "across runs."
         ),
     )
@@ -120,18 +150,18 @@ class DigestVerticalRef(Model):
         default=None,
         ge=0,
         description=(
-            "Of those, how many were past collect.max_age_hours. A desk fed by a back "
-            "catalogue thins for this reason and no other, and a thin desk that cannot "
-            "say why reads as a broken run."
+            "Of those, how many were past collect.max_age_hours. A vertical fed by a "
+            "back catalogue thins for this reason and no other, and a thin topic that "
+            "cannot say why reads as a broken run."
         ),
     )
     below_feed_floor: bool | None = Field(
         default=None,
         description=(
-            "Some run today found fewer live feeds than this desk's floor, so that run "
-            "planned nothing for it. Published for the operator surfaces; the reading "
-            "page never draws a sentence from it, because how many of our feeds "
-            "answered is a fact about our pipeline rather than about a story."
+            "Some run today found fewer live feeds than this vertical's floor, so that "
+            "run planned nothing for it. Published for the operator surfaces; the "
+            "reading page never draws a sentence from it, because how many of our "
+            "feeds answered is a fact about our pipeline rather than about a story."
         ),
     )
 
@@ -143,10 +173,10 @@ class DigestVerticalRef(Model):
             self.below_feed_floor is None,
         ]
         if any(absent) and not all(absent):
-            raise ValueError("a desk carries every shortfall field or none of them")
+            raise ValueError("a topic carries every shortfall field or none of them")
         if self.considered is not None and self.too_old is not None:
             if self.too_old > self.considered:
-                raise ValueError("a desk cannot drop more stories than it considered")
+                raise ValueError("a topic cannot drop more stories than it considered")
         return self
 
 
@@ -174,7 +204,20 @@ class DigestItem(Model):
     """One item as a reader consumes it. The link is a first-class element, not a footnote."""
 
     item_id: ItemId
-    vertical: Slug
+    vertical: Slug = Field(
+        description=(
+            "The vertical the carrying feed declares. `item_id` is addressed from it, "
+            "so it is the story's address and never a reading of the story."
+        )
+    )
+    desk: Slug | None = Field(
+        default=None,
+        description=(
+            "Where the day publishes this story, which is the topic a reader finds it "
+            "under. Null says nothing relabelled it and a page falls back to "
+            "`vertical`; null is never read as a desk of its own."
+        ),
+    )
     title: UntrustedLine
     source_url: Url
     source_id: Slug
@@ -245,8 +288,9 @@ class DigestItem(Model):
         ge=0.0,
         description=(
             "What the planning step scored this story at, against the other stories of "
-            "its own desk. Comparable across the day because every desk uses one scale. "
-            "Null where the run did not record it, which is not the same as 0."
+            "its own vertical. Comparable across the day because every vertical uses "
+            "one scale. Null where the run did not record it, which is not the same "
+            "as 0."
         ),
     )
     also_covered_by: int | None = Field(
@@ -354,6 +398,29 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T06:56",
+            change=(
+                "Added DigestItem.desk - where the day publishes a story - and "
+                "DigestVerticalRef.desk_count beside count. DigestVerticalRef.count "
+                "keeps meaning the vertical count. Every use of the word desk for the "
+                "vertical was rewritten in the same commit."
+            ),
+            why=(
+                "One word was doing two jobs across the whole file, and a reader has no "
+                "way to tell which job a given sentence meant. A vertical is what the "
+                "carrying feed declares and what item_id is addressed from; a desk is "
+                "where the day publishes the story. Redefining count in place was "
+                "refused: 22 frozen published days already carry it, a published day is "
+                "never rewritten, and nothing in the payload would say which of the two "
+                "meanings a given day's number holds - so the second number is a second "
+                "field and a page prefers desk_count where it is present. Both new "
+                "fields are optional and null on every day published before today - 22 "
+                "days, 106 vertical refs and 8,922 items, measured 2026-09-12 - where "
+                "null reads as unknown and a page falls back to the vertical (section "
+                "11). Nothing fills desk yet; the model that will is a later row."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T03:55",
             change=(
                 "DigestItem.lenses and DigestItem.events are lists of Slug rather than "
@@ -403,21 +470,21 @@ class DigestDay(Contract):
         ),
         ChangelogEntry(
             version="2026-09-02T16:00",
-            change="Added considered, too_old and below_feed_floor to each desk of the day.",
+            change="Added considered, too_old and below_feed_floor to each vertical of the day.",
             why=(
-                "A desk that published three stories looked exactly like a desk whose "
+                "A vertical that published three stories looked exactly like one whose "
                 "feeds had broken, and the page had nothing to tell them apart with. "
                 "The planning step already counted what the feeds offered and how much "
                 "of it was a back catalogue; it wrote both into the run plan and "
-                "published neither, so the reading page could not say why a desk was "
+                "published neither, so the reading page could not say why a topic was "
                 "thin. Nothing new is computed. Each field is the largest any run of "
                 "the day recorded rather than the sum, because a later run has already "
                 "taken what an earlier one published and would count the same "
                 "back-catalogue story twice. All three are optional, arrive together, "
                 "and are null on every day published before this - 12 days, 56 "
-                "desk-days and 4,713 items when this landed, 2026-09-02 - and a null "
-                "reads as unknown, never as 0, which would claim the feeds offered a "
-                "desk nothing (section 11)."
+                "vertical-days and 4,713 items when this landed, 2026-09-02 - and a "
+                "null reads as unknown, never as 0, which would claim the feeds offered "
+                "a vertical nothing (section 11)."
             ),
         ),
         ChangelogEntry(
@@ -425,7 +492,7 @@ class DigestDay(Contract):
             change="Added leads: the day's leading stories, each with the reason it leads.",
             why=(
                 "The page had no first screen. Its opening stories were whichever "
-                "desk sorted first in run 1, which is an accident rather than an "
+                "vertical sorted first in run 1, which is an accident rather than an "
                 "edit, and the reader could not see why any story was there. The "
                 "block is chosen across the whole day from the ranking signal the "
                 "item already publishes plus a shared-subject term computed here, "
@@ -597,10 +664,18 @@ class DigestDay(Contract):
         for item in self.items:
             if item.vertical not in counted:
                 raise ValueError(f"item {item.item_id} names an unlisted vertical")
+            if item.desk is not None and item.desk not in counted:
+                raise ValueError(f"item {item.item_id} names an unlisted desk")
         for vertical_id, count in counted.items():
             actual = sum(1 for item in self.items if item.vertical == vertical_id)
             if actual != count:
                 raise ValueError(f"vertical {vertical_id} count disagrees with its items")
+        for ref in self.verticals:
+            if ref.desk_count is None:
+                continue
+            drawn = sum(1 for item in self.items if (item.desk or item.vertical) == ref.id)
+            if drawn != ref.desk_count:
+                raise ValueError(f"desk {ref.id} desk_count disagrees with its items")
 
         if self.partial != (self.items_failed > 0):
             raise ValueError("partial is exactly whether anything failed")

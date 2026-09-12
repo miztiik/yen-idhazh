@@ -18,7 +18,7 @@ import { join, resolve } from 'node:path';
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
 import { dayKey, toDay } from '../charts/viewport';
-import { orderByTime } from '../day-shape';
+import { deskOf, orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
 import { publishedVisual, refusedDrawing } from '../payload/drawing';
 import { dropVectors } from '../payload/project';
@@ -333,8 +333,12 @@ export function dayShell(
 	// shuffle them the moment the rest of the day arrived - a first screen that
 	// rewrites itself while the reader is on it.
 	const ordered = orderByTime(day.items);
+	// `deskOf` and not `item.vertical`: the route is a topic, and the topic a
+	// story is read under is where the day published it. Filtering on the feed's
+	// own word here would seed the document with a different set from the one the
+	// browser draws when the served day lands.
 	const items = split.vertical
-		? ordered.filter((item) => item.vertical === split.vertical)
+		? ordered.filter((item) => deskOf(item) === split.vertical)
 		: ordered;
 	const kept = new Set(split.keep ?? []);
 	const head = new Set(items.slice(0, seedItems).map((item) => item.item_id));

@@ -63,6 +63,8 @@ Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
 
 **A killed command is indeterminate in BOTH directions** - the same kill left `gh pr create` having done nothing and left `git push -u` having pushed the branch and skipped only the upstream write. Verify by side effect (the file it writes, the remote ref it pushes), never by exit code.
 
+**`Set-Location` does not move .NET's idea of the current directory, so a `[IO.File]` call on a relative path reads another worktree.** The shell was at `...p23-r6`, `Get-Content .\tests\fixtures\...` worked, and `[IO.File]::ReadAllBytes('tests\fixtures\...')` failed naming `...p23-r3\frontend\tests\fixtures\...` - a path in a different agent's checkout that this run had never touched. The shell's location and `[Environment]::CurrentDirectory` are two variables, and only cmdlets read the first. Worse than the error is the success: the same call on a path that happens to exist in the stale directory returns another worktree's bytes and reads like your own file. **Pass `[IO.File]` an absolute path, always** - `[IO.File]::ReadAllText("$w\backend\tests\test_rank.py")`. Seen 2026-09-12.
+
 ## The terminal tool itself
 
 **A sync call can return "Command produced no output" without having run**, about one call in four under load, and it can also return ANOTHER worktree's output. An empty result announces itself; a plausible one does not, and a correct answer about the wrong tree is indistinguishable from a correct answer about yours. Tag every command, increment the tag, and discard anything that does not carry it:

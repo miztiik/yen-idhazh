@@ -1,0 +1,29 @@
+{
+  "band": "high",
+  "band_reason": null,
+  "desk": "ai",
+  "entities": [],
+  "events": [],
+  "introduced_by_run": 1,
+  "item_id": "energy-9435555854",
+  "key_points": [
+    "The operator says the site will draw 400MW at full build and is sited beside an existing gas plant.",
+    "Grid connection is the stated constraint, and the first phase is contracted for 2027.",
+    "No model vendor is named in the announcement."
+  ],
+  "lenses": [],
+  "published_at": "2026-08-27T10:00:10Z",
+  "reader_note": null,
+  "source_form": "article",
+  "source_id": "energy-storage",
+  "source_kind": "reporting",
+  "source_name": "Energy-Storage.news",
+  "source_url": "https://energy-storage.news/example-data-centre-campus-grid-connection-phase-one",
+  "summary": "A power developer has begun work on a campus that will supply a single data-centre operator, and says the site will draw 400MW once every phase is built. The announcement names grid connection rather than generation as the constraint, and contracts the first phase for 2027. The story reached us through an energy feed, and it is a story about compute.",
+  "title": "Developer starts work on a 400MW campus built for one data-centre operator",
+  "truncated": false,
+  "updated_at": null,
+  "updated_by_run": null,
+  "vertical": "energy",
+  "visual": null
+}

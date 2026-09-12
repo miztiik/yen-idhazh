@@ -1,6 +1,7 @@
 import { indexMonths, loadDay, publishedDates } from '$lib/server/payload';
 import { archiveRecentDays, archiveWindowDays, assistConfig, consoleConfig } from '$lib/server/config';
 import { archiveCalendar, type ArchiveDay } from '$lib/archive-calendar';
+import { deskCount } from '$lib/day-shape';
 import type { DigestDay, DigestVerticalRef } from '$lib/payload/types';
 
 /** Declared here rather than inherited. The root layout is a universal load and
@@ -26,11 +27,15 @@ export function load() {
 	// integer a topic, so it grows per topic and never per story. It is the pill
 	// count, and it is the honest denominator for a topic-filtered list while
 	// months are still unread - the page has never counted them itself.
+	//
+	// Summed through `deskCount`, so the archive counts stories where a reader
+	// finds them. A day that relabelled a story publishes it under one topic and
+	// counts it under another, and the pill has to lead to the stories it counts.
 	const verticalCounts: Record<string, number> = {};
 	for (const day of loaded) {
 		for (const ref of day.verticals) {
 			verticalNames[ref.id] = ref.display_name;
-			verticalCounts[ref.id] = (verticalCounts[ref.id] ?? 0) + ref.count;
+			verticalCounts[ref.id] = (verticalCounts[ref.id] ?? 0) + deskCount(ref);
 		}
 	}
 	const verticals: DigestVerticalRef[] = Object.keys(verticalCounts)

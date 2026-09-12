@@ -147,6 +147,15 @@ Every path the script holds is relative, so run from `frontend/` it finds no inj
 
 **The canary's biggest day holds 8 stories and publishes no leads, so no browser spec can see a seed smaller than its day.** `digest.shell_seed_items` is 15, and every reading route seeds and fetches, so on the canary the seed is always the whole day and the fetch has nothing to carry. Two consequences, both live: `reading-page.spec.ts`'s leading-block arm skips itself for want of a lead, and a rule about what the seed keeps cannot be asserted from a build at all. **Drive that class of rule from a built fixture instead** - `day-seam.spec.ts` builds a 40-story day with its leads at positions 25 and 39 and calls `homeShell` with a `root` of its own, which is fixed in size and can carry a case the canary has never produced (Rule #12). Widening the canary was not chosen: every browser spec shares it, so a bigger day re-prices the whole suite to close one gap. Found 2026-09-10.
 
+**`npm run build:canary` shells out to a bare `python`, so in a worktree with no venv it dies on `ModuleNotFoundError: No module named 'feedparser'`.** `frontend/scripts/build-canary.mjs` calls `process.env.IDHAZH_PYTHON || 'python'`, and a bare `python` is whatever is on PATH - a system interpreter with none of this project's dependencies. Setting `PYTHONPATH` does not help: the modules are absent, not unfindable. Export the interpreter instead, and the same variable covers both of the script's python steps:
+
+```powershell
+$env:IDHAZH_PYTHON = 'c:\...\yen-idhazh\.venv\Scripts\python.exe'
+npm --prefix frontend run build:canary
+```
+
+The traceback names `discover.py` importing `feedparser`, several frames below `build_canary_day.py`, and the node wrapper then prints its own `Error: Command failed:` with `stdout: null` - so the one line that says what is wrong is 30 lines above the line that says something failed. Read the head of the output, not the tail. Seen 2026-09-12.
+
 ## Serving a build to measure it
 
 **A commit made after the build turns the next browser run red**, before a test runs, with `The real build has stale inputs` and `Process from config.webServer was not able to start. Exit code: 1` - which reads like a broken preview server. A two-line edit to a backend test invalidated a build taken twenty minutes earlier (2026-09-05). The guard only checks the fingerprint, so it says nothing about whether the tree is the real site or the canary.
