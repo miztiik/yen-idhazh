@@ -13,6 +13,7 @@ import {
 } from '../src/lib/charts/series';
 import { rank, tailSentence, type Rankable, type RankedDisplay } from '../src/lib/charts/rank';
 import type { TimeWindow } from '../src/lib/charts/viewport';
+import { telemetryRow } from './support/telemetry-row';
 
 /**
  * A ledger that draws a plausible but wrong ranking is the failure worth a
@@ -83,9 +84,10 @@ function builtRows(): TelemetryRow[] {
 	const COUNTS = [529, 97, 61, 40, 25, 16, 10, 6, 4, 2, 1];
 	const STAGES = ['fetch', 'extract', 'summarize'];
 	const rows: TelemetryRow[] = [];
-	// Named rather than spread from a `Partial`: an optional field widens to
-	// `| undefined`, which the row type refuses, and this file cannot see a
-	// column added on main until CI builds the merge.
+	// Through the shared builder, which spells the row once. Five specs used to
+	// write it out by hand, so every column appended to the projection broke all
+	// five - and a spread of `Partial<TelemetryRow>` cannot stand in, because an
+	// optional field widens to `| undefined` and the row type refuses it.
 	const row = (over: {
 		date?: string;
 		run_id?: string;
@@ -94,27 +96,17 @@ function builtRows(): TelemetryRow[] {
 		stage?: string;
 		outcome?: string;
 		code?: string;
-	}): TelemetryRow => ({
-		date: over.date ?? '2026-08-20',
-		run_id: over.run_id ?? '1',
-		item_id: over.item_id,
-		vertical: 'world',
-		source_id: over.source_id ?? 'src-00',
-		stage: over.stage ?? 'fetch',
-		outcome: over.outcome ?? 'failed',
-		code: over.code ?? 'unreachable',
-		source_words: null,
-		summary_words: null,
-		source_words_before_cap: null,
-		fetch_ms: null,
-		extract_ms: null,
-		summarize_ms: null,
-		prefill_ms: null,
-		decode_ms: null,
-		input_tokens: null,
-		output_tokens: null,
-		cached_tokens: null
-	});
+	}): TelemetryRow =>
+		telemetryRow({
+			date: over.date ?? '2026-08-20',
+			run_id: over.run_id ?? '1',
+			item_id: over.item_id,
+			vertical: 'world',
+			source_id: over.source_id ?? 'src-00',
+			stage: over.stage ?? 'fetch',
+			outcome: over.outcome ?? 'failed',
+			code: over.code ?? 'unreachable'
+		});
 
 	let made = 0;
 	COUNTS.forEach((count, cause) => {
@@ -371,27 +363,15 @@ test.describe('THE ORACLE: sources ranked by the articles their failures cost', 
 		// The dedupe rule, proved on two rows built to collide rather than on
 		// whatever the committed ledger happens to hold today.
 		const window = { start: '2026-08-01', end: '2026-08-01' };
-		const row: TelemetryRow = {
+		const row: TelemetryRow = telemetryRow({
 			date: '2026-08-01',
 			run_id: '2026-08-01-1',
 			item_id: 'ai-1234567890',
-			vertical: 'ai',
 			source_id: 'a-wire',
 			stage: 'fetch',
 			outcome: 'failed',
-			code: 'http_client_error',
-			source_words: null,
-			summary_words: null,
-			source_words_before_cap: null,
-			fetch_ms: null,
-			extract_ms: null,
-			summarize_ms: null,
-			prefill_ms: null,
-			decode_ms: null,
-			input_tokens: null,
-			output_tokens: null,
-			cached_tokens: null
-		};
+			code: 'http_client_error'
+		});
 		const twice = [row, { ...row, run_id: '2026-08-01-2' }];
 		expect(failedRows(twice, window, null)).toHaveLength(2);
 		expect(sourceLosses(twice, window).sources[0].lost).toBe(1);

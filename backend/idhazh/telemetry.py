@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Final, Protocol
 
 from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.call_cost import COST_FIELDS, CallCost
 from idhazh.contracts.feed_health import RobotsOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem
@@ -796,7 +797,28 @@ def classify_item(
         input_tokens=summary.input_tokens,
         output_tokens=summary.output_tokens,
         cached_tokens=summary.cached_tokens,
+        calls=(summary.call_1, summary.call_2),
     )
+
+
+def _flatten_calls(calls: tuple[CallCost | None, CallCost | None]) -> dict[str, Any]:
+    """The nested per-call costs as the ledger's flat cells.
+
+    One translator between the two spellings. A ledger row is a CSV line and
+    cannot nest, and `Summary` describes the five numbers once - so this is the
+    single place the two shapes meet, rather than a second copy of the
+    vocabulary in the writer.
+    """
+    cells: dict[str, Any] = {"model_calls": None}
+    recorded = 0
+    for slot, call in enumerate(calls, start=1):
+        cells[f"call_{slot}_kind"] = None if call is None else call.kind
+        for field in COST_FIELDS:
+            cells[f"call_{slot}_{field}"] = None if call is None else getattr(call, field)
+        recorded += call is not None
+    if recorded:
+        cells["model_calls"] = recorded
+    return cells
 
 
 def _row(
@@ -823,6 +845,7 @@ def _row(
     cached_tokens: int | None = None,
     source_words_before_cap: int | None = None,
     extraction: ExtractionHealth | None = None,
+    calls: tuple[CallCost | None, CallCost | None] = (None, None),
 ) -> ItemHealthRow:
     return ItemHealthRow(
         version=ItemHealthRow.schema_version(),
@@ -854,6 +877,7 @@ def _row(
         span_integrity=extraction.span_integrity if extraction is not None else None,
         elements_found=extraction.elements_found if extraction is not None else None,
         element_class=extraction.element_class if extraction is not None else None,
+        **_flatten_calls(calls),
     )
 
 

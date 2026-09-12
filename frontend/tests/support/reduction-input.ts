@@ -14,6 +14,7 @@
  */
 
 import type { SummaryBand, TelemetryRow } from '../../src/lib/charts/series';
+import { telemetryRow } from './telemetry-row';
 
 /** The sizes one arm of the counted-visit oracle is built at.
  *
@@ -164,27 +165,28 @@ export function telemetryRows(days: number, perDay: number): TelemetryRow[] {
 			// them is exercised; one in five fails, at a stage that rotates.
 			const stage = index % 6 === 0 ? 'plan' : ['fetch', 'extract', 'summarize'][index % 3];
 			const failed = index % 5 === 0 && stage !== 'plan';
-			rows.push({
-				date: dayOf(day),
-				run_id: runIdOf(day * 2),
-				item_id: `item-${index}`,
-				vertical: `desk-${index % 5}`,
-				source_id: `source-${index % 7}`,
-				stage,
-				outcome: failed ? 'failed' : 'ok',
-				code: failed ? ['paywalled', 'http_client_error', ''][index % 3] : '',
-				source_words: 400 + Math.round(next() * 1_200),
-				summary_words: 60 + Math.round(next() * 90),
-				source_words_before_cap: null,
-				fetch_ms: 400 + Math.round(next() * 900),
-				extract_ms: 200 + Math.round(next() * 500),
-				summarize_ms: 60_000 + Math.round(next() * 200_000),
-				prefill_ms: 30_000 + Math.round(next() * 40_000),
-				decode_ms: 20_000 + Math.round(next() * 30_000),
-				input_tokens: 2_000 + Math.round(next() * 2_000),
-				output_tokens: 150 + Math.round(next() * 100),
-				cached_tokens: Math.round(next() * 300)
-			});
+			rows.push(
+				telemetryRow({
+					date: dayOf(day),
+					run_id: runIdOf(day * 2),
+					item_id: `item-${index}`,
+					vertical: `desk-${index % 5}`,
+					source_id: `source-${index % 7}`,
+					stage,
+					outcome: failed ? 'failed' : 'ok',
+					code: failed ? ['paywalled', 'http_client_error', ''][index % 3] : '',
+					source_words: 400 + Math.round(next() * 1_200),
+					summary_words: 60 + Math.round(next() * 90),
+					fetch_ms: 400 + Math.round(next() * 900),
+					extract_ms: 200 + Math.round(next() * 500),
+					summarize_ms: 60_000 + Math.round(next() * 200_000),
+					prefill_ms: 30_000 + Math.round(next() * 40_000),
+					decode_ms: 20_000 + Math.round(next() * 30_000),
+					input_tokens: 2_000 + Math.round(next() * 2_000),
+					output_tokens: 150 + Math.round(next() * 100),
+					cached_tokens: Math.round(next() * 300)
+				})
+			);
 		}
 	}
 	return rows;
