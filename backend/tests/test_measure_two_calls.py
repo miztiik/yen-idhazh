@@ -156,51 +156,92 @@ def test_common_prefix_stops_at_the_first_difference() -> None:
 
 #: The rendered reading that matches the recorded completions: call 1's prompt
 #: renders to the 1,497 tokens the server charged for, and the two prompts
-#: diverge at 1,493, which is where the cache stopped.
-AGREES: Final = Break(at=1493, rendered_one=1497, rendered_two=2389, tail="", replay_tokens=205)
+#: diverge at 1,493 - four tokens inside call 1's own prompt, which is where the
+#: chat template wrote a block it dropped on the replay. It is a reading of the
+#: path row #3c retired, kept because it is the only evidence in the tree of
+#: what a broken prefix looks like.
+BROKE: Final = Break(at=1493, rendered_one=1497, rendered_two=2389, tail="", replay_tokens=205)
+
+#: The same item once the prompt bytes are ours: the two prompts agree for the
+#: whole of call 1's 1,497 and the cache reaches 1,702 - call 1's prompt and its
+#: whole reply. Built rather than recorded, because the reading that produced
+#: `BROKE` was taken before the row and the shape is the point (`CLAUDE.md`
+#: section 13).
+KEPT_TWO: Final = Completion(content="", prompt_tokens=2389, cached_tokens=1702)
+AGREES: Final = Break(at=1497, rendered_one=1497, rendered_two=2389, tail="", replay_tokens=205)
 
 
 def test_the_checks_hold_when_the_render_and_the_cache_agree() -> None:
+    spend = decompose(RECORDED_ONE, KEPT_TWO)
+    assert check(RECORDED_ONE, KEPT_TWO, spend, AGREES).hold
+
+
+def test_two_prompts_that_diverge_inside_call_ones_fail() -> None:
+    """Row #3c's oracle, taken live: the recorded pre-row reading does not pass it.
+
+    This is the reading that made the row. The two prompts stopped agreeing four
+    tokens before the end of call 1's, because the chat template rendered one
+    assistant turn two ways, and 209 tokens were read again. Nothing about the
+    arithmetic changed; what changed is that a run in that state now says so
+    instead of printing a share and moving on.
+    """
     spend = decompose(RECORDED_ONE, RECORDED_TWO)
-    assert check(RECORDED_ONE, RECORDED_TWO, spend, AGREES).hold
+    wrong = check(RECORDED_ONE, RECORDED_TWO, spend, BROKE)
+    assert not wrong.hold
+    assert wrong.failures() == ["the two prompts diverge before the end of call 1's"]
+
+
+def test_a_cache_reaching_past_the_shared_prefix_is_the_good_news() -> None:
+    """A floor, not an equality, and the distinction is measured rather than chosen.
+
+    Once call 2's prompt is call 1's extended, the slot also answers for call
+    1's reply, so the cache reaches beyond where the two prompts stop being the
+    same string. Measured 2026-09-12 on the configured weights: the prompts
+    agreed to token 7,420 and the cache reached 7,435. An equality here would
+    fail every item for working.
+    """
+    spend = decompose(RECORDED_ONE, KEPT_TWO)
+    checks = check(RECORDED_ONE, KEPT_TWO, spend, AGREES)
+
+    assert KEPT_TWO.cached_tokens > (AGREES.at or 0)
+    assert checks.cache_reached_the_shared_prefix
+    assert checks.hold
 
 
 def test_a_prompt_that_renders_to_another_length_fails() -> None:
     """The check that catches a diagnostic describing a prompt nobody sent.
 
-    Rendering without the thinking flag every real request carries drops the
-    empty think block, so the rendered prompt is four tokens short of the one
-    the server charged for - and the tool would then report that the prefix
-    never broke while the cache reading says it broke and cost 209 tokens.
+    A renderer that dropped the reply opening would report a prompt four tokens
+    short of the one the server charged for - and the tool would then describe a
+    prefix that never broke while the cache reading says otherwise.
     """
-    spend = decompose(RECORDED_ONE, RECORDED_TWO)
-    wrong = check(
-        RECORDED_ONE, RECORDED_TWO, spend, replace(AGREES, rendered_one=1493, at=1493)
-    )
+    spend = decompose(RECORDED_ONE, KEPT_TWO)
+    wrong = check(RECORDED_ONE, KEPT_TWO, spend, replace(AGREES, rendered_one=1493))
     assert not wrong.hold
     assert wrong.failures() == [
-        "call 1's rendered prompt is not the length the server charged for"
+        "call 1's rendered prompt is not the length the server charged for",
+        "the two prompts diverge before the end of call 1's",
     ]
 
 
-def test_a_cache_that_stopped_somewhere_else_fails() -> None:
-    spend = decompose(RECORDED_ONE, RECORDED_TWO)
-    wrong = check(RECORDED_ONE, RECORDED_TWO, spend, replace(AGREES, at=1200))
+def test_a_cache_that_stopped_short_of_the_shared_prefix_fails() -> None:
+    short = Completion(content="", prompt_tokens=2389, cached_tokens=1200)
+    spend = decompose(RECORDED_ONE, short)
+    wrong = check(RECORDED_ONE, short, spend, AGREES)
     assert not wrong.hold
-    assert wrong.failures() == ["the cache did not stop where the rendered prompts diverge"]
+    assert wrong.failures() == ["the cache stopped short of where the two prompts still agree"]
 
 
 def test_a_replay_shorter_than_the_reply_fails() -> None:
-    """A runtime that splits reasoning out of `content` replays less than it wrote.
+    """A runtime that returns less than it decoded replays less than it wrote.
 
-    `build_call_two_request` sends `one.content`, and a llama.cpp build this
-    repository already names empties that field for a template whose generation
-    prompt ends in a closing think tag. The assistant turn would then be empty,
-    and every token of call 1's reply would be charged to the template cause
-    where no row would remove it.
+    `build_call_two_request` appends `one.content` to call 1's own prompt
+    bytes. A build that emptied that field would append nothing, and every token
+    of call 1's reply would be charged to the template cause where no row would
+    remove it.
     """
-    spend = decompose(RECORDED_ONE, RECORDED_TWO)
-    wrong = check(RECORDED_ONE, RECORDED_TWO, spend, replace(AGREES, replay_tokens=0))
+    spend = decompose(RECORDED_ONE, KEPT_TWO)
+    wrong = check(RECORDED_ONE, KEPT_TWO, spend, replace(AGREES, replay_tokens=0))
     assert not wrong.hold
     assert wrong.failures() == [
         "call 1's replayed turn is shorter than the reply it generated"
@@ -208,9 +249,9 @@ def test_a_replay_shorter_than_the_reply_fails() -> None:
 
 
 def test_an_unread_diagnostic_is_unread_and_not_a_failure() -> None:
-    """A server that would not render is a missing reading, never a finding."""
-    spend = decompose(RECORDED_ONE, RECORDED_TWO)
-    assert check(RECORDED_ONE, RECORDED_TWO, spend, Break()).hold
+    """A server that would not tokenise is a missing reading, never a finding."""
+    spend = decompose(RECORDED_ONE, KEPT_TWO)
+    assert check(RECORDED_ONE, KEPT_TWO, spend, Break()).hold
 
 
 def a_sample(key: str, words: int) -> Sample:
