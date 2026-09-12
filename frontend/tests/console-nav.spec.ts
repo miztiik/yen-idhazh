@@ -14,8 +14,8 @@ import { expect, test, type Page } from '@playwright/test';
  * makes that a rename and not a route change. The strip may never take the
  * health ramp: green, amber and red on a label would say a route is failing,
  * and a route is a noun. And since 2026-09-12 the strip has to FIT - five tabs
- * on no more than two rows at 1440 and three at 360, with no box overlapping
- * another.
+ * on no more than two rows at 1440 and three at 360 and 320, with no box
+ * overlapping another.
  */
 
 /** The owner's words, and the paths they sit on. Typed out on purpose: this is
@@ -208,13 +208,17 @@ async function stripBoxes(page: Page) {
 /** Widths and the rows five tabs may stand on at each.
  *
  * 1440 is where the console is read; 360 is the narrowest phone the rest of
- * this suite drives. Two rows and three rows, because the strip sits directly
- * above the band and the band is the first thing an operator reads - five rows
- * of chrome would push the verdict off a phone's first screen.
+ * this suite drives; 320 is the narrowest screen still in use and is here
+ * because the basis that cleared 360 still stacked five deep there - the same
+ * defect one screen narrower, found by measuring rather than by reading the
+ * rule. Two rows and three rows, because the strip sits directly above the band
+ * and the band is the first thing an operator reads: five rows of chrome would
+ * push the verdict off a phone's first screen.
  */
 const STRIP_WIDTHS = [
 	{ width: 1440, height: 1000, rows: 2 },
-	{ width: 360, height: 780, rows: 3 }
+	{ width: 360, height: 780, rows: 3 },
+	{ width: 320, height: 780, rows: 3 }
 ] as const;
 
 for (const view of STRIP_WIDTHS) {

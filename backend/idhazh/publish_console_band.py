@@ -1077,7 +1077,7 @@ def _size(
     """The committed tree against the 1 GB Pages cap.
 
     Not windowed by the control below it, and that is the difference between
-    this and the panel on Pipelines. The band stands on all three routes, so a
+    this and the panel on Pipelines. The band stands on every route, so a
     figure that moved when a control on one route moved would read as three
     different sites.
     """

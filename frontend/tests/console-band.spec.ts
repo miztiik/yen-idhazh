@@ -371,14 +371,16 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 	// One band, derived once in the shared layout and drawn above all five route
 	// panels. Five routes deriving their own would eventually disagree about which
 	// one of them is worst, which is the whole reason it is derived once (row 24).
+	//
+	// The three routes with panels, because `hydrated` waits for a window control
+	// and `/console/judgement/` and `/console/voices/` have none - they fetch
+	// nothing, so a control there would govern nothing. That the band is word for
+	// word identical on all FIVE is asserted in `console-nav.spec.ts`, which does
+	// not wait on hydration; what this test adds is the half that needs one,
+	// below.
 	const pipelines = await bandText('/console/');
 	expect(pipelines.length, 'the band drew nothing on /console/').toBeGreaterThan(0);
-	for (const path of [
-		'/console/model/',
-		'/console/machine/',
-		'/console/judgement/',
-		'/console/voices/'
-	]) {
+	for (const path of ['/console/model/', '/console/machine/']) {
 		expect(await bandText(path), `the band differs on ${path}`).toBe(pipelines);
 	}
 

@@ -110,17 +110,41 @@ changes that argument.
 **The strip has to fit, and the basis is what moved to make it.** `.tab-slot`
 was `flex: 1 1 14rem` - 224px at a 16px root - which put one tab on a row of a
 360px phone, so five tabs would have stood five deep directly above the band. It
-is `9rem` now, 144px, which is two across a phone and five across a desktop. The
-per-tab description drops below `48rem`, the breakpoint the Pipelines route
-already uses, because below it the strip is at most three tabs across and a
-description under every label would be rows of wrapped small type between the
-title and the verdict. The description is not lost: it is still the anchor's
+is `8rem` now, 128px, so two fit the 288px content box of a 320px phone and five
+fit one row of a desktop. The per-tab description is hidden by default and shown
+from `1024px`, the breakpoint three other components already use.
+
+Measured 2026-09-12 off the built page in headless Chromium, `window.innerWidth`
+read inside the page beside every figure:
+
+| Width | Rows | Tab | Strip | Description |
+| ---: | ---: | ---: | ---: | --- |
+| 320 | 3 | 140px | 215px | hidden |
+| 360 | 3 | 160px | 199px | hidden |
+| 414 | 3 | 186px | 199px | hidden |
+| 480 | 2 | 142px | 162px | hidden |
+| 640 | 2 | 141px | 138px | hidden |
+| 768 | 1 | 135px | 86px | hidden |
+| 900 | 1 | 161px | 86px | hidden |
+| 1024 | 1 | 186px | 136px | shown |
+| 1440 | 1 | 269px | 80px | shown |
+
+**Two numbers were taken from that sweep rather than from the rule.** `9rem`
+cleared 360px and still stacked five deep at 320px, which is the same defect one
+screen narrower, so the basis went to `8rem`. And the description at the narrower
+`48rem` breakpoint made the strip 168px at 800px against 86px at 768px - so
+widening the window made the chrome taller, which is a discontinuity a reader
+notices and cannot explain. At 1024px each tab is 186px and the line costs 50px
+once, then falls back as the tabs widen.
+
+The description is not lost below the breakpoint: it is still the anchor's
 `title` and the page it opens prints it in full, so what a hidden line costs is
 the one-line summary a reader gets before choosing - which is why every label is
 one word.
 [../../../frontend/tests/console-nav.spec.ts](../../../frontend/tests/console-nav.spec.ts)
-measures the tab boxes off the built page at 1440 and 360 and fails on a row too
-many or on any two boxes that overlap.
+measures the tab boxes off the built page at 1440, 360 and 320, prints the width
+the page really had beside every figure, and fails on a row too many or on any
+two boxes that overlap.
 
 **Every label carries its own worst state**, computed at build time from the
 committed ledger - `Machine - shards read 4.31x apart`, not `Machine`.
