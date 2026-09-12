@@ -239,6 +239,15 @@ What is a smell is a documentation change that describes behaviour nobody
 altered. That is documentation drifting away from the code rather than tracking
 it, and it reads as authoritative to the next person either way.
 
+### The contract is subject to this rule too
+
+`CLAUDE.md` carries fences rather than full rationale prose, from 2026-09-12.
+The argument behind each of its rulings lives in
+[../archive/contract-history-2026-09.md](../archive/contract-history-2026-09.md).
+A page that every agent loads on every session is the page where a saved token
+is worth the most, and it is also the page least able to argue that it is the
+exception.
+
 ### Cross-doc consistency mechanism
 
 - Living docs are the default source of truth for current shape. Edit them in place as the project changes.
