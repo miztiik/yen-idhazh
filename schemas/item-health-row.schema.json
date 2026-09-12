@@ -22,7 +22,7 @@
       "type": "string"
     },
     "FailureCode": {
-      "description": "Stable failure vocabulary for item-health rows.",
+      "description": "Stable failure vocabulary for item-health rows.\n\n**Membership is one member per knob an operator turns, not one per gate.**\nFour HTTP members answer to one fetch, because the fix for a 404 is not the\nfix for a rate limit. `output_truncated` and `labels_truncated` are the two\noutput budgets, derived from two different grammars, for the same reason.",
       "enum": [
         "not_attempted",
         "robots_denied",
@@ -41,6 +41,7 @@
         "model_unreachable",
         "context_exceeded",
         "output_truncated",
+        "labels_truncated",
         "bad_shape",
         "length_out_of_range",
         "copied_source",
@@ -76,6 +77,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added the labels_truncated summarize failure code, source-neutral like every other code the model owns.",
+      "version": "2026-09-13",
+      "why": "The two-call path's labelling reply can run out of its output budget on an ordinary article - measured 2026-09-12, one article of three, 346 words, 900 tokens decoded and the JSON cut mid-string - and the item is then lost whole, because the call that writes the summary replays that reply and is never sent. It was recorded as bad_shape, which is also what a reply that held valid JSON and violated the schema records, and also what a stray reasoning channel records; the only thing separating them was a sentence in a log line. The same commit derives that budget from the labelling grammar instead of from the summariser's knob, and this counter is how anyone sees whether that worked - folded into output_truncated it would move with call 2's cuts and answer nothing. It is a separate member rather than a second reading of output_truncated because the two are two derivations over two grammars: two numbers to move, so two counts to read. No read-side migration is owed - the code is additive and no run has written it - but a reader trending bad_shape across 2026-09-13 sees a step down that nothing else in the CSV explains, and this entry is where that is written."
+    },
     {
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
       "version": "2026-09-12T18:40",
@@ -591,7 +597,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-12T18:40",
+      "default": "2026-09-13",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -615,5 +621,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-12T18:40"
+  "version": "2026-09-13"
 }

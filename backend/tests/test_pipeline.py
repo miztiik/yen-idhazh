@@ -3453,13 +3453,16 @@ class TestTheFlagOnDispatchesBothCalls:
         )
         assert stamped != text_digest(summarize.prompt_inputs(settings.app.summarize))
 
-    def test_a_labelling_reply_this_build_cannot_read_loses_the_item_loudly(
+    def test_a_labelling_reply_the_output_budget_cut_says_so(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
     ) -> None:
-        """Plan 11 row #3g's defect, made visible rather than fixed here. Call 2's
-        prompt replays call 1's reply verbatim and the reason that is safe is
-        that the reply has been held to a closed schema - so a reply that did not
-        parse stops the item rather than being sent unchecked."""
+        """Plan 11 row #3g. The cut is read off `finish_reason` before the parse.
+
+        Until 2026-09-13 this landed as `bad_shape`, which is also what a reply
+        that answered inside its budget and violated the schema records - so the
+        one failure a budget can fix was hiding inside the one it cannot, and
+        the only thing separating them was a sentence in a log line.
+        """
         cut = json.loads(read_text(CALL_ONE_REPLY))
         cut["choices"][0]["message"]["content"] = '{"labels": [{"element_id": "quan'
         cut["choices"][0]["finish_reason"] = "length"
@@ -3469,6 +3472,35 @@ class TestTheFlagOnDispatchesBothCalls:
             monkeypatch,
             on=True,
             replies=(json.dumps(cut).encode("utf-8"),),
+        )
+
+        assert served == len(run_plan.items), "the second call is never sent"
+        written = [
+            Summary.from_json(read_text(items / f"{item.item_id}.summary.json"))
+            for item in run_plan.items
+        ]
+        assert {summary.status for summary in written} == {SummaryStatus.FAILED}
+        assert {summary.failure_code for summary in written} == {FailureCode.LABELS_TRUNCATED}
+
+    def test_a_labelling_reply_this_build_cannot_read_loses_the_item_loudly(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """The other way a labelling reply is unusable: it finished, and it is wrong.
+
+        Call 2's prompt replays call 1's reply verbatim and the reason that is
+        safe is that the reply has been held to a closed schema - so a reply that
+        did not parse stops the item rather than being sent unchecked. These
+        bytes stop mid-string like a cut one and the server says `stop`, which is
+        the case a budget cannot fix and a wider grammar can.
+        """
+        broken = json.loads(read_text(CALL_ONE_REPLY))
+        broken["choices"][0]["message"]["content"] = '{"labels": [{"element_id": "quan'
+
+        run_plan, items, served = worked(
+            tmp_path,
+            monkeypatch,
+            on=True,
+            replies=(json.dumps(broken).encode("utf-8"),),
         )
 
         assert served == len(run_plan.items), "the second call is never sent"
