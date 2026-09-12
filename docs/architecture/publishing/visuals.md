@@ -919,8 +919,10 @@ SVG class vocabulary the hand-written one does - `mark-rect`, `mark-text`, `mark
 the page's own tokens. The inline carrier plan 01 built is the carrier this row uses.
 
 **The name is the item's own id, so a path is a function of the item and of nothing else.**
-`energy-4821903756.svg` - the same `<vertical>-<ten digits>` a reader already lands on as an anchor
-([`layout.md`](layout.md)). Two items cannot share a path, so nothing has to notice that they did.
+`energy-4821903756.svg` on a day written before 2026-09-12 and `energy-wfyypy5sgvnwcxd3.svg` after
+it - the same id a reader already lands on as an anchor, in whichever of the two live shapes that
+day was written under ([`layout.md`](layout.md)). Two items cannot share a path, so nothing has to
+notice that they did.
 
 That is the third answer to one defect, and the first two are worth keeping on the page because they
 are what a counter costs. **A per-process counter** restarted at 1 in every run, so the second run of
