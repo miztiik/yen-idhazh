@@ -46,8 +46,8 @@ strip. It was three; it took a fourth and a fifth on 2026-09-12:
 | `/console/` | **Pipelines** | Did the runs work, which feeds broke, and what each stage cost. |
 | `/console/model/` | **Summaries** | What the model wrote, how long it took, and what it got wrong. |
 | `/console/machine/` | **Hardware** | The hardware the model ran on, and how much it varied between runs. |
-| `/console/judgement/` | **Judgement** | What the model made of each article, how sure it was, and where it disagreed with us. |
-| `/console/voices/` | **Voices** | Who supplied the day, how far each feed is discounted, and what it published. |
+| `/console/judgement/` | **Judgement** | What the model made of each article, and where we disagreed. |
+| `/console/voices/` | **Voices** | Who supplied the day, and how far each feed is discounted. |
 
 `/console/` keeps its path. It is the one an operator types and the one every
 existing bookmark points at, so moving it to `/console/pipelines/` would have

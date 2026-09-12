@@ -134,13 +134,12 @@ const ROUTE_WORDS: Record<RouteId, { label: string; href: string; description: s
 	judgement: {
 		label: 'Judgement',
 		href: '/console/judgement/',
-		description:
-			'What the model made of each article, how sure it was, and where it disagreed with us.'
+		description: 'What the model made of each article, and where we disagreed.'
 	},
 	voices: {
 		label: 'Voices',
 		href: '/console/voices/',
-		description: 'Who supplied the day, how far each feed is discounted, and what it published.'
+		description: 'Who supplied the day, and how far each feed is discounted.'
 	}
 };
 
