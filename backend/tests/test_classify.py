@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from math import ceil
 from typing import Any
 
 import pytest
@@ -28,10 +29,14 @@ from pydantic import BaseModel, ValidationError
 from idhazh import config, summarize
 from idhazh.classify.calls import (
     ANCHORED_MAX,
+    CALL_ONE_BUDGET_TOKENS,
     CALL_TWO_BUDGET_TOKENS,
+    CHARS_PER_OUTPUT_TOKEN,
     CHARS_PER_WORD,
     LABEL_PASS_VERSION,
     LABELS_MAX,
+    MEASURED_REPLY_CHARACTERS,
+    MEASURED_REPLY_TOKENS,
     PROPOSED_MAX,
     SALIENCE_SCORE,
     CallOneReply,
@@ -40,6 +45,7 @@ from idhazh.classify.calls import (
     apply_labels,
     build_call_one_request,
     build_call_two_request,
+    call_one_output_tokens,
     call_one_schema,
     call_one_system_prompt,
     call_one_user_turn,
@@ -451,6 +457,76 @@ class TestCallOneShape:
     def test_it_strips_a_thinking_block(self) -> None:
         raw = "<think>reading it</think>" + json.dumps(a_reply().model_dump())
         assert parse_call_one(raw).proposed == []
+
+
+class TestCallOnesDerivedBudget:
+    """Row #3g. The budget is arithmetic over this shape's own bounds.
+
+    Until 2026-09-13 it was `models.summarize.inference.max_output_tokens`, the
+    summariser role's number, which knows nothing about this reply - and one
+    ordinary 346-word article lost its whole item to it on 2026-09-12.
+    """
+
+    def test_the_widest_reply_the_grammar_admits_fits_the_budget(self) -> None:
+        """The row's oracle, computed from the bounds rather than written down."""
+        widest = widest_json_characters(call_one_schema())
+
+        assert widest / CHARS_PER_OUTPUT_TOKEN <= call_one_output_tokens()
+        assert call_one_output_tokens() == CALL_ONE_BUDGET_TOKENS
+
+    def test_the_role_knob_the_budget_used_to_be_does_not_fit_this_shape(self) -> None:
+        """The bite proof, and it is the base state this row was dispatched on.
+
+        An oracle that cannot go red is not an oracle. The number call 1 was
+        sent until 2026-09-13 fails the assertion above, which is why the reply
+        that filled half of what this shape admits was cut mid-string.
+        """
+        widest = widest_json_characters(call_one_schema())
+
+        assert widest / CHARS_PER_OUTPUT_TOKEN > InferenceConfig().max_output_tokens
+
+    def test_a_bound_that_moves_moves_the_budget_with_it(self) -> None:
+        """Re-derived, not restated. This is what "derived" has to mean to be worth saying."""
+        narrowed = json.loads(json.dumps(call_one_schema()))
+        narrowed["properties"]["labels"]["maxItems"] = LABELS_MAX // 2
+
+        assert widest_json_characters(narrowed) < widest_json_characters(call_one_schema())
+        assert (
+            ceil(widest_json_characters(narrowed) / CHARS_PER_OUTPUT_TOKEN)
+            < call_one_output_tokens()
+        )
+
+    def test_a_boolean_is_counted_rather_than_crashing_the_arithmetic(self) -> None:
+        """`hedge` is the only boolean either reply shape carries, and it is call 1's.
+
+        The shared width function had no branch for one until 2026-09-13 and fell
+        through to the map branch, raising `KeyError: 'propertyNames'` - which
+        reads as a malformed schema and is a missing case. So the whole oracle
+        above was uncomputable rather than merely failing.
+        """
+        assert widest_json_characters({"type": "boolean"}) == len("false")
+        assert "boolean" in schema_types(call_one_schema())
+
+    def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
+        payload = call_one_payload(dense)
+
+        assert payload["n_predict"] == call_one_output_tokens()
+        assert payload["n_predict"] != InferenceConfig().max_output_tokens
+        assert "max_tokens" not in payload, (
+            "two budget keys in one body and the server answers whichever it reads first"
+        )
+
+    def test_the_measured_density_is_the_reading_it_came_from(self) -> None:
+        """Guardrail #10. It is an estimate from one reply and it says so in source.
+
+        The reply that made this row necessary decoded 900 tokens and the parse
+        failed at character 2,805 of it. Holding the two numbers rather than the
+        quotient is what stops 3.12 being read as a value somebody tuned.
+        """
+        assert CHARS_PER_OUTPUT_TOKEN == MEASURED_REPLY_CHARACTERS / MEASURED_REPLY_TOKENS
+        assert MEASURED_REPLY_TOKENS < call_one_output_tokens(), (
+            "the budget has to clear the reply that was lost, or the row fixed nothing"
+        )
 
 
 class TestCallOnePrompting:

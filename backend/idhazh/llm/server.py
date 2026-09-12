@@ -374,6 +374,7 @@ def completion_payload(
     user: str,
     output_schema: dict[str, Any],
     inference: InferenceConfig,
+    max_output_tokens: int,
 ) -> dict[str, Any]:
     """The request body for a prompt we rendered ourselves.
 
@@ -382,6 +383,12 @@ def completion_payload(
     the words and cannot change the shape. The spelling differs because the
     route does - `response_format` is accepted and ignored here, which is a
     silent loss of the only control that matters, so it is never sent.
+
+    **The budget is handed in rather than read off `inference`**, for the same
+    reason `continued_completion_payload` takes one: a rendered call is held to
+    a shape of its own, and a budget sized for some other shape cuts a reply
+    that did exactly what the grammar allowed. `inference.max_output_tokens` is
+    the summariser role's number and sizes the single call that still reads it.
 
     `cache_prompt` is stated rather than inherited. The whole point of a
     rendered prompt is that the next call reuses this one, the build's own
@@ -399,7 +406,7 @@ def completion_payload(
         "temperature": inference.temperature,
         "top_p": inference.top_p,
         "seed": inference.seed,
-        "n_predict": inference.max_output_tokens,
+        "n_predict": max_output_tokens,
         "stream": False,
         "cache_prompt": True,
         "json_schema": output_schema,
