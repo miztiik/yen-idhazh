@@ -1,9 +1,11 @@
-"""The closed vocabularies and the vertical registry (`config/taxonomy.json`).
+"""The label vocabularies and the vertical registry (`config/taxonomy.json`).
 
-Lenses and event types are closed enums rather than free-text strings, so a new
-value is a schema change carrying a changelog entry rather than a typo waiting
-to happen. Verticals are config-declared, because a vertical is built in the
-open over weeks under `draft` status until it clears its feed floor.
+Every id here is an open slug, so adding or retiring a word is a config edit.
+The closed vocabulary is this file, not the Python type: nothing may invent a
+label, because `tag.tags` can only ever return a key of the mapping this file
+builds, and no fetched text reaches that mapping (Rule #11). What the open type
+buys is that a day written before the vocabulary moved still reads - a closed
+type would reject a payload whose word this file has since stopped carrying.
 
 An id is an immutable slug; `display_name` is separate and freely mutable, so
 renaming what a reader sees never orphans a payload written under the old label.
@@ -56,32 +58,6 @@ class SourceKind(StrEnum):
     ANALYSIS = "analysis"
     GOVERNMENT = "government"
     COMMUNITY = "community"
-
-
-class LensId(StrEnum):
-    """A question asked of items already collected. Costs no extra request."""
-
-    CHINA = "china"
-    AI_ROI = "ai-roi"
-    MARKETS = "markets"
-    CYBER = "cyber"
-    WAR = "war"
-    TRADE = "trade"
-    CHIPS = "chips"
-
-
-class EventType(StrEnum):
-    """What happened to an item. One or more per item."""
-
-    RELEASE = "release"
-    DEAL = "deal"
-    ACQUISITION = "acquisition"
-    FUNDING = "funding"
-    CAPEX = "capex"
-    EARNINGS = "earnings"
-    REGULATION = "regulation"
-    RESEARCH = "research"
-    INCIDENT = "incident"
 
 
 MatchTerm = Annotated[
@@ -172,7 +148,7 @@ class VerticalDef(VocabularyEntry, Lifecycled):
 
 
 class LensDef(VocabularyEntry, Lifecycled):
-    id: LensId
+    id: Slug
     keywords: list[MatchTerm] = Field(
         default_factory=list,
         description=(
@@ -198,7 +174,7 @@ class LensDef(VocabularyEntry, Lifecycled):
 
 
 class EventDef(VocabularyEntry):
-    id: EventType
+    id: Slug
     keywords: list[MatchTerm] = Field(
         default_factory=list,
         description="The curated terms that assign this event. Same rule as LensDef.keywords.",
@@ -210,6 +186,33 @@ class Taxonomy(Contract):
 
     __schema_stem__: ClassVar[str] = "taxonomy"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T03:55",
+            change=(
+                "LensDef.id and EventDef.id are Slug rather than the closed LensId and "
+                "EventType enums, which are deleted. Taxonomy no longer requires the "
+                "file to label every enum member exactly once; ids must only be "
+                "distinct within their vocabulary."
+            ),
+            why=(
+                "Adding or retiring a lens was a Python edit, a schema regeneration and "
+                "a release, which is the opposite of the rule that a label vocabulary is "
+                "config - and it is why the vocabulary had not moved. The schema now "
+                "gates shape (the slug pattern) and never membership, so a word is one "
+                "config edit. Breaking on the write side, read-compatible on the read "
+                "side and deliberately so (section 11): every id any committed payload "
+                "carries is a well-formed slug, so a widened type accepts every one of "
+                "them, where a narrowed one would reject a day whose word this file has "
+                "since stopped carrying. Nothing may invent a label, because "
+                "tag.tags can only return a key of the mapping this file builds. What "
+                "the enum was also doing was making it impossible to DELETE an id: "
+                "measured 2026-09-12, ai-roi is retired here and carried by 18 committed "
+                "items over 2026-08-27, 08-28 and 08-29, so deleting it rather than "
+                "tombstoning it would leave those 18 holding a word nothing can name. "
+                "That is what the reading side migrates for - it renders an id it cannot "
+                "name rather than dropping it."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12",
             change=(
@@ -289,18 +292,25 @@ class Taxonomy(Contract):
     events: list[EventDef]
 
     @model_validator(mode="after")
-    def _vocabularies_are_complete_and_distinct(self) -> Self:
-        vertical_ids = [item.id for item in self.verticals]
-        if len(set(vertical_ids)) != len(vertical_ids):
-            raise ValueError("vertical ids must be distinct")
+    def _vocabulary_ids_are_distinct(self) -> Self:
+        """Distinct within each vocabulary, and that is the whole rule.
 
-        lens_ids = [item.id for item in self.lenses]
-        if sorted(lens_ids) != sorted(LensId):
-            raise ValueError("lenses must label every LensId exactly once")
-
-        event_ids = [item.id for item in self.events]
-        if sorted(event_ids) != sorted(EventType):
-            raise ValueError("events must label every EventType exactly once")
+        It used to also demand that `lenses` label every `LensId` and `events`
+        every `EventType` exactly once. There is no enum left to be complete
+        against: this file IS the vocabulary, so a word it does not carry does
+        not exist, and a word it stops carrying is one a person deleted on
+        purpose. What that costs is written down rather than guarded here - a
+        deleted id leaves every committed day that carries it holding a word
+        nothing can name, which is why `retired` exists and why the reading side
+        renders an id it cannot name instead of dropping it.
+        """
+        for kind, ids in (
+            ("vertical", [item.id for item in self.verticals]),
+            ("lens", [item.id for item in self.lenses]),
+            ("event", [item.id for item in self.events]),
+        ):
+            if len(set(ids)) != len(ids):
+                raise ValueError(f"{kind} ids must be distinct")
         return self
 
     @model_validator(mode="after")
@@ -320,11 +330,11 @@ class Taxonomy(Contract):
                     if item.status is LifecycleStatus.ACTIVE
                 ),
                 *(
-                    ("lens", item.id.value, bool(item.definition))
+                    ("lens", item.id, bool(item.definition))
                     for item in self.lenses
                     if item.status is LifecycleStatus.ACTIVE
                 ),
-                *(("event", item.id.value, bool(item.definition)) for item in self.events),
+                *(("event", item.id, bool(item.definition)) for item in self.events),
             )
             if not defined
         ]
@@ -366,15 +376,21 @@ class Taxonomy(Contract):
     def vertical(self, vertical_id: str) -> VerticalDef | None:
         return next((item for item in self.verticals if item.id == vertical_id), None)
 
-    def lens_terms(self) -> dict[LensId, list[str]]:
-        """The lens match surface. A retired lens keeps its tombstone and stops matching."""
+    def lens_terms(self) -> dict[str, list[str]]:
+        """The lens match surface. A retired lens keeps its tombstone and stops matching.
+
+        This mapping is the closed vocabulary the tagger works from, which is
+        what keeps an open id type safe: `tag.tags` can only return a key of
+        what it is handed, so a hostile page can win itself a word we already
+        publish and can never invent one (Rule #11).
+        """
         return {
             lens.id: lens.keywords
             for lens in self.lenses
             if lens.status is not LifecycleStatus.RETIRED
         }
 
-    def lens_weights(self) -> dict[LensId, float]:
+    def lens_weights(self) -> dict[str, float]:
         """Only the lenses that score, so a caller cannot spend time on the others.
 
         Every id here is also in `lens_terms`, so a scoring hit is always a label
@@ -386,5 +402,5 @@ class Taxonomy(Contract):
             if lens.status is not LifecycleStatus.RETIRED and lens.weight > 0.0
         }
 
-    def event_terms(self) -> dict[EventType, list[str]]:
+    def event_terms(self) -> dict[str, list[str]]:
         return {event.id: event.keywords for event in self.events}

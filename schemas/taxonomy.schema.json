@@ -16,7 +16,9 @@
           "type": "string"
         },
         "id": {
-          "$ref": "#/$defs/EventType"
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
         },
         "keywords": {
           "description": "The curated terms that assign this event. Same rule as LensDef.keywords.",
@@ -36,22 +38,6 @@
       "title": "EventDef",
       "type": "object"
     },
-    "EventType": {
-      "description": "What happened to an item. One or more per item.",
-      "enum": [
-        "release",
-        "deal",
-        "acquisition",
-        "funding",
-        "capex",
-        "earnings",
-        "regulation",
-        "research",
-        "incident"
-      ],
-      "title": "EventType",
-      "type": "string"
-    },
     "LensDef": {
       "additionalProperties": false,
       "properties": {
@@ -68,7 +54,9 @@
           "type": "string"
         },
         "id": {
-          "$ref": "#/$defs/LensId"
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
         },
         "is_auto_discovered": {
           "default": false,
@@ -117,20 +105,6 @@
       ],
       "title": "LensDef",
       "type": "object"
-    },
-    "LensId": {
-      "description": "A question asked of items already collected. Costs no extra request.",
-      "enum": [
-        "china",
-        "ai-roi",
-        "markets",
-        "cyber",
-        "war",
-        "trade",
-        "chips"
-      ],
-      "title": "LensId",
-      "type": "string"
     },
     "LifecycleStatus": {
       "description": "Retire, never delete: a tombstone keeps old payloads valid.",
@@ -207,6 +181,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "LensDef.id and EventDef.id are Slug rather than the closed LensId and EventType enums, which are deleted. Taxonomy no longer requires the file to label every enum member exactly once; ids must only be distinct within their vocabulary.",
+      "version": "2026-09-12T03:55",
+      "why": "Adding or retiring a lens was a Python edit, a schema regeneration and a release, which is the opposite of the rule that a label vocabulary is config - and it is why the vocabulary had not moved. The schema now gates shape (the slug pattern) and never membership, so a word is one config edit. Breaking on the write side, read-compatible on the read side and deliberately so (section 11): every id any committed payload carries is a well-formed slug, so a widened type accepts every one of them, where a narrowed one would reject a day whose word this file has since stopped carrying. Nothing may invent a label, because tag.tags can only return a key of the mapping this file builds. What the enum was also doing was making it impossible to DELETE an id: measured 2026-09-12, ai-roi is retired here and carried by 18 committed items over 2026-08-27, 08-28 and 08-29, so deleting it rather than tombstoning it would leave those 18 holding a word nothing can name. That is what the reading side migrates for - it renders an id it cannot name rather than dropping it."
+    },
+    {
       "change": "Added VocabularyEntry.definition to every vertical, lens and event, and is_auto_discovered to VerticalDef and LensDef.",
       "version": "2026-09-12",
       "why": "An id and a display name tell a model nothing. `research` means whatever sentence sits next to it, so the sentence is the label and it has to be somewhere a person can edit without touching Python - change the text and the next run labels against it, with no code change and no schema regeneration. The bound is a token budget: 30 definition sentences measured 805 tokens together with llama-tokenize against the pinned Qwen3-8B-Q4_K_M on 2026-09-11, about 27 tokens each, and 240 characters is roughly twice that. is_auto_discovered says a model proposed the entry, which stops a word that arrived from the open web reading like one a person chose. Both are additive with defaults, so a taxonomy written before this still validates and offers nothing extra to a prompt; no read-side migration is needed. An entry the vocabulary does offer must carry its sentence, which is a rule on Taxonomy rather than a required key, because a draft entry has no definition yet."
@@ -249,7 +228,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-12",
+      "default": "2026-09-12T03:55",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -269,5 +248,5 @@
   ],
   "title": "Taxonomy",
   "type": "object",
-  "version": "2026-09-12"
+  "version": "2026-09-12T03:55"
 }

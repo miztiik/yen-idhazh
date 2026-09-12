@@ -41,7 +41,7 @@ type Json = Record<string, unknown>;
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-09-09';
+export const VIEW_VERSION = '2026-09-12T03:55';
 
 // The fields a page renders, and no others. Traced along the render path rather
 // than guessed: `DigestList` scopes and filters the list, and `DigestItem` with

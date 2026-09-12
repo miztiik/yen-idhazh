@@ -11,10 +11,13 @@ measured on 2026-08-26 over 1889 published items and moves lens coverage from
 noise, so the terms are curated in `config/taxonomy.json` and this module
 derives none of them.
 
-Two properties follow from the vocabulary being a mapping keyed by an enum:
+Two properties follow from the vocabulary being a mapping built from
+`config/taxonomy.json`, and neither needed the ids to be a closed Python type:
 
 - A hostile page can win itself a tag we already publish. It can never invent
-  one, and no tag ever reaches a prompt (Rule #11). The matcher reads text that
+  one, and no tag ever reaches a prompt (Rule #11). `tags` returns keys of the
+  mapping it was handed and nothing else, so the committed file is the whole of
+  the vocabulary whatever the ids are typed as. The matcher reads text that
   has already crossed the trust boundary at `sanitize`.
 - The same text always produces the same tags, so a re-run cannot reorder or
   re-label a day.

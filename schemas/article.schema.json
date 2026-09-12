@@ -10,22 +10,6 @@
       "title": "ArticleStatus",
       "type": "string"
     },
-    "EventType": {
-      "description": "What happened to an item. One or more per item.",
-      "enum": [
-        "release",
-        "deal",
-        "acquisition",
-        "funding",
-        "capex",
-        "earnings",
-        "regulation",
-        "research",
-        "incident"
-      ],
-      "title": "EventType",
-      "type": "string"
-    },
     "FailureCode": {
       "description": "Stable failure vocabulary for item-health rows.",
       "enum": [
@@ -55,20 +39,6 @@
       "title": "FailureCode",
       "type": "string"
     },
-    "LensId": {
-      "description": "A question asked of items already collected. Costs no extra request.",
-      "enum": [
-        "china",
-        "ai-roi",
-        "markets",
-        "cyber",
-        "war",
-        "trade",
-        "chips"
-      ],
-      "title": "LensId",
-      "type": "string"
-    },
     "SourceForm": {
       "enum": [
         "article",
@@ -92,6 +62,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "lenses and events are lists of Slug rather than of the closed LensId and EventType enums, which are deleted. The schema gates the slug pattern and no longer enumerates the members.",
+      "version": "2026-09-12T03:55",
+      "why": "A lens id was a Python enum member, so adding or retiring a word was a code change, a schema regeneration and a release. The vocabulary is config/taxonomy.json and nothing else, and the tagger can only ever emit a key of the mapping that file builds - so the type can widen without letting anything invent a label (Rule #11). Read-compatible: every id any payload on disk carries is a well-formed slug, so this build reads every one of them, and a re-run of a stage against a payload an older build wrote produces the same tags. The break is on the write side, where the schema stops refusing a word the vocabulary has gained (section 11)."
+    },
     {
       "change": "failure_code may now carry copied_source or leaked_address.",
       "version": "2026-08-27",
@@ -150,7 +125,8 @@
     },
     "events": {
       "items": {
-        "$ref": "#/$defs/EventType"
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "type": "string"
       },
       "title": "Events",
       "type": "array"
@@ -198,7 +174,8 @@
     },
     "lenses": {
       "items": {
-        "$ref": "#/$defs/LensId"
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "type": "string"
       },
       "title": "Lenses",
       "type": "array"
@@ -322,7 +299,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-27",
+      "default": "2026-09-12T03:55",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -356,5 +333,5 @@
   ],
   "title": "Article",
   "type": "object",
-  "version": "2026-08-27"
+  "version": "2026-09-12T03:55"
 }
