@@ -8,7 +8,7 @@ This runbook is written to be **domain-neutral and stack-agnostic**, so it can b
 
 ## When to run
 
-For any PR you author. The mechanics scale - a one-line typo fix runs the same steps as a multi-file refactor, just faster.
+For any change that goes through a pull request. Not every change does - one that cannot break a reader, a contract or a published page can go to the trunk directly, and the same gates still apply to it there. Scale the steps to the change: a one-line typo fix needs a commit, a push, and the checks its own paths select.
 
 ## Inputs
 
@@ -43,13 +43,9 @@ files before transferring it. Do not overwrite another agent's changes while
 making the transfer. Commit and validate in the dedicated worktree, merge via
 the PR, then fast-forward the clean main checkout and remove only your worktree.
 
-## The 2-commit-then-squash pattern
+## Commit
 
-Use this pattern when your PR's diff needs to cite its own to-be-allocated PR number (the most common case for any change that updates a plan-doc or durable doc with a `PR #_pending_` placeholder). The cost is one extra commit on the branch (~5 lines of churn) that vanishes at squash; the value is the in-doc PR# stamp lands in the same merge SHA as the work.
-
-### Commit 1 - structural
-
-All file edits, deletes, schema bumps, test changes. The plan-doc / concept / how-to / subsystem entries that reference this PR cite `PR #_pending_` as a placeholder. Stage explicit paths only:
+One commit where the work is one change. Stage explicit paths only:
 
 ```powershell
 git add <named paths>
@@ -69,20 +65,11 @@ git push -u origin <branch>
 gh pr create --base main --head <branch> --title "<title>" --body-file .tmp_pr_body.md
 ```
 
-Capture the PR number from the URL it prints.
+Capture the PR number from the URL it prints; the merge command below needs it.
 
-### Commit 2 - stamp
+**A change does not cite its own pull request number.** A number allocated after the branch is written costs a second commit and a second round of checks for about five lines of churn. Name the change by what it did - the behaviour, the file, the date - which is what somebody searching the history has to go on anyway. Where a record genuinely needs the number, read it from the merge rather than writing it into the diff.
 
-Replace `_pending_` with `#NNN` in every doc that references this PR:
-
-```powershell
-# Edit files: plan-doc row + relevant concept/how-to/subsystem doc + etc.
-git add <stamped paths>
-git commit -m "stamp(<scope>): PR #NNN"
-git push
-```
-
-Do not record an architecture decision as a routine PR stamp. Update the living doc that owns the current shape. When this PR actively explored and rejected a real architecture alternative with non-trivial reversal cost, add a `## Design rationale` / `## Rejected alternatives` section to that same living doc - there is no `docs/architecture/decisions/` directory.
+Do not record an architecture decision as a routine stamp either. Update the living doc that owns the current shape, in this same change. When the change actively explored and rejected a real architecture alternative with non-trivial reversal cost, add a `## Design rationale` / `## Rejected alternatives` section to that same living doc - there is no `docs/architecture/decisions/` directory.
 
 ## The Definition-of-Done gates
 
@@ -100,7 +87,7 @@ Record the project's actual commands under each category the first time you run 
 
 ## Merge
 
-Merge is serialized even when work dispatch is parallel. Before each merge, confirm the branch is based on the current target branch and all required gates are green. If the target branch moved, update the PR branch, rerun the affected gates, and merge only after they are green again. Never merge a red or stale branch.
+Merge is serialized even when work dispatch is parallel. Before each merge, confirm the required gates are green. Update the branch only when something asks for it - a conflict, or a gate that went red because of a change on the target branch rather than yours. Never merge a red branch.
 
 **When the target branch moves under an open PR, bring it in with a merge.** A merge adds those commits to your branch and rewrites nothing you already pushed, so the update is an ordinary push with nothing to force over:
 
@@ -120,7 +107,7 @@ The cost, named rather than hidden: one extra merge commit on the branch. The sq
 gh pr merge NNN --squash --delete-branch
 ```
 
-Both commits squash to one entry on `main`. The merged-to-main commit contains the correct `PR #NNN` reference inline.
+The branch squashes to one entry on `main`.
 
 **`--auto` queues the merge behind the gates instead of behind a person, and it needs more than the repo setting.** Auto-merge queues behind something that *blocks* the merge, so with no required status check there is nothing to queue behind: `gh pr merge <n> --squash --delete-branch --auto` exits 0 and does nothing. Check `autoMergeRequest` rather than the exit code before believing it worked.
 
@@ -189,12 +176,12 @@ Remove-Item .tmp_*.txt, .tmp_*.md, .tmp_*.log -ErrorAction SilentlyContinue
 
 The `.tmp_*` pattern is the convention for ephemeral PR-authoring files. Add `.tmp_*` to `.gitignore` once it exists.
 
-### Step 6 - distill lessons
+### Step 6 - a finding with no home
 
-If the PR taught you something durable - a new pattern, a gotcha, a generalisable rule - distill it per [distill-a-plan.md](distill-a-plan.md) so the next session does not rediscover it.
+Normally there is nothing to do here, because the change already updated the page that owns what it changed. If it taught you something durable that no page owns, [distill-a-plan.md](distill-a-plan.md) says where it goes.
 
 ## See also
 
 - [CLAUDE.md](../../CLAUDE.md) section 8 (Git Hygiene), section 9 (Definition of Done), section 12 (UI Verification), section 13 (Test Coverage Policy)
-- [distill-a-plan.md](distill-a-plan.md) - what to do with the lessons a PR produced
+- [distill-a-plan.md](distill-a-plan.md) - where a finding goes when no page owns it yet
 - [../reference/documentation-structure.md](../reference/documentation-structure.md) - which doc tier the distilled content belongs in

@@ -6,7 +6,7 @@ The procedure for turning a rough idea or draft into a `TODO/<YYYYMMDD>-<slug>-p
 
 Authoring produces the plan; it does NOT start the work. Running the plan is a separate ritual in [execute-a-plan.md](execute-a-plan.md).
 
-Run the `bootstrap` skill first (skip only for Level-0/1). The plan-doc is a living doc on the default branch, never a frozen artifact.
+Read the page that owns each surface the plan touches ([../agents/bootstrap.md](../agents/bootstrap.md) routes). The plan-doc is a living doc on the default branch, never a frozen artifact.
 
 When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "section".
 
@@ -17,7 +17,7 @@ A user says "make a plan", "prepare a plan", "plan this out", or "write an execu
 ## Procedure
 
 1. **Investigate against the code, not the draft.** Read the actual files the work touches. Verify every load-bearing claim directly (read the enforcement predicate, the consumer call site, the row-count), never via a subagent summary alone. If a draft says "X violates Y", open Y and confirm. Dispatch `Explore` subagents for breadth so the main context does not overflow. Spot-check any id-overlap claim with a real `set(a) & set(b)` sample before trusting it.
-2. **Size and split into PR-rows.** One row = one PR = one branch = one reviewable unit. Phase the rows with hard dependency lines (A -> B ->...), reader-before-writer for any schema or contract change. Bundle only where the work itself is one atomic surface; never bundle mixed risk profiles.
+2. **Size the rows around outcomes, not around deliveries.** A row is one outcome that can be verified and reverted, and several rows ship together when they share a surface, an owner and a risk profile. Split a row when a part carries different risk, or when two parts can genuinely be built at the same time by different agents - not to make each one small enough to review, because a reviewer reads the change, not the row. Phase the rows with hard dependency lines (A -> B ->...), reader-before-writer for any schema or contract change. Never bundle mixed risk profiles.
 3. **Resolve ambiguity by naming the deciding authority inline.** Use the authority assignment in `CLAUDE.md` section 14. Where a decision is contested, run the relevant personas in DEBATE - they converge to ONE written ruling baked into the row, not independent parallel reviews. Red-team passes are research-only and return exact old -> new text.
 4. **Set the Level + ESCALATE triggers.** Per CLAUDE.md section 6. Anything Level-5 (core design / a persisted contract / the runtime) PAUSES for user sign-off; write the trigger explicitly so the executing agent stops there and nowhere else. A trigger that fires mid-execution is handled by [handle-scope-change.md](handle-scope-change.md).
 5. **Write the plan-doc** using the structure below. Stamp the execution pointer (see [execute-a-plan.md](execute-a-plan.md)) near the top. STOP after writing. Do not implement.
@@ -45,9 +45,9 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
  - `#` integer ordinal.
  - `Depends-on` lists `#` values that must be DONE before this row can start; `-` means no predecessor.
  - `Parallel-group` is a letter; rows sharing a letter are mutually independent and dispatched together.
- - `Status` starts `PENDING`, flips through `IN-FLIGHT` to `DONE #<pr>` or `COLLAPSED` (with cited rationale).
- - `Worktree` is the isolated absolute path the orchestrator created for the row (or `-` until dispatched).
- - `Subagent` names the dispatched agent (or `-` until dispatched).
+ - `Status` starts `PENDING`, flips through `IN-FLIGHT` to `DONE` or `COLLAPSED` (with cited rationale). Write `DONE #<pr>` when the row shipped on a pull request of its own.
+ - `Worktree` is the isolated absolute path the row was carried on, or `-` when it was carried in its owner's own checkout.
+ - `Subagent` names the agent the row was delegated to, or `-` when its owner carried it directly.
 
 - **Section 2+ - one section per row, fixed shape, no prose padding:**
 
@@ -78,7 +78,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
 ## See also
 
 - [execute-a-plan.md](execute-a-plan.md) - the orchestrator contract that runs the plan this doc writes.
-- [distill-a-plan.md](distill-a-plan.md) - the closure and archive ritual after every row merges.
+- [distill-a-plan.md](distill-a-plan.md) - where a finding goes when no page owns it yet.
 - [handle-scope-change.md](handle-scope-change.md) - STOP-AND-SURFACE when scope shifts mid-plan.
 - [../reference/documentation-structure.md](../reference/documentation-structure.md) - the plan-doc single-snapshot rule and Diataxis tiers.
 - [../../CLAUDE.md](../../CLAUDE.md) - correction levels (section 6), anti-patterns (section 10), agent roster (section 14).

@@ -6,16 +6,19 @@ The procedure for lifting durable findings out of a `TODO/<date>-<slug>.md` plan
 
 ## When to run
 
-- After any plan-doc row closes (PR merged + status flipped to `Closed` / `Done`).
-- Before declaring an entire plan-doc complete.
-- When picking up a stale plan-doc and noticing it has grown rationale narrative that belongs elsewhere.
+**The default is never, because the work has already been done.** A change updates the page that owns the behaviour it changed, in the same commit (`CLAUDE.md` Guardrail #4), so by the time a row closes there is normally nothing left to lift.
 
-Do NOT run for in-flight rows. Distillation only happens after the finding has stabilised through merge.
+Run this when that did not happen, and only then:
+
+- A finding turned up that no page owns, and the change that found it had no business creating one.
+- A plan-doc has grown rationale narrative that belongs on a living doc.
+- Before deleting a plan-doc, to check that nothing durable is only written there.
+
+Do NOT run it as a closure pass after every row. A pass that runs whether or not it has anything to do is a pass that mostly finds nothing, and it costs a cycle every time.
 
 ## Inputs
 
-- One closed plan-doc row + its `CLOSED` narrative sub-section (per the [ship-a-pr.md](ship-a-pr.md) 2-commit-then-squash stamp pattern).
-- The merged commit SHA on `main` (for cross-reference).
+- The finding, and the change that produced it.
 
 ## The routing decision
 

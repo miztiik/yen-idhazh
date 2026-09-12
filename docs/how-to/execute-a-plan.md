@@ -6,14 +6,16 @@ The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [
 
 When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "section".
 
-## The model: an orchestrator that never codes, and disposable workers that do
+## The model: one owner, who delegates when delegation pays
 
-The agent that runs a plan is an **orchestrator**, not an implementer. It holds only the plan-doc and one report per row, and it NEVER writes feature code inline. Every row's real work is delegated to a **worker subagent** (via `runSubagent`) that runs in its own isolated context and its own git worktree, does the row end-to-end, and returns a structured report. The orchestrator then gates, merges, flips the Status Reckoner, and advances.
+The agent that runs a plan **owns** it. It may carry a row itself, and it delegates a row to a **worker subagent** (via `runSubagent`) when delegation buys something: the row is genuinely independent of what the owner is already holding, or the owner's own context is filling up.
 
-Why the split exists: the orchestrator's context is the scarce resource. If it implemented rows inline, its context would fill with per-row detail and it would lose the plan. Delegation keeps the orchestrator lean - it only ever holds the plan + per-row reports, never the full implementation transcript. This is context protection, and it is the whole point.
+**Delegation is context protection, and it costs a hand-off.** A worker starts cold, reads its way back to where the owner already was, and returns a report the owner then has to read. That is worth paying when two rows can be built at the same time, or when the owner cannot hold another row's detail without losing the plan. It is not worth paying for a row the owner is already inside: a one-file edit in a surface it just changed lands faster and better if the owner does it.
+
+The diagram below shows the delegated path, because that is the one with moving parts. Where delegation is not bought, the owner is both columns.
 
 ```
-orchestrator (main thread) worker subagent (one per row) persona custom agents
+orchestrator (main thread) worker subagent (when delegated) persona custom agents
  read the queue; adopt or close runSubagent(default) per row runSubagent("Fowler...") etc.
  read plan-doc + Status Reckoner bootstrap; implement the row resolve ONE ambiguity,
  pick next dispatchable row(s) ----> code + tests + docs ----> return a written ruling
@@ -28,17 +30,19 @@ orchestrator (main thread) worker subagent (one per row) persona custom agents
 
 ### The orchestrator (main thread) does exactly this, and only this
 1. Read the queue before adding to it: what is already half-done, and what the tables say is done. Adopt or close it first (below).
-2. Bootstrap; read the plan-doc Section 0 (operating contract) + Section 1 (Status Reckoner).
+2. Read the plan-doc Section 0 (operating contract) + Section 1 (Status Reckoner).
 3. Select the next dispatchable row(s): every `Depends-on` is `DONE`; rows sharing a `Parallel-group` dispatch together, up to `Parallel N`. Waiting for checks is not a dependency.
-4. Create an isolated git worktree off `origin/main` + a named branch per row. Never share a worktree between rows or with a parallel agent (worktree contamination silently sweeps one row's edits into another's PR). Fill the Status Reckoner `Worktree`.
-5. Dispatch one worker subagent per row (`runSubagent`, default agent) with a self-contained brief (below). Set `Status = IN-FLIGHT`; fill `Subagent`.
+4. For a row you are delegating, or one that will run beside another, create an isolated git worktree off `origin/main` and a named branch. Never share a worktree between rows or with a parallel agent (worktree contamination silently sweeps one row's edits into another's change). Fill the Status Reckoner `Worktree`. A row you carry yourself, with nothing running beside it, needs no second checkout.
+5. Dispatch a worker subagent (`runSubagent`, default agent) with a self-contained brief (below) for each row delegation buys. Fill `Subagent`; mark `Status = IN-FLIGHT` under the condition below.
 6. Receive the worker's report. Verify its test records and the merge candidate's CI checks against the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md). Do not repeat an unchanged worker check. If a merge changes the tested inputs, select checks for those changed inputs. On green gates, remove the row's worktree and then AUTO-merge (`gh pr merge --squash --delete-branch`). If checks or publish/deploy jobs are still running for one independent row, keep dispatching other ready rows instead of idling.
-7. Confirm the merged diff carried the row's own Reckoner line (below); unblock dependents; [distill](distill-a-plan.md) the closed row.
+7. Confirm the merged diff carried the row's own Reckoner line (below); unblock dependents.
 8. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
 **Step 1 exists because an interrupted run leaves no note.** A worker that is killed mid-row never writes its report, never opens a pull request, and never clears the `IN-FLIGHT` it was given, so the next agent to arrive sees a queue that looks idle and a box that is not. What it leaves behind is a checkout with edits in it and a branch nobody proposed - indistinguishable, at a glance, from a checkout somebody finished with. Before selecting any row, list the worktrees and branches on the box, ask which plan row each one belongs to, and ask the pull request host whether its pull request is open, merged or absent. Then decide per item: adopt the work, or remove it. Starting a fresh row beside an abandoned one is how the same row gets done twice, and how two branches end up writing the same file.
 
-**The `IN-FLIGHT` stamp of step 5 goes on the trunk, before the branch is cut, and this is the step orchestrators skip.** A status written only on the row's own branch is invisible until that branch merges, which is exactly the window the stamp exists to cover - so a stamp on the branch is not a stamp. It is one line of one table, and the orchestrator is already permitted this edit and no other. Measured on this project on 2026-09-12: thirteen rows had been dispatched and merged, and **no cell anywhere read `IN-FLIGHT`** - for a whole working session the only record of what was being worked was a chat log, which no later agent can read. The cost of the stamp is one small trunk commit per dispatch. The cost of skipping it is that the queue reports every busy row as free, and two agents pick the same one.
+**When more than one agent is working the plan at once, mark the row `IN-FLIGHT` on the trunk before the branch is cut.** A status written only on the row's own branch is invisible until that branch merges, which is exactly the window the mark exists to cover - so a mark on the branch is not a mark. It is one line of one table, and the owner is already permitted this edit and no other. Measured on this project on 2026-09-12: thirteen rows had been dispatched and merged, and **no cell anywhere read `IN-FLIGHT`** - for a whole working session the only record of what was being worked was a chat log, which no later agent can read.
+
+**When one agent is carrying the plan, that mark buys nothing and costs a push.** There is nobody to collide with, and a trunk commit for one table cell starts a round of checks for a cell. Record the row's status in the change that does the work.
 
 The project's plan-queue reader answers all three questions in one command - what each Reckoner says, what can start now, and which worktrees and branches no row claims. Where the project has no such tool, the same answer is a `git worktree list`, a branch list, and one query for open pull requests, read against the Reckoners by hand.
 
@@ -48,11 +52,11 @@ A plan-doc is written before the work and read after the tree has moved under it
 
 1. **Every symbol the row names has to exist.** Search the tree for each identifier, path and command the row's text quotes. A row that names something renamed, moved, or never written sends a worker looking for it, and the worker then either invents a substitute or stops and asks. Both cost a dispatch, and the substitute is the more expensive one because it arrives looking like finished work. When a name is wrong, correct the row before dispatching and say what it was corrected from.
 
-2. **The row's oracle has to be able to fail against the base tree.** Run it before the worker starts. It must fail. An oracle that already passes is measuring something other than the row, and the worker will report a green that proves nothing - so the row closes, the plan records it as settled, and nothing was checked. A row that retires a name is where this bites most often: an oracle phrased as a search for that name matches every place the name still is, so it answers the same before the work and after it, for two different reasons.
+2. **The row's check has to be able to fail for the reason the row exists.** Run it against the base tree before the work starts. Usually it fails, and an oracle that already passes is measuring something other than the row - the work will then report a green that proves nothing, so the row closes, the plan records it as settled, and nothing was checked. A row that retires a name is where this bites most often: an oracle phrased as a search for that name matches every place the name still is, so it answers the same before the work and after it, for two different reasons. **Where the row's whole value is that behaviour does not change** - a refactor, a move, a rename - the check passes at both ends by design, and what must be able to fail is the property the change could break. Say which of the two the row is. Do not invent a failing check to satisfy a rule.
 
 Neither check makes a row correct. They establish only that the row can be acted on, and that its result can be told apart from its starting position - which is the same standard `CLAUDE.md` Guardrail #10 sets for any other measurement.
 
-The orchestrator does NOT open the row's source files, write its code, or run its inner test loop inline - that is the worker's job. Its own edits are limited to the plan-doc and the merge: correcting a row before dispatch, filling `Worktree` and `Subagent`, and marking `IN-FLIGHT`. A page derived from the Reckoners is not on that list either, for the reason in the worker's step 7 - the stamp is the edit, and the generated page follows it on its own. The row's completed line is stamped by the worker, in the row's own pull request.
+**When a row is delegated, the owner does not also implement it.** Opening the row's source files while a worker is inside them is how two versions of one change appear. For a delegated row its own edits are limited to the plan-doc and the merge: correcting a row before dispatch, filling `Worktree` and `Subagent`, and marking `IN-FLIGHT`. A page derived from the Reckoners is not on that list either, for the reason in the worker's step 7 - the line is the edit, and the generated page follows it on its own.
 
 Do not remove or alter a worker's checkout while its tests or build are running.
 Closing a plan does not invalidate an existing check. A documentation-only
@@ -64,11 +68,11 @@ closure uses documentation checks and CI, not a fresh local application suite.
 
 **When the orchestrator reports to the user, it translates; it does not forward.** A worker writes in the vocabulary of the subsystem it just changed, which is correct for the doc that row updated and wrong for a person asking what happened. Say what each number means next to the number (`CLAUDE.md` section 0b). Forwarding a worker's phrasing is the single easiest way for an orchestrator to break the voice rule while every row underneath it is green.
 
-**A row's pull request updates that row's Reckoner line, inside that same pull request.** Not after the merge, and not by the orchestrator later. The worker edits one line of one table - its own row's `Status`, `Worktree`, `PR` and `Subagent` - and nothing else in the Reckoner, so the merged diff is self-describing: the change and the record that it happened arrive in one commit, and there is no window in which they disagree. The pull request number is not known while the branch is being written, which is exactly what the placeholder-then-stamp pattern in [ship-a-pr.md](ship-a-pr.md) is for: write `PR #_pending_`, open the pull request, then stamp the number in a second commit that the squash absorbs.
+**A row's change updates that row's Reckoner line, inside that same change.** Not afterwards, and not by somebody else later. It edits one line of one table - its own row's `Status`, `Worktree` and `Subagent` - and nothing else in the Reckoner, so the merged diff is self-describing: the change and the record that it happened arrive together, and there is no window in which they disagree. The pull request number is not known while the branch is being written, so `PR` is read from the merge rather than written into the diff ([ship-a-pr.md](ship-a-pr.md)).
 
 The cost of leaving it until afterwards is that nothing carries the update - it belongs to a step that runs after the only artefact anybody reviews has already merged, so an orchestrator that dies, is interrupted, or simply moves on leaves a row that is finished and a table that says it is not. Measured 2026-09-11: the first row executed under this contract merged in a pull request that touched no Reckoner line, and hours later that row still read `PENDING` with an empty `PR` column while the work was on the trunk. The instruction to flip it was written down and read by the agent that failed to do it, which is the finding worth keeping - **wording alone did not hold, so the update moved inside the diff that is reviewed.** Step 7 above verifies rather than performs it, and the project's plan-queue reader fails when a merged pull request names a row that never learned it landed.
 
-### The worker subagent (one per row) does the actual work
+### The worker subagent, when a row is delegated
 Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Scope, Files touched, Acceptance gates, Oracle, Decisions, Rejected alternatives) plus the standing instruction: read the page that owns the surface, honor CLAUDE.md, stay in scope, consult personas on ambiguity, return a report. The worker:
 1. Reads the row, and the page that owns each surface it touches ([../agents/bootstrap.md](../agents/bootstrap.md) routes).
 2. Implements the row end-to-end: code + tests at the tier that matches the surface (CLAUDE.md section 13) + the docs update.
@@ -90,17 +94,21 @@ own `tools` list must include it too, because that list takes precedence. If an
 with one real, read-only nested invocation. See
 [VS Code's nested-subagent documentation](https://code.visualstudio.com/docs/agents/run/subagents#_nested-subagents).
 
-If the harness does not permit a worker to dispatch a nested subagent, the worker instead surfaces the ambiguity in its report; the orchestrator runs the persona consult and re-dispatches the row with the ruling appended to the brief. Reading a persona's file is not a consultation. Either way personas are consulted - never skipped, never treated as a gate.
+If the harness does not permit a worker to dispatch a nested subagent, the worker instead surfaces the ambiguity in its report; the owner runs the persona consult and re-dispatches the row with the ruling appended to the brief. Reading a persona's file is not a consultation.
+
+**Consult when two defensible answers would lead to different code and the difference matters.** Not for coverage, not one per surface touched, and never as a gate. A consultation whose outcome cannot change what gets written is one to skip - running it anyway is how a row acquires an hour and a paragraph without acquiring a decision.
 
 ## The one-line stamp a plan-doc carries
 
 Every plan-doc carries exactly one execution stamp (author-a-plan.md step 5). It is the line that makes "implement it" sufficient: the executing agent reads it, loads this doc, and follows the contract with no further instruction.
 
 ```
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = <n>; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; parallel N = <n>; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 ```
 
 Drop the `AUTHOR-AND-STOP...` clause once the user authorizes execution.
+
+A plan-doc carrying an earlier wording of this stamp is run under this doc as it stands. The stamp points here; it does not restate the contract.
 
 ## Parallel fan-out
 
@@ -124,7 +132,7 @@ AUTO is the default. PAUSE and surface only for: a Level-5 row (CLAUDE.md sectio
 
 ## Closure
 
-When every row is `DONE` / `COLLAPSED`: run [distill-a-plan.md](distill-a-plan.md) for each closed row, confirm the Status Reckoner is fully resolved, and delete the plan-doc once fully distilled (git history is the ledger, per [../reference/documentation-structure.md](../reference/documentation-structure.md)).
+When every row is `DONE` / `COLLAPSED`: confirm the Status Reckoner is fully resolved, check that nothing durable is written only in the plan-doc ([distill-a-plan.md](distill-a-plan.md) says where anything left over goes), and delete the plan-doc (git history is the ledger, per [../reference/documentation-structure.md](../reference/documentation-structure.md)).
 
 **Then sweep the worktrees the plan created**, with the tool the project's own worktree notes name. Judge each one on three signals and keep it unless all three agree: its pull request is merged, its branch is gone from the remote, and its own tree is clean. All three are needed. A squash merge leaves the branch a non-ancestor of the trunk, so ancestry cannot answer whether the row landed - which is why the pull request is asked. And a branch with no pull request at all is pending work rather than stale work; twice on this project such a branch held a real fix nobody had proposed yet. A detached worktree is the one case ancestry settles alone.
 
@@ -134,7 +142,7 @@ Remove the checkout and keep the branch whenever the branch still holds a commit
 
 - [author-a-plan.md](author-a-plan.md) - authoring the plan this doc runs; the plan-doc structure + Status Reckoner columns (`Worktree`, `Subagent`) this contract fills.
 - [../agents/bootstrap.md](../agents/bootstrap.md) - what to read before answering, and what every answer owes.
-- [distill-a-plan.md](distill-a-plan.md) - lifting findings into canonical docs after a row merges.
+- [distill-a-plan.md](distill-a-plan.md) - where a finding goes when no page owns it yet.
 - [handle-scope-change.md](handle-scope-change.md) - STOP-AND-SURFACE when scope shifts mid-row.
 - [ship-a-pr.md](ship-a-pr.md) - the PR lifecycle the orchestrator runs at merge.
 - [../../CLAUDE.md](../../CLAUDE.md) - correction levels (section 6), Definition of Done (section 9), agent roster (section 14).
