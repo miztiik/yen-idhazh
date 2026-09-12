@@ -23,7 +23,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 10 | 3 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
-| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 1 | 2 | 1 |
+| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 1 | 2 | 0 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
@@ -35,17 +35,21 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 7 | 21 | 6 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 3 | 5 | 0 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
-| [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 3 | 1 | 1 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 1 |
+| [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 3 | 1 | 0 |
 
-## In flight - 2
+## In flight - 6
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
+| #3g | 11 | C7 | Call 1's reply does not fit its own budget | p11-3g |
+| #2 | 13 | B | The window takes a value, and nothing is deleted yet | p13-2 |
 | #1a | 23 | C | The fingerprint stops gating and stops being read | p23-1a |
 | #3 | 24 | B | The migration utility, and it refuses to write a tree it cannot read back | p24-3 |
+| #1 | 25 | A | Two docstrings defend a requirement the page retired | p25-1 |
+| #4 | 26 | B | The ruling, written where the next person arrives | p26-4 |
 
-## Ready now - 27
+## Ready now - 24
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -58,9 +62,8 @@ section 3 is where it is answered.
 | #19 | 20260823-known-defects-plan | - | A summarize call that failed on its reply reports no cost at all | - |
 | #20 | 20260823-known-defects-plan | - | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
-| #3g | 11 | C7 | Call 1's reply does not fit its own budget | - |
+| #6 | 11 | F | The small model, its job and its cache go | 5b |
 | #1 | 12 | A | A new engine behind the same seam | - |
-| #2 | 13 | B | The window takes a value, and nothing is deleted yet | 1 |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
@@ -77,11 +80,9 @@ section 3 is where it is answered.
 | #4 | 23 | F | An event gets a lifecycle | 3 |
 | #13 | 23 | F | The encoder alarm | 3 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
-| #1 | 25 | A | Three docstrings defend a requirement the page retired | - |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
-| #4 | 26 | B | The ruling, written where the next person arrives | 1, 2 |
 
-## Waiting on another row - 74
+## Waiting on another row - 73
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -91,13 +92,12 @@ section 3 is where it is answered.
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
 | #3f | 11 | C6 | The window is sized for two calls | plan 23 row #1a is IN-FLIGHT |
-| #6 | 11 | F | The small model, its job and its cache go | - |
 | #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
 | #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | D | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | E | A whole day, again | 5 is PENDING |
-| #3 | 13 | C | The fuse comes out, and one run is watched | 2 is PENDING |
+| #3 | 13 | C | The fuse comes out, and one run is watched | 2 is IN-FLIGHT |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
 | #2 | 15 | B | Position and length: bar, dot, slope | 1 is PENDING |
@@ -132,7 +132,7 @@ section 3 is where it is answered.
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 is PENDING |
-| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is BLOCKED |
+| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is PENDING |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
 | #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is PENDING; 8 is PENDING |
@@ -149,7 +149,7 @@ section 3 is where it is answered.
 | #6 | 24 | D | `state/feed-health/` files by day | 3 is IN-FLIGHT |
 | #7 | 24 | E | `state/seen/` files by day | 3 is IN-FLIGHT |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 3 is IN-FLIGHT |
-| #2 | 25 | B | One order over the whole day, inside a frame a person set | 1 is PENDING |
+| #2 | 25 | B | One order over the whole day, inside a frame a person set | 1 is IN-FLIGHT |
 | #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | 2 is PENDING |
 | #6 | 25 | C | The topic pills order by what is running | 2 is PENDING |
 | #4 | 25 | D | Carriage becomes a tie-break | 3 is PENDING |
