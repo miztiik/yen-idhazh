@@ -19,11 +19,11 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 6 | 3 | 3 | 3 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 3 | 4 | 4 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 12 | 8 | 4 | 0 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 9 | 4 | 2 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
-| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 0 | 3 | 0 |
+| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 1 | 2 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
@@ -33,21 +33,17 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 6 | 22 | 7 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 1 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 7 | 21 | 7 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 3 | 5 | 1 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
 
-## In flight - 4
+## In flight - 0
 
-| Row | Plan | Group | Title | Worktree |
-| --- | --- | --- | --- | --- |
-| #3e | 11 | C5 | The instructions move in front of the article | p11-3e |
-| #1 | 13 | A | The rules, and which rule governs every file this project writes | p13-1 |
-| #5 | 23 | A | The item id becomes sixteen characters of base32 | p23-5 |
-| #4 | 24 | B | The telemetry publisher declares the cover it already has | p24-4 |
+Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
+dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 26
+## Ready now - 30
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -58,8 +54,12 @@ section 3 is where it is answered.
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #19 | 20260823-known-defects-plan | - | A summarize call that failed on its reply reports no cost at all | - |
+| #20 | 20260823-known-defects-plan | - | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
+| #3g | 11 | C7 | Call 1's reply does not fit its own budget | - |
+| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 5, 3b, 3e |
 | #1 | 12 | A | A new engine behind the same seam | - |
+| #2 | 13 | B | The window takes a value, and nothing is deleted yet | 1 |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
@@ -82,7 +82,7 @@ section 3 is where it is answered.
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 | #1 | 26 | A | What prerendering actually weighs, both arms | - |
 
-## Waiting on another row - 77
+## Waiting on another row - 75
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -92,14 +92,12 @@ section 3 is where it is answered.
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
 | #3f | 11 | C6 | The window is sized for two calls | - |
-| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 3e is IN-FLIGHT |
 | #6 | 11 | F | The small model, its job and its cache go | 5b is PENDING |
 | #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
 | #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | D | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | E | A whole day, again | 5 is PENDING |
-| #2 | 13 | B | The window takes a value, and nothing is deleted yet | 1 is IN-FLIGHT |
 | #3 | 13 | C | The fuse comes out, and one run is watched | 2 is PENDING |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
@@ -148,7 +146,7 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING; 20 is PENDING |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | 1a is PENDING |
-| #5 | 24 | C | `state/item-health/` files by day | 3 is PENDING; 4 is IN-FLIGHT |
+| #5 | 24 | C | `state/item-health/` files by day | 3 is PENDING |
 | #6 | 24 | D | `state/feed-health/` files by day | 3 is PENDING |
 | #7 | 24 | E | `state/seen/` files by day | 3 is PENDING |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 3 is PENDING |
