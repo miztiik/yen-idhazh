@@ -17,15 +17,13 @@ from pathlib import Path
 
 STANDARD = "docs/reference/documentation-structure.md"
 
-#: Loaded on every task before a line of code is read (docs/agents/bootstrap.md).
-ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "docs/agents/bootstrap.md")
+#: Held before a line of code is read, because the harness injects them.
+ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md")
 
-#: The bootstrap also pulls one of each of these. The worst case is the heaviest.
-PICKED_ONE_OF = {
-    "a subsystem doc": "docs/architecture",
-    "a concept doc": "docs/concepts",
-    "a plan-doc": "TODO",
-}
+#: The routing table sends you to one page, not one of each. The worst case is
+#: the heaviest page it can send you to. A plan-doc is not on it: `TODO/` is
+#: read when a task names a plan, never because an agent started work.
+ROUTED_TO = ("docs/architecture", "docs/concepts", "docs/how-to")
 
 #: A section a later one corrects reads like one of these. A hit is a candidate.
 SUPERSEDED = re.compile(
@@ -88,14 +86,18 @@ def main() -> None:
             n = tokens(path.read_text(encoding="utf-8"))
             total += n
             print(f"  {name:<52} ~{n:>6,}")
-    for label, folder in PICKED_ONE_OF.items():
-        found = sorted((root / folder).glob("**/*.md")) if (root / folder).exists() else []
-        if not found:
-            continue
-        worst = max(found, key=lambda p: len(p.read_text(encoding="utf-8")))
+    routed = [
+        p
+        for folder in ROUTED_TO
+        if (root / folder).exists()
+        for p in (root / folder).glob("**/*.md")
+    ]
+    if routed:
+        worst = max(routed, key=lambda p: len(p.read_text(encoding="utf-8")))
         n = tokens(worst.read_text(encoding="utf-8"))
         total += n
-        print(f"  {label + ', heaviest: ' + worst.relative_to(root).as_posix():<52} ~{n:>6,}")
+        label = "the routed page, heaviest: " + worst.relative_to(root).as_posix()
+        print(f"  {label:<52} ~{n:>6,}")
     print(f"  {'worst-case total':<52} ~{total:>6,}\n")
     print("  The test: does that leave room for the working set - the files you came")
     print("  to change, plus what you must read to change them?\n")

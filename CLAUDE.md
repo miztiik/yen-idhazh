@@ -84,8 +84,6 @@ Not legitimate: naming the limitation and stopping. **A limitation named with no
 
 **What this does not license.** It does not license routing around a person's ruling (section 0), the runner budget (Guardrail #2), or the trust boundary (Guardrail #11) - those are surfaced, not overruled. And it does not license a larger change than the intent needs: intent is what the user asked for, not what you would have asked for.
 
-### Design rationale
-
 ## 1. Adaptive Guardrails (Read First, Every Session)
 
 **When a guardrail bites, that is feedback, not a verdict.** Two responses are legitimate - adapt it, saying what changed and why, or take a named exception recorded next to the work - and two are not: quietly routing around it, or reading it as advice because it is inconvenient. **Every deviation carries a person's name, and no agent may adapt a guardrail or take an exception for itself**: it proposes, a person disposes, and the decision is written into the commit that carries it. Each guardrail carries its reason, the reason is the load-bearing part, and **a guardrail cited without its reason is a half-quote** - so a guardrail whose reason no longer holds is one to change, and saying so is the job. **Three of the twelve are boundaries rather than adaptable constraints** - static-first publication (#1), the runner budget (#2) and the trust boundary (#11) - which an agent surfaces and never overrules, because the first two are set outside this project and the third protects a reader.
@@ -311,7 +309,7 @@ Seven persona advisors live under `.github/agents/`, each at a distinct altitude
 
 Adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
 
-**A veto must name what the reader loses.** A ruling that removes states what is removed *and* what the reader gives up by not having it; a ruling that states only the first is not a ruling and does not bind. This is not a courtesy - it is the price of the design rationale below.
+**A veto must name what the reader loses.** A ruling that removes states what is removed *and* what the reader gives up by not having it; a ruling that states only the first is not a ruling and does not bind. This is not a courtesy - it is the price of the authority the table above hands out.
 
 Five pairs share an edge, and each one has a written split.
 
@@ -327,7 +325,7 @@ A persona's own worldview shapes what it says, never how plainly it says it (sec
 ## See also
 
 - [`README.md`](README.md) - what yen-idhazh is.
-- [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md) - the load ritual every persona runs before answering.
+- [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md) - which page owns what, and what every answer owes.
 - [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md) - the environment and the commands behind sections 9 and 12.
 - [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) - environment and tool quirks that make a command lie.
 - [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md) - where each kind of doc lives.
