@@ -134,6 +134,7 @@
       "definition": "The story turns on semiconductors - who designs them, who makes them, the plants and machines that produce them, or who is allowed to buy them.",
       "display_name": "Chips",
       "id": "chips",
+      "is_auto_discovered": false,
       "keywords": [
         "chips",
         "semiconductor",
@@ -152,12 +153,15 @@
         "gpu",
         "gpus"
       ],
+      "retired_on": null,
+      "status": "active",
       "weight": 0.3
     },
     {
       "definition": "The story turns on China - its government, its companies, or a decision another country has taken about it.",
       "display_name": "China",
       "id": "china",
+      "is_auto_discovered": false,
       "keywords": [
         "china",
         "chinese",
@@ -166,12 +170,15 @@
         "shenzhen",
         "xi jinping"
       ],
+      "retired_on": null,
+      "status": "active",
       "weight": 0.0
     },
     {
       "definition": "The story turns on an attack on a computer system or the defence against one - a breach, ransomware, a stolen dataset, spyware or a security flaw.",
       "display_name": "Cyber",
       "id": "cyber",
+      "is_auto_discovered": false,
       "keywords": [
         "cyberattack",
         "cyber attack",
@@ -189,12 +196,15 @@
         "threat actor",
         "spyware"
       ],
+      "retired_on": null,
+      "status": "active",
       "weight": 0.0
     },
     {
       "definition": "The story turns on what investors and traders did - a share price, an index, a bond yield, a valuation, or a market's reaction to something.",
       "display_name": "Markets",
       "id": "markets",
+      "is_auto_discovered": false,
       "keywords": [
         "stock market",
         "share price",
@@ -216,12 +226,15 @@
         "traders",
         "shareholders"
       ],
+      "retired_on": null,
+      "status": "active",
       "weight": 0.0
     },
     {
       "definition": "The story turns on goods or technology crossing a border, and on the tariffs, quotas, export controls or bans that meet them there.",
       "display_name": "Trade and tariffs",
       "id": "trade",
+      "is_auto_discovered": false,
       "keywords": [
         "tariff",
         "tariffs",
@@ -241,12 +254,15 @@
         "customs duty",
         "wto"
       ],
+      "retired_on": null,
+      "status": "active",
       "weight": 0.3
     },
     {
       "definition": "The story turns on armed conflict - the fighting, the weapons, the people it displaces, or the talks to stop it.",
       "display_name": "War",
       "id": "war",
+      "is_auto_discovered": false,
       "keywords": [
         "at war",
         "war in",
@@ -264,11 +280,15 @@
         "peace talks",
         "civilians killed"
       ],
+      "retired_on": null,
+      "status": "active",
       "weight": 0.0
     },
     {
+      "definition": "",
       "display_name": "Return on AI investment",
       "id": "ai-roi",
+      "is_auto_discovered": false,
       "keywords": [],
       "retired_on": "2026-08-30",
       "status": "retired",
@@ -281,6 +301,7 @@
       "definition": "The story is mainly about artificial intelligence - the models, the people and companies building or selling them, the machines and data centres they run on, or the rules being written for them.",
       "display_name": "AI",
       "id": "ai",
+      "is_auto_discovered": false,
       "min_feeds": 35,
       "retired_on": null,
       "status": "active"
@@ -289,33 +310,19 @@
       "definition": "The story is mainly about how energy is made, moved, stored or paid for - electricity, oil, gas, renewables, nuclear power and the grids that carry them.",
       "display_name": "Energy",
       "id": "energy",
+      "is_auto_discovered": false,
       "min_feeds": 21,
       "retired_on": null,
       "status": "active"
     },
     {
-      "definition": "The story is mainly about companies and money in general - results, deals, jobs, prices, interest rates, markets - and not about a subject another desk names.",
-      "display_name": "Business and Economy",
-      "id": "business-economy",
+      "definition": "",
+      "display_name": "Proposed desk",
+      "id": "proposed-desk",
+      "is_auto_discovered": true,
       "min_feeds": 21,
       "retired_on": null,
-      "status": "active"
-    },
-    {
-      "definition": "The story is mainly about what happens between or inside countries - governments, conflict, diplomacy, elections and disasters - rather than about one industry.",
-      "display_name": "World",
-      "id": "world",
-      "min_feeds": 21,
-      "retired_on": null,
-      "status": "active"
-    },
-    {
-      "definition": "The story is mainly about India - its government, its economy, its companies or an event inside it - and India is the subject rather than one country in a longer list.",
-      "display_name": "India",
-      "id": "india",
-      "min_feeds": 21,
-      "retired_on": null,
-      "status": "active"
+      "status": "draft"
     }
   ]
 }

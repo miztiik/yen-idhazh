@@ -3,6 +3,13 @@
     "EventDef": {
       "additionalProperties": false,
       "properties": {
+        "definition": {
+          "default": "",
+          "description": "The sentence the model is scored against. It is the label, as far as the model is concerned: an id and a display name say nothing, and `research` means whatever sentence sits next to it. Edit it and the next run labels against the new text - no code change, no schema regeneration. Every figure measured against the old text is stale from that day, which is why a measurement records the version of this file it was taken under.",
+          "maxLength": 240,
+          "title": "Definition",
+          "type": "string"
+        },
         "display_name": {
           "minLength": 1,
           "title": "Display Name",
@@ -23,8 +30,8 @@
         }
       },
       "required": [
-        "id",
-        "display_name"
+        "display_name",
+        "id"
       ],
       "title": "EventDef",
       "type": "object"
@@ -48,6 +55,13 @@
     "LensDef": {
       "additionalProperties": false,
       "properties": {
+        "definition": {
+          "default": "",
+          "description": "The sentence the model is scored against. It is the label, as far as the model is concerned: an id and a display name say nothing, and `research` means whatever sentence sits next to it. Edit it and the next run labels against the new text - no code change, no schema regeneration. Every figure measured against the old text is stale from that day, which is why a measurement records the version of this file it was taken under.",
+          "maxLength": 240,
+          "title": "Definition",
+          "type": "string"
+        },
         "display_name": {
           "minLength": 1,
           "title": "Display Name",
@@ -55,6 +69,12 @@
         },
         "id": {
           "$ref": "#/$defs/LensId"
+        },
+        "is_auto_discovered": {
+          "default": false,
+          "description": "True when a model proposed this entry rather than a person writing it. The marker survives promotion on purpose: a word that arrived from an article read six weeks ago reads exactly like one a person chose, and the difference is the first thing anybody asks when a label looks wrong. A proposal lands under `draft` status with no definition, so it is offered to no prompt and rendered on no page until a person writes the sentence and changes the status in a pull request.",
+          "title": "Is Auto Discovered",
+          "type": "boolean"
         },
         "keywords": {
           "description": "The curated terms that assign this lens. A lens is assigned when one of them appears in the item's words as a whole-word phrase, case-folded. Nothing is derived from the id or the display name: deriving from the id was measured at 88.2 percent of items, because `ai` sits inside `said`. An empty list means the lens is never assigned.",
@@ -92,8 +112,8 @@
         }
       },
       "required": [
-        "id",
-        "display_name"
+        "display_name",
+        "id"
       ],
       "title": "LensDef",
       "type": "object"
@@ -124,8 +144,15 @@
     },
     "VerticalDef": {
       "additionalProperties": false,
-      "description": "A subject with its own reporters and its own feeds.",
+      "description": "A subject with its own reporters and its own feeds.\n\nIt is also the desk vocabulary: a feed declares one of these and a model\nreading the article names one of these. Two deciders, one list of words\n(`docs/concepts/taxonomy.md`).",
       "properties": {
+        "definition": {
+          "default": "",
+          "description": "The sentence the model is scored against. It is the label, as far as the model is concerned: an id and a display name say nothing, and `research` means whatever sentence sits next to it. Edit it and the next run labels against the new text - no code change, no schema regeneration. Every figure measured against the old text is stale from that day, which is why a measurement records the version of this file it was taken under.",
+          "maxLength": 240,
+          "title": "Definition",
+          "type": "string"
+        },
         "display_name": {
           "minLength": 1,
           "title": "Display Name",
@@ -135,6 +162,12 @@
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "title": "Id",
           "type": "string"
+        },
+        "is_auto_discovered": {
+          "default": false,
+          "description": "True when a model proposed this entry rather than a person writing it. The marker survives promotion on purpose: a word that arrived from an article read six weeks ago reads exactly like one a person chose, and the difference is the first thing anybody asks when a label looks wrong. A proposal lands under `draft` status with no definition, so it is offered to no prompt and rendered on no page until a person writes the sentence and changes the status in a pull request.",
+          "title": "Is Auto Discovered",
+          "type": "boolean"
         },
         "min_feeds": {
           "description": "Feed floor below which the vertical does not render at all.",
@@ -161,8 +194,8 @@
         }
       },
       "required": [
-        "id",
         "display_name",
+        "id",
         "min_feeds"
       ],
       "title": "VerticalDef",
@@ -173,6 +206,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added VocabularyEntry.definition to every vertical, lens and event, and is_auto_discovered to VerticalDef and LensDef.",
+      "version": "2026-09-12",
+      "why": "An id and a display name tell a model nothing. `research` means whatever sentence sits next to it, so the sentence is the label and it has to be somewhere a person can edit without touching Python - change the text and the next run labels against it, with no code change and no schema regeneration. The bound is a token budget: 30 definition sentences measured 805 tokens together with llama-tokenize against the pinned Qwen3-8B-Q4_K_M on 2026-09-11, about 27 tokens each, and 240 characters is roughly twice that. is_auto_discovered says a model proposed the entry, which stops a word that arrived from the open web reading like one a person chose. Both are additive with defaults, so a taxonomy written before this still validates and offers nothing extra to a prompt; no read-side migration is needed. An entry the vocabulary does offer must carry its sentence, which is a rule on Taxonomy rather than a required key, because a draft entry has no definition yet."
+    },
     {
       "change": "Added the war, trade and chips lenses, and LensDef.weight. ai-roi keeps its id and is retired in config.",
       "version": "2026-08-30",
@@ -211,7 +249,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-30",
+      "default": "2026-09-12",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -231,5 +269,5 @@
   ],
   "title": "Taxonomy",
   "type": "object",
-  "version": "2026-08-30"
+  "version": "2026-09-12"
 }
