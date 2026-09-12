@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 Traps in PowerShell, MSYS, the editor's own file and search tools, the Python
 environment, npm and the libraries that lie about what they returned. Index and
@@ -105,9 +105,11 @@ MSYS_NO_PATHCONV=1 git show 'origin/main:docs/a.md' # the fallback, per shell
 
 `git grep` is case-sensitive by default (`-i` makes it not) and exits 1 when it finds nothing, which a `&&` chain reads as a failure. It also reads anything after the pattern as a revision until it meets `--`, so a context flag placed the way ripgrep takes it becomes a commit-ish: `git grep -n -A 20 'pattern' -- <path>`.
 
+**A path holding `[` or `]` reads as an empty directory to every PowerShell cmdlet that takes `-Path`.** The brackets are a wildcard character class, so `Get-ChildItem -Name 'frontend/src/routes/[date]/[vertical]/'` matches nothing and returns nothing - no error, no warning, just the same output a genuinely empty folder gives. On 2026-09-12 a worker concluded that route directory did not exist and reported the plan-doc wrong; `git ls-files` showed four files in it. Every SvelteKit dynamic route in this repository is such a path. Use `-LiteralPath`, which takes the string as written, or ask git. The same applies to `Test-Path`, `Remove-Item`, `Copy-Item` and `Select-String`, each of which has its own `-LiteralPath`.
+
 ## The editor's own file and search tools
 
-**A workspace search reads the folder VS Code has open, never your worktree.** `includePattern` is resolved against the workspace root, so a pattern prefixed with the worktree directory matches nothing and the same pattern without it happily searches the SHARED checkout and returns its stale copy. Both failure modes are silent and the second is worse - you read `main`'s text and conclude your edit did not apply. In a worktree, use `Select-String -Path` with absolute paths, or read the file by absolute path.
+**A workspace search reads the folder VS Code has open, never your worktree.** `includePattern` is resolved against the workspace root, so a pattern prefixed with the worktree directory matches nothing and the same pattern without it happily searches the SHARED checkout and returns its stale copy. Both failure modes are silent and the second is worse - you read `main`'s text and conclude your edit did not apply. **The third failure mode is the quietest: the hit is real and its line number is not.** On 2026-09-12 a worker editing a file in a worktree got line numbers from the shared checkout's copy of the same file, three hundred lines out, and one edit anchored on them silently went to the wrong place. In a worktree, use `Select-String -Path` with absolute paths, or read the file by absolute path.
 
 **The search index is unreliable in both directions**, even inside the open folder: on 2026-08-31 one session got an empty result for a function that was in the file it named, and minutes earlier real matches from a sibling worktree nobody had asked about. It can also return a line of code that no longer exists anywhere - a 2026-08-29 hit quoted an assertion a merged pull request had removed, at a line number that was blank, and a worker nearly restored the deleted rule. When two tools disagree, the byte reader wins; a hit you cannot reproduce with `Select-String` or `Get-Content` is not there.
 
