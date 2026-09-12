@@ -1,10 +1,10 @@
 {
   "complete_dates": 19,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-12T11:59:51Z",
+  "generated_at": "2026-09-12T15:07:33Z",
   "last_date": "2026-09-11",
   "min_complete_days": 30,
-  "run_id": "2026-09-12-34689544296",
+  "run_id": "2026-09-12-34696925525",
   "sources": [
     {
       "availability": "answering",
@@ -235,7 +235,7 @@
       "vertical": "world"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "opportunities": 0,
       "permission": "allowed",
       "publications": 0,
@@ -1219,7 +1219,7 @@
       "vertical": "india"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 39,
       "permission": "denied",
       "publications": 39,
@@ -1555,7 +1555,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "opportunities": 21,
       "permission": "allowed",
       "publications": 21,
