@@ -1,10 +1,10 @@
 {
   "complete_dates": 19,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-12T08:42:26Z",
+  "generated_at": "2026-09-12T11:59:51Z",
   "last_date": "2026-09-11",
   "min_complete_days": 30,
-  "run_id": "2026-09-12-34680107844",
+  "run_id": "2026-09-12-34689544296",
   "sources": [
     {
       "availability": "answering",
@@ -607,7 +607,7 @@
       "vertical": "world"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 17,
       "permission": "allowed",
       "publications": 10,
@@ -1111,7 +1111,7 @@
       "vertical": "business-economy"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 7,
       "permission": "allowed",
       "publications": 2,
@@ -1219,7 +1219,7 @@
       "vertical": "india"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "opportunities": 39,
       "permission": "denied",
       "publications": 39,
@@ -1435,7 +1435,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "answering",
       "opportunities": 73,
       "permission": "allowed",
       "publications": 71,
