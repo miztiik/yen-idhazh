@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "pipeline_fingerprint is optional and nothing sets it.",
+      "version": "2026-09-12T21:00",
+      "why": "The stamp stopped being a gate, so the ledger row this mirrors no longer carries one. The column stays, because the two committed months hold values in it and a published file is never rewritten."
+    },
+    {
       "change": "Initial shape: the score ledger's own measurements, typed, with url_key, source_url and title refused at import.",
       "version": "2026-09-09",
       "why": "The console reads state/scores/ at build time and serialises the result into its document, so the ledger's shape crossed to a reader as inlined JSON with no contract, no version stamp and no changelog while the telemetry projection beside it has all three (Guardrail #3). Naming the shape before a producer exists is what stops the producer, the consumer and the gates each inventing their own list. item_id is carried as an opaque key on the same terms PublicTelemetryRow carries it: identity is minted by the ledger writer, and a published shard has no writer left to re-mint it if that grammar moves."
@@ -128,9 +133,18 @@
       "type": "string"
     },
     "pipeline_fingerprint": {
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Pipeline Fingerprint",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Null on every row written after 2026-09-12. It stays a column of the published file because the committed months carry values in it.",
+      "title": "Pipeline Fingerprint"
     },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
@@ -235,7 +249,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-09-09",
+      "default": "2026-09-12T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -262,12 +276,11 @@
     "extractiveness",
     "band",
     "summary_word_count",
-    "pipeline_fingerprint",
     "output_digest",
     "scorer_version",
     "scored_at"
   ],
   "title": "PublicEvalRow",
   "type": "object",
-  "version": "2026-09-09"
+  "version": "2026-09-12T21:00"
 }

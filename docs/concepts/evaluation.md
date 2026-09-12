@@ -10,11 +10,13 @@ How a summary is judged, why one number is never enough, and the rule that keeps
 
 Every summary reads equally confident. A wrong one is not visibly different from a right one - that is what makes generated text useful and what makes it dangerous. A reader cannot audit it, and the person who built the pipeline stops reading the output within a week. So the system has to measure its own work on **every item whose inputs changed**, continuously, and the measurement has to be committed rather than recomputed on demand.
 
-That qualifier is the only legitimate way to do less work. The fingerprint
-contract defines a future skip for an unchanged item, but production does not
-wire the ledger or classifier yet
+That qualifier is now the whole of the story rather than a promise: **there is no
+skip.** The stamp that was going to define one was deleted on 2026-09-12 along
+with the unwired classifier and its ledger, and nothing has asked for a skip
+since
 ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
-Do not read missing rows today as proof that an unchanged item was skipped.
+A run measures every item it produces. Do not read a missing row as proof that an
+unchanged item was skipped - nothing skips.
 Sampling is a different thing entirely, and it is not done - see the rationale
 below.
 
@@ -774,13 +776,14 @@ rule said it did.** Over those same 38 rows the first ten deciles run 9, 9, 8, 9
 early gives a roughly balanced sample, and **a partial draw may not be reported
 as stratified.**
 
-**One draw is one `scorer_version`. The pipeline is a covariate the draw reports,
-not a filter it applies** (owner decision, 2026-08-27). `eligible`, `draw` and
+**One draw is one `scorer_version`, and that is the whole of the pool rule**
+(owner decision, 2026-08-27; completed 2026-09-12). `eligible`, `draw` and
 `run_days` require the scorer with no default, because the cuts being calibrated
 live inside that string: a row read by a different instrument answers a different
-question. `pipeline_fingerprint` is optional and omitting it is the normal case;
-`strata` splits the drawn rows by producer, marking any stratum under
-`evaluation.label_min_stratum_rows` too thin to cut on.
+question. **The pipeline stamp left the draw entirely on 2026-09-12**: nothing
+writes it, so `strata`, the per-producer mix and
+`evaluation.label_min_stratum_rows` went with it, and a draw is one pool whose
+figure is read rather than withheld.
 
 Requiring both was unreachable rather than strict - the stamp digests seventeen
 inputs, so a reworded prompt or a llama.cpp rebuild resets the count to zero, and
@@ -959,9 +962,15 @@ ties keep the first row.
 
 Source length uses every known pre-cap length, including rows without a
 faithfulness score. Copying and the combined length/faithfulness warning need
-matching `model_id`, `scorer_version` and `pipeline_fingerprint` values. A
-missing identity is not a match. After a model, prompt or setting change, a
+matching `model_id` and `scorer_version` values. A
+missing identity is not a match. After a model or scorer change, a
 series with too few earlier articles reports insufficient evidence.
+
+**The pipeline stamp was a third part of that identity until 2026-09-12, and it
+is what made the comparison unreachable**: it moved on any of seventeen inputs,
+so a reworded prompt inside a window split the window in two and both halves fell
+under the minimum. Nothing was compared, and nothing compared reads as no drift
+at every call site.
 
 The length threshold is `drift.source_word_count_drop`. The copying threshold
 is `drift.extractiveness_rise`, an absolute increase in the share of copied
@@ -1017,7 +1026,7 @@ benchmark or prove that every live source still has the captured layout.
 
 **The measured reset rate (2026-08-27, `state/scores.csv` and `state/fingerprints.csv` at commit `c08d8b5`).** 2,232 eval rows, written by 18 runs across **5 scored run-days** (`2026-08-22` to `2026-08-26`), carry **5 distinct `pipeline_fingerprint` values** and **4 distinct `scorer_version` values** - one new pipeline stamp per scored day, on average. `2026-08-26` alone carried three different (`scorer_version`, `pipeline_fingerprint`) pairs: the stamp moved at that day's second run and again at its fifth, and the scorer version moved at the fifth with it. Every one of those 2,232 rows names the same `model_id`, `qwen3-8b-q4-k-m` - the model did not change once and the stamp still moved four times, so a model swap is *one* cause of a reset rather than the cause. `state/fingerprints.csv` holds a single row, because the ledger that expands a stamp into its inputs only started on 2026-08-26; four of the five stamps can no longer be expanded at all. Authority: measurement.
 
-**The consequence, and how it was resolved (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moved `model_sha256` and `chat_template_sha256` together, which is the one reset `state/fingerprints.csv` can expand into its cause. At the observed rate of pipeline change, every model or runtime improvement spent the whole window, so the pair requirement was unreachable rather than strict - a live tension between shipping a better pipeline and measuring the one already running. **The owner resolved it on 2026-08-27: count run-days at one `scorer_version`, and carry `pipeline_fingerprint` as a reported stratum rather than a disqualification.** The rejected alternative was to freeze the pipeline for ten days; it was declined because the claim it buys expires at the next prompt change, so the freeze would be paid repeatedly, and because a repository shipping several fixes a day cannot stand still that long. What the chosen rule gives up is stated wherever a result is printed: a rate over a pooled draw is a prior with wide bounds, not a calibration, and a stratum under `evaluation.label_min_stratum_rows` may not move a threshold at all. Measured effect on the same ledger: the drawable sample went from 32 of 60 with seven deciles short to **60 of 60**. Nothing here moves a threshold. Authority: owner.
+**The consequence, and how it was resolved (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moved `model_sha256` and `chat_template_sha256` together, which is the one reset `state/fingerprints.csv` can expand into its cause. At the observed rate of pipeline change, every model or runtime improvement spent the whole window, so the pair requirement was unreachable rather than strict - a live tension between shipping a better pipeline and measuring the one already running. **The owner resolved it on 2026-08-27: count run-days at one `scorer_version`, and carry `pipeline_fingerprint` as a reported stratum rather than a disqualification.** The rejected alternative was to freeze the pipeline for ten days; it was declined because the claim it buys expires at the next prompt change, so the freeze would be paid repeatedly, and because a repository shipping several fixes a day cannot stand still that long. What the chosen rule gives up is stated wherever a result is printed: a rate over a pooled draw is a prior with wide bounds, not a calibration, and a stratum under `evaluation.label_min_stratum_rows` may not move a threshold at all. Measured effect on the same ledger: the drawable sample went from 32 of 60 with seven deciles short to **60 of 60**. Nothing here moves a threshold. Authority: owner. **Completed 2026-09-12**: the stamp stopped being written at all, so the reported stratum, the mix and `evaluation.label_min_stratum_rows` went with it and a draw is one pool.
 
 ## Rejected alternatives
 
@@ -1051,7 +1060,7 @@ Scoring every changed item costs something, and the obvious economy is to score 
 **The economics do not justify it.** The deterministic counterweights are string operations - a rounding error against the cost of generating the summary in the first place. Only the faithfulness model costs anything real, and rationing it is a decision that should follow a measurement rather than precede one. The rule: measure the faithfulness scorer's share of per-item wall-clock, and if it exceeds a stated share of the budget, sample *it* alone, selected deterministically, and never below the rate at which a month-over-month comparison stays valid. The counterweights are never sampled. That rationing now exists, and it is drawn per run rather than within a day - see [The scorer is sampled by run, and nothing else is](#the-scorer-is-sampled-by-run-and-nothing-else-is) for why the earlier wording changed.
 
 **If a sample is ever taken, it is recorded and never left as an absence.**
-Production fingerprint skip is not wired, so a missing row today cannot
+Nothing skips, so a missing row today cannot
 prove that work was skipped. Any future skip or sample reason must be explicit.
 And any aggregate built on a sample states its denominator in the open: a count
 that describes part of the digest may never be displayed as though it described
@@ -1124,10 +1133,12 @@ Committing the scores rather than deriving them is what makes a claim about last
 The ledger header is part of the contract. A writer now refuses to append when the committed header no longer matches `EvalRow.csv_columns`. A contract test also parses every committed `state/*.csv` with Python's `csv` module and fails if any data row has a different cell count from its header. This protects the file itself, not only the append path.
 
 **The ledger records measurements, not runs.** The writer refuses a row whose
-address, pipeline fingerprint, output words and scorer version all match a row
+address, output words and scorer version all match a row
 the file already holds. Nothing in that recorded measurement identity changed,
 so a second row would only inflate the denominator every rate is computed
-against. Article-input identity is not part of this de-duplication key.
+against. Article-input identity is not part of this de-duplication key, and the
+pipeline stamp left it on 2026-09-12: it stopped being written, so keeping it
+would have left a constant empty component in every digest.
 `item_id` is deliberately absent too: it is a slot on a page, not the item.
 
 ### Every column is answered for by exactly one console panel
@@ -1171,10 +1182,9 @@ That title is the **source's** headline, not the one the summarizer wrote ([../a
 **Run-level facts are not ledger rows.** How many items a run planned, finished and failed is a property of the run, not of any item, and it lives in the run manifest - which is committed, dated and published alongside the day. Widening the per-item row to carry a second kind of row would leave every item row with columns that are blank for it and would break the dashboard's one honest question: group the rows by band and count them.
 
 **A duplicate measurement writes no second row.** The writer de-duplicates on
-address, pipeline fingerprint, output words and scorer version after work has
-run. That is ledger de-duplication, not proof that production skipped inference.
-The current pipeline fingerprint also lacks article-input identity, so it cannot
-establish that a publisher left the source bytes unchanged
+address, output words and scorer version after work has
+run. That is ledger de-duplication, not proof that production skipped inference;
+nothing skips
 ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
 
 ### The dedupe is answered by an index, and an index can be wrong
@@ -1258,7 +1268,7 @@ carries:
 - one digest per distinct measurement it held, sorted -
  `evals.writer.recorded_observations` unions these with the live rows, which is
  how the promise above keeps holding for a month whose rows are gone;
-- one cohort per (date, run, row version, model, pipeline fingerprint, scorer
+- one cohort per (date, run, row version, model, scorer
  version), each carrying its row count, ten faithfulness deciles, three bands,
  the boolean signal counts, the known and actual cut counts, the premise-digest
  counts, and `{n, sum, sum_squares, min, max}` for every numeric column.
@@ -1428,13 +1438,18 @@ Both limbs are arithmetic over committed rows. Neither runs a model.
 | Unsupported numbers | share of `state/scores.csv` rows with `unsupported_numbers > 0` | the rate doubles, or rises 5 points absolute |
 | Copying without a faithfulness cost | mean `extractiveness` and mean `hhem` | extractiveness up 0.10 or more while hhem is flat or up |
 
-Segment by `pipeline_fingerprint`, at one fixed `scorer_version`, over a rolling
+Segment by `model_id`, at one fixed `scorer_version`, over a rolling
 14 run-days against the last 14 days the 8B produced.
 
-**The segment key is `pipeline_fingerprint`, not `model_id`.** A slug holds still
+**The segment key was `pipeline_fingerprint` until 2026-09-12, and that is what
+made the segment unreachable.** A slug holds still
 while the prompt, the truncation cap and the llama.cpp build move, and all three
-move the score, so a slug attributes a changed score to an unchanged pipeline
+move the score - but the stamp moved so often that no segment ever reached 14
+run-days, so the limb never fired either way
 ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
+What is given up by segmenting on the slug is named rather than implied: a
+reworded prompt inside the window now reads as a model regression, and the run
+record's `inputs` is where an operator checks whether one landed.
 Holding `scorer_version` fixed matters for the same reason: a rescore under a new
 scorer moves both sides of the comparison and would read as a model regression.
 

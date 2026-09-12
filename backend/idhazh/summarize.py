@@ -19,8 +19,8 @@ reason a specific failure cannot happen:
 
 Every number the prompt states is substituted from config at render time
 (Guardrail #6). That is not only tidiness: what we ask for is one of the inputs
-the pipeline fingerprint hashes, so changing the ask now re-summarizes instead
-of reusing a reply written under the old one.
+the run record names, so a reworded ask is visible in the data rather than only
+in a commit message.
 """
 
 from __future__ import annotations
@@ -493,7 +493,6 @@ def _failed(
         version=Summary.schema_version(),
         item_id=article.item_id,
         url_key=article.url_key,
-        pipeline_fingerprint="0" * 64,
         output_digest=derive_output_digest(None, []),
         model_id=model_id,
         source_truncated=article.truncated,
@@ -567,7 +566,6 @@ def to_summary(
     completion: Completion | None,
     *,
     model_id: str,
-    pipeline_fingerprint: str,
     generated_at: str,
     prompt_config: SummarizeConfig | None = None,
     evaluation: EvaluationConfig | None = None,
@@ -707,7 +705,6 @@ def to_summary(
         title=title,
         summary=draft.summary,
         key_points=key_points,
-        pipeline_fingerprint=pipeline_fingerprint,
         output_digest=derive_output_digest(draft.summary, key_points, title=title),
         model_id=model_id,
         attempt=attempt,

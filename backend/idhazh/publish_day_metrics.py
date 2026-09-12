@@ -195,7 +195,7 @@ def build(
     the day as it now stands across every run rather than only what this run
     touched.
     """
-    model_id, pipeline_fingerprint = _model_and_fingerprint(manifest, score_rows)
+    model_id = _model_id(manifest, score_rows)
     scored, drifted, suspect = _scored_items(day, score_rows)
     return DayMetrics(
         version=DayMetrics.schema_version(),
@@ -203,7 +203,6 @@ def build(
         revision=manifest.runs[-1].n,
         runs=len(manifest.runs),
         model_id=model_id,
-        pipeline_fingerprint=pipeline_fingerprint,
         items_published=len(day.items),
         items_planned=sum(run.items_planned for run in manifest.runs),
         items_failed=sum(run.items_failed for run in manifest.runs),
@@ -399,31 +398,33 @@ def _sources(day: DigestDay) -> list[DaySource]:
     ]
 
 
-def _model_and_fingerprint(
-    manifest: RunManifest, score_rows: Sequence[dict[str, str]]
-) -> tuple[str, str]:
-    """The model and pipeline stamp the day's summaries were written under.
+def _model_id(manifest: RunManifest, score_rows: Sequence[dict[str, str]]) -> str:
+    """The model the day's summaries were written under.
 
-    Read off the score ledger, as the model-change panel reads them (finding 70):
-    the newest measurement on record, so a corrected day reports the stamp it now
+    Read off the score ledger, as the model-change panel reads it (finding 70):
+    the newest measurement on record, so a corrected day reports the model it now
     stands under. A day whose scorer never ran has no measurement to read, so it
-    falls back to the newest run's declared summarize model and stamp.
+    falls back to the newest run's declared summarize model.
+
+    It used to return the pipeline stamp beside the model, and refuse the whole
+    day when the manifest carried neither. That refusal is what made a day's
+    figures depend on a digest that gated nothing: after 2026-09-12 no run writes
+    a stamp, so a day with no scored item would have published nothing at all.
     """
     if score_rows:
         newest = max(score_rows, key=lambda row: row.get("scored_at", ""))
-        return newest["model_id"], newest["pipeline_fingerprint"]
+        return newest["model_id"]
     run = manifest.runs[-1]
     model_id = next(
         (use.model_ref.id for use in run.models if use.role is ModelRole.SUMMARIZE),
         None,
     )
-    fingerprint = run.pipeline_fingerprints[0] if run.pipeline_fingerprints else None
-    if model_id is None or fingerprint is None:
+    if model_id is None:
         raise ValueError(
             f"{manifest.date}: no scored item and no summarize model on the manifest, "
             "so the day's model cannot be named"
         )
-    return model_id, fingerprint
+    return model_id
 
 
 def _throughput(health_rows: Sequence[dict[str, str]]) -> DayThroughput | None:

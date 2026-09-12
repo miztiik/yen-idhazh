@@ -58,7 +58,6 @@ COHORT_KEY: Final = (
     "run_id",
     "version",
     "model_id",
-    "pipeline_fingerprint",
     "scorer_version",
 )
 
@@ -212,7 +211,6 @@ def _cohort(rows: Sequence[Mapping[str, str]]) -> ScoreCohort:
         run_id=first["run_id"],
         row_version=first["version"],
         model_id=first["model_id"],
-        pipeline_fingerprint=first["pipeline_fingerprint"],
         scorer_version=first["scorer_version"],
         rows=len(rows),
         hhem_deciles=deciles,

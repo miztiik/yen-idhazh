@@ -51,7 +51,7 @@ The shapes, and where each one lives once written:
 | `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
 | `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
-| `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
+| `FingerprintRow` | `fingerprint-row` | one appended row of the retired `state/fingerprints.csv`; nothing writes it |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
@@ -144,7 +144,7 @@ mirrors the digest tree its rows are derived from.
 | `state/item-health/` | monthly shards | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and fetches month shards |
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `item_health_full_grain_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published/` | day files | have we already published this? | yes, `collect.published_window_days` - committed at `-1`, so the read is whole today |
-| `state/fingerprints.csv` | one file | has this exact input run before? | no |
+| `state/fingerprints.csv` | one file | what did this run open? - retired 2026-09-12; the run record answers it | no |
 | `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/retention.md#what-bounds-the-committed-state-tree) |
 | `state/score-index/` | monthly shards | which measurements does the shard beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, pipeline, output and scorer is one measurement whenever it is re-taken |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
@@ -294,7 +294,7 @@ Where a field is a function of other fields on the same payload, the model recom
 - `url_key` is the sha256 of `canonical_url`. It is item identity for dedupe and skip, it is a **field and never a path segment**, and a payload that carries someone else's key does not load.
 - `hhem_delta` is `hhem - hhem_full`. The truncation signal cannot be silently wrong.
 - `output_digest` is the sha256 of the summary and its key points - the published words only, so a re-run that produced the same text in a different wall-clock does not read as drift.
-- `pipeline_fingerprint` is the sha256 of the `PipelineInputs` model's own serialization, so a ledger row cannot claim a stamp its components do not produce. See [determinism.md](determinism.md).
+- `pipeline_fingerprint` was the sha256 of the `PipelineInputs` model's own serialization. Nothing has written it since 2026-09-12; the same inputs are recorded by name on the run record. See [determinism.md](determinism.md).
 
 The alternative - trusting the stored value - makes a stale derived field indistinguishable from a correct one, and the mismatch surfaces months later as a dedupe that quietly stopped working.
 
@@ -341,7 +341,7 @@ The shapes this subsystem owns. `CLAUDE.md` section 11 states the three rules th
 | --- | --- | --- |
 | **Stage payloads** | Each pipeline stage | The next stage, and any re-run |
 | **The eval ledger** | The evaluate stage, appended | The dashboard, and any trend query |
-| **The fingerprint ledger** | Any stage writing under a new stamp, appended | A later run deciding whether to skip, and anyone auditing drift |
+| **The fingerprint ledger** | Nothing since 2026-09-12 | Anyone reading the ten rows it already holds |
 | **The source ledgers** | Plan and assemble, appended | The next run, deciding an article's age, whether it already ran, and whether a feed should rest |
 | **The run manifest** | The assemble stage | A later run, and anyone auditing what produced what |
 | **Config** | A human | Both `backend/` and, where a surface needs it, `frontend/` |
@@ -380,7 +380,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 
 ## See also
 
-- [determinism.md](determinism.md) - the pipeline fingerprint, its ledger, and the skip rule built on it.
+- [determinism.md](determinism.md) - what a run records about its own inputs, and the one alarm built on it.
 - [../extraction/elements.md](../extraction/elements.md) - the element shape: six kinds, two tiers, and why the verbatim slice is called `span_excerpt`.
 - [../sources/freshness.md](../sources/freshness.md) - why the published ledger files by day, and what its cover buys.
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.

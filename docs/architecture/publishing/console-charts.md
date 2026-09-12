@@ -402,20 +402,52 @@ chart measures and never a decoration applied everywhere. A marker that means
 nothing on half the page teaches an operator to stop reading it, and that costs
 the half where it did mean something.
 
-**The boundary is a `pipeline_fingerprint` transition, never a `model_id` one.**
-The stamp is a digest over every declared input that can move an output - the
-weights, the quantisation, the llama.cpp build, the chat template, the prompt,
-the output schema, the truncation cap, the decoding settings, and the extractor
-and sanitizer versions
-([../../../backend/idhazh/contracts/fingerprint.py](../../../backend/idhazh/contracts/fingerprint.py)).
-Measured 2026-08-27 over 2,232 rows the stamp moved four times while every row
-named one model, so a slug attributes a changed number to an unchanged pipeline;
+**The boundary is a change in the run's recorded inputs, never a `model_id`
+one.** Each run records what it summarized with, field by field - the weights
+and their digest, the quantisation, the llama.cpp build, the chat template, the
+prompt, the output schema, the truncation cap, the decode and runtime settings
+including `n_ctx`, the runner class, and the extractor and sanitizer versions
+([../../../backend/idhazh/contracts/fingerprint.py](../../../backend/idhazh/contracts/fingerprint.py)),
+and it hangs off `RunRecord.inputs` in each day's `run.json`.
+Measured 2026-08-27 over 2,232 rows those inputs moved four times while every
+row named one model, so a slug attributes a changed number to an unchanged
+pipeline;
 [../../concepts/evaluation.md](../../concepts/evaluation.md) segments on the
-stamp for the same reason.
+inputs for the same reason. **`run_id` cannot stand in for it either**: measured
+2026-09-12 over 9,435 published score rows across 22 dates it made 21 of the 21
+day transitions a boundary, because it is an execution identity and moves every
+run whether or not anything about the pipeline did.
 
-**A day is a boundary when it ran a stamp the previous scored day did not run.**
-A day that only stopped using one of yesterday's stamps started nothing, so it
-is not one. A day carrying several stamps is one boundary, because a day is one
+**These are a record and never a key.** No run, no pool, no window and no
+published number turns on them, so a run whose inputs moved is counted, averaged
+and published exactly as one whose inputs held still. The test anybody can run:
+delete the field and exactly one thing changes on the whole site - a rule
+disappears from two charts. Not one figure moves and not one row vanishes. They
+replaced `pipeline_fingerprint`, which was one digest standing for the same
+seventeen inputs and which did gate: it withheld a quality number until N
+consecutive run-days ran at one digest, and the digest moved weekly, so the
+window never opened. Owner decision, 2026-09-10.
+
+**Naming the inputs rather than digesting them is what makes that structural.**
+One opaque hex token affords exactly one operation - equality - which is the
+gate's operation and the only one. A set of named values affords reading, and a
+boundary drawn from them can say which input moved. Ruled by Fowler, 2026-09-12.
+
+**The days committed before 2026-09-12 are read from the score ledger's own
+`pipeline_fingerprint` column**, behind `RECORDED_INPUTS_FROM` in
+`frontend/src/lib/server/model-work.ts`. A hard date split rather than "prefer
+whichever is present": the two shapes always compare unequal, so an overlap
+would invent a boundary. **The cutover day itself is never a boundary**, because
+its predecessor's identity comes from one store and its own from the other. The
+historical branch retires once the oldest day the widest console window can show
+is on or after that date, and the removal condition is written on the line that
+declares it. What retiring it costs: the nine boundaries the committed months
+hold become unreachable from the console, and an operator who wants them reads
+the CSV.
+
+**A day is a boundary when it ran an identity the previous recorded day did not
+run.** A day that only stopped using one of yesterday's started nothing, so it
+is not one. A day carrying several is one boundary, because a day is one
 column and a change inside it cannot be placed any finer. Measured 2026-08-31
 over the committed ledger - 3,884 rows, 10 scored days - that rule finds five
 boundaries: 23, 24, 26, 27 and 29 August. Comparing only the previous day's last

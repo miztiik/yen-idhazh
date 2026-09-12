@@ -127,9 +127,18 @@
           "type": "string"
         },
         "pipeline_fingerprint": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Pipeline Fingerprint",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Null on a cohort summarised from rows written after 2026-09-12. It stopped being part of what makes a cohort one cohort on the same date.",
+          "title": "Pipeline Fingerprint"
         },
         "premise_distinct": {
           "description": "Distinct premise digests among those. Below premise_recorded means two items were scored against the same text, which is the shape a broken extractor takes.",
@@ -184,7 +193,6 @@
         "run_id",
         "row_version",
         "model_id",
-        "pipeline_fingerprint",
         "scorer_version",
         "rows",
         "hhem_deciles",
@@ -204,6 +212,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "pipeline_fingerprint is optional and leaves the cohort key, which is now (date, run, row version, model, scorer).",
+      "version": "2026-09-12T21:00",
+      "why": "Splitting a month's rows on a stamp that moved on any of seventeen inputs turned one day into several cohorts of a handful of rows each, which is how a monthly figure stopped being readable. The field stays on the cohort so an archive written before today still validates."
+    },
     {
       "change": "Initial shape: one archived month, its source hash and row count, its sorted observation digests, and one cohort per (date, run, row version, model, pipeline, scorer).",
       "version": "2026-09-03",
@@ -248,7 +261,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-03",
+      "default": "2026-09-12T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -263,5 +276,5 @@
   ],
   "title": "ScoreArchive",
   "type": "object",
-  "version": "2026-09-03"
+  "version": "2026-09-12T21:00"
 }

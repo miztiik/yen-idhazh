@@ -92,7 +92,7 @@ from idhazh.contracts.feed_health import (
     RobotsOutcome,
     derive_endpoint_key,
 )
-from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
 from idhazh.contracts.qualification import (
     CanaryObservation,
@@ -133,14 +133,10 @@ from idhazh.evals.hhem import (
     weights_digest,
 )
 from idhazh.fingerprint import (
-    LEDGER_RELPATH as FINGERPRINT_RELPATH,
-)
-from idhazh.fingerprint import (
     UNRECORDED_TEMPLATE,
-    append_new,
     build_inputs,
     file_digest,
-    host_cpu,
+    prose_changed_alone,
     runner_class,
     runtime_build,
     text_digest,
@@ -180,7 +176,11 @@ CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
-FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
+
+#: Where a shard leaves its recorded input manifest for the assemble stage.
+#: One name for every shard of a run: they all observe one configuration, so
+#: they all write the same bytes and the atomic rename settles it.
+INPUTS_PAYLOAD: Final = "inputs.json"
 
 
 def _index_root() -> Path:
@@ -1041,7 +1041,6 @@ def stage_work(
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
     )
-    fingerprint = inputs.fingerprint()
     scorer_version = metrics.scorer_version(
         scorer_id=HHEM_SCORER_ID,
         scorer_revision=HHEM_REVISION,
@@ -1050,14 +1049,14 @@ def stage_work(
     )
 
     items_dir = _run_dir(plan.date) / "items"
-    _write_stamp(items_dir, inputs=inputs, run_id=plan.run_id)
+    _write_inputs(items_dir, inputs=inputs)
     mine = shard_of(plan, shard=shard, shards=shards)
     LOG.info(
-        "working shard=%s/%s items=%s fingerprint=%s",
+        "working shard=%s/%s items=%s model=%s",
         shard,
         shards,
         len(mine),
-        fingerprint[:12],
+        model.id,
     )
     ready: list[_FetchedWorkItem] = []
     for original_index, item in enumerate(mine):
@@ -1100,7 +1099,6 @@ def stage_work(
                 summary, decision = _two_calls_one_item(
                     article,
                     settings,
-                    fingerprint,
                     date=plan.date,
                     endpoint=model_endpoint,
                     run_id=plan.run_id,
@@ -1110,7 +1108,6 @@ def stage_work(
                 summary = _summarize_one(
                     article,
                     settings,
-                    fingerprint,
                     endpoint=model_endpoint,
                     run_id=plan.run_id,
                     tracer=tracer,
@@ -1212,35 +1209,61 @@ def _write_evidence(row: EvalRow, *, premise: str, summary: str) -> Path:
     return path
 
 
-def _write_stamp(items_dir: Path, *, inputs: PipelineInputs, run_id: str) -> FingerprintRow:
-    """Leave the expansion of this run's stamp beside the items it produced.
+def _write_inputs(items_dir: Path, *, inputs: PipelineInputs) -> None:
+    """Leave this run's recorded input manifest beside the items it produced.
 
-    The work stage is the only one that can observe these inputs, and its
-    checkout is thrown away when the shard ends - the artifact it uploads is
-    this directory. So the stamp travels as a payload and `stage_assemble`,
-    which owns every committed ledger, is what appends it (section 1a).
+    The work stage is the only one that can observe these inputs - the weights
+    the runtime opened, the build that decoded them, the template the server
+    will apply - and its checkout is thrown away when the shard ends. The
+    artifact it uploads is this directory, so the manifest travels as a payload
+    and `stage_assemble`, which owns the run record, is what hangs it on the run
+    (section 1a).
 
-    Named by the stamp, so eight shards observing one configuration leave one
-    file rather than eight that have to be reconciled.
+    One name, not one per shard. Every shard of a run observes the same
+    configuration and writes the same bytes, so the atomic rename settles it and
+    there is nothing to reconcile.
     """
-    row = FingerprintRow(
-        version=FingerprintRow.schema_version(),
-        pipeline_fingerprint=inputs.fingerprint(),
-        first_seen_run=run_id,
-        first_seen_at=assemble.utc_now(),
-        inputs=inputs,
-        host_cpu=host_cpu(),
+    assemble.write_atomic(
+        items_dir / INPUTS_PAYLOAD, canonical_json(inputs.model_dump(mode="json"))
     )
-    assemble.write_atomic(items_dir / f"{row.pipeline_fingerprint}.fingerprint.json", row.to_json())
-    return row
 
 
-def _stamps(items_dir: Path) -> list[FingerprintRow]:
-    """Every stamp the shards left behind, in a stable order."""
-    return [
-        FingerprintRow.read(path)
-        for path in sorted(items_dir.glob("*.fingerprint.json"))
-    ]
+def _recorded_inputs(items_dir: Path) -> PipelineInputs | None:
+    """What the shards recorded, or nothing when no shard summarized anything."""
+    path = items_dir / INPUTS_PAYLOAD
+    if not path.is_file():
+        return None
+    return PipelineInputs.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def _report_prose_change(
+    inputs: PipelineInputs | None, previous: RunManifest | None
+) -> None:
+    """Say when the words we asked for moved and the machine reading them did not.
+
+    The one alarm that survives the retired stamp (owner decision, 2026-09-10).
+    It reports and never blocks: the run publishes, every number is read, and
+    the operator is told which input moved.
+
+    The comparison is against the newest earlier run on the same manifest, which
+    the caller already holds in memory - one payload, whatever the archive has
+    grown to (Guardrail #12).
+    """
+    if inputs is None or previous is None:
+        return
+    earlier = next(
+        (run.inputs for run in reversed(previous.runs) if run.inputs is not None), None
+    )
+    moved = prose_changed_alone(earlier, inputs)
+    if not moved:
+        return
+    message = (
+        f"the words we ask for moved and the model and the binary did not: "
+        f"{', '.join(moved)}. Summaries written before and after this run answer "
+        f"a different ask."
+    )
+    print(f"::warning title=Prose changed, model did not::{message}")
+    LOG.warning("%s", message)
 
 
 def _fetch_one(
@@ -1367,7 +1390,6 @@ def _ask_the_model(
 def _summarize_one(
     article: Article,
     settings: config.Settings,
-    fingerprint: str,
     *,
     endpoint: str = DEFAULT_ENDPOINT,
     run_id: str | None = None,
@@ -1413,7 +1435,6 @@ def _summarize_one(
                 article,
                 completion,
                 model_id=model_id,
-                pipeline_fingerprint=fingerprint,
                 generated_at=assemble.utc_now(),
                 prompt_config=settings.app.summarize,
                 evaluation=settings.app.evaluation,
@@ -1547,7 +1568,6 @@ def _drawn(
 def _two_calls_one_item(
     article: Article,
     settings: config.Settings,
-    fingerprint: str,
     *,
     date: str,
     endpoint: str = DEFAULT_ENDPOINT,
@@ -1600,7 +1620,6 @@ def _two_calls_one_item(
                 article,
                 None,
                 model_id=model_id,
-                pipeline_fingerprint=fingerprint,
                 generated_at=generated_at,
                 prompt_config=settings.app.summarize,
                 evaluation=settings.app.evaluation,
@@ -1699,7 +1718,6 @@ def _two_calls_one_item(
                     article,
                     half if half is not None else two,
                     model_id=model_id,
-                    pipeline_fingerprint=fingerprint,
                     generated_at=generated_at,
                     prompt_config=settings.app.summarize,
                     evaluation=settings.app.evaluation,
@@ -2092,7 +2110,7 @@ def stage_validate(
         if article.status is not ArticleStatus.OK:
             LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue
-        summary = _summarize_one(article, settings, "0" * 64)
+        summary = _summarize_one(article, settings)
         if summary.status is not SummaryStatus.OK:
             LOG.warning("validation article did not summarize url=%s", item.canonical_url)
             continue
@@ -2484,7 +2502,7 @@ def _score_item(
 
 
 def _one_call(
-    article: Article, settings: config.Settings, fingerprint: str, *, endpoint: str
+    article: Article, settings: config.Settings, *, endpoint: str
 ) -> tuple[Summary, Completion | None, float]:
     """One live inference call, timed, with the reply kept for the gates."""
     inference = settings.app.models.summarize.inference
@@ -2517,7 +2535,6 @@ def _one_call(
         article,
         completion,
         model_id=model_id,
-        pipeline_fingerprint=fingerprint,
         generated_at=assemble.utc_now(),
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
@@ -2527,7 +2544,7 @@ def _one_call(
 
 
 def _run_canaries(
-    settings: config.Settings, fingerprint: str, *, endpoint: str
+    settings: config.Settings, *, endpoint: str
 ) -> list[CanaryObservation]:
     """Every planted attack, through the live candidate.
 
@@ -2541,7 +2558,7 @@ def _run_canaries(
         article = _canary_article(
             payload, extract_config=settings.app.extract, fetched_at=assemble.utc_now()
         )
-        summary, completion, _ = _one_call(article, settings, fingerprint, endpoint=endpoint)
+        summary, completion, _ = _one_call(article, settings, endpoint=endpoint)
         reply = " ".join([summary.title or "", summary.summary or "", *(summary.key_points or [])])
         cleaned = sanitize(str(payload["raw_text"]))
         raw = completion.content if completion else ""
@@ -2597,23 +2614,7 @@ def stage_qualify_canaries(
     section 4). The fixtures are the file in, `canaries.json` is the file out,
     and the exit code is the gate.
     """
-    inference = settings.app.models.summarize.inference
-    model = settings.app.models.summarize
-    observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
-    inputs = build_inputs(
-        model=model,
-        model_sha256=model.sha256,
-        inference=inference,
-        truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
-        runtime_build=runtime_build(),
-        chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
-        prompt=summarize.prompt_inputs(settings.app.summarize),
-        output_schema=summarize.output_schema_text(settings.app.summarize),
-        runner_class=runner_class(),
-        extractor_version=extract.EXTRACTOR_VERSION,
-        sanitizer_version=SANITIZER_VERSION,
-    )
-    observations = _run_canaries(settings, inputs.fingerprint(), endpoint=model_endpoint)
+    observations = _run_canaries(settings, endpoint=model_endpoint)
     return _canary_report(
         observations,
         root=QUALIFICATION_ROOT / date,
@@ -2667,7 +2668,6 @@ def stage_qualify(
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
     )
-    fingerprint = inputs.fingerprint()
 
     plan = _load_plan(date)
     mine = shard_of(plan, shard=shard, shards=shards)
@@ -2720,7 +2720,7 @@ def stage_qualify(
     for repeat in range(1, repeats + 1):
         for entry in frozen:
             summary, completion, seconds = _one_call(
-                entry.article, settings, fingerprint, endpoint=model_endpoint
+                entry.article, settings, endpoint=model_endpoint
             )
             observations.append(
                 _observe(
@@ -2742,7 +2742,7 @@ def stage_qualify(
             if repeat == 1 and summary.status is SummaryStatus.OK:
                 scores.append(_score_item(entry, summary, scorer, settings.app.evaluation))
 
-    canaries = _run_canaries(settings, fingerprint, endpoint=model_endpoint) if shard == 0 else []
+    canaries = _run_canaries(settings, endpoint=model_endpoint) if shard == 0 else []
 
     result = QualificationShard(
         version=QualificationShard.schema_version(),
@@ -2754,7 +2754,7 @@ def stage_qualify(
         repeats=repeats,
         candidate=candidate,
         scorer=scorer_identity,
-        pipeline_fingerprint=fingerprint,
+        inputs=inputs,
         corpus_registered_at=registered_at,
         planned=attempted,
         corpus=[entry.row for entry in frozen],
@@ -3696,6 +3696,7 @@ def stage_assemble(
     # instrument, which is what tells a run that was switched off or not drawn
     # apart from one whose weights would not load.
     instruments = sorted({row.scorer_version for row in rows})
+    recorded_inputs = _recorded_inputs(items_dir)
     manifest = assemble.build_manifest(
         plan=plan,
         day=day,
@@ -3711,6 +3712,7 @@ def stage_assemble(
         config_digests=settings.digests,
         site_bytes=site_bytes,
         site_files=site_files,
+        inputs=recorded_inputs,
         item_health_rows=item_health_rows,
         decisions=decisions,
         evaluation_enabled=observability.evaluation_enabled,
@@ -3719,9 +3721,9 @@ def stage_assemble(
         scorer_version=instruments[0] if len(instruments) == 1 else None,
         rank_version=rank.RANK_VERSION,
     )
+    _report_prose_change(recorded_inputs, previous_manifest)
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(STATE_ROOT, rows)
-    stamps = append_new(FINGERPRINTS, _stamps(items_dir))
     published = ledger.append_published(STATE_ROOT, day.date, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
     publish_telemetry.publish(
@@ -3837,14 +3839,13 @@ def stage_assemble(
         LOG.warning("%s", yield_alarm)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
-        "new_fingerprints=%s search_index=%s/%s day_metrics=%s",
+        "search_index=%s/%s day_metrics=%s",
         plan.date,
         len(day.items),
         day.partial,
         landed,
         published,
         item_health,
-        [row.pipeline_fingerprint[:12] for row in stamps],
         len(index.entries),
         index.vector_bytes // index.dimensions,
         publish_day_metrics.day_metrics_relpath(plan.date),

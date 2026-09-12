@@ -209,7 +209,6 @@ def to_eval_row(
         source_word_count=source_words,
         source_seen_word_count=article.word_count,
         summary_word_count=metrics.word_count(text),
-        pipeline_fingerprint=summary.pipeline_fingerprint,
         output_digest=summary.output_digest,
         source_digest=text_digest(premise),
         determinism_violation=determinism_violation,
