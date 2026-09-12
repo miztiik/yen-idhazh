@@ -61,7 +61,7 @@ from idhazh.contracts.base import (
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import EventType, LensId, SourceKind
+from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 
 
@@ -195,8 +195,8 @@ class DigestItem(Model):
 
     summary: str = Field(min_length=1)
     key_points: list[str] = Field(min_length=1)
-    lenses: list[LensId] = Field(default_factory=list)
-    events: list[EventType] = Field(default_factory=list)
+    lenses: list[Slug] = Field(default_factory=list)
+    events: list[Slug] = Field(default_factory=list)
     entities: list[Slug] = Field(default_factory=list)
 
     band: ConfidenceBand
@@ -353,6 +353,27 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T03:55",
+            change=(
+                "DigestItem.lenses and DigestItem.events are lists of Slug rather than "
+                "of the closed LensId and EventType enums, which are deleted. The "
+                "schema gates the slug pattern and no longer enumerates the members."
+            ),
+            why=(
+                "Adding or retiring a lens was a code change and a release rather than a "
+                "config edit. The vocabulary is config/taxonomy.json, and the tagger can "
+                "only emit a key of the mapping that file builds, so widening the type "
+                "lets nothing invent a label (Rule #11). Read-compatible, which is the "
+                "half that matters for a frozen day: every id the 22 committed days "
+                "carry is a well-formed slug, so this build reads all 8,922 of their "
+                "items unchanged (measured 2026-09-12). It is also what lets a day keep "
+                "saying what it said - ai-roi is retired and carried by 18 of those "
+                "items, and under a closed type deleting the id from config would make "
+                "those days unreadable, so the only safe move was never to delete one "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-08",
             change="updated_at names the published ledger's day tree, not the flat file.",

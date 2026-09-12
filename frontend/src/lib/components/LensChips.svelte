@@ -10,7 +10,7 @@
 	 * something. That is what makes an inert chip honest beside the outlined
 	 * topic pills above.
 	 */
-	import { LENS_NAMES, shownLenses } from '$lib/payload/lenses';
+	import { lensLabel, shownLenses } from '$lib/payload/lenses';
 
 	let { lenses }: { lenses: readonly string[] | undefined } = $props();
 
@@ -22,7 +22,7 @@
 	     did not say. The relation word is for that ear only. -->
 	<span class="sr-only">Also about:</span>
 	{#each shown as id (id)}
-		<span class="lens-chip" data-lens={id}>{LENS_NAMES[id]}</span>
+		<span class="lens-chip" data-lens={id}>{lensLabel(id)}</span>
 	{/each}
 {/if}
 
