@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-12
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -20,7 +20,7 @@ question, and the four answers do not mix.
 
 | Answer | Directory |
 | --- | --- |
-| A person writes it, by hand | `config/`, `docs/`, `tests/`, `TODO/` |
+| A person writes it, by hand | `.claude/`, `.github/`, `config/`, `docs/`, `notebooks/`, `tests/`, `TODO/` |
 | A tool generates it, and it is committed | `schemas/`, `state/`, `frontend/public/digest/` |
 | A tool generates it, and it is thrown away | `backend/var/`, `frontend/build/` |
 | It is downloaded, not authored | `backend/models/`, `backend/bin/` |
@@ -29,14 +29,18 @@ question, and the four answers do not mix.
 
 | Path | Holds | Written by | Reaches a reader |
 | --- | --- | --- | --- |
-| `config/` | The tunable knobs: `idhazh.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
+| `config/` | The tunable knobs: `idhazh.json`, `appearance.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
 | `corpus/` | The rolling training window: source text as training samples, its census and its holdout | a run, in CI | **never** |
-| `schemas/` | One generated JSON Schema per contract, thirty-eight files | `python -m idhazh.contracts.export` | no |
-| `backend/` | The build-time producer. Not a service, ever | a person | no |
+| `schemas/` | One generated JSON Schema per contract | `python -m idhazh.contracts.export` | no |
+| `backend/` | The build-time producer. Not a service, ever. `backend/idhazh/` is the package, `backend/idhazh/contracts/` the Pydantic models, `backend/utilities/` the operator tooling, `backend/tests/` its tests | a person | no |
+| `.github/workflows/` | CI, the measurement harness, the daily pipeline, and the Pages deploy | a person | no |
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
+| `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
+| `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
 | `state/` | The append-only ledgers one run leaves for the next. Four of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/` and `state/scores/` by month, `state/published/` by day | a run, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
+| `notebooks/` | Committed notebooks a person runs off this machine, on hardware the runner does not have. Instructions only - never weights, never a token, and nothing in CI runs them (Guardrail #2) | a person | no |
 | `docs/` | The canonical knowledge. Agent memory | a person | no |
 | `TODO/` | Active plan-docs. Working material, never authoritative | a person | no |
 
