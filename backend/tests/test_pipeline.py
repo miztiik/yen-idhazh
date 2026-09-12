@@ -19,17 +19,26 @@ import socket
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    REPO_ROOT,
+    RecordedEndpoint,
+    read_text,
+)
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config, extract, ledger, rank, telemetry
+from idhazh import assemble, cli, config, extract, ledger, rank, summarize, telemetry
+from idhazh.classify import calls
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig, ObservabilityConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ChangelogEntry, StalePayloadError
+from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.digest_view import DigestView
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
@@ -43,7 +52,7 @@ from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
-from idhazh.contracts.visual_decision import VisualDecision
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
 from idhazh.evals import archive as score_archive
 from idhazh.evals import metrics, sampling, writer
 from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
@@ -51,6 +60,7 @@ from idhazh.evals.score import band, to_eval_row, verdict
 from idhazh.fetch import FetchResult
 from idhazh.fingerprint import read_ledger, text_digest
 from idhazh.ledger import STATE_DIRNAME
+from idhazh.llm.server import parse_completion
 
 pytestmark = pytest.mark.slow
 
@@ -3225,3 +3235,271 @@ def test_a_day_nothing_relabelled_publishes_the_same_two_numbers() -> None:
     assert day.verticals
     for ref in day.verticals:
         assert ref.desk_count == ref.count
+
+
+# --- The two calls, in the pipeline, behind one flag --------------------------
+
+#: What a `Summary` carries that is a clock rather than a decision. Two runs of
+#: one recorded reply agree on everything else, and these five are why "the same
+#: bytes" is asserted after they come off rather than over the whole payload.
+CLOCKS: Final = ("generated_at", "duration_ms", "fetch_ms", "extract_ms", "summarize_ms")
+
+CALL_ONE_REPLY: Final = FIXTURES_DIR / "completions" / "call-one" / "labelled.json"
+CALL_TWO_REPLY: Final = FIXTURES_DIR / "completions" / "call-two" / "summary-and-plan.json"
+
+
+def two_call_settings(on: bool) -> config.Settings:
+    """The committed config with the flag moved and nothing else."""
+    settings = config.load(CONFIG_DIR)
+    return config.Settings(
+        app=settings.app.model_copy(
+            update={"run": settings.app.run.model_copy(update={"two_calls_per_item": on})}
+        ),
+        appearance=settings.appearance,
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        watchlist=settings.watchlist,
+        digests=settings.digests,
+    )
+
+
+def worked(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    *,
+    on: bool,
+    replies: tuple[bytes, ...],
+) -> tuple[RunPlan, Path, int]:
+    """One real work stage over captured pages and recorded replies.
+
+    No network and nothing mocked: the pages come off disk and the replies are
+    played back by a real loopback server (Guardrail #7). The third value is how
+    many requests the stage sent, which is the only way to tell one call an item
+    from two without reading a payload that both paths can produce.
+    """
+    run_plan = plan()
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    with RecordedEndpoint(200, *replies) as server:
+        cli.stage_work(
+            run_plan,
+            settings=two_call_settings(on),
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
+        served = server.served
+    return run_plan, tmp_path / "run" / run_plan.date / "items", served
+
+
+def without_clocks(summary: Summary) -> dict[str, Any]:
+    payload: dict[str, Any] = json.loads(summary.to_json())
+    for field in CLOCKS:
+        payload.pop(field, None)
+    return payload
+
+
+def only_stamp(items: Path) -> FingerprintRow:
+    """The one pipeline stamp a single-shard run leaves, named by itself.
+
+    More than one means the stage observed two configurations in one shard,
+    which is a finding rather than something to pick from.
+    """
+    stamps = sorted(items.glob("*.fingerprint.json"))
+    assert len(stamps) == 1, f"one shard, one stamp, got {[path.name for path in stamps]}"
+    return FingerprintRow.read(stamps[0])
+
+
+class TestTheFlagOffLeavesTodaysPipelineWhereItWas:
+    """The acceptance gate. This row lands with the flag off, so the whole of
+    what a reader gets on the day it merges is what the flag-off path produces -
+    and the change that could move it is invisible in a diff, because the
+    pipeline stamp is computed once a shard and written into every payload."""
+
+    def test_one_request_an_item_and_no_second_one(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
+
+        run_plan, _items, served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
+
+        assert served == len(run_plan.items), "the flag off is one summarizer call an item"
+
+    def test_the_stage_writes_the_summary_the_library_builds(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Same bytes, and the comparison is against `summarize.to_summary` rather
+        than against an earlier copy of itself. That is what can fail: the stage
+        picks the prompt config, the evaluation bounds and the stamp, and a
+        two-call path wired into the wrong branch would change one of the three
+        while every payload still validated."""
+        reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
+        completion = parse_completion(reply.decode("utf-8"))
+        settings = two_call_settings(False)
+
+        run_plan, items, _served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
+
+        for item in run_plan.items:
+            written = Summary.from_json(read_text(items / f"{item.item_id}.summary.json"))
+            article = Article.read(items / f"{item.item_id}.article.json")
+            expected = summarize.to_summary(
+                article,
+                completion,
+                model_id=settings.app.models.summarize.id,
+                pipeline_fingerprint=written.pipeline_fingerprint,
+                generated_at=written.generated_at,
+                prompt_config=settings.app.summarize,
+                evaluation=settings.app.evaluation,
+            )
+            assert without_clocks(written) == without_clocks(expected)
+
+    def test_the_stamp_still_digests_the_single_call_prompt(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """The stamp is what a re-run compares against, so moving it with the flag
+        off would re-summarize every item in the archive for nothing."""
+        reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
+        settings = two_call_settings(False)
+
+        _run_plan, items, _served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
+
+        assert only_stamp(items).inputs.prompt_sha256 == text_digest(
+            summarize.prompt_inputs(settings.app.summarize)
+        )
+
+    def test_the_work_stage_writes_no_decision(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """With the flag off nothing in `work` writes a decision, so the separate
+        stage is still the only producer - which is what makes the flag
+        reversible right up until row #6 deletes the old path."""
+        reply = (FIXTURES_DIR / "completions" / "ok.json").read_bytes()
+
+        _run_plan, items, _served = worked(tmp_path, monkeypatch, on=False, replies=(reply,))
+
+        assert not list(items.glob(f"*{PAYLOAD_SUFFIX}"))
+
+
+class TestTheFlagOnDispatchesBothCalls:
+    def test_two_requests_an_item_and_the_cost_is_split_between_them(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Trigger 1's instrument, end to end. `call_1` and `call_2` are what the
+        ledger carries per call, and until something dispatched the pair the
+        cells could only ever hold one call's numbers."""
+        run_plan, items, served = worked(
+            tmp_path,
+            monkeypatch,
+            on=True,
+            replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
+        )
+
+        assert served == 2 * len(run_plan.items), "the flag on is two calls an item"
+        written = [
+            Summary.from_json(read_text(items / f"{item.item_id}.summary.json"))
+            for item in run_plan.items
+        ]
+        for summary in written:
+            assert summary.call_1 is not None and summary.call_2 is not None
+            assert summary.call_1.kind is CallKind.LABEL
+            assert summary.call_2.kind is CallKind.SUMMARIZE_AND_PLAN
+
+    def test_every_item_that_publishes_carries_a_decision(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """The work stage decides the picture now, so the decision lands beside
+        the summary rather than an hour later in another job on another model."""
+        run_plan, items, _served = worked(
+            tmp_path,
+            monkeypatch,
+            on=True,
+            replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
+        )
+
+        published = [
+            item.item_id
+            for item in run_plan.items
+            if Summary.from_json(
+                read_text(items / f"{item.item_id}.summary.json")
+            ).status is SummaryStatus.OK
+        ]
+        assert published, "the recorded pair has to produce at least one publishable item"
+        for item_id in published:
+            decision = VisualDecision.from_json(read_text(items / f"{item_id}{PAYLOAD_SUFFIX}"))
+            assert decision.item_id == item_id
+            assert decision.asked_the_model, "call 2 was sent, whatever it answered"
+            assert decision.decision_ms is not None
+
+    def test_the_stamp_digests_the_two_prompts_instead(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """The two calls render their own bytes, so the turn markers decide what
+        the model reads and nothing else in the stamp reaches them. A marker edit
+        would move every reply while the ledger said `unchanged`."""
+        settings = two_call_settings(True)
+
+        _run_plan, items, _served = worked(
+            tmp_path,
+            monkeypatch,
+            on=True,
+            replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
+        )
+
+        stamped = only_stamp(items).inputs.prompt_sha256
+        assert stamped == text_digest(
+            calls.prompt_inputs(
+                settings.app.summarize, inference=settings.app.models.summarize.inference
+            )
+        )
+        assert stamped != text_digest(summarize.prompt_inputs(settings.app.summarize))
+
+    def test_a_labelling_reply_this_build_cannot_read_loses_the_item_loudly(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Plan 11 row #3g's defect, made visible rather than fixed here. Call 2's
+        prompt replays call 1's reply verbatim and the reason that is safe is
+        that the reply has been held to a closed schema - so a reply that did not
+        parse stops the item rather than being sent unchecked."""
+        cut = json.loads(read_text(CALL_ONE_REPLY))
+        cut["choices"][0]["message"]["content"] = '{"labels": [{"element_id": "quan'
+        cut["choices"][0]["finish_reason"] = "length"
+
+        run_plan, items, served = worked(
+            tmp_path,
+            monkeypatch,
+            on=True,
+            replies=(json.dumps(cut).encode("utf-8"),),
+        )
+
+        assert served == len(run_plan.items), "the second call is never sent"
+        written = [
+            Summary.from_json(read_text(items / f"{item.item_id}.summary.json"))
+            for item in run_plan.items
+        ]
+        assert {summary.status for summary in written} == {SummaryStatus.FAILED}
+        assert {summary.failure_code for summary in written} == {FailureCode.BAD_SHAPE}
+        assert not list(items.glob(f"*{PAYLOAD_SUFFIX}")), "a lost item gets no decision"
+
+
+class TestTheOldPlannerStandsDownWhenTheWorkStageDecided:
+    def test_it_decides_nothing_and_overwrites_nothing(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Without this the separate job re-decides every item on the small model
+        and overwrites a decision drawn from the article with one drawn from a
+        summary of it - silently, because both payloads validate."""
+        run_plan, items, _served = worked(
+            tmp_path,
+            monkeypatch,
+            on=True,
+            replies=(CALL_ONE_REPLY.read_bytes(), CALL_TWO_REPLY.read_bytes()),
+        )
+        before = {
+            path.name: path.read_bytes() for path in sorted(items.glob(f"*{PAYLOAD_SUFFIX}"))
+        }
+        assert before, "the two-call path has to have written something to overwrite"
+
+        cli.stage_visual_planner(run_plan, settings=two_call_settings(True))
+
+        after = {path.name: path.read_bytes() for path in sorted(items.glob(f"*{PAYLOAD_SUFFIX}"))}
+        assert after == before

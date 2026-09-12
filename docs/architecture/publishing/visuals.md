@@ -23,6 +23,25 @@ runs on Qwen3-4B while the summarizer keeps the 8B. Splitting the stage also mea
 never starts a planner still publishes.** Every item simply carries no picture, which is already
 the common and correct answer.
 
+**`run.two_calls_per_item` folds the whole of it back into `work`, and it is false today.** With
+the flag on, the summarizer's second call writes the summary and the plan in one reply, so `work`
+decides the picture and draws it while it still holds the article; `idhazh visuals` then runs,
+finds that every item is already decided, and returns without asking the small model anything.
+Which is the point - a second pass would overwrite a decision drawn from the **article** with one
+drawn from a summary of it, and both payloads validate, so nothing would say it had happened.
+
+Two things follow from `work` being the job that draws. It is sharded four ways, so four runners
+render a quarter of the day each instead of one runner rendering all of it against a budget; and
+each shard has to hand its drawn bytes to `assemble` itself, which is the `shard-visuals-<n>`
+artifact in `digest.yml`. The decisions travel inside `items-<n>`, which is rooted at the items
+directory and therefore cannot carry a file written under `frontend/public/digest/`. Without the
+second artifact the day publishes a payload naming an asset nobody uploaded, which
+`cli._picture_faults` reports as "names a picture file that is not there".
+
+**The flag is the first of two commits** (plan 11 rows #5b and #6). The second deletes the flag,
+the small model, this stage and its job together. Until then the flag off leaves the pipeline
+exactly where it was.
+
 ## The model never writes a number
 
 This is the whole safety design, and it is structural rather than instructed.
@@ -527,8 +546,9 @@ by tokenising the committed call-2 reply with `Qwen3-8B-Q4_K_M.gguf` through `ll
 whole reply is **327 tokens**, the summary alone is **152**, and the plan half is **176** - so a
 plan is 54 percent of what an ordinary reply decodes. At the 6.01 tok/s the summarizer decodes at
 (`ubuntu-latest`, 2026-08-23) that is **29.3 seconds an item**, on the items the gate fires for.
-**It is one reply and not a distribution**: no stage dispatches call 2 yet, so the fixture is
-written by hand, and this sizes the saving rather than measuring a run. (176 by direct count and 175
+**It is one reply and not a distribution**: the fixture is written by hand, so this sizes the saving
+rather than measuring a run, and no run has read one - the stage that dispatches call 2 shipped on
+2026-09-12 behind `run.two_calls_per_item`, which is off. (176 by direct count and 175
 by subtracting the summary from the whole - the one-token gap is a merge across the object
 boundary.) How often the gate fires is the other half of the bill and is a run measurement nobody
 has taken on the two-call flow; the single-call gate's own rate was 46.9 percent of items, measured
@@ -564,6 +584,14 @@ because a console counts members and cannot count prose.
 single-call prefilter above and the two-call suppression - and both record `not_reachable`, because
 what an operator acts on is the gate rather than the line of code. And **which** check refused is
 `ValidatorCheck`'s to say: one fact with two homes is a fact that can disagree with itself.
+
+`validation_failed` is the member that rule is doing the most work in. Three routes write it, and
+the last two only exist once a stage dispatches call 2: the validator refused the plan by name; the
+reply's plan half would not hold `VisualPlan`'s own rules, which a grammar cannot enforce because
+they read one field against another; and every check passed and `compile_bar` still could not draw
+it. To an operator those are one answer - a plan was drafted and this build refuses it - so the
+rationale says which, and the member does not. `visual_planner.not_drawable_here` writes the second
+and third; `refused_by_the_validator` writes the first, because only it has rejections to name.
 
 **Four members, because four routes have a writer.** The design record names six gates and the
 two-call flow adds a seventh. The potential class, the novelty floor, the sufficiency bar and the

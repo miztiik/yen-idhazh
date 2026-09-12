@@ -2512,6 +2512,53 @@ def test_the_visuals_artifact_collects_the_file_the_stage_writes() -> None:
     )
 
 
+def test_a_work_shard_hands_over_the_pictures_it_drew_itself() -> None:
+    """Under `run.two_calls_per_item` the work shards are the only job that draws.
+
+    Call 2 writes the summary and the plan in one reply, so `work` renders the
+    picture on its own runner and its checkout is thrown away when the shard
+    ends. The decisions travel inside `items-<shard>`; the drawn bytes do not,
+    because that artifact is rooted at the items directory. Without this pair
+    `assemble` publishes a payload naming an asset that is not there, which
+    `_picture_faults` reports as a broken image on every story that got one.
+
+    Empty and green while the flag is off, which is why this is the only thing
+    connecting the two halves: no run exercises it until somebody turns the flag
+    on, and by then the wiring has to already be right.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    upload = _mapping(
+        _artifact_upload(workflow, "work", "shard-visuals-${{ matrix.shard }}").get("with"),
+        "upload",
+    )
+
+    assert _substitute(str(upload.get("path")).strip()) == f"{SUBSTITUTED_DAY_DIR}/", (
+        "this run's day and never the whole digest tree, which would send every "
+        "committed day back to Actions on every run"
+    )
+    assert upload.get("if-no-files-found") == "ignore", (
+        "the flag is off, so the glob matches nothing and must not fail the shard"
+    )
+
+    downloads = [
+        _mapping(step.get("with"), "assemble download")
+        for step in _steps(workflow, "assemble")
+        if str(step.get("uses", "")).startswith("actions/download-artifact")
+    ]
+    collected = [
+        asked
+        for asked in downloads
+        if str(asked.get("pattern", "")).startswith("shard-visuals-")
+    ]
+    assert len(collected) == 1, "assemble must collect the shards' pictures exactly once"
+    assert str(collected[0].get("merge-multiple")).lower() == "true", (
+        "four shards unpack into one day"
+    )
+    assert _substitute(str(collected[0].get("path"))) == f"{SUBSTITUTED_DAY_DIR}/", (
+        "the artifact is rooted at the day, so it unpacks back into the day"
+    )
+
+
 def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
     """A rebase that refuses to start throws away a day the run already computed.
 
