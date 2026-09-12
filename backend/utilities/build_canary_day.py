@@ -54,10 +54,16 @@ from idhazh.assemble import (
     to_digest_visual,
     write_atomic,
 )
-from idhazh.contracts.app_config import EvaluationConfig, ModelRef, SummarizeConfig
+from idhazh.contracts.app_config import (
+    EvaluationConfig,
+    ModelRef,
+    SummarizeConfig,
+    VisualsConfig,
+)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
+from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import (
     FeedHealthRow,
@@ -72,11 +78,12 @@ from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import SourceKind, SourceTier
+from idhazh.contracts.visual import VisualPlan
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
-from idhazh.render import asset_relpath, render_visual
+from idhazh.render import asset_relpath, render_planned_visual, render_visual
 
 CANARY_DIR = Path("tests/fixtures/canaries")
 DATE = "2026-08-20"
@@ -101,30 +108,21 @@ SITE_BYTES_FIRST_DAY = 54_230
 SITE_BYTES_PER_DAY = 11_000
 
 # Two items carry a real visual, so the browser suite exercises the picture path
-# rather than proving it safe by never serving one. The specs are ours, not a
-# model's - this file tests the surface, not the visual planner.
-CHART_SPEC = json.dumps(
-    {
-        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-        "background": "transparent",
-        "data": {
-            "values": [
-                {"label": "2025", "value": 15400},
-                {"label": "2024", "value": 11200},
-                {"label": "2023", "value": 8600},
-            ]
-        },
-        "encoding": {
-            "x": {"axis": {"title": "megawatt"}, "field": "value", "type": "quantitative"},
-            "y": {"axis": {"title": None}, "field": "label", "sort": None, "type": "nominal"},
-        },
-        "height": 410,
-        "mark": {"color": "#4c6ef5", "type": "bar"},
-        "width": 680,
-    },
-    separators=(",", ":"),
-    sort_keys=True,
-)
+# rather than proving it safe by never serving one.
+#
+# **The first is compiled, and the other two are written out here.** The first
+# is the one end-to-end drawing the fixture holds: a committed plan and a
+# committed element table go through `compile_bar`, so every bar on that story
+# can be re-derived from the article's own figures and a browser can check the
+# picture says what the table says. The other two are hand-written because they
+# carry cases a compiled plan cannot - a chart with no unit on its axis, and a
+# spec the Vega toolchain refuses.
+#
+# The compiled one reads the validator's own fixtures rather than a second copy
+# of them, so the drawing the browser reads back and the plan the backend oracle
+# compiles are one file. Editing either fixture moves both, which is the point.
+PLANNED_PLAN = Path("tests/fixtures/visual-validator/plans/passes.json")
+PLANNED_TABLE = Path("tests/fixtures/visual-validator/tables/wind.json")
 
 SECOND_CHART_SPEC = json.dumps(
     {
@@ -480,7 +478,9 @@ def lenses_for(index: int) -> list[str]:
     return []
 
 
-def visual_for(index: int, item_id: str, target: Path) -> VisualDecision | None:
+def visual_for(
+    index: int, item_id: str, target: Path, *, visuals: VisualsConfig
+) -> VisualDecision | None:
     """A rendered chart on each of the first two items, and a failed one on the third.
 
     Two rendered, not one, because the browser suite's oracle is that every
@@ -489,11 +489,39 @@ def visual_for(index: int, item_id: str, target: Path) -> VisualDecision | None:
     a visual that is not a published chart on the day: the console counts
     rendered charts rather than visuals, and a fixture where the two numbers
     agree cannot tell the two readings apart.
+
+    **The first goes through the compiler.** Its spec and its alt text are built
+    from a committed plan over a committed element table, so the day carries one
+    drawing whose every bar can be re-derived from the figures the article
+    states - which is what the browser suite reads back.
     """
+    # The payload stores `digest/<Y>/<M>/<D>/...`, so the root here is the parent
+    # of the digest directory - exactly as the real pipeline does it.
+    public_root = target.parent
+    relpath = asset_relpath(DATE, item_id)
+
+    def decided(kind: VisualKind, spec: str | None, alt: str | None) -> VisualDecision:
+        return VisualDecision(
+            version=VisualDecision.schema_version(),
+            item_id=item_id,
+            url_key="0" * 64,
+            kind=kind,
+            spec=spec,
+            alt_text=alt,
+            model_id="canary",
+            decided_at=f"{DATE}T06:00:00Z",
+        )
+
     if index == 0:
-        spec = CHART_SPEC
-        alt = "Bar chart. 2025 15,400 megawatt; 2024 11,200 megawatt; 2023 8,600 megawatt."
-    elif index == 1:
+        return render_planned_visual(
+            decided(VisualKind.NONE, None, None),
+            VisualPlan.read(PLANNED_PLAN),
+            ElementTable.read(PLANNED_TABLE),
+            public_root=public_root,
+            relpath=relpath,
+            visuals=visuals,
+        )
+    if index == 1:
         spec = SECOND_CHART_SPEC
         alt = "Bar chart. Filed 320 cases; Reviewed 210 cases; Approved 95 cases."
     elif index == 2:
@@ -502,22 +530,8 @@ def visual_for(index: int, item_id: str, target: Path) -> VisualDecision | None:
     else:
         return None
 
-    decision = VisualDecision(
-        version=VisualDecision.schema_version(),
-        item_id=item_id,
-        url_key="0" * 64,
-        kind=VisualKind.CHART,
-        spec=spec,
-        alt_text=alt,
-        model_id="canary",
-        decided_at=f"{DATE}T06:00:00Z",
-    )
     return render_visual(
-        decision,
-        # The payload stores `digest/<Y>/<M>/<D>/...`, so the root here is the
-        # parent of the digest directory - exactly as the real pipeline does it.
-        public_root=target.parent,
-        relpath=asset_relpath(DATE, item_id),
+        decided(VisualKind.CHART, spec, alt), public_root=public_root, relpath=relpath
     )
 
 
@@ -536,11 +550,15 @@ def published_items(
     ]
 
 
-def build(target: Path, evaluation: EvaluationConfig) -> DigestDay:
+def build(target: Path, evaluation: EvaluationConfig, visuals: VisualsConfig) -> DigestDay:
     items = published_items(evaluation)
     items = [
         item.model_copy(
-            update={"visual": to_digest_visual(visual_for(index, item.item_id, target))}
+            update={
+                "visual": to_digest_visual(
+                    visual_for(index, item.item_id, target, visuals=visuals)
+                )
+            }
         )
         for index, item in enumerate(items)
     ]
@@ -1205,10 +1223,11 @@ def main() -> int:
         shutil.rmtree(args.state)
 
     evaluation = config.load().app.evaluation
+    visuals = config.load().app.visuals
     quiet = earlier_days()
     for date in quiet:
         quiet_day(args.out, date)
-    day = build(args.out, evaluation)
+    day = build(args.out, evaluation, visuals)
     runs = manifest(args.out, len(day.items))
     checks = health(args.state)
     census = source_health(args.out.parent)
@@ -1237,8 +1256,8 @@ def main() -> int:
         for month in months
     ]
     digest = hashlib.sha256(day.to_json().encode("utf-8")).hexdigest()[:12]
-    visuals = sum(1 for item in day.items if item.visual is not None)
-    print(f"canary day {DATE}: {len(day.items)} items, {visuals} visuals, payload {digest}")
+    drawn = sum(1 for item in day.items if item.visual is not None)
+    print(f"canary day {DATE}: {len(day.items)} items, {drawn} visuals, payload {digest}")
     print(f"wrote {(day_dir(args.out, DATE) / 'digest.json').as_posix()}")
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
