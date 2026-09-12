@@ -174,6 +174,44 @@ cached_tokens` rather than the whole prompt.
 
 So an article is never charged for the article before it.
 
+**Under the two-call design that sentence still holds, and the shared prefix is
+now worth naming.** Measured 2026-09-12 on the configured weights, item 2 of a
+run reused **1,362 tokens** of its call-1 prompt with no work - call 1's system
+turn, which is byte-identical on every item - while the article behind it read
+from cold. The run also destroyed the previous item's copy of call 2's question,
+which is what a one-slot cache is supposed to do
+([`../../reference/benchmarks/2026-09-12-two-call-re-read.md`](../../reference/benchmarks/2026-09-12-two-call-re-read.md)).
+
+## What call 2 reads again, and which row owns each part
+
+The second call opens with the first call's whole message array, so most of its
+prompt is answered from the slot. What is left is three things, and the figure
+in force for each is from
+[`../../reference/benchmarks/2026-09-12-two-call-re-read.md`](../../reference/benchmarks/2026-09-12-two-call-re-read.md) -
+`Qwen3.5-9B-Q4_K_M.gguf` through `llama-server` build 10444, 2026-09-12, one run
+and no spread, on the longest article the committed corpus holds.
+
+| Cause | Tokens an item | At 9.85 tokens a second | Whose |
+| --- | --- | --- | --- |
+| the article changed | the whole call-1 prompt, less the shared system turn | - | irreducible |
+| the chat template broke the prefix | **100** - four, plus call 1's whole 96-token reply behind them | 10.2 s an item, 3.4 min of a 20-item shard | plan 11 row #3c |
+| the trailing turn sits behind the article | **697**, of which 687 is the question's own text | **69.7 s an item, 23.2 min of a 20-item shard** | plan 11 row #3e |
+
+**687 is the number to act on, and it is seven times the template's.** Call 2's
+question names no article and quotes no sentence, so it is the same bytes on
+every item - but the article in front of it is not, so a prefix cache cannot
+reach it and all 687 tokens are read again, every item, for ever. The plan
+carried "about 670" as an estimate until this reading and it is withdrawn.
+
+**What the two calls cost over a single call is 797 tokens an item** - the
+template break plus the trailing turn - which is **80.9 seconds an item, about
+27 minutes of a 20-item shard.** Rows #3c and #3e remove 787 of the 797.
+
+**A token count names the runtime, not the processor** (`CLAUDE.md` Guardrail
+#10, as clarified 2026-09-12), so the counts above travel and the seconds beside
+them are this page's own measured rate rather than the laptop the counts came
+from.
+
 ## The write rate still falls through a run, and the cause is the ordering
 
 Measured on run `32742672105`, all four workers, first half of each job against
