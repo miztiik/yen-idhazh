@@ -24,7 +24,7 @@ Parallel N is 1 by measurement, not by caution: Rows #1, #2 and #3 all write `CL
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Intent chain, rename, preamble, approval encoding | - | A | DONE #_pending_ | `../yen-idhazh.worktrees/p27-r1` | #_pending_ | default |
+| 1 | Intent chain, rename, preamble, approval encoding | - | A | DONE #628 | `../yen-idhazh.worktrees/p27-r1` | #628 | default |
 | 2 | Rewrite all twelve guardrails | 1 | B | PENDING | - | - | - |
 | 3 | Eight collateral sections | 2 | C | PENDING | - | - | - |
 | 4 | Restate in the three derived agent surfaces | 3 | D | PENDING | - | - | - |
