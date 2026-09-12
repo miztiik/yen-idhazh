@@ -240,7 +240,7 @@ itself, and either is enough. What is not enough is nothing.
 
 ### The console payload producers, 2026-09-09
 
-Seven producers write the console's own payloads at publication
+**Eight producers** write the console's own payloads at publication
 ([console-payloads.md](../architecture/publishing/console-payloads.md)). They
 are listed apart because their cover is a **store** bound rather than a read
 bound: each published directory is pruned to its own
@@ -253,6 +253,7 @@ read".
 | --- | --- | --- |
 | `publish_console.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries |
 | `publish_scores.publish`, `publish_feed_health.publish`, `publish_span_rollup.publish` | the state shard for the month named | the month the run appended to |
+| `publish_telemetry.publish` | the `state/item-health/` partitions the caller names, or every one when it names none | **the month the run appended to**, which is what `cli.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `publish_day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
 | `publish_run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
 | `publish_console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards | `max(console.window_presets)`, committed at 90 |
@@ -273,6 +274,33 @@ handle** whatever it holds - the same handle `ledger.load_runtime_counters`
 already opens for one run - and what it WRITES is bounded: a row below
 `public_machine_keep_months` is dropped on the way through rather than written
 into a file the prune would delete on the next pass.
+
+**The eighth answers to a different knob, and that knob has never bitten,
+2026-09-12.** `publish_telemetry.publish` is the odd member of this block: it
+reads the **source ledger** rather than a published directory, so what caps it is
+`observability.item_health_full_grain_months` and not one of the
+`public_*_keep_months` the other seven answer to. The two are held **equal** by
+the config contract, because a projection and the ledger it projects have to age
+together. What makes the daily cover hold is that a run appends to one month, so
+the month it names is the only one that can have changed - and the filter is
+skipped for any month whose mirror is missing, which is what lets a fresh clone
+rebuild one it never published and is why no cover in months belongs on the
+`months=None` arm. **Fourteen is not yet a bound on what that arm reads**: the
+oldest partition on disk is `2026-08` and `retention.prune_telemetry` first has a
+candidate to fold on **2027-10-01**, so today it reads every partition there has
+ever been - two of them, 3,824,328 bytes over 11,143 rows and 20 days on
+2026-09-12, which is 186.7 KB a day and exact. Fourteen partitions at that rate
+would be 58 to 80 MB, an **estimate** whose range is source yield rather than
+measurement noise. `publish_telemetry.migrate` is the module's other growing read
+and declares `-1`: rewriting every shard is the job, and it is an operator
+command a person runs once on a contract change rather than a per-run cost.
+
+**What the two arms open is counted rather than timed**, in
+`backend/tests/test_publish_telemetry.py`, over a twelve-partition ledger the
+test builds: the backfill opens twelve and the daily pass opens one. The count is
+also the tripwire for the day-grain move - `publish`'s glob is `*.csv` and not
+recursive, so a ledger that files by day would take the backfill to **zero**
+rather than to an error.
 
 ### The oracle, and what it caught
 

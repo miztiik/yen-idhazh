@@ -148,6 +148,16 @@ def publish(
     `docs/concepts/partitions.md`; the second is how it decides "only when
     a correction targets it" - a correction changes the bytes, an ordinary
     re-run does not.
+
+    Cover: the months the caller names. The daily caller passes the one month it
+    appended to, so an ordinary run reads one partition whatever the ledger
+    holds. `None` is unbounded on purpose - a fresh clone has to rebuild a mirror
+    it never published, and a cover in months would leave it permanently short of
+    one. What bounds the ledger is the store rather than this read:
+    `observability.item_health_full_grain_months` caps it at fourteen partitions.
+    That cap has never had a candidate to take - the oldest partition on disk is
+    2026-08 and `retention.prune_telemetry` first reaches it on 2027-10-01 - so
+    the unbounded arm reads every partition there has ever been.
     """
     source_dir = state_root / ledger.ITEM_HEALTH_DIRNAME
     public_root.mkdir(parents=True, exist_ok=True)
@@ -174,6 +184,11 @@ def migrate(public_root: Path = DEFAULT_PUBLIC_ROOT) -> list[tuple[Path, int, bo
     pair that has to hold is the writer and the reader a run already uses. It
     never reads `state/`: a shard whose source month has been folded away still
     has to load.
+
+    Cover: -1, unbounded on purpose. Rewriting every shard is the job, and a
+    cover would leave the ones it skipped in the shape they were written in. It
+    is an operator command a person runs once on a contract change, never a
+    per-run cost.
     """
     results: list[tuple[Path, int, bool]] = []
     for path in sorted(public_root.glob("*.csv")):
