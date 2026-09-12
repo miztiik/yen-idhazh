@@ -38,7 +38,7 @@ from __future__ import annotations
 import csv
 from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 
 from idhazh import month_partition
 from idhazh.contracts.eval_row import EvalRow
@@ -188,9 +188,7 @@ def indexed_observations(state_dir: Path) -> set[str]:
     """
     held: set[str] = set()
     for path in index_shards(state_dir):
-        require_matching_header(path, index_columns())
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            held.update(record["observation_digest"] for record in csv.DictReader(handle))
+        held.update(_digests_of_index(path))
     return held
 
 
@@ -220,9 +218,8 @@ def refresh_index(state_dir: Path) -> int:
     writer of `state/scores/` in this repository goes through it. A shard that
     grew behind the index's back - rows appended by something that never knew
     the index existed, which is what a long-lived branch meets when it merges a
-    `main` older than this file - is repaired by deleting that month's index.
-    That puts the month back into the first case above and the next run refills
-    it from the rows.
+    `main` older than this file - is repaired by `rebuild_index`, which an
+    operator runs against the months it names and which checks its own result.
 
     A partial fill is safe in the direction that matters. It under-reports, so a
     measurement lands twice and `idhazh dedupe-ledgers` settles it against
@@ -235,15 +232,122 @@ def refresh_index(state_dir: Path) -> int:
         path = index_path(state_dir, month)
         if path.exists():
             continue
-        with shard.open("r", encoding="utf-8", newline="") as handle:
-            digests = _distinct(observation_digest(row) for row in csv.DictReader(handle))
-        written += _append_index(path, digests)
+        written += _fill_index(shard, path)
 
     archived = {path.stem for path in archive.archive_files(state_dir)}
     for path in index_shards(state_dir):
         if path.stem not in live and path.stem in archived:
             path.unlink()
     return written
+
+
+class IndexDrift(NamedTuple):
+    """What one month's index and the rows beside it disagree about, both ways.
+
+    `extra` is what the index holds that the rows cannot produce. `missing` is
+    what the rows produce that the index does not hold. Two fields rather than
+    one count, because a one-directional answer passes on an index that only
+    ever grows - and an index that only grows is what a repeated dedupe over a
+    re-scored item looks like.
+    """
+
+    extra: frozenset[str]
+    missing: frozenset[str]
+
+
+def rebuild_index(state_dir: Path, months: Iterable[str]) -> dict[str, IndexDrift]:
+    """Drop each named month's index, write it again from the rows, and name what was wrong.
+
+    The repair `refresh_index` has no path to. That function fills a month with
+    **no** index and never compares one that exists against the shard beside it,
+    because comparing means reading the rows and reading the rows is the bill
+    the index exists to remove. So an index that drifted - a fill a crash cut
+    short, a shard a `merge=union` grew behind its back, an index written at a
+    grain the ledger no longer uses - stands for ever, and the next dedupe
+    silently admits a measurement the ledger already holds.
+
+    Dropping the file is the recipe `refresh_index` has always described. What
+    this adds is the assertion: the rewritten index is read back and compared
+    against the rows in **both** directions, and a disagreement raises instead
+    of returning a count. One direction passes on an index that only ever grows.
+
+    Returns what each named month had wrong **before** it was rewritten, so a
+    repair reports the drift rather than hiding it. Two empty sets for a month
+    is an answer, not a no-op: it says that index was telling the truth.
+
+    **An operator command, and no stage calls it.** It opens every row of every
+    month it is given - the read the index exists to avoid - so the cover is the
+    months the caller names and there is no default (Rule #12,
+    `cli.stage_rebuild_score_index`). A month with no committed shard is refused
+    by name rather than skipped: a typo must not read as a clean pass over
+    nothing.
+    """
+    live = {shard.stem: shard for shard in ledger_shards(state_dir)}
+    named = sorted({month[:7] for month in months})
+    if not named:
+        raise ValueError("rebuild_index was given no month, and a pass over none repairs none")
+    absent = [month for month in named if month not in live]
+    if absent:
+        raise FileNotFoundError(f"{LEDGER_RELDIR} holds no shard for {absent}")
+
+    found: dict[str, IndexDrift] = {}
+    for month in named:
+        path = index_path(state_dir, month)
+        produced = _digests_of_shard(live[month])
+        found[month] = _drift(_digests_of_index(path), produced)
+        path.unlink(missing_ok=True)
+        _fill_index(live[month], path)
+        after = _drift(_digests_of_index(path), produced)
+        if after.extra or after.missing:
+            raise RuntimeError(
+                f"{index_relpath(month)} still disagrees with the rows beside it after a "
+                f"rebuild: {len(after.extra)} digests it holds that the rows cannot produce, "
+                f"{len(after.missing)} the rows produce that it does not hold"
+            )
+    return found
+
+
+def _drift(held: frozenset[str], produced: frozenset[str]) -> IndexDrift:
+    """Both directions at once, so no call site can ask for only one."""
+    return IndexDrift(extra=held - produced, missing=produced - held)
+
+
+def _fill_index(shard: Path, path: Path) -> int:
+    """Write one month's index from the rows beside it. The one place that does.
+
+    Both callers come here: `refresh_index` for a month that has no index, and
+    `rebuild_index` for one it has just dropped. A second implementation is how
+    the two would come to disagree about what a digest is.
+    """
+    with shard.open("r", encoding="utf-8", newline="") as handle:
+        digests = _distinct(observation_digest(row) for row in csv.DictReader(handle))
+    return _append_index(path, digests)
+
+
+def _digests_of_index(path: Path) -> frozenset[str]:
+    """The digests one index file holds. An absent file holds none.
+
+    The header is checked against the contract first, which is the same guard
+    `append` puts on a shard and for the same reason: a file whose columns moved
+    would otherwise be read one column under another column's name.
+    """
+    if not path.exists():
+        return frozenset()
+    require_matching_header(path, index_columns())
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return frozenset(record["observation_digest"] for record in csv.DictReader(handle))
+
+
+def _digests_of_shard(path: Path) -> frozenset[str]:
+    """The distinct observations one month's rows produce, read from the rows.
+
+    The one read here that opens a score row on purpose, which is why only
+    `rebuild_index` calls it and why that is a command a person types.
+    """
+    if not path.exists():
+        return frozenset()
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return frozenset(observation_digest(row) for row in csv.DictReader(handle))
 
 
 def _distinct(digests: Iterable[str]) -> list[str]:

@@ -2777,6 +2777,61 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, date: str | None) -> 
     return 0
 
 
+def stage_rebuild_score_index(
+    *, months: Sequence[str] | None, state_dir: Path | None = None
+) -> int:
+    """Write `state/score-index/` again from the rows it indexes, and say what drifted.
+
+    The operator's repair for an index that stopped describing its shard. A fill
+    a crash cut short, a shard a `merge=union` grew behind the index's back, or
+    an index left at a grain the ledger no longer uses all read as a success
+    today: `evals.writer.refresh_index` only fills a month with no index at all,
+    so a wrong one is never compared against anything and the next dedupe
+    silently admits a measurement the ledger already holds.
+
+    **Never a step of a run, and that is the design rather than an oversight.**
+    Rebuilding reads every score row of every month it is given, which is the
+    read the index exists to avoid (Rule #12), and an index that repaired itself
+    on a schedule would hide the drift this exists to reveal. So a person types
+    it, and the cover is stated: `--month` names the months to rebuild and
+    `--every-shard` is the full pass over the archive. Neither is the default,
+    which is the shape `dedupe-ledgers` already uses for the same question.
+
+    A month with no committed shard exits non-zero rather than reporting a clean
+    pass over nothing, and so does a tree with no shard at all - the rule
+    `validate-days` and `site-weight` already hold.
+    """
+    state = state_dir if state_dir is not None else STATE_ROOT
+    live = sorted(shard.stem for shard in writer.ledger_shards(state))
+    named = live if months is None else sorted({month[:7] for month in months})
+    if not named:
+        LOG.error(
+            "rebuild-score-index found no shard under %s, so no index can be wrong about one",
+            writer.LEDGER_RELDIR,
+        )
+        return 1
+    absent = [month for month in named if month not in live]
+    if absent:
+        LOG.error("rebuild-score-index was asked for months that are not committed: %s", absent)
+        return 1
+
+    found = writer.rebuild_index(state, named)
+    for month, drift in sorted(found.items()):
+        LOG.info(
+            "index rebuilt file=%s held_the_rows_cannot_produce=%s rows_it_did_not_hold=%s",
+            writer.index_relpath(month),
+            len(drift.extra),
+            len(drift.missing),
+        )
+    LOG.info(
+        "score index rebuilt cover=%s months=%s drifted=%s",
+        "every-shard" if months is None else ",".join(named),
+        len(named),
+        sum(1 for drift in found.values() if drift.extra or drift.missing),
+    )
+    return 0
+
+
 def stage_prune_state(
     *,
     observability: ObservabilityConfig,
@@ -4145,6 +4200,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "assemble",
             "harvest",
             "dedupe-ledgers",
+            "rebuild-score-index",
             "prune-stamp",
             "prune-state",
             "run",
@@ -4373,11 +4429,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Report what the telemetry fold would do and change nothing on disk.",
     )
     parser.add_argument(
+        "--month",
+        action="append",
+        default=[],
+        metavar="YYYY-MM",
+        help=(
+            "A month for `rebuild-score-index` to write again from the rows beside it, "
+            "repeatable. A month that is not committed is an error, not a skip."
+        ),
+    )
+    parser.add_argument(
         "--every-shard",
         action="store_true",
         help=(
-            "dedupe-ledgers: settle every committed shard rather than the run's. "
-            "The operator's full pass, and the only one that costs more every month."
+            "The operator's full pass over every committed shard, and the only one that "
+            "costs more every month. `dedupe-ledgers` settles them all rather than the "
+            "run's; `rebuild-score-index` rewrites every month's index rather than the "
+            "months named."
         ),
     )
     args = parser.parse_args(argv)
@@ -4426,6 +4494,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "or --every-shard (the operator's full pass), and not both"
             )
         return stage_dedupe_ledgers(date=None if args.every_shard else args.date)
+
+    if args.stage == "rebuild-score-index":
+        # Above the fetcher for the same reason dedupe-ledgers is: it reads and
+        # rewrites committed files only.
+        #
+        # The cover is stated, never defaulted. `--month` names what to rewrite;
+        # `--every-shard` reads every score row on record, which is the read the
+        # index exists to avoid, so it is a person's decision (Rule #12).
+        if bool(args.month) == args.every_shard:
+            parser.error(
+                "rebuild-score-index needs --month (the months to rewrite) "
+                "or --every-shard (the operator's full pass), and not both"
+            )
+        return stage_rebuild_score_index(months=None if args.every_shard else args.month)
 
     if args.stage == "prune-state":
         # And this one only reads and deletes committed files. A fold that opened
