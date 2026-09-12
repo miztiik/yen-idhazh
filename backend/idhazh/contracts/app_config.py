@@ -1483,10 +1483,37 @@ PAGES_HARD_CAP_MB: Final = 1024
 
 
 class RetentionConfig(Model):
-    """Ships disabled. A default is a promise, not a placeholder."""
+    """Every default here deletes nothing. A default is a promise, not a placeholder.
+
+    The committed file is one step ahead of the defaults from 2026-09-13:
+    `image_months` is 13 there and -1 here. `dry_run` is true in both, so the
+    committed config names a window and still removes nothing - which is the
+    order this was landed in, so that the first evidence of what the window
+    selects arrives before the deletion rather than after it.
+    """
 
     image_months: int = Field(
-        default=-1, ge=-1, description="-1 disables pruning entirely. Age-based only, never size."
+        default=-1,
+        ge=-1,
+        description=(
+            "How long a rendered visual stays before the cleanup may take it. -1 "
+            "disables the age window entirely and is the default, so a clone that "
+            "configures nothing deletes nothing. Age-based only, never size: a "
+            "size trigger deletes most on the day the reader has most to read. "
+            "config/idhazh.json sets 13 from 2026-09-13, which is the first age "
+            "window this project has ever had. `retention.cutoff` spends a month "
+            "as 30 days, so 13 here is 390 days and not thirteen calendar months - "
+            "5.7 days shorter, which holds slightly less rather than slightly "
+            "more. It is an archive policy and not a cap defence, and the "
+            "measurement says so: rendered visuals arrive at 324,580 bytes a "
+            "published day, so 390 days stands at 120.7 MiB for ever, 11.8 percent "
+            "of the 1 GiB Pages ceiling, where 12 months would stand at 111.4 and "
+            "14 at 130.0. Those are 18.6 MiB apart against a one-spread band of "
+            "47.6 MiB, so the byte budget cannot separate them and the owner's 13 "
+            "stands (Carmack, 2026-09-13). The derivation is "
+            "docs/reference/measurements-site.md, 'What a published day adds in "
+            "rendered visuals'."
+        ),
     )
     dry_run: bool = True
     max_deletes_per_run: int = Field(
@@ -3403,6 +3430,29 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-13",
+            change=(
+                "retention.image_months is re-valued in config/idhazh.json from -1 to "
+                "13, and its description carries the derivation. No key was added, "
+                "removed or retyped, and the default on the model stays -1 - so a "
+                "config written before this still loads and needs no read-side "
+                "migration. retention.dry_run stays true, so nothing is deleted by "
+                "this."
+            ),
+            why=(
+                "-1 switched the age window off entirely, so this is the first age "
+                "window this project has had rather than a tightening of one. The "
+                "value was an owner decision with no measurement behind it; the rate "
+                "it needed was taken on 2026-09-13 over the 23 dated directories "
+                "under frontend/public/digest/. Rendered visuals arrive at 324,580 "
+                "bytes a published day over the 19 days past the startup regime, so "
+                "390 days stands at 120.7 MiB for ever, 11.8 percent of the 1 GiB "
+                "Pages ceiling. 12 and 14 months are 18.6 MiB either side of it "
+                "against a one-spread band of 47.6 MiB, so the byte budget cannot "
+                "separate them and the owner's 13 stands (Carmack, 2026-09-13)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-12T12:00",
             change=(

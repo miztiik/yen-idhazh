@@ -76,7 +76,7 @@ const FOOTER_FACTS: Array<[string, RegExp]> = [
 const FOOTER_GONE: Array<[string, RegExp]> = [
 	['the verification sentence', /Every summary is checked against the article it came from\./],
 	['the git build line', /Built from git/],
-	['the retention promise', /Nothing is deleted\.|Charts older than \d+ months? are deleted\./]
+	['the retention promise', /Nothing is deleted\.|Charts are kept for \d+ months?, then deleted;/]
 ];
 
 /** What the old footer stated about today's run, in its new wording. */
