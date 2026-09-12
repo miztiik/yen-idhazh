@@ -13,16 +13,17 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import shutil
 import statistics
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import ledger
+from idhazh import cli, ledger
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_url_key
@@ -1342,6 +1343,184 @@ def test_the_index_costs_a_fixed_number_of_bytes_an_observation(tmp_path: Path) 
     assert ObservationIndexRow.csv_columns() == ("version", "observation_digest")
     assert index.stat().st_size == len(header) + 10 * a_row
     assert a_row == 76
+
+
+# --- Rebuilding the observation index --------------------------------------
+#
+# `refresh_index` fills a month with NO index and never compares one that
+# exists against the shard beside it, because comparing means reading the rows
+# and reading the rows is the bill the index removes. So an index that drifted
+# has no repair and no check, and the next dedupe silently admits a measurement
+# the ledger already holds. `rebuild_index` is the repair; the fixture below is
+# the check.
+#
+# This fixture is committed rather than built, unlike every other one in this
+# file. The shape under test IS a pair of files that disagree, and a tree a
+# test writes through the writer cannot hold a digest the writer would never
+# mint. It is four files and nothing appends to it, so it is fixed in size
+# (Rule #12).
+
+INDEX_REBUILD: Final = FIXTURES_DIR / "evals" / "index-rebuild"
+REBUILD_MONTHS: Final = ("2026-01", "2026-02")
+
+
+def _drifted_tree(tmp_path: Path) -> Path:
+    """The committed fixture, copied, because a test may not write into a fixture."""
+    state = tmp_path / "state"
+    shutil.copytree(INDEX_REBUILD, state)
+    return state
+
+
+def _rows_produce(state: Path, months: Sequence[str]) -> set[str]:
+    """The digests the ledger's rows produce, read from the rows.
+
+    The oracle's own arithmetic. The index is compared against this and never
+    against another read of itself, which is the only comparison that can catch
+    a digest the rows cannot produce.
+    """
+    held: set[str] = set()
+    for month in months:
+        with writer.ledger_path(state, month).open("r", encoding="utf-8", newline="") as handle:
+            held |= {writer.observation_digest(row) for row in csv.DictReader(handle)}
+    return held
+
+
+def test_a_rebuilt_index_holds_exactly_the_digests_the_rows_produce(tmp_path: Path) -> None:
+    """No more and no fewer, asserted in both directions.
+
+    Two partitions, each spoilt in one direction, and both defects are real:
+    `2026-01`'s index carries a digest no row of that month can produce, which
+    is what a restore that rolled a row back leaves behind, and `2026-02`'s is
+    missing one its rows do produce, which is what a fill a crash cut short
+    leaves behind.
+
+    **A one-directional assertion passes on an index that only ever grows**, and
+    an index that only grows is what a repeated dedupe over a re-scored item
+    looks like. So the fixture is checked as wrong both ways before the rebuild,
+    and the equality is asserted both ways after it.
+    """
+    state = _drifted_tree(tmp_path)
+    produced = _rows_produce(state, REBUILD_MONTHS)
+    before = {digest for month in REBUILD_MONTHS for digest in _indexed(state, month)}
+
+    assert before - produced, "the fixture held nothing the rows cannot produce"
+    assert produced - before, "the fixture was missing nothing the rows do produce"
+
+    writer.rebuild_index(state, REBUILD_MONTHS)
+
+    after = {digest for month in REBUILD_MONTHS for digest in _indexed(state, month)}
+    assert not after - produced, (
+        f"the rebuilt index holds {len(after - produced)} digests the rows cannot produce"
+    )
+    assert not produced - after, (
+        f"the rebuilt index lacks {len(produced - after)} digests the rows do produce"
+    )
+    assert after == produced
+
+
+def test_the_rebuild_names_what_each_month_had_wrong(tmp_path: Path) -> None:
+    """A repair that reported nothing would hide the drift it exists to reveal.
+
+    One digest too many in one partition and one too few in the other, each on
+    its own side of the answer - so an operator reading the log can tell an
+    index that grew from one that was cut short, which are different faults with
+    different causes.
+    """
+    state = _drifted_tree(tmp_path)
+    produced = _rows_produce(state, REBUILD_MONTHS)
+
+    found = writer.rebuild_index(state, REBUILD_MONTHS)
+
+    assert len(found["2026-01"].extra) == 1 and not found["2026-01"].missing
+    assert len(found["2026-02"].missing) == 1 and not found["2026-02"].extra
+    assert found["2026-01"].extra.isdisjoint(produced), "the extra digest was one the rows produce"
+    assert found["2026-02"].missing < produced, "the missing digest was not one the rows produce"
+
+
+def test_rebuilding_one_month_opens_and_rewrites_only_that_month(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cover is the months the caller names, and nothing else is read.
+
+    A rebuild reads every score row of the months it is given, which is the read
+    the index exists to avoid (Rule #12). That is affordable because a person
+    names the months; it stops being affordable the moment naming one month
+    opens the archive.
+    """
+    state = _drifted_tree(tmp_path)
+    untouched = writer.index_path(state, "2026-01").read_bytes()
+
+    opened = _opened_bytes(monkeypatch, state, lambda: writer.rebuild_index(state, ["2026-02"]))
+
+    assert "scores/2026-01.csv" not in opened, f"a month nobody named was read: {sorted(opened)}"
+    assert "scores/2026-02.csv" in opened, "the rows of the named month were never read"
+    assert writer.index_path(state, "2026-01").read_bytes() == untouched
+    assert _indexed(state, "2026-02") == _rows_produce(state, ["2026-02"])
+
+
+def test_a_month_with_no_committed_shard_is_refused_by_name(tmp_path: Path) -> None:
+    """A typo must not read as a clean pass over nothing.
+
+    The rule `validate-days` and `site-weight` already hold, on the store where
+    getting it wrong is quietest: a rebuild that skipped an unknown month would
+    print the same line as one that rewrote every month asked for. The refusal
+    comes before any file is touched, so the months named beside the typo keep
+    the index they had.
+    """
+    state = _drifted_tree(tmp_path)
+    before = writer.index_path(state, "2026-02").read_bytes()
+
+    with pytest.raises(FileNotFoundError, match="2026-03"):
+        writer.rebuild_index(state, ["2026-02", "2026-03"])
+    with pytest.raises(ValueError, match="no month"):
+        writer.rebuild_index(state, [])
+
+    assert writer.index_path(state, "2026-02").read_bytes() == before, (
+        "a refused rebuild rewrote a month anyway"
+    )
+
+
+def test_the_rebuild_is_an_operator_command_and_no_scheduled_stage_calls_it(
+    tmp_path: Path,
+) -> None:
+    """Reachable by hand, refused without a stated cover, and scheduled nowhere.
+
+    An index that repaired itself on a schedule would hide the drift it exists
+    to reveal, and the full pass reads every score row on record - which is a
+    decision somebody takes out loud (Rule #12). So the verb appears in no
+    workflow and no shell script, and the mechanism is called from one module.
+    """
+    state = _drifted_tree(tmp_path)
+    assert cli.stage_rebuild_score_index(months=["2026-02"], state_dir=state) == 0
+    assert _indexed(state, "2026-02") == _rows_produce(state, ["2026-02"])
+    assert cli.stage_rebuild_score_index(months=None, state_dir=state) == 0
+    assert cli.stage_rebuild_score_index(months=["2026-03"], state_dir=state) == 1
+
+    with pytest.raises(SystemExit) as unsaid:
+        cli.main(["rebuild-score-index"])
+    assert unsaid.value.code == 2
+    with pytest.raises(SystemExit) as both:
+        cli.main(["rebuild-score-index", "--month", "2026-02", "--every-shard"])
+    assert both.value.code == 2
+
+    automated = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (
+            *(REPO_ROOT / ".github" / "workflows").glob("*.y*ml"),
+            *(REPO_ROOT / ".github" / "scripts").glob("*.sh"),
+        )
+        if "rebuild-score-index" in read_text(path)
+    )
+    assert not automated, f"the rebuild is a step of {automated}"
+
+    callers = sorted(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in (REPO_ROOT / "backend" / "idhazh").rglob("*.py")
+        if "rebuild_index" in read_text(path)
+    )
+    assert callers == ["backend/idhazh/cli.py", "backend/idhazh/evals/writer.py"], (
+        f"the rebuild is reached from {callers}"
+    )
 
 
 def _archive_row(number: int) -> EvalRow:
