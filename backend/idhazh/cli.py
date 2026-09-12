@@ -1791,9 +1791,10 @@ def already_published(date: str) -> frozenset[str]:
     """The item ids the day's committed digest already carries.
 
     `assemble.build_day` keeps an already-published item and discards the new
-    run's copy of it, because the reading order is part of what a shared link
-    shows. So a later run's visual decision for one of those items can never
-    reach a reader: it is computed, written, read back, and thrown away.
+    run's copy of it, so a later run's visual decision for one of those items can
+    never reach a reader: it is computed, written, read back, and thrown away.
+    That discard is crash consistency between the day write and the ledger
+    append, not a published order a reader ever sees.
 
     A day runs five times. Without this the second run spends its whole budget
     re-deciding the first run's items at 20 to 40 measured seconds each, and the
