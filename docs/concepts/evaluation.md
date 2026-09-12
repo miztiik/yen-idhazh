@@ -572,10 +572,26 @@ judge and the Editor rubric
 ([../../backend/utilities/prompt_loop_rubric.md](../../backend/utilities/prompt_loop_rubric.md))
 **propose** a revised prompt. The deterministic, model-free scorers above
 **dispose**: a candidate replaces the incumbent only when it beats it, over a
-frozen committed article set, on `unsupported_numbers`, `lead_missing`,
-`hedge_dropped` and `verbatim_run`. The gate is a Pareto beat - no worse on every
-target, strictly better on at least one - not a weighted sum and not an optimiser.
-The judge's preference is recorded and promotes nothing.
+frozen committed article set, on all four gate targets. The gate is a Pareto
+beat - no worse on every target, strictly better on at least one - not a
+weighted sum and not an optimiser. The judge's preference is recorded and
+promotes nothing.
+
+The four are `unsupported_numbers`, `lead_missing_rate`, `hedge_dropped_rate`
+and `verbatim_run` - `prompt_loop.GATE_TARGETS`, at line 96 of
+[../../backend/utilities/prompt_loop.py](../../backend/utilities/prompt_loop.py).
+They are computed by `metrics.unsupported_numbers`, by `metrics.lead_coverage`
+compared against `evaluation.lead_coverage_min`, by `metrics.hedge_dropped` and
+by `metrics.verbatim_run`.
+
+**There is no `metrics.lead_missing`.** `lead_missing` is a `BandReason` member,
+declared at line 58 of
+[../../backend/idhazh/contracts/eval_row.py](../../backend/idhazh/contracts/eval_row.py)
+and returned by the band rule at line 77 of
+[../../backend/idhazh/evals/score.py](../../backend/idhazh/evals/score.py). It is
+a different thing, in a different file, from the gate target whose name it nearly
+is. `CLAUDE.md` called it a scorer until 2026-09-11, so a reader arriving from
+that sentence will look for a function that was never there.
 
 That is how it honours both rules at once. **Rule 2** - the model does not grade
 the model - takes a narrow, offline-only exception: the judge authors a
