@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 Every number this project's design rests on, with the date it was taken and the
 spread. Rule #10 in one page: **an unmeasured number is labelled an estimate and
@@ -71,17 +71,34 @@ never to cut an approved feature to stay under a number. That is why every recor
 carries what to do when it fires. A guardrail that only ever refuses work is a
 guardrail somebody eventually raises without measuring anything.
 
-**No figure on this page names the machine it was taken on unless that machine
-is a runner.** A developer box is where a byte count, a token count, a pixel or
-a row count gets taken, and by the rule above none of those belongs to it - so
-naming it added a fact nobody could act on and invited a reader to discount a
-number that travels. What is still named is the part that genuinely moves a
-result: the runtime and its version. node's zlib and python's `gzip` disagree by
-about 2 percent at the same level, and an interpreter change moved a
-`tracemalloc` figure on this page by 30 percent, so `node 24.12.0` or
-`CPython 3.14.2` is provenance and `Intel Core i7-1265U` was not. Where a
-duration or a memory figure was taken off a runner, the runner is named, because
-those do belong to the box. Owner ruling, 2026-09-10.
+**A figure that travels does not name the machine it was taken on; a figure that
+belongs to the box does.** A byte count, a token count, a pixel and a row count
+travel, so naming a developer box beside one adds a fact nobody can act on and
+invites a reader to discount a number that is as good as any runner's. **A
+duration and a memory figure belong to the box by the rule above, so they name
+it** - the runner where a runner took them, and the developer machine where one
+did, beside the label saying a developer-machine duration is an
+order-of-magnitude check and nothing more. What is named in every case is the
+part that genuinely moves a result: the runtime and its version. node's zlib and
+python's `gzip` disagree by about 2 percent at the same level, and an
+interpreter change moved a `tracemalloc` figure on this page by 30 percent, so
+`node 24.12.0` or `CPython 3.14.2` is provenance in a way a processor model is
+not.
+
+**This narrows an earlier ruling rather than reversing it, and the reason is
+that the sentence was absolute where its reason was not.** From 2026-09-10 to
+2026-09-12 this read "no figure on this page names the machine it was taken on
+unless that machine is a runner". Its own justification listed four quantities -
+a byte count, a token count, a pixel, a row count - and said none of them
+belongs to the box. **A duration is not on that list, and two paragraphs above,
+this page says a second belongs to the box that took it.** So the page
+contradicted itself, and a worker fell into the gap on 2026-09-12: it had a
+duration measured on a developer machine, `CLAUDE.md` Rule #10 told it to name
+the hardware, this sentence told it not to, and it could not resolve which
+governed. **`CLAUDE.md` Rule #10 governs.** This page is a guardrail and the
+contract carries the rules; where the two disagree the rule wins, and what a
+guardrail may do is say how the rule's intent is met - never contradict it.
+Owner ruling, 2026-09-12, narrowing the ruling of 2026-09-10.
 
 ## What a 90-day window costs at each grain, 2026-09-11
 
@@ -93,8 +110,10 @@ them: the day arm's median was 99.1 ms faster, 3.5 percent, against spreads of
 120-day ledger of 3,152 rows a day.
 
 The milliseconds are a developer-machine reading and an order-of-magnitude check
-by the rule above. The two counts are arithmetic and travel. The full record -
-conditions, method, both arms, and what it does not settle - is
+by the rule above, so they name the box that took them: **Intel Core i7-1265U,
+Windows 11 build 26200**. The two counts are arithmetic and travel, so they name
+only the interpreter. The full record - conditions, method, both arms, and what
+it does not settle - is
 [benchmarks/2026-09-11-day-window-read.md](benchmarks/2026-09-11-day-window-read.md).
 Re-run it with `python backend/utilities/measure_day_window.py`.
 
