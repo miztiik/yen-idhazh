@@ -2606,6 +2606,106 @@ def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path:
     assert {row["robots_outcome"] for row in rows} == {"allowed", "denied", "unreachable", ""}
 
 
+# --- The Oracle: a definition is config, and editing it moves the prompt ----
+
+
+def json_leaves(payload: object, path: str = "") -> dict[str, object]:
+    """Every scalar in a payload, addressed, so two payloads can be diffed leaf by leaf."""
+    if isinstance(payload, dict):
+        return {
+            address: leaf
+            for key, value in payload.items()
+            for address, leaf in json_leaves(value, f"{path}/{key}").items()
+        }
+    if isinstance(payload, list):
+        return {
+            address: leaf
+            for index, value in enumerate(payload)
+            for address, leaf in json_leaves(value, f"{path}[{index}]").items()
+        }
+    return {path: payload}
+
+
+def taxonomy_fixture(stem: str) -> Taxonomy:
+    """One of the two fixture vocabularies the definition oracle is driven from."""
+    return Taxonomy.from_json(read_text(FIXTURES_DIR / "taxonomy" / f"{stem}.json"))
+
+
+def test_editing_one_definition_moves_the_prompt_and_nothing_else() -> None:
+    """Change a sentence in the vocabulary file and the model is asked a different question.
+
+    `definitions-a.json` and `definitions-b.json` are the same vocabulary with
+    one lens's definition rewritten - proved here rather than promised, by
+    walking both payloads and requiring exactly one leaf to differ. Both are
+    written through the contract the committed schema is generated from, so
+    parsing them is validating against it.
+
+    A vocabulary that needs a code change to move its own definition is not
+    config, whatever file it lives in. This test is what says so out loud: no
+    Python is edited between the two arms and no schema is regenerated, and the
+    block the labelling prompt is built from still moves.
+    """
+    a = taxonomy_fixture("definitions-a")
+    b = taxonomy_fixture("definitions-b")
+
+    left = json_leaves(json.loads(a.to_json()))
+    right = json_leaves(json.loads(b.to_json()))
+    assert set(left) == set(right), "the two fixtures are not the same vocabulary"
+    differing = sorted(address for address in left if left[address] != right[address])
+    assert differing == ["/lenses[0]/definition"], "the two fixtures differ somewhere else too"
+
+    assert a.definition_block() != b.definition_block()
+    assert a.definition_block().count("\n") == b.definition_block().count("\n")
+
+
+def test_a_draft_or_retired_entry_reaches_no_prompt() -> None:
+    """`status` is a control, not a convention, and the block's bytes are the proof.
+
+    `definitions-a.json` carries a draft vertical a model proposed and a retired
+    lens kept as a tombstone. Neither may contribute a byte: a draft is a word
+    nobody has approved, and a tombstone is there so a day already carrying it
+    still renders. So writing a sentence onto both and re-reading the block has
+    to produce the same string, which is the assertion a filter that forgets one
+    call site fails and prose cannot catch.
+    """
+    offered = taxonomy_fixture("definitions-a")
+    payload = json.loads(offered.to_json())
+    for entry in [*payload["verticals"], *payload["lenses"]]:
+        if entry["status"] != LifecycleStatus.ACTIVE.value:
+            entry["definition"] = "a sentence no prompt may carry"
+
+    assert Taxonomy.model_validate(payload).definition_block() == offered.definition_block()
+    assert "proposed-desk" not in offered.definition_block()
+    assert "ai-roi" not in offered.definition_block()
+
+
+def test_every_offered_entry_of_the_committed_vocabulary_carries_its_sentence() -> None:
+    """The rule the contract enforces, held against the file a run really reads.
+
+    An id and a display name tell a model nothing, so a word offered with no
+    sentence beside it is a word it cannot read. The committed config is the one
+    that decides a run, not a value a fixture chose.
+    """
+    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    block = taxonomy.definition_block()
+    offered = [
+        *(
+            (item.id, item.definition)
+            for item in taxonomy.verticals
+            if item.status is LifecycleStatus.ACTIVE
+        ),
+        *(
+            (item.id.value, item.definition)
+            for item in taxonomy.lenses
+            if item.status is LifecycleStatus.ACTIVE
+        ),
+        *((item.id.value, item.definition) for item in taxonomy.events),
+    ]
+    for entry_id, definition in offered:
+        assert definition, f"{entry_id} is offered to the model with no definition"
+        assert definition in block
+
+
 def test_the_frontend_names_every_live_lens_and_no_retired_one() -> None:
     """The page's own copy of the lens display names, held against the config.
 
