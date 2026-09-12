@@ -248,7 +248,7 @@ test.describe('the day a browser could not read', () => {
 			const loader = (window as unknown as { dayLoader: Loader }).dayLoader;
 			// Three of these split into three truthy parts on a dash, which is why
 			// the shape is checked rather than the split. A date arrives from a
-			// route parameter or a search index entry, so it is text (Rule #11).
+			// route parameter or a search index entry, so it is text (Guardrail #11).
 			return {
 				whole: loader.dayUrl('2026-08-30'),
 				elsewhere: loader.dayUrl('2026-08-30', '/somewhere'),
@@ -568,7 +568,7 @@ test.describe('the fragment', () => {
 				empty: loader.restoreAnchor(''),
 				missing: loader.restoreAnchor('#no-story-here'),
 				// A fragment is text a reader was handed. It reaches getElementById,
-				// which takes a literal id, so it can never become a query (Rule #11).
+				// which takes a literal id, so it can never become a query (Guardrail #11).
 				selector: loader.restoreAnchor('#article[id]'),
 				scrolled: window.scrollY
 			};

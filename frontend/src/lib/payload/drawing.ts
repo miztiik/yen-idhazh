@@ -3,7 +3,7 @@
  * Inside an `img` an SVG is a separate, inert document whatever it holds. The
  * moment it is inlined it is markup in our own origin - and a chart's labels
  * are written by a model that read a stranger's page, so this is the trust
- * boundary moving and it gets a check rather than a promise (Rule #11).
+ * boundary moving and it gets a check rather than a promise (Guardrail #11).
  *
  * **Both sides of the move import this file, and that is the whole reason it
  * exists.** The build inlines the stories a prerendered document carries; the

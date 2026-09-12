@@ -47,7 +47,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | --- | --- | --- |
 | 1 | There is **no per-item route**, so a visual lives on a list that has reached 621 items. One expensive drawing is one expensive drawing on a page carrying hundreds | Row 36 |
 | 2 | Over-cap degrades to `none` with its own reason, which joins the enum plan 11 established. It is not a validator rejection - the plan was valid and the drawing was too big | Row 36, 12.7 G11 |
-| 3 | The cap is a config number with the measurement behind it committed | Rule #6, Rule #10 |
+| 3 | The cap is a config number with the measurement behind it committed | Guardrail #6, Guardrail #10 |
 
 ### Rejected alternatives
 

@@ -117,7 +117,7 @@ test('THE ORACLE: a chart that measured part of its window says which part', asy
 		).toBe(drawn);
 		expect(said.days, `${chart.name} draws no columns`).toBeGreaterThan(0);
 		// The sentence names both numbers rather than a share, so a reader can
-		// count the columns and check it (CLAUDE.md Rule #10).
+		// count the columns and check it (CLAUDE.md Guardrail #10).
 		expect(said.text, 'the days measured is not in the sentence').toContain(String(said.measured));
 		expect(said.text, 'the days drawn is not in the sentence').toContain(String(said.days));
 		// And the sentence is only printed where the threshold says it should be.

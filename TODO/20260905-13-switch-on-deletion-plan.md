@@ -74,7 +74,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **The committed value is `-1`, not 13.** So this is the first time an age window exists at all, not a tightening from one window to another | C20, verified 2026-09-05 |
-| 2 | The window is derived from plan 04's measured rate, and the derivation is committed beside the number | Rule #10 |
+| 2 | The window is derived from plan 04's measured rate, and the derivation is committed beside the number | Guardrail #10 |
 | 3 | Age only, never size. **A size-triggered prune deletes most on the day the reader has most to read** | Section 9.2 |
 
 ### Rejected alternatives
@@ -99,7 +99,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | This lands **after** the new renderer. Flipping the fuse while the old drawings are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound | Row 61, O8 |
 | 2 | It lands **here** rather than at the end of the group, because the Pages cap is the first budget the chain breaches and every plan from 15 to 18 adds a family of drawings | Carmack, 2026-09-05 |
 | 3 | `skipped_by_fuse` is watched, not `deleted`. `deleted` is capped at 200, so it reads the same on a healthy run and a runaway one | Row 62 |
-| 4 | Both figures are re-measured after the run and written into `docs/reference/measurements.md` with the date and the corpus they were taken over | Rule #10 |
+| 4 | Both figures are re-measured after the run and written into `docs/reference/measurements.md` with the date and the corpus they were taken over | Guardrail #10 |
 
 ### Rejected alternatives
 

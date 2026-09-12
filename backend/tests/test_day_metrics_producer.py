@@ -9,7 +9,7 @@ asserted exactly, rather than recomputed by a second copy of the producer.
 Driven by a bounded fixture and never by the committed archive: a per-item rule
 is checked on a handful of built rows that can carry a case the archive has
 never produced - two sources, a truncated item, an unattributed doubt, a failed
-fetch that times one stage and no token (CLAUDE.md section 13, Rule #12).
+fetch that times one stage and no token (CLAUDE.md section 13, Guardrail #12).
 
 The real injection canary cannot stand in for the throughput and stage-timing
 figures: it writes a score ledger and a feed-health ledger but no item-health

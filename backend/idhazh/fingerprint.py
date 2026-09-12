@@ -9,7 +9,7 @@ Every input is read from the thing it describes rather than from a literal
 beside the call: the build from the environment the job pinned, the chat
 template from the server that will apply it, the runner class from the runner.
 A source that does not answer is recorded as unanswered, which stamps apart
-from every run whose source did answer (Rule #10).
+from every run whose source did answer (Guardrail #10).
 
 Two consequences are intended and only one is wired. `classify` and `SKIPPABLE`
 describe the skip - identical inputs do no work and write no eval row, because
@@ -43,13 +43,13 @@ from idhazh.ledger import require_matching_header
 LEDGER_RELPATH: Final = "state/fingerprints.csv"
 
 #: Sixty-four zeroes. It satisfies `Sha256`, so a stamp built on it validates,
-#: publishes, and still says nothing about which weights ran (Rule #10).
+#: publishes, and still says nothing about which weights ran (Guardrail #10).
 PLACEHOLDER_DIGEST: Final = "0" * 64
 
 #: What the stamp records when the runtime did not name the build that decoded
 #: the weights. It is not a llama.cpp release tag and cannot be read as one, so
 #: a run whose build went unrecorded fingerprints apart from every run whose
-#: build is known. Declaring the ignorance is the point (Rule #10).
+#: build is known. Declaring the ignorance is the point (Guardrail #10).
 UNRECORDED_BUILD: Final = "build-not-recorded"
 
 #: The same, for a chat template no server was there to hand over.
@@ -93,7 +93,7 @@ def runtime_build(environ: Mapping[str, str] | None = None) -> str:
     A developer machine usually pins nothing. That degrades to `UNRECORDED_BUILD`
     rather than inventing a tag: the whole reason this argument stopped being the
     literal `llama-server-local` is that a stamp naming a build nobody checked
-    validates and lies (Rule #10).
+    validates and lies (Guardrail #10).
     """
     env = os.environ if environ is None else environ
     return env.get("LLAMA_CPP_BUILD", "").strip() or UNRECORDED_BUILD
@@ -347,7 +347,7 @@ def recorded_fingerprints(path: Path) -> set[str]:
     `read_ledger` builds a `FingerprintRow` per stored line and holds the whole
     list before the first one is looked at, so its cost follows the file. This
     read costs the distinct identities, which is the answer, and the answer stops
-    growing once the inputs stop changing (Rule #12).
+    growing once the inputs stop changing (Guardrail #12).
     """
     if not path.exists():
         return set()

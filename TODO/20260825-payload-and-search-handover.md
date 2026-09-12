@@ -6,7 +6,7 @@ Research brief. Non-authoritative working material (`CLAUDE.md` section 3). This
 
 **Two of the three cheap wins in section 3 have shipped, and every vector figure below has been re-measured.** Cause A closed in PR #119 and cause C in PR #121. The vector share this brief called 8.9 percent was measured while most items were missing a vector; the merge defect behind that shipped fixed in PR #114 and the closed days were repaired in PR #133. The corrected figures are in section 1 and section 6. What remains open is cause B (the archive is still eager), cause D (retention) and the whole of section 4.
 
-Run the bootstrap ritual in [`../docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) first. If this file and `docs/` disagree, `docs/` wins (Rule #4).
+Run the bootstrap ritual in [`../docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) first. If this file and `docs/` disagree, `docs/` wins (Guardrail #4).
 
 **Independent of the console-charts work, which shipped 2026-08-25 in PRs #89, #92, #93, #94 and #97.** That work moved first-load JS; this one moves HTML weight. Their file sets overlapped only at `frontend/tests/console.spec.ts`. The byte ceiling it left behind in `frontend/scripts/bundle-gate.mjs` is scoped to first-load JS for exactly this reason, so it does not gate the HTML this handover is about.
 
@@ -24,7 +24,7 @@ All figures taken 2026-08-25 on this repository: `npm run build` in `frontend/`,
 | `/2026-08-25/ai/` | 372.5 KB | 48.0 KB |
 | **`/archive/`** | **873.1 KB** | 43.4 KB |
 
-Whole build 133.8 MB over 123 files, against the 1 GB Pages cap (Rule #2).
+Whole build 133.8 MB over 123 files, against the 1 GB Pages cap (Guardrail #2).
 
 ### Two different causes wearing one coat
 
@@ -93,7 +93,7 @@ These are deletions. They can ship before any of the questions below are answere
 
 **The archive is eager because search needs every payload. So: what should index the search?**
 
-Everything else follows from that answer. If the search has its own index, the archive page carries a list - about 60 bytes a day - and fetches a day's committed `digest.json` only when a reader opens it. Rule #1 explicitly permits fetching our own committed files at runtime, and every day payload is already a static file on the origin.
+Everything else follows from that answer. If the search has its own index, the archive page carries a list - about 60 bytes a day - and fetches a day's committed `digest.json` only when a reader opens it. Guardrail #1 explicitly permits fetching our own committed files at runtime, and every day payload is already a static file on the origin.
 
 ### The owner's hypothesis, to be tested rather than assumed
 
@@ -107,20 +107,20 @@ Everything else follows from that answer. If the search has its own index, the a
 | # | Question | What settles it |
 | --- | --- | --- |
 | 1 | **Is DuckDB the right shape for THIS search?** The current search is a dot product over 384-dim int8 vectors - a nearest-neighbour problem. DuckDB gives SQL and columnar scans, not an ANN index. | Write the query both ways over the committed vectors for 90 days of items and compare recall and latency. If DuckDB's answer is "full scan with a dot product in SQL", it has bought nothing the current code lacks. |
-| 2 | **When does DuckDB pay for itself?** Its 7.8 MB gzipped fixed cost equals about 56 days of the current 140.6 KB/day archive growth. Below that horizon it is more bytes, not fewer - but it is a one-time cost against a per-visit linear one, so the comparison depends on repeat-visit behaviour we do not measure and will not (Rule #1 forbids telemetry). | Reason it explicitly on stated assumptions, and write the assumptions down. An unstated assumption here is what makes the whole decision unfalsifiable. |
+| 2 | **When does DuckDB pay for itself?** Its 7.8 MB gzipped fixed cost equals about 56 days of the current 140.6 KB/day archive growth. Below that horizon it is more bytes, not fewer - but it is a one-time cost against a per-visit linear one, so the comparison depends on repeat-visit behaviour we do not measure and will not (Guardrail #1 forbids telemetry). | Reason it explicitly on stated assumptions, and write the assumptions down. An unstated assumption here is what makes the whole decision unfalsifiable. |
 | 3 | **What is the cheapest thing that works?** Candidates, all of which must be priced: a committed per-month index file (JSON or a compact binary) fetched on demand; `sql.js` or `wa-sqlite` (roughly an order of magnitude smaller than DuckDB); or no database at all - fetch the one day file the reader asked for. | Byte cost per first visit at 30, 90 and 365 days for each, plus query latency on a mid-range phone. |
 | 4 | **Does the console want the same tool as the archive?** They are different problems. The console reads a wide CSV and aggregates by day, which is what a columnar engine is genuinely good at. The archive does nearest-neighbour over vectors, which it is not. | Decide them separately, and say so, even if one tool ends up serving both. |
-| 5 | **What does the chat/search interface actually need?** It is named as pending but not specified anywhere in `docs/`. | Specify it before letting it justify a dependency. A pending feature is not a beneficiary (Rule #8). |
+| 5 | **What does the chat/search interface actually need?** It is named as pending but not specified anywhere in `docs/`. | Specify it before letting it justify a dependency. A pending feature is not a beneficiary (Guardrail #8). |
 | 6 | **Does a monthly shard boundary match how a reader searches?** A month is how `state/` is sharded, which is a writer's convenience. | State the reader behaviour the sharding serves, or pick a boundary that does. |
 
 ---
 
 ## 5. Constraints the research must honour
 
-- **Rule #1.** Static-first. Fetching our own committed files at runtime is allowed and is how an interactive view reads its data. A third-party asset is judged on its bytes, its licence and its privacy behaviour. No service, no telemetry, no runtime call home.
-- **Rule #2.** 1 GB published site. The build is 133.8 MB today; committing a 34 MB wasm binary spends 3.4% of the cap and must be counted, not waved through.
-- **Rule #8.** Every dependency names a beneficiary feature and its cost. "It may help the chat interface" is not a beneficiary until the chat interface is specified.
-- **Rule #10.** Measured, not estimated. Every byte figure in this file carries its method; keep that standard.
+- **Guardrail #1.** Static-first. Fetching our own committed files at runtime is allowed and is how an interactive view reads its data. A third-party asset is judged on its bytes, its licence and its privacy behaviour. No service, no telemetry, no runtime call home.
+- **Guardrail #2.** 1 GB published site. The build is 133.8 MB today; committing a 34 MB wasm binary spends 3.4% of the cap and must be counted, not waved through.
+- **Guardrail #8.** Every dependency names a beneficiary feature and its cost. "It may help the chat interface" is not a beneficiary until the chat interface is specified.
+- **Guardrail #10.** Measured, not estimated. Every byte figure in this file carries its method; keep that standard.
 - **`bundle-gate.mjs` keeps heavy things off the first-load path.** Whatever lands must be reader-initiated the way the encoder already is, and the gate must be extended to name it.
 - **Self-host.** The CSP is `script-src 'self'`, and the partitioned HTTP cache means a CDN saves nothing.
 

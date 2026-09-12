@@ -56,7 +56,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Archive the working documents instead of deleting them | Then two non-authoritative copies of the contract sit beside the real one, which is what `docs/` is the memory means to prevent | CLAUDE.md Rule #4 |
+| 1 | Archive the working documents instead of deleting them | Then two non-authoritative copies of the contract sit beside the real one, which is what `docs/` is the memory means to prevent | CLAUDE.md Guardrail #4 |
 | 2 | Copy the documents wholesale into `docs/` | They are a decision **record**, not a living doc. Most of their content is argument that has already been settled | Fowler |
 
 ---
@@ -75,13 +75,13 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 1 | Re-measure even the corrections. On the last comparable closure a figure it was told to fix was wrong in the fix as well | Recorded lesson |
 | 2 | A ceiling is re-recorded because its **runway** expires, not because a gate went red. Say that plainly or a reader thinks something failed | Recorded lesson |
 | 3 | The whole-day measurement from plans 12 and 18 is taken once more here, because this is the last tree in the group | Susan |
-| 4 | The counterfactual cost figure, if the console shows one, is checked to still print the rate it used and to still be labelled a counterfactual. **We are not billed, and presenting it as a bill is the one way to make it a lie** | CLAUDE.md Rule #10 |
+| 4 | The counterfactual cost figure, if the console shows one, is checked to still print the rate it used and to still be labelled a counterfactual. **We are not billed, and presenting it as a bill is the one way to make it a lie** | CLAUDE.md Guardrail #10 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Carry the working documents' numbers forward | They were measured across twenty-two plans on trees that no longer exist | Rule #10 |
+| 1 | Carry the working documents' numbers forward | They were measured across twenty-two plans on trees that no longer exist | Guardrail #10 |
 
 ---
 

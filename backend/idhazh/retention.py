@@ -18,7 +18,7 @@ it the bytes cannot be published at all. Merging them would leave one number
 doing a job it can only do badly - a warning nobody can ignore, or a failure
 that arrives with no notice. The cap is a knob in one direction only. Its field
 is bounded by `PAGES_HARD_CAP_MB`, the platform's own ceiling, so a config edit
-can make this gate stricter and can never make it looser (Rule #2).
+can make this gate stricter and can never make it looser (Guardrail #2).
 
 **The alarm measures the built bundle and never the committed payload tree.**
 Those are two different trees and they grow at different rates, so one cannot
@@ -178,7 +178,7 @@ class SiteSize:
     def minus(self, root: Path, removed: Mapping[Path, int]) -> SiteSize:
         """This total once those files have left the tree. It reads no file.
 
-        The maintained total (Rule #12). A pass that deletes already knows what it
+        The maintained total (Guardrail #12). A pass that deletes already knows what it
         removed and how big each one was, so asking the whole tree again is a walk
         that grows with the archive to learn a number the caller is holding.
 
@@ -302,7 +302,7 @@ def daily_growth_bytes(size: SiteSize, items_per_day: int) -> float:
     `items_per_day` is `run.safety_ceiling_per_run` and not an average of the
     days on disk. A day that published 117 items is not evidence that the next
     one will; the ceiling is the most a day is allowed to cost, which is the
-    figure a worst-case runway needs (Rule #10).
+    figure a worst-case runway needs (Guardrail #10).
     """
     if items_per_day <= 0:
         raise ValueError("a day that may publish no items has no growth rate and no runway")
@@ -344,7 +344,7 @@ def cap_breach(size: SiteSize, *, cap_mb: int = PAGES_HARD_CAP_MB) -> str | None
     This one fails the build, and the alarm above does not. The split is the
     whole point: 800 MB still deploys, so failing there would stop publishing
     weeks before it had to, and the reader loses a working site to a budget that
-    still had room. Past the cap the site is outside what Rule #2 allows, and
+    still had room. Past the cap the site is outside what Guardrail #2 allows, and
     failing in the job that measured it names the cause - a deploy that refuses
     the bytes names nothing.
     """
@@ -376,7 +376,7 @@ def visuals_older_than(root: Path, limit: date) -> list[Path]:
     3,600 files, 2026-09-07, Intel Core i7-1265U: 261 directory listings against
     417 for the sort-then-filter shape this replaced - and the 261 does not move
     when 140 more days and 3,080 more files are published inside the window,
-    which is what the archive does every day nobody writes any code (Rule #12).
+    which is what the archive does every day nobody writes any code (Guardrail #12).
     """
     found: list[Path] = []
     for _, folder in _dated_days(root, before=limit):
@@ -411,7 +411,7 @@ def _dated_days(root: Path, *, before: date | None = None) -> Iterator[tuple[dat
     single one. That is the whole reason this exists. The scan above used to sort
     every path under the root and then filter, so selecting the handful of
     expired days cost a listing of all of them - a bill that arrived every run,
-    larger each time, for an answer no code change had touched (Rule #12).
+    larger each time, for an answer no code change had touched (Guardrail #12).
     `before` prunes by name at each level: a year whose January already sits at
     or past the cutoff, and a month whose first does, cannot hold an expired day
     and are never opened.
@@ -537,7 +537,7 @@ def prune(
     The tree is read once, at the top, and the after-total is that reading with
     the deleted files retracted from it (`SiteSize.minus`). It used to be two
     whole-tree readings, so learning the size of two pictures cost a second walk
-    of everything ever published - the cost Rule #12 refuses, and it rose every
+    of everything ever published - the cost Guardrail #12 refuses, and it rose every
     time a day was added. The reason the old shape existed still holds and is
     kept: a total that subtracts what the pass *meant* to delete would still be
     written when an unlink did not happen, so a file is retracted only once it
@@ -1061,7 +1061,7 @@ class ScorePruneResult:
     observations_indexed: int
     #: What the archived shards weighed, and what their summaries weigh. Both
     #: are counted in a dry run too, because the ratio between them is the
-    #: measurement this policy is justified by (Rule #10) and a person has to be
+    #: measurement this policy is justified by (Guardrail #10) and a person has to be
     #: able to read it before any deletion is switched on.
     source_bytes: int
     archive_bytes: int
@@ -1092,7 +1092,7 @@ def prune_scores(
 
     A dry run does the first step and none of the others. It still counts the
     bytes both ways, so the log says what the archive would weigh against what
-    the shard weighs, which is the figure Rule #10 asks for beside this policy.
+    the shard weighs, which is the figure Guardrail #10 asks for beside this policy.
 
     `score_archive_keep_months` is applied last and defaults to null, which means
     an archive is kept for ever. Set, it must sit above

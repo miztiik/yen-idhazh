@@ -187,7 +187,7 @@ rule this page opens with, and it is why the lens vocabulary had not moved.
 invent a label: [`../../backend/idhazh/tag.py`](../../backend/idhazh/tag.py)
 returns keys of the mapping it is handed, and the only mapping the pipeline
 hands it is built here - so a hostile page can win itself a word we already
-publish and can never mint one (Rule #11). The Python type was a second copy of
+publish and can never mint one (Guardrail #11). The Python type was a second copy of
 that guarantee, and a second copy is what drifts.
 
 **What the open type buys is that a frozen day still reads.** A closed type
@@ -260,4 +260,4 @@ move does not move, which is the state the lenses were in for weeks.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - how a contract becomes the committed schema.
 - [../../config/taxonomy.json](../../config/taxonomy.json) - the vocabulary itself.
 - [../../backend/idhazh/contracts/taxonomy.py](../../backend/idhazh/contracts/taxonomy.py) - the shape it has to fit.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #6 (no hardcoding) and section 11 (schema versioning).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #6 (no hardcoding) and section 11 (schema versioning).

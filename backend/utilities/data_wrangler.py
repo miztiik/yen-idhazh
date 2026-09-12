@@ -25,7 +25,7 @@ from, and that is the only way they differ:
   item and of dropping whatever the open web no longer serves.
 
 `refill` and `verify --tokens` are the two subcommands that reach the network,
-and they are here rather than in a test for that reason (Rule #7). `verify
+and they are here rather than in a test for that reason (Guardrail #7). `verify
 --tokens` downloads the tokenizer named by `models.<role>.hf_base_repo` and
 answers the question a session needs before it spends an hour and a half: do
 these rows fit `finetune.sequence_length`?

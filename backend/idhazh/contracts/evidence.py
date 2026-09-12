@@ -24,7 +24,7 @@ against. `backend/var/run/<date>/plan.json` and `<item_id>.article.json` are
 gitignored and regenerable in exactly the same way and are contracts for exactly
 the same reason.
 
-**It is a contract under Rule #3 and not a migration surface under section 11.**
+**It is a contract under Guardrail #3 and not a migration surface under section 11.**
 Nothing this payload was ever written into survives: the oldest copy that can
 exist is a workflow artifact 14 days old, and a re-run rebuilds it byte for byte.
 So a shape change here never owes a read-side migration - it owes a re-run. The
@@ -98,7 +98,7 @@ class EvidenceItem(Contract):
     premise: str = Field(
         description=(
             "The article after extraction, sanitizing and the truncation cap - the text the "
-            "scorer read, byte for byte. Untrusted (Rule #11): it prints as inert terminal "
+            "scorer read, byte for byte. Untrusted (Guardrail #11): it prints as inert terminal "
             "text and never becomes a prompt, a path or a URL."
         )
     )

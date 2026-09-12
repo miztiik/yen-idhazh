@@ -9,7 +9,7 @@ The closed-world block is contract tier (`CLAUDE.md` section 13). It holds the
 stamp and `InferenceConfig` to one another, so a knob added to config is either
 digested or written down as undigested, and never simply forgotten.
 
-No mocks and no network (Rule #7): the stamp under test is the committed
+No mocks and no network (Guardrail #7): the stamp under test is the committed
 fixture, so the test and the fixture cannot drift apart.
 """
 
@@ -380,7 +380,7 @@ def test_appending_costs_the_identities_and_not_the_file(tmp_path: Path) -> None
     peaks about 15.6 times lower, and it stops moving when the file grows.
 
     Both populations are built and fixed, so this costs the same on the day the
-    committed ledger holds ten times either (Rule #12, `CLAUDE.md` section 13).
+    committed ledger holds ten times either (Guardrail #12, `CLAUDE.md` section 13).
     """
     stamps = 300
     small = tmp_path / "small" / LEDGER_RELPATH
@@ -448,7 +448,7 @@ DECLARED_BOUNDS: Final[tuple[tuple[str, object, str], ...]] = (
 def test_a_deliberately_unbounded_read_declares_its_cover(
     name: str, read: object, cover: str
 ) -> None:
-    """Rule #12's escape hatch is a person agreeing in the open, so it is written down.
+    """Guardrail #12's escape hatch is a person agreeing in the open, so it is written down.
 
     Each of these four reads was ruled unbounded on purpose. The ruling is worth
     nothing to the next reader unless it sits next to the code, so each one names
@@ -523,7 +523,7 @@ def test_the_runtime_build_is_the_one_the_job_pinned() -> None:
 def test_an_unpinned_build_records_the_absence_rather_than_inventing_a_tag(
     environ: dict[str, str],
 ) -> None:
-    """The literal this replaced named a build nobody checked (Rule #10)."""
+    """The literal this replaced named a build nobody checked (Guardrail #10)."""
     assert runtime_build(environ) == UNRECORDED_BUILD
 
 

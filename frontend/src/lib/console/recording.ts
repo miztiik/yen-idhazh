@@ -43,7 +43,7 @@ export function measurementOff(lastRecorded: string | null): string {
  * caveat printed on every panel is one nobody reads. The sentence refuses to
  * scale the figures up, which is the whole point: a sampled count is a count of
  * what we measured, and multiplying it by four would publish an estimate as a
- * measurement (CLAUDE.md Rule #10).
+ * measurement (CLAUDE.md Guardrail #10).
  */
 export function sampledAt(rate: number): string | null {
 	if (!Number.isFinite(rate) || rate >= 1 || rate <= 0) return null;

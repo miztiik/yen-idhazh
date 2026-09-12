@@ -151,7 +151,7 @@ all and the 10:20 slot started at 12:50, two and a half hours late. Read
 `gh run list --workflow digest.yml` for what actually exists rather than working
 from the cron.
 
-Rule #2 allows 20 concurrent jobs. Eight workers plus the visuals job is nine,
+Guardrail #2 allows 20 concurrent jobs. Eight workers plus the visuals job is nine,
 and `visuals` waits on `work` rather than racing it, so the ceiling is nowhere
 near
 the platform limit. Every shard restores the same cache key, so more shards buy
@@ -213,7 +213,7 @@ the whole shard, read once from `/metrics` at job end and filed in
 which keeps it for two days - long enough to read a failure, far too short to
 hold a published rate to account. The committed row is what lets
 `backend/utilities/reconcile_prefill.py` check the item-health ledger's read rate
-against a second instrument (Rule #10).
+against a second instrument (Guardrail #10).
 
 The same row carries two facts about the job rather than about its server: how
 long the shard took, and which processor it drew. The `work` job's first step -
@@ -438,7 +438,7 @@ owns the repair and acceptance requirements.
 ### The cache across the model swap, measured 2026-08-27
 
 Read with `gh cache list` on either side of the 2026-08-27 summarizer swap,
-against the 10 GB repository ceiling in Rule #2. `n=1` - a cache listing is a
+against the 10 GB repository ceiling in Guardrail #2. `n=1` - a cache listing is a
 state, not a sample, so there is no spread.
 
 | Moment | Bytes | Of the 10 GB cap |
@@ -561,7 +561,7 @@ miss. Keyed on the weights alone, the cache froze one binary and then served a
 different one the first time the entry was evicted - the instability of
 following the newest release with none of its freshness, and no record on the
 run of which build served the day. A throughput number measured in `measure.yml`
-now describes the binary that writes the digest (Rule #10).
+now describes the binary that writes the digest (Guardrail #10).
 
 The run manifest is not fixed by this. It still records `runtime_build` as the
 fixed string `llama-server-local`, so the manifest does not yet name the build.
@@ -630,7 +630,7 @@ the weights they hold. A step cannot.
 That second copy was the defect. The alias came from config while the repository
 and the filename came from workflow `env`, so editing one served the old bytes
 under the new alias and filed every eval row under a model that never ran
-(Rule #10). Changing the model is now one edit to config, and the cache key moves
+(Guardrail #10). Changing the model is now one edit to config, and the cache key moves
 with it.
 
 ### A dispatch input is not a copy
@@ -679,7 +679,7 @@ and it existed for exactly one reason. Both `digest.yml` inference jobs ran
 package was not importable yet. `Install` now runs one step earlier, straight
 after `setup-python`, and the copy is gone. Moving a step within a job is the
 same work in a different position, so no wall-clock claim is made for it
-(Rule #10).
+(Guardrail #10).
 
 While the copy existed the two halves drifted, and the arm that drifted is the
 one nobody diffed. `validate.yml` never needed the utility - its `Install`
@@ -688,7 +688,7 @@ candidates on a server the daily run does not run.
 
 **The port is one `env: LLAMA_PORT` per workflow.** It was nine literals in
 `digest.yml` and three in `validate.yml`, and all of them had to move together
-or the job failed in a way that reads as an unreachable model (Rule #6).
+or the job failed in a way that reads as an unreachable model (Guardrail #6).
 `server_argv` takes it as an argument; every `/health`, `/v1/models`, `/props`
 and `/metrics` probe reads it; and `idhazh.llm.server` reads the same variable
 for the address the summarize stage posts to, so the server and its client
@@ -855,7 +855,7 @@ the default one.
 
 ## Platform limits that shape the workflows
 
-The ceilings themselves are stated once, in `CLAUDE.md` Rule #2. What follows is
+The ceilings themselves are stated once, in `CLAUDE.md` Guardrail #2. What follows is
 the behaviour behind them, which is what actually decides a workflow's shape.
 Verified 2026-08-20.
 

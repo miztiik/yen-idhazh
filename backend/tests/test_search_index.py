@@ -93,7 +93,7 @@ def newest_committed_month() -> str:
     """The month of the newest committed day, read off the path.
 
     Not off the payload: parsing every day to learn one date cost one parse per
-    published day, and the tree gets longer every day (`CLAUDE.md` Rule #12).
+    published day, and the tree gets longer every day (`CLAUDE.md` Guardrail #12).
     """
     year, month, _day = committed_day_paths()[-1].parts[-4:-1]
     return f"{year}-{month}"
@@ -449,7 +449,7 @@ class TestTheCommittedShard:
         # The month being written, not every month ever written. An older shard is
         # frozen - nothing appends to it and no later run rebuilds it - so
         # re-deriving it every run re-answers a settled question at a price that
-        # grows every month (`CLAUDE.md` Rule #12).
+        # grows every month (`CLAUDE.md` Guardrail #12).
         month = newest_committed_month()
         path = index_root / f"{month}.bin"
         assert path.exists(), f"{month} has published days and no committed vector file"

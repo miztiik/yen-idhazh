@@ -12,7 +12,7 @@ be exactly zero. Every other row of the report is unreadable until that one
 holds, and it must not be able to pass by returning zero everywhere - so the
 same run asserts that a multi-window item does move.
 
-No mocks and no network (Rule #7). The two scorers below are real
+No mocks and no network (Guardrail #7). The two scorers below are real
 implementations of the `Scorer` protocol: pure functions of the two texts, which
 is what makes their answers predictable enough to check arithmetic against.
 """
@@ -311,7 +311,7 @@ class TestTheReport:
         ]
 
     def test_a_group_of_one_has_no_spread_rather_than_a_crash(self, tmp_path: Path) -> None:
-        """Rule #10 wants a spread beside every mean. One reading's spread is zero, not an error."""
+        """Guardrail #10 wants a spread beside every mean. One reading's spread is zero, not an error."""
         a_package(tmp_path, [an_item(a_premise(50), SUMMARY, name="alone")])
         pairs = bias.load_pairs(tmp_path, tmp_path / "absent.csv")
         wide = bias.single_slice_geometry(pairs, NARROW)

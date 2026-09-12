@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-08
 
-Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the five planted attacks that assert it on every change. This is the operational home of Rule #11.
+Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the five planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
 The boundary is crossed **exactly once**, at extraction. Everything downstream reads a payload that has already been through it.
 
@@ -50,7 +50,7 @@ A feed is a stranger's list of addresses, and the pipeline dials them from insid
 - **The loopback, private, link-local and reserved ranges are refused**, by literal and again after DNS resolution. A cloud metadata endpoint is otherwise one feed entry away, and it is the single highest-value target on a build runner.
 - **Names that resolve inward are refused** - `localhost`, and the `.local` / `.internal` / `.localdomain` suffixes.
 
-This is Rule #11 applied one step earlier than it is usually read. "Fetched text never becomes a URL to fetch" is the well-known half; the half that bites in CI is that a *feed entry* is fetched text too.
+This is Guardrail #11 applied one step earlier than it is usually read. "Fetched text never becomes a URL to fetch" is the well-known half; the half that bites in CI is that a *feed entry* is fetched text too.
 
 **An unreachable `robots.txt` is a refusal, not a permission.** Assuming consent from silence is how a polite crawler becomes an impolite one, and the failure mode is asymmetric: the cost of skipping a host wrongly is one missing item, and the cost of crawling one wrongly is a complaint we cannot take back.
 
@@ -185,7 +185,7 @@ Splitting the sanitizer into its own module rather than burying it in the extrac
 
 Accepting that prose instructions survive - and saying so - is the honest position. A sanitizer that tried to detect and remove instructions would be a classifier with no ground truth, would delete legitimate quoted text, and would create exactly the false confidence that makes the fence feel optional. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
 
-Making the canary gate say why it failed is a Rule #10 fix, not a reporting nicety. The old string carried no measurement - it named a canary and left the reason to be guessed - and the guess that got written down turned a blank reply into a security breach. A control that reports a failure nobody can diagnose is a control that gets re-interpreted by whoever reads it next. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
+Making the canary gate say why it failed is a Guardrail #10 fix, not a reporting nicety. The old string carried no measurement - it named a canary and left the reason to be guessed - and the guess that got written down turned a blank reply into a security breach. A control that reports a failure nobody can diagnose is a control that gets re-interpreted by whoever reads it next. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
 
 ## Rejected alternatives
 
@@ -199,7 +199,7 @@ Making the canary gate say why it failed is a Rule #10 fix, not a reporting nice
 | Keep `urllib.robotparser` | Two supported interpreters read one committed file two ways, so what this crawler may read depended on which runner picked up the job. A control with a version-dependent answer is not a control. | Carmack |
 | Pin the whole project to Python 3.14 | A parser the size of five source files isolates the inconsistent primitive without narrowing the supported range or disturbing the compiled dependency matrix. | Carmack |
 | Recheck a refusal on a 24-hour timer | Scheduled runs are irregular, a timer delays a same-day recovery, and no measurement justifies the delay it buys. One process is one run, which is the cadence already. | Carmack |
-| Send a user agent a site allows | It defeats the publisher's stated policy and discards the contact address our identity exists to carry. | Rule #11 |
+| Send a user agent a site allows | It defeats the publisher's stated policy and discards the contact address our identity exists to carry. | Guardrail #11 |
 | Persist the robots body as evidence | The lifecycle needs a typed decision, not a publisher-controlled document inside `state/`. | Fowler |
 | Record the outcome on the observation as a stored enum | A second answer to a question the conditions already answer. The two drift the first time one of them changes, and the stored one is the one a reader trusts. | Andre |
 | Split the non-reply into a second, softer gate | A control test that did not run is not a control test that passed. A separate gate is a place to lower a bar during an incident, which is the moment the bar exists for. | Andre |
@@ -213,4 +213,4 @@ Making the canary gate say why it failed is a Rule #10 fix, not a reporting nice
 - [../contracts/determinism.md](../contracts/determinism.md) - why the sanitizer carries a version.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Extract stage that owns the crossing.
 - [../../concepts/principles.md](../../concepts/principles.md) - principle 5, the belief this page implements.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #11, section 4, section 13.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #11, section 4, section 13.

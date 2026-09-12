@@ -24,7 +24,7 @@
  * time, so it is exactly as trustworthy as the bundle carrying it.
  *
  * Nothing here reads a payload field, a model output or any fetched text
- * (Rule #11). The URL is built from two committed config values and a path that
+ * (Guardrail #11). The URL is built from two committed config values and a path that
  * is a key of the committed manifest, so a file this module does not already
  * hold a digest for cannot be asked for at all.
  */

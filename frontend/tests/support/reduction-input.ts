@@ -10,7 +10,7 @@
  * Every cell here comes from one seeded sequence, so the same ledger is built
  * on every machine and the golden stays comparable. Nothing reads a committed
  * ledger: a test that walks the archive costs more every published day
- * (Rule #12), and the shapes this row is about are reachable from a fixture.
+ * (Guardrail #12), and the shapes this row is about are reachable from a fixture.
  */
 
 import type { SummaryBand, TelemetryRow } from '../../src/lib/charts/series';

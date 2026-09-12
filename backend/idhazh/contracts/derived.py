@@ -55,7 +55,7 @@ that *carries* a resolved set, and that payload is the compiler's - it does not
 exist yet. Minting one now would mean a committed fixture standing in for a
 writer nobody has built, which is the "field nobody writes" defect one level up.
 The shapes land here ahead of their producer because contracts come before logic
-(Rule #3) and because `contracts/` is where a shape lives, not because something
+(Guardrail #3) and because `contracts/` is where a shape lives, not because something
 persists one today.
 """
 
@@ -87,7 +87,7 @@ ALLOW_LIST: Final[frozenset[str]] = frozenset(
 #: How many Tier 1 elements one derived value may read. A share reads its part
 #: plus every element of the whole, and a channel holds at most
 #: `MAX_IDS_PER_ROLE`, so this is that plus the part. Tied to the channel width
-#: rather than typed here, so a cap rise moves both (Rule #6).
+#: rather than typed here, so a cap rise moves both (Guardrail #6).
 MAX_DERIVED_INPUTS: Final = MAX_IDS_PER_ROLE + 1
 
 #: A derived value is written the one way a Tier 1 quantity is: a decimal pinned

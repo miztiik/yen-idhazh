@@ -389,7 +389,7 @@ test.describe('the coverage sentence', () => {
 
 		// Read from the ledger, not from the chart. Both numbers are printed
 		// because a share cannot be checked against columns a reader can count
-		// (CLAUDE.md Rule #10).
+		// (CLAUDE.md Guardrail #10).
 		expect(Number(await one.getAttribute('data-coverage-measured'))).toBe(want.days);
 		expect(Number(await one.getAttribute('data-coverage-items'))).toBe(want.items);
 		expect(Number(await one.getAttribute('data-coverage-timed-low'))).toBe(want.low);

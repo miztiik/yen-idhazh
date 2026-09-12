@@ -156,7 +156,7 @@ test.describe('the eight canaries, on the published surface', () => {
 		// The second query is the same rule at the carrier that replaced that
 		// image. A drawing is markup in our own origin rather than a separate inert
 		// document, so the parts of SVG that can run or fetch have to be absent
-		// from the rendered page as well as refused before it is drawn (Rule #11).
+		// from the rendered page as well as refused before it is drawn (Guardrail #11).
 		await page.goto('/2026-08-20/');
 		await dayReady(page);
 		const smuggled = await page.evaluate(() =>

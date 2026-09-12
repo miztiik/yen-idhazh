@@ -13,7 +13,7 @@ import { modelWork } from '../src/lib/server/model-work';
  * Three things are checked here, all in plain Node against fixtures so nothing
  * depends on the committed archive (`CLAUDE.md` section 13). First, the reader
  * opens only the dates it is asked for - never a listing of the tree - so its
- * cost is the window and not the archive (Rule #12). Second, `evalDays` and
+ * cost is the window and not the archive (Guardrail #12). Second, `evalDays` and
  * `modelWork` take the distinct-published counts from the record where a day has
  * one, and fall back to the row counts where it does not. Third, every
  * measurement distribution still reads every row, so a re-score still counts

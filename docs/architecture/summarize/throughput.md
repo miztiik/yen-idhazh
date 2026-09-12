@@ -82,7 +82,7 @@ The model server counts the same work for itself and publishes the totals on
 `/metrics`, which is a second instrument that shares none of the first one's
 failure modes. Until 2026-08-27 those counters reached only a job log that keeps
 them for two days, so this page published a rate nothing committed could check -
-and under Rule #10 a number that cannot be reconciled cannot justify a design.
+and under Guardrail #10 a number that cannot be reconciled cannot justify a design.
 
 Each `work` shard now commits its server's counters as one row of
 `state/runtime-counters.csv`, and
@@ -340,7 +340,7 @@ at the width it occupies, so one unit is one pixel. The server draws at
 | Keep two requests in flight per worker to overlap read and write | Measured 2026-08-25: aggregate write rises 1.055x for a second sequence, spread 0.022, against a 1.4x gate. That is about 1.9 percent of a run. Four sequences reach 1.133x and oversubscribe the 4 vCPU. Cancelled, not deferred. |
 | Report one blended `summarize_ms` rate | Cannot separate a long-article day from a long-summary day, which is the question the chart exists for. |
 | Average the per-item rates for the day figure | A rate is a ratio. Averaging weighs a 60-word release note the same as a 2000-word feature. |
-| Raise `retention-days` on `runtime-log-*` and reconcile the read rate by hand | Two days becomes thirty and the answer still expires. Rule #10 wants the evidence to survive with the claim, and a committed row is the only thing that does. |
+| Raise `retention-days` on `runtime-log-*` and reconcile the read rate by hand | Two days becomes thirty and the answer still expires. Guardrail #10 wants the evidence to survive with the claim, and a committed row is the only thing that does. |
 | Trust the ledger and delete the metrics scrape | The ledger sums a client-side field per request. The server's counters are the independent instrument, and deleting the second instrument to end a disagreement is how a wrong number becomes permanent. |
 | Put the counter snapshot on `RunManifest` | Wrong grain (a manifest run record is one run, a snapshot is one shard), wrong producer (the manifest is written hours later in another job, so the numbers would have to survive an artifact that expires in a day and is skipped on cancel), and wrong audience (`run.json` is a payload a reader fetches; this is measurement evidence and belongs under `state/`). |
 | Scrape the counters per request instead of once at job end | Both counters are cumulative, so a per-request scrape adds requests to the thing it measures and still reports only the last one. |

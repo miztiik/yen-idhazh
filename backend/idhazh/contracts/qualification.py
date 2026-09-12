@@ -90,7 +90,7 @@ class Diagnostic(Model):
 
     Every one carries its denominator. A rate over four items is not a rate, and
     a diagnostic that hides its denominator is how an unmeasured number gets
-    cited later as if it were evidence (Rule #10).
+    cited later as if it were evidence (Guardrail #10).
     """
 
     name: str = Field(min_length=1)
@@ -219,7 +219,7 @@ class CanaryObservation(Model):
 
     The unit suite proves the sanitizer and the schema against recorded
     completions. It cannot prove that a model nobody has served before follows
-    this chat template, so the canaries run again here on live calls (Rule #11).
+    this chat template, so the canaries run again here on live calls (Guardrail #11).
 
     `replied` is false for two very different reasons - the attack was never put
     to the model, or the model answered with nothing publishable - and neither
@@ -320,7 +320,7 @@ class QualificationReport(Contract):
             change="Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
             why=(
                 "An adoption gate that reports a pass without the number that produced it "
-                "cannot be re-read six months later (Rule #10)."
+                "cannot be re-read six months later (Guardrail #10)."
             ),
         ),
     )

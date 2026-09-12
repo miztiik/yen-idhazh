@@ -55,7 +55,7 @@ VALIDATOR_FIXTURES: Final = FIXTURES_DIR / "visual-validator"
 
 
 def committed_visuals() -> VisualsConfig:
-    """The knobs the pipeline actually ships, never a number typed here (Rule #6)."""
+    """The knobs the pipeline actually ships, never a number typed here (Guardrail #6)."""
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
 
 
@@ -214,7 +214,7 @@ def test_two_spellings_of_one_dimension_are_not_two_units() -> None:
 def test_a_unit_the_table_does_not_name_is_never_assumed_compatible() -> None:
     """The table is a closed allow-list, and the fail-closed direction is the point.
 
-    Units are read off a stranger's page (Rule #11), so an unknown one is
+    Units are read off a stranger's page (Guardrail #11), so an unknown one is
     compared by identity and by nothing else. Two currencies are the case that
     matters: joining them needs an exchange rate, which is a number no article
     wrote.
@@ -280,7 +280,7 @@ def test_the_vocabulary_stamp_is_compared_rather_than_matched() -> None:
 
 
 def test_enough_data_reads_the_committed_knobs_and_not_a_literal() -> None:
-    """Rule #6. The floor is `visuals.min_chart_points` and it is read, not chosen."""
+    """Guardrail #6. The floor is `visuals.min_chart_points` and it is read, not chosen."""
     visuals = committed_visuals()
     assert (visuals.min_chart_points, visuals.max_chart_points) == (3, 8)
     plan, table = load_plan("too-few-marks"), load_table("wind")
@@ -304,7 +304,7 @@ def test_a_histogram_needs_a_value_for_every_bin_it_draws() -> None:
     against five bars: two of the five would count nothing, `derived_values`
     refuses that drawing, and the validator had already said the plan was fine.
     The floor is `visuals.histogram_bins` because those are the marks that have
-    to be filled, and it is a knob rather than a number chosen here (Rule #6).
+    to be filled, and it is a knob rather than a number chosen here (Guardrail #6).
     """
     table = load_table("wind")
     three = histogram_over("quantity-93-99", "quantity-58-66", "quantity-112-120")

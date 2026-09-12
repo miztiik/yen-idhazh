@@ -19,7 +19,7 @@ happen because of it:
   is read to report and never to select - best-of-N against it is the Goodhart
   form the metric's own contract forbids (`idhazh.evals.metrics.new_fact_rate`).
 - **It runs offline.** The frozen set is committed article text. The loop makes no
-  open-web fetch (Rule #7); its only network call is to a local model server on
+  open-web fetch (Guardrail #7); its only network call is to a local model server on
   loopback. It runs on a developer machine or a manual dispatch and is never
   imported by the pipeline, so it can never sit on the daily critical path.
 - **Nothing it writes reaches a reader.** The winning prompt, the rubric, the
@@ -200,7 +200,7 @@ class Summarizer(Protocol):
 
     The live implementation calls a local model server; a recorded one (the
     tests) returns fixtures. Either way the loop fetches nothing from the open
-    web (Rule #7).
+    web (Guardrail #7).
     """
 
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]: ...
@@ -479,7 +479,7 @@ def load_frozen_articles(directory: Path) -> tuple[list[Article], list[FrozenIte
     Only articles that fetched and carry body text are kept: a fetch failure or an
     empty body is not something a summariser prompt can be scored on. The set is a
     fixed, committed directory, so the loop reads a bounded input and never a
-    collection that grows with the archive (Rule #12).
+    collection that grows with the archive (Guardrail #12).
     """
     articles: list[Article] = []
     items: list[FrozenItem] = []

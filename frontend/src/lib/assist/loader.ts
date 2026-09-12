@@ -8,7 +8,7 @@
  *    click reaches, which is also what keeps the library out of the first-load
  *    bundle - a static import would put it there no matter what the UI did.
  * 2. **Same origin, always.** `allowRemoteModels = false` makes a fetch to a
- *    third-party hub impossible rather than unlikely. That is Rule #1, and
+ *    third-party hub impossible rather than unlikely. That is Guardrail #1, and
  *    a runtime fetch to another origin is the half of it that never changed.
  * 3. **Absent, not broken.** Every failure path returns a reason. A reader who
  *    declines, or whose browser cannot run this, sees a page that is missing a
@@ -16,7 +16,7 @@
  * 4. **The download is described from measurement, never from a guess.** What
  *    has already arrived is read out of the browser's own cache storage, and
  *    what is arriving now is the library's own byte count. Reading this
- *    device's disk is not telemetry: nothing is sent anywhere (Rule #1).
+ *    device's disk is not telemetry: nothing is sent anywhere (Guardrail #1).
  */
 
 import { base } from '$app/paths';

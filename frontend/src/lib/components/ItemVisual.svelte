@@ -61,7 +61,7 @@
 	 * The refusal is the same one the build runs, out of the same module. Inlined
 	 * markup is markup in our own origin whichever side put it there, and the
 	 * labels inside it were written by a model that read a stranger's page
-	 * (Rule #11). The path is matched before it is joined onto `base`, for the
+	 * (Guardrail #11). The path is matched before it is joined onto `base`, for the
 	 * same reason `dayUrl` matches a date: it is about to become an address.
 	 *
 	 * **`__ASSET_BASE_URL__` moves where the drawing is asked for and nothing
@@ -115,7 +115,7 @@
 	 * **Every waiting story shares one watcher**, which lives in `$lib/reveal`
 	 * and holds the margin. A story built its own until 2026-09-06, so a day that
 	 * published more drawings held more watchers - a cost that rose because a run
-	 * published more, which is what Rule #12 refuses.
+	 * published more, which is what Guardrail #12 refuses.
 	 *
 	 * **A story that leaves the page takes its request with it.** Unmount stops
 	 * the watch and aborts the fetch, so a reader scrolling fast is not still

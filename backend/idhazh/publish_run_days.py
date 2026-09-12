@@ -12,7 +12,7 @@ a producer.
 
 **One month costs one month, for ever.** A month holds at most 31 days whatever
 the archive grows to, so re-reading the month a run wrote into is constant cost
-rather than a growing one (Rule #12). It is re-read rather than merged into the
+rather than a growing one (Guardrail #12). It is re-read rather than merged into the
 published file because a correction can land on any day of the open month, and a
 merge would have to trust the published copy to still describe a day the
 correction just changed.
@@ -65,7 +65,7 @@ def months_published(digest_root: Path) -> list[str]:
     Two directory listings a year and one a month - never a day payload opened -
     so learning which months exist costs the tree's shape rather than its
     contents. It does grow: one entry a month, for ever, and there is no cheaper
-    way to answer "which months are there" than to look (Rule #12).
+    way to answer "which months are there" than to look (Guardrail #12).
     """
     found: list[str] = []
     if not digest_root.is_dir():
