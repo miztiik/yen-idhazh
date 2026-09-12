@@ -108,7 +108,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3 | Call 2 summarises and plans, and the article is read once | 2 | C | DONE #570 | yi-t11r3 | #570 | worker |
 | 3b | Every call reports its own cost | 3 | C2 | PENDING | - | - | - |
 | 3c | Own the prompt bytes | 6 | - | DEFERRED | - | - | - |
-| 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | PENDING | - | - | - |
+| 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | PENDING | - | - | - |
 | 6 | The small model, its job and its cache go | 5 | F | PENDING | - | - | - |
 
