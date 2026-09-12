@@ -7,7 +7,7 @@ that only works as part of the whole is a stage nobody can debug.
     idhazh plan       read feeds, rank, record      -> run/<date>/plan.json
     idhazh work       fetch, extract, summarize, score -> run/<date>/items/*
     idhazh record     commit what one shard settled -> state/
-    idhazh counters   commit what one shard's model server counted -> state/
+    idhazh counters   commit what one job's model server counted -> state/
     idhazh assemble   collect what finished        -> frontend/public/... + state/
 
 `idhazh run` is the three in order, which is what a developer wants and what
@@ -104,7 +104,7 @@ from idhazh.contracts.qualification import (
 )
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, PublishedAgeBand, RunPlan, VerticalPlan
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.runtime_counters import WORK_JOB, RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -2566,6 +2566,7 @@ def stage_counters(
     metrics_path: Path,
     shard: int = 0,
     shards: int = 1,
+    job: str = WORK_JOB,
     job_started_at: int | None = None,
     cpu_model: str | None = None,
     cpu_stat_at_start: str | None = None,
@@ -2597,6 +2598,10 @@ def stage_counters(
     A missing or empty body still writes a row, with every counter null. A shard
     whose server was already gone and a shard that never ran are different facts,
     and pooling a run needs to see the shard that contributed nothing.
+
+    `job` is which of the two model-server jobs this is. It is on the row because
+    the two serve different weights, so nothing downstream can pool them and
+    nothing can tell them apart without it.
     """
     row = RuntimeCountersRow.from_metrics_text(
         _text_if_readable(metrics_path),
@@ -2605,6 +2610,7 @@ def stage_counters(
         shard=shard,
         shards=shards,
         scraped_at=assemble.utc_now(),
+        job=job,
         job_started_at=job_started_at,
         cpu_model=cpu_model,
         cpu_stat_at_start=cpu_stat_at_start,
@@ -2615,9 +2621,10 @@ def stage_counters(
     )
     landed = ledger.append_runtime_counters(STATE_ROOT, [row])
     LOG.info(
-        "counted shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s cpu=%s "
-        "cpu_busy_pct=%s peak_rss_bytes=%s model_load_ms=%s n_ctx_configured=%s "
+        "counted job=%s shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s "
+        "cpu=%s cpu_busy_pct=%s peak_rss_bytes=%s model_load_ms=%s n_ctx_configured=%s "
         "python_peak_rss_bytes=%s cgroup_peak_bytes=%s rows=%s",
+        row.job,
         shard,
         shards,
         plan.run_id,
@@ -4315,6 +4322,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--job",
+        default=WORK_JOB,
+        help=(
+            "The workflow job writing this row. Two jobs stand a model server up and "
+            "they serve different weights, so a row that cannot say which one wrote it "
+            "proves nothing. The default is the job that wrote every row committed "
+            "before the cell existed."
+        ),
+    )
+    parser.add_argument(
         "--job-started-at",
         default="",
         help=(
@@ -4627,6 +4644,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             metrics_path=args.counters_file,
             shard=args.shard,
             shards=args.shards,
+            job=args.job,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,
             cpu_model=args.cpu_model,
             cpu_stat_at_start=args.cpu_stat_at_start,

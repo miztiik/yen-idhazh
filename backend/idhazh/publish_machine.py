@@ -5,7 +5,8 @@ so this is the one published series whose month boundary is drawn here rather
 than inherited from a state shard. Every cell on the row is our own server's
 counter, our own job clock or the runner's CPU name, so the row is published
 whole - `RuntimeCountersRow.FORBIDDEN_COLUMNS` would be empty and the shape says
-why in its own module.
+why in its own module. **Every COLUMN, not every row**: `PUBLISHED_JOB` names
+the one job this series is about, and the reason is beside it.
 
 **The source read is unbounded, on purpose, and this is where it says so**
 (Rule #12, and the third answer in `docs/concepts/growing-reads.md`). The
@@ -30,15 +31,23 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger, publish_console
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.runtime_counters import WORK_JOB, RuntimeCountersRow
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = RuntimeCountersRow.csv_columns()
 DIRNAME: Final = publish_console.MACHINE_DIRNAME
 SUFFIX: Final = ".csv"
+#: The one job this series is about. The `visuals` job writes counters rows too
+#: from 2026-09-12, and they belong in `state/` rather than here: the Machine
+#: page pools a run's tokens over a run's seconds, and the two jobs serve
+#: different weights, so one pooled rate over both describes no model. The page
+#: also refuses a run whose rows disagree about the shard count, and the visuals
+#: job runs one server where a work run runs four.
+PUBLISHED_JOB: Final = WORK_JOB
 
 __all__ = [
     "DIRNAME",
     "PUBLIC_COLUMNS",
+    "PUBLISHED_JOB",
     "SUFFIX",
     "months_on_file",
     "publish",
@@ -61,13 +70,15 @@ def shard_relpath(month: str) -> str:
 def months_on_file(
     state_root: Path, *, oldest_month: str
 ) -> dict[str, list[RuntimeCountersRow]]:
-    """Every counters row at or above `oldest_month`, bucketed by its month.
+    """Every `work` counters row at or above `oldest_month`, bucketed by its month.
 
     One pass and one handle over `state/runtime-counters.csv` - see the module
     docstring for why that read is unbounded and why no cover would help. Rows
     below the boundary are dropped here rather than written and then pruned,
     because a file written and deleted in the same run is a diff a reviewer has
-    to explain.
+    to explain. A row from another job is dropped for the reason `PUBLISHED_JOB`
+    gives, and that drop is by name rather than by absence - a row whose `job`
+    cell is empty never reaches here, because the contract refuses it.
 
     A row that no longer validates raises rather than being skipped. The
     counters file is what every Hardware panel stands on, and a run that
@@ -83,7 +94,10 @@ def months_on_file(
             month = row.get("date", "")[:7]
             if month < oldest_month:
                 continue
-            found[month].append(RuntimeCountersRow.from_csv_row(row))
+            counted = RuntimeCountersRow.from_csv_row(row)
+            if counted.job != PUBLISHED_JOB:
+                continue
+            found[month].append(counted)
     return dict(found)
 
 

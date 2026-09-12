@@ -1,7 +1,10 @@
-"""What llama-server itself counted during one `work` shard.
+"""What llama-server itself counted during one job.
 
-`state/runtime-counters.csv`. One row per shard per run, appended by the `work`
-job just after it commits the rows its items earned.
+`state/runtime-counters.csv`. One row per job per shard per run. The `work` job
+appends one for each of its shards just after it commits the rows its items
+earned, and the `visuals` job appends one for the planner server it ran. `job`
+is the cell that says which of them wrote a row, and every other cell is
+unreadable without it - the two jobs serve different weights.
 
 **What one row covers.** Both `llamacpp:` figures are cumulative for the server
 process, and a shard starts one llama-server and keeps it for the whole job. So
@@ -90,6 +93,20 @@ _SCRAPED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
 #: union driver, which works line by line, so a cell that could hold a newline
 #: could split one row across a merge.
 CpuModel = Annotated[str, StringConstraints(pattern=r"^[ -~]+$", max_length=120)]
+
+#: The workflow job that wrote a row. Lowercase, because it is the job's own id
+#: in `.github/workflows/digest.yml` rather than a display name - a display name
+#: would drift from the thing it is supposed to identify.
+JobName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]*$", max_length=40)]
+
+#: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
+#: one step in the repository ran `idhazh counters`, and it is in the `work` job,
+#: so every row committed before that date came from `work` - 293 of them when
+#: this was written. That is what lets the column be additive and defaulted
+#: (`CLAUDE.md` section 11) instead of inventing a value for rows nobody can go
+#: back and ask. The property is what the default rests on; the count moves every
+#: run.
+WORK_JOB: Final = "work"
 
 #: The Prometheus series each field is read from, on llama.cpp `b10598`. The
 #: names are the wire format and the field names are ours, so a llama.cpp rename
@@ -182,10 +199,31 @@ _LOG_INSTANT: Final = re.compile(r"^(\d+)\.(\d{2})\.(\d{3})\.(\d{3}) ")
 
 
 class RuntimeCountersRow(Contract):
-    """One `work` shard, one run, one row."""
+    """One job's server, one shard, one run, one row."""
 
     __schema_stem__: ClassVar[str] = "runtime-counters-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12",
+            change=(
+                "Appended `job`, the workflow job that wrote the row, defaulted to "
+                "`work`. `ledger.RUNTIME_COUNTERS_KEY` gained it in the same commit."
+            ),
+            why=(
+                "Every row committed up to 2026-09-12 came from the `work` job - 293 "
+                "of them on the day this landed - because exactly one workflow step "
+                "ran `idhazh counters` and it sits in that job. So the summarizer's "
+                "live-path figures are on record and the visual planner's are not: the "
+                "4B has no `prompt_tokens_cached_total`, no `peak_rss_bytes`, no "
+                "`prompt_seconds_total` and no `n_ctx_configured` taken in the digest "
+                "path, and a `llama-bench` run produces none of the four. The `visuals` "
+                "job now writes a row of its own, and two jobs appending to one ledger "
+                "make the old key ambiguous: both spell shard 0 of the same run, so "
+                "without this cell the second row is dropped as a repeat of the first. "
+                "The default is a reading rather than a guess, which is what lets a row "
+                "written before this column existed still validate."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-08",
             change=(
@@ -416,6 +454,20 @@ class RuntimeCountersRow(Contract):
         ),
     )
 
+    job: JobName = Field(
+        default=WORK_JOB,
+        description=(
+            "The workflow job that wrote this row. Two jobs stand a model server up and "
+            "they serve different weights - `work` the summarizer, `visuals` the visual "
+            "planner - so a rate pooled across both describes no model, and every other "
+            "cell here is unreadable without this one. It is the last column rather "
+            "than a fourth identity cell so the migration that put it on every "
+            "committed row is one appended cell a line, and nothing reading this file "
+            "by position moves. An empty cell is refused rather than defaulted: a row "
+            "that cannot say which job wrote it proves nothing."
+        ),
+    )
+
     @model_validator(mode="after")
     def _shard_fits_inside_the_run(self) -> Self:
         if self.shard >= self.shards:
@@ -467,6 +519,7 @@ class RuntimeCountersRow(Contract):
         shard: int,
         shards: int,
         scraped_at: str,
+        job: str = WORK_JOB,
         job_started_at: int | None = None,
         cpu_model: str | None = None,
         cpu_stat_at_start: str | None = None,
@@ -488,6 +541,10 @@ class RuntimeCountersRow(Contract):
         caller - so the two cells can never say different things about the same
         instant. No stamp leaves the cell empty. Empty is not zero: a job whose
         stamp went missing and a job that took no time are different facts.
+
+        `job` defaults to the one job that wrote every row committed before the
+        cell existed, so a caller written against the older signature still
+        produces the row it always produced.
 
         The last four arguments are raw text the host printed, not numbers a
         caller worked out: the `cpu` line of `/proc/stat` at each end of the job,
@@ -513,6 +570,7 @@ class RuntimeCountersRow(Contract):
                 "shard": shard,
                 "shards": shards,
                 "scraped_at": scraped_at,
+                "job": job,
                 "job_seconds": _elapsed(scraped_at, job_started_at),
                 "cpu_model": (cpu_model or "").strip() or None,
                 "cpu_busy_pct": _cpu_busy_pct(cpu_stat_at_start, cpu_stat_at_end),

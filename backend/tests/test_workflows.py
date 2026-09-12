@@ -23,6 +23,7 @@ from typing import Final, cast
 import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, llama_server_flags, read_text
+from pydantic import ValidationError
 
 from idhazh import ledger, publish_console, publish_telemetry
 from idhazh.contracts import runtime_counters
@@ -316,6 +317,11 @@ CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
 # below.
 SAMPLE_MEMORY_STEP: Final = "Sample memory"
 MEMORY_SUMMARY_STEP: Final = "What memory this shard used"
+# The sampler itself, which stopped being a heredoc inside that step on
+# 2026-09-12: two jobs take this reading now, and a shell step two jobs run is
+# what `.github/scripts/` is for (`CLAUDE.md` section 3). It is also now under
+# `shellcheck`, which cannot see a `run:` body.
+SAMPLE_SCRIPT: Final = SCRIPTS_DIR / "sample-rss.sh"
 # Which `rss-samples.tsv` column the operator print reads at each `awk` field
 # number. It reads by position, so this mapping is the whole agreement between
 # the step that writes the file and the step that reads it - and it lives in no
@@ -383,12 +389,14 @@ COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
 COMMIT_JOBS: Final = {
     "plan": "plan",
     "work": "work",
+    "visuals": "visuals",
     "assemble": "assemble",
     "fold": "assemble",
 }
 COMMIT_STEPS: Final = {
     "plan": "Commit what the plan saw",
     "work": "Commit what this shard measured",
+    "visuals": "Commit what the visual planner counted",
     "assemble": "Commit the day",
     "fold": "Commit the folded telemetry",
 }
@@ -408,6 +416,10 @@ COMMIT_SCRIPT_ENV: Final = {
     # so a second attempt cannot see the first attempt's pushed rows and the
     # union keeps both - which is what the post-merge pass is for.
     "work": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
+    # One row, from a job that runs after every work shard has pushed. It still
+    # settles, for the same reason: a second attempt at this job cannot see the
+    # row the first attempt pushed, and the union merge keeps both.
+    "visuals": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
     "assemble": COMMIT_BASE_ENV
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
     "fold": COMMIT_BASE_ENV,
@@ -424,6 +436,9 @@ COMMIT_STAGED_PATHS: Final = {
         "state/score-index",
         "state/runtime-counters.csv",
     ],
+    # One file. The visuals job measures one server and writes one row, and the
+    # `job` cell on it is what keeps that row out of the work shards' record.
+    "visuals": ["state/runtime-counters.csv"],
     "assemble": [
         "frontend/public/digest",
         "frontend/public/telemetry",
@@ -493,6 +508,23 @@ CONSOLE_SEED: Final = tuple(
 # is committed by the step after it.
 COUNTERS_STEP: Final = "What the server counted"
 COUNTERS_COMMAND: Final = "python -m idhazh counters"
+# The same three steps in the visuals job, which took none of these readings
+# until 2026-09-12 - so every live-path figure on record belonged to the
+# summarizer and none to the visual planner.
+VISUALS_CLOCK_STEP: Final = "Stamp the visuals clock and the host"
+VISUALS_SAMPLE_MEMORY_STEP: Final = "Sample visuals memory"
+VISUALS_COUNTERS_STEP: Final = "What the visual planner counted"
+VISUALS_MEMORY_SUMMARY_STEP: Final = "What memory the visual planner used"
+VISUALS_SERVER_LOG_FILE: Final = "visual-planner.log"
+# The flag that says which job a row came from, and the two values in use. A row
+# that cannot say which job wrote it proves nothing: the two jobs serve
+# different weights, and they both spell shard 0 of the same run.
+COUNTERS_JOB_FLAG: Final = "--job"
+COUNTERS_JOBS: Final = {"work": "work", "visuals": "visuals"}
+# The two-row fixture the reader is driven over: one `work` row and one
+# `visuals` row, sharing a date, a run and a shard index. Fixed in size, and it
+# carries a case the committed ledger has never held (Rule #12).
+COUNTERS_FIXTURE: Final = FIXTURES_DIR / "runtime-counters" / "visuals-job-row.csv"
 # Deliberately not `--metrics`: that is llama-server's own flag, and
 # `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` forbids any
 # workflow step from spelling one.
@@ -507,6 +539,11 @@ CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
 WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
+# The same pair in the visuals job. It is one rung further down: the work job
+# may not fail the shard, and this job may not fail at all - `continue-on-error`
+# on the whole job plus assemble's `always()` means a visual planner that never
+# started costs every item its picture and costs the day nothing.
+VISUALS_LEDGER_STEPS: Final = (VISUALS_COUNTERS_STEP, COMMIT_STEPS["visuals"])
 TOLERATED: Final = "true"
 COMMIT_IDENTITY: Final = "yen-idhazh pipeline <pipeline@yen-idhazh.invalid>"
 #: Every file that configures git before a job commits. A runner carries no
@@ -2407,7 +2444,7 @@ def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
     settling = [
         label for label, names in COMMIT_SCRIPT_ENV.items() if "DROP_REPEATED_ROWS_COMMAND" in names
     ]
-    assert settling == ["plan", "work"]
+    assert settling == ["plan", "work", "visuals"]
 
     for label in settling:
         settle = _commit_call(label)[1]["DROP_REPEATED_ROWS_COMMAND"].split()
@@ -2879,6 +2916,11 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         assert step.get("continue-on-error") == TOLERATED, (
             f"work step {name} must not fail the shard"
         )
+    for name in VISUALS_LEDGER_STEPS:
+        step = _step(workflow, "visuals", "name", name)
+        assert step.get("continue-on-error") == TOLERATED, (
+            f"visuals step {name} must not fail the job"
+        )
     # Closed-world, because a publish step that swallowed its own failure would
     # publish nothing and report success. The one that was already here is
     # assemble's visuals download: `visuals` is allowed to produce no artifact at
@@ -2886,7 +2928,9 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     # it for the harvest's reason: they run after the day is committed and touch
     # only months past `observability.item_health_full_grain_months`, so the most
     # a failure costs is one run's worth of bytes and the next run folds the same
-    # month again.
+    # month again. The two visuals steps join it for the work job's reason, one
+    # rung down: this job cannot stop a publication at all, so a scrape or a push
+    # that fails there costs one reading and the day nothing.
     tolerant = {
         (job_name, step.get("name") or step.get("uses"))
         for job_name in _mapping(workflow.get("jobs"), "jobs")
@@ -2895,6 +2939,7 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     }
     assert tolerant == {
         *(("work", name) for name in WORK_LEDGER_STEPS),
+        *(("visuals", name) for name in VISUALS_LEDGER_STEPS),
         ("assemble", "actions/download-artifact@v8"),
         ("assemble", HARVEST_STEP),
         ("assemble", FOLD_STEP),
@@ -4011,10 +4056,41 @@ def _work_step(name: str) -> str:
 
 def _sample_header() -> list[str]:
     """The columns the memory sampler writes, in the order it writes them."""
-    script = _work_step(SAMPLE_MEMORY_STEP)
+    script = read_text(SAMPLE_SCRIPT)
     header = re.search(rf"printf '([^']*)' > {re.escape(RSS_SAMPLE_FILE)}", script)
-    assert header, f"{SAMPLE_MEMORY_STEP} must printf a header row into {RSS_SAMPLE_FILE}"
+    assert header, f"{SAMPLE_SCRIPT.name} must printf a header row into {RSS_SAMPLE_FILE}"
     return header.group(1).removesuffix("\\n").split("\\t")
+
+
+def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> None:
+    """Two copies of a sampler is one copy nobody looked at this week.
+
+    It was a heredoc inside the work job's own step until 2026-09-12, which was
+    fine while one job took the reading. The visuals job needs the same one -
+    `peak_rss_bytes` is one of the four figures the visual planner has never
+    had - and pasting fifty lines of shell into a second `run:` body is the
+    thing `.github/scripts/` exists to stop (`CLAUDE.md` section 3). Moving it
+    also puts it under `shellcheck`, which cannot read a `run:` body at all.
+
+    Each job hands it the pid file its own server wrote, so a copy-paste that
+    left the work job's name in the visuals step would sample a process that
+    never existed and record nothing, silently.
+    """
+    assert SAMPLE_SCRIPT.is_file()
+    assert read_text(SAMPLE_SCRIPT).startswith("#!/usr/bin/env bash\n")
+
+    launched = {
+        "work": (_work_step(SAMPLE_MEMORY_STEP), "llama-server.pid"),
+        "visuals": (_digest_step("visuals", VISUALS_SAMPLE_MEMORY_STEP), "visual-planner.pid"),
+    }
+    for job_name, (script, pid_file) in launched.items():
+        assert f"bash {SAMPLE_SCRIPT.relative_to(REPO_ROOT).as_posix()}" in script, (
+            f"the {job_name} job must run the shared sampler"
+        )
+        assert f"cat {pid_file}" in script, (
+            f"the {job_name} job must sample the server its own start step wrote"
+        )
+        assert "nohup" in script, f"the {job_name} sampler must outlive its own step"
 
 
 def test_the_memory_sampler_and_both_its_readers_agree_on_the_columns() -> None:
@@ -4095,9 +4171,9 @@ def test_the_sampler_names_every_python_process_it_counts() -> None:
     reads the roll-call by POSITION, so a column inserted anywhere but the end
     silently reports a process id as a size in kilobytes.
     """
-    script = _work_step(SAMPLE_MEMORY_STEP)
+    script = read_text(SAMPLE_SCRIPT)
     header = re.search(rf"printf '([^']*)' > {re.escape(PYTHON_PROCS_FILE)}", script)
-    assert header, f"{SAMPLE_MEMORY_STEP} must printf a header row into {PYTHON_PROCS_FILE}"
+    assert header, f"{SAMPLE_SCRIPT.name} must printf a header row into {PYTHON_PROCS_FILE}"
     columns = header.group(1).removesuffix("\\n").split("\\t")
     assert columns[0] == "ts", columns
     assert len(columns) == len(set(columns)), f"a column name is written twice: {columns}"
@@ -4105,7 +4181,7 @@ def test_the_sampler_names_every_python_process_it_counts() -> None:
     # One loop, one filter. The count and the roll-call have to come off the
     # same pass over `/proc`, or the sum is over a set the roll-call never named.
     loop = re.search(r"for proc in /proc/\[0-9\]\*; do\n(.*?)\n *done\n", script, re.DOTALL)
-    assert loop, f"{SAMPLE_MEMORY_STEP} must walk /proc once per sample"
+    assert loop, f"{SAMPLE_SCRIPT.name} must walk /proc once per sample"
     body = loop.group(1)
     assert "python_n=$((python_n + 1))" in body, "the count must be taken inside that walk"
     assert f">> {PYTHON_PROCS_FILE}" in body, "the roll-call must be written inside that walk"
@@ -4337,6 +4413,139 @@ def test_the_counters_step_and_the_row_agree_on_what_it_reads() -> None:
     assert runtime_counters._CPU_FIELDS[0] == "user", (
         "the row parses the aggregate cpu line, which is what both steps read"
     )
+
+
+def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
+    """The Oracle for row #P4. A row with no job name proves nothing.
+
+    Two jobs of the daily run stand a llama-server up and they serve different
+    weights - `work` the summarizer at Qwen3.5-9B, `visuals` the planner at
+    Qwen3-4B - and both spell shard 0 of the same run. So `(date, run_id,
+    shard)` names one record and describes two servers, and a reader pooling
+    them reports a rate that belongs to no model.
+
+    Driven from a two-row fixture rather than from `state/runtime-counters.csv`,
+    which a run appends to five times a day (Rule #12). The fixture also carries
+    a case the committed ledger cannot: until this lands, every row in it came
+    from `work`.
+
+    Three assertions, because three things can go wrong. The reader has to
+    separate the rows BY JOB, not by shard - they share a shard index. Each side
+    has to carry a decode rate, or the fixture proves the separation and nothing
+    about whether either row is worth having. And the parser has to REFUSE a row
+    whose cell is empty rather than default it: a defaulted blank would file the
+    planner's numbers under the summarizer's name and every gate would stay
+    green.
+    """
+    with COUNTERS_FIXTURE.open(encoding="utf-8", newline="") as handle:
+        raw = list(csv.DictReader(handle))
+    rows = [runtime_counters.RuntimeCountersRow.from_csv_row(row) for row in raw]
+
+    by_job = {row.job: row for row in rows}
+    assert set(by_job) == set(COUNTERS_JOBS.values()), "the reader must separate them by job"
+    assert len({(row.date, row.run_id, row.shard) for row in rows}) == 1, (
+        "the fixture has to share a shard index, or it proves the wrong thing"
+    )
+    assert len({(row.date, row.run_id, row.job, row.shard) for row in rows}) == len(rows), (
+        "the job is what tells the two apart, and nothing else on the row does"
+    )
+    assert tuple(ledger.RUNTIME_COUNTERS_KEY) == ("date", "run_id", "job", "shard"), (
+        "the ledger key must hold the job, or the second row is dropped as a repeat"
+    )
+
+    for job_name, row in by_job.items():
+        assert row.tokens_predicted_total, f"the {job_name} row carries no decoded tokens"
+        assert row.tokens_predicted_seconds_total, f"the {job_name} row carries no decode seconds"
+        rate = row.tokens_predicted_total / row.tokens_predicted_seconds_total
+        assert rate > 0, f"the {job_name} row has no decode rate"
+
+    nameless = {name: value for name, value in raw[0].items() if name != "job"}
+    with pytest.raises(KeyError):
+        runtime_counters.RuntimeCountersRow.from_csv_row(nameless)
+    with pytest.raises(ValidationError):
+        runtime_counters.RuntimeCountersRow.from_csv_row({**raw[0], "job": ""})
+
+    # And the other half of `CLAUDE.md` section 11: a row written before the
+    # column existed still validates. Proved by removing the key from a payload,
+    # which cannot age out the way a count of unmigrated rows would.
+    older = {
+        name: value
+        for name, value in rows[0].model_dump(mode="json").items()
+        if name != "job"
+    }
+    assert runtime_counters.RuntimeCountersRow.model_validate(older).job == (
+        runtime_counters.WORK_JOB
+    )
+
+
+def test_the_visuals_job_writes_a_counters_row_of_its_own() -> None:
+    """The reading row #P4 exists to take, held where a workflow that drops it reds.
+
+    `measurements.md` records the 4B at 13.00 +/- 0.03 tok/s on a `llama-bench`
+    run, and a bench run produces no `prompt_tokens_cached_total`, no
+    `peak_rss_bytes`, no `prompt_seconds_total` and no `n_ctx_configured`. Those
+    four are what the labelling rows of plan 23 are priced against, and until
+    this step existed every committed counters row came from `work`.
+
+    The three inputs are asserted rather than the output, because the output is
+    a dispatched run. Each of them is a way the step can produce a row that
+    looks fine and says nothing: no clock stamp and `job_seconds` and
+    `cpu_busy_pct` are empty; the wrong server log and `n_ctx_configured` is
+    empty; no commit and the row never leaves the runner.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    names = [step.get("name") for step in _steps(workflow, "visuals")]
+
+    for step_name in (
+        VISUALS_CLOCK_STEP,
+        VISUALS_SAMPLE_MEMORY_STEP,
+        VISUALS_COUNTERS_STEP,
+        COMMIT_STEPS["visuals"],
+    ):
+        assert step_name in names, f"the visuals job must carry {step_name}"
+
+    # The clock is stamped before the checkout, so it covers the cache restore
+    # and the weight load as well as the model time.
+    assert names.index(VISUALS_CLOCK_STEP) == 0, "the clock must cover the whole job"
+    assert names.index(VISUALS_SAMPLE_MEMORY_STEP) < names.index(VISUALS_COUNTERS_STEP)
+    assert names.index(VISUALS_COUNTERS_STEP) < names.index(COMMIT_STEPS["visuals"]), (
+        "the commit has to run after the row it commits is written"
+    )
+
+    clock = _digest_step("visuals", VISUALS_CLOCK_STEP)
+    for variable in CLOCK_VARIABLES:
+        assert variable in clock, f"{VISUALS_CLOCK_STEP} must stamp {variable}"
+    assert clock.count(CPU_STAT_READING) == 1, f"{VISUALS_CLOCK_STEP} must read /proc/stat once"
+
+    counters = _digest_step("visuals", VISUALS_COUNTERS_STEP)
+    assert counters.count(CPU_STAT_READING) == 1
+    assert f"--server-log {VISUALS_SERVER_LOG_FILE}" in counters, (
+        "the window one sequence got is read off the planner's own log, not the summarizer's"
+    )
+    assert f"--rss-samples-file {RSS_SAMPLE_FILE}" in counters
+    assert f"--memory-peak-file {MEMORY_PEAK_FILE}" in counters
+    assert f"--counters-file {METRICS_FILE}" in counters
+
+
+@pytest.mark.parametrize("job_name", sorted(COUNTERS_JOBS))
+def test_every_counters_step_says_which_job_it_is(job_name: str) -> None:
+    """A default is not a statement, and both callers have to make one.
+
+    `--job` defaults to `work`, which is what lets a row written before the
+    column existed still validate. That same default is why the visuals step has
+    to name its own value out loud: a copy-paste that dropped the flag would
+    file the planner's numbers under the summarizer's name, the ledger would
+    accept them, and the console would pool two models into one rate.
+    """
+    step_name = {"work": COUNTERS_STEP, "visuals": VISUALS_COUNTERS_STEP}[job_name]
+    script = _digest_step(job_name, step_name)
+    assert COUNTERS_COMMAND in script, f"{step_name} must run {COUNTERS_COMMAND}"
+    assert f"{COUNTERS_JOB_FLAG} {COUNTERS_JOBS[job_name]}" in script, (
+        f"{step_name} must say it is the {job_name} job"
+    )
+    for other, value in COUNTERS_JOBS.items():
+        if other != job_name:
+            assert f"{COUNTERS_JOB_FLAG} {value}" not in script
 
 
 # --- The qualification arm (Row #10) ----------------------------------------
