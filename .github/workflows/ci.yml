@@ -28,17 +28,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Which half of the site gate a change has to pay for. `site` runs on every
-  # change because almost any backend module reaches it through `pip install`;
-  # the canary and browser half only reads the published surface, so a change
-  # that cannot move that surface should not spend four minutes proving it.
-  # A pull request that is wrong about this reddens `main` on the merge push,
-  # where the filter does not apply - that is the failure this trades for.
+  # What a change has to pay for. Two questions, not one.
+  #
+  # `code` asks whether anything but documentation changed. That branch is a
+  # closed list of prefixes rather than a guess, so a path nobody classified
+  # falls to the expensive side. It is asked on a push as well as a pull
+  # request, because a documentation edit cannot break an application check on
+  # either event, and a merge that runs the whole suite over a changed sentence
+  # buys nothing.
+  #
+  # `browser` asks which half of the site gate a pull request buys: the canary
+  # and browser half only reads the published surface, so a change that cannot
+  # move that surface should not spend four minutes proving it. That one is a
+  # wager that nobody forgot a path, so a push that carries any code does not
+  # consult it at all - a pull request the list was wrong about reddens `main`
+  # on the merge push, which is where the wager is settled.
   scope:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       browser: ${{ steps.decide.outputs.browser }}
+      code: ${{ steps.decide.outputs.code }}
       console: ${{ steps.decide.outputs.console }}
       validate_all: ${{ steps.decide.outputs.validate_all }}
       playwright: ${{ steps.browsers.outputs.playwright }}
@@ -54,8 +64,11 @@ jobs:
       - id: decide
         env:
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          # A pull request names its range and a push names its own. A dispatch
+          # names neither, and the selector buys everything when it cannot see a
+          # range.
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: .github/scripts/browser-suite-needed.sh >> "$GITHUB_OUTPUT"
 
       # Read once here, used by the two jobs that cache a browser, because a
@@ -86,20 +99,29 @@ jobs:
         with:
           fetch-depth: 2
 
+      # The one check a change carrying no code can still fail. Everything
+      # below it is about code, and a documentation change skips all of it.
+      - name: Whitespace
+        run: git diff --check HEAD^1 HEAD
+
       - uses: actions/setup-node@v7
+        if: needs.scope.outputs.code == 'true'
         with:
           node-version: '22'
 
       - uses: actions/setup-python@v7
+        if: needs.scope.outputs.code == 'true'
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
 
       - name: Install
+        if: needs.scope.outputs.code == 'true'
         run: pip install -e ".[dev]"
 
       - name: Lint
+        if: needs.scope.outputs.code == 'true'
         run: ruff check .
 
       # The shell nothing else checks. `ruff` and `mypy` stop at Python, and
@@ -110,18 +132,22 @@ jobs:
       # body, so the shell written inline in a workflow is covered by the
       # workflow contract test instead.
       - name: Lint the shell
+        if: needs.scope.outputs.code == 'true'
         run: shellcheck --severity=style .github/scripts/*.sh
 
       - name: Type-check
+        if: needs.scope.outputs.code == 'true'
         run: mypy
 
       - name: Tests, including the five injection canaries
+        if: needs.scope.outputs.code == 'true'
         run: pytest
 
       # A generated artifact that was hand-edited regenerates to something else.
       # The suite already asserts this against a temp directory; doing it again
       # against the working tree catches an exporter that writes in place.
       - name: Contract drift gate
+        if: needs.scope.outputs.code == 'true'
         run: |
           python -m idhazh.contracts.export
           git diff --exit-code -- schemas/
@@ -242,6 +268,8 @@ jobs:
   # Measured on run 33669915697, 2026-09-02: 41 s on 3.12 and 36 s on 3.14,
   # both alongside `gates` at 1 m 22 s, so the run's wall clock does not move.
   robots:
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -262,6 +290,8 @@ jobs:
         run: pytest backend/tests/test_extract.py
 
   site:
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
