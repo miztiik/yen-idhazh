@@ -829,6 +829,27 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+      # The pictures this shard drew, and only under `run.two_calls_per_item`.
+      # With the flag off the stage draws nothing here and the glob matches
+      # nothing, which `if-no-files-found: ignore` makes a green no-op; with it
+      # on, `work` is the only job that renders, and a decision naming an asset
+      # whose bytes never left this runner is a broken image on the page -
+      # `_picture_faults` calls it "names a picture file that is not there".
+      #
+      # The decisions themselves need no line: they are written into the items
+      # directory above and travel in that artifact.
+      #
+      # This run's day and never the whole tree, for the reason the visuals
+      # job's own upload gives: `render.write.asset_relpath` files every chart
+      # under the day that names it, so a wider line sends every committed day
+      # back to Actions on every run (Guardrail #12).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: shard-visuals-${{ matrix.shard }}
+          path: ${{ needs.plan.outputs.day_dir }}/
+          retention-days: 1
+          if-no-files-found: ignore
+
       # The article and the summary each scored item was judged on, for the
       # person who labels the faithfulness queue by hand. The committed ledger
       # keeps digests and no text, and this checkout is deleted when the job
@@ -1204,6 +1225,16 @@ jobs:
         with:
           name: visuals
           path: .
+
+      # The pictures the work shards drew under `run.two_calls_per_item`. One
+      # artifact per shard and empty on every shard when the flag is off, so
+      # this is a no-op until it is on and the whole of the transfer once it is.
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: shard-visuals-*
+          merge-multiple: true
+          path: ${{ needs.plan.outputs.day_dir }}/
 
       - name: Assemble and publish
         run: |

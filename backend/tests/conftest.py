@@ -208,28 +208,61 @@ def refill_recorded(
 # --- The two calls that read one article, shared by two test modules ------
 
 class RecordedEndpoint:
-    """A real local server that replays one recorded llama-server reply.
+    """A real local server that replays recorded llama-server replies in order.
 
     Nothing is mocked: the caller makes its ordinary POST over a loopback
     socket, and the bytes it reads back are the ones a llama-server wrote
     (Guardrail #7). The stdlib server owns the framing, so the test is about the
     body and not about HTTP.
+
+    More than one body replays them in a cycle, which is what lets a caller that
+    makes a fixed number of calls per item be driven over several items: two
+    bodies answer call 1 and call 2, then call 1 again. `served` is the POST
+    count, so a test can assert the pair rather than infer it from what came
+    back - and an item that sent one call where the cycle expects two shows up
+    there rather than as a reply that will not parse three items later.
     """
 
-    def __init__(self, status: int, body: bytes) -> None:
+    def __init__(self, status: int, *bodies: bytes) -> None:
+        if not bodies:
+            raise ValueError("a recorded endpoint replays at least one body")
+        served: list[int] = []
+        replies = bodies
+
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
 
+            def do_GET(self) -> None:
+                # `/props`, which every stage reads before its first item. A
+                # fixed template keeps the pipeline stamp the same across two
+                # runs of one test, so a stamp that moved moved for a reason.
+                template = b'{"chat_template": "fixture-template"}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(template)))
+                self.end_headers()
+                self.wfile.write(template)
+
             def do_POST(self) -> None:
                 self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                body = replies[len(served) % len(replies)]
+                served.append(1)
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
 
+            def log_message(self, *_args: object) -> None:
+                return None
+
+        self._served = served
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    @property
+    def served(self) -> int:
+        return len(self._served)
 
     @property
     def endpoint(self) -> str:

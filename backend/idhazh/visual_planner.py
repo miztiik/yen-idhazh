@@ -818,6 +818,37 @@ def refused_by_the_validator(
     )
 
 
+def not_drawable_here(
+    summary: Summary, *, why: str, model_id: str, decided_at: str, version: str
+) -> VisualDecision:
+    """The `none` an item gets when a plan was drafted and this build drew nothing.
+
+    Its sibling above is for a plan the validator refused by name. This one is
+    for the two ways a drafted plan reaches no picture with no rejection to
+    quote, and both are reachable only from a stage that dispatches call 2:
+
+    - the reply's plan half will not hold `VisualPlan`'s own rules, which a
+      grammar cannot enforce because they read one field against another;
+    - every check passed and the compiler still could not draw it.
+
+    One `none_reason` between them, and the same one the validator's refusal
+    records. `decided_without_the_model` states the rule this follows: one
+    member per gate, never one per call site - what an operator acts on is the
+    gate, and the gate here is "a plan was drafted and this build refuses it".
+    `why` is ours rather than the model's, so the rationale says which of the
+    two it was.
+    """
+    return _nothing(
+        summary,
+        model_id=model_id,
+        reason=why,
+        decided_at=decided_at,
+        version=version,
+        drafted_chart=True,
+        none_reason=NoneReason.VALIDATION_FAILED,
+    )
+
+
 # --- The ladder that steps down ----------------------------------------------
 
 
