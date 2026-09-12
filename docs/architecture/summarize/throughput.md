@@ -194,18 +194,29 @@ and no spread, on the longest article the committed corpus holds.
 | Cause | Tokens an item | At 9.85 tokens a second | Whose |
 | --- | --- | --- | --- |
 | the article changed | the whole call-1 prompt, less the shared system turn | - | irreducible |
-| the chat template broke the prefix | **100** - four, plus call 1's whole 96-token reply behind them | 10.2 s an item, 3.4 min of a 20-item shard | plan 11 row #3c |
-| the trailing turn sits behind the article | **697**, of which 687 is the question's own text | **69.7 s an item, 23.2 min of a 20-item shard** | plan 11 row #3e |
+| the chat template broke the prefix | **100** - four, plus call 1's whole 96-token reply behind them | 10.2 s an item, 3.4 min of a 20-item shard | plan 11 row #3c, closed |
+| the trailing turn sits behind the article | **697**, of which 687 is the question's own text, now **47** | **69.7 s an item, 23.2 min of a 20-item shard**, now 4.8 s and 1.6 min | plan 11 row #3e, closed |
 
-**687 is the number to act on, and it is seven times the template's.** Call 2's
+**687 was the number to act on, and it was seven times the template's.** Call 2's
 question names no article and quotes no sentence, so it is the same bytes on
-every item - but the article in front of it is not, so a prefix cache cannot
-reach it and all 687 tokens are read again, every item, for ever. The plan
+every item - but the article in front of it is not, so a prefix cache could not
+reach it and all 687 tokens were read again, every item, for ever. The plan
 carried "about 670" as an estimate until this reading and it is withdrawn.
 
-**What the two calls cost over a single call is 797 tokens an item** - the
+**Row #3e moved both jobs into the system turn and left three lines behind**: the
+band the article's own length picked, and the fields the grammar will hold the
+reply to. The rendered turn went from 692 tokens to 42, so **650 tokens come off
+every item** - 66.0 seconds an item, 22.0 minutes of a 20-item shard - and the
+system turn grew by 697, paid once a shard because it is the same bytes on every
+item. **Net, a 20-item shard is 20.8 minutes better off.** Measured 2026-09-12
+([`../../reference/benchmarks/2026-09-12-instructions-in-front.md`](../../reference/benchmarks/2026-09-12-instructions-in-front.md)).
+
+**What the two calls cost over a single call was 797 tokens an item** - the
 template break plus the trailing turn - which is **80.9 seconds an item, about
-27 minutes of a 20-item shard.** Rows #3c and #3e remove 787 of the 797.
+27 minutes of a 20-item shard.** Rows #3c and #3e removed 749 of the 797,
+leaving about **48 tokens an item, 4.9 seconds**. **The "787" this page carried
+until 2026-09-12 was arithmetic over a saving nobody had measured yet**: 37
+tokens of pointer stay behind, which is what the row's floor exists to say.
 
 **A token count names the runtime, not the processor** (`CLAUDE.md` Guardrail
 #10, as clarified 2026-09-12), so the counts above travel and the seconds beside
