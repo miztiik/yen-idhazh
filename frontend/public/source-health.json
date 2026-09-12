@@ -1,10 +1,10 @@
 {
   "complete_dates": 19,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-12T15:07:33Z",
+  "generated_at": "2026-09-12T18:32:13Z",
   "last_date": "2026-09-11",
   "min_complete_days": 30,
-  "run_id": "2026-09-12-34696925525",
+  "run_id": "2026-09-12-34707672359",
   "sources": [
     {
       "availability": "answering",
@@ -235,7 +235,7 @@
       "vertical": "world"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 0,
       "permission": "allowed",
       "publications": 0,
@@ -1555,7 +1555,7 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "opportunities": 21,
       "permission": "allowed",
       "publications": 21,
@@ -1639,7 +1639,7 @@
       "vertical": "india"
     },
     {
-      "availability": "answering",
+      "availability": "failing",
       "opportunities": 69,
       "permission": "allowed",
       "publications": 67,
@@ -1807,7 +1807,7 @@
       "vertical": "energy"
     },
     {
-      "availability": "resting",
+      "availability": "failing",
       "opportunities": 53,
       "permission": "allowed",
       "publications": 53,
