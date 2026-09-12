@@ -938,5 +938,6 @@ independently.
 - [ship-a-pr.md](ship-a-pr.md) - the neutral PR lifecycle these commands serve.
 - [run-the-pipeline.md](run-the-pipeline.md) - running the producer itself, which these gates do not do.
 - [../reference/agent-notes.md](../reference/agent-notes.md) - environment quirks that make a command lie about its result.
+- [../reference/ci-caches.md](../reference/ci-caches.md) - what CI downloads once and keeps, and why a gate job is not always as slow as its step list looks.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - what the drift gate compares.
 - [../../CLAUDE.md](../../CLAUDE.md) - sections 9, 12, and 13.
