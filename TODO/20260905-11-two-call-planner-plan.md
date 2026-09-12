@@ -106,7 +106,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 1 | Call 1 reads the article and points at it | - | A | DONE #561 | yi-t11r1 | #561 | worker |
 | 2 | The four kinds only a model can find | 1 | B | DONE #562 | yi-t11r2 | #562 | worker |
 | 3 | Call 2 summarises and plans, and the article is read once | 2 | C | DONE #570 | yi-t11r3 | #570 | worker |
-| 3b | Every call reports its own cost | 3 | C2 | DONE PR #_pending_ | p11-3b | PR #_pending_ | worker |
+| 3b | Every call reports its own cost | 3 | C2 | DONE #636 | p11-3b | #636 | worker |
 | 3c | Own the prompt bytes | 6 | - | DEFERRED | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
