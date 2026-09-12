@@ -102,22 +102,82 @@ summariser's and the planner's.
 model grades anything (`CLAUDE.md` section 0a). Anchoring is span equality
 against the article's own bytes; the own-words rate is a set membership test.
 
-**Method.** Eight real corpus articles, 154 to 354 words, taken as the first
-eight by `url_key` in that band - a fixed set chosen by a rule rather than by a
-reading. Each is sent through call 1 twice, once with the system turn at
-`242a701c` and once with the system turn as this row leaves it, with call 1's
-real 900-token output budget both times. The arms are run one after the other
-rather than interleaved: every number is a count at temperature 0, so box load
-cannot move it, and grouped, each arm prefills its own system turn once instead
-of on every call. **Eight threads rather than the configured four**, because the
-answer is a set of counts and the thread count only moves the clock; both arms
-ran at the same setting and the comparison is between them, never against a
-runner figure.
+**Method.** Six real corpus articles were selected, 154 to 354 words, taken as
+the first six by `url_key` in that band - a fixed set chosen by a rule rather
+than by a reading - and **three of them ran** before the box was needed back.
+Each is sent through call 1 twice, once with the system turn at `242a701c` and
+once with the system turn as this row leaves it, with call 1's real 900-token
+output budget both times.
 
-**The arm is running as this record is written, and its table lands in the next
-commit on this branch.** Said here rather than left blank because a record whose
-method is written and whose result is not is a record somebody may read as a
-result of nothing.
+**Three pairs ran and two are clean**, because the third exposed a defect in the
+BEFORE arm that has nothing to do with this row - see the section below. The
+clean result is over the two articles both arms answered in full.
+
+| Over 2 articles both arms answered | before | after |
+| --- | ---: | ---: |
+| labels | 1 | 1 |
+| labels naming an id the pass minted | 1 | 1 |
+| figures proposed | 1 | 1 |
+| named-thing groups | 8 | 7 |
+| place groups | 5 | 2 |
+| quotes | 2 | 2 |
+| claims | 0 | 0 |
+| keyphrases | 15 | 13 |
+| lede sentences | 2 | 2 |
+
+| Rate | before | after |
+| --- | --- | --- |
+| anchoring, pointed elements | 23/31, **74.2 percent** | 18/21, **85.7 percent** |
+| anchoring, proposed figures | 1/1 | 1/1 |
+| **own words** | 14/16, **87.5 percent** | 13/14, **92.9 percent** |
+
+**No dilution is visible, and what moved moved the right way.** The after arm
+proposes a little less - 7 named-thing groups against 8, 13 keyphrases against
+15, and 2 place groups against 5 - and a **higher share of what it does propose
+resolves to characters in the article**: 85.7 percent against 74.2. The
+own-words rate, the arm that watches the four free-text channels nothing
+downstream re-resolves, went up rather than down. Every count that feeds the
+picture is identical: the same labels, all on ids the pass minted, the same
+proposed figure, the same quotes, claims and lede sentences.
+
+**Two articles is a small set and the honest reading is a bound, not a zero.**
+With no regression seen in two, the rule of three puts the rate below about 78
+percent at 95 percent confidence, which is almost no constraint. What makes the
+run worth having anyway is the shape of the failure it looks for: a prompt the
+model reads on every item would show up as a systematic shift, not a rare event,
+and the shift that did appear is in the safe direction on both rates.
+
+**The arms were run one article at a time through both layouts**, so a run cut
+short by box load leaves whole pairs rather than one whole arm; and eight
+threads were used rather than the configured four, because every number here is
+a count and the thread count only moves the clock. Both arms ran at the same
+setting. The whole run took 36 minutes for three articles, at 2.3 to 3.5 tokens
+a second of decode with three other agents working on the box.
+
+## A defect this run found, and it is not this row's
+
+**Call 1's reply can exceed its own output budget on an ordinary article, and
+when it does the item is lost with no recovery.** On the third article - 346
+words, the BEFORE layout, so the base commit and not this change - call 1 decoded
+**900 tokens, hit `models.summarize.inference.max_output_tokens` exactly, and
+stopped with `finish_reason = length`**. The reply was cut mid-string and
+`classify.calls.parse_call_one` raised `Invalid JSON: EOF while parsing a string
+at line 1 column 2805`.
+
+Nothing rescues it. Call 2 has `recovered_completion`, which spends the
+summary-before-plan field order to salvage a cut reply; **call 1 has no
+equivalent**, because its reply is one flat object with no half a caller could
+use. And the budget is not derived from call 1's own grammar the way call 2's is
+from `call_two_output_tokens` - it is the role's `max_output_tokens`, which was
+sized for a summary.
+
+The arithmetic says it is not a freak: `CallOneReply` admits 16 labels, 4
+proposals, 6 entity groups and 6 place groups of 4 mentions each, 8 quotes, 8
+claims, 8 keyphrases and 2 lede addresses. A dense article filling even half of
+that passes 900 tokens. **This is the same family as plan 11 row #3f** - a bound
+that is not derived from the shape it bounds - and it belongs to a row of its
+own rather than to this one.
+
 
 ## What this run does not settle
 
@@ -128,11 +188,12 @@ result of nothing.
   10,000 tokens. The token arithmetic does not depend on article length at all -
   the trailing turn and the system turn are the same bytes whatever the article
   is - but what call 1 proposes on a 4,000-word article is unmeasured here.
-- **Eight articles is a small set**, and a clean result is a bound rather than a
-  zero: with no regression seen in eight, the rule of three puts the rate below
-  about 31 percent at 95 percent confidence. That is weak, and it is the honest
-  reading. What makes it worth having anyway is that the failure it looks for is
-  a systematic one - a prompt the model reads on every item - not a rare event.
+- **Two clean articles is a very small set**, and a clean result is a bound
+  rather than a zero: the rule of three puts the regression rate below about 78
+  percent at 95 percent confidence, which is almost no constraint. The run was
+  stopped at three pairs because the box carries three other agents and a pair
+  cost 12 minutes. **Re-run it wider when the box is quiet**; the harness is one
+  scratch script and the article set is chosen by a rule, so it reproduces.
 - **Nothing dispatches these calls yet**, so no published summary has been
   written under either layout. The first real reading is the first daily run
   after plan 11 row #5b lands.

@@ -111,6 +111,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3c | Own the prompt bytes | 3d | C4 | DONE #640 | p11-3c | #640 | worker |
 | 3e | The instructions move in front of the article | 3c | C5 | DONE #644 | p11-3e | #644 | worker |
 | 3f | The window is sized for two calls | 3d | C6 | BLOCKED | - | - | - |
+| 3g | Call 1's reply does not fit its own budget | - | C7 | PENDING | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
 | 5 | One chart, drawn end to end | 4 | E | DONE #621 | p11-r5 | #621 | worker |
 | 5b | Call 1 and call 2 run in the pipeline | 5, 3b, 3e | E2 | PENDING | - | - | - |
@@ -307,6 +308,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 - **Oracle: three numbers and a conservation law, and the conservation law is what makes this row safe.** First, **conservation**: the tokens the trailing turn gives up against the tokens the system turn takes on, with the difference printed rather than absorbed - a row that "saves" 600 tokens by dropping an instruction instead of moving it passes any threshold and fails this at once. **Read 2026-09-12: the trailing turn gave up 650 and the system turn took on 697, a balance of -47**, and every one of those 47 is named in the record - two conditioning clauses on the plan half, a two-job opening on the elements half, the pointer itself, and about 20 tokens of duplicated injection rule dropped because the system turn already states it in fuller form. Second, **the floor is measured before anything moves**: the rendered turn carrying the four band numbers decision 1 keeps, and nothing else. **F is 14 tokens.** Third, **the bar is stated against F**: the row passes when the residual `after - F` is the pointer and nothing else. **Read `692 -> 42, floor 14, pointer 28`**, against `678` of residual before. **"Under 100 tokens an item" replaced a measurement with a round number** and could not say either; it is withdrawn. Fourth, over a fixed set of real articles run through both layouts, **the per-kind element counts and the anchoring survival rate hold** - deterministic counts over a model's output, not a model grading a model. Andre, 2026-09-12.
 - **The oracle grew a fourth arm in execution, and the reason is that the third one cannot see where the risk lands.** Anchoring survival re-resolves a citation `surface` against its named sentence and the per-kind counts see the model labelling more or fewer rows, but **nothing re-resolves `measure`, `dimension`, `entity` or a keyphrase against the article** - and those are exactly the free-text channels a plan-drafting vocabulary would leak into. The arm is the **own-words rate**: the share of those four whose words are in the article, case-folded. It measures a rule the prompt already states ("in the item's own words", "Copy them; do not invent them"), it is deterministic and model-free, and it runs on the same fixed set through both layouts. Andre, 2026-09-12.
 - **The risk is real and it is the only one of these rows that can change what the model says.** Call 1 would carry summariser instructions it does not need. Paid once per shard, that is cheap; the objection is not cost but **context dilution on the call least able to absorb it**, because call 1's entire output is addresses into the article. The oracle's second number is what settles it. Andre, 2026-09-12.
+- **Oracle 2 and 3 came back clean, and the honest reading is a bound rather than a zero** (added in execution, 2026-09-12). Over the articles both layouts answered in full, every count that feeds the picture is identical - the same labels, all on ids the pass minted, the same proposed figure, the same quotes, claims and lede sentences - the after arm proposes a little less, and **a higher share of what it proposes resolves to characters in the article: 85.7 percent against 74.2**. The own-words rate, the arm Andre added, went **up**: 92.9 percent against 87.5. Both rates moved in the safe direction. **It is two articles**, so the rule of three bounds the regression rate below about 78 percent at 95 percent confidence, which is almost no constraint; what makes it worth having is that the failure it hunts is systematic rather than rare, because the prompt is read on every item. The run was stopped at three pairs - three other agents were working the box and a pair cost 12 minutes - and the record says how to re-run it wider ([`../docs/reference/benchmarks/2026-09-12-instructions-in-front.md`](../docs/reference/benchmarks/2026-09-12-instructions-in-front.md)).
 - **What this row does not do:** it changes no contract, no reply shape, no schema and no published surface. **It is not a pure move of text, and saying so was wrong**: the instructions are the same set, but the gate's selector moved from the presence of the plan half to the last line of the pointer, the plan half's two unconditional openers were made conditional, one duplicated sentence of the injection rule was dropped where the system turn already states it fuller, and the labelling pass's "you never write a number" was scoped to the labelling pass. That last one is a defect the move exposed rather than created: in one turn it flatly contradicts "keep every figure exactly as the item wrote it", and a summary that quietly lost its figures would pass every check there is. Corrected in execution, 2026-09-12, on Andre's ruling.
 
 ### Decisions
@@ -358,6 +360,26 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | --- | --- | --- | --- |
 | 1 | Wire the calls up behind the flag and find out on the first real run | A shard of wall clock spent discovering what a token count already said, and a known defect carried into a run | Andre, 2026-09-12 |
 | 2 | Raise `n_ctx` from 16,384 to 24,576 inside this row | Memory on a 16 GB runner that nobody has measured, and the window is fingerprint-digested, so every summary written before it is stamped apart from every summary after. Guardrail #2 is surfaced and never adapted by an agent | Andre, 2026-09-12; `CLAUDE.md` Guardrail #2 |
+
+---
+
+## 4f. Row #3g - Call 1's reply does not fit its own budget
+
+**Added 2026-09-12 by row #3e's worker, and found on the BASE commit rather than on that row's change.** Running six real corpus articles through call 1 to check that row #3e had not changed what the model says, **one article of the first three lost its reply to the output budget**. It is 346 words, which is ordinary, and it was the untouched layout.
+
+| What happened | Reading |
+| --- | --- |
+| call 1 decoded | **900 tokens**, which is `models.summarize.inference.max_output_tokens` exactly |
+| the server said | `finish_reason = length` |
+| `parse_call_one` said | `Invalid JSON: EOF while parsing a string at line 1 column 2805` |
+| what was salvaged | **nothing** |
+
+- **Two things are wrong and the second is the one that matters.** The budget is the summariser role's `max_output_tokens`, sized for a summary rather than derived from `CallOneReply`'s own bounds - where call 2's `call_two_output_tokens` derives its budget from the grammar and re-derives it on every import. And **call 1 has no `recovered_completion`**: call 2 spends its summary-before-plan field order to rescue a cut reply, and call 1's reply is one flat object with no half a caller can use.
+- **It is not a freak.** `CallOneReply` admits 16 labels, 4 proposals, 6 entity groups and 6 place groups of 4 mentions each, 8 quotes, 8 claims, 8 keyphrases and 2 lede addresses. An article filling half of that passes 900 tokens. One of three ordinary articles did.
+- **Scope:** derive call 1's output budget from its own grammar, as call 2's is, and say what happens to an item whose reply is cut - a named reason a counter can carry, rather than an exception several frames from the cause.
+- **Files touched:** `backend/idhazh/classify/calls.py`, `backend/tests/test_classify.py`, and whatever the chosen failure shape needs. Not costed here.
+- **Oracle:** the widest reply `CallOneReply` admits fits the budget, computed from the bounds rather than written down - and an item whose reply is cut anyway is reported as cut.
+- **It blocks nothing and nothing blocks it**, but **row #5b should not wire the calls up before it is settled**: a defect that loses an item silently is worse once something is dispatching. Evidence: [`../docs/reference/benchmarks/2026-09-12-instructions-in-front.md`](../docs/reference/benchmarks/2026-09-12-instructions-in-front.md).
 
 ---
 
