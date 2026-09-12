@@ -28,7 +28,8 @@ Parallel N is 1 by measurement, not by caution: Rows #1, #2 and #3 all write `CL
 | 2 | Rewrite all twelve guardrails | 1 | B | DONE #630 | `../yen-idhazh.worktrees/p27-r2` | #630 | default |
 | 3 | Eight collateral sections | 2 | C | DONE #631 | `../yen-idhazh.worktrees/p27-r3` | #631 | default |
 | 4 | Restate in the three derived agent surfaces | 3 | D | DONE #633 | `../yen-idhazh.worktrees/p27-r4` | #633 | default |
-| 5 | Repository-wide sweep, schemas, relapse proof | 4 | E | PENDING | - | - | - |
+| 6 | Re-derive the digest's twelve summaries and its stale headings | 4 | E | PENDING | - | - | - |
+| 5 | Repository-wide sweep, schemas, relapse proof | 6 | F | PENDING | - | - | - |
 
 ## 2. Row #1 - Intent chain, rename, preamble, approval encoding
 
@@ -293,6 +294,54 @@ Two citation bugs surface during the sweep and are fixed in it:
 ### What this row does not do
 
 Does not change any guardrail text. Does not touch `version` or `changelog` in any schema. Does not edit committed data.
+
+## 6a. Row #6 - Re-derive the digest's twelve summaries and its stale headings
+
+Added 2026-09-12 after Row #4 reported it. Owner instruction, same day.
+
+- **Scope:** the guardrails digest still summarises the twelve as they read before Row #2, and three of its headings now contradict the contract. Re-derive it from the merged contract.
+- **Files touched:**
+  - `docs/agents/guardrails.md`
+  - `docs/agents/bootstrap.md`
+
+| # | Defect | What it says now | What the contract says |
+| --- | --- | --- | --- |
+| 1 | All twelve summaries pre-date Row #2 | Headlines carry no reason and no deviation path | Each guardrail carries what is constrained, the reason, and what to do when it bites |
+| 2 | Guardrail #1 summary | "No runtime telemetry" | Telemetry exists and is committed; the ban is on automatic transmission, not on measurement |
+| 3 | Guardrail #2 summary | "The runner is the architecture" | "The stock runner is the production target, and measuring elsewhere is legitimate" |
+| 4 | Guardrail #10 summary | "An unmeasured number may not justify a design" | An estimate may not settle a design; it may carry one to the next step |
+| 5 | Guardrail #6 summary | Config knobs only | Binds the frontend as hard as the backend; the substitution test; feature flags with a removal condition |
+| 6 | The non-goals heading | "Project-level non-goals (do NOT raise these)" | A non-goal is a dated decision with an owner, not a law of physics; price it and hand the decision back |
+| 7 | The section-1 heading | "## Rules (cite by number when relevant)" | Section 1 is Adaptive Guardrails |
+| 8 | The layer heading | "## Layer / dependency rules" | Section 4 is Layer and Dependency Boundaries |
+| 9 | The bootstrap ritual | "Rules #1-#11 are load-bearing" | There are twelve. #12 landed 2026-09-05 |
+| 10 | The runner-budget anti-pattern | Stops at the refusal | Names the required next move: the design that fits and what it traded |
+
+- **Acceptance gates:**
+  - Local: `python backend/utilities/doc_load.py` before and after; record both figures and what they mean.
+  - Local: ASCII-only, LF-only.
+  - Local: `npm --prefix frontend run test:changed -- --list`, then whatever it selects.
+  - Local: `python backend/utilities/plan_status.py --write` after the Reckoner edit.
+  - CI: full suite.
+- **Oracle:** **Ten defects, ten fixes, and no eleventh claim.** Every row of the table above is quoted before and after in the PR body. Then the reverse check: for each of the twelve summaries, name the sentence in `CLAUDE.md` it derives from. A summary with no source sentence is an extension and fails the row (Guardrail #4 - the digest restates, it never extends).
+- **Decisions:**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The digest is re-derived rather than deleted. Retiring it is a separate decision the owner has not taken. | Owner, 2026-09-12 |
+| 2 | The non-goals heading changes meaning, not just wording. "Do NOT raise these" is the exact behaviour section 0a's new preamble forbids. | Owner, 2026-09-12 |
+| 3 | This row runs before the sweep so the sweep sees final text. | Orchestrator |
+
+- **Rejected alternatives:**
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Fold this into Row #5's sweep. | Mixed risk profiles. The sweep is mechanical; re-deriving a summary is authoring, and bundling them hides the authoring inside a 341-file diff nobody can review. | `docs/how-to/author-a-plan.md` step 2 |
+| 2 | Retire the digest instead of fixing it. | A live option, priced by Andre at about 5,062 tokens saved, but it needs an owner ruling and it must land after the contract itself is scannable. Not this row. | Andre, 2026-09-12 |
+
+### What this row does not do
+
+Does not sweep `Rule #N` citations - Row #5 does. Does not edit `CLAUDE.md`. Does not retire the digest.
 
 ## 7. Open questions
 
