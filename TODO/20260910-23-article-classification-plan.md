@@ -241,7 +241,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 5 | The item id becomes sixteen characters of base32 | - | A | IN-FLIGHT | p23-5 | - | worker |
+| 5 | The item id becomes sixteen characters of base32 | - | A | DONE #642 | p23-5 | #642 | worker |
 | P1 | The property section 0a names, restated | - | A | DONE #608 | p23-p1 | #608 | worker |
 | 20 | The order of the day, written down | - | A | PENDING | - | - | - |
 | P2 | The reference dataset, built so a number cannot flatter us | - | B | PENDING | - | - | - |
