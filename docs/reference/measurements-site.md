@@ -1,6 +1,6 @@
 # Site Measurements
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 Every number about **what the reader downloads**: the compression level the
 origin serves, each page's ceiling, what a cold load costs, how fast the site
@@ -657,7 +657,19 @@ width at both root sizes and fails if one did not scale, and it prints both
 numbers in the failure so the assertion cannot pass on a layout it never
 measured.
 
-## What the time rail costs and what it removes, 2026-09-02
+## What the time rail cost and what it removed, 2026-09-02
+
+**The rail was deleted on 2026-09-12 and this record is not corrected, because
+it is a reading of 2026-09-02 rather than a claim about today.** What it
+measures is still the argument that retired it, read from the other side: the
+rail's whole value was the labels it did NOT draw, and the same arithmetic re-run
+on 2026-09-12 over 22 days and 8,922 stories gives **1,218 markers, so 86.3
+percent of stories carried no time at all.** Every story now prints its own
+stamp beside its heading
+([../concepts/ui-shell.md](../concepts/ui-shell.md)). The census of which clock,
+below, is the half worth re-reading - the absent COUNT is frozen at 3,733 and
+its SHARE falls with every run, 79.2 percent here and 41.8 percent on
+2026-09-12.
 
 Toolchain: Python 3.14.2. Date: 2026-09-02.
 Method: read every `frontend/public/digest/**/digest.json`, re-order each day by
@@ -674,8 +686,9 @@ scan.
 
 That is the claim the row rests on and it is the one worth checking rather than
 asserting: a sort that drops a story looks exactly like a day that published
-fewer, and nothing on the page would say which. `frontend/tests/time-rail.spec.ts`
-re-runs it over every committed day on every build.
+fewer, and nothing on the page would say which. `frontend/tests/item-time.spec.ts`
+re-runs it on every build, over a built pool rather than over the archive
+(`CLAUDE.md` Rule #12).
 
 ### The rail draws 907 labels where a label per story would draw 4,713
 
@@ -737,10 +750,10 @@ every form.
 
 **47 of the 4,713 stories are stamped exactly `T00:00:00Z`**, 1.0 percent, which
 is what a date-only feed date parses to and also what a story genuinely
-published at midnight parses to. That figure is why the rail still prints a
-clock on a midnight stamp: blanking it would hide the real midnight stories
+published at midnight parses to. That figure is why a midnight stamp still
+prints a clock: blanking it would hide the real midnight stories
 inside the same 1.0 percent, and the payload cannot say which they are
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-rail-is-what-reads-it-and-what-it-can-and-cannot-say-2026-09-02)).
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say-2026-09-12)).
 
 ### A phone gets no rail column, and this is the number that decided it
 

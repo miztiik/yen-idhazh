@@ -17,15 +17,19 @@
 	 *
 	 * The item's facts sit in two places and the split is by what they are about.
 	 * Above the title go the ones a reader uses to decide whether to read it at
-	 * all - the mark, the desk, and who is speaking. Below the summary go the
-	 * claims about the summary itself, and the two things you can do next. The
-	 * fourth fact, when it happened, moved to the day's own time rail on
-	 * 2026-09-02, because the stream now runs in that order and a time printed
-	 * beside every story as well as down the rail is the same number twice.
+	 * all - the mark, the desk, who is speaking, and when. Below the summary go
+	 * the claims about the summary itself, and the two things you can do next.
+	 *
+	 * The fourth fact, when it happened, sat on the day's own time rail from
+	 * 2026-09-02 to 2026-09-12. The rail grouped by the hour and left 86.3 percent
+	 * of stories with no time at all - 1,218 markers over 8,922 committed stories,
+	 * re-measured 2026-09-12 - so the story's own stamp came back here, where every
+	 * story has one.
 	 */
 	import { KIND_WORTH_SAYING, SOURCE_KINDS } from '$lib/bands';
 	import { deskOf } from '$lib/day-shape';
-	import { shortDate } from '$lib/format';
+	import { itemTime, shortDate } from '$lib/format';
+	import Icon from '$lib/icons/Icon.svelte';
 	import type { DigestItem } from '$lib/payload/types';
 	import { shownLenses } from '$lib/payload/lenses';
 	import ItemMeta from './ItemMeta.svelte';
@@ -41,6 +45,7 @@
 		showMark = true,
 		read = false,
 		day,
+		onDate = '',
 		onRead
 	}: {
 		item: DigestItem;
@@ -57,11 +62,25 @@
 		 * are the same day or one apart, and printing both puts two dates on a
 		 * line that already holds four facts. */
 		day?: { date: string; href: string };
+		/** The date the page is reading, so a stamp from another day gets a date in
+		 * front of its clock. Empty on a search result, which has no one date and
+		 * draws the day link in this slot instead. */
+		onDate?: string;
 		onRead?: () => void;
 	} = $props();
 
 	const lenses = $derived(shownLenses(item.lenses));
 	const kindWorthSaying = $derived(KIND_WORTH_SAYING.includes(item.source_kind));
+	/** The story's own time, or null where there is no number to print.
+	 *
+	 * Null on `time_source: unknown`, where neither the feed nor our own first
+	 * sight gave a time: there is nothing to draw and a word saying so would be a
+	 * label with no fact under it. */
+	const when = $derived.by(() => {
+		if (day || !onDate) return null;
+		const time = itemTime(item.published_at, item.time_source, onDate);
+		return time.form === 'none' ? null : time;
+	});
 	/** The topic this story is read under, published beside `data-vertical`.
 	 *
 	 * `vertical` is the word the carrying feed declares about itself and is what
@@ -116,15 +135,28 @@
 				{#if kindWorthSaying}<span class="kind">{SOURCE_KINDS[item.source_kind]}</span>{/if}
 			</span>
 
-			<!-- The time is on the day's rail, not here. It was in this line until
-			     2026-09-02, and a time in both places is the duplicate the rail
-			     exists to remove. What survives is the search result's day link:
-			     that list has no rail, and the date is how a reader tells which
-			     day a found story was published on. -->
+			<!-- When, and the slot holds one thing at a time. On a dated page the date
+			     IS the page, so the story's own clock takes it and the day link is a
+			     fact the reader already has from the address. A search result spans
+			     days, so the link back takes it instead and no clock is drawn - two
+			     dates on a line capped at four things.
+
+			     The stamp is printed unattributed where the payload attributes it to
+			     nobody: 3,733 committed items predate `time_source`, and printing
+			     theirs as a feed time would be a claim the run never recorded. The
+			     mark below is the one case that needs saying - our own first sight of
+			     the address rather than the publisher's date. -->
 			{#if day}
 				<a href={day.href} class="when hover:underline" data-item-day={day.date}>
 					{shortDate(day.date)}
 				</a>
+			{:else if when}
+				<span class="when" data-item-time={when.form}
+					>{when.label}{#if when.form === 'first-seen'}&nbsp;<Icon
+							id="clock-alert"
+							size={14}
+						/>{/if}</span
+				>
 			{/if}
 		</p>
 

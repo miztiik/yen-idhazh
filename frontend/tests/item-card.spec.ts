@@ -287,12 +287,23 @@ test.describe('the item is a low-chrome card', () => {
 			// reading `p.uppercase` would then have measured nothing and reported
 			// a font size of 0 as a pass.
 			const eyebrow = card.querySelector('[data-item-eyebrow]');
+			const when = card.querySelector('[data-item-time]');
 			const px = (el: Element | null) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
 			const root = getComputedStyle(document.documentElement);
 			return {
 				title: px(heading),
 				summary: px(summary),
 				eyebrow: px(eyebrow),
+				// Plan 25 row #5. The time is the eyebrow's own type, colour and
+				// weight - not smaller, not lighter, not a new step on any scale. A
+				// fifth typographic weight on this line is the wallpaper the row
+				// exists to avoid, and it is the one thing about this change a
+				// screenshot cannot settle.
+				when: px(when),
+				whenColour: when ? getComputedStyle(when).color : '',
+				whenWeight: when ? getComputedStyle(when).fontWeight : '',
+				eyebrowColour: eyebrow ? getComputedStyle(eyebrow).color : '',
+				eyebrowWeight: eyebrow ? getComputedStyle(eyebrow).fontWeight : '',
 				text2xl: root.getPropertyValue('--text-2xl').trim(),
 				textLg: root.getPropertyValue('--text-lg').trim(),
 				textXs: root.getPropertyValue('--text-xs').trim(),
@@ -314,5 +325,10 @@ test.describe('the item is a low-chrome card', () => {
 			1
 		);
 		expect(sizes.title, 'the title does not lead the summary').toBeGreaterThan(sizes.summary);
+
+		expect(sizes.when, 'the first story on the page prints no time').toBeGreaterThan(0);
+		expect(sizes.when, 'the time is a type step of its own').toBeCloseTo(sizes.eyebrow, 1);
+		expect(sizes.whenColour, 'the time is a colour of its own').toBe(sizes.eyebrowColour);
+		expect(sizes.whenWeight, 'the time is a weight of its own').toBe(sizes.eyebrowWeight);
 	});
 });

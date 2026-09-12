@@ -75,8 +75,6 @@ ZONE_RAIL_MIN_REM: Final = 8.0
 ZONE_RAIL_MAX_REM: Final = 24.0
 ZONE_ASIDE_MIN_REM: Final = 12.0
 ZONE_ASIDE_MAX_REM: Final = 27.0
-ZONE_TIME_MIN_REM: Final = 2.0
-ZONE_TIME_MAX_REM: Final = 9.0
 
 #: A six-digit CSS hex, lower case. The one form `frontend/src/styles/tokens.css`
 #: writes and the one form `tokens.spec.ts` reads back off it.
@@ -223,23 +221,6 @@ class FrameConfig(Model):
             "leading stories beside the stream instead of above it. One trailing "
             "column at a time: a 68-character measure plus both this and the item's "
             "own rail does not fit inside `reading_max_px`."
-        ),
-    )
-    zone_time_rem: float = Field(
-        default=5.5,
-        ge=ZONE_TIME_MIN_REM,
-        le=ZONE_TIME_MAX_REM,
-        description=(
-            "The day stream's leading column from the small breakpoint, which carries "
-            "the time rail. It is the widest label the rail prints that decides this "
-            "number, not the shortest: the rail prints digits only, so the widest is "
-            "a cross-year stamp, `2019-06-11 08:15` at 16 characters, and the common "
-            "ones are `14:05` and `08-19 23:40`. In rem, so the column grows with a "
-            "reader who set their browser text larger and the label keeps the same "
-            "number of lines. There is no phone value because there is no phone "
-            "column: 328 CSS px of content box cannot hold a rail, the read mark and "
-            "a readable line at once, so below the small breakpoint the marker is a "
-            "rule across the top of its group instead."
         ),
     )
 
@@ -519,6 +500,28 @@ class AppearanceConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12",
+            change=(
+                "frame.zone_time_rem is REMOVED, and so are its bounds "
+                "ZONE_TIME_MIN_REM and ZONE_TIME_MAX_REM. ui.rail_group_minutes is "
+                "removed too; it is `UiConfig`, which this document and `AppConfig` "
+                "share, so app-config is restamped with the same version. "
+                "config/appearance.json drops both keys. BREAKING for a file that "
+                "sets either - the read-side migration is that both keys are dropped "
+                "rather than defaulted, and an appearance file carrying one is "
+                "refused rather than silently ignored."
+            ),
+            why=(
+                "The day's time rail is deleted. zone_time_rem was the width of its "
+                "column and rail_group_minutes was how coarsely it grouped, so "
+                "neither has a reader left. Every story now prints its own published "
+                "time in its eyebrow, in the eyebrow's own type, so there is no "
+                "column to size and no grouping to tune. Re-measured 2026-09-12 over "
+                "8,922 committed items in 22 days: the rail drew 1,218 markers, so "
+                "86.3 percent of stories carried no time at all."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-10T09:00",
             change=(

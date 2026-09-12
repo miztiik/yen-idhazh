@@ -16,9 +16,9 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	],
 	reader: [
 		'dated-day', 'day-states', 'filter-bar', 'footer-facts', 'item-card', 'item-meta',
-		'item-visual', 'item-zones', 'layout', 'layout-overflow', 'leading-stories', 'lenses', 'manifest',
-		'payload-state', 'reading-page', 'readstate', 'source-mark',
-		'theme', 'time-rail', 'tokens', 'topic-day', 'topics', 'whole-day'
+		'item-time', 'item-visual', 'item-zones', 'layout', 'layout-overflow', 'leading-stories',
+		'lenses', 'manifest', 'payload-state', 'reading-page', 'readstate', 'source-mark',
+		'theme', 'tokens', 'topic-day', 'topics', 'whole-day'
 	],
 	// Alone, because it rewrites the kill switch the whole served site shares and
 	// `reading-page` installs the worker that reads it. See `playwright.config.ts`.
