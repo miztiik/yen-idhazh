@@ -156,7 +156,7 @@ In-memory `Path` objects for local I/O may stay platform-native; the rule applie
 - Every stage is invocable on its own with a file in and a file out. A stage that only runs as part of the whole pipeline cannot be tested and is a design error.
 - Anything fetched from the open web crosses the trust boundary exactly once, at the extraction stage, and is sanitized there.
 
-## Schema versioning (rules only - see `CLAUDE.md` section 11 for full spec)
+## Schema versioning (essentials only - see `CLAUDE.md` section 11 for full spec)
 
 The persisted surfaces: **stage payloads**, the **eval ledger**, the **run manifest**, **config**, and **published payloads**. Each is a Pydantic model before logic is written (Guardrail #3).
 
