@@ -26,24 +26,28 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
-| [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
+| [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 0 | 6 | 0 |
 | [20260905-17-infographic-vocabulary-plan.md](20260905-17-infographic-vocabulary-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-18-diagram-vocabulary-plan.md](20260905-18-diagram-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-19-visual-telemetry-plan.md](20260905-19-visual-telemetry-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
-| [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 0 | 6 | 1 |
+| [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 0 | 6 | 0 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 7 | 21 | 6 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 4 | 4 | 4 |
-| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 3 | 11 | 2 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 4 | 4 | 3 |
+| [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 3 | 11 | 1 |
 
-## In flight - 1
+## In flight - 5
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
+| #1 | 16 | A | How often does an article actually state a whole | p16-1 |
+| #1 | 21 | A | A place to look at a visual, that never ships with the site | p21-1 |
 | #1a | 23 | C | The fingerprint stops gating and stops being read | p23-1a |
+| #5 | 24 | C | `state/item-health/` files by day | p24-5 |
+| #2 | 25 | B | One order over the whole day, inside a frame a person set | p25-2 |
 
-## Ready now - 30
+## Ready now - 26
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -62,12 +66,10 @@ section 3 is where it is answered.
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
-| #1 | 16 | A | How often does an article actually state a whole | - |
 | #1 | 17 | A | A real sentence made to fit, without anyone re-writing it | - |
 | #1 | 18 | A | The words that mean "then", and the words that mean "against" | - |
 | #1 | 19 | A | The fold key, decided before anything writes a row | - |
 | #1 | 20 | A | The two funnels | - |
-| #1 | 21 | A | A place to look at a visual, that never ships with the site | - |
 | #1 | 22 | A | What is durable, and where it already lives | - |
 | #20 | 23 | A | The order of the day, written down | - |
 | #P2 | 23 | B | The reference dataset, built so a number cannot flatter us | - |
@@ -75,11 +77,9 @@ section 3 is where it is answered.
 | #4 | 23 | F | An event gets a lifecycle | 3 |
 | #13 | 23 | F | The encoder alarm | 3 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
-| #5 | 24 | C | `state/item-health/` files by day | 1, 3, 4 |
 | #6 | 24 | D | `state/feed-health/` files by day | 1, 3 |
 | #7 | 24 | E | `state/seen/` files by day | 1, 3 |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 1, 2, 3 |
-| #2 | 25 | B | One order over the whole day, inside a frame a person set | 1 |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 
 ## Waiting on another row - 67
@@ -104,7 +104,7 @@ section 3 is where it is answered.
 | #4 | 15 | D | Relationship: scatter | 3 is PENDING |
 | #5 | 15 | E | Parts as bars: stacked_bar, with its own question | 4 is PENDING |
 | #6 | 15 | F | The two the reader asked for | 5 is PENDING |
-| #2 | 16 | B | The four ways code may reach a number the article did not write | 1 is PENDING |
+| #2 | 16 | B | The four ways code may reach a number the article did not write | 1 is IN-FLIGHT |
 | #3 | 16 | C | A declared whole: pie | 2 is PENDING |
 | #4 | 16 | D | Three numbers at once: bubble | 3 is PENDING |
 | #5 | 16 | E | A spread of values: histogram | 4 is PENDING |
@@ -123,7 +123,7 @@ section 3 is where it is answered.
 | #2 | 20 | B | Why it was refused, and what happened when it stepped down | 1 is PENDING |
 | #3 | 20 | C | The rules for reading any of it | 2 is PENDING |
 | #4 | 20 | D | How each feature gets retired without a fresh argument | 3 is PENDING |
-| #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 is PENDING |
+| #2 | 21 | B | A machine verdict and a human one, never in the same column | 1 is IN-FLIGHT |
 | #3 | 21 | C | Two ways to ask, and the question locked before the verdict | 2 is PENDING |
 | #4 | 21 | D | Weights that cannot quietly get worse | 3 is PENDING |
 | #5 | 21 | E | Did the reader actually understand it faster | 4 is PENDING |
@@ -144,13 +144,13 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING; 20 is PENDING |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | 1a is IN-FLIGHT |
-| #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | 2 is PENDING |
-| #6 | 25 | C | The topic pills order by what is running | 2 is PENDING |
+| #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | 2 is IN-FLIGHT |
+| #6 | 25 | C | The topic pills order by what is running | 2 is IN-FLIGHT |
 | #4 | 25 | D | Carriage becomes a tie-break | 3 is PENDING |
-| #7 | 25 | D | A desk floor and a desk ceiling | 2 is PENDING |
+| #7 | 25 | D | A desk floor and a desk ceiling | 2 is IN-FLIGHT |
 | #8 | 25 | E | A story cross-files to a second desk | 7 is PENDING |
 | #9a | 25 | E | The placement terms on the counterfactual ledger plan 23 creates | 3 is PENDING; plan 23 row #21 is PENDING |
-| #10 | 25 | F | The `assemble` consolidation | 2 is PENDING; 7 is PENDING; 8 is PENDING |
+| #10 | 25 | F | The `assemble` consolidation | 2 is IN-FLIGHT; 7 is PENDING; 8 is PENDING |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 
