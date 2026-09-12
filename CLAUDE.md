@@ -26,20 +26,6 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 - **Training on the runner, GPU runners, and models that do not fit the runner.** See Guardrail #2. Training a model elsewhere is not a non-goal. The runner only ever opens finished weights and reads bytes, so where those weights were trained does not change what the runner has to do. A fine-tuned model is an ordinary candidate: one entry in `config/idhazh.json`, the same qualification, the same SHA-256.
 - **Accessibility framework / audit tooling** (axe-core, WCAG-level gating, automated contrast checks). Descoped at project level. Basic ARIA and keyboard navigation ARE in scope: visible focus rings, labelled controls, semantic landmarks, keyboard-reachable interactive surfaces. Design-level accessibility is encouraged; merge-gating on audit tooling is not.
 
-### Design rationale
-
-**A non-goal is narrowed by a dated decision, never by an agent (three of the clauses above prove it).**
-
-**The clause on model verdicts is a property, not a list of banned mechanisms (2026-09-11).** The rejected alternative was the list with a carve-out bolted on per case, which costs one more carve-out every time a plan adds a model-written label and never says what the rule protects. What the property costs, stated rather than hidden: a judgement where a list was a lookup, so a case near the line needs a person to rule on it and a `git grep` for a banned mechanism no longer answers. A first draft saying the two bans were the only ways to fail the property was refused on one case - a model pre-label in a human label queue - which is why the amended text says the bans stand **in addition to** the property. Authority: owner, 2026-09-11.
-
-**The same clause takes a narrow, offline-only exception for the prompt loop (2026-09-07).** The rejected alternative was to leave the summariser prompt argued in prose, which costs the project its only instrument and makes every prompt change a matter of taste - which is what a judge sharing the summary's failure modes supplies. The load-bearing guard is a test rather than a sentence: when the judge prefers a candidate the deterministic scorers refuse, the incumbent stands (`backend/tests/test_prompt_loop.py`). Authority: owner, 2026-09-07.
-
-**The article-bodies clause protects what a reader is served and carves out `corpus/` (2026-08-28).** The rejected alternative was a second, private repository. The cost, stated rather than hidden: this repository is public, so source text under `corpus/` is readable by anyone, and the owner weighed that and took it. Authority: owner, 2026-08-28.
-
-**Training a model elsewhere is not a non-goal (2026-08-27).** The rejected wording banned a fine-tuned model rather than a build step the runner cannot execute, which costs an ordinary model swap the appearance of a rule reversal - and a rule that fires on ordinary work stops being read. Authority: owner, 2026-08-27.
-
-The full argument behind each of these is in [`docs/archive/contract-history-2026-09.md`](docs/archive/contract-history-2026-09.md).
-
 ## 0b. Voice
 
 This is the canonical writing rule. It binds every agent, every persona under `.github/agents/`, **every answer an agent gives a user**, every doc, every commit message, and every reader-facing string. Cite it as "section 0b".
@@ -55,12 +41,6 @@ This is the canonical writing rule. It binds every agent, every persona under `.
 - Use ASD-STE100.
 
 Everywhere else restates this section rather than inventing its own style rule (Guardrail #4): [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
-
-### Design rationale
-
-**This section binds every answer an agent gives, not only a doc (2026-08-25).** The rejected wording was the weakest of three disagreeing copies, which cost a user answers like `1.055x aggregate decode, spread 0.022, prefill flat` that were inside the letter of it.
-
-**The number clause is the one clause here that can fail.** The rejected alternative was to rely on "write in plain language", which catches nothing because it is advice; "say what the number means, next to the number" is a check a reader applies to a sentence and gets a yes or a no.
 
 ## 0c. Decision Requests and Tables
 
@@ -106,8 +86,6 @@ Not legitimate: naming the limitation and stopping. **A limitation named with no
 
 ### Design rationale
 
-**This section was added because citing a constraint had become a way to decline work rather than price it (2026-09-12).** The rejected alternative was a clause reading "a sentence that declines carries a price", which costs a number on exactly the days no number exists - a hard rule wearing a guardrail's clothes, and forbidden by Guardrail #10. The third move does the same job without that cost. Authority: owner, 2026-09-12.
-
 ## 1. Adaptive Guardrails (Read First, Every Session)
 
 **When a guardrail bites, that is feedback, not a verdict.** Two responses are legitimate - adapt it, saying what changed and why, or take a named exception recorded next to the work - and two are not: quietly routing around it, or reading it as advice because it is inconvenient. **Every deviation carries a person's name, and no agent may adapt a guardrail or take an exception for itself**: it proposes, a person disposes, and the decision is written into the commit that carries it. Each guardrail carries its reason, the reason is the load-bearing part, and **a guardrail cited without its reason is a half-quote** - so a guardrail whose reason no longer holds is one to change, and saying so is the job. **Three of the twelve are boundaries rather than adaptable constraints** - static-first publication (#1), the runner budget (#2) and the trust boundary (#11) - which an agent surfaces and never overrules, because the first two are set outside this project and the third protects a reader.
@@ -125,32 +103,6 @@ Not legitimate: naming the limitation and stopping. **A limitation named with no
 11. **Fetched text is data, never instruction - and this project does fetch.** Every run reads the open web: feed entries, article pages, whatever text a source chose to publish that day. All of it is untrusted. The hazard has a name - **side-loaded instructions reaching a model**, text that talks its way into being obeyed rather than summarised. It never enters a system prompt, never becomes a shell argument, a file path, or a URL to fetch, and never reaches a reader unlabelled. A filename is recomputed from the item's identity, never built from the item's own words. **The schema and the sanitizer are the control; a prompt asking a model to behave is not** - a polite instruction is itself text, and text is the thing we just said we do not trust. This one protects a reader rather than us, so it is surfaced and never adapted: a stage that needs fetched text somewhere this forbids is a stage to redesign, and it goes to a person as a design question.
 12. **Nothing costs more as the repository grows.** A step whose work scales with what we have already accumulated is a bill that arrives every run for an answer we already had. **The test is a property, not a list**: does this cost rise when nobody wrote any code - because a run appended more? If yes, it is the thing this guardrail is about, whatever the collection is called and whether or not anybody has thought of it yet. Published days, ledger rows, shards, images, vectors, corpus rows and the collection nobody has created yet all count equally; source a person writes does not, because it grows at review speed. **Constant cost is the default.** Take one item, one day, one shard, one header - a fixed input, never a walk over everything we hold. One good case proves the code, and what we already wrote is checked once, by the producer that wrote it. **The escape hatch is a person, and it is deliberately open**: where a growing cost is genuinely the right answer, say next to the code what it reads, how the cost grows, and why a bounded input cannot answer the question, and have a person agree. That exception is normal engineering, not a violation. What is forbidden is a growing cost nobody chose - and no agent may approve one for itself. **This is the guardrail the other eleven were rewritten toward**: a property rather than a list, the reason standing beside the constraint, and an escape hatch that names a person - which is why it needed a voice pass and nothing more.
 
-### Design rationale
-
-**These are guardrails rather than rules, and the section was renamed for that reason (2026-09-12).** The rejected name was "Rules", which costs the conversation its next move: a rule is obeyed or broken, so citing one ends an argument where a guardrail prices a cost. Authority: owner, 2026-09-12.
-
-**An estimate may not settle a design, and it may carry one to the next step (2026-09-12).** The rejected wording - "an unmeasured number may not be used to justify a design" - contradicted section 0d's third move, and a contradiction costs whichever sentence the reader found first. Nothing about a published number moved. Authority: owner, 2026-09-12.
-
-**Guardrail #1 bans automatic transmission, not measurement (2026-09-12).** The rejected wording said "no runtime telemetry" while the pipeline commits telemetry every run and the operator console fetches it at runtime, which costs a reader either a wrong design obeyed or a constraint quietly ignored; the 2026-08-23 wording before it drew the line at an origin rather than a service, which forbade a webfont while leaving the real hazard implied. Nothing new was permitted by either amendment. Authority: owner, 2026-09-12.
-
-**Guardrail #5 does not bend, and its adapt path is escalation under section 6 and nothing else (2026-09-12).** The rejected alternative was a named, dated stopgap carrying its own structural fix, which costs exactly what it promises to avoid: a temporary fix is a permanent fix with a note attached, and the note is what gets lost. Authority: owner, 2026-09-12; sibling owner, 2026-09-11.
-
-**A feature flag carries its removal condition on the line that declares it (2026-09-12).** The rejected alternative was a flag with no stated exit, which costs a permanent second implementation - two code paths, two test matrices, and nobody able to say which one is real. The rule itself costs one more thing to write, at the cheapest moment it will ever be written. Authority: owner, 2026-09-12.
-
-**What "carries the hardware" means was settled on 2026-09-12, and it is not a second exception.** A figure names what could have moved it, and naming anything else is noise that invites a reader to discount a good number. A duration and a memory figure belong to the machine that took them, so they name it - a runner where a runner took them, a developer box where one did, with a developer-machine duration labelled an order-of-magnitude check. A byte count, a token count, a pixel and a row count do not move between machines, so what they name is the runtime and its version: node's zlib and python's `gzip` differ by about 2 percent at one level, and an interpreter change moved a `tracemalloc` figure by 30 percent, which a processor model would not have predicted either way. Date and spread are unconditional in every case. [`docs/reference/measurements.md`](docs/reference/measurements.md) carried a house rule contradicting this; **the contract governs, and a page under `docs/` may say how a rule's intent is met and may not contradict it.** Authority: owner, 2026-09-12, under section 0.
-
-**Where a growing read is recorded is [`docs/concepts/growing-reads.md`](docs/concepts/growing-reads.md) (2026-09-08).** It adds no rule. Before it, the agreement Guardrail #12 requires lived in whatever docstring the author happened to write.
-
-**Guardrail #12 is enforced by review, and a mechanical guard for it was written and deleted the same day (2026-09-06).** `backend/tests/test_archive_readers.py` held hand-written path patterns against a list of twelve approved names. It enumerated the hazard rather than the safe set, so it covered two collections out of nineteen and looked finished; its own maintenance cost grew with the number of collections, which is the defect it existed to catch; and it was a list with no escape hatch, so it made a judgement call look like a permission slip. **The next person to reach for a guard here will reach for the same one.** Cost, stated rather than hidden: nothing fails automatically now, so a growing step can merge if nobody asks. Authority: owner, 2026-09-06.
-
-**Constant cost is the default and a growing read needs a person's name against it (2026-09-06).** The rejected wording named no bar for doing it anyway, which costs every growing step a locally reasonable argument - the archive was right there, and walking it was the shortest code.
-
-**Guardrail #12 is about cost rather than correctness (2026-09-05).** The rejected alternative was to keep walking the archive, which costs the same handful of cases re-checked tens of thousands of times, every four hours, for an answer `idhazh validate-days` and the contract models already refused at write time. The measurement and its conditions are in [`docs/concepts/growing-reads.md`](docs/concepts/growing-reads.md). Authority: owner, 2026-09-05.
-
-**Guardrail #10 takes exactly one exception: a counterfactual cost in currency on the operator console (2026-08-30).** The rejected alternative was wall clock alone, which costs the site its only way to say whether four hours was a good trade. The exception is narrow because the hazard is narrow - a money figure reads as a fact about a bank account - so it prints the rate it used and is labelled a counterfactual. **We are not billed, and presenting it as a bill is the one way to make it a lie.** Authority: owner, 2026-08-30.
-
-The full argument behind each of these is in [`docs/archive/contract-history-2026-09.md`](docs/archive/contract-history-2026-09.md).
-
 ## 1a. Architecture Principles
 
 These operationalize the guardrails and shape every subsystem.
@@ -167,7 +119,7 @@ These operationalize the guardrails and shape every subsystem.
 
 Logging is local by construction. There is no log sink, no log service, and no runtime call home (Guardrail #1).
 
-- **Backend, developer machine.** Structured records to stderr through the standard library `logging` module, configured once at the entry point. Level from `config/`; default `INFO`. A developer reads them in the terminal.
+- **Backend.** Structured records to stderr through the standard library `logging` module, configured once at the entry point. Level from `config/`; default `INFO`..
 - **Backend, CI.** The same stderr stream. GitHub Actions captures it and retains it with the run - that IS the log store. Nothing is uploaded anywhere else. Anything a later run needs to read is a committed artifact or an eval row, not a log line.
 - **Frontend.** The browser console, and only the browser console. A published page logs what a reader would need to hand back when something looks wrong. No SDK, no beacon, no `fetch` to a collector.
 - **Every log record is the event payload.** A stage logs the same structured envelope it emits (section 1a), so a log line and a persisted payload never disagree about what happened.
@@ -249,7 +201,7 @@ Avoid (broad / lossy / history-rewriting):
 
 **One exception, and only one: `.github/workflows/prune.yml`.** It squashes commits older than `finetune.prune_keep_days` and force-pushes `main`, every `finetune.prune_every_days`. Nothing else in this repository may force-push, and no person may. The exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
 
-What it costs, stated rather than implied: a squash boundary is per-commit, not per-path, so the range it collapses carries `backend/`, `docs/` and `state/` as well as `corpus/`. `git blame` and `git bisect` reach back `prune_keep_days` to `prune_keep_days + prune_every_days` and no further, and a commit SHA older than that stops resolving. A clone taken before a prune has to be re-fetched. Owner decision, 2026-08-28, taken over the alternative of keeping the corpus on a branch nobody works from.
+What it costs, stated rather than implied: a squash boundary is per-commit, not per-path, so the range it collapses carries `backend/`, `docs/` and `state/` as well as `corpus/`. `git blame` and `git bisect` reach back `prune_keep_days` to `prune_keep_days + prune_every_days` and no further, and a commit SHA older than that stops resolving. A clone taken before a prune has to be re-fetched.
 
 Safe workflow: `git status --porcelain`, leave unrelated dirty files alone, stage only explicit paths, verify with `git diff --cached --name-only`, small reversible commits on a named branch, push, merge after gates pass.
 
@@ -306,7 +258,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 Every config file and every persisted surface is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and `schemas/<name>.schema.json` is generated from it. Three rules bind every one of them.
 
 - `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
-- Every change appends a `changelog` entry, newest first, `{ version, change, why }`, and sets `version` to today.
+- Every change appends a `changelog` entry, newest first, `{ version, change, why }`, and sets `version`.
 - A breaking change - a removed field, a retype, a shifted meaning - ships its read-side migration in the same commit. **A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.**
 
 What the base model enforces, how a same-day revision extends the stamp, which surfaces this covers, and the one model that pins a published key while its Python name moves: [`docs/architecture/contracts/schemas.md`](docs/architecture/contracts/schemas.md).
@@ -351,11 +303,11 @@ Seven persona advisors live under `.github/agents/`, each at a distinct altitude
 | ----------------------------------- | ------------------ | ----------------------------------------------------------------------------- |
 | Reader                              | `reader.agent.md`  | the person the digest is for - is it worth their two minutes? is the language plain? does the page work on a slow connection and a small screen? |
 | Editor                              | `editor.agent.md`  | what the digest covers and at what length - story selection, where a cut may fall by kind of writing, which themes to trade when a budget binds, whether a source earns its slot |
-| Jony (UI/UX)                        | `jony.agent.md`    | the published surface - page and typography, chart vs diagram vs nothing, the eval dashboard, what a visual must earn |
-| Susan (Craft & Delight)             | `susan.agent.md`   | whether a surface is good enough to ship - the sufficiency checks, elevation and colour systems, icon and chart craft, both themes, empty and degraded states |
-| Andre (AI / LLM)                    | `andre.agent.md`   | model pick on quality grounds, prompt strategy, constrained decoding, eval design and metric choice, the prompt-injection surface |
-| Fowler (Architecture & Engineering) | `fowler.agent.md`  | architecture, persisted contracts (stage payloads, eval ledger, run manifest, config, published payloads), schema versioning, test tiers, refactor safety, module structure, when to delete |
-| Carmack (Engine & Runtime)          | `carmack.agent.md` | inference runtime, model quantisation and fit, the runner budget, throughput, cache and shard economics, job timeouts |
+| Jony (UI and UX)                        | `jony.agent.md`    | the published surface - page and typography, chart vs diagram vs nothing, the eval dashboard, what a visual must earn |
+| Susan (Craft and Delight)             | `susan.agent.md`   | whether a surface is good enough to ship - the sufficiency checks, elevation and colour systems, icon and chart craft, both themes, empty and degraded states |
+| Andre (AI and LLM)                    | `andre.agent.md`   | model pick on quality grounds, prompt strategy, constrained decoding, eval design and metric choice, the prompt-injection surface |
+| Fowler (Architecture and Engineering) | `fowler.agent.md`  | architecture, persisted contracts (stage payloads, eval ledger, run manifest, config, published payloads), schema versioning, test tiers, refactor safety, module structure, when to delete |
+| Carmack (Engine and Runtime)          | `carmack.agent.md` | inference runtime, model quantisation and fit, the runner budget, throughput, cache and shard economics, job timeouts |
 
 Adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
 
@@ -371,9 +323,6 @@ Five pairs share an edge, and each one has a written split.
 
 A persona's own worldview shapes what it says, never how plainly it says it (section 0b).
 
-### Design rationale
-
-**Susan holds the demand mandate because a roster of six vetoes and no demand converges on the minimum that passes every veto (2026-08-29).** Measured 2026-08-28: a published surface using 40.6 percent of a 1536px screen, two responsive breakpoints in the whole frontend, no elevation scale, two icons and no interactive chart - and every one of those passed a review. Giving Jony the demand mandate too was rejected because one head holding both "remove before adding" and "this is not enough" resolves to the veto every time; making sufficiency advisory was rejected because an advisory check is the one skipped on the day it would have bitten. Authority: owner, 2026-08-29.
 
 ## See also
 
