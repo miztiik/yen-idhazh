@@ -245,7 +245,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | P1 | The property section 0a names, restated | - | A | DONE #608 | p23-p1 | #608 | worker |
 | 20 | The order of the day, written down | - | A | PENDING | - | - | - |
 | P2 | The reference dataset, built so a number cannot flatter us | - | B | PENDING | - | - | - |
-| P4 | What one more call costs on the runner | - | B | DONE #_pending_ | p23-p4 | #_pending_ | worker |
+| P4 | What one more call costs on the runner | - | B | DONE #623 | p23-p4 | #623 | worker |
 | 1a | The fingerprint stops gating and stops being read | - | C | PENDING | - | - | - |
 | P5 | Which distribution the runtime reports at a masked token | - | C | PENDING | - | - | - |
 | 2 | Every label vocabulary becomes config | P1 | D | DONE #618 | p23-r2 | #618 | worker |
