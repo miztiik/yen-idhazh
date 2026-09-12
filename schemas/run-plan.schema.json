@@ -19,7 +19,7 @@
           "type": "integer"
         },
         "item_id": {
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
           "title": "Item Id",
           "type": "string"
         },
@@ -258,6 +258,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
+      "version": "2026-09-12T18:40",
+      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
+    },
+    {
       "change": "A run records what the already-published guard refused on dropped_published, and how old those addresses were on dropped_published_ages.",
       "version": "2026-09-07",
       "why": "The guard is the whole reason the published ledger is read entire and never windowed, and nothing committed said what it bought. The count went to stderr and stopped there, so no payload could say how often the guard fired or how old the addresses it refused were - and the age is the number a finite cover turns on, because a cover only ever forgets the old ones. Measured on this checkout 2026-09-08 on an Intel Core i7-1265U, over the ledger as it stood at the end of 2026-09-07: 7,600 rows, 7,519 distinct addresses, and 16 published days from 2026-08-23 to 2026-09-07 - so the whole record is 16 days wide. Every cover anybody has proposed is wider than that, and today the question cannot be answered from what is committed at all. Recording the bands is what makes it answerable, one run at a time. Additive with a default, so a plan an earlier run wrote still validates and no read-side migration is needed (section 11)."
@@ -378,7 +383,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2026-09-07",
+      "default": "2026-09-12T18:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -398,5 +403,5 @@
   ],
   "title": "RunPlan",
   "type": "object",
-  "version": "2026-09-07"
+  "version": "2026-09-12T18:40"
 }

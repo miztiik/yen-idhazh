@@ -71,7 +71,7 @@ The 42 columns, in file order:
 | `version` | date-stamp | always | which contract wrote this row (section 11) |
 | `date` | `YYYY-MM-DD` | always | the digest day, and the shard this row files under |
 | `run_id` | `<date>-<execution>` | always | which execution wrote it. The trailing field is the CI run id, and a small ordinal on rows written before 2026-08-31 |
-| `item_id` | slug | always | `<vertical>-<ten digits>`, derived from the address. Stable across a day's runs, but see the caveat below |
+| `item_id` | slug | always | `<vertical>-<ten decimal digits>` on a row written before 2026-09-12 and `<vertical>-<sixteen base32 symbols>` after it, derived from the address either way. Join on `url_key`, and see below |
 | `url_key` | sha256 | always | the stable article key. Join on this, not `item_id` |
 | `canonical_url` | URL | always | the address, after a run artifact has expired |
 | `vertical` | slug | always | which topic queue it was planned into |
@@ -404,14 +404,18 @@ a wrong code stays. A reclassification is a new row under a later `run_id`, and
 a reader that wants "the latest verdict per item" has to say so. Nothing in the
 pipeline does that today.
 
-**`item_id` is stable, but not guaranteed stable.** `rank.item_id` derives it
-from the address - `<vertical>-<ten digits>` off the `url_key` - so a later run
-of the same day recognises the work an earlier one did. It was a rank position
-once, which renumbered every story on run 2 and published anything that moved a
-place twice. The residual risk is `assign_ids`: two addresses landing on the same
-ten digits are resolved by stepping the second one forward, so a colliding id
-depends on the day's pool rather than on the address alone. `url_key` has no such
-case. Join on `url_key`.
+**`item_id` is stable, and since 2026-09-12 it carries no caveat.** `rank.item_id`
+derives it from the address - `<vertical>-<sixteen Crockford base32 symbols>` off
+the `url_key` - so a later run of the same day recognises the work an earlier one
+did. It was a rank position once, which renumbered every story on run 2 and
+published anything that moved a place twice. It was ten decimal digits until
+2026-09-12, and 33 bits collided often enough that a collision had to be
+resolved: the loser stepped forward past whatever else the run had already
+planned, so a colliding id depended on the day's pool rather than on the address
+alone. Eighty bits do not collide, so nothing steps. **Rows written before
+2026-09-12 keep the decimal id and were not rewritten**, so an id does not join
+across that date. `url_key` is one shape for every row ever written. Join on
+`url_key`.
 
 **The failed share is not the source failure rate.** 324 of the 1200 committed
 rows are `failed`, but twelve of the nineteen codes never count against a
@@ -491,8 +495,9 @@ unsupported form, or genuine missing text stops extract. Authority: Owner
 override O3.
 
 The row stores both `url_key` and `item_id`. `item_id` is derived from the
-address, so it survives a re-plan, but `assign_ids` steps a colliding id forward
-and that depends on the day's pool. `url_key` is the key with no such case.
+address, so it survives a re-plan - but it was ten decimal digits until
+2026-09-12 and is sixteen base32 symbols after it, and rows either side of that
+date were not rewritten. `url_key` is one shape for every row ever written.
 Authority: Fowler.
 
 The row stores `canonical_url`. About 80 bytes buys back the URL that otherwise
