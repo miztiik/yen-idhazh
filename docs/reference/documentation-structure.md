@@ -62,6 +62,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 7. Where a file or a whole directory belongs in the tree? -> the **repository-layout reference doc.** One page maps every top-level directory to what it holds, who writes it, and whether it is committed - so a new directory has to state its reason before it exists.
 8. A tool quirk, an environment trap, or a command whose result cannot be trusted at face value? -> the **agent-notes reference.** Not a private memory file - see below. It is one page until it stops being readable as one; then the stem path becomes an index and each child is named for the tool family whose output lies, so every inbound link keeps working.
 9. A benchmark run - a sweep, a candidate priced, two arms raced? -> its own **benchmark record**, and a link from the instrument log. Never an append to the log. See below.
+10. What happens to an artefact as it ages - kept, summarised, or removed, and on what age? -> the **concept doc** that owns that lifecycle, carrying a dated inventory of the artefacts and the rule that decides one it does not list. Not the repository-layout doc: that answers where a thing lives, and where it lives does not change when a run appends to it.
 
 ### A benchmark run gets its own page, and never the log's name
 
@@ -94,6 +95,35 @@ day" - two questions, and the log is the one every other doc links to.
 row. That is the honest outcome for an exploratory sweep, and it is cheaper than
 the alternative this project has already paid for twice: a number in the log
 that no config key reads, which a later reader treats as load-bearing.
+
+### A dated inventory carries the rule that outlives it
+
+An inventory - every artefact and its policy, every read and its cover, every
+directory and its owner - is correct on the day it ships and wrong the week
+after. It earns its place anyway, because the alternative is that every reader
+re-derives the answer for the thing in front of them.
+
+What makes one survive is not completeness. It is three things on the same page:
+
+- **A rule that answers for an entry the inventory does not list**, written as
+  questions rather than as a list, so it works on something nobody has created
+  yet.
+- **A date in the heading**, so a reader can price how stale the rows might be
+  without checking each one.
+- **One command that prints what exists**, so the gap between the inventory and
+  the world is a line to run rather than an act of memory.
+
+**A test that walks the tree and compares it to the inventory is not a fourth
+thing, and it is weaker than the three.** It can assert that a name appears and
+never that the answer beside the name is still right, so it is green on exactly
+the column that rots. It also grows its own maintenance cost with the thing it
+guards, which is usually the defect it was written to catch (CLAUDE.md Guardrail
+#12, and section 13 on what a test may read).
+
+**An entry with no answer is a row, not a gap.** Where an artefact has not been
+classified yet, the inventory says so in its own row, with the reason. One that
+silently omits what it could not place teaches a reader that the list is the
+world.
 
 ### A page answers one question, and length is a symptom rather than the fault
 
