@@ -130,7 +130,7 @@ it is enforced.
 | --- | --- | --- | --- |
 | `draft` | no | no | The word exists in the file so a person can read it in context. Nobody has approved it |
 | `active` | yes | yes | A person committed it, and it carries its definition |
-| `retired` | no | yes, on a day that already carries it | A tombstone. The word stops matching and stops being offered, and `retired_on` says when |
+| `retired` | no | yes, on a day that already carries it, under its own display name | A tombstone. The word stops matching and stops being offered, and `retired_on` says when |
 
 A draft contributes no byte at all - not a heading, not a blank line - which is
 asserted by writing a sentence onto a draft entry and requiring the rendered
@@ -143,6 +143,10 @@ wrong.
 **A retired id is tombstoned, never deleted.** The precedent is committed and
 already paid for: `ai-roi` was retired on 2026-08-30 rather than removed, so the
 days that carry it stay valid. Deleting an id rewrites what a published day said.
+Since 2026-09-12 the contract no longer makes deletion impossible, so this is a
+rule a person keeps rather than one the type keeps for them - and
+[Every id is an open slug](#every-id-is-an-open-slug-and-the-vocabulary-is-this-file)
+says what the page does on the day somebody breaks it.
 
 ## What changing the vocabulary costs
 
@@ -151,10 +155,63 @@ days that carry it stay valid. Deleting an id rewrites what a published day said
 | A definition sentence | A config edit. Nothing else, and the next run uses it |
 | A display name | A config edit. The id is what payloads carry, so nothing is orphaned |
 | A vertical | A config edit: the id is an open slug |
-| A lens id or an event id | A code change and a schema regeneration - both are closed Python enums today |
-| Retiring any of them | `status` and `retired_on` in config. The id stays |
+| A lens id or an event id | A config edit: since 2026-09-12 these are open slugs too |
+| Retiring any of them | `status` and `retired_on` in config. The id stays, and so does its name |
+| Deleting one outright | A config edit, and every published day that carries the id starts showing the id itself in place of the name. Retire instead |
+
+## Every id is an open slug, and the vocabulary is this file
+
+A lens id and an event id were closed Python enums until 2026-09-12, so adding
+or retiring a word meant editing `backend/idhazh/contracts/taxonomy.py`,
+regenerating four schemas and cutting a release. That is the opposite of the
+rule this page opens with, and it is why the lens vocabulary had not moved.
+
+**What closes the vocabulary is this file, and it always was.** Nothing can
+invent a label: [`../../backend/idhazh/tag.py`](../../backend/idhazh/tag.py)
+returns keys of the mapping it is handed, and the only mapping the pipeline
+hands it is built here - so a hostile page can win itself a word we already
+publish and can never mint one (Rule #11). The Python type was a second copy of
+that guarantee, and a second copy is what drifts.
+
+**What the open type buys is that a frozen day still reads.** A closed type
+refuses a payload whose word this file has since stopped carrying, so the only
+safe way to remove a lens was never to remove one. An open slug reads it, which
+is what makes `status` a real choice rather than the only choice.
+
+**A published day is never edited by a vocabulary change.** Measured 2026-09-12
+over the 22 committed days and 8,922 items, `ai-roi` is carried by 18 of them -
+12 on 2026-08-27, 3 on 2026-08-28 and 3 on 2026-08-29 - and until that day the
+page rendered none of the 18, because the reading side dropped any id it could
+not name. It now keeps the id and shows:
+
+| What config holds | What the chip says |
+| --- | --- |
+| An active entry | Its `display_name` |
+| A retired entry | Its `display_name`, unchanged. A tombstone stops matching new items; it does not un-say an old one |
+| No entry at all | The raw id, `supply-chain` rather than a blank. It is deliberately ugly: it is only reachable once somebody deletes a word a published day still carries, and the alternative is a day quietly saying less than it said |
+
+The id a chip falls back to is our own committed slug and never fetched text,
+so this is the same move `Sources` already makes for a retired feed - a
+tombstoned `source_id` that stops resolving shows its slug rather than
+relabelling the item.
 
 ## Design rationale
+
+**The closed enum was a second copy of the vocabulary, and it was the expensive
+one.** `LensId` and `EventType` were `StrEnum`s until 2026-09-12, which made the
+Python type and `config/taxonomy.json` two places one list of words lived. The
+type never protected anything the file did not already protect - the matcher can
+only return a key of the mapping this file builds - and it charged a code change,
+four regenerated schemas and a release for a word. What it did protect was the
+wrong thing: it made DELETING an id impossible, which reads as safety and is
+really the closed type refusing to read a day it can no longer name.
+
+**What that cost was paid in silence, which is why it took a measurement to
+find.** The reading side dropped any id it could not name, so the 18 committed
+items carrying the retired `ai-roi` each rendered one chip fewer than their own
+payload held, and no test, no gate and no schema said so. A rule stated as "a
+tombstone can never return to the page" sounds like restraint; what it did was
+edit three published days.
 
 **An id is immutable and a display name is not.** Payloads carry the id, so
 renaming what a reader sees never orphans a day written under the old label.

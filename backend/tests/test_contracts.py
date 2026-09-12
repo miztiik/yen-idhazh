@@ -2695,41 +2695,40 @@ def test_every_offered_entry_of_the_committed_vocabulary_carries_its_sentence() 
             if item.status is LifecycleStatus.ACTIVE
         ),
         *(
-            (item.id.value, item.definition)
+            (item.id, item.definition)
             for item in taxonomy.lenses
             if item.status is LifecycleStatus.ACTIVE
         ),
-        *((item.id.value, item.definition) for item in taxonomy.events),
+        *((item.id, item.definition) for item in taxonomy.events),
     ]
     for entry_id, definition in offered:
         assert definition, f"{entry_id} is offered to the model with no definition"
         assert definition in block
 
 
-def test_the_frontend_names_every_live_lens_and_no_retired_one() -> None:
+def test_the_frontend_names_every_committed_lens_including_a_tombstone() -> None:
     """The page's own copy of the lens display names, held against the config.
 
     `frontend/src/lib/payload/lenses.ts` restates them because it is TypeScript
     and the vocabulary is JSON, and it holds them rather than taking them
-    through `data` so the six names are not repeated inside every prerendered
-    day page. Drift either way is a defect a build never catches: a missing name
-    renders nothing where a chip belongs, and a stale one puts a tombstone back
-    on the page.
+    through `data` so the names are not repeated inside every prerendered day
+    page. Drift either way is a defect a build never catches.
+
+    **Every** committed lens, retired ones included, and that is the half that
+    changed on 2026-09-12. Omitting a tombstone did not keep it off the page so
+    much as make the page stop saying what a frozen day said: `ai-roi` was
+    retired on 2026-08-30 and is carried by 18 committed items, and all 18
+    rendered one chip fewer than their payload held. A retired lens keeps its
+    name here; deleting the entry from config is what takes the name away, and
+    the page then falls back to the raw id rather than to silence.
     """
     taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
     source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "payload" / "lenses.ts")
     declared = re.search(r"LENS_NAMES: Readonly<Record<string, string>> = \{(.*?)\};", source, re.DOTALL)
     assert declared is not None, "lenses.ts no longer declares LENS_NAMES"
-    named = dict(re.findall(r"(\S+): '([^']+)'", declared.group(1)))
-    live = {
-        lens.id.value: lens.display_name
-        for lens in taxonomy.lenses
-        if lens.status is not LifecycleStatus.RETIRED
-    }
-    assert named == live, "the page and config/taxonomy.json disagree about the lens names"
-
-    retired = {lens.id.value for lens in taxonomy.lenses if lens.status is LifecycleStatus.RETIRED}
-    assert not (retired & set(named)), f"a retired lens can still render: {sorted(retired & set(named))}"
+    named = dict(re.findall(r"'?([a-z0-9-]+)'?: '([^']+)'", declared.group(1)))
+    committed = {lens.id: lens.display_name for lens in taxonomy.lenses}
+    assert named == committed, "the page and config/taxonomy.json disagree about the lens names"
 
 
 def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None:
@@ -3790,11 +3789,70 @@ def test_a_tombstone_still_answers_for_the_items_it_published() -> None:
     assert "example-defunct-daily" in known
 
 
-def test_the_lens_vocabulary_is_closed() -> None:
+def test_the_lens_vocabulary_may_lose_an_entry_but_never_hold_one_twice() -> None:
+    """What survived the retype, and what deliberately did not.
+
+    Until 2026-09-12 `Taxonomy` refused any file that did not label every
+    `LensId` exactly once, so a lens could not be dropped without editing
+    Python. That check is gone with the enum, and dropping the last lens is now
+    a legal config edit - which is the whole point of the row and also the
+    reason the reading side had to learn to render an id it cannot name. Two
+    ids the same is still a defect, because then one of them decides nothing.
+    """
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "taxonomy" / "with-tombstones.json"))
     payload["lenses"].pop()
-    with pytest.raises(ValueError, match="every LensId"):
+    Taxonomy.model_validate(payload)
+
+    payload["lenses"].append(payload["lenses"][0])
+    with pytest.raises(ValueError, match="lens ids must be distinct"):
         Taxonomy.model_validate(payload)
+
+
+def test_a_published_item_carrying_a_retired_lens_still_reads() -> None:
+    """The read-side half of the retype, on a record a run really wrote.
+
+    `tests/fixtures/digest/retired-lens-item.json` is a verbatim copy of one of
+    the 18 committed items carrying `ai-roi`, which `config/taxonomy.json`
+    retired on 2026-08-30. Measured 2026-09-12 over the 22 committed days and
+    8,922 items: 12 on 2026-08-27, 3 on 2026-08-28 and 3 on 2026-08-29. It is a
+    fixture rather than a walk of the archive because a test may not pay for
+    what the pipeline has piled up (Rule #12), and because the fixture outlives
+    the day those three days age out of retention.
+
+    It also carries a live lens beside the tombstone, so the case it proves is
+    the mixed one: a day does not get to keep half of what it said.
+    """
+    item = DigestItem.model_validate_json(
+        read_text(FIXTURES_DIR / "digest" / "retired-lens-item.json")
+    )
+    assert item.lenses == ["ai-roi", "china"]
+
+    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    retired = {lens.id for lens in taxonomy.lenses if lens.status is LifecycleStatus.RETIRED}
+    assert "ai-roi" in retired, "the fixture stopped being the case this test is about"
+    assert "ai-roi" not in taxonomy.lens_terms(), "a tombstone must stop matching"
+
+
+def test_an_id_the_committed_vocabulary_no_longer_names_still_reads() -> None:
+    """The migration, stated as the thing it has to survive.
+
+    A closed enum could not read a word `config/taxonomy.json` had stopped
+    carrying, so the only safe way to remove a lens was never to remove one. An
+    open slug reads it, which is what lets a person delete an entry without
+    making every day that published it unreadable. The id is removed from the
+    fixture's vocabulary rather than from the committed file, so nothing here
+    depends on what config happens to hold today.
+    """
+    payload = json.loads(read_text(FIXTURES_DIR / "digest" / "retired-lens-item.json"))
+    payload["lenses"] = ["ai-roi", "supply-chain"]
+    item = DigestItem.model_validate(payload)
+    assert item.lenses == ["ai-roi", "supply-chain"]
+
+    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    assert "supply-chain" not in {lens.id for lens in taxonomy.lenses}
+
+    with pytest.raises(ValidationError):
+        DigestItem.model_validate({**payload, "lenses": ["Supply Chain"]})
 
 
 def test_runs_are_append_only() -> None:
