@@ -185,8 +185,8 @@ it happens and no gate can see it, which is why the rule is written here rather
 than enforced.
 
 **So a tag on this repository is a deliberate anchor, named with what it holds
-and why, or it is deleted.** Two existed on 2026-09-10 and both were unchosen -
-nobody had decided either way, and neither had been written down.
+and why, or it is deleted.** A tag nobody decided on, and nobody wrote down, is
+the second kind.
 
 **`encoder-2026-08-22` was deleted**, with its GitHub Release. It pinned the tree
 of a commit whose `corpus/` held article text, for a browser failover the
@@ -425,13 +425,12 @@ of 16,384, or 86 percent. Both windows are asserted against that one sum in
 `backend/tests/test_contracts.py`, so a later move of the cap fails rather than
 drifts.
 
-It was 8,192 until 2026-09-09, and the cap doubling that day made it wrong in a
-way nothing would have reported: the worst row went to 14,088 tokens, the
-wrangler and the notebook drop an over-length row rather than truncate it, and
-the training set therefore lost every article past about 5,500 words while
-production kept summarizing them - a model tuned on the short half of its own
-job. Dropping stays the right refusal; what changed is that nothing now has to
-be refused.
+**A training window narrower than the production cap fails silently, so the two
+are asserted against one sum.** The wrangler and the notebook drop an
+over-length row rather than truncate it, so a narrow window quietly costs the
+training set every long article while production keeps summarizing them - a model
+tuned on the short half of its own job. Dropping stays the right refusal; the
+point is that nothing has to be refused.
 
 **Nobody has measured what 16,384 costs a card, because nothing has trained
 yet** (Guardrail #10). If a session runs out of memory, `SEQUENCE_LENGTH_OVERRIDE` in
