@@ -436,13 +436,24 @@ test.describe('the section on the built console', () => {
 				const cached = value(line, 'cached_tokens');
 				const prefill = value(line, 'prefill_ms');
 				const decode = value(line, 'decode_ms');
+				// The cache figures are about the FIRST call where the projection
+				// publishes one, and about the item where it does not. Derived here a
+				// second time rather than read off the reducer: an item read by two
+				// calls always reuses something, because the second replays the first
+				// call's prompt, so these three taken off the totals would count a
+				// cold slot as a warm one.
+				const firstCached = value(line, 'call_1_cached_tokens');
+				const firstInput = value(line, 'call_1_input_tokens');
+				const split = firstCached !== null && firstInput !== null;
+				const cacheOf = split ? firstCached : cached;
+				const promptOf = split ? firstInput : input;
 				if (input !== null) {
 					prompts.push(input);
 					read = read + input - (cached ?? 0);
-					if (cached !== null) {
-						reused = reused + cached;
-						if (cached === 0) whole = whole + 1;
-						shares.push(Math.round((cached / input) * 100));
+					if (cached !== null) reused = reused + cached;
+					if (cacheOf !== null && promptOf !== null) {
+						if (cacheOf === 0) whole = whole + 1;
+						shares.push(Math.round((cacheOf / promptOf) * 100));
 					}
 					if (prefill !== null) readMs = readMs + prefill;
 				}
