@@ -60,6 +60,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_leading_stories",
         "test_measure_ledgers",
         "test_measure_llm",
+        "test_measure_two_calls",
         "test_notebooks",
         "test_plan",
         "test_plan_status",

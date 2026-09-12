@@ -351,63 +351,101 @@ and nothing in any log would say so.
 ### What the cache actually reused, and the four tokens it did not
 
 `backend/utilities/measure_two_calls.py` starts a real server, sends the two
-calls adjacent on one slot, and reads `timings.cache_n` off call 2's reply.
+calls adjacent on one slot, and splits every token the server prefilled into
+three causes. The run behind the figures here is
+[`../../reference/benchmarks/2026-09-12-two-call-re-read.md`](../../reference/benchmarks/2026-09-12-two-call-re-read.md).
 
-**12th Gen Intel Core i7-1265U, Windows 11, four threads, `n_ctx` 16384, flash
-attention on, `Qwen3-8B-Q4_K_M.gguf` through `llama-server`, 2026-09-10, one
-run.** The token counts are exact and are a property of the template and the
-tokenizer; the milliseconds are this laptop with other work on it and are not a
-runner figure.
+**`Qwen3.5-9B-Q4_K_M.gguf` - the configured weights, sha256 `03b74727...` -
+through `llama-server` build 10444, `n_ctx` 16384, flash attention on, four
+threads, 2026-09-12, one run and no spread.** The token counts are a property of
+the template and the tokenizer; the milliseconds are a developer laptop with
+other work on it and are not a runner figure. The article is the longest the
+committed corpus holds, 3,846 words. Each decode was capped at 16 tokens,
+because every number here lands before a token is decoded.
 
 | | call 1 | call 2 |
 | --- | --- | --- |
-| prompt tokens | 1,497 | 2,389 |
-| **cached tokens** | 0 | **1,493** |
-| completion tokens | 205 | 567 |
-| prefill | 214.1 s | 186.8 s |
-| decode | 88.8 s | 292.6 s |
+| prompt tokens | 7,419 | 8,132 |
+| **cached tokens** | 0 | **7,415** |
+| re-prefilled | 7,419 | **717** |
 
 **The article and the system turn prefilled once, and the reuse stops four
 tokens short of call 1's whole prompt.** Those four are
-`<think>\n\n</think>\n\n`, which tokenizes to `[151667, 271, 151668, 271]`
-against the same weights on the same day. Qwen3's chat template writes an empty
-think block into the **generation prompt** under `enable_thinking: false` and
-drops it when the same turn is replayed as **history**, so the two renderings
-diverge at exactly that point. Nothing in this repository renders it and no
-change to how the prompt is built moves it.
+`<think>\n\n</think>\n\n` - the harness detokenised what call 1 carries at the
+break and got that string verbatim on every item. Qwen3's chat template writes
+an empty think block into the **generation prompt** under
+`enable_thinking: false` and drops it when the same turn is replayed as
+**history**, so the two renderings diverge at exactly that point. Nothing in this
+repository renders it and no change to how the prompt is built moves it. **It is
+still there on Qwen3.5**, which is what this re-reading was taken to find out:
+the first reading was taken on the retired 8B, and a template ships with its
+weights.
 
 **What those four tokens cost is not four tokens.** A prefix cache reuses a
 prefix, so the divergence ends the reuse and everything behind it is processed
-again: 1,493 cached against the 1,702 that call 1's prompt and its own reply
-come to, which is 209 tokens re-prefilled - the four, plus the whole 205-token
-reply. That answers the second half of the question this measurement was taken
-to answer: **call 1's generated tokens do not cache**, and the reason is
-upstream of them.
+again - the four, plus call 1's whole reply. Measured both ways on the same run:
+**20 tokens at a 16-token decode cap, and 100 at call 1's real 96-token reply.**
+So **call 1's generated tokens do not cache**, and the reason is upstream of
+them.
 
-The weights measured are not the configured ones. `models.summarize` names
-`Qwen3.5-9B-Q4_K_M.gguf`; `Qwen3-8B-Q4_K_M.gguf` is the retired incumbent and is
-what this machine holds. The result is about a chat template rather than about
-weights, but a template ships with its weights, so it is re-measured when the
-model moves.
+**On a later item the system turn is free.** Items 2 and 3 each reused **1,362
+tokens** of their call-1 prompt with no work - call 1's system prompt, which is
+byte-identical on every item - and the server erased the previous item's copy of
+call 2's question as invalidated. That is the steady state a shard spends its
+life in, and it had never been observed before this run.
 
-**209 re-prefilled tokens is not a runner number, and the run that will price it
-is nameable.** It was taken on a developer laptop, against the retired 8B weights
-rather than the configured 9B, in one run with no spread - so it says the reuse
-stops short, and it sizes nothing. Nothing new has to be built to price it on the
-runner: `Completion.cached_tokens` comes off `timings.cache_n` in
+**The larger waste is not the template, and no doc named it until 2026-09-12.**
+Call 2's question is **687 tokens** and sits in a user turn behind the article.
+It is byte-identical on every item - it names no article and quotes no sentence -
+but the text in front of it differs per item, so a prefix cache cannot reach it
+and every token of it is read again on every item. Of call 2's 717 re-prefilled
+tokens, 20 are the template break and 697 are that trailing turn with its
+chat-template headers. Plan 11 rows #3c and #3e own the two, and
+[`throughput.md`](throughput.md) carries what each costs in seconds.
+
+**None of this is a runner number.** It was taken on a developer laptop in one
+run with no spread, so it says where the re-read tokens go and it sizes no day.
+`Completion.cached_tokens` comes off `timings.cache_n` in
 [`../../../backend/idhazh/llm/server.py`](../../../backend/idhazh/llm/server.py),
-`Summary.cached_tokens` persists it per item, and
+`Summary.cached_tokens` persists it per call since plan 11 row #3b, and
 [`../../../backend/idhazh/publish_day_metrics.py`](../../../backend/idhazh/publish_day_metrics.py)
-already derives `input_tokens - cached_tokens`, which is the count of tokens the
-server actually read again. What is missing is a call 2 to read it from. No daily
-run produces a call-2 row yet, because nothing dispatches either call:
-`build_call_one_request`, `parse_call_one`, `build_call_two_request` and
-`parse_call_two` are referenced only inside `classify/calls.py` and its tests,
-and `cli.py` never calls them. The wiring is row 6 of
-[`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md),
-so **the trigger is the first daily run after row 6 lands** - not the next
+already derives `input_tokens - cached_tokens`. What is missing is a call 2 to
+read it from: nothing dispatches either call, and the wiring is row #5b of
+[`../../../TODO/20260905-11-two-call-planner-plan.md`](../../../TODO/20260905-11-two-call-planner-plan.md).
+So **the trigger is the first daily run after row #5b lands** - not the next
 content refresh. Re-read the figure then, and again when plan 11 is distilled per
 [`../../how-to/distill-a-plan.md`](../../how-to/distill-a-plan.md).
+
+### At the configured truncation cap the two calls do not fit the window
+
+The same run rendered both prompts for an article built to
+`extract.truncation_cap_tokens`, which is 10,000 tokens or 7,692 words. The
+committed corpus cannot supply one - its longest body is 3,846 words, which is
+`int(5000 / 1.3)` under the cap in force until 2026-09-09 - so the arm is built
+from corpus prose and cut by `truncate_to_tokens` itself.
+
+| Term | Tokens |
+| --- | --- |
+| call 1's prompt | 14,306 |
+| plus call 1's 900-token output budget | 15,206 |
+| call 2's prompt, with a 400-token stand-in reply | 15,404 |
+| plus the 4,694-token reply call 2's grammar may write | **20,098** |
+| `models.summarize.inference.n_ctx` | 16,384 |
+| **over by** | **3,714** |
+
+So call 2 has **980 tokens of room for a reply whose grammar can emit 4,694**,
+and the only shape that fits at the cap is the one with the picture already
+suppressed: `SUPPRESSED_BUDGET_TOKENS` is 905, which leaves **75 tokens, 0.46
+percent**. `test_the_longest_article_the_cap_allows_still_fits_the_window` sizes
+the single-call sequence at 14,088 of 16,384 and passes; nothing sizes the
+two-call sequence.
+
+**The failure it produces is silent.** With `--no-context-shift` the decode stops
+at the wall rather than raising, `classify.calls.recovered_completion` salvages
+the closed summary, the item publishes with `decision = none`, and no
+`none_reason` member says the window was why - so it is indistinguishable from
+"the model had nothing to draw". Plan 11 row #3f owns it and is blocked on an
+owner decision, because every fix moves a contract.
 
 **Open gap, owned by nobody: the prompt loop still refines the prompt that is
 retiring.** `backend/utilities/prompt_loop.py` today refines the single-call
