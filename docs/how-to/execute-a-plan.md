@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the orchestrator contract)
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it. The autonomy POLICY (AUTO by default, when to ESCALATE) lives in [../agents/bootstrap.md](../agents/bootstrap.md); this doc is the HOW.
 
@@ -37,6 +37,8 @@ orchestrator (main thread) worker subagent (one per row) persona custom agents
 8. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
 **Step 1 exists because an interrupted run leaves no note.** A worker that is killed mid-row never writes its report, never opens a pull request, and never clears the `IN-FLIGHT` it was given, so the next agent to arrive sees a queue that looks idle and a box that is not. What it leaves behind is a checkout with edits in it and a branch nobody proposed - indistinguishable, at a glance, from a checkout somebody finished with. Before selecting any row, list the worktrees and branches on the box, ask which plan row each one belongs to, and ask the pull request host whether its pull request is open, merged or absent. Then decide per item: adopt the work, or remove it. Starting a fresh row beside an abandoned one is how the same row gets done twice, and how two branches end up writing the same file.
+
+**The `IN-FLIGHT` stamp of step 5 goes on the trunk, before the branch is cut, and this is the step orchestrators skip.** A status written only on the row's own branch is invisible until that branch merges, which is exactly the window the stamp exists to cover - so a stamp on the branch is not a stamp. It is one line of one table, and the orchestrator is already permitted this edit and no other. Measured on this project on 2026-09-12: thirteen rows had been dispatched and merged, and **no cell anywhere read `IN-FLIGHT`** - for a whole working session the only record of what was being worked was a chat log, which no later agent can read. The cost of the stamp is one small trunk commit per dispatch. The cost of skipping it is that the queue reports every busy row as free, and two agents pick the same one.
 
 The project's plan-queue reader answers all three questions in one command - what each Reckoner says, what can start now, and which worktrees and branches no row claims. Where the project has no such tool, the same answer is a `git worktree list`, a branch list, and one query for open pull requests, read against the Reckoners by hand.
 

@@ -959,6 +959,126 @@ def print_in_flight(
         print(f"  branches with no worktree: {', '.join(idle)}")
 
 
+# --------------------------------------------------------------- the written file
+
+
+#: Where the generated answer lives, relative to the repository root.
+STATUS_PATH: Final = PurePosixPath("TODO/STATUS.md")
+
+
+def _cell(text: str) -> str:
+    """A markdown cell that cannot break the table it sits in."""
+    return text.replace("|", "\\|").strip() or "-"
+
+
+def _row_line(row: Row, *, tail: str) -> str:
+    plan = str(row.plan_number) if row.plan_number is not None else row.plan_key
+    return f"| #{_cell(row.row_id)} | {plan} | {_cell(row.group)} | {_cell(row.title)} | {tail} |"
+
+
+def status_markdown(plans: Sequence[Plan], index: Mapping[tuple[str, str], Row]) -> str:
+    """The queue as a page, from the Reckoners alone.
+
+    Deterministic on purpose: no clock, no network, no worktree. The same
+    committed tree gives the same bytes on any machine, which is what lets a
+    drift gate hold this file to the Reckoners without going red for a reason
+    nobody caused.
+    """
+    live = [plan for plan in plans if plan.live]
+    rows = [row for plan in live for row in plan.rows]
+    startable = ready(rows, index)
+    flying = [row for row in rows if row.state == "in-flight"]
+    waiting = [(row, unmet(row, index)) for row in rows if row.live and row not in startable]
+    waiting = [(row, why) for row, why in waiting if row.state != "in-flight"]
+
+    out: list[str] = [
+        "# The plan queue",
+        "",
+        "**Generated. Do not hand-edit - the drift gate regenerates it and fails on any",
+        "diff.** The Status Reckoner in each plan-doc is the source; this page is the",
+        "single place to read all of them at once. Regenerate with:",
+        "",
+        "```",
+        "python backend/utilities/plan_status.py --write",
+        "```",
+        "",
+        "Nothing here comes from the network, a clock or a worktree, so the same tree",
+        "always gives the same bytes. For what is on this box right now, and for drift",
+        "against merged pull requests, run `--in-flight` instead; neither belongs in a",
+        "committed file.",
+        "",
+        "## Where each plan stands",
+        "",
+        "| Plan | Rows | Landed | Live | Ready |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for plan in live:
+        landed = sum(1 for row in plan.rows if row.state == "landed")
+        can = sum(1 for row in startable if row.plan_key == plan.key)
+        out.append(
+            f"| [{plan.path.name}]({plan.path.name}) | {len(plan.rows)} "
+            f"| {landed} | {len(plan.live)} | {can} |"
+        )
+
+    out += [
+        "",
+        f"## In flight - {len(flying)}",
+        "",
+    ]
+    if flying:
+        out += ["| Row | Plan | Group | Title | Worktree |", "| --- | --- | --- | --- | --- |"]
+        out += [_row_line(row, tail=_cell(row.worktree)) for row in flying]
+    else:
+        out.append("Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it")
+        out.append("dispatches a row, so an empty table here and a busy worktree disagree.")
+
+    out += [
+        "",
+        f"## Ready now - {len(startable)}",
+        "",
+        "Nothing these depend on is outstanding. It says nothing about which two can run",
+        "together - that is a question about files, and `20260911-execution-order.md`",
+        "section 3 is where it is answered.",
+        "",
+        "| Row | Plan | Group | Title | Depends on |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    out += [
+        _row_line(row, tail=_cell(", ".join(ref.text for ref in row.depends)))
+        for row in startable
+    ]
+
+    out += [
+        "",
+        f"## Waiting on another row - {len(waiting)}",
+        "",
+        "| Row | Plan | Group | Title | Waiting on |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    out += [_row_line(row, tail=_cell("; ".join(why))) for row, why in waiting]
+
+    skipped = [plan for plan in plans if not plan.live]
+    if skipped:
+        out += [
+            "",
+            f"## Finished - {len(skipped)} plans with no live row",
+            "",
+            ", ".join(plan.path.name for plan in skipped),
+        ]
+
+    out += [
+        "",
+        "## See also",
+        "",
+        "- [20260911-handover.md](20260911-handover.md) - what to do first, with no",
+        "  context.",
+        "- [20260911-execution-order.md](20260911-execution-order.md) - which rows",
+        "  collide, and why.",
+        "",
+    ]
+    return "\n".join(out)
+
+
 # ------------------------------------------------------------------------- main
 
 
@@ -979,12 +1099,26 @@ def main() -> None:
         help=f"how many merged pull requests to look back over (default {MERGED_WINDOW})",
     )
     parser.add_argument("--no-gh", action="store_true", help="ask git only, never gh")
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help=f"regenerate {STATUS_PATH} from the Reckoners and exit",
+    )
     args = parser.parse_args()
 
     every = read_plans(args.repo)
     if args.plan:
         every = [plan for plan in every if args.plan.lower() in plan.path.name.lower()]
     index = index_rows(every)
+
+    # Before anything that reads the network, the clock or this box, so the
+    # written file is a pure function of the committed plan-docs.
+    if args.write:
+        target = args.repo / STATUS_PATH
+        target.write_text(status_markdown(every, index), encoding="utf-8", newline="\n")
+        print(f"wrote {STATUS_PATH}")
+        return
+
     listed = every if args.all else [plan for plan in every if plan.live]
     skipped = [plan for plan in every if plan not in listed]
 

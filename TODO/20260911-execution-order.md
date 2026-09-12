@@ -28,34 +28,17 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 ---
 
-## 1. What can start today
+## 1. Why the opening wave was seven
 
-**This section is a snapshot of 2026-09-11, and the dispatch list is no longer here.** Run `python backend/utilities/plan_status.py --ready`, which computes the same answer from the Reckoners every time it runs and so cannot go stale. What is still worth reading below is the REASONING: which rows collide, why the opening wave is seven and not more, and what that wave costs. [`20260911-handover.md`](20260911-handover.md) is the entry point for an agent arriving with no context.
+**The dispatch list is not here, and no list of ready rows is.** [`STATUS.md`](STATUS.md) is generated from the Reckoners on every merge and cannot go stale; run `python backend/utilities/plan_status.py --ready` for the same answer plus drift. What is worth reading on this page is the REASONING a generator cannot produce: **which rows write the same file**, why a wave is the size it is, and what it costs. [`20260911-handover.md`](20260911-handover.md) is the entry point for an agent arriving with no context.
 
-**Nineteen rows had every dependency satisfied when this was derived.** **The whole recommended opening wave has since landed - all seven of it**, so the seven are struck from the table below: plan 23 row `#P1` as pull request #608, plan 24 row `#1` as #609, plan 11 row `#4` as #612, plan 26 row `#2` as #613, plan 26 row `#3` as #614, plan 24 row `#2` as #615 and plan 25 row `#11` as #616. **The first two did not update their own Reckoner lines and the last five did not either**, which is why [`20260911-handover.md`](20260911-handover.md) makes that update part of the row rather than a step after the merge; #610 flipped the first two and this pull request flips the other five. The counts that follow are the counts as derived.
+**Nineteen rows had every dependency satisfied when this was derived on 2026-09-11, and the recommended opening wave of seven has since landed in full** - plan 23 row `#P1` as pull request #608, plan 24 row `#1` as #609, plan 11 row `#4` as #612, plan 26 row `#2` as #613, plan 26 row `#3` as #614, plan 24 row `#2` as #615 and plan 25 row `#11` as #616. **Not one of the seven updated its own Reckoner line**, which is why [`20260911-handover.md`](20260911-handover.md) makes that update part of the row rather than a step after the merge; #610 flipped the first two and #617 flipped the other five. **The table of ready rows that stood here has been deleted rather than corrected**, because a list of what can start is re-derivable every time it is asked and a page cannot keep it true. The counts below are the counts as derived, and they are kept because the arithmetic about the wave rests on them.
 
-**Twelve rows are ready now, and this table is not the place to read that.** Run `python backend/utilities/plan_status.py --ready`.
-
-| Row | Plan | Group | Title |
-| --- | --- | --- | --- |
-| #3b | 11 | C2 | Every call reports its own cost |
-| #P2 | 23 | B | The reference dataset, built so a number cannot flatter us |
-| #P4 | 23 | B | What one more call costs on the runner |
-| #P5 | 23 | C | Which distribution the runtime reports at a masked token |
-| #1a | 23 | C | The fingerprint stops gating and stops being read |
-| #5 | 23 | A | The item id becomes sixteen characters of base32 |
-| #7a | 23 | E | The classification code gets its own package |
-| #20 | 23 | A | The order of the day, written down |
-| #4 | 24 | B | The telemetry publisher declares the cover it already has |
-| #1 | 25 | A | Three docstrings defend a requirement the page retired |
-| #5 | 25 | A | The rail goes and the time lands under the heading |
-| #1 | 26 | A | What prerendering actually weighs, both arms |
-
-**Nineteen are unblocked; seven may run at once.** The other twelve are blocked by a *file*, not by a dependency, and section 3 is where that is proved. **Exactly one of the nineteen collides with nothing else in the set: plan 26 row #2.**
+**Nineteen were unblocked; seven could run at once.** The other twelve were blocked by a *file*, not by a dependency, and section 3 is where that is proved. **Exactly one of the nineteen collided with nothing else in the set: plan 26 row #2.**
 
 ### The opening wave, recommended
 
-**Seven rows, and no other ready row can join them.** Verified by intersecting the seven file lists pairwise, and then by testing every one of the other twelve against the set - each is refused by a named file.
+**Seven rows, and no other ready row could join them.** Verified by intersecting the seven file lists pairwise, and then by testing every one of the other twelve against the set - each is refused by a named file.
 
 | Row | Why it is in the opening wave |
 | --- | --- |
@@ -193,13 +176,11 @@ These are the ones a person composing a wave by reading two plan titles would ge
 
 ---
 
-## 5. The shortest path to something a reader can see
+## 5. The shortest path to something a reader can see - answered, and closed
 
-**One row: plan 25 row #5.** It is ready today, it depends on nothing, and it is the only ready row that changes the page a reader opens. It retires the time rail and puts the timestamp under the heading, in the item's own eyebrow. **It is not in the recommended opening wave** because it and plan 24 row #1 both write `docs/architecture/publishing/layout.md`, and that is the trade section 1 names: one visible change now, against the project's second-heaviest pole delayed by a wave. **Run it in the second wave**, where it is free.
+**All three rows this section recommended have landed**, so it no longer recommends anything: plan 25 row #5 as #625, plan 11 row #4 as #612 and row #5 as #621. What it was for is recorded here in one line, because the judgement is reusable and the list is not.
 
-**Two rows, for the larger increment: plan 11 row #4 then row #5.** Row #5 is "One chart, drawn end to end" - the first drawn chart in this project, and the row its own plan added because a contract with no rendered output delivers nothing a person can check. Row #4 is ready now and row #5 is the only thing waiting on it.
-
-**What is not the answer.** Plan 26 is four rows of prose, a measurement and a deleted build-time guard, and its own section 0.0 says a reader loses nothing and sees nothing. It is worth running - it is cheap, it collides with almost nothing, and it closes a gap two other plans name - but it is not a visible increment and it does not claim to be.
+**A wave of infrastructure rows can contain no visible change at all, and nobody notices until a reader asks what moved.** The opening wave of seven was exactly that. The one ready row a reader could see - plan 25 row #5, which retires the time rail and puts each story's time under its heading - was held out of it by a single shared file, `docs/architecture/publishing/layout.md`, and ran in the second wave where it was free. **When a wave is being composed, ask which of its rows a reader would be able to point at.** If the answer is none, that is a choice and it should be made deliberately rather than discovered.
 
 ---
 

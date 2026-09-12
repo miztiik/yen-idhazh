@@ -34,6 +34,7 @@ from utilities.plan_status import (
     parse_plan,
     read_plans,
     ready,
+    status_markdown,
     status_word,
     stranded_rows,
     unmet,
@@ -527,3 +528,86 @@ def test_an_open_pull_request_is_matched_to_the_row_it_is_finishing(tree: Path) 
     assert "a worktree still holds its branch" in notes[0].detail
     assert "no plan row records it" in notes[1].detail
     assert "no worktree holds it" in notes[1].detail
+
+# ------------------------------------------------------------------ the written file
+
+
+def test_the_written_page_is_the_same_bytes_every_time(tree: Path) -> None:
+    """A drift gate over a file that moves on its own fails for no reason.
+
+    So this asserts the one property the gate rests on: same tree in, same
+    bytes out. Nothing in the page may come from a clock, the network or a
+    checkout.
+    """
+    plans = read_plans(tree)
+    index = index_rows(plans)
+
+    once = status_markdown(plans, index)
+    twice = status_markdown(read_plans(tree), index_rows(read_plans(tree)))
+
+    assert once == twice
+
+
+def test_the_written_page_names_every_live_plan_and_its_ready_rows(tree: Path) -> None:
+    plans = read_plans(tree)
+    page = status_markdown(plans, index_rows(plans))
+
+    for plan in plans:
+        if plan.live:
+            assert plan.path.name in page
+
+    startable = ready([row for plan in plans for row in plan.rows], index_rows(plans))
+    assert f"## Ready now - {len(startable)}" in page
+    for row in startable:
+        assert row.title in page
+
+
+def test_a_row_that_lands_changes_the_written_page(tree: Path) -> None:
+    """The whole point: the file cannot lag behind the Reckoner that feeds it."""
+    before = status_markdown(read_plans(tree), index_rows(read_plans(tree)))
+
+    plan = tree / "TODO" / "20260101-31-alpha-plan.md"
+    plan.write_text(
+        plan.read_text(encoding="utf-8").replace("| PENDING |", "| DONE #77 |", 1),
+        encoding="utf-8",
+        newline="\n",
+    )
+    after = status_markdown(read_plans(tree), index_rows(read_plans(tree)))
+
+    assert before != after
+
+
+def test_every_emitted_row_is_a_well_formed_table_line(tree: Path) -> None:
+    """A page whose tables do not parse is worse than the command it replaces.
+
+    A bare `|` cannot reach here from a title - the Reckoner's own parser would
+    have split the cell first - so what this guards is the emitter: every row
+    line carries its five cells and no sixth.
+    """
+    plans = read_plans(tree)
+
+    page = status_markdown(plans, index_rows(plans))
+
+    emitted = [line for line in page.splitlines() if line.startswith("| #")]
+    assert emitted
+    for line in emitted:
+        assert line.count("|") == 6, line
+        assert not line.startswith("| # |")
+
+
+def test_an_in_flight_row_is_listed_apart_from_the_ready_ones(tree: Path) -> None:
+    """`IN-FLIGHT` is what a reader looks for to know somebody is already on it.
+
+    The alpha fixture carries exactly one, and it must not also be offered as a
+    row somebody could pick up.
+    """
+    plans = read_plans(tree)
+    rows = [row for plan in plans for row in plan.rows]
+    flying = [row for row in rows if row.state == "in-flight"]
+
+    page = status_markdown(plans, index_rows(plans))
+
+    assert f"## In flight - {len(flying)}" in page
+    assert flying
+    startable = ready(rows, index_rows(plans))
+    assert not [row for row in startable if row.state == "in-flight"]
