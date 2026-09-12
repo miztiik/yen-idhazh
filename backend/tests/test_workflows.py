@@ -1658,10 +1658,10 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
 #: re-reads the archive because it moved the shape a day is read through, and
 #: one that buys nothing.
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True, True, False),
-    ("frontend/src/routes/[date]/+page.svelte", True, False, False),
-    ("config/idhazh.json", True, False, True),
-    ("docs/reference/measurements.md", False, False, False),
+    ("frontend/src/routes/console/+page.svelte", True, True, True, False),
+    ("frontend/src/routes/[date]/+page.svelte", True, True, False, False),
+    ("config/idhazh.json", True, True, False, True),
+    ("docs/reference/measurements.md", False, False, False, False),
 )
 
 
@@ -1720,9 +1720,11 @@ def _browser_scope(
 
 
 @requires_bash
-@pytest.mark.parametrize(("changed", "browser", "console", "validate_all"), BROWSER_SCOPE_CASES)
+@pytest.mark.parametrize(
+    ("changed", "browser", "code", "console", "validate_all"), BROWSER_SCOPE_CASES
+)
 def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
-    changed: str, browser: bool, console: bool, validate_all: bool, tmp_path: Path
+    changed: str, browser: bool, code: bool, console: bool, validate_all: bool, tmp_path: Path
 ) -> None:
     """The filter is executed, not read.
 
@@ -1737,6 +1739,7 @@ def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
     """
     assert _browser_scope(tmp_path, [changed]) == {
         "browser": str(browser).lower(),
+        "code": str(code).lower(),
         "console": str(console).lower(),
         "validate_all": str(validate_all).lower(),
     }
@@ -1754,16 +1757,36 @@ def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
 
 
 @requires_bash
-def test_a_push_to_main_never_consults_the_list(tmp_path: Path) -> None:
-    """The allow-list is a wager that nobody forgot a path. The merge commit is
-    where that wager is settled, so it does not apply there - a pull request the
-    list was wrong about reddens `main` within minutes instead of reaching a
-    reader.
+def test_a_push_carrying_code_still_never_consults_the_list(tmp_path: Path) -> None:
+    """The group each path selects is a wager that nobody forgot a path. The
+    merge commit is where that wager is settled, so a push that carries any code
+    buys everything - a pull request the list was wrong about reddens `main`
+    within minutes instead of reaching a reader.
     """
-    assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == {
+    assert _browser_scope(
+        tmp_path, ["docs/x.md", "backend/idhazh/discover.py"], event="push"
+    ) == {
         "browser": "true",
+        "code": "true",
         "console": "true",
         "validate_all": "true",
+    }
+
+
+@requires_bash
+def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
+    """The one question a push does read the paths for.
+
+    A changed sentence cannot break an application check, so the merge that
+    carries it should not spend the suite proving that. This is safe where the
+    wager above is not, because the documentation branch is a closed list of
+    prefixes: a path nobody classified falls to full coverage instead.
+    """
+    assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == {
+        "browser": "false",
+        "code": "false",
+        "console": "false",
+        "validate_all": "false",
     }
 
 

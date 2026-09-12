@@ -30,16 +30,29 @@ const CONSOLE: TestGroup[] = ['logic', 'console', 'publishing'];
 const CONSOLE_OWNED =
 	/^frontend\/(tests\/console[-.]|src\/(routes|lib)\/console\/|src\/lib\/components\/Console[A-Z]|src\/lib\/server\/console-shell\.ts$)/;
 
+/** A document a test reads is that test's input, not documentation.
+ *
+ * `frontend/tests/console-model.spec.ts` asserts the console's label set
+ * against this page, so an edit to it can redden a suite the documentation
+ * branch below would otherwise have answered for.
+ */
+const DOC_TEST_INPUTS: Record<string, TestGroup[]> = {
+	'docs/concepts/console-design.md': ['console']
+};
+
 function consoleIsTheSubject(paths: readonly string[]): boolean {
-	return paths.some((path) => CONSOLE_OWNED.test(path.replaceAll('\\', '/')));
+	return paths.some((path) => {
+		const clean = path.replaceAll('\\', '/');
+		return CONSOLE_OWNED.test(clean) || (DOC_TEST_INPUTS[clean]?.includes('console') ?? false);
+	});
 }
 
-export type CiAnswer = { browser: boolean; console: boolean; validateAll: boolean };
+export type CiAnswer = { browser: boolean; code: boolean; console: boolean; validateAll: boolean };
 
 /** Anything under here IS the archive, so a change to it has to be re-read. */
 const ARCHIVE_TOUCHED = /^frontend\/public\/(digest|telemetry|assist)\//;
 
-/** The three lines the `scope` job writes to `$GITHUB_OUTPUT`.
+/** The four lines the `scope` job writes to `$GITHUB_OUTPUT`.
  *
  * A pure function of the changed paths, so the truth table is checked here at
  * microseconds a case rather than through a temporary git repository and a
@@ -51,19 +64,26 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 	// A harness change still proves itself on everything: `tooling` covers the
 	// selector, the Playwright config and the workflow that reads them.
 	const deferred = isPr && !selection.tooling && !consoleIsTheSubject(paths);
+	// Whether anything but documentation changed. Skipping on this is safe
+	// because the documentation branch in `selectPaths` is a closed list of
+	// prefixes: a path nobody classified falls to full coverage instead.
+	const code = selection.groups.length > 0 || selection.contracts || selection.tooling;
 	return {
 		browser: selection.groups.some((group) => group !== 'backend' && group !== 'logic'),
+		code,
 		console: selection.groups.includes('console') && !deferred,
 		// A published day is frozen, so the only thing that can invalidate one is a
 		// change to the shape it is read through - or an edit to the day itself.
 		// Everything else leaves an answer that was settled when the day was
 		// written, and re-deriving it costs about 0.27 s a day (`CLAUDE.md` Rule
-		// #12). Outside a pull request it always runs: that is the merge to `main`.
+		// #12). Outside a pull request a code change always re-reads: that is the
+		// merge to `main`. Documentation carries no shape, so it never does.
 		validateAll:
-			!isPr ||
-			selection.contracts ||
-			selection.tooling ||
-			paths.some((path) => ARCHIVE_TOUCHED.test(path.replaceAll('\\', '/')))
+			code &&
+			(!isPr ||
+				selection.contracts ||
+				selection.tooling ||
+				paths.some((path) => ARCHIVE_TOUCHED.test(path.replaceAll('\\', '/'))))
 	};
 }
 const MODULE_TESTS: Record<string, string[]> = {
@@ -87,7 +107,10 @@ export function selectPaths(paths: readonly string[]): Selection {
 		const path = original.replaceAll('\\', '/');
 		let selected: TestGroup[] = [];
 		let reason = 'documentation only';
-		if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|\.claude\/|\.github\/(agents|instructions|prompts|skills)\/)/.test(path)) {
+		if (DOC_TEST_INPUTS[path]) {
+			selected = DOC_TEST_INPUTS[path];
+			reason = 'documentation a test reads';
+		} else if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|\.claude\/|\.github\/(agents|instructions|prompts|skills)\/)/.test(path)) {
 			selected = [];
 		} else if (/^backend\/tests\/test_[^/]+\.py$/.test(path)) {
 			selected = ['backend'];
@@ -177,10 +200,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 	const base = process.env.BASE ?? '';
 	const head = process.env.HEAD ?? '';
 	const isPr = process.env.EVENT === 'pull_request' && base !== '' && head !== '';
+	// Without a range - a dispatch, or a first push - the sentinel buys
+	// everything, which is what an unknown change is worth.
 	let paths: string[] = ['full-ci-run'];
-	if (isPr) {
+	if (base !== '' && head !== '') {
 		try {
-			paths = changedPaths(process.cwd(), base, head, false);
+			const changed = changedPaths(process.cwd(), base, head, false);
+			// A pull request is answered from its own paths. A push is answered from
+			// the sentinel, because the group each path selects is a wager that
+			// nobody forgot a path and the merge is where that wager is settled. The
+			// one thing a push does read the paths for is whether any code changed
+			// at all: that branch is a closed list of prefixes rather than a wager.
+			paths = isPr || !ciAnswer(changed, false).code ? changed : ['full-ci-run'];
 		} catch {
 			paths = ['unresolved-change-base'];
 		}
@@ -188,6 +219,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 	if (process.argv.includes('--ci')) {
 		const answer = ciAnswer(paths, isPr);
 		console.log(`browser=${answer.browser}`);
+		console.log(`code=${answer.code}`);
 		console.log(`console=${answer.console}`);
 		console.log(`validate_all=${answer.validateAll}`);
 	} else {
