@@ -1,5 +1,14 @@
 """Keep the published site inside the ceiling that arrives first.
 
+**The concept is adaptive pruning, and `docs/concepts/adaptive-pruning.md` is
+where it is decided.** Adaptive because every store answers one question for
+itself - what a reader loses when its oldest entry goes - and the answer picks
+one of four policies: a ledger folds, a lookup deletes, an asset deletes, a
+record is kept. That page carries the deciding rule, the five properties every
+deletion below obeys, and the register naming every artefact this project writes
+against its policy. What follows here is how each policy is built rather than
+why it is the right one.
+
 The 1 GB Pages cap is the earliest hard limit this project meets, and it is met
 by images rather than by text. So this does two separate things, and they are
 deliberately not the same thing:
