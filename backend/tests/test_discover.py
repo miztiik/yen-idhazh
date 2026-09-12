@@ -12,10 +12,12 @@ and `feedparser` parses a string with no network of its own.
 from __future__ import annotations
 
 import csv
+import json
 import re
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
@@ -40,10 +42,12 @@ from idhazh.discover import (
     streak,
 )
 from idhazh.rank import (
-    ITEM_ID_DIGITS,
+    CROCKFORD_ALPHABET,
+    ITEM_ID_SYMBOLS,
     DayCeiling,
     appeared_at,
     day_source_ceiling,
+    item_id,
     merge,
     plan_vertical,
     score,
@@ -52,6 +56,9 @@ from idhazh.rank import (
 from idhazh.tag import tags
 
 FEEDS = FIXTURES_DIR / "feeds"
+#: Two addresses that collide on the ten-digit id this project published until
+#: 2026-09-12, and the two pools that used to give one of them two ids.
+COLLIDING_POOLS = FIXTURES_DIR / "discover" / "two-candidate-pools.json"
 
 LAB = FeedDef(
     id="lab-blog",
@@ -1031,6 +1038,71 @@ def test_an_item_id_is_the_address_not_the_rank_position() -> None:
             assert by_url[item.canonical_url] == item.item_id
 
 
+def _colliding_pool(fixture: dict[str, Any], name: str) -> list[Candidate]:
+    """Build one of the fixture's two pools, recomputing every url_key on read."""
+    by_url = {entry["canonical_url"]: entry for entry in fixture["articles"]}
+    built = []
+    for url in fixture["pools"][name]:
+        entry = by_url[url]
+        assert entry["url_key"] == derive_url_key(url), "the fixture states a key it does not have"
+        built.append(
+            Candidate(
+                canonical_url=url,
+                source_url=url,
+                url_key=derive_url_key(url),
+                source_id=entry["source_id"],
+                vertical=fixture["vertical"],
+                tier=SourceTier(entry["tier"]),
+                source_form=SourceForm(entry["source_form"]),
+                title=entry["title"],
+                published_at=entry["published_at"],
+            )
+        )
+    return built
+
+
+def test_one_article_keeps_one_id_whatever_else_is_planned_beside_it() -> None:
+    """An id is a function of the address alone, never of the day's pool.
+
+    The two addresses in this fixture land on the same ten-digit id, which is
+    what the project published until 2026-09-12. A collision there had to be
+    resolved, the only way to resolve one is to step the loser past whatever
+    else is already taken, and that made the loser's id depend on who else was
+    planned. Two runs of one day draw different pools, so the same article came
+    back under a second id and the day published it twice - the single failure
+    an address-derived id exists to prevent. Eighty bits do not collide, so
+    there is nothing to resolve and nothing to look at.
+    """
+    fixture = json.loads(read_text(COLLIDING_POOLS))
+    assert fixture["vertical"] == AI.id
+
+    stale = {
+        url: f"{AI.id}-{int(derive_url_key(url)[:16], 16) % 10**10:010d}"
+        for url in fixture["pools"]["crowded"]
+    }
+    assert set(stale.values()) == {fixture["collided_on"]}, (
+        "the fixture no longer collides under the arithmetic it was built against, "
+        "so it proves nothing - find a new pair rather than deleting this arm"
+    )
+
+    probe = fixture["probe"]
+    alone = _colliding_pool(fixture, "alone")
+    crowded = _colliding_pool(fixture, "crowded")
+    assert len(alone) == 1 and len(crowded) == 2
+
+    answers = []
+    for pool in (alone, crowded):
+        _, planned = plan_vertical(
+            AI, pool, config=CollectConfig(), eligible_feeds=3, now=fixture["now"]
+        )
+        found = {item.canonical_url: item.item_id for item in planned}
+        assert probe in found, "the probe has to survive ranking in both pools"
+        answers.append(found[probe])
+
+    assert answers[0] == answers[1]
+    assert len({item_id(AI.id, derive_url_key(url)) for url in stale}) == 2
+
+
 def test_the_list_runs_from_the_highest_score_down() -> None:
     _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW)
     scores = [item.rank_score for item in items]
@@ -1055,13 +1127,21 @@ def test_tier_weights_come_from_config() -> None:
 
 
 def test_no_hash_appears_in_any_planned_item_id() -> None:
-    """Derived from the address, but still decimal digits a reader can read aloud."""
+    """Derived from the address, and a slug a reader can read back rather than a digest.
+
+    A digest in this project is 32 or 64 hex characters and it is never an
+    address (docs/architecture/publishing/layout.md). An item id is sixteen
+    Crockford base32 symbols - a different width, and an alphabet that drops
+    `i`, `l`, `o` and `u` so no id can be misread aloud.
+    """
     _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), eligible_feeds=3, now=NOW)
+    assert items, "the fixture feeds must offer something to address"
     for item in items:
-        digits = item.item_id.rsplit("-", 1)[1]
-        assert item.item_id == f"{item.vertical}-{digits}"
-        assert digits.isdigit()
-        assert len(digits) == ITEM_ID_DIGITS
+        symbols = item.item_id.rsplit("-", 1)[1]
+        assert item.item_id == f"{item.vertical}-{symbols}"
+        assert len(symbols) == ITEM_ID_SYMBOLS
+        assert set(symbols) <= set(CROCKFORD_ALPHABET)
+        assert not set(symbols) & set("ilou")
 
 
 @pytest.mark.parametrize("path", sorted(FEEDS.glob("*")), ids=lambda p: p.name)

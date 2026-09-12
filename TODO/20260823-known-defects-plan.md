@@ -11,7 +11,8 @@ shape: the code now works and the measurement it produces still cannot fire, so
 what it needs is a ruling on which instrument to keep. **This file cannot be
 deleted by writing more of it.**
 
-Defects 15, 16 and 17 closed on 2026-08-27.
+Defects 15, 16 and 17 closed on 2026-08-27. Defects 19 and 20 were filed later,
+on 2026-09-12, by two rows that found them and declined to widen into them.
 
 Closed rows are removed after checking their current production code, regression
 tests and canonical docs. Git history holds their execution record; the living
@@ -28,9 +29,9 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 17 | Two different word counters share one string and read as truncation | 5 | CLOSED 2026-08-27 |
 | 18 | The truncation flag still cannot fire, now for a different reason | 5 | **OPEN - not measurable without the scorer weights** |
 | 19 | A summarize call that failed on its reply reports no cost at all | 2 | **OPEN - found 2026-09-12 by plan 11 row #3b (PR #636)** |
+| 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | **OPEN - found 2026-09-12 by plan 23 row #5 (PR #642)** |
 
 ## 19 - A summarize call that failed on its reply reports no cost at all (OPEN)
-
 `summarize._failed` never receives the `Completion`, so every typed reply
 failure - `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`, `output_truncated` - writes a `Summary` whose five cost cells
@@ -50,6 +51,39 @@ filed it rather than widening to take it. The fix is a signature change: hand
 `_failed` the `Completion` it already has in scope at every call site, record a
 `CallCost` from it, and let the same validator that binds an ok row bind a
 failed one. Level 2 - one file, one explicit behaviour change, and its tests.
+
+## 20 - The `publishing` group dirties a file the build fingerprint hashes (OPEN)
+
+`npm run test:changed -- --group publishing` passes every test and then exits 1
+with `The canary build has stale inputs`. Measured 2026-09-12 on a developer
+machine: 72 of 72 tests pass in 1.2 minutes, and the launcher still reports
+`exit 1` after 277.1 seconds.
+
+Nothing is wrong with the build. `frontend/tests/malformed-day.spec.ts` runs
+`idhazh validate-days` four times, each run appends a receipt to
+`state/day-validations.csv`, and `inputFingerprint` in
+`frontend/scripts/build-state.ts` hashes every tracked file outside
+`backend/var/`, `docs/`, `TODO/` and a short list of frontend directories. That
+file is tracked and is not on the exclusion list, so the group changes one of
+its own build's inputs while running and then fails the check that the inputs
+did not change.
+
+**The cost is that a passing local run reads as a failing one**, on the one
+group that owns the published payload and its projections. A worker who takes
+the exit code at face value has a red branch that is green, and one who ignores
+it has learnt to ignore the check that catches a real mid-run source edit.
+
+Pre-existing and not caused by the base32 item id, which is why plan 23 row #5
+filed it rather than widening to take it: the spec, the ledger, the validator
+and the fingerprint are all untouched by that pull request. CI does not hit it -
+the `browser` job passed on the same commit in 3m1s.
+
+Level 2. Two candidate fixes and they are not equivalent, so this needs a
+ruling rather than a patch: exclude `state/` from the **checks** fingerprint
+while keeping it in the **build** one, or have `validate-days` write no receipt
+when it is driven by a test. The first is a one-line exclusion and widens what a
+mid-run edit can hide; the second keeps the fingerprint honest and puts a test
+flag into a producer.
 
 ## 18 - The truncation flag still cannot fire, now for a different reason (OPEN)
 

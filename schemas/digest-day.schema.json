@@ -142,7 +142,7 @@
           "type": "integer"
         },
         "item_id": {
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
           "title": "Item Id",
           "type": "string"
         },
@@ -218,7 +218,7 @@
         "same_story_as": {
           "anyOf": [
             {
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
               "type": "string"
             },
             {
@@ -363,7 +363,7 @@
       "description": "One of the day's leading stories, and the one sentence saying why it leads.\n\nThe story itself stays in `items` in the published order, so the block adds\na way in and removes nothing. Nothing here carries a position: a number\nbeside a story implies a score we would then owe the reader an explanation\nfor.",
       "properties": {
         "item_id": {
-          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
           "title": "Item Id",
           "type": "string"
         },
@@ -593,6 +593,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols beside the decimal digits it already took.",
+      "version": "2026-09-12T18:40",
+      "why": "Ten decimal digits is 33 bits of the address, which collides often enough that the collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run planned, so a collided id depended on the day's pool rather than on the address alone. Two runs of one day draw different pools, so the same article came back under a second id and published twice. Eighty bits do not collide. This widens and never contracts: every day published before today carries the decimal shape and a published day is frozen, so nothing was rewritten and no read-side migration is owed."
+    },
+    {
       "change": "Added DigestItem.desk - where the day publishes a story - and DigestVerticalRef.desk_count beside count. DigestVerticalRef.count keeps meaning the vertical count. Every use of the word desk for the vertical was rewritten in the same commit.",
       "version": "2026-09-12T06:56",
       "why": "One word was doing two jobs across the whole file, and a reader has no way to tell which job a given sentence meant. A vertical is what the carrying feed declares and what item_id is addressed from; a desk is where the day publishes the story. Redefining count in place was refused: 22 frozen published days already carry it, a published day is never rewritten, and nothing in the payload would say which of the two meanings a given day's number holds - so the second number is a second field and a page prefers desk_count where it is present. Both new fields are optional and null on every day published before today - 22 days, 106 vertical refs and 8,922 items, measured 2026-09-12 - where null reads as unknown and a page falls back to the vertical (section 11). Nothing fills desk yet; the model that will is a later row."
@@ -737,7 +742,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-12T06:56",
+      "default": "2026-09-12T18:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -762,5 +767,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-12T06:56"
+  "version": "2026-09-12T18:40"
 }

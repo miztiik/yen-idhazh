@@ -32,18 +32,29 @@ from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
 from idhazh.embed import cosine
 
-#: Bumped when the scoring shape changes. A published order that moved for a
-#: reason nobody recorded is a published order nobody can defend, and since
-#: 2026-09-01 the run manifest records this string. `-3` adds the shared-subject
-#: term: the plan-time score below is untouched, and the day's item order with
-#: it, but the day now also publishes a second order over the same stories -
-#: `assemble.leading_stories`, which reads `rank_score` and adds to it.
-RANK_VERSION: Final = "idhazh-rank-3"
+#: Bumped when the shape of a published day's ranking changes. A published
+#: order that moved for a reason nobody recorded is a published order nobody
+#: can defend, and since 2026-09-01 the run manifest records this string. `-3`
+#: added the shared-subject term: the plan-time score below is untouched, and
+#: the day's item order with it, but the day now also publishes a second order
+#: over the same stories - `assemble.leading_stories`, which reads `rank_score`
+#: and adds to it. `-4` moved no score at all: it is the day every item started
+#: carrying a base32 address instead of a decimal one, and this string is the
+#: only place a later reader can see that two days were addressed differently.
+RANK_VERSION: Final = "idhazh-rank-4"
 
-#: Decimal digits of the address hash that make up an item id. Ten is short
-#: enough to read in a link and wide enough that two addresses in one vertical
-#: colliding is a once-in-many-years event rather than a weekly one.
-ITEM_ID_DIGITS: Final = 10
+#: Crockford base32, lowercased. `i`, `l`, `o` and `u` are out, so no id can be
+#: misread aloud and none can spell a word. The 32 symbols left are a subset of
+#: the slug alphabet, so an item id is still a slug.
+CROCKFORD_ALPHABET: Final = "0123456789abcdefghjkmnpqrstvwxyz"
+
+#: Bytes of the address hash an item id is built from. Ten bytes is 80 bits,
+#: which is exactly 16 base32 symbols with nothing left over and nothing padded.
+ITEM_ID_BYTES: Final = 10
+
+#: Symbols in the trailing field of an item id. Derived from `ITEM_ID_BYTES`
+#: rather than chosen, so the two cannot fall out of step.
+ITEM_ID_SYMBOLS: Final = ITEM_ID_BYTES * 8 // 5
 
 _STAMP: Final = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -60,36 +71,28 @@ def _hours(later: str, earlier: str) -> float:
 
 
 def item_id(vertical: str, url_key: str) -> str:
-    """`<vertical>-<ten digits>`, derived from the address and nothing else.
+    """`<vertical>-<sixteen base32 symbols>`, from the address and nothing else.
 
     The id used to be the rank position, so run 2 of a day renumbered every
     story: the same article came back under a different id, the digest
     deduplicated on that id, and anything that moved one place published twice.
     Deriving it from the address means a later run of the same day recognises
     the work the earlier one already did.
+
+    It was ten decimal digits until 2026-09-12, which is 33 bits and collided
+    often enough that the collision needed resolving - and the only way to
+    resolve one is to look at the other addresses in the pool, which made a
+    collided id depend on the pool rather than on the address. Eighty bits do
+    not collide, so there is nothing to resolve and nothing to look at. Old ids
+    are never rewritten: a published day is frozen, and `ITEM_ID_PATTERN`
+    accepts both shapes for as long as one of those days survives.
     """
-    number = int(url_key[:16], 16) % 10**ITEM_ID_DIGITS
-    return f"{vertical}-{number:0{ITEM_ID_DIGITS}d}"
-
-
-def assign_ids(vertical: str, url_keys: Iterable[str]) -> dict[str, str]:
-    """One id per address, distinct within the vertical.
-
-    Two addresses landing on the same ten digits is rare, but a repeated id is
-    a contract failure that stops the run, so the second one steps forward
-    until it is free. Resolved in address order, so the answer depends on the
-    pool and never on the ranking.
-    """
-    assigned: dict[str, str] = {}
-    taken: set[str] = set()
-    for url_key in sorted(url_keys):
-        chosen = item_id(vertical, url_key)
-        while chosen in taken:
-            number = (int(chosen.rsplit("-", 1)[1]) + 1) % 10**ITEM_ID_DIGITS
-            chosen = f"{vertical}-{number:0{ITEM_ID_DIGITS}d}"
-        taken.add(chosen)
-        assigned[url_key] = chosen
-    return assigned
+    number = int.from_bytes(bytes.fromhex(url_key)[:ITEM_ID_BYTES], "big")
+    symbols = "".join(
+        CROCKFORD_ALPHABET[(number >> shift) & 0x1F]
+        for shift in range(5 * (ITEM_ID_SYMBOLS - 1), -1, -5)
+    )
+    return f"{vertical}-{symbols}"
 
 
 # --- when a story appeared ---------------------------------------------------
@@ -506,10 +509,9 @@ def plan_vertical(
     taken = _take(
         _ordered(scored), max_per_source=config.max_per_source, day_ceiling=day_ceiling
     )
-    ids = assign_ids(vertical.id, (item.candidate.url_key for item in taken))
     items = [
         PlannedItem(
-            item_id=ids[item.candidate.url_key],
+            item_id=item_id(vertical.id, item.candidate.url_key),
             url_key=item.candidate.url_key,
             source_url=item.candidate.source_url,
             canonical_url=item.candidate.canonical_url,

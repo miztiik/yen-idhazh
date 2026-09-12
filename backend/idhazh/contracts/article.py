@@ -54,6 +54,24 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T18:40",
+            change=(
+                "item_id accepts a second shape: sixteen Crockford base32 symbols "
+                "beside the decimal digits it already took."
+            ),
+            why=(
+                "Ten decimal digits is 33 bits of the address, which collides often "
+                "enough that the collision had to be resolved - and the only way to "
+                "resolve one is to step the loser past whatever else the run planned, "
+                "so a collided id depended on the day's pool rather than on the "
+                "address alone. Two runs of one day draw different pools, so the same "
+                "article came back under a second id and published twice. Eighty bits "
+                "do not collide. This widens and never contracts: every day published "
+                "before today carries the decimal shape and a published day is frozen, "
+                "so nothing was rewritten and no read-side migration is owed."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T06:56",
             change=(
                 "Added desk: where the digest publishes the story, beside vertical, "

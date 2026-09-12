@@ -205,11 +205,13 @@ the other says we tried today and could not - and an operator reading
 
 ## An item's name comes from its address
 
-`item_id` is `<vertical>-<ten digits>`, derived from the URL key and nothing else.
+`item_id` is `<vertical>-<id>`, derived from the URL key and nothing else.
 
 It used to be the rank position. That broke the moment a day had more than one run: run 2 re-ranked the same stories, every id shifted, and an article that moved one place arrived as a new item and published twice. Deriving the id from the address means a later run recognises the work the earlier one already did.
 
-A collision - two addresses landing on the same ten digits - is rare and is a contract failure that stops the run, so the second one steps forward until it finds a free number. Resolved in address order, so the answer depends on the pool and never on the ranking.
+**The id was ten decimal digits until 2026-09-12 and is sixteen Crockford base32 symbols after it.** Ten decimal digits is 33 bits of the address, which collides often enough that a collision had to be resolved - and the only way to resolve one is to step the loser past whatever else the run already planned. That made a collided id depend on the day's pool rather than on the address alone, which is the same failure the address-derived id exists to prevent, reintroduced by the fix for a rarer one. Sixteen base32 symbols carry exactly 80 bits, so there is nothing to resolve and nothing to look at.
+
+**Old ids are never rewritten.** A published day is frozen, so both shapes are live and `ITEM_ID_PATTERN` accepts both for as long as one of those days survives. Nothing sorts ids across days: the two shapes do not order against each other.
 
 ## What sizes a run
 

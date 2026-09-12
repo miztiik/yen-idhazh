@@ -33,10 +33,16 @@ MONTH_PATTERN: Final = r"^\d{4}-\d{2}$"
 # payload is byte-identical to the one that was read.
 TIMESTAMP_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
 SLUG_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
-# `<vertical>-<NN>`: the reader-facing item address. The digits are derived from
-# the address hash, not from a rank position, so the same article keeps the same
-# id across every run of the day. At least two, never capped.
-ITEM_ID_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$"
+# `<vertical>-<id>`: the reader-facing item address. The trailing field is
+# derived from the address hash, not from a rank position, so the same article
+# keeps the same id across every run of the day.
+#
+# Two branches, and this pattern only ever gains one. Decimal digits are what
+# every day published before 2026-09-12 carries, and a published day is frozen -
+# so the old branch stays for as long as those days do. Sixteen Crockford base32
+# symbols are what a run writes now: the alphabet without `i`, `l`, `o` and `u`,
+# which is a subset of the slug alphabet, so the id is still a slug.
+ITEM_ID_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$"
 # `<YYYY-MM-DD>-<execution>`: the run address. Readable, sortable, free of
 # hashes, and unique per execution - the trailing field is the CI run id on
 # anything the pipeline produced, and a count of the day's runs only on a
