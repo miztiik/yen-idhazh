@@ -2932,6 +2932,7 @@ def test_the_runtime_counters_columns_are_defined_once() -> None:
         "n_ctx_configured",
         "python_peak_rss_bytes",
         "cgroup_peak_bytes",
+        "job",
     )
 
 
