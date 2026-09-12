@@ -130,7 +130,7 @@ def refuse_undeclared_weights(weights: Path, app: AppConfig, role: str = "summar
     return found
 
 
-# --- A real article, from the corpus -----------------------------------------
+# --- Real articles, from the corpus ------------------------------------------
 
 
 def article_from_user_turn(turn: str) -> tuple[str | None, str]:
@@ -167,10 +167,14 @@ def corpus_samples(corpus: Path, template: Article) -> list[Sample]:
     """Every corpus row as an `Article`, longest body first.
 
     The corpus is the only committed source text in this repository
-    (`CLAUDE.md` section 0a), so it is the only place a real article near the
-    truncation cap can come from. Everything except the text, the title and the
-    counts derived from them is the committed fixture's: none of it reaches a
-    prompt, and inventing values would only add ways to fail validation.
+    (`CLAUDE.md` section 0a), so it is the only place real article prose can
+    come from. It is not where the cap's worst case comes from: its longest body
+    is whatever `extract.truncation_cap_tokens` allowed on the day it was
+    harvested, which is what `sample_at_the_cap` exists for.
+
+    Everything except the text, the title and the counts derived from them is
+    the committed fixture's: none of it reaches a prompt, and inventing values
+    would only add ways to fail validation.
     """
     base = template.model_dump(mode="json")
     built: list[Sample] = []
@@ -805,11 +809,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--at-cap",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
-            "Run one more item on an article BUILT to extract.truncation_cap_tokens "
-            "out of corpus prose. The corpus cannot supply one: its longest body is "
-            "what the cap allowed when it was harvested."
+            "Run one more item on an article BUILT to extract.truncation_cap_tokens out "
+            "of corpus prose, because the corpus cannot supply one: its longest body is "
+            "what the cap allowed when it was harvested. Off by default, and the reason "
+            "is the clock rather than the question - that prompt is 14,306 tokens, which "
+            "is about 45 minutes of prefill at the 5.4 tokens a second this machine read "
+            "at on 2026-09-12. The run prints the same article's prompt size against the "
+            "ceiling either way, which is what settles whether it fits."
         ),
     )
     parser.add_argument("--out", type=Path, default=None)
@@ -890,20 +898,27 @@ def main(argv: list[str] | None = None) -> int:
             if wanted
             else []
         )
+        # Always rendered, never always run. Without this the harness prints
+        # "the longest that fits", which reads as "the longest there is" - and
+        # what it selected around is the case it exists to measure. Rendering
+        # costs seconds; running it costs about 45 minutes of prefill.
+        built = sample_at_the_cap(samples, cap_tokens=app.extract.truncation_cap_tokens)
+        at_cap_tokens = tokenizer.count(
+            build_call_one_request(
+                built.article,
+                element_table(built.article, config=app.elements),
+                model_id=model.id,
+                inference=model.inference,
+            )["messages"]
+        )
+        print(
+            f"an article AT the cap is {built.article.word_count} words and a "
+            f"{at_cap_tokens}-token call-1 prompt, against the {ceiling}-token ceiling "
+            f"above - the corpus cannot supply one, so this arm is BUILT",
+            flush=True,
+        )
         if args.at_cap:
-            built = sample_at_the_cap(samples, cap_tokens=app.extract.truncation_cap_tokens)
-            table = element_table(built.article, config=app.elements)
-            request = build_call_one_request(
-                built.article, table, model_id=model.id, inference=model.inference
-            )
-            at_cap_tokens = tokenizer.count(request["messages"]) or 0
-            print(
-                f"an article AT the cap is {built.article.word_count} words and a "
-                f"{at_cap_tokens}-token call-1 prompt, against the {ceiling}-token "
-                f"ceiling above - the corpus cannot supply one, so this arm is built",
-                flush=True,
-            )
-            chosen.append((built, at_cap_tokens))
+            chosen.append((built, at_cap_tokens or 0))
 
         for index, (sample, prompt_tokens) in enumerate(chosen, start=1):
             built_arm = args.at_cap and index == len(chosen)
