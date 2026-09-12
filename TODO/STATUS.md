@@ -91,7 +91,7 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #3f | 11 | C6 | The window is sized for two calls | - |
+| #3f | 11 | C6 | The window is sized for two calls | plan 23 row #1a is IN-FLIGHT |
 | #6 | 11 | F | The small model, its job and its cache go | 5b is IN-FLIGHT |
 | #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
 | #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
