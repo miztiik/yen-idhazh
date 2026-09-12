@@ -30,7 +30,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The rules, and which rule governs every file this project writes | - | A | DONE #643 | p13-1 | #643 | worker |
-| 2 | The window takes a value, and nothing is deleted yet | 1 | B | PENDING | - | - | - |
+| 2 | The window takes a value, and nothing is deleted yet | 1 | B | IN-FLIGHT | p13-2 | - | worker |
 | 3 | The fuse comes out, and one run is watched | 2 | C | PENDING | - | - | - |
 
 ---
@@ -66,7 +66,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 3. Row #2 - The window takes a value, and nothing is deleted yet
 
 - **Scope:** `retention.image_months` moves from `-1` to a real window derived from plan 04's measurement, with `dry_run` still `true`.
-- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `backend/tests/test_retention.py`, `docs/concepts/adaptive-pruning.md`, `docs/reference/measurements.md`
+- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `backend/tests/test_retention.py`, `docs/concepts/adaptive-pruning.md`, `docs/reference/measurements.md`
+
+  **The fixture is `every-knob-differs-from-the-committed-config.json`, and the `tuned.json` this row named until 2026-09-12 does not exist.** It is the only file under `tests/fixtures/contracts/app-config/`; corrected before dispatch.
+
+  **The rate this row derives its window from is not written down anywhere, re-measured 2026-09-12 before dispatch.** `docs/reference/measurements.md` carries no images-per-day figure, and plan 04's hard scope says outright that `image_months` stays `-1` until this plan - so plan 04 never took it. What exists is one total on [`../docs/concepts/adaptive-pruning.md`](../docs/concepts/adaptive-pruning.md) line 181: **488 visuals weighing 6,213,480 bytes against 24,348,280 bytes of day payload in the same tree, 2026-09-12.** A total is not a rate. **So this row takes the rate itself** - one bounded, once-off read over the dated directories under `frontend/public/digest/`, off the daily path, its cost written beside it, per `CLAUDE.md` Guardrail #12's escape hatch and the way row #1 of plan 26 took its own number. Decision 2 below still binds: the derivation is committed beside the number.
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; one dispatch producing a dry-run report.
 - **Oracle:** The dry run lists candidates and **every listed path is a rendered visual under a dated directory older than the window** - asserted by pattern over the whole candidate list, with the list's length printed. A dry run that lists nothing proves nothing, so a non-empty list is part of the oracle.
 
@@ -75,7 +79,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **The committed value is `-1`, not 13.** So this is the first time an age window exists at all, not a tightening from one window to another | C20, verified 2026-09-05 |
-| 2 | The window is derived from plan 04's measured rate, and the derivation is committed beside the number | Guardrail #10 |
+| 2 | The window is derived from a measured rate, and the derivation is committed beside the number. **The rate is taken by this row** - plan 04 never took it, and its hard scope says why | Guardrail #10; corrected 2026-09-12 |
 | 3 | Age only, never size. **A size-triggered prune deletes most on the day the reader has most to read** | Section 9.2 |
 
 ### Rejected alternatives
