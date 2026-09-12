@@ -51,7 +51,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { deskShortfall, leadingStories, orderByTime } from '../src/lib/day-shape';
+import { deskCount, deskShortfall, leadingStories, orderByTime } from '../src/lib/day-shape';
 import { shellSeedItems, uiConfig } from '../src/lib/server/config';
 import { loadDay, publishedDates } from '../src/lib/server/payload';
 import { dayReady } from './support/day-ready';
@@ -463,8 +463,10 @@ test.describe('the count and the address', () => {
 
 	test('the dated page says how many stories the day published', async ({ page }) => {
 		// The day's own bounded count, which is the number the topic row prints a
-		// few lines below this sentence on the same screen.
-		const published = (FACTS?.verticals ?? []).reduce((sum, ref) => sum + ref.count, 0);
+		// few lines below this sentence on the same screen. Through `deskCount`,
+		// because the page counts stories where a reader finds them: `count` is the
+		// carrying feed's word, and the two part on a relabelled story.
+		const published = (FACTS?.verticals ?? []).reduce((sum, ref) => sum + deskCount(ref), 0);
 		const drawn = await printedCount(page, `/${DAY}/`);
 		const stories = await page.locator('article.item[id]').count();
 
@@ -488,13 +490,17 @@ test.describe('the count and the address', () => {
 		const desk = FACTS?.verticals.find((ref) => ref.id === TOPIC);
 		expect(desk, `${DAY} serves /${TOPIC}/ and its payload names no such desk`).toBeDefined();
 
+		// `deskCount` and not `count`: the page is about where stories are READ,
+		// and a story its feed filed under this name but the day published under
+		// another is not on this page to be counted.
+		const owed = deskCount(desk!);
 		const printed = await printedCount(page, `/${DAY}/${TOPIC}/`);
-		console.log(`[reading-page] /${DAY}/${TOPIC}/ counts ${printed} of the desk's ${desk!.count}`);
+		console.log(`[reading-page] /${DAY}/${TOPIC}/ counts ${printed} of the desk's ${owed}`);
 		expect(
 			printed,
-			`the topic page claims ${printed} stories on a desk that published ${desk!.count}. A ` +
+			`the topic page claims ${printed} stories on a desk that published ${owed}. A ` +
 				'topic page is about one desk, so the desk is the number it owes the reader'
-		).toBe(desk!.count);
+		).toBe(owed);
 	});
 
 	test('every story the day published has an address that lands', async ({ page }) => {

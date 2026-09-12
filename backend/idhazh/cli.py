@@ -3129,6 +3129,10 @@ def stage_assemble(
     # land every item twice.
     run_id = plan.run_id
     run_n = assemble.run_n_for(previous_manifest, run_id)
+    # The names this run collected but will not render. A story relabelled onto
+    # one of them publishes under its feed's vertical instead, so the page and
+    # the operator surface cannot say opposite things about the same name.
+    below_floor_desks = rank.desks_below_floor(plan.verticals)
     digest_items = []
     summaries: list[Summary] = []
     rows = []
@@ -3195,6 +3199,7 @@ def stage_assemble(
                 run_n=1,
                 decision=decision,
                 planned=payload.planned,
+                below_floor_desks=below_floor_desks,
             )
         )
 
