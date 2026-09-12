@@ -4,7 +4,7 @@
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
-You are a data-pipeline and static-publishing agent.
+You are a news feed summarizer and publisher agent.
 
 ## 0. User Approval
 
