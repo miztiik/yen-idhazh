@@ -314,35 +314,13 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 
 ## 11. Schema Versioning
 
-Every config file and every persisted surface is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and `schemas/<name>.schema.json` is generated from it. The persisted surfaces this project cares about:
+Every config file and every persisted surface is a Pydantic model in `backend/idhazh/contracts/` before logic is written (Guardrail #3, section 1a), and `schemas/<name>.schema.json` is generated from it. Three rules bind every one of them.
 
-- **Stage payloads** - the validated shapes that move between pipeline stages and land as committed files.
-- **The eval ledger** - the CSV row shape appended once per item.
-- **The run manifest** - what ran, against which model, at which commit.
-- **Config** - the tunable knobs in `config/`.
-- **Published payloads** - what `frontend/public/` carries and the site renders.
+- `version` is a `YYYY-MM-DD` date-stamp - never an integer, never an epoch. It answers the question a reader of an old payload actually has: how old is this shape?
+- Every change appends a `changelog` entry, newest first, `{ version, change, why }`, and sets `version` to today.
+- A breaking change - a removed field, a retype, a shifted meaning - ships its read-side migration in the same commit. **A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.**
 
-### `version` is a date-stamp, not an integer
-
-Each schema carries a `version` field that is a human-readable date-stamp - never an integer, never an epoch timestamp:
-
-- Format: `YYYY-MM-DD` (e.g. `2026-08-20`). When more than one change lands the same day, extend to the minute or second: `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS`.
-- The value is ASCII-sortable and self-documenting: `version` tells you *when* the shape last changed, and equals the newest `changelog` entry's version.
-
-### `changelog` array (in-schema change log)
-
-Each schema carries a `changelog` array - newest entry first - recording every change and why it was made. Each entry is `{ version, change, why }`:
-
-- `version` - the date-stamp of that change (same format as above).
-- `change` - what changed (field added / removed / retyped, semantics shifted).
-- `why` - the reason for the change.
-
-Each change is one commit:
-
-- **Additive, backwards-compatible** (new optional field): append a `changelog` entry, set `version` to today; older payloads still validate.
-- **Breaking** (removed field, type change, semantic shift): append a `changelog` entry, set `version` to today, AND write the read-side migration the new build runs on older payloads - same commit.
-
-A payload written by yesterday's run that today's build cannot read is a contract break and a release blocker.
+What the base model enforces, how a same-day revision extends the stamp, which surfaces this covers, and the one model that pins a published key while its Python name moves: [`docs/architecture/contracts/schemas.md`](docs/architecture/contracts/schemas.md).
 
 ## 12. Published-Site Verification (Browser Smoke)
 

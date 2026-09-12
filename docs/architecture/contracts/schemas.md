@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-11
+**Last Updated**: 2026-09-12
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -240,8 +240,8 @@ The rewrite is small enough to be reviewed as a diff rather than run as a utilit
 
 Inherited from the base model, per `CLAUDE.md` section 11:
 
-- `version` is a **date-stamp** (`YYYY-MM-DD`, extended to the minute for same-day revisions), never an integer and never an epoch. It says *when* the shape last moved, which is the question anyone reading an old payload actually has.
-- `changelog` is newest-first, each entry `{ version, change, why }`.
+- `version` is a **date-stamp** (`YYYY-MM-DD`), never an integer and never an epoch. It says *when* the shape last moved, which is the question anyone reading an old payload actually has. When more than one change lands the same day, extend the stamp to the minute or the second - `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS` - so the value stays ASCII-sortable.
+- `changelog` is newest-first, each entry `{ version, change, why }`. `change` says what moved: a field added, removed or retyped, or a meaning shifted. `why` says what the change was for. A `changelog` entry that only restates the field name tells a later reader nothing they could not read off the diff.
 - The base model **enforces** that `version` equals `changelog[0].version`, so the two cannot fall out of step.
 
 Additive change: append the entry, stamp today, done - older payloads still validate. Breaking change: append, stamp today, **and write the read-side migration in the same commit.** A payload written by yesterday's run that today's build cannot read is a release blocker.
@@ -335,7 +335,7 @@ The backend half is a contract-tier test: it regenerates every schema into a tem
 
 ## The persisted surfaces
 
-The shapes this subsystem owns, from `CLAUDE.md` section 11:
+The shapes this subsystem owns. `CLAUDE.md` section 11 states the three rules that bind them; this is the list:
 
 | Surface | Written by | Read by |
 | --- | --- | --- |
