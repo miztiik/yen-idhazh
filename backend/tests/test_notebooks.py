@@ -1,6 +1,6 @@
 """The training notebook is executable content, so its gates are tested like any other.
 
-None of this runs the notebook - that needs a GPU and a network, and Rule #7
+None of this runs the notebook - that needs a GPU and a network, and Guardrail #7
 forbids a test that fetches anything. What it does test is the four properties
 row 6 states, each of which fails silently if it ever stops holding:
 
@@ -84,7 +84,7 @@ def test_no_model_is_named_anywhere_in_it(every_cell: str) -> None:
 
 
 def test_it_reads_the_teacher_and_the_row_counts_out_of_config(code_cells: list[str]) -> None:
-    """A number typed into the notebook is a number that disagrees with the config (Rule #6)."""
+    """A number typed into the notebook is a number that disagrees with the config (Guardrail #6)."""
     body = "\n".join(code_cells)
 
     for key in ("teacher", "train_rows", "min_rows", "epochs", "sequence_length"):

@@ -126,4 +126,4 @@ drifts in five directions.
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - why a lens and an entity never get a feed list of their own.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - why fetched text is data and never instruction.
 - [digest.md](digest.md) - what a published day holds.
-- [../../CLAUDE.md](../../CLAUDE.md) - section 0a (what a model verdict may decide) and Rule #11 (fetched text is data).
+- [../../CLAUDE.md](../../CLAUDE.md) - section 0a (what a model verdict may decide) and Guardrail #11 (fetched text is data).

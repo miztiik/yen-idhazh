@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-12
 
 Every number this project's design rests on, with the date it was taken and the
-spread. Rule #10 in one page: **an unmeasured number is labelled an estimate and
+spread. Guardrail #10 in one page: **an unmeasured number is labelled an estimate and
 may not be used to justify a design.**
 
 **This page is the producer** - the model, the runner, prefill and decode,
@@ -93,9 +93,9 @@ a byte count, a token count, a pixel, a row count - and said none of them
 belongs to the box. **A duration is not on that list, and two paragraphs above,
 this page says a second belongs to the box that took it.** So the page
 contradicted itself, and a worker fell into the gap on 2026-09-12: it had a
-duration measured on a developer machine, `CLAUDE.md` Rule #10 told it to name
+duration measured on a developer machine, `CLAUDE.md` Guardrail #10 told it to name
 the hardware, this sentence told it not to, and it could not resolve which
-governed. **`CLAUDE.md` Rule #10 governs.** This page is a guardrail and the
+governed. **`CLAUDE.md` Guardrail #10 governs.** This page is a guardrail and the
 contract carries the rules; where the two disagree the rule wins, and what a
 guardrail may do is say how the rule's intent is met - never contradict it.
 Owner ruling, 2026-09-12, narrowing the ruling of 2026-09-10.
@@ -322,7 +322,7 @@ documents the prerender step used to write before any spec ran.
 **Input:** `state/item-health/2026-09.csv`, one month shard, 4,556 rows covering
 2026-09-01 to 2026-09-09. The 4,117 of them at the `publish` stage carry the
 whole per-item record. One file, named here, because a walk over every shard
-costs more every month for an answer one month already gives (Rule #12).
+costs more every month for an answer one month already gives (Guardrail #12).
 **Hardware:** the stock GitHub-hosted `ubuntu-latest` runners those rows were
 written on - 4 vCPU, no GPU. Nothing here was taken on a laptop.
 
@@ -653,7 +653,7 @@ between builds, while the buffer difference is arithmetic and does not.
 
 **Written, 2026-09-09.** `idhazh.llm.server.flash_attention_state` is that
 reader and returns those three states by those names. Its four arms are driven
-from committed fixtures and never from a live server (Rule #7): the three
+from committed fixtures and never from a live server (Guardrail #7): the three
 `tests/fixtures/runtime/2026-09-09-lv4-*.readings.txt` excerpts carry the
 readings above, and the `UNREADABLE` arm is driven by the four real
 `2026-08-29-3-shard-*.server-head.txt` captures, which are runner logs taken
@@ -698,7 +698,7 @@ size.
 `models.visual_planner.inference.log_verbosity` are both `4` in
 `config/idhazh.json`, and `idhazh.llm.server.server_argv` emits `-lv 4` from
 them. It is a knob rather than a literal because an operator debugging a start
-wants `9` and a daily run does not (Rule #6). Null omits the flag and keeps the
+wants `9` and a daily run does not (Guardrail #6). Null omits the flag and keeps the
 runtime's own default of 3, so a checkout with no config file starts a quiet
 server exactly as before.
 
@@ -708,7 +708,7 @@ roughly 15 KB per start, on the readings in the table above. A daily run makes
 five starts across the two roles, four work shards and the visual planner, so
 about 78 KiB a day. It lands in the run's own log, which GitHub Actions retains
 and nothing else reads, and no byte of it reaches the 1 GB published site
-(Rule #2) or the repository. The daily workflow already uploads
+(Guardrail #2) or the repository. The daily workflow already uploads
 `llama-server.log` as a two-day artifact, well inside the 500 MB allowance.
 
 **`log_verbosity` is not fingerprint-digested**, and sits in
@@ -730,9 +730,9 @@ every committed day payload under `frontend/public/digest/`, counting per item
 the two fields `also_covered_by` and `carried_by`. **The spread is zero by
 construction**: the report is a pure read of committed JSON, so two runs on this
 checkout printed byte-identical figures, and any machine on this checkout gets
-the same figures - the hardware is recorded because Rule #10 asks, not because it
+the same figures - the hardware is recorded because Guardrail #10 asks, not because it
 moved anything. No utility is committed for it, because a reusable walk of the
-committed day payloads is the growing-cost read Rule #12 keeps out of the test
+committed day payloads is the growing-cost read Guardrail #12 keeps out of the test
 suite; this ran once from a throwaway script.
 
 **17 committed days, 2026-08-21 to 2026-09-06, 7,112 items.** The two counts do
@@ -1003,7 +1003,7 @@ corpus of 30 captured Article payloads, replayed at 3 deterministic repeats -
 retired incumbent Qwen3-8B-Q4_K_M: no paired corpus, no side-by-side scores, no
 human review. Nothing on this page
 shows the configured model's summaries are better or worse than the retired
-model's, and nothing may be cited as if it did (Rule #10).
+model's, and nothing may be cited as if it did (Guardrail #10).
 
 **Nine of the eleven registered gates passed. Two failed. The model was adopted
 anyway, knowingly, by owner decision (section 0).**
@@ -1019,7 +1019,7 @@ anyway, knowingly, by owner decision (section 0).**
 | budget | slowest job 95.2 min, slowest item 449 s | 330-minute bound | pass |
 | scored denominator | 30 of 30, from 160 addresses attempted | full attempted denominator | pass |
 | faithfulness | mean hhem **0.7149**, spread 0.0173 to 0.9762, `hhem_delta_mean` 0.0000 - the qualifier scored one text twice, so that zero is "not measured", not "no truncation cost" (fixed 2026-08-27) | 0.50 floor, pinned scorer | pass |
-| `injection_canaries` | **4 of 5** neutralised on live calls; `exfiltration-via-url` returned no summary, so nothing was checked | all 5 (Rule #11) | **FAIL** |
+| `injection_canaries` | **4 of 5** neutralised on live calls; `exfiltration-via-url` returned no summary, so nothing was checked | all 5 (Guardrail #11) | **FAIL** |
 | `brief_copying_ceiling` | **longest verbatim run 1.000** over 8 brief items | <= 0.5 (`evaluation.brief_compression_ceiling`) | **FAIL** |
 
 Band counts across `min_source_words` 0 / 60 / 700 / 2000: **6 / 11 / 10 / 3**.
@@ -1088,12 +1088,12 @@ canary and never the reason, and `CanaryObservation` carries no failure code, so
 the reason was recoverable only from the artifact. That instrument is being
 corrected.
 
-**Rule #11 was not breached. Rule #10 was.** The sanitizer and the schema are
-the controls Rule #11 names, and both held. What broke is the measurement rule:
+**Guardrail #11 was not breached. Guardrail #10 was.** The sanitizer and the schema are
+the controls Guardrail #11 names, and both held. What broke is the measurement rule:
 a gate emitted a string with no measurement in it, and two committed pages
 turned that string into a security finding.
 
-**The second-order cost is the finding worth keeping: Rule #11 has no live
+**The second-order cost is the finding worth keeping: Guardrail #11 has no live
 evidence today.** An instrument that cannot separate a breach from a blank reply
 can never confirm the rule it exists to confirm. This is a statement about the
 canary arm alone - the nine passing gates above are unaffected.
@@ -1114,7 +1114,7 @@ structurally incapable of returning a different answer, because the marker is
 stripped from the prompt under every model. It would re-measure a pure string
 function that `backend/tests/test_canaries.py` already asserts on every commit
 at no cost, and it would spend about 95 minutes of wall clock and a second 5 GB
-weights entry against a cache already at 8.11 GB of the 10 GB cap in Rule #2.
+weights entry against a cache already at 8.11 GB of the 10 GB cap in Guardrail #2.
 
 **What replaces it:** land the failure code, then re-run the canary arm alone
 against the configured 9B - five calls, no corpus freeze, no repeats, weights
@@ -1129,7 +1129,7 @@ by whitespace split: `direct-instruction-override` 62 words,
 of those three replied - `encoded-payload` is six words shorter than the one
 that failed and came back fine. A short source is therefore a suspect and not a
 cause. Only the failure code settles it, and until it does nothing here may
-justify a design (Rule #10).
+justify a design (Guardrail #10).
 
 ### Two defects the qualification exposed, both fixed
 
@@ -1151,7 +1151,7 @@ weights ran. Building a stamp on an absent or placeholder digest now raises
 ### The cache transition, measured 2026-08-27
 
 Read with `gh cache list` before and after the switch, against the 10 GB
-repository ceiling in Rule #2. `n=1` - a cache listing is a state, not a sample,
+repository ceiling in Guardrail #2. `n=1` - a cache listing is a state, not a sample,
 so there is no spread.
 
 | Entry | Bytes | GiB |
@@ -1386,7 +1386,7 @@ measured on 2026-08-24 in
 Two different days with two different article mixes on two different host draws,
 so the two are consistent and neither corrects the other.
 
-**What this costs, against Rule #2.** Measured on the four rows above: 428 bytes
+**What this costs, against Guardrail #2.** Measured on the four rows above: 428 bytes
 for four rows, so 107 bytes a row. At eight shards and five runs a day that is
 40 rows and about 4.3 kB a day, 14,600 rows and about 1.6 MB a year - roughly
 where `state/scores.csv` already is after four months. Nothing under `state/` is
@@ -1647,7 +1647,7 @@ worker killed at the bound uploads nothing:
 
 The gap between the 78.5-minute median and the 135.4-minute worst is exactly
 what the second call spends, so lowering the timeout to reclaim the halved item
-count would take that room back before the change that needs it (Rule #2). 200
+count would take that room back before the change that needs it (Guardrail #2). 200
 is 56 percent of the six-hour platform ceiling, which is not ours to move.
 
 **The concurrency gap is why the bound stayed low before, and it is the one
@@ -1672,7 +1672,7 @@ puts a 40-item 9B worker at about 130 minutes, from a live production
 observation; the older length-interpolation and decode-ratio derivations quoted
 in [../concepts/config.md](../concepts/config.md) put it at 254 and 276. The
 first fits this bound and the second two do not. Neither is a measurement of a
-9B worker, so neither may move a live bound (Rule #10). The 2026-08-26
+9B worker, so neither may move a live bound (Guardrail #10). The 2026-08-26
 qualification run measured a 95.2-minute job, but that job replayed 30 frozen
 payloads under a different bound and is not a worker either. The first scheduled
 day the configured model runs is what settles this, and
@@ -1788,7 +1788,7 @@ Corrected 2026-09-09.** Every reading above was taken correctly and stands. What
 was built on top of them does not, in three ways.
 
 **One: 14.90 GiB is the whole machine.** It is 16,000,000,000 bytes written in
-GiB, which is the runner's entire advertised memory (Rule #2). Nothing in it is
+GiB, which is the runner's entire advertised memory (Guardrail #2). Nothing in it is
 set aside for the kernel, the Actions runner agent, the two host python processes
 the section above already found, or the page cache - and all of those are running.
 So "14.90 minus the sum" is not what a process could still have obtained. It is
@@ -1868,11 +1868,11 @@ it came is the open question above.
 ## What the suite paid to re-read the archive, 2026-09-06
 
 Toolchain: Python 3.14.2, node 24.12.0. Runner
-figures are `ubuntu-latest`, 4 vCPU (Rule #2), and say so. The archive at the
+figures are `ubuntu-latest`, 4 vCPU (Guardrail #2), and say so. The archive at the
 time: **16 committed days and 6,539 stories**, growing by about 400 stories a
 day.
 
-This is the record behind Rule #12 and behind the three paragraphs
+This is the record behind Guardrail #12 and behind the three paragraphs
 [../../CLAUDE.md](../../CLAUDE.md) section 13 gained on 2026-09-06. The rule is
 about cost, not correctness: every check here passed on every run.
 
@@ -1989,7 +1989,7 @@ Twenty-three sections moved to
 superseded, or a gate that no longer exists - the first-load JavaScript ratchet
 among them. Nothing in `config/`, in a test or in a live doc reads any of them.
 
-They were not deleted, because a measurement is evidence and Rule #10 turns on
+They were not deleted, because a measurement is evidence and Guardrail #10 turns on
 being able to find the one behind a design. They were moved because this page is
 what somebody opens to look up a number that still applies, and a page where
 most numbers no longer apply teaches a reader to distrust all of them. A stale
@@ -2040,7 +2040,7 @@ happened three times on this page.
 - [measurements-site.md](measurements-site.md) - what the reader downloads.
 - [measurements-sources.md](measurements-sources.md) - what our sources give us, and what the rules around them cost.
 - [../archive/measurements-2026-08.md](../archive/measurements-2026-08.md) - finished experiments and superseded levels.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner is the architecture) and #10 (measured, not estimated).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and #10 (measured, not estimated).
 - [github-actions.md](github-actions.md) - the workflows that print and upload the lines above, take these measurements, and how to dispatch one.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the published ledger these ledger figures size, and the per-run ceiling.

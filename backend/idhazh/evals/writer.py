@@ -21,7 +21,7 @@ thing that can still answer it.
 meant every run paid for every row it had ever written. Measured on this
 repository on 2026-09-07: 7,636 rows over two shards, 6,111.8 KB, 819.6 bytes a
 row, and about 173 MB once the ledger reaches steady state - a bill that rises
-on a day nobody wrote any code, which is what Rule #12 refuses. The identity is
+on a day nobody wrote any code, which is what Guardrail #12 refuses. The identity is
 64 hex characters wide, so the ledger keeps a second record of exactly that:
 `state/score-index/<YYYY-MM>.csv`, 76 bytes an observation, beside the shard it
 describes. Over the same 7,636 measurements that is 566.8 KB against 6,111.8 KB,
@@ -88,7 +88,7 @@ def ledger_shards(state_dir: Path) -> list[Path]:
 
     The daily settlement is no longer a caller. A run appends to the one shard
     `ledger_path` names, so that shard is the only place a repeat can be, and
-    walking the rest charged every run for every month on record (Rule #12,
+    walking the rest charged every run for every month on record (Guardrail #12,
     `cli.stage_dedupe_ledgers`). The operator's full pass still comes here.
     """
     return month_partition.month_files(state_dir / LEDGER_DIRNAME, ".csv")
@@ -282,7 +282,7 @@ def rebuild_index(state_dir: Path, months: Iterable[str]) -> dict[str, IndexDrif
 
     **An operator command, and no stage calls it.** It opens every row of every
     month it is given - the read the index exists to avoid - so the cover is the
-    months the caller names and there is no default (Rule #12,
+    months the caller names and there is no default (Guardrail #12,
     `cli.stage_rebuild_score_index`). A month with no committed shard is refused
     by name rather than skipped: a typo must not read as a clean pass over
     nothing.

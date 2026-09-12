@@ -96,7 +96,7 @@ function remainingArticles(days: Day[]): number | null {
 /** Three significant figures, which is the precision the band prints at.
  *
  * The rate under the answer is a median whose spread is near a fifth of itself,
- * so the trailing digits of a six-figure count are noise (Rule #10).
+ * so the trailing digits of a six-figure count are noise (Guardrail #10).
  */
 function threeFigures(value: number): number {
 	if (value <= 0) return 0;
@@ -427,7 +427,7 @@ const BAND_PAYLOAD = resolve(process.cwd(), 'public', 'console', 'band.json');
  * numbers for one payload, fourfold apart, and this spec's own century model
  * produced 3,247 bytes, which passed the number asserted here and failed the
  * one the gate applies. Nothing had gone red yet, which is the whole hazard.
- * The knob lives in `config/idhazh.json` and nowhere else (Rule #6), so this
+ * The knob lives in `config/idhazh.json` and nowhere else (Guardrail #6), so this
  * reads it rather than restating it.
  */
 const REPO = resolve(process.cwd(), '..');

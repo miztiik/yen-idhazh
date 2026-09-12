@@ -5,13 +5,13 @@ item-health ledger sums a field the summarize stage copied out of each model
 reply; `state/runtime-counters.csv` carries what llama-server counted for the
 whole shard. `docs/architecture/summarize/throughput.md` and the console both
 publish rates derived from the first one, so the second one is what makes those
-rates checkable rather than merely reported (Rule #10).
+rates checkable rather than merely reported (Guardrail #10).
 
 This is an audit and not a stage. It runs when somebody doubts a published
 number, never on the daily pipeline's critical path, because a check that can
 fail a publication is a check that gets switched off the first time a shard's
 server dies. It is committed rather than kept as a private script so the answer
-is reproducible from a fork or a stale branch (Rule #5), which is the same
+is reproducible from a fork or a stale branch (Guardrail #5), which is the same
 reason `migrate_published_ledger.py` lives here.
 
 Usage, from the root of a checkout:

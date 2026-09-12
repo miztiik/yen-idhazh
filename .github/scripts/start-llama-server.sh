@@ -10,7 +10,7 @@
 # it rather than reading it.
 #
 # The argv itself is still built by `idhazh.llm.server.server_argv`, which is
-# the single place a llama-server flag may be spelled (Rule #6). This script
+# the single place a llama-server flag may be spelled (Guardrail #6). This script
 # never names one.
 #
 # Usage: start-llama-server.sh <role> <name>

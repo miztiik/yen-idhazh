@@ -14,7 +14,7 @@ make the list a second serial hop and the first month a third (row 10, decision
 **Sentences, not raw ledgers.** Every string on this shape is one the pipeline
 wrote about its own work - a verdict, a route's worst state, a size. None of it
 is fetched text and none of it is an address, so there is no cell an article
-could arrive in (Rule #11). What crosses is what the band prints; the ledgers
+could arrive in (Guardrail #11). What crosses is what the band prints; the ledgers
 behind it stay under `state/`.
 """
 
@@ -46,7 +46,7 @@ _SENTENCE_MAX: Final = 240
 #: cell on the band a browser follows. The leading slash is single and the first
 #: segment cannot be empty, which is what refuses `//host/` - a protocol-relative
 #: URL is an origin wearing a path's clothes, and a site that never calls home
-#: (Rule #1) must not be able to grow a link that does.
+#: (Guardrail #1) must not be able to grow a link that does.
 RoutePath = Annotated[
     str, StringConstraints(pattern=r"^/[a-z0-9-]+(?:/[a-z0-9-]+)*/$", max_length=128)
 ]
@@ -120,7 +120,7 @@ class BandWorst(Model):
 
 
 class BandSize(Model):
-    """The committed tree against the 1 GB Pages cap (`CLAUDE.md` Rule #2)."""
+    """The committed tree against the 1 GB Pages cap (`CLAUDE.md` Guardrail #2)."""
 
     bytes: int | None = Field(
         default=None,
@@ -203,7 +203,7 @@ class ConsoleBand(Contract):
             why=(
                 "The band is derived from six committed ledgers and was inlined into "
                 "three prerendered documents, so the one thing an operator reads first "
-                "was the one thing with no contract and no version stamp (Rule #3). "
+                "was the one thing with no contract and no version stamp (Guardrail #3). "
                 "Fetching it first and alone is what lets the console answer 'did it "
                 "work' before a single month file lands, and the months list is on it "
                 "because a shell that had to ask for the list separately would make "

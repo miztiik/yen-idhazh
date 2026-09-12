@@ -12,7 +12,7 @@ import { resolve } from 'node:path';
  * says a feed "has never failed" is not a stronger version of "did not fail in
  * these runs" - it is a different claim, and it is one no read on the page can
  * support. A sentence that could only be true by reading everything is a
- * growing read wearing different clothes (`CLAUDE.md` Rule #12).
+ * growing read wearing different clothes (`CLAUDE.md` Guardrail #12).
  *
  * It also costs the operator the answer he came for. A feed that broke once in
  * August and has answered every run since is permanently disqualified by
@@ -35,7 +35,7 @@ import { resolve } from 'node:path';
  * strings this row removed are held by review and by the assertions in
  * `console.spec.ts`, not by this file. A rule stated as a property survives a
  * sentence nobody has written yet; a rule stated as a list is wrong the day
- * after it is written (`CLAUDE.md` Rule #12 design rationale).
+ * after it is written (`CLAUDE.md` Guardrail #12 design rationale).
  *
  * Runs in Node rather than in a page, like `payload-weight.spec.ts` beside it,
  * and it reads the same build the preview server is about to serve. A source

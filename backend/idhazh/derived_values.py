@@ -72,7 +72,7 @@ an explicit 28-digit context rather than the process default: a global anybody c
 change is a number that would come out differently in two builds.
 
 Constant cost in the size of one plan and one article's table, both capped by the
-contract and by `elements.max_per_article` (Rule #12).
+contract and by `elements.max_per_article` (Guardrail #12).
 """
 
 from __future__ import annotations
@@ -190,7 +190,7 @@ class Refusal(NamedTuple):
     `detail` is built out of element ids, role names, type names, units and
     digits, never out of an element's own characters - it is destined for a log
     line and later for a ledger cell, and those characters came off a stranger's
-    page (Rule #11).
+    page (Guardrail #11).
     """
 
     check: ResolverCheck

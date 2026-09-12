@@ -88,7 +88,7 @@ Assigning a tag needs a rule, and no config contract has anywhere to put one. `L
 
 The site is the open question, and the two candidates carry different contract costs. This page says "a tag, applied after the fetch", which puts the matcher on sanitized article text at Extract, where `Article` already holds the three fields and nothing new is persisted. The stage diagram says "rank + tag lens/entity" inside the plan job, which runs on the feed title alone before a byte is fetched, and would need three new fields on `PlannedItem` - making `run-plan` a second persisted contract to version. Picking one is the owner's call and is not settled here.
 
-Whichever is chosen, one boundary rule holds. A matcher that reads article text reads a stranger's page, so it runs after `sanitize` and it may only ever emit a member of a closed enum ([trust-boundary.md](trust-boundary.md), Rule #11). A hostile page can then win itself a tag we already publish. It can never invent one, and it never reaches a prompt.
+Whichever is chosen, one boundary rule holds. A matcher that reads article text reads a stranger's page, so it runs after `sanitize` and it may only ever emit a member of a closed enum ([trust-boundary.md](trust-boundary.md), Guardrail #11). A hostile page can then win itself a tag we already publish. It can never invent one, and it never reaches a prompt.
 
 **There is a third outcome, and it is cheaper than either.** Fowler, consulted 2026-08-26: before asking how to build the tagger, ask whether the surface should exist. Three fields, two schemas, a frontend type and a config vocabulary are rent paid every day by a feature with no reader-facing consumer today. The consultation therefore weighs three options, not two - tag at Extract, tag in the plan job, or delete the three dimensions and their vocabularies and stop paying. Deleting is itself a breaking contract change needing a read-side migration (section 11), so it is the same class of work; it is not the cheap way out, only the honest third choice.
 
@@ -227,7 +227,7 @@ enter the pool.
 
 Two rules keep it from becoming a censorship surface:
 
-- **The entries live in `config/`, and the default is empty** (Rule #6). The knob
+- **The entries live in `config/`, and the default is empty** (Guardrail #6). The knob
  is the shape; the list is a source-curation decision like the feed list beside
  it.
 - **The feed's health row still counts what the feed offered.** What we accept is
@@ -237,7 +237,7 @@ Two rules keep it from becoming a censorship surface:
 
 The marker is the narrowest thing that was measured. `fool.com/the-ascent/` is
 the publisher's affiliate arm; `fool.com/investing/` is not blocked, because no
-item from it has been observed to fail (Rule #10).
+item from it has been observed to fail (Guardrail #10).
 
 ## Ranking is arithmetic, not judgement
 
@@ -304,7 +304,7 @@ those weights.
 **The term is a step, not a ramp.** A qualifying subject adds
 `ui.lead_shared_subject_weight` and a subject that does not qualify adds nothing.
 No measurement supports a shape between those two, and a shape nobody measured
-may not justify a design (Rule #10).
+may not justify a design (Guardrail #10).
 
 A subject qualifies when both hold:
 
@@ -316,7 +316,7 @@ A subject qualifies when both hold:
 
 The title, never the body and never fetched text: the matcher reads words we
 wrote and may only emit a slug the committed registry already holds, so a
-hostile page can win a tag we already publish and can never mint one (Rule #11).
+hostile page can win a tag we already publish and can never mint one (Guardrail #11).
 
 **Four eligibility rules run before any score**, and each excludes whatever the
 story ranked: a `low` band story, a `truncated` one, one whose `time_source` is
@@ -743,7 +743,7 @@ read impossible to break by accident.
 
 ## Design rationale
 
-**The affiliate-page control sits at collection, not at the score (2026-08-24).** The three `fool.com/the-ascent/` items are the case that separates "the summary is wrong" from "the item should not be here". Every instrument in the eval ledger compares our summary to the article, and all of them passed. Moving the control to collection also costs nothing: a blocked address is never fetched, never summarized and never scored, which is the cheapest place a rejection can happen (Rule #2). Authority: owner, closing known defect 7.
+**The affiliate-page control sits at collection, not at the score (2026-08-24).** The three `fool.com/the-ascent/` items are the case that separates "the summary is wrong" from "the item should not be here". Every instrument in the eval ledger compares our summary to the article, and all of them passed. Moving the control to collection also costs nothing: a blocked address is never fetched, never summarized and never scored, which is the cheapest place a rejection can happen (Guardrail #2). Authority: owner, closing known defect 7.
 
 Segmenting by subject is a source-diversity problem, not a compute one. The pipeline had spare capacity long before it had spare sources, so the binding constraint was never how many items could be summarized - it was how many were worth summarizing, and whether they covered more than one subject.
 
@@ -777,11 +777,11 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 | Retiring `cnn-world` over the syndicated affiliate pages | It is a working feed carrying real reporting. Retiring a whole source over three items it passed through costs the vertical a desk to fix a link filter. |
 | Blocking `fool.com` entirely | The publisher's editorial arm has not been observed to fail. The measured cut is the affiliate section, and nothing wider has been measured. |
 | Taking the leading block from the first N of the published order | It ships the accident instead of the edit. That head is the top of whichever desk sorted first in run 1, which is a property of `cli.build_plan` and not a judgement about the news. |
-| A heat score for the leading block, computed in the browser | Read-time re-ranking makes a shared link show the recipient a different page from the one the sender saw, and the number behind it would be one nobody measured (Rule #10). Carmack, 2026-08-31. |
+| A heat score for the leading block, computed in the browser | Read-time re-ranking makes a shared link show the recipient a different page from the one the sender saw, and the number behind it would be one nobody measured (Guardrail #10). Carmack, 2026-08-31. |
 | `Front page at <source>.` as a lead's sentence | False. `on_front_page` says a salience feed voted, and the two active ones are `Hacker News front page` and `Hacker News best` - so naming the front page is wrong whenever the other one voted. Measured 2026-09-01, it is also false on all 490 committed stories that record it and absent on the other 3,596. |
 | `Three sources covered this.` as a lead's sentence | `rank.merge` groups by canonical URL, so `carried_by` counts syndication of one address. Two outlets writing their own pieces produce two addresses and both read 1. The shipped sentence says how the report reached us, which is what the number means. |
 | An `events`-based consequence proxy in the lead score | `events` names the kind of event and never its size - a seed round and a multi-billion acquisition both read `funding`. It would make every acquisition outrank every research paper, which is a rule about grammar rather than about importance. |
-| Asking the summarizer for the lens, event and entity tags | A tag decides what a reader is shown under a filter, so a page that picks its own tags writes its own index entry - fetched text steering a control (Rule #11). It also adds decode tokens to the one stage that already dominates the run. A deterministic matcher costs no model time and returns the same answer on every re-run, which is the property the rest of this page's arithmetic already has. Andre, consulted 2026-08-26. |
+| Asking the summarizer for the lens, event and entity tags | A tag decides what a reader is shown under a filter, so a page that picks its own tags writes its own index entry - fetched text steering a control (Guardrail #11). It also adds decode tokens to the one stage that already dominates the run. A deterministic matcher costs no model time and returns the same answer on every re-run, which is the property the rest of this page's arithmetic already has. Andre, consulted 2026-08-26. |
 | A per-feed weight only, with no tier | The tier is the reusable half: it is a fact about a kind of source, and a new feed inherits it without anyone inventing a number. |
 | Keeping the flat floor of twenty-five and leaving two verticals unpublished | The floor would then be measuring the borrowed constant, not the health of the desk. Two verticals stay dark for a reason that does not survive being stated. |
 | Dropping the floor to whatever the thinnest vertical reached | That is tuning the target to the result with no rule behind it, and the floor stops being able to fail. |

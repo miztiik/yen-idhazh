@@ -5,7 +5,7 @@
  * of those stories built its own `IntersectionObserver`, so a day that
  * published more drawings held more watchers - one object, one callback and one
  * observed target per waiting story, for the life of the page. That is a cost
- * that rises because a run published more, which is what CLAUDE.md Rule #12
+ * that rises because a run published more, which is what CLAUDE.md Guardrail #12
  * refuses.
  *
  * One watcher answers the same question for all of them. The browser already

@@ -27,7 +27,7 @@ from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 #:
 #: `endpoint_key` is the sha256 of the configured feed URL, and its own field
 #: description on `FeedHealthRow` says it "identifies the address rather than the
-#: feed". An address hashed is still an address (Rule #11), and every panel that
+#: feed". An address hashed is still an address (Guardrail #11), and every panel that
 #: draws this ledger groups by `feed_id`, which is our own slug.
 FORBIDDEN_COLUMNS: Final[frozenset[str]] = frozenset({"endpoint_key"})
 
@@ -46,7 +46,7 @@ class PublicFeedRow(Contract):
             why=(
                 "The console reads state/feed-health/ at build time and inlines the "
                 "result, so the ledger's shape reached a reader with no contract and "
-                "no version stamp (Rule #3). Naming it before a producer exists is "
+                "no version stamp (Guardrail #3). Naming it before a producer exists is "
                 "what stops the producer and the consumer inventing two different "
                 "lists. detail is kept because it is our own sentence and the panel "
                 "prints it; endpoint_key is refused because it is the address."

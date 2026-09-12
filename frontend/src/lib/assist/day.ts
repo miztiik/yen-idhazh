@@ -87,7 +87,7 @@ const days = new Map<string, HeldDay>();
 /** A published date, and nothing else. Three parts split on a dash is not the
  * same test: `not-a-date` splits into three truthy parts and would have become
  * `digest/not/a/date/digest.json` - a path built out of whatever arrived, which
- * is the shape of mistake Rule #11 is about. A date reaching here comes from a
+ * is the shape of mistake Guardrail #11 is about. A date reaching here comes from a
  * route parameter or a search index entry, so it is checked rather than
  * trusted. */
 const PUBLISHED_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -210,7 +210,7 @@ function hold(date: string, entry: HeldDay): void {
  * rather than on arrival, which is the worst shape this failure has.
  *
  * It is deliberately not a schema. A browser validating twenty-three fields
- * would need a validator on the reading path (Rule #1, Rule #8), and the
+ * would need a validator on the reading path (Guardrail #1, Guardrail #8), and the
  * contract is checked where it can be checked properly: `idhazh validate-days`
  * opens every story of every committed day in CI and before every publish.
  */
@@ -277,7 +277,7 @@ export interface DayWatch {
 	/** Told on every change, so the page holds no timer of its own. */
 	onStatus: (status: DayStatus, day: DayForPage | null) => void;
 	/** How long the wait may last before it is worth one sentence. It comes from
-	 * `ui.payload_slow_ms` and is never a number written here (Rule #6). */
+	 * `ui.payload_slow_ms` and is never a number written here (Guardrail #6). */
 	slowMs: number;
 	/** Go back to the host about a day this session already holds. This is what
 	 * the retry control calls. A failed day is no longer held, so a plain ask
@@ -343,7 +343,7 @@ export function watchDay(date: string, watch: DayWatch): Promise<DayForPage | nu
  * of the document and have to tab back down to what they were sent to read.
  *
  * The id goes to `getElementById`, which takes a literal id and not a selector,
- * so a fragment a reader was handed cannot become a query (Rule #11).
+ * so a fragment a reader was handed cannot become a query (Guardrail #11).
  *
  * True when it found the element, so a caller can tell "no such story here"
  * from "no fragment at all".

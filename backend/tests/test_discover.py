@@ -5,7 +5,7 @@ a model, so the tests are about the day's *order* rather than about parsing:
 does the same story arriving three ways become one item, does an institution
 outrank an aggregator, and does a re-run produce the identical list.
 
-No mocks and no network (Rule #7). Every feed here is a committed fixture,
+No mocks and no network (Guardrail #7). Every feed here is a committed fixture,
 and `feedparser` parses a string with no network of its own.
 """
 
@@ -377,7 +377,7 @@ def test_a_promotional_address_never_enters_the_pool() -> None:
         "https://fool.com/The-Ascent/credit-cards/landing/wells-fargo-reflect-review",
     ]
     # The publisher's editorial arm is not blocked. The measured cut is the
-    # affiliate section, and nothing wider has been measured (Rule #10).
+    # affiliate section, and nothing wider has been measured (Guardrail #10).
     assert [candidate.canonical_url for candidate in kept] == [
         "https://cnn.com/2026/08/23/world/summit",
         "https://fool.com/investing/2026/08/23/quarterly-results",

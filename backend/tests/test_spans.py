@@ -21,7 +21,7 @@ Two sentinels, because one of them alone would be a weaker test:
 The same sweep runs over all five committed injection canaries in
 `backend/tests/test_canaries.py`, which owns those fixtures.
 
-No mocks and no network (Rule #7): the fetcher reads a page this file builds,
+No mocks and no network (Guardrail #7): the fetcher reads a page this file builds,
 and the model is a loopback HTTP server replying with a committed completion.
 """
 
@@ -442,7 +442,7 @@ def test_the_robots_read_is_a_span_inside_the_fetch() -> None:
 
     The address is a loopback one, which `fetch.address_is_dialable` refuses
     before any socket is opened - so this runs the real fetcher with no network
-    (Rule #7).
+    (Guardrail #7).
     """
     sink = Collect()
     tracer = telemetry.Tracer(sink=sink, now=lambda: "2026-08-30T06:00:00Z")

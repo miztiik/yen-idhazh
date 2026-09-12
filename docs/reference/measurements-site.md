@@ -279,7 +279,7 @@ beside it, which moves the day a month is added.
 
 **A per-row ceiling was the rejected alternative** - "no telemetry row may cost
 more than 40 gzipped bytes" fires the day a column is added and never fires on
-ordinary growth, which is the Rule #12 shape. It was refused because it puts two
+ordinary growth, which is the Guardrail #12 shape. It was refused because it puts two
 units in one config object, and a mixed-unit knob is read wrong once and then
 trusted.
 
@@ -499,7 +499,7 @@ is the first tag in the repository, so nothing was paying that before.
 04:21 and 04:22 local. The browser is Chromium 151.0.7922.34 driven by
 Playwright 1.62.1 on node v24.12.0, from
 `backend/utilities/encoder_origin_probe.mjs` - an operator tool, run by hand,
-not a spec and in no suite, because Rule #7 forbids a test that touches the
+not a spec and in no suite, because Guardrail #7 forbids a test that touches the
 network. The page is `https://miztiik.github.io/yen-idhazh/`, the deployed Pages
 origin; `location.origin` and `isSecureContext` were read out of the loaded
 document to prove it. Every fetch runs inside that document, so the `Origin`
@@ -688,7 +688,7 @@ That is the claim the row rests on and it is the one worth checking rather than
 asserting: a sort that drops a story looks exactly like a day that published
 fewer, and nothing on the page would say which. `frontend/tests/item-time.spec.ts`
 re-runs it on every build, over a built pool rather than over the archive
-(`CLAUDE.md` Rule #12).
+(`CLAUDE.md` Guardrail #12).
 
 ### The rail draws 907 labels where a label per story would draw 4,713
 
@@ -1075,7 +1075,7 @@ tests read; this section is where it came from.
 
 | Quantity | Bytes | What it means |
 | --- | ---: | --- |
-| The cap (Rule #2) | 1,073,741,824 | 1 GiB. Past it the site is outside what Pages allows. |
+| The cap (Guardrail #2) | 1,073,741,824 | 1 GiB. Past it the site is outside what Pages allows. |
 | The site, 2026-08-27 | 128,064,853 | 11.9 percent of the cap used. |
 | Headroom | 945,676,971 | What is left. |
 | Growth, one published day | 16,641,956 +/- 1,294,368 | What each new day costs. |
@@ -1198,7 +1198,7 @@ the manifest the run wrote after it measured.
 percent, because a published day is 117 to 731 items.** The rate per item is the
 one that holds still, which is why `site-weight` prints that one.
 
-**The repository pack, differenced across the same two commits** (Rule #2's other
+**The repository pack, differenced across the same two commits** (Guardrail #2's other
 budget: the prune bounds the past, and nothing bounds a growing present). Each
 figure is a fresh clone of one commit followed by `git gc --aggressive
 --prune=now`, so it is a repacked size and not an accident of how the local
@@ -1278,7 +1278,7 @@ row the old table carried.
 | 1000 MB | 24 MB | 1 | 2 |
 | 1023 MB | 1 MB | 0 | 0 |
 
-**The target is 14 days, and the target is a judgement (Rule #10).** Nothing here
+**The target is 14 days, and the target is a judgement (Guardrail #10).** Nothing here
 measures how long one maintainer takes to read one issue, so nothing here can
 ground it. Two things around it are measured and bound the window rather than
 set it: the pipeline runs five times a day, so the site is measured every four
@@ -1423,7 +1423,7 @@ second, and to 1.3 seconds on the contended readings.** That is a projection
 from a measured rate, not a measurement.
 
 Against the assemble job's 20-minute timeout that is **0.1 percent of the
-budget** (Rule #2). Five runs a day spend about five seconds a day on it at the
+budget** (Guardrail #2). Five runs a day spend about five seconds a day on it at the
 ceiling. The payloads it reads are the same ones assemble already opens, so the
 cost is a second parse rather than a second download.
 
@@ -1539,7 +1539,7 @@ against.
 list of dicts and then folds it into one map. `tracemalloc` peak over the
 narrowed ledger is **1,102,193 B**, 498.1 B a row, for 2,213 rows. At the
 365,000-row structural ceiling that is **182 MB**, or 1.1 percent of the
-runner's 16 GB (Rule #2). The 2026-08-25 reading was 716 B a row, so the
+runner's 16 GB (Guardrail #2). The 2026-08-25 reading was 716 B a row, so the
 narrowing took about 30 percent off the read - but that reading was on CPython
 3.14 and this one is on 3.12.12, so the interpreter is not held constant and the
 two are not a clean before-and-after. The conclusion is the same either way: a
@@ -1589,4 +1589,4 @@ What a browser fetches before a reader does anything: the prerendered document, 
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the reader's surface these figures were taken on.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the bundle gate that reads every ceiling here.
 - [../concepts/config.md](../concepts/config.md) - the knobs these numbers set.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner is the architecture) and #10 (measured, not estimated).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and #10 (measured, not estimated).

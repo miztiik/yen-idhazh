@@ -250,7 +250,7 @@ def user_turn(
     numbers no sentence beside it mentions.
 
     `lead_words` is most of the request's prefill, and prefill is most of the
-    stage's wall-clock, so it is a config knob rather than a literal (Rule #6).
+    stage's wall-clock, so it is a config knob rather than a literal (Guardrail #6).
     """
     parts = [f"Title: {article.title}" if article.title else "Title: (untitled)"]
     parts.append(untrusted_block(summary.summary or ""))
@@ -389,7 +389,7 @@ def chart_is_reachable(facts: list[NumericFact], *, visuals: VisualsConfig) -> b
 
     This reads the facts only - never the article's words. A predicate that
     branched on fetched prose would let a stranger's page steer our control
-    flow (Rule #11).
+    flow (Guardrail #11).
     """
     if not facts:
         return False
@@ -712,7 +712,7 @@ def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[Vis
     about prose, and a plan can always write prose with no numeral in it.
 
     **It reads no word of the article.** Every input is a kind, a unit or a
-    count, so a stranger's page cannot steer our control flow (Rule #11) - the
+    count, so a stranger's page cannot steer our control flow (Guardrail #11) - the
     same property the single-call gate above holds and for the same reason.
     """
     drawable = _drawable(table)
@@ -776,7 +776,7 @@ def declined_by_the_model(
 
     The ordinary answer. `why` is the plan's own prose and is sanitized on the
     way into the rationale, because it is a string a model wrote about a page we
-    did not write (Rule #11).
+    did not write (Guardrail #11).
     """
     return _nothing(
         summary,

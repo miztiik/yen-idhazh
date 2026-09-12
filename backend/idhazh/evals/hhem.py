@@ -42,7 +42,7 @@ from idhazh.contracts.app_config import EvaluationConfig
 #: not a revision - it moved on 2025-10-20 and could move again tonight. The
 #: value below is the revision `main` resolved to when it was read from the
 #: Hugging Face model API on 2026-08-26. A faithfulness floor measured against
-#: a branch measures an instrument nobody can name afterwards (Rule #10).
+#: a branch measures an instrument nobody can name afterwards (Guardrail #10).
 HHEM_MODEL: Final = "vectara/hallucination_evaluation_model"
 HHEM_REVISION: Final = "8e4a2e6e96c708cc76c2344f7e4757df2515292c"
 HHEM_SCORER_ID: Final = "hhem-2.1-open"
@@ -54,7 +54,7 @@ _IMMUTABLE_REVISION: Final = re.compile(r"^[0-9a-f]{40}$")
 #: How the last window is placed. `metrics.scorer_version` spells this beside the
 #: window size, so a ledger row records the geometry that produced it.
 #:
-#: A code constant and not a config knob (Rule #6 is about tunables). The window
+#: A code constant and not a config knob (Guardrail #6 is about tunables). The window
 #: size and the overlap are numbers an operator can reasonably move; "should the
 #: last window be the same size as the others" is not a question anyone answers
 #: twice.
@@ -143,7 +143,7 @@ def weights_digest(scorer: HhemScorer) -> str:
     checkpoints behind one branch name produced one digest, and the derived
     `scorer_version` said the instrument had not changed. It now walks the
     loaded state dict in key order and digests the actual parameter bytes, so
-    the value is an observation (Rule #10).
+    the value is an observation (Guardrail #10).
 
     Raises when nothing is loaded. A scorer that cannot name its own weights
     cannot support a faithfulness gate, and a fallback string here is what let

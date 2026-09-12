@@ -499,9 +499,9 @@ export async function load() {
 	const console = consoleConfig();
 	// The widest span the control can reach. Nothing older than this can be drawn
 	// whatever the operator does, so every read below is covered by it and no
-	// panel loses a day (`CLAUDE.md` Rule #12). Read from `console.window_presets`
+	// panel loses a day (`CLAUDE.md` Guardrail #12). Read from `console.window_presets`
 	// rather than written down here, so raising the widest preset widens the
-	// reads with it (Rule #6).
+	// reads with it (Guardrail #6).
 	const widest = Math.max(...console.window_presets);
 	const shards = shardMonths(widest);
 	const { rows } = evalRows(shards);
@@ -584,7 +584,7 @@ export async function load() {
 	// One day record per date the window holds, read once at the widest preset and
 	// sliced per preset from that map. `charts` already names every published day,
 	// so this adds no listing of the tree - only `widest` file opens, whatever the
-	// archive holds behind it (`CLAUDE.md` Rule #12).
+	// archive holds behind it (`CLAUDE.md` Guardrail #12).
 	const chartDates = charts.map((day) => day.date).sort();
 	const widestSpan = windowOfDays(chartDates, today, widest, console.today_anchor);
 	const recordsByDate = dayMetrics(
@@ -665,7 +665,7 @@ export async function load() {
 		// a run already settled, and a second reducer here is the defect it removed.
 		// `dayMetrics` opens one file per date it is handed and never lists the tree,
 		// so the cost is the widest preset - 90 files - however many days the archive
-		// holds behind it (`CLAUDE.md` Rule #12).
+		// holds behind it (`CLAUDE.md` Guardrail #12).
 		extractionByWindow,
 		// **No telemetry rows.** The page fetches its months, and the list of which
 		// months exist rides on the band the layout already fetched. Inlined they

@@ -25,7 +25,7 @@
 	 *
 	 * The query is untrusted reader text matched against untrusted payload text.
 	 * It is compared as a lowercased substring by the caller and is never
-	 * interpolated into a selector, a URL or markup (Rule #11).
+	 * interpolated into a selector, a URL or markup (Guardrail #11).
 	 *
 	 * **The thin-desk sentence sits OUTSIDE the panel, not inside it.** At 1024px
 	 * and up the panel is one nowrap band so that it is cheap enough to stick, and

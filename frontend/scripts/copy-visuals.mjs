@@ -52,7 +52,7 @@
  * The shape is `schemas/digest-view.schema.json`, generated from
  * `backend/idhazh/contracts/digest_view.py`, and every staged file carries its
  * `version`. It is a contract because a reading route is about to fetch it, so
- * a browser we cannot upgrade will parse it (Rule #3).
+ * a browser we cannot upgrade will parse it (Guardrail #3).
  */
 
 import {
@@ -133,7 +133,7 @@ const stage = (bytes, destination) => {
 // current; everything else here goes, empty directories included, so the tree
 // this leaves is the tree a full re-stage would have written.
 //
-// Rule #12, and it is the escape hatch taken in writing: this sweep opens a tree
+// Guardrail #12, and it is the escape hatch taken in writing: this sweep opens a tree
 // that gains a directory every published day, and it is unbounded on purpose.
 // No bounded input answers "what is staged that the source no longer has" - a
 // receipt tells you a file is current, never that a file is orphaned, and the

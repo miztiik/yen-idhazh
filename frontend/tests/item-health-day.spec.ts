@@ -9,7 +9,7 @@ import { itemHealthForDay, readShards } from '../src/lib/server/payload';
  * from that one month's shard, never a walk of every shard.
  *
  * All in plain Node against fixtures, so nothing depends on the committed
- * archive (`CLAUDE.md` section 13). The claim is Rule #12: the band's health
+ * archive (`CLAUDE.md` section 13). The claim is Guardrail #12: the band's health
  * read opens a fixed number of files whatever the archive holds behind it. The
  * proof is by construction - a row bearing the target date is planted in every
  * OTHER month's shard, and the reader still returns only the row in the target

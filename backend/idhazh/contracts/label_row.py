@@ -142,7 +142,7 @@ class LabelRow(Contract):
             why=(
                 "The faithfulness cuts are a reader-facing promise with no measured error "
                 "rate behind them. Nothing can move a threshold until labels exist, and "
-                "labels cannot exist until the shape that holds them does (Rule #3). "
+                "labels cannot exist until the shape that holds them does (Guardrail #3). "
                 "Contracts before logic, and this one lands before a single row."
             ),
         ),

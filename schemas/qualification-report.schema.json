@@ -75,7 +75,7 @@
     },
     "Diagnostic": {
       "additionalProperties": false,
-      "description": "A number recorded and never blocked on.\n\nEvery one carries its denominator. A rate over four items is not a rate, and\na diagnostic that hides its denominator is how an unmeasured number gets\ncited later as if it were evidence (Rule #10).",
+      "description": "A number recorded and never blocked on.\n\nEvery one carries its denominator. A rate over four items is not a rate, and\na diagnostic that hides its denominator is how an unmeasured number gets\ncited later as if it were evidence (Guardrail #10).",
       "properties": {
         "denominator": {
           "description": "How many observations produced the value.",
@@ -222,7 +222,7 @@
     {
       "change": "Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
       "version": "2026-08-26",
-      "why": "An adoption gate that reports a pass without the number that produced it cannot be re-read six months later (Rule #10)."
+      "why": "An adoption gate that reports a pass without the number that produced it cannot be re-read six months later (Guardrail #10)."
     }
   ],
   "description": "The merged verdict: every gate, every diagnostic, one answer.",

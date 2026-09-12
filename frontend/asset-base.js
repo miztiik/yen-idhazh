@@ -20,7 +20,7 @@
  * one origin for the drawings valve and, since 2026-09-10, the origins the
  * encoder's failover leg reaches - every one of them computed here from our own
  * config at build time. No payload field, no model output and no fetched text
- * can reach any of them (Rule #11), and `'self'` stays first in the list, so
+ * can reach any of them (Guardrail #11), and `'self'` stays first in the list, so
  * every request the page already makes is unaffected.
  *
  * **A second origin is only safe because of what it is paired with.** The

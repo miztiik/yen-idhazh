@@ -9,7 +9,7 @@
  * tail is growing, and what a run's tokens would have cost somewhere else.
  *
  * Every function here is pure and every one takes its ceiling as an argument,
- * so a test drives it from a fixture ledger and Rule #6 keeps the knobs in
+ * so a test drives it from a fixture ledger and Guardrail #6 keeps the knobs in
  * `config/`. Nothing reaches the disk and nothing reaches the network.
  *
  * **An empty cell is unknown and never zero.** The reader hands absence through
@@ -27,7 +27,7 @@ import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
 import { paint, type ChartToken, type Polarity } from './theme';
 
-/** The runner's memory, from CLAUDE.md Rule #2: 4 vCPU, 16 GB RAM, no GPU.
+/** The runner's memory, from CLAUDE.md Guardrail #2: 4 vCPU, 16 GB RAM, no GPU.
  *
  * A constant and not a `config/` knob, for the same reason `PAGES_CAP_BYTES` in
  * `glance.ts` is a constant: it is a property of the platform we run on, not a
@@ -1099,9 +1099,9 @@ export interface CostRate {
 /** What a run's tokens would have cost at somebody else's price.
  *
  * A counterfactual and never a bill: nothing bills us, because Actions minutes
- * are free on a public repository (Rule #2). What this answers is the question
+ * are free on a public repository (Guardrail #2). What this answers is the question
  * the wall clock cannot - whether four hours of runner time was a good trade -
- * and CLAUDE.md Rule #10 carries the owner's carve-out for it, on the condition
+ * and CLAUDE.md Guardrail #10 carries the owner's carve-out for it, on the condition
  * that the rate and its source are printed beside the figure.
  */
 export function costOf(tokens: { input: number; output: number }, rate: CostRate): number {

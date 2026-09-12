@@ -216,7 +216,7 @@ class VisualDecision(Contract):
             why=(
                 "The route job sits between 51 and 60 minutes against a 60-minute bound and "
                 "nothing recorded what it spent, so every argument about the budget was an "
-                "estimate (Rule #10). Null on a payload written before the clock existed, "
+                "estimate (Guardrail #10). Null on a payload written before the clock existed, "
                 "which is what keeps the field additive."
             ),
         ),

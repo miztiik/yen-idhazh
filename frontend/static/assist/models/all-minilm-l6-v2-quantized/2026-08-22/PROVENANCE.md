@@ -51,7 +51,7 @@ returning searcher pay the whole download again.
 
 ## Why this file is in the repository
 
-Rule #1 forbids a runtime fetch to any origin but our own. A browser that
+Guardrail #1 forbids a runtime fetch to any origin but our own. A browser that
 loaded weights from a third-party hub would break that, so the weights are
 committed and served beside the pages that use them.
 
@@ -79,4 +79,4 @@ stated to them before anything is fetched.
 ## See also
 
 - [`../../../../../../docs/architecture/publishing/visuals.md`](../../../../../../docs/architecture/publishing/visuals.md) - the other build-time renderer.
-- [`../../../../../../CLAUDE.md`](../../../../../../CLAUDE.md) - Rule #1 and section 0a.
+- [`../../../../../../CLAUDE.md`](../../../../../../CLAUDE.md) - Guardrail #1 and section 0a.

@@ -459,7 +459,7 @@ class RunManifest(Contract):
             why=(
                 "The route job lands between 51 and 60 minutes against a 60-minute bound, "
                 "and no committed artifact said what it spent or how many items it spent it "
-                "on. The budget cannot be argued from an estimate (Rule #10). Both default "
+                "on. The budget cannot be argued from an estimate (Guardrail #10). Both default "
                 "on a manifest written before they existed."
             ),
         ),

@@ -1038,7 +1038,7 @@ def test_a_recorded_call_one_reply_labels_the_table_over_a_loopback_socket(
     content is written by hand rather than captured, because no stage dispatches
     call 1 yet - the call that turns this table into a page is a later row. It
     carries no `usage` block for the same reason: a token count nobody measured
-    is not a token count (Rule #10), and the transport reads a missing one as
+    is not a token count (Guardrail #10), and the transport reads a missing one as
     zero.
     """
     table = element_table(article_ok, config=ElementsConfig())
@@ -1345,7 +1345,7 @@ def test_a_recorded_call_two_reply_parses_over_a_loopback_socket(article_ok: Art
     content is written by hand rather than captured, because no stage dispatches
     call 2 yet - the gate in front of it and the picture it leads to are later
     rows. It carries no `usage` block for the same reason: a token count nobody
-    measured is not a token count (Rule #10).
+    measured is not a token count (Guardrail #10).
 
     The plan's own `element_ids` are checked against the article's table here,
     which is the point of decision 3 - the plan sources the article, and the

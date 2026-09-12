@@ -15,7 +15,7 @@ Two properties follow from the vocabulary being a mapping built from
 `config/taxonomy.json`, and neither needed the ids to be a closed Python type:
 
 - A hostile page can win itself a tag we already publish. It can never invent
-  one, and no tag ever reaches a prompt (Rule #11). `tags` returns keys of the
+  one, and no tag ever reaches a prompt (Guardrail #11). `tags` returns keys of the
   mapping it was handed and nothing else, so the committed file is the whole of
   the vocabulary whatever the ids are typed as. The matcher reads text that
   has already crossed the trust boundary at `sanitize`.

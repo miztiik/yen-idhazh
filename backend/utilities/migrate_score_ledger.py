@@ -18,7 +18,7 @@ What this rewrite can and cannot recover:
   an empty cell. Zero would be a measurement; empty is the fact.
 
 One-shot, and committed rather than run by hand, so a fork or a stale branch can
-reproduce the exact rewrite this repository ran (CLAUDE.md Rule #5). It is safe
+reproduce the exact rewrite this repository ran (CLAUDE.md Guardrail #5). It is safe
 to leave here after it has run: rows are selected by their own `version` stamp,
 so a row written by the fixed pipeline is never touched, and a file with no
 eligible row is refused rather than rewritten a second time.

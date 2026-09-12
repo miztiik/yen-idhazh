@@ -48,7 +48,7 @@ const ROUTE = '/console/machine/';
 const DRAWN = 20_000;
 
 /** The window presets the console offers, read from config rather than typed
- * here (Rule #6). The file is found off this module's own URL, so the read does
+ * here (Guardrail #6). The file is found off this module's own URL, so the read does
  * not depend on whether the suite started in `frontend/` or the repository root. */
 const APPEARANCE = JSON.parse(
 	readFileSync(fileURLToPath(new URL('../../config/appearance.json', import.meta.url)), 'utf8')

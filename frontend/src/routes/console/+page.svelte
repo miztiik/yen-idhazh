@@ -671,7 +671,7 @@
 	 *
 	 * The rate under this is a median whose spread is near a fifth of itself, so
 	 * the trailing digits of a six-figure answer are noise and printing them
-	 * claims an accuracy nothing measured (Rule #10). */
+	 * claims an accuracy nothing measured (Guardrail #10). */
 	function roughly(value: number): string {
 		if (value <= 0) return '0';
 		const scale = 10 ** Math.max(0, Math.floor(Math.log10(value)) - 2);

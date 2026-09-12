@@ -30,7 +30,7 @@ from idhazh.contracts.app_config import InferenceConfig, ModelRef
 # to. Two answers would leave a server listening on one port and a summarizer
 # posting to another, and every item would fail as "model unreachable".
 # It is a process-boundary value, not a tunable, so it is not a config field and
-# `idhazh.fingerprint` has nothing to classify (Rule #6, `CLAUDE.md` section 11).
+# `idhazh.fingerprint` has nothing to classify (Guardrail #6, `CLAUDE.md` section 11).
 DEFAULT_PORT: Final = int(os.environ.get("LLAMA_PORT") or 8080)
 DEFAULT_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}/v1/chat/completions"
 DEFAULT_HEALTH: Final = f"http://127.0.0.1:{DEFAULT_PORT}/health"

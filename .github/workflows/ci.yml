@@ -5,7 +5,7 @@ name: CI
 # lets an attack through fails the build rather than shipping.
 #
 # The runner here is the same stock ubuntu-latest the pipeline runs on
-# (Rule #2), so a gate that would not fit the pipeline's budget does not
+# (Guardrail #2), so a gate that would not fit the pipeline's budget does not
 # fit this one either.
 
 on:
@@ -143,7 +143,7 @@ jobs:
       # itself - is the only thing that can invalidate one, and a merge to `main`
       # always counts. Measured 2026-09-05: 16 days took 6.6 s, about 0.27 s a
       # day, so a year of publishing would be around 100 s of every run
-      # (Rule #12).
+      # (Guardrail #12).
       - name: Every committed day still matches its contracts
         if: needs.scope.outputs.validate_all == 'true'
         run: python -m idhazh validate-days
@@ -241,7 +241,7 @@ jobs:
         working-directory: frontend
         run: npm run bundle-gate
 
-      # Whole-site weight against the 1 GB Pages cap (Rule #2). The bundle gate
+      # Whole-site weight against the 1 GB Pages cap (Guardrail #2). The bundle gate
       # above bounds one page at a time; nothing bounded the sum. `build` is the
       # tree the deploy uploads, so it is the only honest thing to measure, and
       # it exists only after the build step above.
@@ -368,13 +368,13 @@ jobs:
   # it runs concurrently, against a `browser` job that measured 460, 482, 494,
   # 514, 542 and 554 s over its last six green runs on main - so the run
   # finishes at the same moment it does now. Actions minutes are free and
-  # unmetered on a public repository (Rule #2), and 20 concurrent jobs are
+  # unmetered on a public repository (Guardrail #2), and 20 concurrent jobs are
   # available against the six this workflow already starts.
   whole-day:
     needs: scope
     if: needs.scope.outputs.browser == 'true'
     runs-on: ubuntu-latest
-    # Sized from the worst case, not the blended figure (Rule #10). The job
+    # Sized from the worst case, not the blended figure (Guardrail #10). The job
     # measured 183 s; the spec's own per-test timeout is 600 s, and a browser
     # that crashes rather than finishing has to be allowed to report as a crash.
     timeout-minutes: 20

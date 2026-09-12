@@ -178,7 +178,7 @@ class FeedHealthRow(Contract):
     detail: str | None = Field(
         default=None,
         max_length=200,
-        description="Our own one-line reason. Never the response body (Rule #11).",
+        description="Our own one-line reason. Never the response body (Guardrail #11).",
     )
     # Everything below here was appended on 2026-09-02 and is empty on every row
     # written before that. A column is appended and never filed by meaning: a

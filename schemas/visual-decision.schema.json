@@ -72,7 +72,7 @@
     {
       "change": "Added optional route_ms.",
       "version": "2026-08-24T11:15",
-      "why": "The route job sits between 51 and 60 minutes against a 60-minute bound and nothing recorded what it spent, so every argument about the budget was an estimate (Rule #10). Null on a payload written before the clock existed, which is what keeps the field additive."
+      "why": "The route job sits between 51 and 60 minutes against a 60-minute bound and nothing recorded what it spent, so every argument about the budget was an estimate (Guardrail #10). Null on a payload written before the clock existed, which is what keeps the field additive."
     },
     {
       "change": "Initial shape: the four-way visual-kind enum, the spec, and the render outcome.",

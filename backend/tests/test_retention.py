@@ -313,7 +313,7 @@ def test_a_retracted_deletion_equals_an_independent_walk(tmp_path: Path) -> None
 
 
 def test_maintaining_the_total_does_not_read_more_as_the_tree_grows(tmp_path: Path) -> None:
-    """Rule #12, counted. The walk grows with the archive and the retraction does not."""
+    """Guardrail #12, counted. The walk grows with the archive and the retraction does not."""
     small = site(tmp_path / "small", {"2026-08-20": ["a.webp", "b.webp"]})
     large = site(
         tmp_path / "large",
@@ -603,7 +603,7 @@ def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
 
 #: The first published day of the trees the four tests below run against. They
 #: are built here rather than read off `frontend/public/digest/`, so what these
-#: tests cost never moves with what the pipeline has published (Rule #12,
+#: tests cost never moves with what the pipeline has published (Guardrail #12,
 #: section 13).
 SCAN_START: Final = date(2019, 1, 1)
 #: Days in the big arm. 400 puts fourteen calendar months on the tree and leaves
@@ -723,7 +723,7 @@ def test_the_scan_finds_exactly_what_sorting_the_whole_tree_found(tmp_path: Path
 def test_the_scan_opens_the_expired_days_and_never_a_day_inside_the_window(
     tmp_path: Path,
 ) -> None:
-    """Rule #12, counted. A day the policy keeps is a day the policy need not read.
+    """Guardrail #12, counted. A day the policy keeps is a day the policy need not read.
 
     The old shape sorted every path under the root, so it opened all 400 day
     directories to select the 250 it wanted - and that count rose every day
@@ -751,7 +751,7 @@ def test_a_bigger_archive_does_not_make_the_scan_read_more(tmp_path: Path) -> No
     """Two trees, the same backlog, and the same reads.
 
     The large arm carries 140 more published days and 3,080 more files, all of
-    them inside the window. Rule #12's question is whether a run that changed no
+    them inside the window. Guardrail #12's question is whether a run that changed no
     code costs more because an earlier run appended - so the two scans have to
     open the same directories, not merely find the same files.
     """
@@ -2399,7 +2399,7 @@ def test_a_score_dry_run_writes_nothing_and_still_counts_both_sides(tmp_path: Pa
 
     A dry run that reported only a file list would leave the person deciding
     whether to switch the deletion on with no idea what the archive costs
-    (Rule #10). It summarises, measures both sides, and writes nothing.
+    (Guardrail #10). It summarises, measures both sides, and writes nothing.
     """
     state = a_score_tree(tmp_path)
     held = {path.name: path.read_bytes() for path in score_writer.ledger_shards(state)}

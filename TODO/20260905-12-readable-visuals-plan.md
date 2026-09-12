@@ -101,7 +101,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | SI, and metric, wherever a quantity has an SI form: `2M tokens`, not `2,000,000 tokens`. **The prefix set is the SI set and nothing else** - no `bn`, no `lakh`, no `crore`, because each is read differently by a different part of the audience | O47, section 7.5 |
-| 2 | **One declared locale, at build time.** `1.234` is one thousand two hundred and thirty-four in Berlin and slightly more than one in London. Reading the reader's browser would make two readers see different bytes, which breaks byte identity and is the reader-varying behaviour Rule #1 refuses | O47 |
+| 2 | **One declared locale, at build time.** `1.234` is one thousand two hundred and thirty-four in Berlin and slightly more than one in London. Reading the reader's browser would make two readers see different bytes, which breaks byte identity and is the reader-varying behaviour Guardrail #1 refuses | O47 |
 | 3 | Precision is declared in config, so `2M` versus `2.4M` is a decision and not an accident of the input | O47 |
 | 4 | **Formatting is not a derived value** and needs no provenance - nothing about the quantity moved. `convert` is, and it landed in plan 10 | O47, O45 |
 | 5 | `d3-format` and `d3-time-format` are already named in the module matrix and do the prefix and precision rules with no code of ours | Section 7.5 |
@@ -110,7 +110,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Detect the reader's locale at runtime | Two readers see different bytes; the byte-identity oracle breaks; Rule #1 refuses reader-varying behaviour | O47 |
+| 1 | Detect the reader's locale at runtime | Two readers see different bytes; the byte-identity oracle breaks; Guardrail #1 refuses reader-varying behaviour | O47 |
 | 2 | Per-chart formatting | The path to `2M` and `2,000,000` on one page | Susan |
 
 ---

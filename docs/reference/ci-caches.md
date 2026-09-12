@@ -7,7 +7,7 @@ new one has to clear. Read this before adding one: the ceiling is shared, it is
 nearly full, and the entry a careless addition evicts is the one the daily
 pipeline needs.
 
-`CLAUDE.md` Rule #2 states the 10 GB ceiling. The eviction behaviour behind it -
+`CLAUDE.md` Guardrail #2 states the 10 GB ceiling. The eviction behaviour behind it -
 an entry unread for 7 days is deleted, and a restore is paid once per job rather
 than once per run - is in
 [github-actions.md](github-actions.md#platform-limits-that-shape-the-workflows).
@@ -96,7 +96,7 @@ of it none of those fonts is used. But `layout-overflow.spec.ts` measures text
 against its container, and a missing font changes what fontconfig substitutes
 and therefore what the browser measures. The failure that risks is a check that
 goes on passing in CI while disagreeing with a developer box, which is worse
-than 15 s. An unmeasured number may not justify a design (Rule #10), so this
+than 15 s. An unmeasured number may not justify a design (Guardrail #10), so this
 stays as it is until somebody runs the arm.
 
 **`measure.yml` `image`'s CPU-only torch install.** It installs from a separate
@@ -152,4 +152,4 @@ are the place to look next.
 - [github-actions.md](github-actions.md) - the workflows, their triggers, the weights cache key, and the platform limits behind the ceiling.
 - [measurements.md](measurements.md) - the instrument log, including the cache reading taken across the 2026-08-27 model swap.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - which gates run where, and what CI is authoritative for.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner budget, including the 10 GB ceiling) and Rule #10 (measured, not estimated).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner budget, including the 10 GB ceiling) and Guardrail #10 (measured, not estimated).

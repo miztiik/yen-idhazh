@@ -2,7 +2,7 @@
 
 Unit and integration tier (CLAUDE.md section 13). Nothing here is mocked, no
 test touches the network, and nothing reads the committed archive: every case is
-built in the test, including cases no published day has produced (Rule #12).
+built in the test, including cases no published day has produced (Guardrail #12).
 
 The one thing every test here is defending is the promise in
 `docs/concepts/digest.md`: the block adds a way into the day and removes
@@ -533,7 +533,7 @@ def test_a_notable_story_left_out_says_which_rule_left_it_out(
 #
 # Two questions used to open every committed day. One is gone and one is built.
 # "Does a real day supply enough eligible stories to fill the block?" is about
-# the news, not the code, so it is not a pytest (Rule #12); the code property -
+# the news, not the code, so it is not a pytest (Guardrail #12); the code property -
 # the block fills to its cap when the supply is there - is
 # `test_the_block_holds_the_configured_count_and_never_more` above, and the
 # data-supply signal, if wanted, is an operator surface under `backend/utilities/`.

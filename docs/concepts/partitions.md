@@ -72,7 +72,7 @@ than through anything this rule asked for, and a detail is not a rule - so the c
 written out, and `backend/tests/test_retention.py::test_the_month_readers_all_agree_on_what_a_month_is`
 holds all four readers to it.
 
-Authority: Rule #5 - a structural fix rather than a third copy of the rule. Found while
+Authority: Guardrail #5 - a structural fix rather than a third copy of the rule. Found while
 [re-measuring the state prunes](../architecture/publishing/layout.md#the-state-prunes-were-already-constant-cost-and-the-premise-that-said-otherwise-was-wrong-2026-09-08),
 2026-09-08.
 
@@ -98,7 +98,7 @@ level, so an empty month directory named in another script's digits survived eve
 read. `backend/tests/test_day_partition.py` holds every day-tree reader to the rule,
 as `test_the_month_readers_all_agree_on_what_a_month_is` does one grain over.
 
-Authority: Rule #5, 2026-09-11. `day_partition` is a **peer** of `month_partition`
+Authority: Guardrail #5, 2026-09-11. `day_partition` is a **peer** of `month_partition`
 rather than a replacement: both grains are live, so both modules are.
 
 ## The freeze rule
@@ -113,7 +113,7 @@ a daily pipeline is the first run of the next month.
 The rule binds writes, not reads. A closed partition is still opened: `evals.writer.append`
 checks the header of every committed shard before it writes one, and
 `ledger.shards_in_window` opens every stem a reader's window names. What bounds reads is
-[growing-reads.md](growing-reads.md) - the cover a read declares, and `CLAUDE.md` Rule #12
+[growing-reads.md](growing-reads.md) - the cover a read declares, and `CLAUDE.md` Guardrail #12
 behind it.
 
 Authority: owner, 2026-09-06.
@@ -247,4 +247,4 @@ Authority: `CLAUDE.md` section 5, 2026-09-11.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-month-search-index) - the month search index, its ceilings, and what an unpublish owes each grain.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the fastest-growing collection, and what would move it to a shorter period.
 - [../reference/repository-layout.md](../reference/repository-layout.md) - what each top-level directory holds and who writes it.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #12 (nothing costs more as the repository grows) and section 11 (schema versioning).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #12 (nothing costs more as the repository grows) and section 11 (schema versioning).

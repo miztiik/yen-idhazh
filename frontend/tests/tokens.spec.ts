@@ -379,7 +379,7 @@ test.describe('the token layer', () => {
 	});
 
 	test('the committed display face is inside its byte budget', () => {
-		// Rule #2: the published site has a 1 GB ceiling. A face that is a
+		// Guardrail #2: the published site has a 1 GB ceiling. A face that is a
 		// meaningful fraction of a day's growth has to argue for itself; this
 		// one is about three tenths of one percent of it.
 		const bytes = statSync(join(FRONTEND, 'static', 'fonts', 'inter-latin-variable.woff2')).size;

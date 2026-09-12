@@ -278,7 +278,7 @@ class ThemeConfig(Model):
         description=(
             "A self-hosted display face on headings. The body keeps the system stack: "
             "it renders on the first frame at zero bytes and the body is what the "
-            "reader came for. Rule #1 permits a third-party asset; this project "
+            "reader came for. Guardrail #1 permits a third-party asset; this project "
             "self-hosts because the HTTP cache is partitioned per site, so the "
             "shared-cache argument is dead and the request is the larger cost."
         ),
@@ -558,9 +558,9 @@ class AppearanceConfig(Contract):
                 "flicker, so the shimmer waits and a fetch that lands first never "
                 "animates at all. It is a knob rather than a literal because the right "
                 "value is a property of the payloads and the network, not of the "
-                "stylesheet (Rule #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a "
+                "stylesheet (Guardrail #6). FOUR HUNDRED IS A DECLARED ESTIMATE, not a "
                 "measurement: no median payload arrival has been taken since the "
-                "fetches landed, and Rule #10 refuses an unmeasured number the right "
+                "fetches landed, and Guardrail #10 refuses an unmeasured number the right "
                 "to justify a design, so this one justifies nothing - it is the value "
                 "the surface ships on until somebody re-derives it from the measured "
                 "median a payload takes to reach a reader. The shell-and-fetch "
@@ -704,7 +704,7 @@ class AppearanceConfig(Contract):
                 "worker unregisters itself and deletes every cache it owns. "
                 "`offline_days_kept` bounds what the worker keeps, because a cache that "
                 "grows with the archive is the failure that argued against caching days "
-                "at all (Rule #6, docs/concepts/ui-shell.md)."
+                "at all (Guardrail #6, docs/concepts/ui-shell.md)."
             ),
         ),
         ChangelogEntry(
@@ -719,7 +719,7 @@ class AppearanceConfig(Contract):
                 "A desk now publishes why it ran what it ran, and one sentence under "
                 "every desk would be a column of absences rather than information. This "
                 "is the line between a desk that explains itself and a desk that says "
-                "nothing, and a component may not spell it (Rule #6). Twelve is one "
+                "nothing, and a component may not spell it (Guardrail #6). Twelve is one "
                 "page of the stream, so a desk under it is one a reader sees the whole "
                 "of at once. Measured 2026-09-02 over the 12 committed days and 56 "
                 "desk-days: 7 sit at or below it, 12.5 percent, and nothing in the "
@@ -737,7 +737,7 @@ class AppearanceConfig(Contract):
             ),
             why=(
                 "The day's stories now run newest first down a time rail, which is a "
-                "fifth column beside the prose and therefore a zone (Rule #6). It is a "
+                "fifth column beside the prose and therefore a zone (Guardrail #6). It is a "
                 "rem, so `frontend/tests/item-zones.spec.ts` reads the column at a 16px "
                 "root and again at 22px and fails unless it scaled - measured on the "
                 "canary build, the rail went 88 to 121 CSS px, which is 22/16. There is "
@@ -761,7 +761,7 @@ class AppearanceConfig(Contract):
             why=(
                 "The reading page's column widths were literals in one component's "
                 "style block, so an operator could move the frame and the measure but "
-                "not the furniture between them (Rule #6). Naming them is also what "
+                "not the furniture between them (Guardrail #6). Naming them is also what "
                 "makes them checkable: every zone is a rem, so raising the root font "
                 "size moves all of them, and a browser check now reads the used width "
                 "of each zone at 16px and at 22px and fails if one did not scale. "
@@ -786,7 +786,7 @@ class AppearanceConfig(Contract):
                 "It is now the newest few days as rows over one disclosure a month "
                 "and one a year before this one, so the list a reader SEES grows "
                 "twelve rows a year instead of 365. How many days stay out is a "
-                "choice a page may not spell (Rule #6), and the ceiling is what makes "
+                "choice a page may not spell (Guardrail #6), and the ceiling is what makes "
                 "the knob safe: set to 400 it is the wall again. Read by the build "
                 "alone, so it never rides to a reader. What the DOCUMENT costs did not "
                 "fall to nothing and is not claimed to: measured 2026-09-01 on Intel "
@@ -810,7 +810,7 @@ class AppearanceConfig(Contract):
                 "The day page's filter and the archive's topic pills became one panel, "
                 "and the archive's field now narrows the loaded list as a reader types "
                 "- so the same rule governs two surfaces and may not be spelled in "
-                "either of them (Rule #6). Two rather than one because one letter "
+                "either of them (Guardrail #6). Two rather than one because one letter "
                 "narrows nothing: measured 2026-09-01 over the 12 committed days and "
                 "4,203 story titles, the median single letter matches 80.2 percent of "
                 "them and `e` matches 99.8 percent, against a median 0.8 percent for a "
@@ -850,7 +850,7 @@ class AppearanceConfig(Contract):
                 "The day gets a leading block: five stories chosen across the whole "
                 "day, each carrying one sentence saying why it is there. Every "
                 "number that decides it is a knob rather than a literal in a stage "
-                "(Rule #6). The block replaces the three-per-topic headings, which "
+                "(Guardrail #6). The block replaces the three-per-topic headings, which "
                 "on the 431-story day of 2026-08-30 drew 15 stories and put 416 "
                 "behind five links, so items_per_topic lost its only reader. "
                 "Additive with defaults and one deprecation that still validates, "
@@ -885,7 +885,7 @@ class AppearanceConfig(Contract):
             ),
             why=(
                 "Two console lists gained a cap on the same day, and a cap a "
-                "component hardcodes is one an operator cannot move (Rule #6). The "
+                "component hardcodes is one an operator cannot move (Guardrail #6). The "
                 "failure section now ranks sources by the articles their failures "
                 "cost the digest; measured 2026-09-01 over the committed "
                 "projection, a thirty-day window holds 60 sources with a loss, so "
@@ -928,7 +928,7 @@ class AppearanceConfig(Contract):
                 "reader-facing surface carries one. The row wraps now, and the topics "
                 "past this number sit inside a `+N more` disclosure so a day with "
                 "many topics does not turn the row into the page. A cap a component "
-                "spells is a cap an operator cannot move (Rule #6)."
+                "spells is a cap an operator cannot move (Guardrail #6)."
             ),
         ),
         ChangelogEntry(
@@ -1028,7 +1028,7 @@ class AppearanceConfig(Contract):
             why=(
                 "The chart arm section now leads with the two figures its retirement "
                 "rule names, each as a bar with the limit drawn on it. A limit a "
-                "component hardcodes is one an operator cannot move (Rule #6), and "
+                "component hardcodes is one an operator cannot move (Guardrail #6), and "
                 "these three were constants in a TypeScript module. Additive with "
                 "defaults, so an appearance file written before today still validates "
                 "(section 11)."

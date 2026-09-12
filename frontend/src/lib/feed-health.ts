@@ -276,7 +276,7 @@ export interface Reliability {
  * been. The same span the streak beside each feed is read over, because two
  * spans in one section is the defect the shared window exists to remove - and
  * the sentence the page prints names that span rather than claiming all of
- * them (`CLAUDE.md` Rule #12).
+ * them (`CLAUDE.md` Guardrail #12).
  */
 export function reliability(rows: readonly FeedRecord[]): Reliability {
 	const read = new Map<string, FeedRecord[]>();

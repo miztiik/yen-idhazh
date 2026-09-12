@@ -98,7 +98,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | 2 | `none_reason` covers **all six gates**, not only the ones the validator sees. The pre-model refusal is the cheapest gate and therefore the most common, so it would otherwise be the least explained | 12.6 G1, 12.7 G11 |
 | 3 | `visual_id` is the join key. **Without it there is no overlap to compute reviewer agreement from, and by the project's own rule no keep rate is quotable** | 12.14 G41 |
 | 4 | `gate_floor_applied` becomes real only once the ladder's depth-2 and depth-3 percentiles exist, which plan 11 settled | 12.7 |
-| 5 | No query surface. There is no server | Row 55, Rule #1 |
+| 5 | No query surface. There is no server | Row 55, Guardrail #1 |
 
 ### Rejected alternatives
 

@@ -14,7 +14,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | **Contracts before logic.** Plan 11's second call emits a visual plan; this plan defines what a visual plan is and what it may not contain, and builds the validator that refuses a bad one. Written the other way round, logic would be writing a payload with no contract, which is Rule #3 backwards. On its own it delivers the trust guarantee - a checkable rule that no drawn figure can be one the article did not state - and it is testable with no model running at all |
+| Why this plan exists | **Contracts before logic.** Plan 11's second call emits a visual plan; this plan defines what a visual plan is and what it may not contain, and builds the validator that refuses a bad one. Written the other way round, logic would be writing a payload with no contract, which is Guardrail #3 backwards. On its own it delivers the trust guarantee - a checkable rule that no drawn figure can be one the article did not state - and it is testable with no model running at all |
 | Hard scope - in | The plan contract and its four prohibitions; the encoding roles; the validator's checks; the Derived Value contract with its four-function allow-list, the versioned unit table and the provenance chain |
 | Hard scope - out | The planner module, the model calls, the reachability gate and the downgrade ladder (plan 11). Any renderer or compiler (plan 12). The display formatter - `convert` is a contract rule and belongs here, but SI prefixes, locale and precision are rendering and belong with the compiler |
 | ESCALATE triggers | 1. A validator check cannot be expressed without calling a model. 2. A fifth allow-list function is proposed - the list is closed and its shortness is the guarantee. 3. The two provenance invariants declared build-failing elsewhere cannot be ruled without changing what a corpus build does |
@@ -141,7 +141,7 @@ where it actually lives. The relation is between `VisualType` and
 `EncodingRole`, two closed enums, and a JSON file can reference neither; a copy
 there is a second spelling that drifts from both. And "a bar has no bins" is
 what a bar is rather than a tunable. The knobs that ARE knobs -
-`min_chart_points` and `max_chart_points` - are read from `config/` (Rule #6),
+`min_chart_points` and `max_chart_points` - are read from `config/` (Guardrail #6),
 and a test asserts they are read rather than typed.
 
 **Eleven of the eighteen types have a rule. The other seven** - `table`, `flow`,

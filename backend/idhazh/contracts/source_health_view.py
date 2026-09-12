@@ -10,7 +10,7 @@ those may reach a page. This is the narrow shape that does cross, written to
 **The forbidden fields are absent by construction rather than by filtering.**
 There is no field here that could hold a source URL, an item URL, a URL key, an
 endpoint digest, a ledger `detail` cell or a robots body, so a writer cannot put
-one in and a reviewer does not have to notice that it did not (Rule #11). A
+one in and a reviewer does not have to notice that it did not (Guardrail #11). A
 projection spelled as a dict of names gains a cell by a one-word edit and
 nothing refuses it; a projection spelled as a model fails at import.
 
@@ -231,7 +231,7 @@ class SourceHealthView(Contract):
                 "places and published in none, so the console re-derived what it could "
                 "in TypeScript and simply could not see the rest. A typed projection "
                 "gives the page one answer to render and keeps every private cell out "
-                "of the published tree by construction (Rule #11)."
+                "of the published tree by construction (Guardrail #11)."
             ),
         ),
     )
