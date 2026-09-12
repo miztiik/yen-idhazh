@@ -30,7 +30,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The rules, and which rule governs every file this project writes | - | A | DONE #643 | p13-1 | #643 | worker |
-| 2 | The window takes a value, and nothing is deleted yet | 1 | B | IN-FLIGHT | p13-2 | - | worker |
+| 2 | The window takes a value, and nothing is deleted yet | 1 | B | DONE #651 | p13-2 | #651 | worker |
 | 3 | The fuse comes out, and one run is watched | 2 | C | PENDING | - | - | - |
 
 ---

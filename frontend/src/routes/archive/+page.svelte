@@ -112,10 +112,14 @@
 			: `No story in the last ${plural(windowDays, 'day', 'days')}.`
 	);
 
+	// The rule, not a report. "Charts older than N months are deleted" reads as
+	// an account of what has happened, so a reader who finds nothing missing is
+	// left wondering what they cannot see - and the window is stated a year
+	// before the first chart can age into it (Reader, 2026-09-13).
 	const retention = $derived(
 		data.retentionMonths > 0
-			? `Charts older than ${plural(data.retentionMonths, 'month', 'months')} are deleted. ` +
-					'Every story and every link stays.'
+			? `Charts are kept for ${plural(data.retentionMonths, 'month', 'months')}, ` +
+					'then deleted; every story and every link stays.'
 			: 'Nothing here is deleted.'
 	);
 

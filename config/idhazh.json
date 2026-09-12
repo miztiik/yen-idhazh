@@ -257,7 +257,7 @@
   },
   "retention": {
     "dry_run": true,
-    "image_months": -1,
+    "image_months": 13,
     "max_deletes_per_run": 200,
     "pages_hard_cap_mb": 1024,
     "site_budget_mb": 800

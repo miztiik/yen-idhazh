@@ -1400,11 +1400,14 @@ jobs:
       #
       # It also covers the archive cleanup, which joined this step on 2026-09-06
       # and is the one thing here that would cost a reader something it can see.
-      # `retention.image_months` is -1, so nothing is ever a candidate and the
+      # `retention.dry_run` is true, so nothing is ever deleted and the
       # pass is a measurement of the backlog: it appends one row to
       # `state/visual-prunes/YYYY/MM/DD.csv` every run, carrying what it found
-      # and what the fuse would have held back. Switching that deletion on is
-      # plan 13's job and needs `frontend/public/digest` added to the commit call
+      # and what the fuse would have held back. `retention.image_months` took
+      # its first value, 13, on 2026-09-13, so the pass names a cutoff now -
+      # and nothing published is old enough to sit behind it. Switching the
+      # deletion on is plan 13's job and needs `frontend/public/digest` added to
+      # the commit call
       # below, since `git add` records a removal only for a path it is handed.
       #
       # It also covers the trace prune, which joined this step on 2026-09-06 and
