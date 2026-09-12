@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.runtime_counters import WORK_JOB, RuntimeCountersRow
 from idhazh.ledger import item_health_path, load_runtime_counters
 
 #: How far apart the two instruments may be before one of them is wrong.
@@ -160,11 +160,23 @@ class Reconciliation:
 
 
 def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
-    """Both sides of one run, pooled the same way."""
+    """Both sides of one run, pooled the same way.
+
+    The `work` rows only. The other side of this comparison is
+    `state/item-health/`, which is one row per summarized item, so the visual
+    planner's server has nothing to reconcile against and pooling it in would
+    add a second model's tokens to the first model's seconds.
+    """
     return Reconciliation(
         run_id=run_id,
         ledger=pool_ledger(item_health_path(state_dir, run_id[:10]), run_id=run_id),
-        server=pool_counters(load_runtime_counters(state_dir, run_id=run_id)),
+        server=pool_counters(
+            [
+                row
+                for row in load_runtime_counters(state_dir, run_id=run_id)
+                if row.job == WORK_JOB
+            ]
+        ),
     )
 
 

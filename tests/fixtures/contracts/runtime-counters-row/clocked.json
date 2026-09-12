@@ -3,6 +3,7 @@
   "cpu_busy_pct": null,
   "cpu_model": "AMD EPYC 7763 64-Core Processor",
   "date": "2026-08-29",
+  "job": "work",
   "job_seconds": 5236,
   "model_load_ms": null,
   "n_busy_slots_per_decode": 1.0,

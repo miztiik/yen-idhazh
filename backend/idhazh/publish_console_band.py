@@ -1311,17 +1311,29 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
 def _counter_rows(
     state_root: Path, *, months: int, anchor: str
 ) -> list[Mapping[str, str]]:
-    """The counter rows the widest span reaches, as raw cells.
+    """The `work` counter rows the widest span reaches, as raw cells.
 
     Raw rather than through `RuntimeCountersRow`, because refusing a run is the
     band's whole point here: a row that will not validate is one of the two
     servers this has to notice, and validating it away would silently drop the
     evidence. The growing read behind it is `publish_machine`'s and is declared
     there.
+
+    The job is read off the cell rather than through the contract, for that same
+    reason, and a row whose cell is missing or empty is kept - it is exactly the
+    malformed row this band exists to report, and dropping it would make the
+    band quiet about the thing it was built for. `publish_machine.PUBLISHED_JOB`
+    says why the other job's rows are not this series.
     """
     source = ledger.runtime_counters_path(state_root)
     if not source.is_file():
         return []
     oldest = publish_console.oldest_month_kept(date.fromisoformat(anchor), months)
     with source.open("r", encoding="utf-8", newline="") as handle:
-        return [row for row in csv.DictReader(handle) if (row.get("date") or "")[:7] >= oldest]
+        return [
+            row
+            for row in csv.DictReader(handle)
+            if (row.get("date") or "")[:7] >= oldest
+            and (row.get("job") or publish_machine.PUBLISHED_JOB)
+            == publish_machine.PUBLISHED_JOB
+        ]
