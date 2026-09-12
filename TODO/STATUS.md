@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 3 | 4 | 4 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 9 | 4 | 2 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 9 | 4 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 1 | 2 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -33,17 +33,21 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 7 | 21 | 7 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 3 | 5 | 1 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 7 | 21 | 6 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 3 | 5 | 0 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
-| [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
+| [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 0 |
 
-## In flight - 0
+## In flight - 4
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | p11-5b |
+| #1a | 23 | C | The fingerprint stops gating and stops being read | p23-1a |
+| #3 | 24 | B | The migration utility, and it refuses to write a tree it cannot read back | p24-3 |
+| #1 | 26 | A | What prerendering actually weighs, both arms | p26-1 |
 
-## Ready now - 30
+## Ready now - 26
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -57,7 +61,6 @@ section 3 is where it is answered.
 | #20 | 20260823-known-defects-plan | - | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #3g | 11 | C7 | Call 1's reply does not fit its own budget | - |
-| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 5, 3b, 3e |
 | #1 | 12 | A | A new engine behind the same seam | - |
 | #2 | 13 | B | The window takes a value, and nothing is deleted yet | 1 |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
@@ -72,15 +75,12 @@ section 3 is where it is answered.
 | #1 | 22 | A | What is durable, and where it already lives | - |
 | #20 | 23 | A | The order of the day, written down | - |
 | #P2 | 23 | B | The reference dataset, built so a number cannot flatter us | - |
-| #1a | 23 | C | The fingerprint stops gating and stops being read | - |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token | - |
 | #4 | 23 | F | An event gets a lifecycle | 3 |
 | #13 | 23 | F | The encoder alarm | 3 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
-| #3 | 24 | B | The migration utility, and it refuses to write a tree it cannot read back | 1 |
 | #1 | 25 | A | Three docstrings defend a requirement the page retired | - |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
-| #1 | 26 | A | What prerendering actually weighs, both arms | - |
 
 ## Waiting on another row - 75
 
@@ -92,7 +92,7 @@ section 3 is where it is answered.
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
 | #3f | 11 | C6 | The window is sized for two calls | - |
-| #6 | 11 | F | The small model, its job and its cache go | 5b is PENDING |
+| #6 | 11 | F | The small model, its job and its cache go | 5b is IN-FLIGHT |
 | #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
 | #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
@@ -145,11 +145,11 @@ section 3 is where it is answered.
 | #16 | 23 | N | A vertical is proposed into a channel and promoted by a person | 14 is PENDING; 8 is PENDING |
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING; 20 is PENDING |
-| #1b | 23 | P | The fingerprint field is dropped from the contracts | 1a is PENDING |
-| #5 | 24 | C | `state/item-health/` files by day | 3 is PENDING |
-| #6 | 24 | D | `state/feed-health/` files by day | 3 is PENDING |
-| #7 | 24 | E | `state/seen/` files by day | 3 is PENDING |
-| #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 3 is PENDING |
+| #1b | 23 | P | The fingerprint field is dropped from the contracts | 1a is IN-FLIGHT |
+| #5 | 24 | C | `state/item-health/` files by day | 3 is IN-FLIGHT |
+| #6 | 24 | D | `state/feed-health/` files by day | 3 is IN-FLIGHT |
+| #7 | 24 | E | `state/seen/` files by day | 3 is IN-FLIGHT |
+| #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 3 is IN-FLIGHT |
 | #2 | 25 | B | One order over the whole day, inside a frame a person set | 1 is PENDING |
 | #3 | 25 | C | `rank_score` orders the stream, and its terms are the editor's | 2 is PENDING |
 | #6 | 25 | C | The topic pills order by what is running | 2 is PENDING |
@@ -160,7 +160,7 @@ section 3 is where it is answered.
 | #10 | 25 | F | The `assemble` consolidation | 2 is PENDING; 7 is PENDING; 8 is PENDING |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #4 | 26 | B | The ruling, written where the next person arrives | 1 is PENDING |
+| #4 | 26 | B | The ruling, written where the next person arrives | 1 is IN-FLIGHT |
 
 ## Finished - 14 plans with no live row
 
