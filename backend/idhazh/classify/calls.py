@@ -19,6 +19,16 @@ cut in the plan, and the summary behind it is already closed. Both calls are
 built here and no stage dispatches either yet; the gate in front of them, and
 the picture they lead to, are later rows.
 
+**Every instruction sits in front of the article and the question behind it is
+three lines.** Both jobs are described in the one system turn, which is the same
+bytes on every item and is therefore read once per shard rather than once per
+item. What stays behind the article is what cannot be shared: the band the
+article's own length picked, and the fields the grammar will hold this reply to.
+The question used to carry both jobs in full and cost 687 tokens an item on
+every item for ever, because the article in front of it differs and a prefix
+cache cannot reach past it - 69.7 s an item at the measured 9.85 tokens a second
+(`docs/reference/benchmarks/2026-09-12-instructions-in-front.md`).
+
 The picture they lead to is `idhazh.visual_planner`, which decides whether an
 item gets a chart. It stays there: it is a different subject that happened to
 share a file.
@@ -63,6 +73,15 @@ from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
 PROMPTS: Final = Path(__file__).parent.parent / "prompts"
 
 CALL_ONE_PROMPT_PATH: Final = PROMPTS / "label_article_elements.txt"
+#: The second job, in two files because the plan half is conditioned separately
+#: and a placeholder moved by accident has to be findable. Both are read into
+#: the SYSTEM turn, in front of the article, where they are the same bytes on
+#: every item; `call_one_system_prompt` joins them.
+SUMMARY_HALF_PROMPT_PATH: Final = PROMPTS / "summarize_and_plan_visual.txt"
+PLAN_HALF_PROMPT_PATH: Final = PROMPTS / "plan_visual.txt"
+#: The only thing left behind the article: what the band asks for, and which
+#: fields the grammar will hold this reply to.
+POINTER_PROMPT_PATH: Final = PROMPTS / "write_about_the_item.txt"
 
 #: Each module that reads a raw model reply keeps its own two-line cleaner,
 #: as `summarize` and `visual_planner` do. One shared cleaner is worth having
@@ -292,8 +311,40 @@ def call_one_schema() -> dict[str, Any]:
     return CallOneReply.model_json_schema()
 
 
-def call_one_system_prompt() -> str:
-    return CALL_ONE_PROMPT_PATH.read_text(encoding="utf-8")
+def call_one_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
+    """Both jobs, in one turn, in front of the article.
+
+    Three files joined here rather than one file holding all of it, and the
+    reason is the four placeholders that may NOT move: `target_words_min/max`
+    and `key_points_min/max` are the article's own band and belong in the turn
+    behind it. Appended into one 8.5 KB file a stray one of those is invisible
+    and renders to a model as the literal `$target_words_min`. Kept apart, one
+    test states the whole invariant - the rendered system prompt carries no `$`,
+    and the moved template's placeholder set is exactly the four config-level
+    names.
+
+    Elements, then the summary, then the plan, because everything the plan half
+    points at - an address, the table - is defined in the elements half, so the
+    definition comes before the use.
+
+    **It takes no article and never will.** That is what makes it the same bytes
+    on every item, which is the whole basis of the prefix cache: one cache slot
+    at `n_parallel = 1`, so a system turn that varied per item would evict the
+    article on every alternation and cost far more than it saved.
+    """
+    ask = prompt_config or SummarizeConfig()
+    return "\n".join(
+        (
+            CALL_ONE_PROMPT_PATH.read_text(encoding="utf-8"),
+            _summary_half().substitute(
+                title_words_min=ask.title_words_min,
+                title_words_max=ask.title_words_max,
+                key_point_words_max=ask.key_point_words_max,
+                max_verbatim_words=ask.max_verbatim_words,
+            ),
+            _plan_half(),
+        )
+    )
 
 
 def sentence_id(index: int) -> str:
@@ -381,6 +432,7 @@ def build_call_one_request(
     *,
     model_id: str,
     inference: InferenceConfig,
+    prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
     """Call 1's request body, with the reply shape enforced by the decoder.
 
@@ -388,10 +440,14 @@ def build_call_one_request(
     template, which is what lets call 2 open with them unchanged. The output
     budget is the role's own and is not narrowed here; call 2's is derived from
     both replies' bounds together.
+
+    `prompt_config` reaches call 1 because the system turn carries both jobs
+    now. Every number it spends is a config-level one, the same on every item,
+    so the turn is still the same bytes on every item.
     """
     return completion_payload(
         model_id=model_id,
-        system=call_one_system_prompt(),
+        system=call_one_system_prompt(prompt_config),
         user=call_one_user_turn(article, table),
         output_schema=call_one_schema(),
         inference=inference,
@@ -890,13 +946,6 @@ def anchored(
 # --- Call 2: the summary and the plan, over the prefix call 1 already paid for
 
 
-CALL_TWO_PROMPT_PATH: Final = PROMPTS / "summarize_and_plan_visual.txt"
-#: The plan half of that turn, in its own file because it is substituted in or
-#: out. One file rather than two whole prompts, so the summary half a reader
-#: ends up reading cannot differ between the two requests by drifting - it is
-#: the same bytes, and a test asserts it.
-PLAN_HALF_PROMPT_PATH: Final = PROMPTS / "plan_visual.txt"
-
 #: How many characters of a decoded string one word may cost, matching
 #: `summarize._MAX_CHARS_PER_WORD` because both rails are cut from the same
 #: cloth: a word count in `config/` spent as a `maxLength` the grammar enforces.
@@ -921,8 +970,13 @@ class CallTwoReply(NamedTuple):
 
 
 @lru_cache(maxsize=1)
-def _call_two_template() -> Template:
-    return Template(CALL_TWO_PROMPT_PATH.read_text(encoding="utf-8"))
+def _pointer_template() -> Template:
+    return Template(POINTER_PROMPT_PATH.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def _summary_half() -> Template:
+    return Template(SUMMARY_HALF_PROMPT_PATH.read_text(encoding="utf-8"))
 
 
 @lru_cache(maxsize=1)
@@ -1025,13 +1079,22 @@ def call_two_user_turn(
     brief: bool = False,
     plan: bool = True,
 ) -> str:
-    """The second question, and nothing the first turn already carried.
+    """The second question: the band, and the fields. Three lines.
 
     It names no article and quotes no sentence. The item, its addressed
     sentences and its candidate table are in the first user turn and are still
     there, so repeating any of them would spend prefill on bytes the server
     already holds - and would put a second, differently-worded copy of the same
     untrusted text in front of the model.
+
+    **Everything that could be shared already is.** Both jobs are described in
+    the system turn, in front of the article, where they are read once per shard
+    (`call_one_system_prompt`). What is left here is what differs per item, and
+    it is the whole of what differs: the band the article's own length picked,
+    and the fields the grammar will hold this reply to. Until 2026-09-12 this
+    turn carried both jobs in full - 687 tokens re-read on every item for ever,
+    because the article in front of it differs and a prefix cache cannot reach
+    past it.
 
     Every number in it is substituted from `config/` at render time (Guardrail #6),
     and the key-point pair comes off `summarize.key_point_rail`, which is the
@@ -1040,27 +1103,26 @@ def call_two_user_turn(
     no article named the two would disagree: the prompt would state the shortest
     band's numbers while the decoder held the union of every band's.
 
-    **`plan=False` drops the plan half of the turn as well as the plan half of
-    the grammar**, and that is the same rule read a second time. A turn that
-    asks for a title, a caption and a reason the grammar has nowhere to put does
-    not produce them - constrained decoding renormalises onto the tokens the
-    grammar allows, so the text goes into the only channel left open, which is
-    the summary a reader reads. The plan half is also two thirds of a turn that
-    sits after the article and therefore prefills on every single item.
+    **The last line is read off the grammar rather than written out**, so the
+    field names in the recency position cannot disagree with the shape the
+    decoder will enforce. That is also the whole of what `plan=False` changes
+    here: the reachability gate spends itself on the grammar, the grammar is
+    what this line reads, and the two turns differ in that line and nowhere
+    else. Naming a field the grammar has nowhere to put does not produce it -
+    constrained decoding renormalises onto the tokens the grammar allows, so the
+    text goes into the only channel left open, which is the summary a reader
+    reads.
     """
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0) if brief else ask.band_for(source_words or 0)
     key_points_min, key_points_max = summarize.key_point_rail(ask, source_words, brief)
-    return _call_two_template().substitute(
-        title_words_min=ask.title_words_min,
-        title_words_max=ask.title_words_max,
-        key_points_min=key_points_min,
-        key_points_max=key_points_max,
-        key_point_words_max=ask.key_point_words_max,
+    shape = call_two_model(ask, source_words=source_words, brief=brief, plan=plan)
+    return _pointer_template().substitute(
         target_words_min=band.target_words_min,
         target_words_max=band.target_words_max,
-        max_verbatim_words=ask.max_verbatim_words,
-        plan=_plan_half() if plan else "",
+        key_points_min=key_points_min,
+        key_points_max=key_points_max,
+        write="Write " + ", then ".join(f'"{name}"' for name in shape.model_fields) + ".",
     )
 
 
@@ -1193,10 +1255,10 @@ def build_call_two_request(
     the prompt and the reply behind it.
 
     **Suppressing the plan moves nothing in front of the article.** The three
-    things `plan=False` changes - the trailing user turn, the decoder shape and
-    the output budget - all sit after the system turn, the article and call 1's
-    reply, so the cached prefix a gated item reuses is the same prefix an
-    ungated one reuses.
+    things `plan=False` changes - the trailing turn's last line, the decoder
+    shape and the output budget - all sit after the system turn, the article and
+    call 1's reply, so the cached prefix a gated item reuses is the same prefix
+    an ungated one reuses.
     """
     return continued_completion_payload(
         first,
