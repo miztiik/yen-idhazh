@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -696,24 +696,51 @@ Until 2026-09-02 one knob decided when a month stopped being kept at full grain
 cleanup age at all, so three stores grew with nothing to stop them while the
 fourth was tuned by a number that said nothing about them.
 
-Six names replace it, one per store, each a knob and not a constant (Guardrail #6):
+Twelve names replace it, each a knob and not a constant (Guardrail #6). Ten are
+full-grain windows, returned together by `ObservabilityConfig.full_grain_months`
+so `refuse_windows_shorter_than` can check every one of them against what a
+console read still selects; the other two are the ages that govern what a fold
+leaves behind.
 
 | Store | Full grain | Summary after it |
 | --- | --- | --- |
 | `state/item-health/` | `item_health_full_grain_months` (14) | `item_health_aggregate_keep_months` (null) |
 | `state/scores/` | `scores_full_grain_months` (14) | `score_archive_keep_months` (null) |
 | `state/feed-health/` | `feed_health_keep_months` (14) | none - a per-feed-per-run record is not a total worth keeping |
-| `frontend/public/telemetry/` | `public_telemetry_keep_months` (14) | none - it is the browser's copy of the census |
+
+And one for each published copy, because a reader fetches those and our own disk
+is not what bounds them:
+
+| Published copy | Age | Paired with |
+| --- | --- | --- |
+| `frontend/public/telemetry/` | `public_telemetry_keep_months` (14) | `item_health_full_grain_months` |
+| `frontend/public/scores/` | `public_scores_keep_months` (14) | `scores_full_grain_months` |
+| `frontend/public/feed-health/` | `public_feed_health_keep_months` (14) | `feed_health_keep_months` |
+| `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
+| `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
+| `frontend/public/machine/` | `public_machine_keep_months` (14) | nothing - the source is one appended CSV, so the copy is where a month boundary first exists |
+| `frontend/public/span-rollup/` | `public_span_rollup_keep_months` (14) | nothing |
+
+**Two more ages sit outside this block**, because each is a read cover first and
+a cleanup age second: `observability.trace_window_days` bounds `state/traces/`,
+and `collect.seen_window_days` bounds `state/seen/` by naming the shards the
+reader opens.
 
 **Null keeps a summary indefinitely, and a finite value must sit above its own
 full-grain window.** The contract refuses any other pair, so a month can never
 be deleted before the thing that replaces it has been written.
 
-**The published copy must last exactly as long as the ledger it copies.** The
-contract refuses `public_telemetry_keep_months != item_health_full_grain_months`
-in both directions: a published month whose source has been folded away is a
-rate nobody can check, and a source month with no published copy is a window the
-console cannot draw.
+**A published copy must last exactly as long as the ledger it copies, where
+there is one.** The contract refuses any pair but equality for the three copies
+that name a source, in both directions: a published month whose source has been
+folded away is a rate nobody can check, and a source month with no published copy
+is a window the console cannot draw. The other four have no state ledger behind
+them and are bounded by their own knob alone.
+
+**This block sets the ages. Which policy a store is under - fold, delete or keep
+- is [adaptive-pruning.md](adaptive-pruning.md)**, which is also where an age is
+judged to be the wrong instrument for a store rather than merely the wrong
+number.
 
 ### Why 14 and not 13
 
@@ -1174,4 +1201,5 @@ Excluding the runner's ceilings is the less obvious half. They look exactly like
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - what `console.*` tunes.
 - [evaluation.md](evaluation.md) - the bands and thresholds.
 - [telemetry.md](telemetry.md) - the logging knobs.
+- [adaptive-pruning.md](adaptive-pruning.md) - which policy each cleanup age serves, and the register of every artefact this project writes.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the schema every config file conforms to, and which word a new key takes.
