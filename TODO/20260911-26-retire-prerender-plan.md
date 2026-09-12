@@ -148,7 +148,7 @@ Read 2026-09-11 from `main` at `b0e0411a`, in an isolated worktree. Every figure
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | What prerendering actually weighs, both arms | - | A | PENDING | - | - | - |
+| 1 | What prerendering actually weighs, both arms | - | A | IN-FLIGHT | p26-1 | - | worker |
 | 2 | The guard retires, and nothing a reader sees moves | - | A | DONE #613 | p26-r2 | #613 | worker |
 | 3 | The three surfaces that say every route is prerendered | - | B | DONE #614 | p26-r3 | #614 | worker |
 | 4 | The ruling, written where the next person arrives | 1, 2 | B | PENDING | - | - | - |
@@ -163,7 +163,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 | Group | Rows | What the first row writes | What the second row writes | Where they come closest |
 | --- | --- | --- | --- | --- |
-| A | 1, 2 | `docs/reference/benchmarks/2026-09-11-prerender-on-and-off.md`, `docs/reference/measurements-site.md` | `frontend/prerender-guard.js` (deleted), `frontend/svelte.config.js`, `frontend/tests/prerender-guard.spec.ts` (deleted), `frontend/scripts/test-groups.ts`, `docs/architecture/publishing/frontend.md` | Both write under `docs/`. Row #1 writes two files under `docs/reference/`, row #2 writes one under `docs/architecture/publishing/`. **No shared page, and no shared directory** |
+| A | 1, 2 | `docs/reference/benchmarks/2026-09-12-prerender-on-and-off.md`, `docs/reference/measurements-site.md` | `frontend/prerender-guard.js` (deleted), `frontend/svelte.config.js`, `frontend/tests/prerender-guard.spec.ts` (deleted), `frontend/scripts/test-groups.ts`, `docs/architecture/publishing/frontend.md` | Both write under `docs/`. Row #1 writes two files under `docs/reference/`, row #2 writes one under `docs/architecture/publishing/`. **No shared page, and no shared directory** |
 | B | 3, 4 | `README.md`, `docs/architecture/overview.md`, `docs/how-to/run-the-gates.md`, `backend/tests/test_workflows.py` | `docs/architecture/publishing/frontend.md` | Nothing. Row #3 is the three surfaces outside the living doc plus one test docstring; row #4 is the living doc and only it |
 
 **One file is written by two rows, and they are in different groups for exactly that reason.** `docs/architecture/publishing/frontend.md` is opened by row #2, which must delete the paragraph describing the file it deletes in the same commit, and by row #4, which writes the ruling and corrects a stale table row. Group A completes before group B dispatches, so they never hold it at once. **Merging them was rejected**: row #4 waits on row #1's measurement and the guard deletion must not.
@@ -174,7 +174,9 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 ### Scope
 
-Build the site twice from one tree - once as it stands, once with the seven `prerender = true` declarations removed - and write up the difference as this repository's first record under `docs/reference/benchmarks/`. **The second arm is a throwaway measurement branch that is never merged and never pushed**; its only product is a number.
+Build the site twice from one tree - once as it stands, once with the seven `prerender = true` declarations removed - and write up the difference as a record under `docs/reference/benchmarks/`. **The second arm is a throwaway measurement branch that is never merged and never pushed**; its only product is a number.
+
+**This row does not create that directory, and an earlier draft said it did.** Three records already sit there - `2026-09-11-day-window-read.md`, `2026-09-12-two-call-re-read.md` and `2026-09-12-instructions-in-front.md` - written by plan 24 row #1 and plan 11 rows #3d and #3e. Follow their shape rather than inventing one. Corrected by the orchestrator, 2026-09-12.
 
 **The measurement, named exactly** ([`../CLAUDE.md`](../CLAUDE.md) Guardrail #10):
 
@@ -191,7 +193,7 @@ Build the site twice from one tree - once as it stands, once with the seven `pre
 
 ### Files touched
 
-- `docs/reference/benchmarks/2026-09-11-prerender-on-and-off.md` - new, and the first file in that directory.
+- `docs/reference/benchmarks/2026-09-12-prerender-on-and-off.md` - new. **Named for the day the reading is taken**, which is 2026-09-12, not the 2026-09-11 an earlier draft of this row assumed.
 - `docs/reference/measurements-site.md` - one line and a link to the record, per `CLAUDE.md` section 5: the log carries the figure now in force and links to the record rather than absorbing it.
 
 ### Acceptance gates
