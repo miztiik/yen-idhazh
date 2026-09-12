@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 How an item gets a chart or - most of the time - nothing at all.
 
@@ -1207,7 +1207,7 @@ file before it can be enabled.
 | Name the asset from a hash of the address, `<vertical>-<url_key prefix>.svg` | It fixes the same defect as the item id and breaks a rule the item id does not: [`layout.md`](layout.md) says no hash appears in any path, filename or URL, and `backend/tests/test_contracts.py::test_no_hash_appears_in_any_published_path` holds it. The item id is already a published address - it is the anchor a reader lands on - so it costs the reader nothing that has not already been accepted. |
 | Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
 | Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
-| Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `retention.image_months` is `-1`, which switches the prune off entirely, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
+| Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `retention.dry_run` is `true`, which makes every pass report-only, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
 | Keep the first claimant's chart and null only the second | The order two items sit in a payload is not evidence of which one the chart was drawn for. This repairs 14 items by guessing on the other 14, and a guess that publishes is the failure being fixed. |
 | Re-render the 2026-08-24 day from its committed decisions | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `visuals` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's decisions expired on 2026-08-25, before anyone read the handover. |
 | Renumber a raced chart instead of dropping it | Right while a path could mean two different stories, wrong now that it names one item. Moving this run's copy would file that item's picture under a name that is not its own, and leave two files where the day references one. |

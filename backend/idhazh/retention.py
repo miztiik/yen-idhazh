@@ -494,9 +494,11 @@ def oldest_visual(root: Path) -> date | None:
     `deleted` says. None means the tree carries no visual at all, which is a
     different fact from "the oldest one is recent" and is spelled differently.
 
-    This is the one that costs on every run that has ever shipped. `image_months`
-    is -1, so `cutoff` returns None and `visuals_older_than` is never called -
-    and `prune` still asks this on every path through it, including the early
+    This is the one that costs on every run that has ever shipped, and it did not
+    stop costing when the window took a value. `image_months` is 13 from
+    2026-09-13 and the oldest visual on disk is weeks old, so `visuals_older_than`
+    returns nothing until 2027 - and `prune` still asks this on every path
+    through it, including the early
     return. The answer is the first day that still holds a picture, so it stops
     at that day: 4 directory listings on a built 400-day tree against 417 for the
     shape it replaced, 2026-09-07, Intel Core i7-1265U.

@@ -152,10 +152,11 @@ test('the stories still list with the whole model directory gone', async ({ page
 test('the header states the retention window before anything is deleted', async ({ page }) => {
 	await page.goto('/archive/');
 
-	// The canary days carry `retention_window_months: -1`, which is what the
-	// committed config ships. The promise has to be on the page either way.
+	// The canary days carry `retention_window_months: -1`; the committed config
+	// now ships 13, and a published day carries whatever its own run wrote. The
+	// promise has to be on the page either way.
 	await expect(page.locator('[data-archive-scope]')).toContainText(
-		/Nothing here is deleted\.|Charts older than \d+ months? are deleted\./
+		/Nothing here is deleted\.|Charts are kept for \d+ months?, then deleted;/
 	);
 });
 

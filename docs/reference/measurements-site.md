@@ -1,6 +1,6 @@
 # Site Measurements
 
-**Last Updated**: 2026-09-12
+**Last Updated**: 2026-09-13
 
 Every number about **what the reader downloads**: the compression level the
 origin serves, each page's ceiling, what a cold load costs, how fast the site
@@ -20,6 +20,99 @@ Almost every figure here is a byte or a pixel, which is why almost none of them
 names a machine - what they name instead is the runtime, because node's zlib and
 python's `gzip` disagree by about 2 percent on the same file and that difference
 is real.
+
+## What a published day adds in rendered visuals, 2026-09-13
+
+**A published day adds 25.5 rendered visuals weighing 324,580 bytes, so a
+13-month window holds 120.7 MiB of them for ever - 11.8 percent of the 1 GiB
+Pages ceiling.** That is the number `retention.image_months` was given a value
+from, and it is the reason the window is an archive policy rather than a cap
+defence: visuals are 10.7 percent of what the site adds in a day, and with no
+window at all they would take about nine years to fill the cap on their own.
+
+Toolchain: CPython 3.14.2. Date: 2026-09-13. Byte and file counts over a fixed
+tree, so the box bears on none of them and n=1 per arm has no spread of its own;
+the spread that matters is on the rate and is given below.
+
+**This rate is over the committed payload tree, and that is legal for visuals
+only.** [Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling) records
+that dividing the built site's headroom by the payload tree's growth is wrong by
+about twenty times, because they are different trees. The two agree here for one
+reason and it is worth stating next to the number rather than a link away:
+`frontend/scripts/copy-visuals.mjs` **projects** a day payload on the way into
+`static/` - measured 40.9 percent smaller - and **copies a rendered visual byte
+for byte**. So a payload-tree JSON byte is not a site byte and a payload-tree
+visual byte is, exactly once. Corroboration, not proof: the runner measured
+`digest` at 19.0 MB of a 98.7 MB built site on 2026-09-10, and the visuals
+committed through 2026-09-09 come to 5,690,974 bytes, about 30 percent of it,
+the rest being the projected payloads.
+
+### The rate
+
+One bounded, once-off read over the 23 dated directories under
+`frontend/public/digest/`, run by hand and off the daily path - `CLAUDE.md`
+Guardrail #12's escape hatch, taken deliberately. It opens 23 directories and
+stats every file in them, which is the whole cost; nothing in the pipeline or in
+a test repeats it.
+
+```powershell
+# per day: the rendered visuals in it, and what they weigh
+Get-ChildItem frontend/public/digest -Directory -Recurse |
+  Where-Object { $_.FullName -match '\\\d{4}\\\d{2}\\\d{2}$' } |
+  ForEach-Object { Get-ChildItem $_.FullName -File -Filter '*.svg' |
+    Measure-Object Length -Sum }
+```
+
+| Over | Days | Visuals | Bytes | Visuals a day | Bytes a day |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Every committed day | 23 | 491 | 6,244,624 | 21.3 | 271,505 |
+| **Past the startup regime** | **19** | **485** | **6,167,015** | **25.5** | **324,580** |
+| The newest 14 days | 14 | 360 | 4,598,385 | 25.7 | 328,456 |
+
+**The rate is taken over the 19 days from 2026-08-25, and the first four are
+dropped for the reason this page already drops them from its own site rate**:
+2026-08-21 to 2026-08-24 published 4, 10, 147 and 731 items and drew 0, 1, 1 and
+4 visuals, which is a corpus starting rather than running. Including them halves
+the visuals-a-day figure and mixes two regimes.
+
+**The 19-day and 14-day windows agree to 1.2 percent**, which is the check that
+the figure is a rate and not an artefact of where the window was cut.
+
+**The spread is 39.4 percent of the mean** - 127,877 bytes on a mean of 324,580,
+min 104,576 and max 534,078 - because a published day is 117 to 731 items. The
+per-visual figure is the one that holds still: **12,716 bytes a visual**, and
+every visual in the tree today is an SVG, so a raster family would move it.
+
+### What a window buys against the cap
+
+`retention.cutoff` spends a month as 30 days, so a window of N months is 30N
+days. Thirteen is therefore **390 days and not thirteen calendar months** - 5.7
+days short - and the error runs in the safe direction: the window holds slightly
+less than a calendar reading would say, never more.
+
+| Window | Days | Bytes standing | MiB | Of the 1 GiB cap | At the fast edge |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 12 months | 360 | 116,848,705 | 111.4 | 10.9 pct | 155.3 MiB |
+| **13 months (shipped)** | **390** | **126,586,097** | **120.7** | **11.8 pct** | **168.3 MiB** |
+| 14 months | 420 | 136,323,489 | 130.0 | 12.7 pct | 181.2 MiB |
+| none, `-1` | for ever | 1 GiB after 3,308 published days | - | 100 pct in about 9 years | - |
+
+The fast-edge column is the mean plus one spread, 452,457 bytes a published day.
+
+**The byte budget cannot choose between the three, and that is the finding.**
+The whole 12-to-14 range is 18.6 MiB, 1.8 percent of the cap, against a
+one-spread band of 47.6 MiB across the same window - which is 5.1 months of
+window. An instrument whose noise is five months wide cannot resolve two months.
+What the window is worth against no window at all is about 42 published days of
+runway, and what it costs a reader is a picture on a day older than it. The
+choice between 12, 13 and 14 was made on neither of those and is recorded where
+the rule lives:
+[../concepts/adaptive-pruning.md](../concepts/adaptive-pruning.md#why-13-and-why-the-bytes-did-not-choose-it).
+
+**Re-take it on a threshold rather than a date.** Visuals a day or bytes a visual
+moving more than one spread, or the first visual that is not an SVG. The read is
+one bounded pass and costs seconds, so there is no reason to defer it once either
+happens.
 
 ## What prerendering weighs, on and off, 2026-09-12
 

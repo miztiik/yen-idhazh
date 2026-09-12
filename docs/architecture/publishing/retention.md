@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-13
 
 What may be deleted, when, and what bounds every collection a run appends to.
 Unpublishing a day, the state tree's own ceilings, and the score shards that
@@ -34,7 +34,9 @@ What it must never touch: a day's JSON payload, a date directory, the eval ledge
 
 Two promises to the reader, both non-negotiable: **the window is stated before anything is deleted**, on the archive page and on the missing-day page; and a pruned day lands in the designed missing state, **never a silent redirect to today**. A reader who cannot distinguish a dead link from a live one has lost the ability to trust any link.
 
-The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts older than N months are deleted. Every story and every link stays." is the promise, and "Nothing here is deleted." is what ships today at `image_months: -1`. **The archive is now the only page that states it.** The footer carried a copy on every page from 2026-08-31 and lost it on 2026-09-09: it was read off the newest day, so a page a reader already held was rewritten each time one published, for a sentence about a job that has never deleted anything. The archive's copy stays because that is the page where deletion could matter to the reader looking at it, and because the promise above is that the window is stated **before** anything is deleted - one page stating it is what that asks for, and one page cannot disagree with itself.
+The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts are kept for N months, then deleted; every story and every link stays." is the promise, and "Nothing here is deleted." is what a day published before 2026-09-13 carries, when the knob was `-1`. **The sentence states the rule and never reports an event.** It read "Charts older than N months are deleted" until 2026-09-13 and was changed the day the window took a value: a reader who scrolls an archive with nothing missing reads the present tense as an account of what has happened and starts wondering what they cannot see, where a house rule is true on day one whether or not anything has aged into it (Reader, 2026-09-13). That distinction is what lets the promise below be kept - the window can be stated a year before the first chart can reach it. **The archive is now the only page that states it.** The footer carried a copy on every page from 2026-08-31 and lost it on 2026-09-09: it was read off the newest day, so a page a reader already held was rewritten each time one published, for a sentence about a job that has never deleted anything. The archive's copy stays because that is the page where deletion could matter to the reader looking at it, and because the promise above is that the window is stated **before** anything is deleted - one page stating it is what that asks for, and one page cannot disagree with itself.
+
+**The window is 13 months from 2026-09-13 and `retention.dry_run` is still true, so nothing is deleted and the notice is a year early on purpose.** The oldest chart on disk was published 2026-08-22, so the first one could not go before about 2027-09-22 even with the deletion switched on. Where 13 came from, and why the byte budget could not choose between 12, 13 and 14, is [../../concepts/adaptive-pruning.md](../../concepts/adaptive-pruning.md#why-13-and-why-the-bytes-did-not-choose-it).
 
 ## Unpublishing a day, a range or a month: the design (2026-09-06)
 
@@ -99,7 +101,7 @@ honours is already a key in `config/` with a contract behind it
 ([../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #6): `retention.image_months`,
 `retention.max_deletes_per_run`, `retention.site_budget_mb`, and the
 `observability.*_keep_months` family that bounds the ledgers a day writes into,
-all at 14 months today. A number in the source that decides what to delete is
+all of that family at 14 months today. A number in the source that decides what to delete is
 the defect, whatever the number is.
 
 If a scheduled variant is ever wanted, it reuses that shape rather than minting
@@ -143,7 +145,7 @@ Every run appends one row to `state/visual-prunes.csv` describing the cleanup pa
 
 **`skipped_by_fuse` is the field the row exists for, and it is the one nobody would have added.** `deleted` looks like the answer and cannot be one: `retention.max_deletes_per_run` caps it at 200, so it reads 200 on a run that has just cleared its backlog and 200 on a run that has twenty more passes to go. Only the pair separates them. A run that deleted 200 and skipped none is finished; a run that deleted 200 and skipped 4,000 is not, and nothing else on the row would say so.
 
-**It means the same thing on a dry run as on a live one**: the candidates the fuse would not have let that run reach. It is deliberately not "everything still there afterwards". Every run that ships today is a dry run - `image_months` is -1 and the step passes `--dry-run` - so counting the deletions a dry run declined to make would set `skipped_by_fuse` equal to `candidates_found` on every row this project will ever write, and the field would say nothing at all. That is the same failure `deleted` already has, arrived at from the other side. `dry_run` is the cell that says nothing was deleted, and the arithmetic reads it: on a live run `deleted + skipped_by_fuse` is `candidates_found` exactly, and on a dry run it falls short by what a live run would have taken. The contract refuses a row that breaks either rule.
+**It means the same thing on a dry run as on a live one**: the candidates the fuse would not have let that run reach. It is deliberately not "everything still there afterwards". Every run that ships today is a dry run - `retention.dry_run` is true and the step passes `--dry-run` - so counting the deletions a dry run declined to make would set `skipped_by_fuse` equal to `candidates_found` on every row this project will ever write, and the field would say nothing at all. That is the same failure `deleted` already has, arrived at from the other side. `dry_run` is the cell that says nothing was deleted, and the arithmetic reads it: on a live run `deleted + skipped_by_fuse` is `candidates_found` exactly, and on a dry run it falls short by what a live run would have taken. The contract refuses a row that breaks either rule.
 
 **The two byte figures are the tree the cleanup walks, not the published site.** Those are two different trees - eighteen times apart when they were last measured together - so the row names the one it read. The site is measured by `idhazh site-weight` against the built bundle, and never here.
 
