@@ -1194,6 +1194,11 @@ index that only ever grows, and an index that only grows is what a repeated
 dedupe over a re-scored item looks like. It reports what each month had wrong
 before it rewrote it, so drift is named rather than quietly absorbed.
 
+It writes the file the partition rule names today and removes no other, so the
+third case above is the one it cannot repair on its own: a file at a grain no
+reader recognises is invisible to the comparison as well, and a change of grain
+has to take its own old files away.
+
 **It is never a step of a run**, for two reasons rather than one. It reads every
 score row of every month it is given, which is the read the index exists to
 avoid ([`../../CLAUDE.md`](../../CLAUDE.md) Rule #12) - so the cover is stated,

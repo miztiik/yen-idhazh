@@ -262,14 +262,19 @@ def rebuild_index(state_dir: Path, months: Iterable[str]) -> dict[str, IndexDrif
     **no** index and never compares one that exists against the shard beside it,
     because comparing means reading the rows and reading the rows is the bill
     the index exists to remove. So an index that drifted - a fill a crash cut
-    short, a shard a `merge=union` grew behind its back, an index written at a
-    grain the ledger no longer uses - stands for ever, and the next dedupe
-    silently admits a measurement the ledger already holds.
+    short, a shard a `merge=union` grew behind its back - stands for ever, and
+    the next dedupe silently admits a measurement the ledger already holds.
 
     Dropping the file is the recipe `refresh_index` has always described. What
     this adds is the assertion: the rewritten index is read back and compared
     against the rows in **both** directions, and a disagreement raises instead
     of returning a count. One direction passes on an index that only ever grows.
+
+    **It writes the file the partition rule names today, and it removes no
+    other.** A file at a grain no reader recognises is ignored rather than
+    refused (`month_partition.month_files`), so it is invisible to the
+    comparison as well - which is the whole of why a grain change has to take
+    its old files away itself.
 
     Returns what each named month had wrong **before** it was rewritten, so a
     repair reports the drift rather than hiding it. Two empty sets for a month
