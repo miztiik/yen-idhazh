@@ -1,9 +1,20 @@
-"""Talk to a local llama-server over its OpenAI-compatible endpoint.
+"""Talk to a local llama-server over the two routes it answers on.
 
-The transport is the OpenAI chat-completions shape, not because anything is
-hosted - `CLAUDE.md` section 0a forbids that - but because it is the one wire
-format every local runtime already speaks, so swapping llama.cpp for something
-else later is a URL change rather than a rewrite.
+Nothing here is hosted - `CLAUDE.md` section 0a forbids that. Two transports,
+and which one a caller takes is decided by whether the prompt bytes are ours.
+
+**The chat-completions shape** hands the server a message array and lets the
+model's own chat template render the prompt. It is the one wire format every
+local runtime already speaks, so swapping llama.cpp for something else later is
+a URL change rather than a rewrite. One call, one prompt, nothing replayed.
+
+**The rendered-completion shape** hands the server the prompt string itself.
+A sequence of calls needs it: a chat template renders the same assistant turn
+differently as a generation prompt and as history, so the second call's prompt
+stops matching the first one part-way through and the server re-reads
+everything behind the break. Rendering the bytes here makes the second prompt
+literally the first one plus the reply plus the new turn, so the prefix holds by
+construction rather than by a template's goodwill.
 
 Decoding parameters are assembled in exactly one place. A second place to set
 temperature is a second place for an output to move for a reason nobody
@@ -16,9 +27,11 @@ import json
 import os
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import StrEnum
+from functools import lru_cache
 from pathlib import Path
+from string import Template
 from typing import Any, Final
 from urllib import request
 from urllib.parse import urlsplit, urlunsplit
@@ -34,6 +47,27 @@ from idhazh.contracts.app_config import InferenceConfig, ModelRef
 DEFAULT_PORT: Final = int(os.environ.get("LLAMA_PORT") or 8080)
 DEFAULT_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}/v1/chat/completions"
 DEFAULT_HEALTH: Final = f"http://127.0.0.1:{DEFAULT_PORT}/health"
+
+# The route that takes a prompt string. It is a consequence of which builder
+# rendered the payload rather than a dial anybody turns - a chat body posted
+# here is broken, not differently tuned - so it sits beside the port for the
+# same reason the port does, and `idhazh.fingerprint` has nothing to classify
+# (Guardrail #6, `CLAUDE.md` section 11).
+#
+# llama-server's own `/completions` rather than the OpenAI-compatible
+# `/v1/completions` beside it. Measured 2026-09-12 on build b10444-5f754ea0e:
+# both routes ignore `response_format` outright and return unconstrained prose,
+# and both honour a top-level `json_schema`. On the native route that field is
+# the route's own; on the compatibility route it survives a layer whose job is
+# to rewrite this body, and that layer already drops `response_format`. No
+# workflow pins a llama.cpp build, so a build that started stripping it would
+# turn constrained decoding off for every item at once.
+_COMPLETION_PATH: Final = "/completions"
+DEFAULT_COMPLETION_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}{_COMPLETION_PATH}"
+
+#: The reply stopped because it ran out of budget. llama-server's own word for
+#: it on the rendered-completion route, where the chat route says `length`.
+_STOPPED_AT_THE_BUDGET: Final = "limit"
 
 # llama.cpp maps ERROR_TYPE_EXCEED_CONTEXT_SIZE to HTTP 400 and names it here.
 # The message beside it states the token counts and its wording moves between
@@ -57,6 +91,96 @@ def is_context_exceeded(body: str) -> bool:
     if not isinstance(error, dict):
         return False
     return bool(error.get("type") == CONTEXT_EXCEEDED_TYPE)
+
+
+#: How one turn is written for the weights we load. It is model-shaped text and
+#: it moves when the model does, so it sits beside the prompts rather than in
+#: `config/`: an operator turns no dial here, and a wrong value renders a prompt
+#: with no turn structure that the decoder's grammar still accepts - worse
+#: summaries and no error. JSON rather than raw text because the trailing
+#: newlines are load-bearing and invisible, and an editor or a line-ending pass
+#: would rewrite them in silence.
+TURN_MARKERS_PATH: Final = Path(__file__).parent.parent / "prompts" / "turn_markers.json"
+
+
+@dataclass(frozen=True, slots=True)
+class TurnMarkers:
+    """The strings that open and close a turn, and the two ways a reply opens.
+
+    **The reply opening is not derived from the turn opening**, because a chat
+    template ends a generation prompt with more than a role header. The weights
+    this project runs today close an empty reasoning block there when reasoning
+    is off, and open one when it is on; both are recorded rather than invented,
+    from the server that applies them.
+    """
+
+    turn_opening: Template
+    turn_closing: str
+    reply_opening: str
+    reply_opening_thinking: str
+
+    def turn(self, role: str, content: str) -> str:
+        """One whole turn. `substitute` rather than `safe_substitute`: a renamed
+        placeholder raises here instead of reaching a model as the literal it
+        looks like (`docs/architecture/summarize/prompt.md`)."""
+        return self.turn_opening.substitute(role=role) + content + self.turn_closing
+
+    def opening(self, *, thinking: bool) -> str:
+        return self.reply_opening_thinking if thinking else self.reply_opening
+
+    def opening_of(self, prompt: str) -> str:
+        """The reply opening a rendered prompt already ends with.
+
+        A continuation reads it off the prompt rather than off a flag handed in
+        beside it, so the second call cannot open its reply differently from the
+        first - which is the one way a continuation could still break the prefix
+        it exists to preserve.
+        """
+        for opening in (self.reply_opening_thinking, self.reply_opening):
+            if prompt.endswith(opening):
+                return opening
+        raise ValueError("this prompt does not end on a reply opening, so nothing may follow it")
+
+
+@lru_cache(maxsize=1)
+def turn_markers() -> TurnMarkers:
+    """The markers, read once and checked once.
+
+    A missing key raises at the first render rather than becoming a `KeyError`
+    part-way through a shard.
+    """
+    loaded = json.loads(TURN_MARKERS_PATH.read_text(encoding="utf-8"))
+    missing = sorted({field.name for field in fields(TurnMarkers)} - set(loaded))
+    if missing:
+        raise ValueError(f"{TURN_MARKERS_PATH.name} names no {', '.join(missing)}")
+    return TurnMarkers(
+        turn_opening=Template(loaded["turn_opening"]),
+        turn_closing=loaded["turn_closing"],
+        reply_opening=loaded["reply_opening"],
+        reply_opening_thinking=loaded["reply_opening_thinking"],
+    )
+
+
+def render_prompt(*, system: str, user: str, thinking: bool) -> str:
+    """The prompt bytes a rendered completion is sent, from the turns it is made of."""
+    markers = turn_markers()
+    return markers.turn("system", system) + markers.turn("user", user) + markers.opening(
+        thinking=thinking
+    )
+
+
+def continued_prompt(prompt: str, *, reply: str, user: str) -> str:
+    """The next prompt in a sequence: this one, what came back, and one new turn.
+
+    The opening is a literal concatenation, so the property a prefix cache needs
+    is not something two call sites have to agree about - it is what the
+    expression says. The seam sits on the turn-closing marker, which tokenises
+    as one entry of the model's own vocabulary, so the byte prefix survives as a
+    token prefix rather than re-splitting at the join.
+    """
+    markers = turn_markers()
+    opening = markers.opening_of(prompt)
+    return prompt + reply + markers.turn_closing + markers.turn("user", user) + opening
 
 
 class FlashAttention(StrEnum):
@@ -243,30 +367,70 @@ def request_payload(
     }
 
 
-def continued_payload(
+def completion_payload(
+    *,
+    model_id: str,
+    system: str,
+    user: str,
+    output_schema: dict[str, Any],
+    inference: InferenceConfig,
+) -> dict[str, Any]:
+    """The request body for a prompt we rendered ourselves.
+
+    `json_schema` is the control that survives an injection, exactly as
+    `response_format` is on the chat route: text inside the user turn can change
+    the words and cannot change the shape. The spelling differs because the
+    route does - `response_format` is accepted and ignored here, which is a
+    silent loss of the only control that matters, so it is never sent.
+
+    `cache_prompt` is stated rather than inherited. The whole point of a
+    rendered prompt is that the next call reuses this one, the build's own
+    default for the flag is not readable off `/props`, and nothing pins the
+    build - so a default that flipped would re-read every prompt in full with
+    no line in any log to say why.
+
+    `model` is carried although a single-model server ignores it. It is the one
+    field that says which weights the body was built for, and a payload read out
+    of a log with no model id cannot be attributed to a run.
+    """
+    return {
+        "model": model_id,
+        "prompt": render_prompt(system=system, user=user, thinking=inference.thinking),
+        "temperature": inference.temperature,
+        "top_p": inference.top_p,
+        "seed": inference.seed,
+        "n_predict": inference.max_output_tokens,
+        "stream": False,
+        "cache_prompt": True,
+        "json_schema": output_schema,
+    }
+
+
+def continued_completion_payload(
     first: Mapping[str, Any],
     *,
     reply: str,
     user: str,
     output_schema: dict[str, Any],
-    schema_name: str,
     max_output_tokens: int,
 ) -> dict[str, Any]:
-    """A second request whose prompt opens with the first one's, byte for byte.
+    """A second request whose prompt IS the first one's, plus what it returned.
 
-    The prefix is identical **by construction** rather than by two call sites
-    agreeing to render the same string. That is the whole point of taking the
-    first payload as an argument instead of rebuilding it: a prefix cache reuses
-    the longest common prefix of the tokenised prompt, so one changed character
-    in the system turn costs a full re-prefill of the article behind it, and
-    nothing about that failure is loud - the run is simply twice as slow.
+    Not "byte for byte by agreement between two call sites" - the same string
+    object, extended. A prefix cache reuses the longest common prefix of the
+    tokenised prompt, so everything the first call read and everything it wrote
+    is answered from the slot and only the new turn is prefilled.
 
-    Only three things move. The message array grows by the assistant turn the
-    first call produced and the user turn that asks the next question; the
-    decoder is held to a different shape; and the output budget is the one
-    derived for that shape. Temperature, `top_p`, `seed`, `stream` and the
-    thinking flag are carried over untouched, because `request_payload` is the
-    one place that sets them (`docs/architecture/contracts/determinism.md`).
+    Only three things move: the prompt grows, the decoder is held to a different
+    shape, and the output budget is the one derived for that shape. Temperature,
+    `top_p`, `seed`, `stream` and the prompt cache are carried over untouched,
+    because `completion_payload` is the one place that sets them
+    (`docs/architecture/contracts/determinism.md`).
+
+    **The budget is replaced in the key it was written in.** A second spelling
+    would leave both in the body, and llama-server would answer the first call's
+    budget to a reply sized for the second - a cut plan on every item, recovered
+    into a summary with no picture, and no counter saying why.
 
     `reply` is the first call's own content, replayed verbatim. It is a string
     the model wrote and it is not trusted any further here than a fetched page
@@ -275,39 +439,60 @@ def continued_payload(
     """
     return {
         **first,
-        "messages": [
-            *(dict(message) for message in first["messages"]),
-            {"role": "assistant", "content": reply},
-            {"role": "user", "content": user},
-        ],
-        "max_tokens": max_output_tokens,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {"name": schema_name, "strict": True, "schema": output_schema},
-        },
+        "prompt": continued_prompt(str(first["prompt"]), reply=reply, user=user),
+        "n_predict": max_output_tokens,
+        "json_schema": output_schema,
     }
 
 
 def parse_completion(body: str) -> Completion:
-    """Read the envelope. Nothing here trusts the content yet."""
+    """Read the envelope. Nothing here trusts the content yet.
+
+    Two envelopes, because the server answers two routes and each names its
+    fields its own way. The chat route returns `choices`, a `usage` block and a
+    `finish_reason`; the rendered-completion route returns `content`, its token
+    counts at the top level, and a `stop_type` whose budget word is `limit`.
+    The `timings` block is the same on both.
+
+    `reasoning` stays empty on the rendered-completion route, and that is a
+    property rather than a gap: the split `Completion.reasoned` exists to catch
+    is the chat template moving a think block into `reasoning_content`, and a
+    route with no template applies none. Anything the model writes inline
+    arrives in `content`, where each caller's own cleaner already removes it.
+    """
     payload = json.loads(body)
-    choices = payload.get("choices") or []
-    if not choices:
-        raise ValueError("the runtime returned no choices")
-    usage = payload.get("usage") or {}
-    message = choices[0].get("message", {})
     # llama.cpp reports prefill and decode separately; a runtime that does not
     # leaves the rates absent rather than blending them into one wrong number.
     timings = payload.get("timings") or {}
+    prefill_ms = round(float(timings.get("prompt_ms", 0.0)))
+    decode_ms = round(float(timings.get("predicted_ms", 0.0)))
+    cached_tokens = int(timings.get("cache_n", 0))
+    if "choices" in payload:
+        choices = payload.get("choices") or []
+        if not choices:
+            raise ValueError("the runtime returned no choices")
+        usage = payload.get("usage") or {}
+        message = choices[0].get("message", {})
+        return Completion(
+            content=message.get("content") or "",
+            reasoning=message.get("reasoning_content") or "",
+            prompt_tokens=int(usage.get("prompt_tokens", 0)),
+            completion_tokens=int(usage.get("completion_tokens", 0)),
+            finish_reason=choices[0].get("finish_reason") or "stop",
+            prefill_ms=prefill_ms,
+            decode_ms=decode_ms,
+            cached_tokens=cached_tokens,
+        )
+    if "content" not in payload:
+        raise ValueError("the runtime returned neither a choice nor a completion")
     return Completion(
-        content=message.get("content") or "",
-        reasoning=message.get("reasoning_content") or "",
-        prompt_tokens=int(usage.get("prompt_tokens", 0)),
-        completion_tokens=int(usage.get("completion_tokens", 0)),
-        finish_reason=choices[0].get("finish_reason") or "stop",
-        prefill_ms=round(float(timings.get("prompt_ms", 0.0))),
-        decode_ms=round(float(timings.get("predicted_ms", 0.0))),
-        cached_tokens=int(timings.get("cache_n", 0)),
+        content=payload.get("content") or "",
+        prompt_tokens=int(payload.get("tokens_evaluated", 0)),
+        completion_tokens=int(payload.get("tokens_predicted", 0)),
+        finish_reason="length" if payload.get("stop_type") == _STOPPED_AT_THE_BUDGET else "stop",
+        prefill_ms=prefill_ms,
+        decode_ms=decode_ms,
+        cached_tokens=cached_tokens,
     )
 
 
@@ -333,6 +518,16 @@ def props_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
     """
     parts = urlsplit(endpoint)
     return urlunsplit((parts.scheme, parts.netloc, "/props", "", ""))
+
+
+def completion_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+    """The rendered-completion address on the server an endpoint names.
+
+    Derived from a sibling address for the same reason `props_url` is: a run
+    pointed at another port asks one server for everything.
+    """
+    parts = urlsplit(endpoint)
+    return urlunsplit((parts.scheme, parts.netloc, _COMPLETION_PATH, "", ""))
 
 
 def props(endpoint: str = DEFAULT_ENDPOINT, *, timeout: float) -> dict[str, Any]:

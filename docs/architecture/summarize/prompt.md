@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -332,23 +332,93 @@ the picture they lead to are later rows of
 What is settled, and what this section owns, is why the second call is shaped
 the way it is.
 
-**Call 2 appends to call 1's message array, and reuses call 1's system prompt.**
-The request is built from call 1's own payload rather than rendered again, so
-the system turn and the article-carrying user turn are the same bytes and not
-merely the same intent. A prefix cache reuses the longest common prefix of the
-tokenised prompt, so a system prompt of call 2's own would end the shared prefix
-at the chat template's header and prefill the whole article a second time -
-roughly double, for a wording whose benefit nobody could measure. The reuse is
-asserted on the bytes and never on a `prefill_ms` ratio, which would confound
-cache reuse with how long the new turn is and would read as partial success when
-the prompt had been built in the wrong order.
+**Call 2's prompt IS call 1's prompt, plus call 1's reply, plus one question.**
+The two calls do not go to the chat-completions route and hand a message array
+to the model's chat template. They go to `llama-server`'s rendered-completion
+route, `/completions`, and the prompt bytes are built in
+[`../../../backend/idhazh/llm/server.py`](../../../backend/idhazh/llm/server.py)
+by `render_prompt` and `continued_prompt`. So call 2's prompt is not "the same
+bytes as" call 1's - it is the same string, extended. A prefix cache reuses the
+longest common prefix of the tokenised prompt, and what it can reach is
+therefore everything call 1 read **and** everything call 1 wrote.
+
+**Call 1's system prompt is reused rather than replaced.** A system prompt of
+call 2's own would end the shared prefix at the first turn marker and prefill
+the whole article a second time - roughly double, for a wording whose benefit
+nobody could measure. The reuse is asserted on the bytes and never on a
+`prefill_ms` ratio, which would confound cache reuse with how long the new turn
+is and would read as partial success when the prompt had been built in the wrong
+order.
 
 **The two calls belong adjacent, per item.** `models.summarize.inference` pins
 `n_parallel` to 1, so the server holds one cache slot. Every call 1 first and
 every call 2 afterwards would evict the prefix before it was reused, every time,
-and nothing in any log would say so.
+and nothing in any log would say so. Owning the bytes makes a mis-ordering more
+expensive rather than less: what an eviction now costs is the prompt and the
+reply behind it.
 
-### What the cache actually reused, and the four tokens it did not
+### What is in the prompt bytes, and who wrote each part
+
+Three strings open and close a turn, and they live in
+`backend/idhazh/prompts/turn_markers.json` beside the two prompt files. They are
+model-shaped text and they move when the model does, so they sit with the
+prompts rather than in `config/`: an operator turns no dial here, and a wrong
+value renders a prompt with no turn structure that the decoder's grammar still
+accepts - worse summaries and no error. They are JSON rather than raw text
+because the trailing newlines are load-bearing and invisible.
+
+| Marker | What it is | On the configured weights |
+| --- | --- | --- |
+| `turn_opening` | opens a turn, with `$role` substituted | `<\|im_start\|>$role\n` |
+| `turn_closing` | closes a turn | `<\|im_end\|>\n` |
+| `reply_opening` | where the model starts writing, reasoning off | `<\|im_start\|>assistant\n<think>\n\n</think>\n\n` |
+| `reply_opening_thinking` | the same, reasoning on | `<\|im_start\|>assistant\n<think>\n` |
+
+**The empty reasoning block is written deliberately, and writing it is what
+keeps this a transport change.** It is what the chat template put there, so the
+bytes the model sees are the bytes it saw before. Whether omitting it would move
+what the model says is unmeasured and would need a run over a fixed article set;
+rather than find out, this keeps the block. Once the bytes are ours the block
+costs nothing anyway - call 2 replays call 1's prompt verbatim, so it is inside
+the cached prefix rather than in front of a break.
+
+**A continuation reads its reply opening off the prompt it is extending**, never
+off a flag handed in beside it, so call 2 cannot open its reply differently from
+call 1 - which is the one remaining way a continuation could break the prefix it
+exists to preserve. A prompt that does not end on a reply opening is refused.
+
+**The seam sits on a turn marker, which is one entry of the model's own
+vocabulary.** That is what makes a byte prefix a token prefix: a join in the
+middle of a word could re-split, and a join on a special token cannot. Measured
+on the configured weights 2026-09-12 - `<|im_start|>` tokenises to a single id,
+and a concatenated prompt shared every one of call 1's prompt tokens.
+
+**The decoder's shape is carried by a top-level `json_schema` field, not by
+`response_format`.** Measured the same day on build b10444-5f754ea0e: both
+completion routes accept `response_format` and **ignore** it, returning
+unconstrained prose. `json_schema` is honoured. The native route is taken rather
+than the OpenAI-compatible `/v1/completions` beside it because on the native
+route that field is the route's own, while on the compatibility route it
+survives a layer whose job is to rewrite the body - and that layer already drops
+`response_format`. No workflow pins a llama.cpp build.
+
+**`cache_prompt` is stated in the body rather than inherited.** The build's
+default for it is not readable off `/props`, and a build that flipped it would
+make call 2 re-read its whole prompt with no line in any log to say why.
+
+**The oracle is offline and needs no server.** `tests/fixtures/prompts/` holds
+both rendered prompts as plain files and one rendering recorded from the server
+that applies the template, so three things are checked without a model running:
+call 2's prompt opens with call 1's prompt and its reply; the markers reproduce
+the template's own generation prompt byte for byte, on both reasoning arms; and
+the template's continuation does **not** have the property ours does. That last
+pair is the row's argument as an assertion rather than a paragraph.
+
+### What the chat template cost, and why the bytes are ours
+
+This is a reading of the path above, taken before it changed. It is kept because
+it is the measurement that bought the change and the only evidence in the tree
+of what a broken prefix looks like.
 
 `backend/utilities/measure_two_calls.py` starts a real server, sends the two
 calls adjacent on one slot, and splits every token the server prefilled into
@@ -369,24 +439,28 @@ because every number here lands before a token is decoded.
 | **cached tokens** | 0 | **7,415** |
 | re-prefilled | 7,419 | **717** |
 
-**The article and the system turn prefilled once, and the reuse stops four
+**The article and the system turn prefilled once, and the reuse stopped four
 tokens short of call 1's whole prompt.** Those four are
 `<think>\n\n</think>\n\n` - the harness detokenised what call 1 carries at the
 break and got that string verbatim on every item. Qwen3's chat template writes
 an empty think block into the **generation prompt** under
 `enable_thinking: false` and drops it when the same turn is replayed as
-**history**, so the two renderings diverge at exactly that point. Nothing in this
-repository renders it and no change to how the prompt is built moves it. **It is
-still there on Qwen3.5**, which is what this re-reading was taken to find out:
-the first reading was taken on the retired 8B, and a template ships with its
-weights.
+**history**, so the two renderings diverged at exactly that point. **It is still
+there on Qwen3.5**, which is what this re-reading was taken to find out: the
+first reading was taken on the retired 8B, and a template ships with its
+weights. What removed it was not a change to the template but a change of
+transport - the prompt bytes are rendered above and the two renderings are now
+one string.
 
-**What those four tokens cost is not four tokens.** A prefix cache reuses a
-prefix, so the divergence ends the reuse and everything behind it is processed
+**What those four tokens cost was not four tokens.** A prefix cache reuses a
+prefix, so the divergence ended the reuse and everything behind it was processed
 again - the four, plus call 1's whole reply. Measured both ways on the same run:
 **20 tokens at a 16-token decode cap, and 100 at call 1's real 96-token reply.**
-So **call 1's generated tokens do not cache**, and the reason is upstream of
-them.
+At the measured 9.85 tokens a second that is **10.2 seconds an item, about 3.4
+minutes of a 20-item shard** ([`throughput.md`](throughput.md)). The 100 is a
+reading on a 3,430-word article; call 1's reply on a cap-length article is
+unmeasured and a denser candidate table may make it longer, so the saving at the
+cap is unknown and probably larger.
 
 **On a later item the system turn is free.** Items 2 and 3 each reused **1,362
 tokens** of their call-1 prompt with no work - call 1's system prompt, which is
@@ -399,9 +473,9 @@ Call 2's question is **687 tokens** and sits in a user turn behind the article.
 It is byte-identical on every item - it names no article and quotes no sentence -
 but the text in front of it differs per item, so a prefix cache cannot reach it
 and every token of it is read again on every item. Of call 2's 717 re-prefilled
-tokens, 20 are the template break and 697 are that trailing turn with its
-chat-template headers. Plan 11 rows #3c and #3e own the two, and
-[`throughput.md`](throughput.md) carries what each costs in seconds.
+tokens, 20 were the template break and 697 are that trailing turn with the
+markers around it. The template break is gone; the trailing turn is plan 11 row
+#3e, and [`throughput.md`](throughput.md) carries what it costs in seconds.
 
 **None of this is a runner number.** It was taken on a developer laptop in one
 run with no spread, so it says where the re-read tokens go and it sizes no day.
@@ -740,6 +814,19 @@ This also closed a hole: `summary_words_min` and `summary_words_max` decide whic
 summaries are publishable and were absent from the fingerprint, so a cached
 summary survived a change to the rule it was written under.
 
+**The two-call path opens a hole of its own, and it is row #5b's to close.**
+Since the prompt bytes became ours, the turn markers are a determinism input,
+and nothing digests them: `build_inputs` hashes the chat template off `/props`,
+which no longer renders those two prompts, and `prompt_inputs`, which is the
+single-call template. So a change to `turn_markers.json` would move every output
+while the stamp said `unchanged` - which is the event `Observation.
+DETERMINISM_VIOLATION` exists to make visible. It cannot bite today, because
+no stage dispatches either call. It bites on the first run after the wiring
+lands, so the wiring row passes call 1's rendered prompt to `build_inputs` as
+`prompt`: one argument at one call site, and it covers the markers, both prompt
+files and the turn order together. Recorded here 2026-09-12 by plan 11 row #3c;
+the row that owns it is #5b.
+
 ## The changes are not retroactive
 
 A change to what the summariser writes - the decode reorder, the per-band
@@ -754,7 +841,11 @@ forward, which is the right trade for the runner budget - regenerating the whole
 archive would be a model sweep bounded only by its own size (Guardrail #2). Changing
 the prompt WORDING would behave the same way; it is a separate lever from the
 band numbers and the decode order, and moving it is the job of the offline loop
-in `backend/utilities/prompt_loop.py`, not a hand edit.
+in `backend/utilities/prompt_loop.py`, not a hand edit. **That loop still posts
+to the chat-completions route**, which is correct for the single-call summariser
+it tunes and wrong the day it is pointed at the two-call path: it would then
+measure a prompt the chat template rendered while production ran different
+bytes.
 
 ## A rule, not the argument for it
 
@@ -963,7 +1054,7 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 | Cut the five hedge terms and keep only "keep the source's hedges" | Each term is a literal member of a lexicon in `backend/idhazh/evals/metrics.py`. The prompt and the alarm share a vocabulary, and cutting the list decouples them silently. |
 | Keep cutting until the prompt is as short as it can be | Length is not the measure. A cut is safe when another line, the decoder or a metric still carries the behaviour, and a gamble when nothing does. |
 | Move band-varying numbers to the tail before measuring | The live runner measurement collapsed the prize. The current server log cannot prove reuse, so the change would risk output drift for an unproved gain. |
-| A system prompt of call 2's own | The shared prefix would end at the chat template's header and the whole article would prefill again - roughly double, for a wording nobody could measure the benefit of. |
+| A system prompt of call 2's own | The shared prefix would end at the first turn marker and the whole article would prefill again - roughly double, for a wording nobody could measure the benefit of. |
 | Three calls, so a cut reply is retried in halves | It needs a measured timeout rate first, and there is none. The recovery above costs zero seconds and does not. |
 | Temperature jitter on a retry | It breaks the `seed: 0`, `temperature: 0.0` contract. A re-run that is not a re-run makes every other measurement on this page unrepeatable. |
 | Pick the output budget and check it against the bounds | A number somebody chose is a number nobody re-derives. It is computed on every import instead, and a bound that moves without it is an import error. |
