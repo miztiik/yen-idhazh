@@ -1790,6 +1790,30 @@ def test_a_push_carrying_no_code_starts_no_code_job(tmp_path: Path) -> None:
     }
 
 
+def test_a_trunk_push_is_never_cancelled_by_the_next_one() -> None:
+    """The rule that makes the `scope` job safe on a push.
+
+    `scope` answers from each push's own changed paths, so a push carrying only
+    documentation correctly checks nothing. That is only sound while it cannot
+    cancel a push that carried code: the surviving run checks nothing because
+    nothing in ITS range needed checking, and the code reaches the trunk with no
+    verdict on the trunk. Measured 2026-09-12, before this was fixed: two pushes
+    carrying 14 code files between them were cancelled by a third that changed
+    one plan-doc.
+    """
+    concurrency = _mapping(_load_workflows()["ci.yml"]["concurrency"], "ci.yml concurrency")
+    cancel = str(concurrency["cancel-in-progress"])
+    assert cancel != "true", "a push to the trunk has to keep the run it started"
+    assert "pull_request" in cancel, (
+        "cancelling is still right on a pull request, where a newer commit "
+        "supersedes the older one and its verdict is worth nothing"
+    )
+    assert "github.sha" in str(concurrency["group"]), (
+        "a push groups by its own commit, so it is neither cancelled by nor "
+        "queued behind the next push"
+    )
+
+
 #: Every job that builds the site and then commits what it built, named with the
 #: step that publishes. Both jobs write a day payload that can be invalid, so
 #: both carry the same two-severity order.
