@@ -101,9 +101,11 @@ JobName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]*$", max_le
 
 #: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
 #: one step in the repository ran `idhazh counters`, and it is in the `work` job,
-#: so every one of the 289 rows committed before that date came from `work`. That
-#: is what lets the column be additive and defaulted (`CLAUDE.md` section 11)
-#: instead of inventing a value for rows nobody can go back and ask.
+#: so every row committed before that date came from `work` - 293 of them when
+#: this was written. That is what lets the column be additive and defaulted
+#: (`CLAUDE.md` section 11) instead of inventing a value for rows nobody can go
+#: back and ask. The property is what the default rests on; the count moves every
+#: run.
 WORK_JOB: Final = "work"
 
 #: The Prometheus series each field is read from, on llama.cpp `b10598`. The
@@ -208,11 +210,11 @@ class RuntimeCountersRow(Contract):
                 "`work`. `ledger.RUNTIME_COUNTERS_KEY` gained it in the same commit."
             ),
             why=(
-                "Every one of the 289 rows committed up to 2026-09-12 came from the "
-                "`work` job, because exactly one workflow step ran `idhazh counters` "
-                "and it sits in that job. So the summarizer's live-path figures are on "
-                "record and the visual planner's are not: the 4B has no "
-                "`prompt_tokens_cached_total`, no `peak_rss_bytes`, no "
+                "Every row committed up to 2026-09-12 came from the `work` job - 293 "
+                "of them on the day this landed - because exactly one workflow step "
+                "ran `idhazh counters` and it sits in that job. So the summarizer's "
+                "live-path figures are on record and the visual planner's are not: the "
+                "4B has no `prompt_tokens_cached_total`, no `peak_rss_bytes`, no "
                 "`prompt_seconds_total` and no `n_ctx_configured` taken in the digest "
                 "path, and a `llama-bench` run produces none of the four. The `visuals` "
                 "job now writes a row of its own, and two jobs appending to one ledger "
@@ -459,10 +461,10 @@ class RuntimeCountersRow(Contract):
             "they serve different weights - `work` the summarizer, `visuals` the visual "
             "planner - so a rate pooled across both describes no model, and every other "
             "cell here is unreadable without this one. It is the last column rather "
-            "than a fourth identity cell so the migration that put it on 289 committed "
-            "rows is one appended cell a line, and nothing reading this file by "
-            "position moves. An empty cell is refused rather than defaulted: a row that "
-            "cannot say which job wrote it proves nothing."
+            "than a fourth identity cell so the migration that put it on every "
+            "committed row is one appended cell a line, and nothing reading this file "
+            "by position moves. An empty cell is refused rather than defaulted: a row "
+            "that cannot say which job wrote it proves nothing."
         ),
     )
 

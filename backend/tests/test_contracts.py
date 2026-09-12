@@ -3325,9 +3325,9 @@ def test_the_cgroup_peak_reads_the_line_the_shard_job_writes_and_the_word_it_wri
 def test_widening_the_counters_ledger_costs_only_the_new_commas_and_the_new_names() -> None:
     """The Oracle for the widening: every old row re-reads, and the bytes account for themselves.
 
-    Three rows built here rather than the 289 in `state/runtime-counters.csv`,
+    Three rows built here rather than the 293 in `state/runtime-counters.csv`,
     which gains one per job per shard per run (Rule #12). What is under test is
-    the arithmetic of an appended column, and three rows prove it exactly as 289
+    the arithmetic of an appended column, and three rows prove it exactly as 293
     do.
 
     A widening that MOVED a cell instead of appending one still parses, and every

@@ -6,7 +6,7 @@
     {
       "change": "Appended `job`, the workflow job that wrote the row, defaulted to `work`. `ledger.RUNTIME_COUNTERS_KEY` gained it in the same commit.",
       "version": "2026-09-12",
-      "why": "Every one of the 289 rows committed up to 2026-09-12 came from the `work` job, because exactly one workflow step ran `idhazh counters` and it sits in that job. So the summarizer's live-path figures are on record and the visual planner's are not: the 4B has no `prompt_tokens_cached_total`, no `peak_rss_bytes`, no `prompt_seconds_total` and no `n_ctx_configured` taken in the digest path, and a `llama-bench` run produces none of the four. The `visuals` job now writes a row of its own, and two jobs appending to one ledger make the old key ambiguous: both spell shard 0 of the same run, so without this cell the second row is dropped as a repeat of the first. The default is a reading rather than a guess, which is what lets a row written before this column existed still validate."
+      "why": "Every row committed up to 2026-09-12 came from the `work` job - 293 of them on the day this landed - because exactly one workflow step ran `idhazh counters` and it sits in that job. So the summarizer's live-path figures are on record and the visual planner's are not: the 4B has no `prompt_tokens_cached_total`, no `peak_rss_bytes`, no `prompt_seconds_total` and no `n_ctx_configured` taken in the digest path, and a `llama-bench` run produces none of the four. The `visuals` job now writes a row of its own, and two jobs appending to one ledger make the old key ambiguous: both spell shard 0 of the same run, so without this cell the second row is dropped as a repeat of the first. The default is a reading rather than a guess, which is what lets a row written before this column existed still validate."
     },
     {
       "change": "Appended `n_ctx_configured`, the window one sequence got; `python_peak_rss_bytes`, the high-water mark summed over the job's own python processes; and `cgroup_peak_bytes`, what the kernel counted against the job's memory limit.",
@@ -82,7 +82,7 @@
     },
     "job": {
       "default": "work",
-      "description": "The workflow job that wrote this row. Two jobs stand a model server up and they serve different weights - `work` the summarizer, `visuals` the visual planner - so a rate pooled across both describes no model, and every other cell here is unreadable without this one. It is the last column rather than a fourth identity cell so the migration that put it on 289 committed rows is one appended cell a line, and nothing reading this file by position moves. An empty cell is refused rather than defaulted: a row that cannot say which job wrote it proves nothing.",
+      "description": "The workflow job that wrote this row. Two jobs stand a model server up and they serve different weights - `work` the summarizer, `visuals` the visual planner - so a rate pooled across both describes no model, and every other cell here is unreadable without this one. It is the last column rather than a fourth identity cell so the migration that put it on every committed row is one appended cell a line, and nothing reading this file by position moves. An empty cell is refused rather than defaulted: a row that cannot say which job wrote it proves nothing.",
       "maxLength": 40,
       "pattern": "^[a-z][a-z0-9_-]*$",
       "title": "Job",
