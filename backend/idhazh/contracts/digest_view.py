@@ -73,7 +73,7 @@ from idhazh.contracts.base import (
 from idhazh.contracts.digest_day import DigestLead, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.run_plan import TimeSource
-from idhazh.contracts.taxonomy import LensId, SourceKind
+from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.visual_decision import VisualState
 
 
@@ -168,7 +168,7 @@ class DigestViewItem(Model):
     introduced_by_run: int = Field(
         ge=1, description="A global fact, true for every reader, asserted without any storage."
     )
-    lenses: list[LensId] = Field(default_factory=list)
+    lenses: list[Slug] = Field(default_factory=list)
     key_points: list[str] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -191,6 +191,25 @@ class DigestView(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T03:55",
+            change=(
+                "lenses on a served item is a list of Slug rather than of the closed "
+                "LensId enum, which is deleted. The schema gates the slug pattern and "
+                "no longer enumerates the members."
+            ),
+            why=(
+                "This is the payload a browser fetches, so the enum was a second copy of "
+                "the vocabulary that had to be regenerated and redeployed before a "
+                "config edit could take effect. Read-compatible, and here that is a "
+                "promise to a device rather than to a job: a service worker keeps days, "
+                "so a shell holding a payload written weeks ago reads every id it "
+                "carries unchanged. The reading side takes the other half of the same "
+                "change - it renders an id the committed vocabulary cannot name rather "
+                "than dropping the chip, so a day cannot quietly stop saying what it "
+                "said (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-09",
             change=(

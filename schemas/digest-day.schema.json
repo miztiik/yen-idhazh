@@ -115,7 +115,8 @@
         },
         "events": {
           "items": {
-            "$ref": "#/$defs/EventType"
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
           },
           "title": "Events",
           "type": "array"
@@ -141,7 +142,8 @@
         },
         "lenses": {
           "items": {
-            "$ref": "#/$defs/LensId"
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
           },
           "title": "Lenses",
           "type": "array"
@@ -506,36 +508,6 @@
       "title": "DigestVisual",
       "type": "object"
     },
-    "EventType": {
-      "description": "What happened to an item. One or more per item.",
-      "enum": [
-        "release",
-        "deal",
-        "acquisition",
-        "funding",
-        "capex",
-        "earnings",
-        "regulation",
-        "research",
-        "incident"
-      ],
-      "title": "EventType",
-      "type": "string"
-    },
-    "LensId": {
-      "description": "A question asked of items already collected. Costs no extra request.",
-      "enum": [
-        "china",
-        "ai-roi",
-        "markets",
-        "cyber",
-        "war",
-        "trade",
-        "chips"
-      ],
-      "title": "LensId",
-      "type": "string"
-    },
     "SourceForm": {
       "enum": [
         "article",
@@ -590,6 +562,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "DigestItem.lenses and DigestItem.events are lists of Slug rather than of the closed LensId and EventType enums, which are deleted. The schema gates the slug pattern and no longer enumerates the members.",
+      "version": "2026-09-12T03:55",
+      "why": "Adding or retiring a lens was a code change and a release rather than a config edit. The vocabulary is config/taxonomy.json, and the tagger can only emit a key of the mapping that file builds, so widening the type lets nothing invent a label (Rule #11). Read-compatible, which is the half that matters for a frozen day: every id the 22 committed days carry is a well-formed slug, so this build reads all 8,922 of their items unchanged (measured 2026-09-12). It is also what lets a day keep saying what it said - ai-roi is retired and carried by 18 of those items, and under a closed type deleting the id from config would make those days unreadable, so the only safe move was never to delete one (section 11)."
+    },
     {
       "change": "updated_at names the published ledger's day tree, not the flat file.",
       "version": "2026-09-08",
@@ -725,7 +702,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-08",
+      "default": "2026-09-12T03:55",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -750,5 +727,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-08"
+  "version": "2026-09-12T03:55"
 }

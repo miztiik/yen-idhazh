@@ -1,0 +1,36 @@
+{
+  "band": "high",
+  "band_reason": null,
+  "entities": [],
+  "events": [
+    "acquisition",
+    "deal"
+  ],
+  "introduced_by_run": 1,
+  "item_id": "energy-9435555854",
+  "key_points": [
+    "IPP Greenvolt secured a \u20ac218 million financing package from UniCredit for two 200MW/800MWh battery projects in Poland.",
+    "Developer Enlight purchased a 125MW ready-to-build battery energy storage system in Finland from Korkia.",
+    "UAB Elesela reached financial close with Artea Bank for a 20MWh battery project in Lithuania.",
+    "European Energy appointed Capalo AI to optimize two solar-plus-storage projects in Lithuania and Latvia.",
+    "GEN-I Sonce enlisted Waldevar Energy to construct a 55MW/220MWh battery project in Romania."
+  ],
+  "lenses": [
+    "ai-roi",
+    "china"
+  ],
+  "published_at": "2026-08-27T10:00:10Z",
+  "reader_note": null,
+  "source_form": "article",
+  "source_id": "energy-storage",
+  "source_kind": "reporting",
+  "source_name": "Energy-Storage.news",
+  "source_url": "https://energy-storage.news/roundup-greenvolt-elesela-enlight-european-energy-gen-i-large-scale-bess-projects-forward-cee-baltics",
+  "summary": "A roundup details recent financing and contracting moves for battery energy storage systems in Poland, Lithuania, Latvia, Finland, and Romania. Greenvolt secured a \u20ac218 million package for two Polish projects, while Enlight acquired a Finnish BESS from Korkia. UAB Elesela reached financial close on a Lithuanian project, and European Energy hired Capalo AI to optimize hybrid parks in Lithuania and Latvia. Additionally, GEN-I Sonce enlisted an EPC firm to build a Romanian battery project.",
+  "title": "Five developers advance large-scale battery projects across Central and Eastern Europe",
+  "truncated": false,
+  "updated_at": null,
+  "updated_by_run": null,
+  "vertical": "energy",
+  "visual": null
+}

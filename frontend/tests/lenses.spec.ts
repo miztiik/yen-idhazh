@@ -1,20 +1,40 @@
 import { expect, test } from '@playwright/test';
-import { LENS_NAMES, MAX_LENS_CHIPS, shownLenses } from '../src/lib/payload/lenses';
+import { LENS_NAMES, MAX_LENS_CHIPS, lensLabel, shownLenses } from '../src/lib/payload/lenses';
 
 /**
  * A topic chip is the one thing on an item that a desk heading cannot say: that
  * this story and one three screens down under another desk are the same story.
  *
  * It is inert on purpose, so the assertions that matter are about what it is
- * NOT - not a control, not present when we know nothing, not a tombstone.
+ * NOT - not a control, not present when we know nothing, not a silent edit of a
+ * day that has already been published.
  */
 
 test.describe('the chips, without a browser', () => {
-	test('unknown and retired ids resolve to nothing', () => {
-		expect(shownLenses(['ai-roi'])).toEqual([]);
-		expect(shownLenses(['not-a-lens'])).toEqual([]);
+	test('an id the payload carries is kept, named or not', () => {
+		// Until 2026-09-12 both of these resolved to nothing. That was not the
+		// page being tidy - it was the page dropping a word a frozen day had
+		// published, which it did on 18 committed items carrying `ai-roi`.
+		expect(shownLenses(['ai-roi'])).toEqual(['ai-roi']);
+		expect(shownLenses(['not-a-lens'])).toEqual(['not-a-lens']);
 		expect(shownLenses(undefined)).toEqual([]);
 		expect(shownLenses([])).toEqual([]);
+	});
+
+	test('a chip reads its committed name, and falls back to the raw id', () => {
+		expect(lensLabel('china')).toBe('China');
+		// Retired, not deleted: config still carries the words, so the page still
+		// says them.
+		expect(lensLabel('ai-roi')).toBe('Return on AI investment');
+		// Deleted: nothing left to say but what the day recorded.
+		expect(lensLabel('supply-chain')).toBe('supply-chain');
+	});
+
+	test('a named id takes a slot before an unnamed one', () => {
+		// The cap is two and a reader can read 'China'. `supply-chain` is what a
+		// day looks like once its word has been deleted from the vocabulary.
+		expect(shownLenses(['supply-chain', 'china'])).toEqual(['china', 'supply-chain']);
+		expect(shownLenses(['supply-chain', 'war', 'china'])).toEqual(['china', 'war']);
 	});
 
 	test('more than the cap is cut, in configured order and not payload order', () => {
@@ -71,10 +91,24 @@ test.describe('the chips on the page', () => {
 		);
 	});
 
-	test('a retired topic never reaches the page', async ({ page }) => {
+	test('a retired topic keeps its tombstone on a day that published it', async ({ page }) => {
 		await page.goto('/');
-		await expect(page.locator('[data-lens="ai-roi"]')).toHaveCount(0);
-		await expect(page.getByText('Return on AI investment')).toHaveCount(0);
+		// The canary plants `ai-roi` beside `supply-chain` on one item, which is
+		// what a real day looks like after the vocabulary moved under it: one word
+		// retired and still named in config, one deleted from it entirely.
+		const tombstone = page.locator('[data-lens="ai-roi"]');
+		await expect(tombstone).toHaveCount(1);
+		await expect(tombstone).toHaveText('Return on AI investment');
+	});
+
+	test('a topic config cannot name renders the raw id, not a blank', async ({ page }) => {
+		await page.goto('/');
+		const unnamed = page.locator('[data-lens="supply-chain"]');
+		await expect(unnamed).toHaveCount(1);
+		await expect(unnamed).toHaveText('supply-chain');
+		// Both of the item's words survive: the cap is what drops a chip, never
+		// the page's ability to name it.
+		await expect(page.locator('article[data-lenses~="ai-roi"] [data-lens]')).toHaveCount(2);
 	});
 
 	test('events and entities stay off the reading page', async ({ page }) => {
