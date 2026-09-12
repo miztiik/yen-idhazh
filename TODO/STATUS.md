@@ -23,7 +23,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 12 | 8 | 4 | 0 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
-| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 0 | 3 | 1 |
+| [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 0 | 3 | 0 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
 | [20260905-15-chart-vocabulary-plan.md](20260905-15-chart-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-16-composition-vocabulary-plan.md](20260905-16-composition-vocabulary-plan.md) | 6 | 0 | 6 | 1 |
@@ -33,18 +33,21 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 6 | 22 | 8 |
-| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 2 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 6 | 22 | 7 |
+| [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 1 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
 
-## In flight - 1
+## In flight - 4
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #3e | 11 | C5 | The instructions move in front of the article | p11-3e |
+| #1 | 13 | A | The rules, and which rule governs every file this project writes | p13-1 |
+| #5 | 23 | A | The item id becomes sixteen characters of base32 | p23-5 |
+| #4 | 24 | B | The telemetry publisher declares the cover it already has | p24-4 |
 
-## Ready now - 29
+## Ready now - 26
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -57,7 +60,6 @@ section 3 is where it is answered.
 | #19 | 20260823-known-defects-plan | - | A summarize call that failed on its reply reports no cost at all | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #1 | 12 | A | A new engine behind the same seam | - |
-| #1 | 13 | A | The rules, and which rule governs every file this project writes | - |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
 | #2 | 14 | A | Every fact is reachable without a mouse | - |
 | #1 | 15 | A | The whole vocabulary is declarable, and an unbuilt type steps down | - |
@@ -68,7 +70,6 @@ section 3 is where it is answered.
 | #1 | 20 | A | The two funnels | - |
 | #1 | 21 | A | A place to look at a visual, that never ships with the site | - |
 | #1 | 22 | A | What is durable, and where it already lives | - |
-| #5 | 23 | A | The item id becomes sixteen characters of base32 | - |
 | #20 | 23 | A | The order of the day, written down | - |
 | #P2 | 23 | B | The reference dataset, built so a number cannot flatter us | - |
 | #1a | 23 | C | The fingerprint stops gating and stops being read | - |
@@ -77,7 +78,6 @@ section 3 is where it is answered.
 | #13 | 23 | F | The encoder alarm | 3 |
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #3 | 24 | B | The migration utility, and it refuses to write a tree it cannot read back | 1 |
-| #4 | 24 | B | The telemetry publisher declares the cover it already has | - |
 | #1 | 25 | A | Three docstrings defend a requirement the page retired | - |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 | #1 | 26 | A | What prerendering actually weighs, both arms | - |
@@ -99,7 +99,7 @@ section 3 is where it is answered.
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
 | #5 | 12 | D | A caption, and one mark that lands first | 4 is PENDING |
 | #6 | 12 | E | A whole day, again | 5 is PENDING |
-| #2 | 13 | B | The window takes a value, and nothing is deleted yet | 1 is PENDING |
+| #2 | 13 | B | The window takes a value, and nothing is deleted yet | 1 is IN-FLIGHT |
 | #3 | 13 | C | The fuse comes out, and one run is watched | 2 is PENDING |
 | #3 | 14 | B | The browser draws exactly what the build drew | 1 is PENDING; 2 is PENDING |
 | #4 | 14 | C | Motion that can be turned off, and that ends | 3 is PENDING |
@@ -148,7 +148,7 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 13 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING; 21 is PENDING; 20 is PENDING |
 | #1b | 23 | P | The fingerprint field is dropped from the contracts | 1a is PENDING |
-| #5 | 24 | C | `state/item-health/` files by day | 3 is PENDING; 4 is PENDING |
+| #5 | 24 | C | `state/item-health/` files by day | 3 is PENDING; 4 is IN-FLIGHT |
 | #6 | 24 | D | `state/feed-health/` files by day | 3 is PENDING |
 | #7 | 24 | E | `state/seen/` files by day | 3 is PENDING |
 | #8 | 24 | F | `state/scores/` and `state/score-index/` file by day | 3 is PENDING |
