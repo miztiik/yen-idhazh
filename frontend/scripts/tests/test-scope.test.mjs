@@ -65,6 +65,38 @@ test('documentation alone starts no code suite and cannot hide a mixed edit', ()
 	assert.equal(mixed.reasons.length, 2);
 });
 
+test('a change carrying no code buys no code job, on a merge as well as a branch', () => {
+	for (const isPr of [true, false]) {
+		assert.equal(ciAnswer(['docs/reference/measurements.md', 'TODO/a-plan.md'], isPr).code, false);
+		// Anything that is not documentation, including a path nobody classified.
+		for (const set of [
+			['docs/a.md', 'frontend/src/app.html'],
+			['config/idhazh.json'],
+			['new-area/module.ts'],
+			['full-ci-run'],
+			['unresolved-change-base']
+		]) {
+			assert.equal(ciAnswer(set, isPr).code, true, set.join(' '));
+		}
+	}
+	// Documentation carries no shape a committed day is read through, so a merge
+	// that changes only documentation no longer re-reads every day.
+	assert.equal(ciAnswer(['docs/a.md'], false).validateAll, false);
+	assert.equal(ciAnswer(['docs/a.md'], false).browser, false);
+});
+
+test('a document a test reads is that test input, not documentation', () => {
+	const page = 'docs/concepts/console-design.md';
+	assert.deepEqual(selectPaths([page]).groups, ['console']);
+	assert.equal(selectPaths([page]).reasons[0].reason, 'documentation a test reads');
+	const answer = ciAnswer([page], true);
+	assert.equal(answer.code, true);
+	assert.equal(answer.browser, true);
+	// On the branch, not after the merge: the spec that reads the page is the one
+	// an edit to it can break.
+	assert.equal(answer.console, true);
+});
+
 test('specific backend modules select existing module and integration tests', () => {
 	const selection = selectPaths(['backend/idhazh/discover.py']);
 	assert.deepEqual(selection.groups, ['backend']);
