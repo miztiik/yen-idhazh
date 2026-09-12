@@ -16,6 +16,7 @@ collection a run appends to (Guardrail #12).
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -28,12 +29,16 @@ from idhazh.contracts.article import Article
 from idhazh.llm.server import Completion
 from idhazh.sanitize import untrusted_block
 from utilities.measure_two_calls import (
+    Break,
+    Sample,
     WrongWeightsError,
     article_from_user_turn,
+    check,
     common_prefix,
     decompose,
     prefilled,
     refuse_undeclared_weights,
+    sample_at_the_cap,
 )
 
 ARTICLE: Final = CONTRACT_FIXTURES_DIR / "article" / "ok.json"
@@ -54,10 +59,30 @@ def loaded_app() -> AppConfig:
     return config.load(CONFIG_DIR).app
 
 
-def test_the_three_causes_sum_to_what_the_server_prefilled() -> None:
-    """The oracle. Parts that do not add up are three plausible numbers."""
-    spend = decompose(RECORDED_ONE, RECORDED_TWO)
-    assert spend.total == prefilled(RECORDED_ONE, RECORDED_TWO)
+@pytest.mark.parametrize(
+    ("one", "two"),
+    [
+        (RECORDED_ONE, RECORDED_TWO),
+        (RECORDED_ONE, Completion(content="", prompt_tokens=2389, cached_tokens=1702)),
+        (RECORDED_ONE, Completion(content="", prompt_tokens=2389, cached_tokens=2000)),
+        (
+            Completion(content="", prompt_tokens=9, completion_tokens=0, cached_tokens=9),
+            Completion(content="", prompt_tokens=9, cached_tokens=9),
+        ),
+    ],
+)
+def test_the_three_causes_always_sum_and_that_is_why_they_are_not_the_oracle(
+    one: Completion, two: Completion
+) -> None:
+    """The sum holds for every input, so a check on it proves nothing.
+
+    `boundary` cancels out of the two call-2 causes in both branches of the
+    `max`, so they come to `two.prompt_tokens - two.cached_tokens` whatever the
+    numbers are. It is here as documentation: a reader who takes the printed
+    total for a verification would trust a number they should not. What the run
+    fails on is `check`, below.
+    """
+    assert decompose(one, two).total == prefilled(one, two)
 
 
 def test_the_recorded_reading_splits_the_way_the_write_up_says() -> None:
@@ -127,6 +152,101 @@ def test_common_prefix_stops_at_the_first_difference() -> None:
     assert common_prefix([1, 2, 3], [1, 2, 3]) == 3
     assert common_prefix([1, 2, 3], [1, 2]) == 2
     assert common_prefix([], [1]) == 0
+
+
+#: The rendered reading that matches the recorded completions: call 1's prompt
+#: renders to the 1,497 tokens the server charged for, and the two prompts
+#: diverge at 1,493, which is where the cache stopped.
+AGREES: Final = Break(at=1493, rendered_one=1497, rendered_two=2389, tail="", replay_tokens=205)
+
+
+def test_the_checks_hold_when_the_render_and_the_cache_agree() -> None:
+    spend = decompose(RECORDED_ONE, RECORDED_TWO)
+    assert check(RECORDED_ONE, RECORDED_TWO, spend, AGREES).hold
+
+
+def test_a_prompt_that_renders_to_another_length_fails() -> None:
+    """The check that catches a diagnostic describing a prompt nobody sent.
+
+    Rendering without the thinking flag every real request carries drops the
+    empty think block, so the rendered prompt is four tokens short of the one
+    the server charged for - and the tool would then report that the prefix
+    never broke while the cache reading says it broke and cost 209 tokens.
+    """
+    spend = decompose(RECORDED_ONE, RECORDED_TWO)
+    wrong = check(
+        RECORDED_ONE, RECORDED_TWO, spend, replace(AGREES, rendered_one=1493, at=1493)
+    )
+    assert not wrong.hold
+    assert wrong.failures() == [
+        "call 1's rendered prompt is not the length the server charged for"
+    ]
+
+
+def test_a_cache_that_stopped_somewhere_else_fails() -> None:
+    spend = decompose(RECORDED_ONE, RECORDED_TWO)
+    wrong = check(RECORDED_ONE, RECORDED_TWO, spend, replace(AGREES, at=1200))
+    assert not wrong.hold
+    assert wrong.failures() == ["the cache did not stop where the rendered prompts diverge"]
+
+
+def test_a_replay_shorter_than_the_reply_fails() -> None:
+    """A runtime that splits reasoning out of `content` replays less than it wrote.
+
+    `build_call_two_request` sends `one.content`, and a llama.cpp build this
+    repository already names empties that field for a template whose generation
+    prompt ends in a closing think tag. The assistant turn would then be empty,
+    and every token of call 1's reply would be charged to the template cause
+    where no row would remove it.
+    """
+    spend = decompose(RECORDED_ONE, RECORDED_TWO)
+    wrong = check(RECORDED_ONE, RECORDED_TWO, spend, replace(AGREES, replay_tokens=0))
+    assert not wrong.hold
+    assert wrong.failures() == [
+        "call 1's replayed turn is shorter than the reply it generated"
+    ]
+
+
+def test_an_unread_diagnostic_is_unread_and_not_a_failure() -> None:
+    """A server that would not render is a missing reading, never a finding."""
+    spend = decompose(RECORDED_ONE, RECORDED_TWO)
+    assert check(RECORDED_ONE, RECORDED_TWO, spend, Break()).hold
+
+
+def a_sample(key: str, words: int) -> Sample:
+    article = Article.from_json(ARTICLE.read_text(encoding="utf-8"))
+    body = " ".join(f"word{index}" for index in range(words))
+    return Sample(
+        url_key=key,
+        article=Article.model_validate(
+            article.model_dump(mode="json")
+            | {"text": body, "word_count": words, "source_word_count": words}
+        ),
+    )
+
+
+def test_the_cap_arm_is_built_to_the_cap_and_names_the_rows_it_joined() -> None:
+    """The corpus cannot supply an article at the cap, so one is built.
+
+    Driven from two built samples rather than from `corpus/corpus.jsonl`, which
+    a run appends to (Guardrail #12). What is under test is the joining and the
+    cut, and a fixed pair shows both: neither row alone reaches the cap.
+    """
+    cap = 1300
+    allowed = cap // 13 * 10
+    built = sample_at_the_cap([a_sample("first", 600), a_sample("second", 600)], cap_tokens=cap)
+    assert built.article.word_count == allowed
+    assert built.article.truncated
+    assert built.article.truncated_at_tokens == cap
+    assert built.url_key == "built from first+second"
+
+
+def test_the_cap_arm_stops_joining_once_it_has_enough() -> None:
+    """A row past the cap is not read, so the arm names only what it used."""
+    built = sample_at_the_cap(
+        [a_sample("first", 5000), a_sample("second", 5000)], cap_tokens=1300
+    )
+    assert built.url_key == "built from first"
 
 
 def test_the_title_and_the_body_come_back_out_of_a_user_turn() -> None:

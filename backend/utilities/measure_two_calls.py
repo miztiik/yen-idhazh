@@ -57,15 +57,17 @@ from idhazh import config
 from idhazh.classify.calls import (
     build_call_one_request,
     build_call_two_request,
+    call_one_system_prompt,
     call_two_output_tokens,
     call_two_user_turn,
 )
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.corpus import ChatRole, CorpusRow
 from idhazh.elements import element_table
-from idhazh.extract import approx_tokens
-from idhazh.llm.server import Completion, post, server_argv
+from idhazh.extract import TOKENS_PER_WORD, approx_tokens, truncate_to_tokens
+from idhazh.llm.server import Completion, post, props, server_argv
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -197,6 +199,48 @@ def corpus_samples(corpus: Path, template: Article) -> list[Sample]:
     return sorted(built, key=lambda one: one.article.word_count, reverse=True)
 
 
+def sample_at_the_cap(samples: Sequence[Sample], *, cap_tokens: int) -> Sample:
+    """One article at the configured truncation cap, built from corpus prose.
+
+    **The corpus cannot supply one.** Its longest body is whatever the cap
+    allowed on the day it was harvested, so the archive's worst case is a fossil
+    of a retired setting - measured 2026-09-12, the longest of 1,444 rows is
+    3,846 words, which is `int(5000 / 1.3)` under a cap that doubled to 10,000
+    on 2026-09-09. `CLAUDE.md` section 13 rules that where the awkward shape is
+    the point, the shape is **built**, because a built one carries the case the
+    archive has never produced (Guardrail #12).
+
+    Real prose, so the tokenizer sees real vocabulary and real punctuation; the
+    length is the only part that is ours. The bodies are joined longest first
+    and then cut by `truncate_to_tokens` itself, so the arm is the cap's worst
+    case by construction and follows the cap the next time it moves.
+    """
+    words: list[str] = []
+    used: list[str] = []
+    allowed = int(cap_tokens / TOKENS_PER_WORD)
+    for sample in samples:
+        used.append(sample.url_key)
+        words.extend((sample.article.text or "").split())
+        if len(words) >= allowed:
+            break
+    body, truncated, cut = truncate_to_tokens(" ".join(words), cap_tokens)
+    kept = len(body.split())
+    return Sample(
+        url_key="built from " + "+".join(used),
+        article=Article.model_validate(
+            samples[0].article.model_dump(mode="json")
+            | {
+                "text": body,
+                "word_count": kept,
+                "source_word_count": kept,
+                "token_count": approx_tokens(kept),
+                "truncated": truncated,
+                "truncated_at_tokens": cut,
+            }
+        ),
+    )
+
+
 # --- The server's own template and tokenizer ---------------------------------
 
 
@@ -221,16 +265,29 @@ class Tokenizer:
     the tokenizer is the model's, and both move when the model does. A server
     that will not answer yields nothing rather than a guess, and the caller says
     the diagnostic was unread (`CLAUDE.md` section 1a).
+
+    **`thinking` is carried, and it is the reason this class exists rather than
+    a pair of functions.** Qwen3 writes an empty think block into a generation
+    prompt only under `enable_thinking: false`, which is what every real request
+    here sets. Rendering the diagnostic without it renders a prompt the server
+    was never sent, and the tool then prints that the prefix never broke while
+    the cache reading says it broke and cost 209 tokens.
     """
 
     base: str
     timeout: float
+    thinking: bool
 
     def render(self, messages: Sequence[Any]) -> str | None:
         """The exact prompt string this message array would become."""
         try:
             body = _json_post(
-                f"{self.base}/apply-template", {"messages": list(messages)}, timeout=self.timeout
+                f"{self.base}/apply-template",
+                {
+                    "messages": list(messages),
+                    "chat_template_kwargs": {"enable_thinking": self.thinking},
+                },
+                timeout=self.timeout,
             )
         except (urllib.error.URLError, OSError, ValueError):
             return None
@@ -260,6 +317,10 @@ class Tokenizer:
         tokens = self.tokenize(rendered) if rendered is not None else None
         return None if tokens is None else len(tokens)
 
+    def tokens(self, messages: Sequence[Any]) -> list[int] | None:
+        rendered = self.render(messages)
+        return self.tokenize(rendered) if rendered is not None else None
+
 
 def common_prefix(left: Sequence[int], right: Sequence[int]) -> int:
     """How many tokens two prompts share before they diverge.
@@ -272,6 +333,29 @@ def common_prefix(left: Sequence[int], right: Sequence[int]) -> int:
     while index < limit and left[index] == right[index]:
         index += 1
     return index
+
+
+def describe(endpoint: str, *, digest: str) -> dict[str, Any]:
+    """What the server says about itself, beside the weights it was handed.
+
+    What is being priced here is a chat template, and a template ships with a
+    build as well as with weights - this repository's own `Completion.reasoned`
+    names a llama.cpp build that changes what a reply looks like with no weights
+    change. So the template is digested rather than quoted: it is a few thousand
+    characters of Jinja and the question a later reader has is only whether it
+    is the same one.
+    """
+    said = props(endpoint, timeout=60.0)
+    template = said.get("chat_template")
+    return {
+        "weights_sha256": digest,
+        "build": said.get("build_info"),
+        "model_path": said.get("model_path"),
+        "chat_template_sha256": (
+            derive_text_digest(template) if isinstance(template, str) else None
+        ),
+        "chat_template_characters": len(template) if isinstance(template, str) else None,
+    }
 
 
 # --- The decomposition -------------------------------------------------------
@@ -293,17 +377,18 @@ class Spend:
 def decompose(one: Completion, two: Completion) -> Spend:
     """Split an item's re-prefill three ways, by cause.
 
-    `boundary` is how far a perfect cache could reach into call 2's prompt: call
-    1's whole prompt plus the reply it generated, both of which the slot already
-    held. What call 2 cached short of that is the template breaking the prefix;
-    what call 2 carries beyond it is the trailing turn, which is new bytes and
-    always prefills.
+    `boundary` is how many entries call 1 left in the slot: its whole prompt
+    plus the tokens it generated, both of which the runtime keeps. What call 2
+    cached short of that is the template breaking the prefix; what call 2
+    carries beyond it is the trailing turn, which is new bytes and always
+    prefills.
 
-    The identity that makes this a decomposition rather than three plausible
-    numbers: `article_changed` is call 1's own re-prefill and the other two sum
-    to call 2's, so the three sum to every token the server prefilled for this
-    item. The `max` covers a cache that reached past call 1's reply, which is
-    not what happens today and would be very good news.
+    **The sum is an identity, so it is a reading aid and not the oracle.**
+    `boundary` cancels: the two call-2 causes always come to
+    `two.prompt_tokens - two.cached_tokens` whichever branch of the `max` runs,
+    so a check that they add up cannot fail and proves nothing. What can fail is
+    `Checks` below - whether the cache actually reached where the two rendered
+    prompts say it had to.
     """
     boundary = one.prompt_tokens + one.completion_tokens
     return Spend(
@@ -316,6 +401,58 @@ def decompose(one: Completion, two: Completion) -> Spend:
 def prefilled(one: Completion, two: Completion) -> int:
     """Every token the server read for this item and did not have cached."""
     return (one.prompt_tokens - one.cached_tokens) + (two.prompt_tokens - two.cached_tokens)
+
+
+@dataclass(frozen=True, slots=True)
+class Checks:
+    """What has to hold for the split above to be about this server.
+
+    Each one is a statement that can come out false, which is the whole reason
+    they are here rather than the sum. They are checked per item and the exit
+    code is theirs.
+    """
+
+    #: The renderer and the live request agree on how long call 1's prompt is.
+    #: False means the diagnostic is describing a prompt the server was not
+    #: sent - a wrong thinking flag does exactly that.
+    prompt_renders_the_same: bool
+    #: The cache stopped exactly where the two rendered prompts diverge. False
+    #: means the runtime is doing something this split does not model, and every
+    #: share below it is then unexplained rather than wrong.
+    cache_reached_the_divergence: bool
+    #: Call 2 carries at least everything call 1 left in the slot. False makes
+    #: `trailing_turn` negative, which is not a share of anything.
+    trailing_turn_is_positive: bool
+    #: What was replayed is what was generated. False means the runtime split a
+    #: reasoning channel out of `content`, so the assistant turn call 2 sends is
+    #: shorter than the reply call 1 wrote, and `boundary` overstates the depth.
+    replay_is_the_whole_reply: bool
+
+    @property
+    def hold(self) -> bool:
+        return (
+            self.prompt_renders_the_same
+            and self.cache_reached_the_divergence
+            and self.trailing_turn_is_positive
+            and self.replay_is_the_whole_reply
+        )
+
+    def failures(self) -> list[str]:
+        named = {
+            "call 1's rendered prompt is not the length the server charged for": (
+                self.prompt_renders_the_same
+            ),
+            "the cache did not stop where the rendered prompts diverge": (
+                self.cache_reached_the_divergence
+            ),
+            "call 2 carries fewer tokens than call 1 left in the slot": (
+                self.trailing_turn_is_positive
+            ),
+            "call 1's replayed turn is shorter than the reply it generated": (
+                self.replay_is_the_whole_reply
+            ),
+        }
+        return [what for what, held in named.items() if not held]
 
 
 #: The label, the field and the row that owns removing it. One list, so the
@@ -339,8 +476,8 @@ def report_call(name: str, completion: Completion) -> None:
     )
 
 
-def report_spend(spend: Spend, measured: int) -> None:
-    """Print the split and say whether it adds up. That is the oracle."""
+def report_spend(spend: Spend, measured: int, *, question: int | None) -> None:
+    """Print the split, and the floor under the share row #3e can move."""
     print()
     print(f"  {'where the re-prefilled tokens went':<46}{'tokens':>8}{'share':>8}  owner")
     for label, field, owner in CAUSES:
@@ -348,8 +485,12 @@ def report_spend(spend: Spend, measured: int) -> None:
         share = (100.0 * value / spend.total) if spend.total else 0.0
         print(f"    {label:<44}{value:>8}{share:>7.1f}%  {owner}")
     print(f"    {'total':<44}{spend.total:>8}{100.0 if spend.total else 0.0:>7.1f}%")
-    verdict = "SUMS" if spend.total == measured else "DOES NOT SUM"
-    print(f"  {verdict}: the two calls re-prefilled {measured}, the three causes {spend.total}")
+    print(f"  the two calls re-prefilled {measured}, the three causes {spend.total}")
+    if question is not None:
+        print(
+            f"  of the trailing turn, {question} tokens are the question's own text and "
+            f"{spend.trailing_turn - question} are chat-template headers no row moves"
+        )
 
 
 # --- The run -----------------------------------------------------------------
@@ -362,54 +503,68 @@ class Reading:
     label: str
     url_key: str
     article_words: int
+    call_one_prompt: int
     one: Completion
     two: Completion
     spend: Spend
+    question_tokens: int | None
     broke_at: int | None
-    call_one_rendered: int | None
+    rendered_one: int | None
+    rendered_two: int | None
     divergence: str | None
-
-    @property
-    def sums(self) -> bool:
-        return self.spend.total == prefilled(self.one, self.two)
+    replay_tokens: int | None
+    checks: Checks
 
     def as_json(self) -> dict[str, Any]:
         return {
             "label": self.label,
             "url_key": self.url_key,
             "article_words": self.article_words,
+            "call_one_prompt_tokens": self.call_one_prompt,
             "call_one": asdict(self.one),
             "call_two": asdict(self.two),
             "spend": asdict(self.spend),
             "re_prefilled": prefilled(self.one, self.two),
-            "sums": self.sums,
-            "call_one_rendered_tokens": self.call_one_rendered,
+            "question_tokens": self.question_tokens,
+            "rendered_call_one_tokens": self.rendered_one,
+            "rendered_call_two_tokens": self.rendered_two,
             "prefix_broke_at": self.broke_at,
             "divergence": self.divergence,
+            "replay_tokens": self.replay_tokens,
+            "checks": asdict(self.checks),
         }
 
 
-def prefix_break(
-    first: dict[str, Any], second: dict[str, Any], tokenizer: Tokenizer
-) -> tuple[int | None, int | None, str | None]:
-    """Where the two rendered prompts stop agreeing, and what call 1 had there.
+@dataclass(frozen=True, slots=True)
+class Break:
+    """Where the two rendered prompts stop agreeing, and what sits there."""
 
-    The live `cached_tokens` says how far the cache reached. This says WHY it
-    stopped there, in this model's own tokens, so the answer moves when the
-    template does instead of restating what one template did in 2026.
+    at: int | None = None
+    rendered_one: int | None = None
+    rendered_two: int | None = None
+    tail: str | None = None
+    replay_tokens: int | None = None
+
+
+def prefix_break(
+    first: dict[str, Any], second: dict[str, Any], reply: str, tokenizer: Tokenizer
+) -> Break:
+    """Why the cache stopped where it did, in this model's own tokens.
+
+    The live `cached_tokens` says how far the cache reached. This says why, so
+    the answer moves when the template does instead of restating what one
+    template did in 2026. It also tokenises the reply on its own: a runtime that
+    splits reasoning out of `content` replays a shorter assistant turn than call
+    1 wrote, and nothing else here would show it.
     """
-    one_prompt = tokenizer.render(first["messages"])
-    two_prompt = tokenizer.render(second["messages"])
-    if one_prompt is None or two_prompt is None:
-        print("  the server would not render a prompt, so the break point is unread")
-        return None, None, None
-    one_tokens = tokenizer.tokenize(one_prompt)
-    two_tokens = tokenizer.tokenize(two_prompt)
+    one_tokens = tokenizer.tokens(first["messages"])
+    two_tokens = tokenizer.tokens(second["messages"])
     if one_tokens is None or two_tokens is None:
-        print("  the server would not tokenise a prompt, so the break point is unread")
-        return None, None, None
+        print("  the server would not render or tokenise a prompt, so the break is unread")
+        return Break()
     at = common_prefix(one_tokens, two_tokens)
     tail = tokenizer.detokenize(one_tokens[at:])
+    replay = tokenizer.tokenize(reply)
     print(
         f"  rendered: call 1 is {len(one_tokens)} tokens, call 2 is {len(two_tokens)},"
         f" and they diverge at token {at} -"
@@ -417,7 +572,30 @@ def prefix_break(
     )
     if tail is not None:
         print(f"  what call 1 has there, verbatim: {tail!r}")
-    return at, len(one_tokens), tail
+    return Break(
+        at=at,
+        rendered_one=len(one_tokens),
+        rendered_two=len(two_tokens),
+        tail=tail,
+        replay_tokens=None if replay is None else len(replay),
+    )
+
+
+def check(one: Completion, two: Completion, spend: Spend, broke: Break) -> Checks:
+    """The four statements that can come out false. A missing reading is not one.
+
+    An unread diagnostic is reported as unread rather than as a failure
+    (`CLAUDE.md` section 1a), so a check whose evidence the server would not
+    give holds by default and the run says the evidence is missing.
+    """
+    return Checks(
+        prompt_renders_the_same=broke.rendered_one in (None, one.prompt_tokens),
+        cache_reached_the_divergence=broke.at is None or broke.at == two.cached_tokens,
+        trailing_turn_is_positive=spend.trailing_turn >= 0,
+        replay_is_the_whole_reply=(
+            broke.replay_tokens is None or broke.replay_tokens >= one.completion_tokens - 1
+        ),
+    )
 
 
 def run_item(
@@ -430,6 +608,7 @@ def run_item(
     timeout: float,
     call_one_cap: int,
     call_two_cap: int,
+    question_tokens: int | None,
 ) -> Reading:
     article = sample.article
     model = app.models.summarize
@@ -448,19 +627,27 @@ def run_item(
     two = post(second, endpoint=endpoint, timeout=timeout)
     report_call("call 2", two)
 
-    at, rendered, tail = prefix_break(first, second, tokenizer)
+    broke = prefix_break(first, second, one.content, tokenizer)
     spend = decompose(one, two)
-    report_spend(spend, prefilled(one, two))
+    report_spend(spend, prefilled(one, two), question=question_tokens)
+    checks = check(one, two, spend, broke)
+    for failure in checks.failures():
+        print(f"  CHECK FAILED: {failure}")
     return Reading(
         label=label,
         url_key=sample.url_key,
         article_words=article.word_count,
+        call_one_prompt=one.prompt_tokens,
         one=one,
         two=two,
         spend=spend,
-        broke_at=at,
-        call_one_rendered=rendered,
-        divergence=tail,
+        question_tokens=question_tokens,
+        broke_at=broke.at,
+        rendered_one=broke.rendered_one,
+        rendered_two=broke.rendered_two,
+        divergence=broke.tail,
+        replay_tokens=broke.replay_tokens,
+        checks=checks,
     )
 
 
@@ -505,44 +692,80 @@ def pick_samples(
     raise RuntimeError(f"only {len(chosen)} of {wanted} articles fit under {prompt_ceiling}")
 
 
-def finish(readings: Sequence[Reading], out: Path | None, *, weights: Path, digest: str) -> int:
+def finish(
+    readings: Sequence[Reading],
+    out: Path | None,
+    *,
+    weights: Path,
+    digest: str,
+    system_tokens: int | None,
+    server: dict[str, Any],
+) -> int:
     """The summary, the machine-readable copy, and the exit code.
 
-    The exit code is about the instrument and not about the design: a
-    decomposition whose parts do not add up is a guess with three decimal
-    places, and that is the one thing this may fail on.
+    The exit code is about the instrument and not about the design. The three
+    causes always sum, so what can fail is whether the cache reached where the
+    two rendered prompts say it had to, and whether the steady state is one.
     """
     print()
-    print("=" * 92)
-    head = f"{'item':<28}{'words':>7}{'total':>8}{'article':>9}{'template':>10}{'trailing':>10}"
-    print(head)
+    print("=" * 100)
+    print(
+        f"{'item':<28}{'words':>7}{'prompt':>8}{'total':>8}"
+        f"{'article':>9}{'template':>10}{'trailing':>10}"
+    )
     for reading in readings:
         print(
-            f"{reading.label:<28}{reading.article_words:>7}{reading.spend.total:>8}"
-            f"{reading.spend.article_changed:>9}{reading.spend.template_broke:>10}"
-            f"{reading.spend.trailing_turn:>10}"
+            f"{reading.label:<28}{reading.article_words:>7}{reading.call_one_prompt:>8}"
+            f"{reading.spend.total:>8}{reading.spend.article_changed:>9}"
+            f"{reading.spend.template_broke:>10}{reading.spend.trailing_turn:>10}"
         )
-    if len(readings) > 1:
+    print("`prompt` is call 1's own prompt, so two rows with equal words can still differ")
+
+    steady = list(readings[1:])
+    cold = []
+    if steady:
         print()
         print("Item 1 is a cold cache slot, so the steady state is item 2 onward:")
-        for reading in readings[1:]:
+        for reading in steady:
+            reused = reading.one.cached_tokens
             print(
-                f"  {reading.label}: call 1 reused {reading.one.cached_tokens} of its "
+                f"  {reading.label}: call 1 reused {reused} of its "
                 f"{reading.one.prompt_tokens}-token prompt, and call 2 reused "
                 f"{reading.two.cached_tokens} of its {reading.two.prompt_tokens}"
             )
+            if system_tokens is not None and reused < system_tokens:
+                cold.append(reading.label)
+        if system_tokens is not None:
+            print(
+                f"  call 1's system turn is {system_tokens} tokens and is the same bytes on "
+                "every item, so a later item reusing fewer than that is the finding"
+            )
+
     print()
     print(f"weights {weights.name} sha256={digest}")
-    payload = {"weights": weights.name, "sha256": digest, "items": [r.as_json() for r in readings]}
+    payload = {
+        "taken_at": time.strftime("%Y-%m-%d"),
+        "weights": weights.name,
+        "sha256": digest,
+        "server": server,
+        "call_one_system_tokens": system_tokens,
+        "items": [reading.as_json() for reading in readings],
+    }
     text = json.dumps(payload, default=str, indent=2)
     if out is not None:
         out.write_text(text + "\n", encoding="utf-8", newline="\n")
         print(f"wrote {out}")
     else:
         print(text)
-    broken = [reading.label for reading in readings if not reading.sums]
-    if broken:
-        print(f"INSTRUMENT BROKEN: the causes do not sum on {', '.join(broken)}", file=sys.stderr)
+
+    failed = [
+        f"{reading.label}: {what}" for reading in readings for what in reading.checks.failures()
+    ]
+    failed += [f"{label}: call 1 did not reuse the shared system turn" for label in cold]
+    if failed:
+        print("INSTRUMENT BROKEN:", file=sys.stderr)
+        for line in failed:
+            print(f"  {line}", file=sys.stderr)
         return 1
     return 0
 
@@ -579,7 +802,26 @@ def main(argv: list[str] | None = None) -> int:
         default=True,
         help="Run one more item with call 1 on its real output budget.",
     )
+    parser.add_argument(
+        "--at-cap",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Run one more item on an article BUILT to extract.truncation_cap_tokens "
+            "out of corpus prose. The corpus cannot supply one: its longest body is "
+            "what the cap allowed when it was harvested."
+        ),
+    )
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--server-log",
+        type=Path,
+        default=None,
+        help=(
+            "Where to keep the server's own output. `log_verbosity` is 4 in config, so "
+            "this is the only place the attention state and a failed load say anything."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(REPO_ROOT / "config")
@@ -604,41 +846,73 @@ def main(argv: list[str] | None = None) -> int:
         port=args.server_port,
     )
     print(" ".join(argv_line), flush=True)
-    server = subprocess.Popen(argv_line, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    handle = args.server_log.open("wb") if args.server_log else None
+    server = subprocess.Popen(
+        argv_line, stdout=handle or subprocess.DEVNULL, stderr=subprocess.STDOUT
+    )
     readings: list[Reading] = []
+    described: dict[str, Any] = {}
+    system_tokens: int | None = None
     try:
         wait_for_health(args.server_port, deadline_seconds=args.startup_seconds)
         base = f"http://127.0.0.1:{args.server_port}"
         endpoint = f"{base}/v1/chat/completions"
         timeout = args.request_minutes * 60.0
-        tokenizer = Tokenizer(base=base, timeout=60.0)
+        tokenizer = Tokenizer(base=base, timeout=60.0, thinking=model.inference.thinking)
+        described = describe(f"{endpoint}", digest=digest)
 
         # What one item needs after call 1's prompt: call 1's decode, the
         # trailing turn and call 2's decode. Call 2's prompt is call 1's plus
-        # those, so one ceiling on call 1's prompt covers both calls. The
-        # trailing turn is tokenised rather than guessed - it is also the
-        # answer to "how big is call 2's question really".
+        # those, so one ceiling on call 1's prompt covers both calls. The decode
+        # cap is a clock knob and has no place in a context budget, so the
+        # budget reads the real one whatever the cap is. The trailing turn is
+        # tokenised rather than guessed - it is also the answer to "how big is
+        # call 2's question really".
         question = call_two_user_turn(app.summarize)
         trailing = tokenizer.count([{"role": "user", "content": question}])
+        system_tokens = tokenizer.count([{"role": "system", "content": call_one_system_prompt()}])
         if trailing is None:
             raise RuntimeError("the server would not tokenise call 2's question")
         call_one_decode = model.inference.max_output_tokens
-        call_two_decode = args.decode_cap or call_two_output_tokens(app.summarize)
-        reserve = call_one_decode + call_two_decode + trailing
-        ceiling = model.inference.n_ctx - reserve
+        call_two_decode = call_two_output_tokens(app.summarize)
+        ceiling = model.inference.n_ctx - (call_one_decode + call_two_decode + trailing)
         print(
             f"call 2's question renders to {trailing} tokens as its own turn; with "
             f"{call_one_decode} for call 1's decode and {call_two_decode} for call 2's, "
-            f"call 1's prompt may reach {ceiling} of {model.inference.n_ctx}",
+            f"call 1's prompt may reach {ceiling} of {model.inference.n_ctx} in production",
             flush=True,
         )
 
-        chosen = pick_samples(
-            samples, app=app, tokenizer=tokenizer, wanted=wanted, prompt_ceiling=ceiling
+        chosen = (
+            pick_samples(
+                samples, app=app, tokenizer=tokenizer, wanted=wanted, prompt_ceiling=ceiling
+            )
+            if wanted
+            else []
         )
+        if args.at_cap:
+            built = sample_at_the_cap(samples, cap_tokens=app.extract.truncation_cap_tokens)
+            table = element_table(built.article, config=app.elements)
+            request = build_call_one_request(
+                built.article, table, model_id=model.id, inference=model.inference
+            )
+            at_cap_tokens = tokenizer.count(request["messages"]) or 0
+            print(
+                f"an article AT the cap is {built.article.word_count} words and a "
+                f"{at_cap_tokens}-token call-1 prompt, against the {ceiling}-token "
+                f"ceiling above - the corpus cannot supply one, so this arm is built",
+                flush=True,
+            )
+            chosen.append((built, at_cap_tokens))
+
         for index, (sample, prompt_tokens) in enumerate(chosen, start=1):
-            uncapped = args.uncapped_item and index == wanted
-            label = f"item {index}" + (" - call 1 uncapped" if uncapped else "")
+            built_arm = args.at_cap and index == len(chosen)
+            uncapped = built_arm or (args.uncapped_item and index == wanted)
+            label = f"item {index}"
+            if built_arm:
+                label += " - at the cap, BUILT"
+            elif uncapped:
+                label += " - call 1 uncapped"
             print()
             print(
                 f"--- {label}: {sample.article.word_count} words, {prompt_tokens} prompt "
@@ -655,13 +929,23 @@ def main(argv: list[str] | None = None) -> int:
                     timeout=timeout,
                     call_one_cap=0 if uncapped else args.decode_cap,
                     call_two_cap=args.decode_cap,
+                    question_tokens=trailing,
                 )
             )
     finally:
         server.terminate()
         server.wait(timeout=60)
+        if handle is not None:
+            handle.close()
 
-    return finish(readings, args.out, weights=args.weights, digest=digest)
+    return finish(
+        readings,
+        args.out,
+        weights=args.weights,
+        digest=digest,
+        system_tokens=system_tokens,
+        server=described,
+    )
 
 
 if __name__ == "__main__":
