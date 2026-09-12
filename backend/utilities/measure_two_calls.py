@@ -873,21 +873,28 @@ def main(argv: list[str] | None = None) -> int:
         # trailing turn and call 2's decode. Call 2's prompt is call 1's plus
         # those, so one ceiling on call 1's prompt covers both calls. The decode
         # cap is a clock knob and has no place in a context budget, so the
-        # budget reads the real one whatever the cap is. The trailing turn is
-        # tokenised rather than guessed - it is also the answer to "how big is
-        # call 2's question really".
+        # budget reads the real one whatever the cap is.
+        #
+        # **Two counts, and they are not the same question.** The budget wants
+        # the turn as the template renders it, headers and all. The report wants
+        # the question's own text, because the difference between the two IS the
+        # chat-template floor row #3e cannot go below - and measuring the report
+        # with the rendered number makes that floor come out negative.
         question = call_two_user_turn(app.summarize)
-        trailing = tokenizer.count([{"role": "user", "content": question}])
-        system_tokens = tokenizer.count([{"role": "system", "content": call_one_system_prompt()}])
-        if trailing is None:
+        rendered_turn = tokenizer.count([{"role": "user", "content": question}])
+        question_tokens = tokenizer.tokenize(question)
+        if rendered_turn is None or question_tokens is None:
             raise RuntimeError("the server would not tokenise call 2's question")
+        trailing = len(question_tokens)
+        system_tokens = tokenizer.count([{"role": "system", "content": call_one_system_prompt()}])
         call_one_decode = model.inference.max_output_tokens
         call_two_decode = call_two_output_tokens(app.summarize)
-        ceiling = model.inference.n_ctx - (call_one_decode + call_two_decode + trailing)
+        ceiling = model.inference.n_ctx - (call_one_decode + call_two_decode + rendered_turn)
         print(
-            f"call 2's question renders to {trailing} tokens as its own turn; with "
-            f"{call_one_decode} for call 1's decode and {call_two_decode} for call 2's, "
-            f"call 1's prompt may reach {ceiling} of {model.inference.n_ctx} in production",
+            f"call 2's question is {trailing} tokens of text and {rendered_turn} as a "
+            f"rendered turn; with {call_one_decode} for call 1's decode and "
+            f"{call_two_decode} for call 2's, call 1's prompt may reach {ceiling} of "
+            f"{model.inference.n_ctx} in production",
             flush=True,
         )
 
