@@ -5,15 +5,19 @@ summary of it, beside the table of quantities and dates the candidate pass
 already cut, and asks what each one means. Its reply cites addresses code minted
 and types nothing a reader sees.
 
-**Call 2 appends to call 1's message array and the article is read once.** It
-sends back the same system turn and the same article-carrying user turn, byte
-for byte, followed by call 1's own reply and one new question - so the server's
-prefix cache answers for the article and only the new turn is prefilled. Its
-reply carries the summary first and the plan second, and that order is the
-recovery: a decode the output budget cuts is cut in the plan, and the summary
-behind it is already closed. Both calls are built here and no stage dispatches
-either yet; the gate in front of them, and the picture they lead to, are later
-rows.
+**Call 2's prompt IS call 1's prompt, plus call 1's reply, plus one question.**
+The bytes are rendered here rather than by the model's chat template, and call
+2's are the first one's extended - so the server's prefix cache answers for the
+system turn, the article and the reply, and only the new turn is prefilled. A
+template could not give that: it writes an empty reasoning block into a
+generation prompt and drops it when the same turn is replayed as history, so
+the two renderings diverge four tokens before the end of call 1's prompt and
+everything behind the break is read again - 100 tokens an item, measured on the
+configured weights 2026-09-12. Call 2's reply carries the summary first and the
+plan second, and that order is the recovery: a decode the output budget cuts is
+cut in the plan, and the summary behind it is already closed. Both calls are
+built here and no stage dispatches either yet; the gate in front of them, and
+the picture they lead to, are later rows.
 
 The picture they lead to is `idhazh.visual_planner`, which decides whether an
 item gets a chart. It stays there: it is a different subject that happened to
@@ -50,7 +54,7 @@ from idhazh.contracts.element import (
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
 from idhazh.elements import NUMBER, SpanDriftError, read_quantity, sentence_starts, settle
 from idhazh.extract import approx_tokens
-from idhazh.llm.server import Completion, continued_payload, request_payload
+from idhazh.llm.server import Completion, completion_payload, continued_completion_payload
 from idhazh.sanitize import untrusted_block
 from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
 
@@ -380,17 +384,17 @@ def build_call_one_request(
 ) -> dict[str, Any]:
     """Call 1's request body, with the reply shape enforced by the decoder.
 
-    The output budget is the role's own and is not narrowed here. Call 2 appends
-    to this message array and its budget is derived from both replies' bounds
-    together, which is the row that adds the second call.
+    The prompt bytes are rendered here rather than by the model's chat
+    template, which is what lets call 2 open with them unchanged. The output
+    budget is the role's own and is not narrowed here; call 2's is derived from
+    both replies' bounds together.
     """
-    return request_payload(
+    return completion_payload(
         model_id=model_id,
         system=call_one_system_prompt(),
         user=call_one_user_turn(article, table),
         output_schema=call_one_schema(),
         inference=inference,
-        schema_name="call_one",
     )
 
 
@@ -1168,24 +1172,25 @@ def build_call_two_request(
     brief: bool = False,
     plan: bool = True,
 ) -> dict[str, Any]:
-    """Call 2's request body, built by appending to call 1's.
+    """Call 2's request body, built by extending call 1's prompt.
 
-    `first` is the payload call 1 was sent and `reply` is what came back, so the
-    system turn and the article-carrying user turn are the same bytes rather
-    than the same intent. That is the point of taking them as arguments: a
-    prefix cache reuses the longest common prefix of the tokenised prompt, so
-    one re-rendered character in front of the article costs a full re-prefill of
-    it, and nothing about that failure is loud.
+    `first` is the payload call 1 was sent and `reply` is what came back, so
+    call 2's prompt is not "the same bytes as" call 1's - it opens with the same
+    string object. That is the point of taking them as arguments: a prefix cache
+    reuses the longest common prefix of the tokenised prompt, and nothing about
+    a broken prefix is loud.
 
     **Call 1's system prompt is reused rather than replaced.** A prompt of call
-    2's own would end the common prefix at the chat template's header, and the
-    whole article would prefill a second time - roughly double the stage's
-    wall clock for a wording nobody could measure the benefit of.
+    2's own would end the common prefix at the first turn marker, and the whole
+    article would prefill a second time - roughly double the stage's wall clock
+    for a wording nobody could measure the benefit of.
 
     The two calls belong **adjacent, per item**. `models.summarize.inference`
     pins `n_parallel` to 1, so the server holds one cache slot: every call 1
     first and every call 2 after would evict the prefix before it was reused,
-    every time, with nothing in any log to say so.
+    every time, with nothing in any log to say so. Owning the bytes makes a
+    mis-ordering more expensive rather than less - what an eviction now costs is
+    the prompt and the reply behind it.
 
     **Suppressing the plan moves nothing in front of the article.** The three
     things `plan=False` changes - the trailing user turn, the decoder shape and
@@ -1193,7 +1198,7 @@ def build_call_two_request(
     reply, so the cached prefix a gated item reuses is the same prefix an
     ungated one reuses.
     """
-    return continued_payload(
+    return continued_completion_payload(
         first,
         reply=reply,
         user=call_two_user_turn(
@@ -1202,7 +1207,6 @@ def build_call_two_request(
         output_schema=call_two_schema(
             prompt_config, source_words=source_words, brief=brief, plan=plan
         ),
-        schema_name="call_two" if plan else "call_two_summary_only",
         max_output_tokens=call_two_output_tokens(prompt_config, plan=plan),
     )
 

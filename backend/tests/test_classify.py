@@ -8,6 +8,7 @@ changed a request body would have shipped looking like a rename.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -71,18 +72,22 @@ from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json
 from idhazh.contracts.visual_decision import VisualKind
 from idhazh.elements import SpanDriftError, element_table
 from idhazh.extract import approx_tokens
-from idhazh.llm.server import Completion, post
+from idhazh.llm.server import Completion, continued_prompt, post, render_prompt, turn_markers
 from idhazh.visual_planner import plan_lost_to_the_budget
 
 RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
 
 #: How to re-record after a DELIBERATE prompt or bound change. Nothing else may
-#: move these bytes, which is the whole point of the file.
+#: move these bytes, which is the whole point of the file. It rewrites the two
+#: rendered prompts under `tests/fixtures/prompts/` from the same inputs, so the
+#: payload view and the prompt view cannot come from two different articles.
 RECAPTURE = (
     "python -c \"import json, pathlib, sys; sys.path[:0] = ['backend', 'backend/tests']; "
     "import test_classify as t; p = pathlib.Path(t.RECORDED_PAYLOADS); d = json.loads("
     "p.read_text()); d['call_one'], d['call_two'] = t.rebuilt_payloads(d['inputs']); "
-    "p.write_text(json.dumps(d, indent=2) + chr(10))\""
+    "p.write_text(json.dumps(d, indent=2) + chr(10)); "
+    "t.RENDERED_CALL_ONE.write_text(d['call_one']['prompt'], newline=chr(10)); "
+    "t.RENDERED_CALL_TWO.write_text(d['call_two']['prompt'], newline=chr(10))\""
 )
 
 
@@ -141,6 +146,103 @@ def test_the_same_check_fails_on_a_body_that_was_re_rendered() -> None:
     call_one, _ = rebuilt_payloads(tampered)
 
     assert call_one != recorded["call_one"]
+
+
+# --- The prompt bytes, and the property the whole two-call design rests on ---
+#
+# Row #3c. Call 2's prompt opens with call 1's prompt AND call 1's reply, so a
+# prefix cache answers for both and only the new turn is prefilled. The check is
+# a string comparison over committed files: no server, no warm cache slot, and
+# no re-taking it the day the model changes.
+#
+# One assertion alone would not be enough, and the reason is worth stating. A
+# prompt built from turn markers that are complete nonsense passes a prefix
+# check perfectly - the grammar still returns valid JSON, and the failure looks
+# like a quality regression rather than an error. So the markers are checked
+# against a rendering recorded from the server that applies them.
+
+PROMPT_FIXTURES = FIXTURES_DIR / "prompts"
+RENDERED_CALL_ONE = PROMPT_FIXTURES / "call-one.txt"
+RENDERED_CALL_TWO = PROMPT_FIXTURES / "call-two.txt"
+CHAT_TEMPLATE_RENDERING = PROMPT_FIXTURES / "chat-template.json"
+
+
+def recorded_reply() -> str:
+    """Call 1's reply as the recorded fixtures hold it - one copy, two views."""
+    inputs = json.loads(read_text(RECORDED_PAYLOADS))["inputs"]
+    body = json.loads(read_text(REPO_ROOT / inputs["call_one_reply"]))
+    return str(body["choices"][0]["message"]["content"])
+
+
+class TestThePromptBytes:
+    def test_call_twos_prompt_opens_with_call_ones_prompt_and_its_reply(self) -> None:
+        """The oracle, over two files a person can open and read.
+
+        `startswith` rather than a slice comparison, because what matters is
+        that nothing before the new turn moved - not that the two files are the
+        same length.
+        """
+        one = read_text(RENDERED_CALL_ONE)
+        two = read_text(RENDERED_CALL_TWO)
+
+        assert two.startswith(one + recorded_reply())
+
+    def test_the_committed_prompts_are_what_the_builders_render_today(self) -> None:
+        """A fixture nothing regenerates is a fixture that stops describing the code."""
+        inputs = json.loads(read_text(RECORDED_PAYLOADS))["inputs"]
+        call_one, call_two = rebuilt_payloads(inputs)
+
+        assert call_one["prompt"] == read_text(RENDERED_CALL_ONE)
+        assert call_two["prompt"] == read_text(RENDERED_CALL_TWO)
+
+    def test_the_turn_markers_are_the_models_own(self) -> None:
+        """Recorded from the server that applies them, not written from memory.
+
+        Both reply openings, because the one a prompt ends with is chosen by the
+        thinking flag and a wrong pair would be invisible on the default arm.
+        """
+        recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
+        system, user = recorded["system"], recorded["user"]
+
+        assert render_prompt(system=system, user=user, thinking=False) == (
+            recorded["generation_prompt"]
+        )
+        assert render_prompt(system=system, user=user, thinking=True) == (
+            recorded["generation_prompt_thinking"]
+        )
+
+    def test_the_chat_template_breaks_the_property_our_renderer_keeps(self) -> None:
+        """Why this row exists, as a paired assertion rather than a paragraph.
+
+        The template writes an empty reasoning block into a generation prompt
+        and drops it when the same turn comes back as history, so its second
+        rendering stops matching its first four tokens early and everything
+        behind the break is read again. Ours cannot: the second prompt is the
+        first one extended.
+        """
+        recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
+        opening = recorded["generation_prompt"] + recorded["reply"]
+        ours = continued_prompt(
+            render_prompt(system=recorded["system"], user=recorded["user"], thinking=False),
+            reply=recorded["reply"],
+            user=recorded["question"],
+        )
+
+        assert not recorded["continued_prompt"].startswith(opening)
+        assert ours.startswith(opening)
+
+    def test_a_prompt_that_does_not_end_on_a_reply_opening_is_refused(self) -> None:
+        """Nothing may be appended to a prompt whose end nobody recognises."""
+        with pytest.raises(ValueError, match="reply opening"):
+            continued_prompt("a prompt that stops mid-sentence", reply="{}", user="and then?")
+
+    def test_every_marker_is_read_from_the_asset_and_none_is_written_here(self) -> None:
+        """The substitution test: move the asset and the bytes move with it."""
+        markers = turn_markers()
+        moved = replace(markers, turn_closing="<<END>>")
+
+        assert markers.turn("user", "hello").endswith(markers.turn_closing)
+        assert moved.turn("user", "hello").endswith("<<END>>")
 
 
 # --- Call 1: the model reads the article and points at it --------------------
@@ -385,10 +487,11 @@ class TestCallOnePrompting:
             model_id="m",
             inference=config.load(CONFIG_DIR).app.models.summarize.inference,
         )
-        assert payload["response_format"]["json_schema"]["schema"] == call_one_schema()
-        assert payload["messages"][0]["role"] == "system"
-        assert (dense.text or "") not in payload["messages"][0]["content"]
-        assert "4,200 megawatt hours" in payload["messages"][1]["content"]
+        markers = turn_markers()
+        assert payload["json_schema"] == call_one_schema()
+        assert payload["prompt"].startswith(markers.turn("system", call_one_system_prompt()))
+        assert "4,200 megawatt hours" in payload["prompt"]
+        assert payload["prompt"].endswith(markers.opening(thinking=False))
 
 
 class TestLabelling:
@@ -1113,26 +1216,31 @@ def bounded(schema: object, path: str = "") -> set[str]:
 
 
 class TestTheCallTwoOracle:
-    def test_call_two_opens_with_call_ones_prompt_byte_for_byte(self, dense: Article) -> None:
-        """The floor. One re-rendered character in front of the article re-prefills it.
+    def test_call_two_opens_with_call_ones_prompt_and_the_reply_it_returned(
+        self, dense: Article
+    ) -> None:
+        """The whole of row #3c, as one string comparison and no server.
 
-        A prefix cache reuses the longest common prefix of the tokenised prompt,
-        so this is the property the cache hit is made of. It is asserted on the
-        bytes rather than on a `prefill_ms` ratio, which would confound cache
-        reuse with how long the new turn is and read as partial success when the
-        prompt was built in the wrong order.
+        A prefix cache reuses the longest common prefix of the tokenised prompt.
+        Since the bytes are ours, call 2's prompt is call 1's extended rather
+        than re-rendered, so what the cache can reach is everything call 1 read
+        AND everything it wrote. Asserted on the bytes rather than on a
+        `prefill_ms` ratio, which would confound cache reuse with how long the
+        new turn is and read as partial success when the prompt was built wrong.
         """
         first = call_one_payload(dense)
+        reply = '{"labels": []}'
 
-        assert call_two_payload(dense)["messages"][:2] == first["messages"]
+        assert call_two_payload(dense, reply)["prompt"].startswith(first["prompt"] + reply)
 
     def test_the_same_check_fails_on_a_prompt_that_was_re_rendered(
         self, dense: Article, article_ok: Article
     ) -> None:
         """The bite proof: an oracle that cannot fail is not an oracle."""
         other = call_one_payload(article_ok)
+        reply = '{"labels": []}'
 
-        assert call_two_payload(dense)["messages"][:2] != other["messages"]
+        assert not call_two_payload(dense, reply)["prompt"].startswith(other["prompt"] + reply)
 
     def test_the_summary_is_decoded_before_the_plan(self) -> None:
         """Decision 5, asserted where the decoder meets it rather than in the class.
@@ -1145,10 +1253,12 @@ class TestTheCallTwoOracle:
 
 class TestCallTwoShape:
     def test_call_ones_reply_is_replayed_as_the_assistant_turn(self, dense: Article) -> None:
-        turns = call_two_payload(dense, '{"labels": []}')["messages"]
+        markers = turn_markers()
+        first = call_one_payload(dense)
+        prompt = call_two_payload(dense, '{"labels": []}')["prompt"]
 
-        assert [turn["role"] for turn in turns] == ["system", "user", "assistant", "user"]
-        assert turns[2]["content"] == '{"labels": []}'
+        assert prompt[len(first["prompt"]) :].startswith('{"labels": []}' + markers.turn_closing)
+        assert prompt.endswith(markers.opening(thinking=False))
 
     def test_the_second_question_asks_for_both_halves_in_order(self) -> None:
         turn = call_two_user_turn()
@@ -1161,7 +1271,10 @@ class TestCallTwoShape:
         A second copy would spend prefill on bytes the server already holds, and
         would put the same untrusted text in front of the model twice.
         """
-        assert (dense.text or "") not in call_two_payload(dense)["messages"][3]["content"]
+        first = call_one_payload(dense)
+        added = call_two_payload(dense)["prompt"][len(first["prompt"]) :]
+
+        assert (dense.text or "") not in added
 
     def test_the_ask_and_the_decoder_hold_the_same_band(self, dense: Article) -> None:
         """A prompt that asks for more key points than the decoder allows loses the item."""
@@ -1234,9 +1347,10 @@ class TestTheDerivedBudget:
     def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
         payload = call_two_payload(dense)
 
-        assert payload["max_tokens"] == call_two_output_tokens()
-        assert payload["response_format"]["json_schema"]["schema"] == call_two_schema(
-            source_words=dense.band_source_words
+        assert payload["n_predict"] == call_two_output_tokens()
+        assert payload["json_schema"] == call_two_schema(source_words=dense.band_source_words)
+        assert "max_tokens" not in payload, (
+            "two budget keys in one body and the server answers the first call's"
         )
 
     def test_the_second_call_decodes_nothing_the_first_call_settled(self, dense: Article) -> None:
@@ -1244,10 +1358,12 @@ class TestTheDerivedBudget:
         first = call_one_payload(dense)
         second = call_two_payload(dense)
 
-        assert [second[key] for key in ("temperature", "top_p", "seed", "stream")] == [
-            first[key] for key in ("temperature", "top_p", "seed", "stream")
-        ]
-        assert second["chat_template_kwargs"] == first["chat_template_kwargs"]
+        assert [
+            second[key] for key in ("temperature", "top_p", "seed", "stream", "cache_prompt")
+        ] == [first[key] for key in ("temperature", "top_p", "seed", "stream", "cache_prompt")]
+        assert second["prompt"].endswith(turn_markers().opening_of(first["prompt"])), (
+            "the reply opening is read off call 1's prompt, so the two cannot disagree"
+        )
 
 
 class TestARepliedCutByTheBudget:

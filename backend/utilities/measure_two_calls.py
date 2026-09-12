@@ -10,10 +10,12 @@ can act on**, so this reports three numbers that sum to the total instead.
 
 - **The article changed.** Call 1 on a new item reads a new article. Irreducible:
   no prompt layout removes it, and it is the cost the design exists to pay.
-- **The chat template broke the prefix.** Call 2 replays call 1's turns as
-  history and the template renders them differently, so everything behind the
-  divergence prefills again - the divergence itself is a handful of tokens and
-  what sits behind it is call 1's whole reply.
+- **The chat template broke the prefix.** It used to: call 2 replayed call 1's
+  turns as history, the template rendered them differently, and everything
+  behind the divergence prefilled again. Row #3c renders the prompt bytes
+  itself, so this cause is zero by construction. **The row stays on the page
+  reading zero** - a cause that is printed is a cause a build change or a prompt
+  edit cannot reintroduce quietly, and a deleted row catches nothing.
 - **The trailing turn sits behind the article.** Call 2's question is the same
   bytes on every item, but the article in front of it is not, so a prefix cache
   cannot reach it and every token of it is read again, for ever.
@@ -67,7 +69,7 @@ from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.corpus import ChatRole, CorpusRow
 from idhazh.elements import element_table
 from idhazh.extract import TOKENS_PER_WORD, approx_tokens, truncate_to_tokens
-from idhazh.llm.server import Completion, post, props, server_argv
+from idhazh.llm.server import Completion, completion_url, post, props, server_argv, turn_markers
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -262,41 +264,23 @@ def _json_post(url: str, payload: dict[str, Any], *, timeout: float) -> dict[str
 
 @dataclass(frozen=True, slots=True)
 class Tokenizer:
-    """The running server's own template and tokenizer, over its own HTTP.
+    """The running server's own tokenizer, over its own HTTP.
 
-    Asking the server rather than reasoning about the template is the whole
-    difference between a reading and an argument: the template is the model's,
-    the tokenizer is the model's, and both move when the model does. A server
-    that will not answer yields nothing rather than a guess, and the caller says
-    the diagnostic was unread (`CLAUDE.md` section 1a).
+    Asking the server rather than reasoning about the vocabulary is the whole
+    difference between a reading and an argument: the tokenizer is the model's
+    and it moves when the model does. A server that will not answer yields
+    nothing rather than a guess, and the caller says the diagnostic was unread
+    (`CLAUDE.md` section 1a).
 
-    **`thinking` is carried, and it is the reason this class exists rather than
-    a pair of functions.** Qwen3 writes an empty think block into a generation
-    prompt only under `enable_thinking: false`, which is what every real request
-    here sets. Rendering the diagnostic without it renders a prompt the server
-    was never sent, and the tool then prints that the prefix never broke while
-    the cache reading says it broke and cost 209 tokens.
+    **It takes prompt strings, not message arrays.** The prompts this measures
+    are rendered by `idhazh.llm.server`, so there is no template to ask about -
+    asking `/apply-template` would tokenise a prompt the server was never sent,
+    which is how the reading this tool replaced came to be taken on the wrong
+    model.
     """
 
     base: str
     timeout: float
-    thinking: bool
-
-    def render(self, messages: Sequence[Any]) -> str | None:
-        """The exact prompt string this message array would become."""
-        try:
-            body = _json_post(
-                f"{self.base}/apply-template",
-                {
-                    "messages": list(messages),
-                    "chat_template_kwargs": {"enable_thinking": self.thinking},
-                },
-                timeout=self.timeout,
-            )
-        except (urllib.error.URLError, OSError, ValueError):
-            return None
-        prompt = body.get("prompt")
-        return prompt if isinstance(prompt, str) else None
 
     def tokenize(self, text: str) -> list[int] | None:
         try:
@@ -316,14 +300,9 @@ class Tokenizer:
         content = body.get("content")
         return content if isinstance(content, str) else None
 
-    def count(self, messages: Sequence[Any]) -> int | None:
-        rendered = self.render(messages)
-        tokens = self.tokenize(rendered) if rendered is not None else None
+    def count(self, text: str) -> int | None:
+        tokens = self.tokenize(text)
         return None if tokens is None else len(tokens)
-
-    def tokens(self, messages: Sequence[Any]) -> list[int] | None:
-        rendered = self.render(messages)
-        return self.tokenize(rendered) if rendered is not None else None
 
 
 def common_prefix(left: Sequence[int], right: Sequence[int]) -> int:
@@ -342,15 +321,21 @@ def common_prefix(left: Sequence[int], right: Sequence[int]) -> int:
 def describe(endpoint: str, *, digest: str) -> dict[str, Any]:
     """What the server says about itself, beside the weights it was handed.
 
-    What is being priced here is a chat template, and a template ships with a
-    build as well as with weights - this repository's own `Completion.reasoned`
-    names a llama.cpp build that changes what a reply looks like with no weights
-    change. So the template is digested rather than quoted: it is a few thousand
-    characters of Jinja and the question a later reader has is only whether it
-    is the same one.
+    The chat template no longer renders these two prompts and is still recorded,
+    because it ships with a build as well as with weights - this repository's own
+    `Completion.reasoned` names a llama.cpp build that changes what a reply looks
+    like with no weights change - and because a reader comparing this run against
+    an earlier one needs to know whether the template moved under it. It is
+    digested rather than quoted: it is a few thousand characters of Jinja and the
+    only question is whether it is the same one.
+
+    The turn markers are digested beside it. They are what renders these prompts
+    now, so a run whose markers moved is a run whose outputs may have moved, and
+    nothing else here would say so.
     """
     said = props(endpoint, timeout=60.0)
     template = said.get("chat_template")
+    markers = turn_markers()
     return {
         "weights_sha256": digest,
         "build": said.get("build_info"),
@@ -359,6 +344,12 @@ def describe(endpoint: str, *, digest: str) -> dict[str, Any]:
             derive_text_digest(template) if isinstance(template, str) else None
         ),
         "chat_template_characters": len(template) if isinstance(template, str) else None,
+        "turn_markers_sha256": derive_text_digest(
+            markers.turn_opening.template
+            + markers.turn_closing
+            + markers.reply_opening
+            + markers.reply_opening_thinking
+        ),
     }
 
 
@@ -431,6 +422,11 @@ class Checks:
     #: reasoning channel out of `content`, so the assistant turn call 2 sends is
     #: shorter than the reply call 1 wrote, and `boundary` overstates the depth.
     replay_is_the_whole_reply: bool
+    #: Everything call 1 left in the slot survived into call 2's prompt, so the
+    #: template cause is zero. This is row #3c's own oracle taken live: the
+    #: offline byte assertion says call 2's prompt opens with call 1's, and this
+    #: says the server agreed once it tokenised them.
+    the_whole_of_call_one_was_reused: bool
 
     @property
     def hold(self) -> bool:
@@ -439,6 +435,7 @@ class Checks:
             and self.cache_reached_the_divergence
             and self.trailing_turn_is_positive
             and self.replay_is_the_whole_reply
+            and self.the_whole_of_call_one_was_reused
         )
 
     def failures(self) -> list[str]:
@@ -455,15 +452,20 @@ class Checks:
             "call 1's replayed turn is shorter than the reply it generated": (
                 self.replay_is_the_whole_reply
             ),
+            "call 2 re-read part of what call 1 already put in the slot": (
+                self.the_whole_of_call_one_was_reused
+            ),
         }
         return [what for what, held in named.items() if not held]
 
 
 #: The label, the field and the row that owns removing it. One list, so the
-#: printed table and the JSON cannot drift apart.
+#: printed table and the JSON cannot drift apart. The template row reads zero
+#: since row #3c and stays printed: a cause on the page is one a build change
+#: cannot reintroduce quietly.
 CAUSES: Final = (
     ("the article changed", "article_changed", "irreducible"),
-    ("the chat template broke the prefix", "template_broke", "row #3c"),
+    ("the chat template broke the prefix", "template_broke", "row #3c, removed"),
     ("the trailing turn sits behind the article", "trailing_turn", "row #3e"),
 )
 
@@ -553,18 +555,21 @@ class Break:
 def prefix_break(
     first: dict[str, Any], second: dict[str, Any], reply: str, tokenizer: Tokenizer
 ) -> Break:
-    """Why the cache stopped where it did, in this model's own tokens.
+    """Where the two prompts stop agreeing, in this model's own tokens.
 
-    The live `cached_tokens` says how far the cache reached. This says why, so
-    the answer moves when the template does instead of restating what one
-    template did in 2026. It also tokenises the reply on its own: a runtime that
-    splits reasoning out of `content` replays a shorter assistant turn than call
-    1 wrote, and nothing else here would show it.
+    The live `cached_tokens` says how far the cache reached. This says why, and
+    since row #3c the expected answer is "they do not stop agreeing until call
+    1's prompt and reply are both behind us". It is still measured rather than
+    asserted, because a byte prefix is only a token prefix when the seam sits
+    where the tokenizer cannot merge across - which is a property of the
+    vocabulary and not of our arithmetic. It also tokenises the reply on its
+    own: a runtime that splits reasoning out of `content` replays a shorter
+    assistant turn than call 1 wrote, and nothing else here would show it.
     """
-    one_tokens = tokenizer.tokens(first["messages"])
-    two_tokens = tokenizer.tokens(second["messages"])
+    one_tokens = tokenizer.tokenize(str(first["prompt"]))
+    two_tokens = tokenizer.tokenize(str(second["prompt"]))
     if one_tokens is None or two_tokens is None:
-        print("  the server would not render or tokenise a prompt, so the break is unread")
+        print("  the server would not tokenise a prompt, so the break is unread")
         return Break()
     at = common_prefix(one_tokens, two_tokens)
     tail = tokenizer.detokenize(one_tokens[at:])
@@ -599,6 +604,7 @@ def check(one: Completion, two: Completion, spend: Spend, broke: Break) -> Check
         replay_is_the_whole_reply=(
             broke.replay_tokens is None or broke.replay_tokens >= one.completion_tokens - 1
         ),
+        the_whole_of_call_one_was_reused=spend.template_broke == 0,
     )
 
 
@@ -619,7 +625,7 @@ def run_item(
     table = element_table(article, config=app.elements)
     first = build_call_one_request(article, table, model_id=model.id, inference=model.inference)
     if call_one_cap:
-        first["max_tokens"] = call_one_cap
+        first["n_predict"] = call_one_cap
     one = post(first, endpoint=endpoint, timeout=timeout)
     report_call("call 1", one)
 
@@ -627,7 +633,7 @@ def run_item(
         first, one.content, source_words=article.band_source_words, brief=article.brief
     )
     if call_two_cap:
-        second["max_tokens"] = call_two_cap
+        second["n_predict"] = call_two_cap
     two = post(second, endpoint=endpoint, timeout=timeout)
     report_call("call 2", two)
 
@@ -667,8 +673,8 @@ def pick_samples(
 
     Longest, because every share this prints is a share of a prompt and the
     design's worst case is its longest one. Measured rather than estimated: the
-    prompt is rendered and tokenised by the server that will answer it, so
-    "fits" is a fact rather than a words-to-tokens rule of thumb.
+    prompt is tokenised by the server that will answer it, so "fits" is a fact
+    rather than a words-to-tokens rule of thumb.
     """
     model = app.models.summarize
     chosen: list[tuple[Sample, int]] = []
@@ -677,11 +683,11 @@ def pick_samples(
         request = build_call_one_request(
             sample.article, table, model_id=model.id, inference=model.inference
         )
-        tokens = tokenizer.count(request["messages"])
+        tokens = tokenizer.count(str(request["prompt"]))
         if tokens is None:
             raise RuntimeError(
-                "the server would not render or tokenise a prompt, so no article can be "
-                "chosen by measurement - check /apply-template and /tokenize"
+                "the server would not tokenise a prompt, so no article can be "
+                "chosen by measurement - check /tokenize"
             )
         if tokens <= prompt_ceiling:
             chosen.append((sample, tokens))
@@ -864,10 +870,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         wait_for_health(args.server_port, deadline_seconds=args.startup_seconds)
         base = f"http://127.0.0.1:{args.server_port}"
-        endpoint = f"{base}/v1/chat/completions"
+        endpoint = completion_url(base)
         timeout = args.request_minutes * 60.0
-        tokenizer = Tokenizer(base=base, timeout=60.0, thinking=model.inference.thinking)
-        described = describe(f"{endpoint}", digest=digest)
+        tokenizer = Tokenizer(base=base, timeout=60.0)
+        described = describe(endpoint, digest=digest)
 
         # What one item needs after call 1's prompt: call 1's decode, the
         # trailing turn and call 2's decode. Call 2's prompt is call 1's plus
@@ -876,17 +882,18 @@ def main(argv: list[str] | None = None) -> int:
         # budget reads the real one whatever the cap is.
         #
         # **Two counts, and they are not the same question.** The budget wants
-        # the turn as the template renders it, headers and all. The report wants
-        # the question's own text, because the difference between the two IS the
-        # chat-template floor row #3e cannot go below - and measuring the report
-        # with the rendered number makes that floor come out negative.
+        # the turn as it is rendered, markers and all. The report wants the
+        # question's own text, because the difference between the two IS the
+        # marker floor row #3e cannot go below - and measuring the report with
+        # the rendered number makes that floor come out negative.
+        markers = turn_markers()
         question = call_two_user_turn(app.summarize)
-        rendered_turn = tokenizer.count([{"role": "user", "content": question}])
+        rendered_turn = tokenizer.count(markers.turn("user", question))
         question_tokens = tokenizer.tokenize(question)
         if rendered_turn is None or question_tokens is None:
             raise RuntimeError("the server would not tokenise call 2's question")
         trailing = len(question_tokens)
-        system_tokens = tokenizer.count([{"role": "system", "content": call_one_system_prompt()}])
+        system_tokens = tokenizer.count(markers.turn("system", call_one_system_prompt()))
         call_one_decode = model.inference.max_output_tokens
         call_two_decode = call_two_output_tokens(app.summarize)
         ceiling = model.inference.n_ctx - (call_one_decode + call_two_decode + rendered_turn)
@@ -911,12 +918,14 @@ def main(argv: list[str] | None = None) -> int:
         # costs seconds; running it costs about 45 minutes of prefill.
         built = sample_at_the_cap(samples, cap_tokens=app.extract.truncation_cap_tokens)
         at_cap_tokens = tokenizer.count(
-            build_call_one_request(
-                built.article,
-                element_table(built.article, config=app.elements),
-                model_id=model.id,
-                inference=model.inference,
-            )["messages"]
+            str(
+                build_call_one_request(
+                    built.article,
+                    element_table(built.article, config=app.elements),
+                    model_id=model.id,
+                    inference=model.inference,
+                )["prompt"]
+            )
         )
         print(
             f"an article AT the cap is {built.article.word_count} words and a "

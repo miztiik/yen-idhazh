@@ -1,0 +1,15 @@
+{
+  "content": "{\n  \"labels\": [\n    {\n      \"element_id\": \"quantity-149-159\",\n      \"measure\": \"cost per million tokens\",\n      \"dimension\": \"\",\n      \"entity\": \"Example Lab\",\n      \"time_element_id\": \"\",\n      \"attribution\": \"named\",\n      \"hedge\": true,\n      \"salience\": \"primary\"\n    },\n    {\n      \"",
+  "stop_type": "limit",
+  "timings": {
+    "cache_n": 0,
+    "predicted_ms": 39369.855,
+    "predicted_n": 96,
+    "prompt_ms": 259808.304,
+    "prompt_n": 1551
+  },
+  "tokens_cached": 1646,
+  "tokens_evaluated": 1551,
+  "tokens_predicted": 96,
+  "truncated": false
+}
