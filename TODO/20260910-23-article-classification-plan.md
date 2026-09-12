@@ -248,7 +248,7 @@ Re-read from the tree on 2026-09-11. It is here because this plan adds a learned
 | P4 | What one more call costs on the runner | - | B | PENDING | - | - | - |
 | 1a | The fingerprint stops gating and stops being read | - | C | PENDING | - | - | - |
 | P5 | Which distribution the runtime reports at a masked token | - | C | PENDING | - | - | - |
-| 2 | Every label vocabulary becomes config | P1 | D | PENDING | - | - | - |
+| 2 | Every label vocabulary becomes config | P1 | D | DONE #618 | p23-r2 | #618 | worker |
 | P3 | A person labels the dev split and the test split | P2 | D | PENDING | - | - | human |
 | 3 | Lens and event ids become slugs, and a retired id keeps its tombstone | 2 | E | PENDING | - | - | - |
 | 7a | The classification code gets its own package | - | E | PENDING | - | - | - |
