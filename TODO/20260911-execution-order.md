@@ -89,7 +89,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 | 11 #4 | 1 | 15 | The reachability gate and the downgrade ladder |
 | 11 #5 | 2 | 14 | One chart, drawn end to end |
 | 23 #P4 | 1 | 13 | What one more call costs on the runner |
-| 23 #7a | 1 | 13 | The classification code gets its own package |
+| 23 #7a | 1 | 13 | The classification code gets its own package. **Landed as #_pending_** |
 | 11 #6 | 3 | 13 | The small model, its job and its cache go |
 
 **The longest pole is plan 23 row #P1, and it is three prose files.** It blocked 18 of the 58 live rows and it writes `CLAUDE.md`, `AGENTS.md` and `docs/agents/guardrails.md` - no code, no contract, no schema. **It was the cheapest row on this page and the most expensive one to leave alone.** Second is plan 24 row #1 at 17, and third is plan 23 row #2 at 17, which waits only on #P1. **The first two of those landed on 2026-09-11, as #608 and #609**, which puts plan 23 row #2 and the four plan 23 rows waiting on `day_partition.py` at the head of the queue.
@@ -116,7 +116,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 | 13 rows | 23, 24, 25 | `backend/tests/test_marks.py` | Every row that adds a backend test module |
 | 12 rows | 23, 24, 25 | `docs/concepts/growing-reads.md` | Every row that reads a collection a run appends to |
 | 8 rows | 23, 24, 25 | `backend/tests/test_pipeline.py` | - |
-| 7 rows | 11, 23 | `backend/idhazh/visual_planner.py` and `backend/tests/test_visual_planner.py` | Resolved inside plan 23 by its row #7a, and not resolved between the two plans |
+| 7 rows | 11, 23 | `backend/idhazh/visual_planner.py` and `backend/tests/test_visual_planner.py` | **Resolved inside plan 23 on 2026-09-12 by its row #7a, which landed as #_pending_**, and still not resolved between the two plans |
 | 7 rows | 23, 24 | `backend/idhazh/retention.py` and `backend/tests/test_retention.py` | The collision plan 23 section 0.1 already names |
 | 7 rows | 23, 24 | `docs/architecture/contracts/schemas.md` | - |
 | 7 rows | 23, 24, 25 | `docs/architecture/publishing/layout.md` | - |
