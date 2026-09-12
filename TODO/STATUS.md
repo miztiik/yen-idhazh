@@ -31,17 +31,16 @@ committed file.
 | [20260905-20-visual-console-plan.md](20260905-20-visual-console-plan.md) | 4 | 0 | 4 | 1 |
 | [20260905-21-human-judgement-plan.md](20260905-21-human-judgement-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
-| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 5 | 23 | 8 |
+| [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 6 | 22 | 8 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
 | [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 5 | 3 | 2 | 1 |
 
-## In flight - 1
+## In flight - 0
 
-| Row | Plan | Group | Title | Worktree |
-| --- | --- | --- | --- | --- |
-| #7a | 23 | E | The classification code gets its own package | p23-7a |
+Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
+dispatches a row, so an empty table here and a busy worktree disagree.
 
 ## Ready now - 31
 
@@ -133,7 +132,7 @@ section 3 is where it is answered.
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 is PENDING |
-| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | 7a is IN-FLIGHT; plan 11 row 6 is PENDING |
+| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is PENDING |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
 | #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is PENDING; 8 is PENDING |

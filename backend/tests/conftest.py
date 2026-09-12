@@ -2,22 +2,27 @@
 
 from __future__ import annotations
 
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
 
-from idhazh import cli
-from idhazh.contracts.app_config import AppConfig, InferenceConfig, ModelRef
+from idhazh import cli, config
+from idhazh.classify.calls import build_call_one_request
+from idhazh.contracts.app_config import AppConfig, ElementsConfig, InferenceConfig, ModelRef
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_output_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.corpus import Published
+from idhazh.elements import element_table
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
 from idhazh.llm.server import server_argv
@@ -197,4 +202,69 @@ def refill_recorded(
             ),
             **overrides,
         }
+    )
+
+
+# --- The two calls that read one article, shared by two test modules ------
+
+class RecordedEndpoint:
+    """A real local server that replays one recorded llama-server reply.
+
+    Nothing is mocked: the caller makes its ordinary POST over a loopback
+    socket, and the bytes it reads back are the ones a llama-server wrote
+    (Rule #7). The stdlib server owns the framing, so the test is about the
+    body and not about HTTP.
+    """
+
+    def __init__(self, status: int, body: bytes) -> None:
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_POST(self) -> None:
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    @property
+    def endpoint(self) -> str:
+        return f"http://127.0.0.1:{self._server.server_port}/v1/chat/completions"
+
+    def __enter__(self) -> RecordedEndpoint:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5.0)
+
+
+CALL_ONE_REPLIES = FIXTURES_DIR / "completions" / "call-one"
+CALL_TWO_REPLIES = FIXTURES_DIR / "completions" / "call-two"
+
+
+def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> ElementTable:
+    """The candidate pass over an article's own text, or over `text` in its place.
+
+    A prompt is built from an article and a table together and refuses a pair
+    that disagree, so a case that renders one passes the article whose text the
+    table indexes.
+    """
+    if text is not None:
+        article = article.model_copy(update={"text": text})
+    return element_table(article, config=ElementsConfig(max_per_article=cap))
+
+
+def call_one_payload(article: Article) -> dict[str, Any]:
+    return build_call_one_request(
+        article,
+        a_table(article),
+        model_id="m",
+        inference=config.load(CONFIG_DIR).app.models.summarize.inference,
     )
