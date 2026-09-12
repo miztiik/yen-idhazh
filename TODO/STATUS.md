@@ -19,7 +19,7 @@ committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 5 | 3 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 8 | 5 | 2 | 2 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 8 | 5 | 2 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 0 | 3 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -37,12 +37,13 @@ committed file.
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
 | [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 5 | 3 | 2 | 1 |
 
-## In flight - 0
+## In flight - 1
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #6 | 11 | F | The small model, its job and its cache go | p11-6 |
 
-## Ready now - 31
+## Ready now - 30
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -54,7 +55,6 @@ section 3 is where it is answered.
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #3b | 11 | C2 | Every call reports its own cost | 3 |
-| #6 | 11 | F | The small model, its job and its cache go | 5 |
 | #1 | 12 | A | A new engine behind the same seam | - |
 | #1 | 13 | A | The rules, and which rule governs every file this project writes | - |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
@@ -132,7 +132,7 @@ section 3 is where it is answered.
 | #2 | 22 | B | The numbers, taken again on the tree that shipped | 1 is PENDING |
 | #3 | 22 | C | The two documents go, and nothing links to a ghost | 2 is PENDING |
 | #P3 | 23 | D | A person labels the dev split and the test split | P2 is PENDING |
-| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is PENDING |
+| #7b | 23 | H | The two calls become a DAG, and every label rides in the first | plan 11 row 6 is IN-FLIGHT |
 | #8 | 23 | I | Call 1 labels: desk, lenses, article kind | 7b is PENDING |
 | #14 | 23 | J | The classification ledger, and the day file the console reads | 8 is PENDING |
 | #12 | 23 | J | The quote: seven conditions, three checks, ten codes | 7b is PENDING; 8 is PENDING |
