@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -112,6 +112,16 @@ main_tree=$(git rev-parse origin/main^{tree})
 ```
 
 **That test has one false negative, and it is the common case for a plan-doc.** If both sides added the same file the merge is an add/add conflict, so the branch reads as unmerged. Compare the blobs before believing it - identical object ids mean the content landed verbatim (`git rev-parse <branch>:<path> <squash>:<path>`, needs `MSYS_NO_PATHCONV=1`). Observed 2026-08-28: one branch of four flagged this way was fully merged.
+
+## Reading the tree with `git grep`
+
+**A hit count says a symbol is everywhere when nothing calls it.** Counting `visual_planner` across this repository on 2026-09-12 named 56 files, which reads as a live subsystem. Three of them were under `backend/idhazh/` and **all three were docstring prose**; the only real import outside `backend/tests/` was an offline harness under `backend/utilities/`. A plan row was dispatched to retire that subsystem on the strength of a replacement that had never been wired to anything, and the count is what made the replacement look live. **"Is it mentioned" and "is it called" can answer 56 and 0**, and only the second one says whether deleting the old thing breaks the site. Ask for import statements, and read the production package on its own:
+
+```powershell
+git grep -nE '^\s*(from|import)\s+.*<module>' -- backend/idhazh backend/utilities
+```
+
+A module imported only by tests and by `backend/utilities/` is built and unwired, which is indistinguishable from built and shipped in every other reading of the tree. The cheapest confirming tell is the module's own docstring: one that still says a later row will connect it usually has not been connected.
 
 ## Ledgers under merge
 
