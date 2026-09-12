@@ -1,0 +1,3 @@
+Now write about the item above.
+Summary: $target_words_min to $target_words_max words, $key_points_min to $key_points_max key points.
+$write

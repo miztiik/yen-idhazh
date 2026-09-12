@@ -33,6 +33,7 @@ from idhazh.classify.calls import (
     CHARS_PER_WORD,
     SUPPRESSED_BUDGET_TOKENS,
     build_call_two_request,
+    call_one_system_prompt,
     call_two_output_tokens,
     call_two_prose_words,
     call_two_schema,
@@ -1130,22 +1131,36 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         assert whole["prompt"][len(shared) :] != suppressed["prompt"][len(shared) :]
         assert suppressed["n_predict"] == SUPPRESSED_BUDGET_TOKENS
 
-    def test_the_summary_half_of_the_turn_is_the_same_bytes_either_way(self) -> None:
-        """One template, substituted in or out, so the two halves cannot drift."""
-        whole = call_two_user_turn(source_words=0)
-        suppressed = call_two_user_turn(source_words=0, plan=False)
+    def test_both_halves_reach_the_model_whichever_shape_is_asked_for(self) -> None:
+        """They sit in the system turn now, so this is true by construction.
 
-        assert whole.startswith(suppressed.rstrip("\n"))
-        assert "The plan." in whole
-        assert "The summary." in suppressed
+        It used to be true by substitution - one template with the plan half
+        substituted in or out - and the thing it guarded against was the summary
+        half drifting between the two requests. There is one rendering of both
+        halves now and the gate cannot reach it.
+        """
+        system = call_one_system_prompt()
 
-    def test_the_suppressed_turn_asks_for_nothing_the_grammar_cannot_hold(self) -> None:
-        """A turn that asks for a field with nowhere to put it pushes the text into
-        the only channel left, which is the summary a reader reads."""
-        suppressed = call_two_user_turn(source_words=0, plan=False)
+        assert "The summary." in system
+        assert "The plan, when the question below asks for one." in system
+        assert call_two_user_turn(source_words=0).startswith("Now write about the item above.")
 
-        for named in ("The plan.", "confidence", "element_ids", "encodings", "annotations"):
-            assert named not in suppressed
+    def test_the_gated_question_asks_for_the_summary_alone(self) -> None:
+        """The last line is the recency position and it must agree with the grammar.
+
+        Naming a field the grammar has nowhere to put does not produce it: a
+        constrained decoder renormalises onto the tokens the grammar allows, so
+        the text goes into the only channel left open, which is the summary a
+        reader reads. The two turns therefore differ in that line and nowhere
+        else.
+        """
+        whole = call_two_user_turn(source_words=0).strip().splitlines()
+        gated = call_two_user_turn(source_words=0, plan=False).strip().splitlines()
+
+        assert whole[-1] == 'Write "summary", then "visual".'
+        assert '"visual"' not in gated[-1]
+        assert gated[-1].index('"summary"') > gated[-1].index('"title"')
+        assert whole[:-1] == gated[:-1]
 
     def test_a_suppressed_reply_parses_to_a_summary_and_no_plan(self) -> None:
         """`visual` is `None` because none was asked for, not because one was lost."""

@@ -20,7 +20,11 @@ can act on**, so this reports three numbers that sum to the total instead.
   nothing.
 - **The trailing turn sits behind the article.** Call 2's question is the same
   bytes on every item, but the article in front of it is not, so a prefix cache
-  cannot reach it and every token of it is read again, for ever.
+  cannot reach it and every token of it is read again, for ever. Row #3e moved
+  both jobs into the system turn and left three lines behind - measured at 42
+  tokens an item against the 692 the whole question cost. **The row stays on the
+  page for the reason the template row does**: what is printed cannot come back
+  quietly.
 
 **Two items, not one.** One item is a cold cache slot and a cold slot is not the
 steady state a shard spends its life in. On item 2 the system turn should be
@@ -471,7 +475,7 @@ class Checks:
 CAUSES: Final = (
     ("the article changed", "article_changed", "irreducible"),
     ("the chat template broke the prefix", "template_broke", "row #3c, removed"),
-    ("the trailing turn sits behind the article", "trailing_turn", "row #3e"),
+    ("the trailing turn sits behind the article", "trailing_turn", "row #3e, removed"),
 )
 
 
@@ -500,7 +504,7 @@ def report_spend(spend: Spend, measured: int, *, question: int | None) -> None:
     if question is not None:
         print(
             f"  of the trailing turn, {question} tokens are the question's own text and "
-            f"{spend.trailing_turn - question} are chat-template headers no row moves"
+            f"{spend.trailing_turn - question} are the turn markers no row moves"
         )
 
 
@@ -638,7 +642,13 @@ def run_item(
     article = sample.article
     model = app.models.summarize
     table = element_table(article, config=app.elements)
-    first = build_call_one_request(article, table, model_id=model.id, inference=model.inference)
+    first = build_call_one_request(
+        article,
+        table,
+        model_id=model.id,
+        inference=model.inference,
+        prompt_config=app.summarize,
+    )
     if call_one_cap:
         first["n_predict"] = call_one_cap
     one = post(first, endpoint=endpoint, timeout=timeout)
@@ -696,7 +706,11 @@ def pick_samples(
     for seen, sample in enumerate(samples, start=1):
         table = element_table(sample.article, config=app.elements)
         request = build_call_one_request(
-            sample.article, table, model_id=model.id, inference=model.inference
+            sample.article,
+            table,
+            model_id=model.id,
+            inference=model.inference,
+            prompt_config=app.summarize,
         )
         tokens = tokenizer.count(str(request["prompt"]))
         if tokens is None:
@@ -908,7 +922,9 @@ def main(argv: list[str] | None = None) -> int:
         if rendered_turn is None or question_tokens is None:
             raise RuntimeError("the server would not tokenise call 2's question")
         trailing = len(question_tokens)
-        system_tokens = tokenizer.count(markers.turn("system", call_one_system_prompt()))
+        system_tokens = tokenizer.count(
+            markers.turn("system", call_one_system_prompt(app.summarize))
+        )
         call_one_decode = model.inference.max_output_tokens
         call_two_decode = call_two_output_tokens(app.summarize)
         ceiling = model.inference.n_ctx - (call_one_decode + call_two_decode + rendered_turn)
@@ -939,6 +955,7 @@ def main(argv: list[str] | None = None) -> int:
                     element_table(built.article, config=app.elements),
                     model_id=model.id,
                     inference=model.inference,
+                    prompt_config=app.summarize,
                 )["prompt"]
             )
         )

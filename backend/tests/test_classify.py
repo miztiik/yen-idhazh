@@ -43,6 +43,7 @@ from idhazh.classify.calls import (
     call_one_schema,
     call_one_system_prompt,
     call_one_user_turn,
+    call_two_model,
     call_two_output_tokens,
     call_two_prose_words,
     call_two_schema,
@@ -81,11 +82,17 @@ RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
 #: move these bytes, which is the whole point of the file. It rewrites the two
 #: rendered prompts under `tests/fixtures/prompts/` from the same inputs, so the
 #: payload view and the prompt view cannot come from two different articles.
+#:
+#: **Every write names its newline.** `Path.write_text` translates on Windows,
+#: and `.gitattributes` normalises at `git add` - which is after
+#: `test_repo_text_is_ascii_and_lf` has read these working-tree bytes. So a
+#: recapture taken on Windows failed a test about line endings in a file whose
+#: content was correct.
 RECAPTURE = (
     "python -c \"import json, pathlib, sys; sys.path[:0] = ['backend', 'backend/tests']; "
     "import test_classify as t; p = pathlib.Path(t.RECORDED_PAYLOADS); d = json.loads("
     "p.read_text()); d['call_one'], d['call_two'] = t.rebuilt_payloads(d['inputs']); "
-    "p.write_text(json.dumps(d, indent=2) + chr(10)); "
+    "p.write_text(json.dumps(d, indent=2) + chr(10), newline=chr(10)); "
     "t.RENDERED_CALL_ONE.write_text(d['call_one']['prompt'], newline=chr(10)); "
     "t.RENDERED_CALL_TWO.write_text(d['call_two']['prompt'], newline=chr(10))\""
 )
@@ -119,14 +126,17 @@ def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
 
 
 def test_both_request_bodies_are_the_bytes_recorded_before_the_code_moved() -> None:
-    """The oracle for the move: a pure move proves itself by producing the same bytes.
+    """Nothing moves these bytes except a deliberate prompt or bound change.
 
-    The fixture was captured from `visual_planner` in the commit before a line of
-    it moved, so a rename that quietly re-rendered a prompt, reordered a message
-    or dropped a decoder bound fails here rather than in a run nobody watches.
-    It is asserted on the serialised bytes rather than on the dicts, because a
-    key order a server tokenises differently is a real difference and a dict
-    comparison cannot see it.
+    It was captured from `visual_planner` in the commit before a line of it
+    moved, so a rename that quietly re-rendered a prompt, reordered a message or
+    dropped a decoder bound failed here rather than in a run nobody watches.
+    **Two rows have re-recorded it since** - #3c, which made the bytes ours, and
+    #3e, which moved the instructions in front of the article - so the guard it
+    is now is the one in the first line rather than a comparison against that
+    commit. It is asserted on the serialised bytes rather than on the dicts,
+    because a key order a server tokenises differently is a real difference and
+    a dict comparison cannot see it.
     """
     recorded = json.loads(read_text(RECORDED_PAYLOADS))
     call_one, call_two = rebuilt_payloads(recorded["inputs"])
@@ -1251,6 +1261,125 @@ class TestTheCallTwoOracle:
         assert list(call_two_schema()["properties"]) == ["summary", "visual"]
 
 
+class TestTheInstructionsSitInFrontOfTheArticle:
+    """Row #3e. What can be shared is shared, and what cannot is three lines.
+
+    The system turn is the same bytes on every item, so the server prefills it
+    once a shard. The turn behind the article is read again on every item for
+    ever, because the article in front of it differs and a prefix cache cannot
+    reach past it - so every token left there is a token paid per item.
+    """
+
+    def test_both_jobs_are_described_in_front_of_the_article(self) -> None:
+        ask = config.load(CONFIG_DIR).app.summarize
+        system = call_one_system_prompt(ask)
+
+        for moved in (
+            "keep every figure exactly as the item wrote it",
+            '"key_points" - one sentence each',
+            "Decide whether this item wants a picture at all",
+            '"confidence" - how sure you are',
+        ):
+            assert moved in system, moved
+            assert moved not in call_two_user_turn(ask), moved
+
+    def test_the_question_behind_the_article_is_the_band_and_the_fields(self) -> None:
+        """Both variants, because the gated one is the one that could grow."""
+        ask = config.load(CONFIG_DIR).app.summarize
+        for plan in (True, False):
+            turn = call_two_user_turn(ask, plan=plan)
+            assert len(turn.strip().splitlines()) == 3, turn
+
+    def test_the_system_turn_is_the_same_bytes_on_every_item(
+        self, dense: Article, article_ok: Article
+    ) -> None:
+        """The whole basis of the prefix cache, and the one way this row could
+        have cost more than it saved.
+
+        `models.summarize.inference.n_parallel` is 1, so the server holds one
+        cache slot. A system turn carrying anything the article picked would
+        evict the article on every alternation between two variants, and the
+        article is thousands of tokens where this row moved hundreds.
+        """
+        ask = config.load(CONFIG_DIR).app.summarize
+        inference = config.load(CONFIG_DIR).app.models.summarize.inference
+        markers = turn_markers()
+        opening = markers.turn("system", call_one_system_prompt(ask))
+
+        for article in (dense, article_ok):
+            payload = build_call_one_request(
+                article,
+                a_table(article),
+                model_id="m",
+                inference=inference,
+                prompt_config=ask,
+            )
+            assert payload["prompt"].startswith(opening)
+
+    def test_no_placeholder_survives_into_the_system_turn(self) -> None:
+        """`substitute`, not `safe_substitute` - a stray `$knob` reads as an
+        instruction, and in an 8.5 KB turn nobody would see it."""
+        assert "$" not in call_one_system_prompt(config.load(CONFIG_DIR).app.summarize)
+
+    def test_the_band_numbers_are_the_only_numbers_behind_the_article(self) -> None:
+        """Decision 1: the article's own band cannot move in front of it.
+
+        The config-level numbers are the same on every item, so they belong in
+        the cached turn; the band's four are not, so they stay in the question.
+        """
+        ask = config.load(CONFIG_DIR).app.summarize
+        band = ask.band_for(0)
+        floor, ceiling = summarize.key_point_rail(ask, None, False)
+        system = call_one_system_prompt(ask)
+        turn = call_two_user_turn(ask)
+
+        assert f"{band.target_words_min} to {band.target_words_max} words" in turn
+        assert f"{floor} to {ceiling} key points" in turn
+        assert f"{band.target_words_min} to {band.target_words_max}" not in system
+        assert f"{ask.title_words_min} to {ask.title_words_max} words" in system
+        assert f"at most {ask.key_point_words_max} words" in system
+
+    def test_the_number_ban_names_the_job_it_belongs_to(self) -> None:
+        """One turn carries both jobs, and they disagree about figures.
+
+        Labelling may not type a number; the summary must keep every figure the
+        item wrote. Left unscoped, the first sentence reads as the rule for both
+        and the summary quietly loses its figures - which no downstream check
+        looks for, because a summary with no number is a valid summary.
+        """
+        system = call_one_system_prompt(config.load(CONFIG_DIR).app.summarize)
+
+        assert "keep every figure exactly as the item wrote it" in system
+        assert "Two rules govern this first job." in system
+        assert "Two rules govern everything you write." not in system
+        assert "in it. You never write a number." not in system
+
+    def test_the_last_line_is_read_off_the_grammar(self) -> None:
+        """The fields in the recency position cannot disagree with the decoder.
+
+        Written out by hand they could, and the failure is silent: constrained
+        decoding renormalises onto the tokens the grammar allows, so a field
+        named with nowhere to put it pushes its text into the only channel left
+        open, which is the summary a reader reads.
+        """
+        ask = config.load(CONFIG_DIR).app.summarize
+        for plan in (True, False):
+            shape = call_two_model(ask, source_words=0, plan=plan)
+            last = call_two_user_turn(ask, source_words=0, plan=plan).strip().splitlines()[-1]
+            named = "Write " + ", then ".join(f'"{one}"' for one in shape.model_fields) + "."
+            assert last == named
+
+    def test_the_two_questions_differ_in_their_last_line_only(self) -> None:
+        """The reachability gate spends itself on the grammar. What it changes
+        here is which fields the last line names, and nothing else."""
+        ask = config.load(CONFIG_DIR).app.summarize
+        whole = call_two_user_turn(ask, source_words=0).splitlines()
+        gated = call_two_user_turn(ask, source_words=0, plan=False).splitlines()
+
+        assert whole[:-1] == gated[:-1]
+        assert whole[-1] != gated[-1]
+
+
 class TestCallTwoShape:
     def test_call_ones_reply_is_replayed_as_the_assistant_turn(self, dense: Article) -> None:
         markers = turn_markers()
@@ -1284,7 +1413,7 @@ class TestCallTwoShape:
         schema = call_two_schema(ask, source_words=dense.band_source_words)
         points = schema["$defs"]["SummaryDraft"]["properties"]["key_points"]
 
-        assert f"{band.key_points_min} to {band.key_points_max} of them" in turn
+        assert f"{band.key_points_min} to {band.key_points_max} key points" in turn
         assert (points["minItems"], points["maxItems"]) == (
             band.key_points_min,
             band.key_points_max,
@@ -1302,7 +1431,7 @@ class TestCallTwoShape:
         floor, ceiling = summarize.key_point_rail(ask, None, False)
 
         assert (points["minItems"], points["maxItems"]) == (floor, ceiling)
-        assert f"{floor} to {ceiling} of them" in call_two_user_turn(ask)
+        assert f"{floor} to {ceiling} key points" in call_two_user_turn(ask)
 
     def test_the_plan_the_decoder_sees_carries_neither_field_code_stamps(self) -> None:
         """`version` and `plan_version` are facts code holds, not questions for a model."""
