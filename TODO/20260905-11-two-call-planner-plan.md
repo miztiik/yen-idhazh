@@ -108,7 +108,7 @@ python -m idhazh validate-days --day 2026-08-30 --day 2026-08-31
 | 3 | Call 2 summarises and plans, and the article is read once | 2 | C | DONE #570 | yi-t11r3 | #570 | worker |
 | 3b | Every call reports its own cost | 3 | C2 | DONE #636 | p11-3b | #636 | worker |
 | 3d | The instrument says where every re-read token went | 3b | C3 | DONE #639 | p11-3d | #639 | worker |
-| 3c | Own the prompt bytes | 3d | C4 | PENDING | - | - | - |
+| 3c | Own the prompt bytes | 3d | C4 | IN-FLIGHT | p11-3c | - | worker |
 | 3e | The instructions move in front of the article | 3c | C5 | PENDING | - | - | - |
 | 3f | The window is sized for two calls | 3d | C6 | BLOCKED | - | - | - |
 | 4 | The gate that refuses before the plan is drafted, and the ladder that steps down | 3 | D | DONE #612 | p11-r4 | #612 | worker |
