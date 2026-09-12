@@ -176,10 +176,9 @@ selector: `-m contract`, `-m visual`, `-m workflow` or `-m "not slow"`, priced
 [below](#run-only-the-tests-a-change-can-break).
 
 **Run the full local suite when you cannot push, or when you are about to merge
-and want the answer now.** The commands are below and none of them is going
-away. What changed on 2026-08-30 is which one is the default: blocking on a
-25-minute local suite before every push, for a change CI clears in 90 seconds,
-was the single largest cost in the console-signal plan.
+and want the answer now.** The commands are below, and none of them is the
+default: blocking on a 25-minute local suite before every push, for a change CI
+clears in 90 seconds, costs far more than it finds.
 
 Two exceptions where local is still the only arm. A published-site change needs
 the browser smoke in `CLAUDE.md` section 12, which is a real browser on your
@@ -202,7 +201,7 @@ python -m venv.venv
 declares `requires-python = ">=3.12,<3.15.0a0"`, so pip refuses an interpreter
 outside the range instead of hanging on it -
 [../reference/agent-notes/shell-and-tools.md](../reference/agent-notes/shell-and-tools.md#the-python-environment)
-has the symptom that used to show instead, and the escape when the machine has
+records the symptom, and the escape when the machine has
 nothing else.
 
 **`uv pip install` does not work here.** It fails with a `HandshakeFailure`
@@ -327,9 +326,9 @@ grows with every published day rather than with the code it checks (Guardrail #1
 `CLAUDE.md` section 13). That covers the committed days, the telemetry and state
 shards, the search index, the corpus, and anything added later. Drive a per-item
 rule from the canary day instead; ask a whole-tree question once and assert on
-the total. **This one is caught by review rather than by a check** - a guard
-that listed the paths was tried and deleted on 2026-09-06, because it enumerated
-two collections out of nineteen and its own upkeep grew with the rest. The
+the total. **This one is caught by review rather than by a check.** A guard that
+lists the paths cannot do it: such a list only ever holds the collections
+somebody remembered, and its own upkeep grows with the rest. The
 question to ask in review is the rule's own: does a run that changed no code
 make this slower.
 
@@ -432,17 +431,10 @@ prints `runway: unknown` rather than a comfortable number.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it holds every route named in `config/idhazh.json` under the gzip guardrail
-set there, and since 2026-09-10 it holds every payload a reader's browser
-fetches under one too.
+set there, and it holds every payload a reader's browser fetches under one too.
 
-**A fourth check was deleted on 2026-08-30**: a per-route first-load JavaScript
-ratchet against `frontend/bundle-baseline.json`, at 64 bytes either way. It had
-no requirement behind it, a local build could not reproduce CI's inside its own
-tolerance, and its record was one file every branch had to rewrite. The
-reasoning is in
-[below](#the-bundle-gate-checks-two-promises-and-used-to-check-three).
-If you are reading an older commit that fails on a route weight, that is why it
-is gone rather than something you need to re-record.
+**A per-route byte ratchet is not a fourth, and must not be added** - the reasons
+are [below](#the-bundle-gate).
 
 **The page guardrail is one-sided, and it bounds the document rather than the
 script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
@@ -456,52 +448,43 @@ by the marker count in `frontend/tests/payload-weight.spec.ts`, which runs in th
 browser suite. A route the config does not name is reported by the gate without
 failing it.
 
-**The unit is `gzip -5`, and it was `gzip -9` until 2026-09-10.** Nine is a level
-no origin serves. Measured that day against the live Pages origin: it served
-`/console/` in 46,917 bytes where a local `gzip -5` makes 46,787 and a `gzip -9`
-makes 45,077, and `/archive/` in 5,760 against 5,755 at `-5`. So `-5` lands
-within 0.3 percent of the wire and `-9` understated it by 3.9 percent, which on a
-number meant to catch growth is four percent of growth nobody saw. If you are
-reading a figure recorded before that date, it is a `-9` number and about four
-percent low.
+**The unit is `gzip -5`.** Nine is a level no origin serves, so measuring at `-9`
+understates the wire - on a number meant to catch growth, by more growth than the
+number is watching for. `-5` lands within a fraction of a percent of what the
+Pages origin serves; the readings are in
+[../reference/measurements-site.md](../reference/measurements-site.md).
 
 **The payload guardrail bounds a file a browser fetches**, which no page
 guardrail can see. `page_weight.payload_ceilings_bytes` maps a build-relative
 path to the largest `gzip -5` size it may reach; a key naming a file bounds that
 file, and a key ending in `/` bounds every file under it, each on its own. It
-exists because the console stopped inlining its telemetry on 2026-09-09: 3.4 MB
-left a document a guardrail watched and landed in files nothing watched, and a
-reader still waits for them. `page_weight.cold_console_load_bytes` bounds the sum
+exists because a payload that moves out of a document and into a file the browser
+fetches leaves every page guardrail behind, while a reader still waits for it. `page_weight.cold_console_load_bytes` bounds the sum
 one cold opening of the console asks for - the design rather than the data, so
 what it catches is a widened `console.default_window_days` rather than a heavier
 shard. Its partner is `frontend/tests/console-cold-load.spec.ts`, which counts
 the serial round trips instead of the bytes: four is the ceiling, three is what a
 cold load takes today, and each extra telemetry month is one more.
 
-**A route takes a number only if its weight does not move when a run
-publishes**, and that is an owner ruling of 2026-09-10: no number comparison.
+**A route takes a number only if its weight does not move when a run publishes.**
 Two routes qualify - `/404` and `/evals/`, which move only when a person edits
 source.
 
-`/archive/` and the three `/console/` routes carried numbers until that day and
-do not now. They grow when the pipeline appends a day, so the number had to grow
-too, and **the only way past a firing was to type a bigger one**: `/archive/` was
-raised twice in one day on 2026-08-26 and then removed. The 2026-08-31 ruling
-made that the only legal answer, since no approved panel may be cut to fit a
-number. A gate whose one outcome is a bigger number catches nothing.
+`/archive/` and the three `/console/` routes take none. They grow whenever the
+pipeline appends a day, so **the only way past a firing is to type a bigger
+number**, and no approved panel may be cut to fit one. A gate whose single
+outcome is a bigger number catches nothing.
 
-**And the same instrument failed the other way at the same time.** `/console/`
-stood at 7.2 times the page it bounded for four days with the build green,
-because nothing fails when a number drifts loose. A check that cannot tell
-correct from far-too-loose is not an instrument, and no value of the constant
-fixes that - which is why setting them all to twice the page, earlier the same
-day, was not the answer either. The measurements are in
+**The same instrument fails the other way too.** Nothing fails when a number
+drifts loose above the page it bounds, so a check that cannot tell correct from
+far-too-loose is not an instrument, and no value of the constant fixes that. The
+readings are in
 [../reference/measurements-site.md](../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10).
 
-**What replaced them checks the cause instead of the symptom.** The one
-regression this surface has ever had is a layout inlining a day payload -
-313,300 gzipped bytes on 2026-08-26 - and that is a yes-or-no fact about a
-document, not a size with a middle value to threshold.
+**What stands in their place checks the cause instead of the symptom.** The one
+regression this surface has ever had is a layout inlining a day payload, and that
+is a yes-or-no fact about a document rather than a size with a middle value to
+threshold.
 `frontend/tests/payload-weight.spec.ts` looks for a day-payload marker in every
 document that does not render a day, and fails on one. **It has no number in it**,
 so it returns the same verdict whatever the archive holds, and it already covered
@@ -738,13 +721,7 @@ the same derivation the config runs:
 node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd).digest.readUInt32BE(0)%10000)"
 ```
 
-Three traps make this suite lie to you. A fourth used to, and was fixed at the
-source rather than written down as a step to remember: `build_canary_day.py`
-now clears its state directory before writing, so running it twice no longer
-stacks a second copy of every feed-health row and quarantines a feed the fixture
-meant to keep healthy.
-
-The traps that remain:
+Three traps make this suite lie to you.
 
 - **`frontend/build` is one shared directory.** `npm run build` and
  `npm run build:canary` both write it. If anything rebuilds the real site
@@ -773,11 +750,10 @@ npm run build
 npm run preview -- --port 4174 --strictPort --host 127.0.0.1
 ```
 
-- **Do not hand-start `vite preview --outDir build`.** This page prescribed that
- until 2026-09-12 and it serves the wrong tree: `--outDir` names a directory
- `vite preview` does not read, so it serves whatever the last build left in
- `.svelte-kit/output/`. Measured 2026-09-05, a document 262,022 bytes on disk
- was served at 216,280, so two different builds of one tree read as identical.
+- **Do not hand-start `vite preview --outDir build`.** It serves the wrong tree:
+ `--outDir` names a directory `vite preview` does not read, so it serves
+ whatever the last build left in `.svelte-kit/output/`, and two different builds
+ of one tree then read as identical.
  A hand-started server also bypasses SvelteKit's preview middleware and cannot
  tell a real hydration failure from its own.
  [`gates-and-builds.md`](../reference/agent-notes/gates-and-builds.md) carries
@@ -858,119 +834,64 @@ every hand-over to cover a case that needs a gate still running 7,200 s in -
 **6.6x the longest gate ever measured here** - and with twenty callers spinning
 it took a hand-over from 0.7 s to about 10 s.
 
-## The bundle gate checks two promises, and used to check three
+## The bundle gate
 
 `npm run bundle-gate` asserts that no encoder reaches the first-load path, and
 that every guarded page is under the number `config/idhazh.json` sets for it.
 
-**A third check was deleted on 2026-08-30: a per-route first-load JavaScript
-ratchet against a hand-maintained record in `frontend/bundle-baseline.json`,
-failing when a route moved more than 64 bytes in either direction.** The file is
-gone with it. Deleting a gate deserves the same argument as adding one, so here
-is the whole of it.
+The page guardrails are absolute limits somebody priced, so nothing has to
+re-record them to merge and a page that got lighter needs no permission. The
+encoder grep names a cause a byte count never could. And
+`frontend/tests/payload-weight.spec.ts` covers the pages a number cannot bound -
+a page that renders a day weighs whatever the day published - by counting a
+marker instead of bytes, which is the same number whatever the published history
+holds.
 
-**The gate never had a requirement behind it.** Its own docstring said so: every
-route is prerendered, so first-load JavaScript is hydration cost rather than
-time-to-read, nobody had measured what that cost a reader, and Guardrail #1 forbids
-the telemetry that would settle it. Having no number to defend, it defined bad
-as *different*. That is a change-detector, and Guardrail #10 says an unmeasured
-number may not justify a design.
+**A per-route byte ratchet is not one of the checks, and must not be added.**
+Three reasons, each of which stays true. It defines bad as *different*, which is
+a change-detector rather than a priced limit. It cannot separate a real
+regression from toolchain noise, because a local build does not reproduce a CI
+build to within a few bytes on a route of tens of thousands. And its record is
+one file every branch has to rewrite, so every branch serialises behind whichever
+merged first, each one re-recording a number its own change never moved.
 
-**What it cost is measured.** A local Windows build does not reproduce a Linux
-CI build inside 64 bytes on a route of about 80,000 - 0.08 percent - so a
-failure could not be read without a control build of `origin/main` on the same
-tree: two extra builds, roughly six minutes, before a branch could tell its own
-change from the toolchain. `origin/main`'s own source failed its own record more
-than once. Worse, the record was one file every branch had to rewrite, so the
-fifteen rows of the console-signal plan serialised behind it - each one rebuilt,
-re-measured and re-recorded a number its own change had not moved, because a
-sibling had merged first.
+## The console has no page number
 
-**And it caught nothing.** Across every firing in that plan the resolution was
-to re-record the number. Not one was a regression somebody then fixed.
+A console route's weight rises whenever the pipeline appends a day, so any number
+bounding it has exactly one legal outcome when crossed: raise it. **A gate with
+one legal outcome is a notification with a build failure attached.** The console
+routes therefore carry no page number, and adding one back reintroduces that.
 
-What survives answers the question that was actually worth asking. The page
-guardrails are absolute limits somebody priced, in `config/idhazh.json`, so
-nothing has to re-record them to merge and a page that got lighter needs no
-permission. The encoder grep names a cause a byte count never could. And
-`tests/payload-weight.spec.ts` covers the pages a number cannot bound - a page
-that renders a day weighs whatever the day published - by counting a marker
-instead of bytes, which is the same number whatever the published history holds.
-
-| Option | Why rejected |
-| --- | --- |
-| Keep the ratchet and widen the tolerance | The tolerance was never the problem. A wider one still needs a per-route record in one shared file, which is what serialised the branches. |
-| Keep the ratchet and generate the record | A file the build rewrites is a log, and a gate whose own tooling updates its baseline cannot fail. |
-| Replace it with a transfer-time budget | Two invented constants instead of one, and Guardrail #1 forbids the telemetry that would settle either. It also models a cost a reader of a prerendered page does not pay. |
-| Delete the page ceilings too | `/archive/` shipped at 873.1 KB of gzipped HTML and nobody noticed until somebody measured. A guardrail is a priced limit, not a change-detector, and it costs nothing to hold. |
-
-Authority: owner, 2026-08-30. The ratchet was Carmack's, 2026-08-25, on the
-argument that a new dependency must be measured before it ships; measuring a
-dependency is still right, and `docs/reference/measurements.md` is where that
-measurement goes. What is gone is failing every unrelated branch until somebody
-retypes it.
-
-## The console has no page number, and why it stopped having one
-
-**It carried three, one per route, and all three are gone since 2026-09-10.**
-They were the clearest case of the defect. A console route's weight rises when
-the pipeline appends a day, so the number had to rise too - and the 2026-08-31
-ruling says no approved panel is cut to stay under a page-weight number, which
-leaves raising it as the *only* legal answer. **A gate with one legal outcome is
-a notification with a build failure attached.**
-
-**`/console/` also showed the opposite failure, at the same time.** It was sized
-on 2026-09-06 against a document that inlined the telemetry and weighed 3.88 MB.
-The telemetry moved to a browser fetch on 2026-09-09 and the document became
-46,775 gzipped bytes, but the number stayed - so for four days it stood at 7.2
-times the page it bounded and nothing went red. **Nothing fails when a number
-drifts loose**, which is why that is the failure mode to look for rather than the
-one to assume cannot happen. Neither 11 percent nor 200 percent above the page
-fixes it, because both are the same instrument pointed at a symptom.
-
-**The cause has a direct check and it needs no number.**
+The regression a number was reaching for has a direct check that needs no number.
 `frontend/tests/payload-weight.spec.ts` fails when any document that does not
-render a day contains a day-payload marker. That is the one regression this
-surface has ever had - a layout inlining a day, 313,300 gzipped bytes on
-2026-08-26 - stated as the yes-or-no fact it actually is. It sweeps every
-prerendered document including all three console routes, and it already carries
-its own negative test, so a renamed field fails loudly instead of passing
-silently.
+render a day contains a day-payload marker. It sweeps every prerendered document
+including all three console routes, and it carries its own negative test, so a
+renamed field fails loudly instead of passing silently.
 
-**What is left when a console page gets heavy: nothing fails, and that was
-already true.** Under the 2026-08-31 ruling a crossed number was raised and the
-panel stayed, so the loss is a printed line in a log. What is bought is that
-`/console/` cannot sit at 7.2 times its page for four days again, because there
-is no number left to drift.
+**A number that bounds a growing surface drifts loose as readily as it binds**,
+and nothing fails when it does - which is the failure mode to look for rather
+than the one to assume cannot happen.
 
-**Turning `console.default_window_days` down is still the right first move when
-the page is inlining something the first paint does not need** - windowing the
-seed on 2026-08-29 and folding the compression scatter on 2026-08-30 were both
-savings. A saving is not a cut, and neither is a reason to leave a panel unbuilt.
-**Thinning a plot is still wrong** - sampling points, or dropping the oldest days,
-is not a byte decision at all: it changes what the chart is a measurement of, and
-a scatter that quietly stopped drawing some of its rows is worse than one that
-got heavy.
+**Two limits stand and neither is ours to choose.** Guardrail #2's 1 GB Pages cap
+is GitHub's, and `retention.pages_hard_cap_mb` is bounded `le=1024` in the schema
+so a config edit can only ever make it stricter. The 200,000-byte lazy chart
+chunk stands too, because a new echarts registration is a decision about the
+chart vocabulary rather than about size.
 
-**Two limits are untouched and neither is ours to choose.** Guardrail #2's 1 GB Pages
-cap is GitHub's, and `retention.pages_hard_cap_mb` is bounded `le=1024` in the
-schema so a config edit can only ever make it stricter - which is the property
-the six page numbers never had. The 200,000-byte lazy chart chunk stands too,
-because a new echarts registration is a decision about the chart vocabulary
-rather than about size.
+**Turning `console.default_window_days` down is the right first move when a page
+is inlining something the first paint does not need.** A saving is not a cut, and
+neither is a reason to leave a panel unbuilt. **Thinning a plot is wrong**:
+sampling points, or dropping the oldest days, is not a byte decision at all - it
+changes what the chart is a measurement of, and a scatter that quietly stopped
+drawing some of its rows is worse than one that got heavy.
 
-Two rules came out of the savings and outlived the numbers that motivated them.
+Two rules came out of that work and outlived the numbers that motivated them.
 **One mark per article per day, never one per row**: the telemetry holds a row
 per item per run, so a re-run writes a second row for an article the first run
 published, and the run that read the most of it is the one kept. And **the seed's
 cutoff anchors on the newest committed day, never on the build clock** - anchored
 on today, a corpus that stopped last month would seed an empty console, which is
 precisely when an operator needs it.
-
-Authority: Jony and Fowler, 2026-08-29; the measurement and the worst-case
-sizing, Carmack; the ratchet ruling, owner, 2026-08-31; the ruling that deleted
-the numbers, owner, 2026-09-10, on advice from Fowler and Carmack, who reached it
-independently.
 
 ## See also
 

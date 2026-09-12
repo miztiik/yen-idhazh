@@ -85,7 +85,7 @@ had to move when nobody wrote any code. The two that stay move only when a perso
 edits source. What the four stood in for is asserted directly, and with no number
 in it, by `frontend/tests/payload-weight.spec.ts`. The reasoning is in
 [../concepts/config.md](../concepts/config.md) and
-[../how-to/run-the-gates.md](../how-to/run-the-gates.md#the-console-has-no-page-number-and-why-it-stopped-having-one).
+[../how-to/run-the-gates.md](../how-to/run-the-gates.md#the-console-has-no-page-number).
 
 The three payload numbers were measured in the same runs and **none of them
 moved, then or since**, because none of them was ever chosen - each is arithmetic

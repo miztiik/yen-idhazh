@@ -248,8 +248,8 @@ Require:
 Use three deterministic repeats for the adoption corpus, not one repeated
 example.
 
-The inline-think parser reads every block, so an empty opening block no longer
-hides a second one that reasoned. It read only the first until 2026-08-25.
+The inline-think parser reads every block, so an empty opening block cannot hide
+a second one that reasoned.
 
 The unit suite uses recorded completions. It proves the parser and controls, not
 that a new live model follows this chat template. A live candidate canary runner
