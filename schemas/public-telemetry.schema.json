@@ -1,5 +1,16 @@
 {
   "$defs": {
+    "CallKind": {
+      "description": "Which model call these numbers came from.\n\nFour members and not two, because the call structure moves under this\nvocabulary rather than beside it. `summarize` and `visual_plan` are what the\npipeline dispatches today, on two different models in two different jobs.\n`label` and `summarize_and_plan` are the pair `idhazh.classify.calls` builds,\nwhich plan 11 row #5b wires in behind a flag and row #6 then makes the only\npair. A reading that spans the flip needs all four names, or the step change\nin every series reads as a regression rather than as the design change it is.",
+      "enum": [
+        "summarize",
+        "visual_plan",
+        "label",
+        "summarize_and_plan"
+      ],
+      "title": "CallKind",
+      "type": "string"
+    },
     "FailureCode": {
       "description": "Stable failure vocabulary for item-health rows.",
       "enum": [
@@ -56,6 +67,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added nullable model_calls, call_1_kind and the first call's five cost cells at the end of the row. The second call is the remainder.",
+      "version": "2026-09-12T16:20",
+      "why": "The census records each model call's own cost and this projection kept only the item total, so the console's cache figures were about to stop meaning anything: readWhole counts items whose prompt was read whole, 749 of the 5,197 rows carrying a cache figure on 2026-09-12, and a second call that reuses the first call's prompt takes it to zero for ever with no code change. The first call plus the total is the whole split, because the flat cells are their sum and the arithmetic is exact integers - so the second call is total minus first, and model_calls is what says how many calls that remainder covers rather than letting a third be absorbed in silence. Both calls spelled out would have cost more than the split is worth to a fetch: measured 2026-09-12 on the two committed shards with every timed row populated, twelve cells cost 72.9 and 80.1 percent more gzipped against 35.3 and 40.8 for these seven. Appended at the end and nullable, because the browser reads this header by position. Empty stays empty - a run that recorded no split writes no cell, and a zero in call_1_cached_tokens is the cold-slot measurement."
+    },
+    {
       "change": "Added nullable fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens and cached_tokens at the end of the row.",
       "version": "2026-09-05T20:00",
       "why": "Every run since 2026-08-23 has measured these eight and written them to state/item-health/, and the projection dropped all eight on the way out - so the console could show that a stage failed and never how long the stage took. They are counts and durations of our own work, not the fetched page, so they cross on the same terms source_words always has. Appended at the end and nullable, because the browser reads this header by position: a name inserted anywhere else shifts every column the console already draws. Empty stays empty - an instrument that did not run writes no cell, never a zero, or a stage that was skipped reads as a stage that took no time."
@@ -79,8 +95,87 @@
         }
       ],
       "default": null,
-      "description": "Tokens the server answered from its prompt cache rather than reading again. Zero is a real answer here and means nothing was cached; empty means the server reported no cache figure at all.",
+      "description": "Tokens the server answered from its prompt cache rather than reading again, added over every call the row records. Zero is a real answer here and means nothing was cached; empty means the server reported no cache figure at all. Where call_1_cached_tokens is filled, read the cache per call rather than here: a second call reusing the first call's prompt makes this non-zero on every item.",
       "title": "Cached Tokens"
+    },
+    "call_1_cached_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prompt tokens the first call reused. Zero is the cold-slot answer and is a measurement; empty means no split was published for this row.",
+      "title": "Call 1 Cached Tokens"
+    },
+    "call_1_decode_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 1 Decode Ms"
+    },
+    "call_1_input_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 1 Input Tokens"
+    },
+    "call_1_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which call ran first: summarize, visual_plan, label or summarize_and_plan. It moves when the call structure moves, so a step change in these series reads as the design change it is rather than as a regression."
+    },
+    "call_1_output_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 1 Output Tokens"
+    },
+    "call_1_prefill_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Milliseconds the first call spent reading its prompt. A duration and never a rate: a prompt token costs more the deeper into the context it sits, so a per-call tok/s cannot be compared with another call's. The item's blended rate is the one that composes.",
+      "title": "Call 1 Prefill Ms"
     },
     "code": {
       "anyOf": [
@@ -159,6 +254,20 @@
       "minLength": 1,
       "title": "Item Id",
       "type": "string"
+    },
+    "model_calls": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many model calls the cells above add up over. Empty on every row published before 2026-09-12. It is what says whether the remainder - the total minus the first call - is one more call or several.",
+      "title": "Model Calls"
     },
     "outcome": {
       "$ref": "#/$defs/ItemOutcome"
@@ -259,7 +368,7 @@
       "title": "Summary Words"
     },
     "version": {
-      "default": "2026-09-05T20:00",
+      "default": "2026-09-12T16:20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -281,5 +390,5 @@
   ],
   "title": "PublicTelemetryRow",
   "type": "object",
-  "version": "2026-09-05T20:00"
+  "version": "2026-09-12T16:20"
 }

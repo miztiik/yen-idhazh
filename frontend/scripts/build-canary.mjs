@@ -105,7 +105,10 @@ function writeItemHealthCanary() {
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
 		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap',
-		'shard', 'span_integrity', 'elements_found', 'element_class'
+		'shard', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
+		'call_1_kind', 'call_1_prefill_ms', 'call_1_decode_ms', 'call_1_input_tokens',
+		'call_1_output_tokens', 'call_1_cached_tokens', 'call_2_kind', 'call_2_prefill_ms',
+		'call_2_decode_ms', 'call_2_input_tokens', 'call_2_output_tokens', 'call_2_cached_tokens'
 	];
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.
@@ -133,7 +136,7 @@ function writeItemHealthCanary() {
 	 * the post-cap count sits on the ceiling a real cut leaves it on. A row without
 	 * `cut` leaves the cell empty, which is what every run before 2026-08-28 wrote.
 	 */
-	const published = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, cut) =>
+	const published = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, cut, calls) =>
 		line({
 			...item(rowDate, run, id),
 			stage: 'publish',
@@ -150,8 +153,39 @@ function writeItemHealthCanary() {
 			output_tokens: model[3],
 			cached_tokens: model[4],
 			source_words_before_cap: cut?.[2],
-			...extraction(id)
+			...extraction(id),
+			...perCall(model, calls)
 		});
+
+	/** The two calls one item took, as the ledger's flat cells.
+	 *
+	 * **A fixture split of a real total, and the only fixture part of a published
+	 * row's cost.** The run this canary was taken from made one call an item, so
+	 * the state the split exists for - a first call that reads the article cold
+	 * and a second that replays it and is answered from the cache - has never been
+	 * produced and cannot be read off a run. The two calls are written to add up
+	 * to the total beside them, cell by cell, because the contract refuses a row
+	 * whose total is not the sum of its calls and a canary that broke that rule
+	 * would fail at publish rather than say anything.
+	 */
+	const perCall = (model, calls) => {
+		if (!calls) return {};
+		const cells = { model_calls: calls.length };
+		const names = ['prefill_ms', 'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens'];
+		calls.forEach(([kind, ...numbers], index) => {
+			cells[`call_${index + 1}_kind`] = kind;
+			names.forEach((name, at) => {
+				cells[`call_${index + 1}_${name}`] = numbers[at];
+			});
+		});
+		names.forEach((name, at) => {
+			const summed = calls.reduce((total, call) => total + call[1 + at], 0);
+			if (summed !== model[at]) {
+				throw new Error(`canary calls sum to ${summed} ${name}, beside a total of ${model[at]}`);
+			}
+		});
+		return cells;
+	};
 
 	/** What the candidate pass got out of one article, as a published row holds it.
 	 *
@@ -326,7 +360,15 @@ function writeItemHealthCanary() {
 		// fetch,extract,summarize | prefill,decode,input,output,cached
 		published(earlier, 1, 'ai-01', [120, 20, 610], [53309, 40210, 1497, 215, 900]),
 		published(earlier, 1, 'ai-02', [210, 30, 720], [77778, 43436, 1765, 230, 900]),
-		published(earlier, 1, 'ai-03', [260, 35, 780], [63586, 50753, 1608, 270, 900]),
+		// The one item whose cost is split by call, so the projection's per-call
+		// cells reach a page at all. Its totals are the same measured numbers the
+		// other rows carry; only the split beside them is a fixture. The two
+		// cached_tokens are 0 and 900 - a first call that read its prompt cold and a
+		// second that was answered from the cache, which one folded cell cannot say.
+		published(earlier, 1, 'ai-03', [260, 35, 780], [63586, 50753, 1608, 270, 900], undefined, [
+			['label', 45000, 8000, 708, 60, 0],
+			['summarize_and_plan', 18586, 42753, 900, 210, 900]
+		]),
 		// The newest day's fetch, extract and summarize values straddle 200, 30
 		// and 700 so its medians stay where the stage-timing test pins them.
 		published(date, 1, 'ai-01', [100, 20, 600], [79100, 29062, 942, 170, 0]),

@@ -1,22 +1,28 @@
 """Rewrite every `state/item-health/<YYYY-MM>.csv` onto the wider header.
 
-`ItemHealthRow` gained three columns on 2026-09-08, and
 `ledger.require_matching_header` compares the committed header to the contract's
-column list exactly. So the contract change and this rewrite land in one commit:
-without it the next scheduled run refuses its first append and the day is lost
-(CLAUDE.md section 11).
+column list exactly, so a contract that gains a column and this rewrite land in
+one commit: without it the next scheduled run refuses its first append and the
+day is lost (CLAUDE.md section 11). It has run twice - three columns on
+2026-09-08, thirteen on 2026-09-12.
 
-Every rewritten row gains three **empty** cells. Not a `false` and not a class
-recomputed from today's extractor: the article text a span was cut from is not in
-the ledger and is not kept, so a class written here would be a guess about a
-string nobody holds. An empty cell says the older run never ran the pass, which
-is the only honest thing it can say.
+**It reads whatever header the shard carries rather than one written down here.**
+The rule it enforces instead is the rule the contract already lives by: a column
+is appended and never inserted, so the committed header must be a prefix of
+`ItemHealthRow.csv_columns()`. A hand-listed previous header is a second
+spelling of the shape that is wrong the day after the next widening, and it
+makes each migration a new copy of this file.
 
-One-shot, and committed rather than run by hand, so a fork or a stale branch can
-reproduce the exact rewrite this repository ran (CLAUDE.md Rule #5). It is safe
-to leave here and safe to re-run: a shard that already carries the wide header is
-reported and skipped rather than rewritten a second time. That is what makes it
-the tool for the merge conflict this change is guaranteed to hit -
+Every rewritten row gains **empty** cells, never a value recomputed today: an
+older run measured nothing there, and an empty cell is the only honest thing it
+can say. A row written before the cost split recorded a total and no per-call
+breakdown, and a breakdown invented from the total would be a reading nobody
+took.
+
+Committed rather than run by hand, so a fork or a stale branch can reproduce the
+exact rewrite this repository ran (CLAUDE.md Rule #5). It is safe to re-run: a
+shard that already carries the wide header is reported and skipped. That is what
+makes it the tool for the merge conflict this change is guaranteed to hit -
 `state/*.csv` is `merge=union`, so a merge concatenates two headers instead of
 raising, and the repair is to take the upstream file whole
 (`git checkout origin/main -- state/item-health`) and run this over it again
@@ -33,42 +39,10 @@ import csv
 import io
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
 
 from idhazh.assemble import write_atomic
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.ledger import ITEM_HEALTH_DIRNAME
-
-#: The shape this migration reads. History rather than a knob, so it is spelled
-#: here: the contract no longer describes the files being migrated.
-NARROW_COLUMNS: Final[tuple[str, ...]] = (
-    "version",
-    "date",
-    "run_id",
-    "item_id",
-    "url_key",
-    "canonical_url",
-    "vertical",
-    "source_id",
-    "stage",
-    "outcome",
-    "code",
-    "http_status",
-    "source_chars",
-    "source_words",
-    "summary_words",
-    "detail",
-    "fetch_ms",
-    "extract_ms",
-    "summarize_ms",
-    "prefill_ms",
-    "decode_ms",
-    "input_tokens",
-    "output_tokens",
-    "cached_tokens",
-    "source_words_before_cap",
-    "shard",
-)
 
 # A migrated row keeps the `version` cell it was written with, for the reason
 # `migrate_feed_health` states: restamping would erase the only marker of which
@@ -94,7 +68,6 @@ def _cells(text: str, columns: tuple[str, ...]) -> list[tuple[str, ...]]:
     reader = csv.DictReader(io.StringIO(text, newline=""))
     return [tuple(row[name] for name in columns) for row in reader]
 
-
 def widen(text: str) -> Migration:
     """The wide shard, or a `ValueError` naming what stopped the rewrite."""
     columns = ItemHealthRow.csv_columns()
@@ -102,15 +75,16 @@ def widen(text: str) -> Migration:
     header = tuple(reader.fieldnames or ())
     if header == columns:
         raise ValueError("already the wide shape, so there is nothing to migrate")
-    if header != NARROW_COLUMNS:
+    if header != columns[: len(header)]:
         raise ValueError(
-            f"expected the header {','.join(NARROW_COLUMNS)} and found {','.join(header)}"
+            f"the header must be a prefix of {','.join(columns)} and is {','.join(header)}"
         )
+    appended = columns[len(header) :]
 
     rows = list(reader)
     for number, row in enumerate(rows, start=2):
-        if None in row or any(row[name] is None for name in NARROW_COLUMNS):
-            raise ValueError(f"line {number} does not carry {len(NARROW_COLUMNS)} cells")
+        if None in row or any(row[name] is None for name in header):
+            raise ValueError(f"line {number} does not carry {len(header)} cells")
 
     out = io.StringIO(newline="")
     writer = csv.DictWriter(out, fieldnames=columns, lineterminator="\n")
@@ -121,13 +95,13 @@ def widen(text: str) -> Migration:
 
     # The Oracle, in two halves. Every cell the old header named is still under
     # that name and in that order, so no reader's answer moved; and every
-    # rewritten row loads through the contract with the three new cells absent
+    # rewritten row loads through the contract with the appended cells absent
     # rather than carrying a reading nobody took.
-    if _cells(text, NARROW_COLUMNS) != _cells(widened, NARROW_COLUMNS):
+    if _cells(text, header) != _cells(widened, header):
         raise ValueError("the rewrite moved a cell an existing reader opens, so nothing changed")
     for number, row in enumerate(csv.DictReader(io.StringIO(widened, newline="")), start=2):
         parsed = ItemHealthRow.from_csv_row(row)
-        if parsed.span_integrity is not None or parsed.element_class is not None:
+        if any(getattr(parsed, name) is not None for name in appended):
             raise ValueError(f"line {number} came back with a reading nobody took")
 
     return Migration(

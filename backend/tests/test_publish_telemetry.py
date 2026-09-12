@@ -109,6 +109,13 @@ def test_publish_telemetry_drops_url_keys_urls_and_detail(tmp_path: Path) -> Non
             "input_tokens": "",
             "output_tokens": "",
             "cached_tokens": "",
+            "model_calls": "",
+            "call_1_kind": "",
+            "call_1_prefill_ms": "",
+            "call_1_decode_ms": "",
+            "call_1_input_tokens": "",
+            "call_1_output_tokens": "",
+            "call_1_cached_tokens": "",
         }
     ]
 
@@ -199,8 +206,10 @@ def test_publish_telemetry_carries_the_stage_timings_and_the_token_counts(tmp_pa
     timings = ("fetch_ms", "extract_ms", "summarize_ms", "prefill_ms", "decode_ms")
     tokens = ("input_tokens", "output_tokens", "cached_tokens")
     assert set(timings + tokens) <= set(header)
-    assert header[-len(timings + tokens) :] == timings + tokens, (
-        "appended at the end, never inserted"
+    at = header.index(timings[0])
+    assert header[at : at + len(timings + tokens)] == timings + tokens, (
+        "one unbroken block, in the order it was appended in - a later column goes "
+        "after it, never through it"
     )
     assert not (FORBIDDEN_COLUMNS & set(projected[0]))
     assert [projected[0][name] for name in timings] == ["100", "20", "600", "180", "420"]
