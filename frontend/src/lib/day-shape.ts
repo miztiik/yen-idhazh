@@ -39,6 +39,32 @@ export function keepDrawings(seeded: DigestItem[], arrived: DigestItem[]): Diges
 	});
 }
 
+/** The topic a story is read under.
+ *
+ * `vertical` is the word the carrying feed declares about itself, and it is
+ * what `item_id` is addressed from, so it never moves. `desk` is where the day
+ * published the story. They agree on every story nothing relabelled, and every
+ * day published before 2026-09-12 carries no `desk` at all - so absent and null
+ * both fall back to the vertical rather than becoming a topic of their own.
+ *
+ * One function, because the fallback has to be the same in the filter, in the
+ * heading and on the chip. Two copies of it disagree on the day a story moves,
+ * and the reader sees a page whose stories and whose count are about different
+ * sets. */
+export function deskOf(item: { vertical: string; desk?: string | null }): string {
+	return item.desk ?? item.vertical;
+}
+
+/** How many stories a topic shows, which is not always how many its feeds carried.
+ *
+ * `count` is stories whose carrying feed declares this vertical; `desk_count` is
+ * stories the day publishes under the name. A page draws the second, and falls
+ * back to the first for a day published before that number existed - where the
+ * two were the same thing. */
+export function deskCount(ref: DigestVerticalRef): number {
+	return ref.desk_count ?? ref.count;
+}
+
 /** One entry of the leading block, as the component draws it. */
 export interface LeadingStory {
 	item_id: string;
@@ -68,6 +94,9 @@ export interface PillSplit {
  * `day.items` is grouped by desk and the pills already read alphabetically, so
  * re-sorting by size would move a topic between two days for a reason a reader
  * cannot see.
+ *
+ * The cut reads `deskCount`, because it is deciding which topics a reader sees
+ * most of - and the number on the row is the number of stories the row leads to.
  */
 export function splitPills(
 	verticals: DigestVerticalRef[],
@@ -77,7 +106,7 @@ export function splitPills(
 	if (verticals.length <= limit) return { shown: verticals, folded: [] };
 	const keep = new Set(
 		[...verticals]
-			.sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
+			.sort((a, b) => deskCount(b) - deskCount(a) || a.id.localeCompare(b.id))
 			.slice(0, Math.max(limit, 1))
 			.map((vertical) => vertical.id)
 	);
@@ -114,6 +143,12 @@ export interface DeskShortfall {
  *
  * A day published before the counts existed carries none of them, and absent is
  * unknown rather than zero: it fires nothing.
+ *
+ * All three clauses read `count` and not `deskCount`, and that is deliberate.
+ * `considered` and `too_old` are counted per FEED, and a feed declares a
+ * vertical - so the only number they can honestly be weighed against is the
+ * vertical's own. Comparing what the sources offered a vertical against what a
+ * desk published would put two different sets either side of the same sentence.
  */
 export function deskShortfall(
 	desk: DigestVerticalRef | undefined,

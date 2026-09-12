@@ -54,6 +54,24 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-12T06:56",
+            change=(
+                "Added desk: where the digest publishes the story, beside vertical, "
+                "which keeps carrying the word the feed declares about itself."
+            ),
+            why=(
+                "One word was doing two jobs. A feed declares a vertical and the digest "
+                "needs to know what the article is about, and those are different "
+                "questions the moment an energy feed carries an AI story. Repointing "
+                "vertical was refused instead of taken: _identity_is_rebuilt_not_trusted "
+                "asserts item_id.startswith(f'{self.vertical}-'), so repointing it "
+                "rejects, at read time, every item whose desk moved. Additive and "
+                "optional: null is nothing having said, the digest falls back to "
+                "vertical, and every payload written before today still reads (section "
+                "11). Nothing fills it yet - the model that will is a later row."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-12T03:55",
             change=(
                 "lenses and events are lists of Slug rather than of the closed LensId "
@@ -137,7 +155,22 @@ class Article(Contract):
         description="Declared by the feed config. Never inferred from extracted text.",
     )
 
-    vertical: Slug
+    vertical: Slug = Field(
+        description=(
+            "The vertical the carrying feed declares about itself, copied from the "
+            "source config and never read out of the article. `item_id` is addressed "
+            "from it, so it may not be repointed - see "
+            "`_identity_is_rebuilt_not_trusted` below."
+        )
+    )
+    desk: Slug | None = Field(
+        default=None,
+        description=(
+            "Where the digest publishes this story, read off the whole article rather "
+            "than off the feed that carried it. Null is nothing having said, and the "
+            "digest falls back to `vertical`; a null is never read as a desk."
+        ),
+    )
     lenses: list[Slug] = Field(default_factory=list)
     events: list[Slug] = Field(default_factory=list)
     entities: list[Slug] = Field(default_factory=list)
@@ -180,6 +213,14 @@ class Article(Contract):
 
     @model_validator(mode="after")
     def _identity_is_rebuilt_not_trusted(self) -> Self:
+        """Both halves of the identity are recomputed rather than believed.
+
+        The second clause is also what keeps `vertical` unrepointable. `item_id`
+        is addressed from the carrying feed's word and a published address never
+        moves, so pointing `vertical` at a reading of the article would reject,
+        at read time, every item whose desk moved. That is why `desk` is a field
+        beside it rather than a second meaning for it.
+        """
         if self.url_key != derive_url_key(self.canonical_url):
             raise ValueError("url_key must be the sha256 of canonical_url, recomputed on read")
         if not self.item_id.startswith(f"{self.vertical}-"):

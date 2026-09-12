@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { orderByTime } from '../src/lib/day-shape';
+import { deskOf, orderByTime } from '../src/lib/day-shape';
 import { dayShell, homeShell, loadDay, publishedDates, wholeDay } from '../src/lib/server/payload';
 import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/types';
 
@@ -135,7 +135,7 @@ function busiest(): { date: string; vertical: string; items: DigestItem[] } {
 		const day = loadDay(date, CANARY);
 		if (!day || day.items.length < 2) continue;
 		const items = orderByTime(day.items);
-		return { date, vertical: items[0].vertical, items };
+		return { date, vertical: deskOf(items[0]), items };
 	}
 	throw new Error('no canary day carries more than one story');
 }
@@ -143,7 +143,7 @@ function busiest(): { date: string; vertical: string; items: DigestItem[] } {
 test.describe('a topic route splits its own list', () => {
 	test('the seed and the rest together are exactly the topic, in reading order', () => {
 		const { date, vertical, items } = busiest();
-		const own = items.filter((item) => item.vertical === vertical).map((item) => item.item_id);
+		const own = items.filter((item) => deskOf(item) === vertical).map((item) => item.item_id);
 		expect(own.length, `${date} published nothing under ${vertical}`).toBeGreaterThan(0);
 		for (const seed of SEEDS) {
 			const shell = dayShell(date, seed, { vertical, root: CANARY })!;
@@ -161,7 +161,7 @@ test.describe('a topic route splits its own list', () => {
 		const { date, vertical, items } = busiest();
 		const shell = dayShell(date, 1, { vertical, root: CANARY })!;
 		expect(shell.facts.verticals.map((ref) => ref.id).sort()).toEqual(
-			[...new Set(items.map((item) => item.vertical))].sort()
+			[...new Set(items.map((item) => deskOf(item)))].sort()
 		);
 	});
 
@@ -176,7 +176,7 @@ test.describe('a topic route splits its own list', () => {
 test.describe('the seed is the head union what the page must anchor', () => {
 	test('a story past the head is in the seed when it is kept, exactly once', () => {
 		const { date, vertical, items } = busiest();
-		const own = items.filter((item) => item.vertical === vertical);
+		const own = items.filter((item) => deskOf(item) === vertical);
 		expect(own.length, 'the canary topic is too small to have a tail').toBeGreaterThan(1);
 		const last = own[own.length - 1].item_id;
 
@@ -197,7 +197,7 @@ test.describe('the seed is the head union what the page must anchor', () => {
 
 	test('keeping a story the head already holds changes nothing', () => {
 		const { date, vertical, items } = busiest();
-		const first = items.filter((item) => item.vertical === vertical)[0].item_id;
+		const first = items.filter((item) => deskOf(item) === vertical)[0].item_id;
 		const plain = dayShell(date, 3, { vertical, root: CANARY })!;
 		const kept = dayShell(date, 3, { vertical, keep: [first], root: CANARY })!;
 		expect(kept.seed.map((item) => item.item_id)).toEqual(

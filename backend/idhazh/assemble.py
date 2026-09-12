@@ -17,7 +17,7 @@ import logging
 import math
 import tempfile
 from array import array
-from collections.abc import Mapping, Sequence
+from collections.abc import Container, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
@@ -62,6 +62,7 @@ from idhazh.embed import (
     text_for,
     to_base64,
 )
+from idhazh.rank import desk_of
 from idhazh.tag import tags
 
 LOG: Final = logging.getLogger("idhazh")
@@ -131,6 +132,7 @@ def to_digest_item(
     decision: VisualDecision | None = None,
     band_reason: BandReason | None = None,
     planned: PlannedItem | None = None,
+    below_floor_desks: Container[str] = frozenset(),
 ) -> DigestItem:
     """One finished item as a reader consumes it. The link is a first-class element.
 
@@ -143,10 +145,17 @@ def to_digest_item(
     Without it all five publish as null, which reads as unknown - a caller that
     has no plan row must not be able to publish a 0 that means "no feed carried
     this".
+
+    `vertical` is the carrying feed's own word and is copied straight across:
+    `item_id` is addressed from it, so the address a reader shares never moves.
+    Where the story publishes is the separate question `desk` answers, and
+    `rank.desk_of` settles it - including the case where the desk is one this
+    run collected but will not render, which falls back to the feed's word.
     """
     return DigestItem(
         item_id=summary.item_id,
         vertical=article.vertical,
+        desk=desk_of(article.vertical, article.desk, below_floor=below_floor_desks),
         title=summary.title or article.title or _UNTITLED,
         source_url=article.canonical_url,
         source_id=article.source_id,
@@ -992,20 +1001,26 @@ def desk_ref(
     *,
     display_name: str,
     count: int,
+    desk_count: int,
     planned: VerticalPlan | None,
     earlier: DigestVerticalRef | None,
 ) -> DigestVerticalRef:
-    """One desk of the day, carrying the strongest shortfall any run recorded.
+    """One topic of the day, carrying the strongest shortfall any run recorded.
 
     The strongest and not the sum. A later run drops what the day has already
     published before it counts anything, so it sees a smaller pool of the same
     back-catalogue stories - and adding the runs would count one such story once
     per run and print a number the feeds never offered.
 
-    A desk this run did not plan keeps what an earlier run said about it, which
-    is how a desk retired from `config/taxonomy.json` mid-day keeps its
-    explanation. A desk no run has ever planned carries nothing, and nothing
+    A vertical this run did not plan keeps what an earlier run said about it,
+    which is how a vertical retired from `config/taxonomy.json` mid-day keeps
+    its explanation. One no run has ever planned carries nothing, and nothing
     reads as unknown rather than as zero.
+
+    `count` is stories whose feed declares this vertical and `desk_count` is
+    stories the day publishes under this name. They are equal until something
+    relabels a story, and the shortfall fields sit beside `count` because a feed
+    declares a vertical and never a desk.
     """
     if planned is None:
         considered = earlier.considered if earlier else None
@@ -1023,6 +1038,7 @@ def desk_ref(
         id=vertical_id,
         display_name=display_name,
         count=count,
+        desk_count=desk_count,
         considered=considered,
         too_old=stale,
         below_feed_floor=floored,
@@ -1094,7 +1110,14 @@ def build_day(
     runs.sort(key=lambda run: run.n)
 
     names = vertical_names(taxonomy)
-    present = sorted({item.vertical for item in combined})
+    # Both words, because a story can be carried by one vertical's feed and
+    # published under another. A ref is owed for each: `count` answers for the
+    # feed's word and `desk_count` for where the day put the story, and a name
+    # that is only one of the two carries a 0 for the other rather than being
+    # left out - which would leave a rendered story under an unlisted topic.
+    present = sorted(
+        {item.vertical for item in combined} | {item.desk for item in combined if item.desk}
+    )
     this_run = {vertical.id: vertical for vertical in plan.verticals}
     already_said = {ref.id: ref for ref in (previous.verticals if previous else [])}
     published = len(combined)
@@ -1123,6 +1146,9 @@ def build_day(
                 vertical_id,
                 display_name=names.get(vertical_id, vertical_id),
                 count=sum(1 for item in combined if item.vertical == vertical_id),
+                desk_count=sum(
+                    1 for item in combined if (item.desk or item.vertical) == vertical_id
+                ),
                 planned=this_run.get(vertical_id),
                 earlier=already_said.get(vertical_id),
             )

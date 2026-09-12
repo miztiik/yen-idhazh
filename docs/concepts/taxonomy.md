@@ -4,17 +4,18 @@
 
 The words this project puts on a story, and which word answers which question.
 
-> A **vertical** says where the story lives. A **lens** says what else it is
-> about. An **event** says what happened. One vertical an item, any number of
-> lenses, any number of events.
+> A **vertical** says which feed carried the story. A **desk** says where the
+> day published it. A **lens** says what else it is about. An **event** says
+> what happened. One vertical an item, one desk, any number of lenses, any
+> number of events.
 
 That sentence is the whole page in short. The rest says who decides each word,
 what changing one costs, and what a model is told each word means.
 
 | Word | How many an item | Who decides | What it changes | Where the list lives |
 | --- | --- | --- | --- | --- |
-| Vertical | exactly one | the feed that carried the item (`FeedDef.vertical`) | the item's address, the page it renders on, and whether the desk runs at all | `verticals` in [`../../config/taxonomy.json`](../../config/taxonomy.json) |
-| Desk | exactly one | the same feed, today | the heading a reader sees | the same list |
+| Vertical | exactly one | the feed that carried the item (`FeedDef.vertical`) | the item's address, and whether that vertical's feeds are asked at all | `verticals` in [`../../config/taxonomy.json`](../../config/taxonomy.json) |
+| Desk | exactly one | nothing yet - it falls back to the vertical | the heading, the pill and the topic route a reader finds the story under | the same list |
 | Lens | zero or more | the item's own words, against curated terms | a rank bonus, and a chip on the item | `lenses` in the same file |
 | Event | zero or more | the item's own words, against curated terms | nothing a reader sees | `events` in the same file |
 
@@ -22,16 +23,16 @@ what changing one costs, and what a model is told each word means.
 
 Every item has exactly one vertical and it is not optional. A feed declares its
 vertical in [`../../config/sources.json`](../../config/sources.json), and every
-article that feed carries inherits it. Three things then hang off that one word:
+article that feed carries inherits it. Two things then hang off that one word:
 
 - **The item's address.** `Article` refuses an `item_id` that does not begin
   `<vertical>-`, so the vertical is part of the identity rather than a label
-  beside it.
-- **The page.** A day's stories are published per vertical at
-  `/<date>/<vertical>/`.
-- **Whether the desk runs at all.** `min_feeds` is a floor on how many of that
-  vertical's addresses a run may lawfully ask - 35 for `ai` and 21 for the other
-  four, in the committed config today. Below the floor the desk **plans nothing**
+  beside it. That is also why the vertical can never be repointed at a reading
+  of the article: repointing it would reject, at read time, every item whose
+  desk moved.
+- **Whether that vertical's feeds are asked at all.** `min_feeds` is a floor on
+  how many of its addresses a run may lawfully ask - 35 for `ai` and 21 for the
+  other four, in the committed config today. Below the floor it **plans nothing**
   rather than thinning out: `rank.plan_vertical` returns an empty list, the run
   succeeds, the digest publishes, and that section is simply absent.
 
@@ -39,16 +40,32 @@ A lens and an event carry none of that. Neither has a feed list, neither is in
 an address, and neither decides whether anything runs. That is the difference
 worth holding: **the vertical is a place, and the other two are remarks.**
 
-## A desk is a vertical as a reader meets it
+## A desk is where the day published the story
 
-`desk` is the word this repository uses for a vertical on the day's page -
-`DigestVerticalRef`'s own docstring opens "One desk of the day". Today the two
-words name one thing decided by one decider: the feed declares a vertical, and
-the page renders it as a desk.
+The vertical is the feed's word about itself. The desk is where the story is
+read: it decides the heading, the pill, and the `/<date>/<desk>/` route.
 
-They are one list of words whichever way the label arrives, which is why the
-vertical vocabulary is what the model would be offered if it were ever asked to
-read the article and name a desk. Nothing asks it today.
+**They are two fields and one vocabulary.** `DigestItem.desk` sits beside
+`DigestItem.vertical`, and both take an id out of the same `verticals` list. A
+null desk is the ordinary state and means nothing has read the article; a page
+falls back to the vertical, and a null is never read as a desk of its own.
+Nothing fills the field today - the run that will is a later row.
+
+**Two counts, because the two words count different things.**
+`DigestVerticalRef.count` is stories whose carrying feed declares this vertical,
+and `desk_count` is stories the day publishes under the name. A page draws
+`desk_count` and falls back to `count`; the three shortfall fields -
+`considered`, `too_old`, `below_feed_floor` - stay beside `count`, because
+collection is per feed and a feed declares a vertical rather than a desk. Every
+day published before 2026-09-12 carries neither `desk` nor `desk_count`, which
+is exactly the fallback case.
+
+**A desk under its own floor is not a place a story may be moved to.** The floor
+counts feeds, so a vertical below it plans nothing and renders nothing. A story
+relabelled onto that name would render under a heading the same day's payload
+flags as having planned nothing, so `rank.desk_of` sends it back to the word its
+feed declared. The rule in one line: **the floor is about supply, and supply is
+collected per feed.**
 
 ## A lens is a question asked of items already collected
 

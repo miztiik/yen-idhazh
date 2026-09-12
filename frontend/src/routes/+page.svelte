@@ -24,6 +24,7 @@
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
 	import MoreDays from '$lib/components/MoreDays.svelte';
 	import PayloadState from '$lib/components/PayloadState.svelte';
+	import { deskCount } from '$lib/day-shape';
 	import { longDate } from '$lib/format';
 	import type { DayForPage } from '$lib/payload/types';
 	import { tick } from 'svelte';
@@ -56,7 +57,7 @@
 	 * day's own units. `PayloadState` formats nothing, so the sentence is built
 	 * here - and it is only true to say when both numbers are known. */
 	const published = $derived(
-		(data.day?.verticals ?? []).reduce((sum, desk) => sum + desk.count, 0)
+		(data.day?.verticals ?? []).reduce((sum, topic) => sum + deskCount(topic), 0)
 	);
 	const shortfall = $derived(
 		published > 0 && (day?.items.length ?? 0) < published

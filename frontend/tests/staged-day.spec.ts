@@ -42,12 +42,17 @@ const COMMITTED = resolve(process.cwd(), 'public', 'digest');
  * it since the run divider was deleted on 2026-09-01, and it stays because
  * taking a name off the allow-list is a change to `DigestView` rather than a
  * detail. Removing it here would make this promise agree with a contract change
- * nobody had decided. */
+ * nobody had decided.
+ *
+ * `desk` joined on 2026-09-12. The reading page groups by the topic a story is
+ * read under, so a desk this projection dropped would be a grouping the browser
+ * cannot make. */
 const RENDERED_FIELDS = [
 	'also_covered_by',
 	'band',
 	'band_reason',
 	'carried_by',
+	'desk',
 	'introduced_by_run',
 	'item_id',
 	'key_points',
@@ -128,7 +133,7 @@ function items(day: Day): Record<string, unknown>[] {
 	return day.payload.items as Record<string, unknown>[];
 }
 
-test('the allow-list is the twenty-three fields this file promises', () => {
+test('the allow-list is the twenty-four fields this file promises', () => {
 	// The staging step and the build-time reader share one module now, so a
 	// widening is one edit in one place. This is the test that makes that edit
 	// visible: it names the field that arrived, where the shape checks below
@@ -157,7 +162,7 @@ test('a staged day carries its items, its own facts, and the stamp that says wha
 	}
 });
 
-test('a staged item carries the twenty-three fields a page renders, and no twenty-fourth', () => {
+test('a staged item carries the twenty-four fields a page renders, and no twenty-fifth', () => {
 	const wrong: string[] = [];
 	let counted = 0;
 	for (const day of staged()) {

@@ -24,6 +24,7 @@
 	 * beside every story as well as down the rail is the same number twice.
 	 */
 	import { KIND_WORTH_SAYING, SOURCE_KINDS } from '$lib/bands';
+	import { deskOf } from '$lib/day-shape';
 	import { shortDate } from '$lib/format';
 	import type { DigestItem } from '$lib/payload/types';
 	import { shownLenses } from '$lib/payload/lenses';
@@ -61,6 +62,14 @@
 
 	const lenses = $derived(shownLenses(item.lenses));
 	const kindWorthSaying = $derived(KIND_WORTH_SAYING.includes(item.source_kind));
+	/** The topic this story is read under, published beside `data-vertical`.
+	 *
+	 * `vertical` is the word the carrying feed declares about itself and is what
+	 * `item_id` is addressed from, so it is the story's address. The desk is
+	 * where the day put the story. Both are on the element rather than one
+	 * standing for the other, because they are two different facts - and they
+	 * agree on every story nothing relabelled. */
+	const desk = $derived(deskOf(item));
 </script>
 
 <article
@@ -69,6 +78,7 @@
 	class:has-mark={showMark}
 	data-band={item.band}
 	data-vertical={item.vertical}
+	data-desk={desk}
 	data-truncated={item.truncated}
 	data-read={read}
 	data-visual={item.visual?.state ?? 'absent'}

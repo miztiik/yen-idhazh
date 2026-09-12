@@ -21,7 +21,7 @@ from idhazh.config import REPO_ROOT
 from idhazh.contracts.app_config import AssistConfig, CollectConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.run_plan import PlannedItem, VerticalPlan
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.discover import Candidate
@@ -30,6 +30,8 @@ from idhazh.ledger import feed_reliability
 from idhazh.rank import (
     authority,
     dedup_text,
+    desk_of,
+    desks_below_floor,
     duplicates_within_plan,
     score,
     tier_weight,
@@ -409,3 +411,80 @@ def test_enforcing_cuts_the_weaker_telling() -> None:
         [strong, weak], embedder=embedder, leads={}, collect=CollectConfig(dedup_enforce=True)
     )
     assert kept == [strong], "enforcing keeps the stronger telling and drops the weaker"
+
+
+# --- Where a story publishes -----------------------------------------------
+#
+# `desk_of` is the whole of decision 8 of TODO/20260910-23-article-classification-plan.md:
+# the feed floor counts feeds, a feed declares a vertical, and a story relabelled
+# onto a name this run will not render falls back to the word its feed declared.
+# Every case here is built in memory; nothing reads the plan tree.
+
+
+def _vertical_plan(vertical_id: str, *, below_floor: bool) -> VerticalPlan:
+    # A vertical under its floor plans nothing, and `VerticalPlan` refuses a row
+    # that says otherwise - so the flag and the count move together here too.
+    return VerticalPlan(
+        id=vertical_id,
+        considered=4,
+        planned=0 if below_floor else 1,
+        eligible_feeds=1 if below_floor else 40,
+        feed_floor=21,
+        below_feed_floor=below_floor,
+    )
+
+
+def test_an_unlabelled_story_names_no_desk_at_all() -> None:
+    """The ordinary case, and the only one on every day published so far.
+
+    Null is not a quiet way of writing the vertical. Nothing reads an article
+    yet, so writing the feed's word here would make every item claim a reading
+    of itself that never happened. The page falls back; the payload does not.
+    """
+    assert desk_of("energy", None, below_floor=frozenset()) is None
+    assert desk_of("energy", None, below_floor=frozenset({"energy"})) is None
+
+
+def test_a_relabelled_story_publishes_under_its_desk() -> None:
+    """The case the whole row exists for: an energy feed carrying an AI story."""
+    assert desk_of("energy", "ai", below_floor=frozenset()) == "ai"
+
+
+def test_a_desk_below_its_own_floor_falls_back_to_the_feeds_word() -> None:
+    """Decision 8, stated as the contradiction it prevents.
+
+    A vertical under its floor is collected and never rendered, and the day
+    payload says so in `below_feed_floor`. Without this fallback an above-floor
+    vertical's stories would land under that name and render - so the reading
+    page would draw a topic the operator surface says planned nothing, and both
+    would be reading the same day.
+    """
+    assert desk_of("energy", "ai", below_floor=frozenset({"ai"})) == "energy"
+
+
+def test_a_story_already_on_its_own_below_floor_vertical_is_left_alone() -> None:
+    """The floor is about supply, and it never moves a story off its own feed.
+
+    An `ai` feed's story stays `ai` whatever the floor says. The fallback exists
+    to stop a story ARRIVING on a name that will not render; a story whose feed
+    declares that name was never going to render either way, and rewriting it
+    here would put it on a topic no feed carried it under.
+    """
+    assert desk_of("ai", "ai", below_floor=frozenset({"ai"})) == "ai"
+
+
+def test_the_below_floor_set_is_read_off_this_runs_own_plan() -> None:
+    """Which names are under their floor is a fact about a run, not about config.
+
+    It depends on how many of each vertical's addresses were lawfully askable
+    today, so it is read from the plan this run wrote rather than recomputed
+    from `config/taxonomy.json` - which cannot know what today's robots.txt
+    said.
+    """
+    plans = [
+        _vertical_plan("ai", below_floor=True),
+        _vertical_plan("energy", below_floor=False),
+        _vertical_plan("world", below_floor=True),
+    ]
+    assert desks_below_floor(plans) == frozenset({"ai", "world"})
+    assert desks_below_floor([]) == frozenset()
