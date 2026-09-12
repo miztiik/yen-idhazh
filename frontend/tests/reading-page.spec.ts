@@ -14,13 +14,14 @@
  *
  * Four questions, and each one needs two rows to have disagreed to fail:
  *
- * - **The time is on the rail and nowhere else.** Row 16 put the time in the
- *   item's eyebrow and row 17 took it out again and gave it a column. Both
- *   landing would print every story's time twice.
- * - **The aside, the sticky filter panel and the time rail keep out of each
- *   other's way.** Three rows put three things in the same 1400px screen: row
- *   18's 18rem aside, row 7's panel that sticks from 1024px, row 17's rail.
- *   None of them knows about the other two.
+ * - **Every story carries its own time, and the page names the zone once.** Row
+ *   16 put the time in the item's eyebrow, row 17 took it out and gave it a
+ *   shared rail, and plan 25 row #5 deleted the rail and gave the time back to
+ *   the story. What survived all three is the caption: `Times shown in UTC.`,
+ *   once per page, which is what makes a bare clock readable.
+ * - **The aside and the sticky filter panel keep out of each other's way.** Two
+ *   rows put two things in the same 1400px screen: row 18's 18rem aside and row
+ *   7's panel that sticks from 1024px. Neither knows about the other.
  * - **A day that half arrives is still a designed page.** Rows 25 and 26 made
  *   the dated routes seed and fetch; row 14 designed what a reader meets when
  *   the fetch fails. The three arms below break the fetch at the network and
@@ -283,41 +284,36 @@ test.describe('every reader route, at every width, in both themes', () => {
 });
 
 test.describe('where two rows meet', () => {
-	test('the time is on the day rail and nowhere on a story', async ({ page }) => {
+	test('every story carries its own time, and the zone is named once', async ({ page }) => {
 		await open(page, 'dark', `/${DAY}/`, 1536);
 
 		const stories = page.locator('article.item');
 		const drawn = await stories.count();
 		expect(drawn, 'the day drew no story, so this proves nothing').toBeGreaterThan(0);
 
-		// The zone is named once, above the column it explains. Not a suffix on
-		// every label and not a band of its own at the top of the page.
+		// The zone is named once, above the stream it explains. Not a suffix on
+		// every stamp and not a band of its own at the top of the page. This
+		// assertion outlived the time rail that used to carry the sentence: the
+		// rail was the duplicate, the caption is what makes a bare clock readable.
 		await expect(
-			page.locator('[data-rail-note]'),
-			'the rail names its clock more than once, or not at all'
+			page.locator('[data-time-note]'),
+			'the day names its clock more than once, or not at all'
 		).toHaveCount(1);
+		await expect(page.locator('[data-time-note]')).toHaveText('Times shown in UTC.');
 
-		// One marker per group of equal times, never one per story. A marker on
-		// every story is the rail drawing the duplicate it exists to remove.
-		const marks = await page.locator('[data-rail-mark]').count();
-		expect(marks, 'the rail drew no marker at all').toBeGreaterThan(0);
+		// And the time is beside the heading, on every story that has one. The
+		// rail printed one marker an hour and left 86.3 percent of stories with no
+		// time at all (1,218 markers over 8,922 committed stories, re-measured
+		// 2026-09-12); what replaced it is the story's own stamp.
+		const clocked = await page.locator('[data-item-time]').count();
 		expect(
-			marks,
-			`the rail drew ${marks} markers for ${drawn} stories, which is a label per story`
-		).toBeLessThanOrEqual(drawn);
-
-		// And the eyebrow carries no clock. Row 16 put one there and row 17 took
-		// it away; a page carrying both prints the same number twice per story.
-		const clocked = await page.locator('[data-item-eyebrow]').evaluateAll((nodes) =>
-			nodes
-				.map((node) => node.textContent ?? '')
-				.filter((text) => /\b\d{1,2}:\d{2}\b/.test(text))
-				.slice(0, 4)
-		);
-		expect(clocked, 'a story prints its time above the title as well as on the rail').toEqual([]);
+			clocked,
+			`${clocked} of ${drawn} stories print a time, and only a story whose ` +
+				`time_source is unknown may print none`
+		).toBeGreaterThanOrEqual(drawn - 1);
 	});
 
-	test('the aside, the sticky panel and the time rail keep out of each other', async ({ page }) => {
+	test('the aside and the sticky panel keep out of each other', async ({ page }) => {
 		test.skip(
 			LEADS === 0,
 			`${DAY} earned no leading block, so this day has no aside to collide with anything`
@@ -333,7 +329,6 @@ test.describe('where two rows meet', () => {
 				return {
 					aside: box('.day-aside'),
 					panel: box('[data-filter-bar]'),
-					rail: box('[data-time-rail]'),
 					stream: box('.day-stream')
 				};
 			});
@@ -341,7 +336,6 @@ test.describe('where two rows meet', () => {
 		const at_rest = await read();
 		expect(at_rest.aside, 'the aside is not on the page at 1536px').not.toBeNull();
 		expect(at_rest.panel, 'the filter panel is not on the page').not.toBeNull();
-		expect(at_rest.rail, 'the time rail is not on the page').not.toBeNull();
 
 		// The aside stands beside the stream, so it starts where the stream ends.
 		expect(
@@ -349,11 +343,6 @@ test.describe('where two rows meet', () => {
 			`the aside starts at ${Math.round(at_rest.aside!.left)} and the stream runs to ` +
 				`${Math.round(at_rest.stream!.right)}, so they overlap`
 		).toBeGreaterThanOrEqual(at_rest.stream!.right - 0.5);
-		// The rail is inside the stream, which is what keeps it clear of the aside.
-		expect(
-			at_rest.rail!.right,
-			'the time rail runs under the aside'
-		).toBeLessThanOrEqual(at_rest.aside!.left + 0.5);
 
 		// Both stick. A reader scrolled to the bottom of a 359-story day has the
 		// panel and the aside pinned at once, and that is the only moment they can

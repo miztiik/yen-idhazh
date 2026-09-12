@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -239,7 +239,7 @@ They now split by what they are a claim about.
 | the desk, as a tinted chip | the confidence sentence |
 | the lens chips the item's words earned, in one wrapper | `Listen` |
 | who is speaking, and its kind where the kind is worth saying | `Read the original`, at the trailing edge |
-| when - a date today, a time on the rail when row #17 lands | |
+| when - the story's own published time on a dated page, and the day it was found on in a search result | |
 
 **The cap is four child elements above the title, at every width.** A line that holds four on a desktop and five on a phone because a chip wrapped in from somewhere else is the failure worth catching, so `frontend/tests/item-meta.spec.ts` drives 360, 801 and 1536 rather than the default viewport. The count is of elements, not of facts: an item that earned three lens chips still spends one slot, because they arrive inside one wrapper, and the kind sits inside the source element it qualifies.
 
@@ -830,8 +830,8 @@ before the first item a later run added. **The divider was deleted on
 2026-09-01.** It named a run boundary, and a run is our schedule rather than the
 reader's - somebody reading past it does not know what run 3 is and cannot do
 anything differently for knowing. The fact a reader wanted from it is when the
-story happened, and row #17 of the reading-page plan puts that on a time rail in
-words they already use. Authority: Editor, plan row #16.
+story happened, and plan 25 row #5 puts that beside every story's own heading,
+in digits they already read. Authority: Editor, plan row #16.
 
 **The field stays on the served-day projection even though nothing renders it.**
 Taking it off is a change to `DigestView` - a contract, its schema, its version

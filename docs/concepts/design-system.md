@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-12
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -352,27 +352,27 @@ The filter bar is the case. It sticks from `frame.breakpoints_px[1]` (1024px) up
 
 **This rule is why the day's aside stands beside the stream and not beside the day's controls.** The first arrangement of the two-column day put the leads in column two from the top of the page, which narrowed everything below them to 896px - and at 896px the filter bar's six pills wrap under its field, so a two-band panel then followed the reader down the page. The controls keep the whole content box and the aside starts level with the first story.
 
-### The reading page spends its width in five named zones
+### The reading page spends its width in four named zones
 
 > **No zone is a pixel count.** Every column the reading page draws beside its prose is a `rem` knob in `config/appearance.json`, so it grows with a reader who set their browser text larger.
 
 | Zone | Token | Default | Drawn from |
 | --- | --- | --- | --- |
-| the day's time rail | `--zone-time` | `5.5rem` | the small breakpoint |
 | the source mark | `--zone-mark` | `1.75rem` | every width - the read state has to stay beside the title it qualifies |
 | the card | `minmax(0, 1fr)`, text at `--measure` | `68ch` | every width |
 | the item's footer rail | `--zone-rail` | `14rem` | the middle breakpoint, and it retires at the wide one |
 | the day's aside | `--zone-aside` | `18rem`, sticky | the wide breakpoint |
 
-**A phone gets no time rail column, and that was measured rather than assumed.** A 360px screen leaves 328 CSS px of content box; the item already spends 40 on the read mark and its gap and 32 on its own padding, so a 3.5rem rail plus its gap left the summary **186px** - about 25 characters, with `Interconnector` broken across two lines in the title. Below the small breakpoint the marker is a rule across the top of its group instead, which costs the reading column nothing and reads as a section heading. What the reader loses is the label sitting level with the story it opens; what they get back is 70px of every line.
+**There were five until 2026-09-12.** `--zone-time` was a `5.5rem` leading column on the day stream, carrying a time rail that grouped stories by the hour and drew one marker per group. The rail is deleted and every story now prints its own time in its eyebrow, so the stream is the content box again at every width. What the reader loses is the hairline that made a column of times read as one axis; what they get back is a time on every story rather than on one in seven, and 5.5rem of every line at the two widths that had the column. Re-measured 2026-09-12 over 8,922 committed stories: the rail drew 1,218 markers, so 86.3 percent carried no time at all.
+
+**A phone never had the time-rail column, and that was measured rather than assumed.** A 360px screen leaves 328 CSS px of content box; the item already spends 40 on the read mark and its gap and 32 on its own padding, so a 3.5rem rail plus its gap left the summary **186px** - about 25 characters, with `Interconnector` broken across two lines in the title. That measurement is why the rail had two layouts, and it is a large part of why one column of times was the wrong place for a fact every story has.
 
 **The frame's content box holds a measure plus exactly one trailing column.** Measured 2026-09-02 at 1536px, that box is 1,216px and the item filled all of it, while the summary used 659.81 - so 230.19px stood empty beside the prose on every story. What that buys is one column of at most 27.1rem once the measure and the mark are paid for. Both the item's rail and the day's aside want it, and keeping both leaves the summary 570px, so the day's column wins at the width it appears and the item gives its rail back. The footer then returns to where the item's own split put it, under the summary it is a claim about.
 
 **The measure never moves.** A wide card holding a 68-character paragraph is not wasted space; a wide paragraph is what the measure exists to prevent, and widening it was refused before the layout was chosen. What the aside spends is the space the measure does not want.
+**A `rem` zone is only a `rem` zone if something checks.** `14rem` and `224px` look identical at the default font size and diverge the moment a reader changes it, and no screenshot tells them apart. `frontend/tests/item-zones.spec.ts` reads every zone's used width with the root font size at 16px and again at 22px and fails unless each one scaled by 22/16 - measured on its own build, the mark went 28 to 38.5, the item's footer rail 224 to 308 and the aside 288 to 396. It prints both numbers in the failure, so the assertion cannot pass on a layout it never measured. Numbers and method: [../reference/measurements-site.md](../reference/measurements-site.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02).
 
-**A `rem` zone is only a `rem` zone if something checks.** `14rem` and `224px` look identical at the default font size and diverge the moment a reader changes it, and no screenshot tells them apart. `frontend/tests/item-zones.spec.ts` reads every zone's used width with the root font size at 16px and again at 22px and fails unless each one scaled by 22/16 - measured on its own build, the mark went 28 to 38.5, the item's footer rail 224 to 308, the aside 288 to 396 and the time rail 88 to 121. It prints both numbers in the failure, so the assertion cannot pass on a layout it never measured. Numbers and method: [../reference/measurements-site.md](../reference/measurements-site.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02).
-
-**The hairline behind the rail is what makes a column of times one axis.** It runs the height of the stream and each marker knocks a hole in it by painting its own ground - so the eye reads a single line with labels on it rather than a stack of separate numbers. That is the only place on the reading surface a rule runs vertically, and it earns it because the thing beside it is ordered. It is a column affordance, so below the small breakpoint it turns: the marker becomes a rule across the top of its group with the time under it.
+**A vertical rule is the one thing the reading surface does not draw.** The time rail had one - a hairline the height of the stream, with each marker knocking a hole in it by painting its own ground, so the eye read a single line with labels on it rather than a stack of separate numbers. It went with the rail on 2026-09-12, and no rule runs vertically on a reader-facing page now. A vertical rule earns its place only beside something ordered, and the stream's order is no longer a thing a reader reads down one column.
 
 ### A chart's column is set by what the chart was drawn at
 
@@ -516,7 +516,7 @@ Icons are **vector glyphs referenced by id** from a generated manifest, never in
 
 **Where a mark goes, and where it does not.** Chrome, controls, the console and the topic pills. Not beside a headline: a topic is a classification the pipeline actually made and may carry a mark, but "what kind of story is this" is an assertion no stage ever produced, and an icon that asserts it is inventing a fact on the page.
 
-**The reading stream draws exactly one glyph, and it is `clock-alert` on the day's time rail.** It marks the story whose printed clock is ours rather than the publisher's - the feed's own time was absent or rejected as impossible. That is the one case where a reader scanning a column of times would otherwise read a number from a different clock as a feed time, and since 2026-09-06 the mark is the only thing that says so: the rail prints digits, so the words that used to carry it are gone. Nothing else on the rail takes a mark: a story with no stamp at all prints nothing, and a merely old story needs none because the date in front of its clock says it. Ten of the 4,713 committed stories are in the marked state, measured 2026-09-02, which is why it needs a mark - a reader has no way to spot two in a thousand.
+**The reading stream draws exactly one glyph, and it is `clock-alert` beside a story's own time.** It marks the story whose printed clock is ours rather than the publisher's - the feed's own time was absent or rejected as impossible. That is the one case where a reader scanning times would otherwise read a number from a different clock as a feed time, and since 2026-09-06 the mark is the only thing that says so: the stamp is digits, so the words that used to carry it are gone. Nothing else beside a time takes a mark: a story with no stamp at all prints nothing, a merely old story needs none because the date in front of its clock says it, and a stamp the payload attributes to nobody takes none either - a mark there would claim a clock the run never recorded, and that is 3,733 stories. Eighteen of the 8,922 committed stories are in the marked state, re-measured 2026-09-12, which is why it needs a mark - a reader has no way to spot two in a thousand.
 
 **The set is closed and it is checked in both directions.** `frontend/tests/icons.spec.ts` fails on an icon nothing draws and on a reference to an id that does not exist, so a set cannot rot silently either way. The first of those is not theoretical: the set was cut from 29 glyphs to 15 on the day it landed, because the lens and event taxonomies exist in `config/taxonomy.json` and no surface renders them. Those thirteen marks wait for a surface rather than shipping against one that might arrive.
 

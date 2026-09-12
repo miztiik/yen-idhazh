@@ -44,35 +44,20 @@ export function clockUtc(timestamp: string): string {
 	return timestamp.slice(11, 16) + ' UTC';
 }
 
-/** Which shape the day's rail printed a story's time in.
+/** Which shape a story printed its own time in.
  *
  * Named so a check can assert the branch rather than pattern-matching the
  * string it produced. `first-seen` is the one that says the printed clock is
  * ours; every other form prints the stamp the day published and claims nothing
  * about whose clock wrote it.
  */
-export type RailForm = 'clock' | 'dated' | 'first-seen' | 'none';
+export type TimeForm = 'clock' | 'dated' | 'first-seen' | 'none';
 
-/** One story's time, as the rail says it. */
-export interface RailTime {
+/** One story's time, as the item prints it beside its heading. */
+export interface ItemTime {
 	/** What the reader reads. Digits and separators, never a word. */
 	label: string;
-	form: RailForm;
-	/** Stories sharing this draw one marker between them, on the first of them. */
-	group: string;
-}
-
-const MINUTES_A_DAY = 1440;
-
-/** Which slice of its own day a stamp falls in, at the configured coarseness.
- *
- * The date leads it, so two stamps at the same hour on different days never
- * share a group however coarse the slices are.
- */
-function slice(stamp: string, minutes: number): string {
-	const span = Math.min(Math.max(Math.round(minutes), 1), MINUTES_A_DAY);
-	const minute = Number(stamp.slice(11, 13)) * 60 + Number(stamp.slice(14, 16));
-	return `${stamp.slice(0, 10)}#${Math.floor(minute / span)}`;
+	form: TimeForm;
 }
 
 /** How many calendar days a stamp sits from the day being read. */
@@ -83,34 +68,33 @@ function dayOffset(stamp: string, onDate: string): number {
 	return Math.round((day - anchor) / 86_400_000);
 }
 
-/** A story's time, in the one vocabulary the day's rail uses: digits.
+/** A story's own time, in one vocabulary: digits.
  *
- * **No words, and no relative form.** The rail prints a clock, and a date in
+ * **No words, and no relative form.** The item prints a clock, and a date in
  * front of it when the stamp is not from the day being read. `Yesterday`,
- * `First seen` and `No time given` are gone - the column already says
- * `Times shown in UTC` once, above itself, so a reader who can read a clock can
- * read every mark on it without being told anything twice. A relative form
- * would be worse than a word: the page is prerendered once and read for the
- * next 24 hours with script optionally off, so `3 hours ago` baked in at 06:20
- * is wrong by 18:20 and wrong for ever on an archived day.
+ * `First seen` and `No time given` are gone - the day says `Times shown in UTC`
+ * once, above its stream, so a reader who can read a clock can read every stamp
+ * on the page without being told anything twice. A relative form would be worse
+ * than a word: the page is prerendered once and read for the next 24 hours with
+ * script optionally off, so `3 hours ago` baked in at 06:20 is wrong by 18:20
+ * and wrong for ever on an archived day.
  *
  * **The clock is still only ever attributed where the payload attributes it.**
  * `time_source: first_seen` means the feed's date was absent or rejected as
  * impossible and the stamp is our own first sight of the address. That keeps
- * its own form, and `TimeRail.svelte` draws a mark beside it - a mark rather
- * than a sentence, so the rail stays numbers.
+ * its own form, and `DigestItem.svelte` draws a mark beside it - a mark rather
+ * than a sentence, so the stamp stays numbers.
  *
- * A story with no stamp at all has no number to print and gets an empty label.
+ * A story with no stamp at all has no number to print and gets an empty label,
+ * which is the one case the item draws nothing for.
  */
-export function railTime(
+export function itemTime(
 	publishedAt: string | null | undefined,
 	timeSource: string | null | undefined,
-	onDate: string,
-	groupMinutes: number
-): RailTime {
-	if (!publishedAt) return { label: '', form: 'none', group: 'none' };
+	onDate: string
+): ItemTime {
+	if (!publishedAt) return { label: '', form: 'none' };
 	const clock = publishedAt.slice(11, 16);
-	const group = slice(publishedAt, groupMinutes);
 	const offset = dayOffset(publishedAt, onDate);
 	const date = publishedAt.slice(0, 10);
 	const sameYear = date.slice(0, 4) === onDate.slice(0, 4);
@@ -118,14 +102,8 @@ export function railTime(
 	// the year only when it is not the year on the page.
 	const stamp =
 		offset === 0 ? clock : `${sameYear ? date.slice(5) : date} ${clock}`;
-	if (timeSource === 'first_seen') {
-		return { label: stamp, form: 'first-seen', group: `first-seen:${group}` };
-	}
-	return {
-		label: stamp,
-		form: offset === 0 ? 'clock' : 'dated',
-		group: `${offset === 0 ? 'clock' : 'dated'}:${group}`
-	};
+	if (timeSource === 'first_seen') return { label: stamp, form: 'first-seen' };
+	return { label: stamp, form: offset === 0 ? 'clock' : 'dated' };
 }
 
 /** Initials of the first two meaningful words: "Ars Technica - AI" -> "AT". */
