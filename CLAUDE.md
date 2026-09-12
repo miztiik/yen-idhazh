@@ -164,18 +164,20 @@ The tiers, the depth limit, the elements every page carries, the three tests tha
 
 ## 6. Correction Levels
 
-| Level | Scope                                                         | Workflow                              |
-| :---: | ------------------------------------------------------------- | ------------------------------------- |
-|   0   | Comments, typos, log strings                                  | Direct fix                            |
-|   1   | 1 file, ~50 lines, isolated bug                               | Direct fix                            |
-|   2   | 1-2 files, explicit behavior change                           | Plan -> execute once scope is clear   |
-|   3   | 2-3 files, cross-cutting                                      | Plan -> phased execution              |
-|   4   | 4+ files, structural                                          | Propose breakdown first               |
+**The level is set by what the change can break, not by how many files it touches.** A one-line edit to a shape somebody already wrote outranks a four-file rename.
+
+| Level | What is true of the change                                              | Workflow                              |
+| :---: | ----------------------------------------------------------------------- | ------------------------------------- |
+|   0   | It cannot change behaviour - a comment, a typo, a log string            | Direct fix                            |
+|   1   | Behaviour changes, and a wrong version is obvious and local             | Direct fix                            |
+|   2   | Behaviour changes where something else already depends on it            | Fix, then check the dependants by name |
+|   3   | It crosses a boundary - two subsystems, or code and published data      | Plan the order, then execute          |
+|   4   | Reverting it later would cost more than writing it                      | Propose the breakdown first           |
 |   5   | Core design / a persisted contract / the model pick / the trust boundary | Design consultation only - pause work |
 
 **The level is chosen against the intent, not against the smallest change that would pass** (section 0d).
 
-When in doubt, choose the higher level.
+When in doubt, choose the higher level. Counting files is not the test: four files that cannot break a reader are a Level 1, and one line that changes a shape an earlier run already wrote is a Level 5.
 
 ## 7. Debug Logging
 
@@ -210,7 +212,7 @@ Commit messages describe the change. **No AI co-author / attribution tags.**
 The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
 - [ ] Tests added/updated at the tier appropriate to the surface (section 13). No mocks per Guardrail #7.
-- [ ] Full suite green **on the merge candidate**. CI is the authoritative arm and is six to fifteen times faster than a developer box; a local full-suite run before every push is optional, not required.
+- [ ] Full suite green **on the merge candidate, once**. CI is the authoritative arm and is six to fifteen times faster than a developer box; a local full-suite run before every push is optional, not required. A candidate that is already green does not re-run the suite because the trunk moved under it.
 - [ ] Applicable local lint, type checks and selected tests pass before the push, per [docs/how-to/run-the-gates.md](docs/how-to/run-the-gates.md). Use the shared test selector. Keep full-suite checks in CI unless local full coverage is explicitly needed. Verify a worker's unchanged test record instead of repeating its check; documentation-only closure needs no local application suite.
 - [ ] Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
