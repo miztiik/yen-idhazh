@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { failureLoad } from '../src/lib/charts/glance';
 import { failureSeries, type TelemetryRow } from '../src/lib/charts/series';
 import { readCsv } from '../src/lib/server/payload';
+import { telemetryRow } from './support/telemetry-row';
 
 /**
  * A failure rate, and the volume it was measured on, in one picture.
@@ -37,27 +38,17 @@ const MIN_ATTEMPTS_FOR_RATE = (
 const STAGES = ['fetch', 'extract', 'summarize'] as const;
 
 function row(date: string, id: string, stage: string, outcome: string, code = ''): TelemetryRow {
-	return {
+	return telemetryRow({
 		date,
 		run_id: `${date}-1`,
 		item_id: id,
-		vertical: 'ai',
 		source_id: 'fixture',
 		stage,
 		outcome,
 		code,
 		source_words: 400,
-		summary_words: 60,
-		source_words_before_cap: null,
-		fetch_ms: null,
-		extract_ms: null,
-		summarize_ms: null,
-		prefill_ms: null,
-		decode_ms: null,
-		input_tokens: null,
-		output_tokens: null,
-		cached_tokens: null
-	};
+		summary_words: 60
+	});
 }
 
 /** Every telemetry row the canary published, as the page reads them. */

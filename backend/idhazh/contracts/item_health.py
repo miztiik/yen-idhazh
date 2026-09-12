@@ -24,6 +24,7 @@ from idhazh.contracts.base import (
     Url,
     UrlKey,
 )
+from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 
 ItemHealthDetail = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 
@@ -157,6 +158,30 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T16:20",
+            change=(
+                "Added nullable model_calls, call_1_kind, call_2_kind and the five cost "
+                "cells for each call at the end of the row; the five flat cost cells are "
+                "now the item's total across the calls the row records."
+            ),
+            why=(
+                "This is the only ledger that carries every planned item, so it is where "
+                "a per-call cost has to land - and it kept one call's five numbers "
+                "without saying which. Folded, cached_tokens stops answering the "
+                "question it exists for: measured on the one two-call run, 0 and 1,493 "
+                "fold to 1,493 against 3,886 prompt tokens, so an item whose first call "
+                "read its whole prompt reads as an item that cached most of it. The kind "
+                "is carried beside each slot because the call structure moves under this "
+                "row rather than beside it, and without it the day a flag flips reads as "
+                "a regression. Appended at the end and nullable, so a row an earlier run "
+                "wrote still reads: those runs recorded a total and no split, and their "
+                "cells stay empty rather than carrying a number invented today. Where a "
+                "slot is filled the flat cells must equal the sum over the filled slots, "
+                "which is what keeps reconcile_prefill and every console rate correct "
+                "with no edit of their own."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-08T21:00",
             change=(
@@ -361,6 +386,40 @@ class ItemHealthRow(Contract):
             "elements_found."
         ),
     )
+    model_calls: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How many model calls this row records the cost of. Empty on every row "
+            "written before 2026-09-12, which recorded a total and no split. It is the "
+            "count of filled call slots below, so a reader of the narrower published "
+            "projection can tell what the remainder it derives covers."
+        ),
+    )
+    call_1_kind: CallKind | None = Field(
+        default=None,
+        description="Which call the stage made first. Empty where no split was recorded.",
+    )
+    call_1_prefill_ms: int | None = Field(default=None, ge=0)
+    call_1_decode_ms: int | None = Field(default=None, ge=0)
+    call_1_input_tokens: int | None = Field(default=None, ge=0)
+    call_1_output_tokens: int | None = Field(default=None, ge=0)
+    call_1_cached_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Prompt tokens the first call reused. Zero here is the cold-slot answer and "
+            "is a measurement; empty means no split was recorded at all."
+        ),
+    )
+    call_2_kind: CallKind | None = Field(
+        default=None, description="Which call the stage made second, or empty where it made one."
+    )
+    call_2_prefill_ms: int | None = Field(default=None, ge=0)
+    call_2_decode_ms: int | None = Field(default=None, ge=0)
+    call_2_input_tokens: int | None = Field(default=None, ge=0)
+    call_2_output_tokens: int | None = Field(default=None, ge=0)
+    call_2_cached_tokens: int | None = Field(default=None, ge=0)
 
     @property
     def counts_against_source(self) -> bool:
@@ -407,6 +466,47 @@ class ItemHealthRow(Contract):
             raise ValueError("an element count is recorded only where every span re-sliced")
         return self
 
+    @model_validator(mode="after")
+    def _a_recorded_call_is_recorded_whole(self) -> Self:
+        """A slot fills entirely or not at all, and the flat cells are their sum.
+
+        The sum rule is what lets every reader that pools these cells -
+        `reconcile_prefill`, `publish_day_metrics`, `publish_console_band` and the
+        console's own pooled rates - stay correct with no edit of its own the day a
+        second call starts being recorded. A row that recorded one call and left
+        the total at that call's numbers would send all four quietly wrong.
+        """
+        filled = 0
+        for slot in (1, 2):
+            cells = [getattr(self, f"call_{slot}_{field}") for field in COST_FIELDS]
+            kind = getattr(self, f"call_{slot}_kind")
+            if kind is None and all(cell is None for cell in cells):
+                continue
+            if kind is None or any(cell is None for cell in cells):
+                raise ValueError(f"call {slot} is recorded whole or not at all")
+            if getattr(self, f"call_{slot}_cached_tokens") > getattr(
+                self, f"call_{slot}_input_tokens"
+            ):
+                raise ValueError(f"call {slot} cached_tokens cannot exceed its input_tokens")
+            filled += 1
+        if filled == 0:
+            if self.model_calls is not None:
+                raise ValueError("model_calls is recorded only beside the calls it counts")
+            return self
+        if self.call_1_kind is None:
+            raise ValueError("a second call is recorded only after a first")
+        if self.model_calls != filled:
+            raise ValueError("model_calls must equal the number of recorded calls")
+        for field in COST_FIELDS:
+            total = sum(
+                getattr(self, f"call_{slot}_{field}")
+                for slot in (1, 2)
+                if getattr(self, f"call_{slot}_kind") is not None
+            )
+            if getattr(self, field) != total:
+                raise ValueError(f"{field} must equal the sum over the recorded calls")
+        return self
+
     @classmethod
     def csv_columns(cls) -> tuple[str, ...]:
         """One definition, so a writer and a reader cannot disagree about the row."""
@@ -441,6 +541,8 @@ class ItemHealthRow(Contract):
             "span_integrity",
             "elements_found",
             "element_class",
+            "model_calls",
+            *(f"call_{slot}_{field}" for slot in (1, 2) for field in ("kind", *COST_FIELDS)),
         )
         for name in optional_fields:
             if payload[name] == "":

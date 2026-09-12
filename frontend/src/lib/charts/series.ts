@@ -25,7 +25,14 @@ export const TELEMETRY_COLUMNS = [
 	'decode_ms',
 	'input_tokens',
 	'output_tokens',
-	'cached_tokens'
+	'cached_tokens',
+	'model_calls',
+	'call_1_kind',
+	'call_1_prefill_ms',
+	'call_1_decode_ms',
+	'call_1_input_tokens',
+	'call_1_output_tokens',
+	'call_1_cached_tokens'
 ] as const;
 
 export type TelemetryColumn = (typeof TELEMETRY_COLUMNS)[number];
@@ -57,9 +64,31 @@ export interface TelemetryRow {
 	decode_ms: number | null;
 	input_tokens: number | null;
 	output_tokens: number | null;
-	/** Tokens the server answered from its prompt cache. Zero means nothing was
-	 * cached; null means the server reported no figure at all. */
+	/** Tokens the server answered from its prompt cache, added over every call the
+	 * row records. Zero means nothing was cached; null means the server reported no
+	 * figure at all. Ask `call_1_cached_tokens` instead when the question is whether
+	 * the cache answered: a second call reusing the first call's prompt makes this
+	 * non-zero on every item. */
 	cached_tokens: number | null;
+	/** How many model calls the totals above add up over. Null on every row
+	 * published before 2026-09-12. It is what says whether the remainder - a total
+	 * minus its `call_1_` cell - is one more call or several. */
+	model_calls: number | null;
+	/** Which call ran first: `summarize`, `visual_plan`, `label` or
+	 * `summarize_and_plan`. Empty where no split was published. */
+	call_1_kind: string;
+	/** The first call's own share of each total. The second call is the remainder,
+	 * exactly: the writer refuses a row whose totals are not the sum of its calls.
+	 * `call_1_prefill_ms` is a duration and never a rate - a prompt token costs more
+	 * the deeper into the context it sits, so a per-call tok/s cannot be compared
+	 * with another call's. */
+	call_1_prefill_ms: number | null;
+	call_1_decode_ms: number | null;
+	call_1_input_tokens: number | null;
+	call_1_output_tokens: number | null;
+	/** Prompt tokens the first call reused. Zero is the cold-slot answer and is a
+	 * measurement; null means no split was published for this row. */
+	call_1_cached_tokens: number | null;
 }
 
 /** One mark on the compression plot, derived in the browser from a telemetry
@@ -535,7 +564,14 @@ export function parseTelemetryCsv(text: string): TelemetryRow[] {
 		decode_ms: numberCell(cells[15] ?? ''),
 		input_tokens: numberCell(cells[16] ?? ''),
 		output_tokens: numberCell(cells[17] ?? ''),
-		cached_tokens: numberCell(cells[18] ?? '')
+		cached_tokens: numberCell(cells[18] ?? ''),
+		model_calls: numberCell(cells[19] ?? ''),
+		call_1_kind: cells[20] ?? '',
+		call_1_prefill_ms: numberCell(cells[21] ?? ''),
+		call_1_decode_ms: numberCell(cells[22] ?? ''),
+		call_1_input_tokens: numberCell(cells[23] ?? ''),
+		call_1_output_tokens: numberCell(cells[24] ?? ''),
+		call_1_cached_tokens: numberCell(cells[25] ?? '')
 	}));
 }
 

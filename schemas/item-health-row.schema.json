@@ -1,5 +1,16 @@
 {
   "$defs": {
+    "CallKind": {
+      "description": "Which model call these numbers came from.\n\nFour members and not two, because the call structure moves under this\nvocabulary rather than beside it. `summarize` and `visual_plan` are what the\npipeline dispatches today, on two different models in two different jobs.\n`label` and `summarize_and_plan` are the pair `idhazh.classify.calls` builds,\nwhich plan 11 row #5b wires in behind a flag and row #6 then makes the only\npair. A reading that spans the flip needs all four names, or the step change\nin every series reads as a regression rather than as the design change it is.",
+      "enum": [
+        "summarize",
+        "visual_plan",
+        "label",
+        "summarize_and_plan"
+      ],
+      "title": "CallKind",
+      "type": "string"
+    },
     "ElementClass": {
       "description": "What one article's numbers say it could carry, and nothing else.\n\n**Three classes, and the count is the point.** The visual programme names\nfive, and only two of them are a question about numbers. `comparative` and\n`processual` are claims about how an article is written, so they have no\nquery yet and land with the diagram plan. Anything reporting per class before\nthen names three and says so, rather than letting a reader take three for the\nwhole taxonomy.\n\nThe query rests on the element table's Tier 1 fields alone - `kind`, `value`\nand `unit` - so it is byte-exact and carries no model judgement.\n`idhazh.elements.classify` is the query; this is its vocabulary, and\n`docs/architecture/extraction/elements.md` is the page that owns it.\n\n**It is declared here rather than beside the element contract**, with the\nthree other closed vocabularies this census row carries, because\n`contracts/element.py` sits above `contracts/article.py`, which sits above\nthis module. A label a census row persists has to be declared at or below the\nrow's own level, and this is the level.",
       "enum": [
@@ -66,6 +77,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added nullable model_calls, call_1_kind, call_2_kind and the five cost cells for each call at the end of the row; the five flat cost cells are now the item's total across the calls the row records.",
+      "version": "2026-09-12T16:20",
+      "why": "This is the only ledger that carries every planned item, so it is where a per-call cost has to land - and it kept one call's five numbers without saying which. Folded, cached_tokens stops answering the question it exists for: measured on the one two-call run, 0 and 1,493 fold to 1,493 against 3,886 prompt tokens, so an item whose first call read its whole prompt reads as an item that cached most of it. The kind is carried beside each slot because the call structure moves under this row rather than beside it, and without it the day a flag flips reads as a regression. Appended at the end and nullable, so a row an earlier run wrote still reads: those runs recorded a total and no split, and their cells stay empty rather than carrying a number invented today. Where a slot is filled the flat cells must equal the sum over the filled slots, which is what keeps reconcile_prefill and every console rate correct with no edit of their own."
+    },
+    {
       "change": "Added nullable span_integrity, elements_found and element_class at the end of the row.",
       "version": "2026-09-08T21:00",
       "why": "The visual planner draws nothing on most items and nothing said whether the article had anything to draw, so a fall in published charts read the same whether the planner stopped choosing them or the extractor stopped finding numbers - and those have different fixes. The class is a query over the element table's Tier 1 fields alone, so it is byte-exact and carries no model judgement. It lands here rather than beside the visual decision because two writers append this ledger and the earlier one runs in the work job, hours before a plan exists: a cell only assemble could fill would be dropped for every item a shard had already recorded. Counts and a class label, never article text - span_excerpt stays inside the process that cut it (CLAUDE.md section 0a). Appended at the end and nullable, so a row an earlier run wrote still reads: those runs measured nothing here and their cells stay empty."
@@ -125,6 +141,161 @@
       ],
       "default": null,
       "title": "Cached Tokens"
+    },
+    "call_1_cached_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prompt tokens the first call reused. Zero here is the cold-slot answer and is a measurement; empty means no split was recorded at all.",
+      "title": "Call 1 Cached Tokens"
+    },
+    "call_1_decode_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 1 Decode Ms"
+    },
+    "call_1_input_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 1 Input Tokens"
+    },
+    "call_1_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which call the stage made first. Empty where no split was recorded."
+    },
+    "call_1_output_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 1 Output Tokens"
+    },
+    "call_1_prefill_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 1 Prefill Ms"
+    },
+    "call_2_cached_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 2 Cached Tokens"
+    },
+    "call_2_decode_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 2 Decode Ms"
+    },
+    "call_2_input_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 2 Input Tokens"
+    },
+    "call_2_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CallKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which call the stage made second, or empty where it made one."
+    },
+    "call_2_output_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 2 Output Tokens"
+    },
+    "call_2_prefill_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Call 2 Prefill Ms"
     },
     "canonical_url": {
       "maxLength": 2048,
@@ -259,6 +430,20 @@
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
       "title": "Item Id",
       "type": "string"
+    },
+    "model_calls": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many model calls this row records the cost of. Empty on every row written before 2026-09-12, which recorded a total and no split. It is the count of filled call slots below, so a reader of the narrower published projection can tell what the remainder it derives covers.",
+      "title": "Model Calls"
     },
     "outcome": {
       "$ref": "#/$defs/ItemOutcome"
@@ -401,7 +586,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-08T21:00",
+      "default": "2026-09-12T16:20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -425,5 +610,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-08T21:00"
+  "version": "2026-09-12T16:20"
 }

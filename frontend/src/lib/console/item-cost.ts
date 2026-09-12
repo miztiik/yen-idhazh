@@ -74,6 +74,16 @@ export interface ItemCost {
 	/** Items whose prompt was read whole. Zero reuse is a measurement, so these
 	 * are counted rather than left out. */
 	readWhole: number;
+	/** Items whose cache figures above were read from the first call rather than
+	 * from the item total. Zero on a window published before 2026-09-12.
+	 *
+	 * The four figures above are per-item cache facts, not rates, and the item
+	 * total stopped answering them the moment an item took more than one call: a
+	 * second call reuses the first call's prompt, so `readWhole` over the totals
+	 * counts nothing for ever. Every rate on this section is still pooled over
+	 * the totals, which is correct - a sum over both calls is the item's cost.
+	 */
+	perCall: number;
 	/** Milliseconds one prompt token costs to read. Summed and then divided,
 	 * never a mean of per-item rates: averaging ratios weighs a release note
 	 * like a feature. */
@@ -147,6 +157,7 @@ export function itemCost(rows: readonly Record<string, string>[], window: CostWi
 	let readTokens = 0;
 	let reusedTokens = 0;
 	let readWhole = 0;
+	let perCall = 0;
 	// The two rates are pooled over the items that carry both halves of them, so
 	// a millisecond total and a token total always describe the same items.
 	let readPairMs = 0;
@@ -160,6 +171,16 @@ export function itemCost(rows: readonly Record<string, string>[], window: CostWi
 		const input = cell(row, 'input_tokens');
 		const output = cell(row, 'output_tokens');
 		const cached = cell(row, 'cached_tokens');
+		// Whether the cache answered is a question about one call. Over an item that
+		// took two, the total says yes on every item, because the second call reuses
+		// the first call's prompt - so the four figures below read the first call
+		// wherever the projection publishes it, and the totals only where it does not.
+		const firstCached = cell(row, 'call_1_cached_tokens');
+		const firstInput = cell(row, 'call_1_input_tokens');
+		const split = firstCached !== null && firstInput !== null;
+		if (split) perCall += 1;
+		const cacheOf = split ? firstCached : cached;
+		const promptOf = split ? firstInput : input;
 
 		if (prefill !== null) readMs.push(prefill);
 		if (decode !== null) writeMs.push(decode);
@@ -177,9 +198,11 @@ export function itemCost(rows: readonly Record<string, string>[], window: CostWi
 			readTokens += read;
 			if (cached !== null) {
 				reusedTokens += cached;
-				reused.push(cached);
-				if (cached === 0) readWhole += 1;
-				const share = sharePct(cached, input);
+			}
+			if (cacheOf !== null && promptOf !== null) {
+				reused.push(cacheOf);
+				if (cacheOf === 0) readWhole += 1;
+				const share = sharePct(cacheOf, promptOf);
 				if (share !== null) itemShares.push(share);
 			}
 			if (prefill !== null) {
@@ -218,6 +241,7 @@ export function itemCost(rows: readonly Record<string, string>[], window: CostWi
 		reusedMedian: middle(reused),
 		reusedWidest: reused.length === 0 ? null : Math.max(...reused),
 		readWhole,
+		perCall,
 		msPerReadToken,
 		msPerWrittenToken,
 		writeCostRatio:
