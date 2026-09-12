@@ -256,7 +256,7 @@ Three details in that carry weight:
 
 - **Authority is the best tier that carried the story, not the average.** One institution saying it makes it true however many aggregators repeated it, and averaging would let volume dilute provenance.
 - **Recency is a bonus, not a filter.** It decays by half every `recency_half_life_hours` and never removes anything from the pool. Why that is a decay rather than a cutoff is [freshness.md](freshness.md).
-- **Ties break on the canonical address.** Without a deterministic tie-break, two runs over identical feeds can publish different orders, and the order is part of what a shared link shows.
+- **Ties break on the canonical address.** Without a deterministic tie-break, two runs over identical feeds can publish different orders, and a re-run over the same feeds has to produce the same plan.
 
 The consequence worth stating plainly: the planning step loads no weights, finishes in seconds, and produces the identical list on every re-run. That is what makes the expensive work shardable afterwards and a re-run cheap.
 

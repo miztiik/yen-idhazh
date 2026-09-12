@@ -1203,6 +1203,65 @@ def test_the_stamp_records_the_run_and_never_a_placeholder(
     assert stamped.first_seen_run == run_plan.run_id
 
 
+# --- The window between the day write and the published ledger ----------------
+
+
+def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """`stage_assemble` writes `digest.json` and appends the published ledger tens
+    of lines later, so a run that dies in that gap leaves a committed day the
+    ledger never heard of. The plan-time guard reads that ledger, so the next run
+    offers every one of those addresses again - and `build_day`'s `already` set is
+    what makes the replay cost nothing.
+
+    That is the reason the two docstrings give since 2026-09-12. The reason they
+    used to give was link stability, and it is retired: both render paths re-sort
+    the day, so the published order reaches no reader.
+
+    The crash is the on-disk state a crash leaves rather than a patched function:
+    the day file stays and the day's ledger file is removed. Driven from the
+    committed run-plan fixture and never from the archive (CLAUDE.md section 13).
+    """
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    items_dir = tmp_path / "run" / run_plan.date / "items"
+    state = tmp_path / "state"
+
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+    score_one_item(items_dir, run_plan)
+    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+
+    day_path = assemble.day_dir(cli.PUBLIC_ROOT, run_plan.date) / "digest.json"
+    published = DigestDay.from_json(read_text(day_path))
+    assert published.items, "run 1 published nothing, so there is no window to test"
+
+    ledger.published_path(state, run_plan.date).unlink()
+    window = settings.app.collect.published_window_days
+    assert not ledger.load_published(state, today=run_plan.date, within_days=window), (
+        "the guard still holds these addresses, so this is not the crash the window leaves"
+    )
+
+    cli.stage_assemble(
+        run_plan.model_copy(update={"run_id": f"{run_plan.date}-2"}),
+        settings=settings,
+        commit_sha="a" * 40,
+        runner="fixture",
+    )
+
+    replayed = DigestDay.from_json(read_text(day_path))
+    assert [item.item_id for item in replayed.items] == [item.item_id for item in published.items]
+    assert {item.introduced_by_run for item in replayed.items} == {1}
+    assert cli.already_published(run_plan.date) == {item.item_id for item in replayed.items}
+
+
 class SteppingClock:
     """A monotonic clock that advances a fixed number of seconds on every read.
 
