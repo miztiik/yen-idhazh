@@ -29,7 +29,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The rules, and which rule governs every file this project writes | - | A | PENDING | - | - | - |
+| 1 | The rules, and which rule governs every file this project writes | - | A | IN-FLIGHT | p13-1 | - | worker |
 | 2 | The window takes a value, and nothing is deleted yet | 1 | B | PENDING | - | - | - |
 | 3 | The fuse comes out, and one run is watched | 2 | C | PENDING | - | - | - |
 
