@@ -17,7 +17,7 @@ whole day's census afterwards.
 
 The row carries:
 
-`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap, shard`
+`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap, shard, span_integrity, elements_found, element_class, model_calls, call_1_kind, call_1_prefill_ms, call_1_decode_ms, call_1_input_tokens, call_1_output_tokens, call_1_cached_tokens, call_2_kind, call_2_prefill_ms, call_2_decode_ms, call_2_input_tokens, call_2_output_tokens, call_2_cached_tokens`
 
 The file is append-only inside its own month. It is not kept for ever: a month
 older than `observability.item_health_full_grain_months` (14) is folded to one
@@ -64,7 +64,7 @@ endings, `utf-8`, no quoting beyond what `csv` needs.
 `from_csv_row` reads `""` back as `None`. There is no sentinel number and no
 `NULL` literal, because both of those get averaged by accident one day.
 
-The 26 columns, in file order:
+The 42 columns, in file order:
 
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
@@ -87,13 +87,32 @@ The 26 columns, in file order:
 | `fetch_ms` | int | once fetch ran | wall-clock for the HTTP read |
 | `extract_ms` | int | once extract ran | wall-clock for text extraction |
 | `summarize_ms` | int | once the model replied | wall-clock for the whole model request |
-| `prefill_ms` | int | when the runtime reports it | the model reading the prompt |
-| `decode_ms` | int | when the runtime reports it | the model writing the reply |
-| `input_tokens` | int | when the runtime reports it | prompt tokens, cached ones included |
-| `output_tokens` | int | when the runtime reports it | tokens written |
-| `cached_tokens` | int | when the runtime reports it | prompt tokens reused instead of read |
+| `prefill_ms` | int | when the runtime reports it | the model reading the prompt, added over every call below |
+| `decode_ms` | int | when the runtime reports it | the model writing the reply, added over every call below |
+| `input_tokens` | int | when the runtime reports it | prompt tokens, cached ones included, added over every call below |
+| `output_tokens` | int | when the runtime reports it | tokens written, added over every call below |
+| `cached_tokens` | int | when the runtime reports it | prompt tokens reused instead of read, added over every call below |
 | `source_words_before_cap` | int | once extract ran, from 2026-08-28 | how long the body was before the cap cut it |
 | `shard` | int | a worker wrote the row, from 2026-08-30 | which of the run's workers produced it |
+| `span_integrity` | bool | the item carried text, from 2026-09-08 | did every element span cut its own characters out of the article |
+| `elements_found` | int | `span_integrity` is true, from 2026-09-08 | Tier 1 elements the candidate pass kept |
+| `element_class` | enum | `span_integrity` is true, from 2026-09-08 | `chartable`, `narrative` or `unclassified` |
+| `model_calls` | int | a split was recorded, from 2026-09-12 | how many calls the five cells above add up over |
+| `call_1_kind` | enum | a split was recorded, from 2026-09-12 | `summarize`, `visual_plan`, `label` or `summarize_and_plan` |
+| `call_1_*` | int | a split was recorded, from 2026-09-12 | the first call's own five, same names and same order |
+| `call_2_kind` | enum | a second call ran, from 2026-09-12 | which call ran second |
+| `call_2_*` | int | a second call ran, from 2026-09-12 | the second call's own five |
+
+**A call slot fills whole or not at all, and the five flat cells are their sum.**
+The contract refuses a row that records one call and leaves the totals at that
+call's numbers, which is what lets every reader that pools these cells stay
+pooled and stay correct. Read the cache per call rather than off the total: a
+second call replays the first call's prompt and is answered for it, so
+`cached_tokens` over the item is non-zero on every item that took two calls and
+says nothing about either
+([the split](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum)).
+**The small model's visual-planner call is not one of these**: it runs in the
+`visuals` job, hours after this row was committed, so no cell here can reach it.
 
 **The row is a census, not an error log.** Successes and failures share one file
 because a rate needs its denominator beside its numerator.

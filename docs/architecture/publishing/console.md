@@ -1095,6 +1095,17 @@ the per-item share has a middle of **0.518**, a 5th percentile of **0.000** and 
 95th of **0.820** - and **667 of 6,104** items reused nothing at all. The
 decision itself stands: the share is drawn, and it is named in words beside it.
 
+**From 2026-09-12 these four figures are about the FIRST model call, not about
+the item.** An item read by two calls always reuses something, because the second
+call replays the first call's prompt and is answered for it - so "read whole with
+nothing held over" taken off the item total would count nothing for ever, a live
+figure becoming a constant with no code change. Where the projection publishes a
+split, the four read `call_1_*`; where it does not, they read the totals as they
+always did, and `perCall` says how many rows of the window were which. Every rate
+on this section still pools the totals, which is correct: a sum over both calls is
+what the item cost
+([the split](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum)).
+
 ### Every denominator is its own, because three of them differ
 
 An item that failed before the model saw it has no clock and no token count; one

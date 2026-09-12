@@ -50,6 +50,7 @@ from idhazh.contracts.app_config import (
 )
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_output_digest
+from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import restates_summary, verbatim_run
@@ -676,6 +677,17 @@ def to_summary(
             )
 
     title = _publishable_title(draft.title, ask)
+    # The stage makes one call today, so the item total is that call's numbers -
+    # derived rather than transcribed, so a second call cannot be recorded in a
+    # slot and left out of the total (`Summary` refuses that anyway).
+    cost = CallCost(
+        kind=CallKind.SUMMARIZE,
+        prefill_ms=completion.prefill_ms,
+        decode_ms=completion.decode_ms,
+        input_tokens=completion.prompt_tokens,
+        output_tokens=completion.completion_tokens,
+        cached_tokens=min(completion.cached_tokens, completion.prompt_tokens),
+    )
     return Summary(
         version=Summary.schema_version(),
         item_id=article.item_id,
@@ -689,11 +701,12 @@ def to_summary(
         attempt=attempt,
         source_truncated=article.truncated,
         length_action=verdict.action,
-        input_tokens=completion.prompt_tokens,
-        output_tokens=completion.completion_tokens,
-        prefill_ms=completion.prefill_ms,
-        decode_ms=completion.decode_ms,
-        cached_tokens=min(completion.cached_tokens, completion.prompt_tokens),
+        call_1=cost,
+        input_tokens=cost.input_tokens,
+        output_tokens=cost.output_tokens,
+        prefill_ms=cost.prefill_ms,
+        decode_ms=cost.decode_ms,
+        cached_tokens=cost.cached_tokens,
         duration_ms=duration_ms,
         generated_at=generated_at,
         status=SummaryStatus.OK,

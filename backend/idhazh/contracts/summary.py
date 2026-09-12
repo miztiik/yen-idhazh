@@ -24,6 +24,7 @@ from idhazh.contracts.base import (
     UrlKey,
     derive_output_digest,
 )
+from idhazh.contracts.call_cost import COST_FIELDS, CallCost
 from idhazh.contracts.item_health import FAILURE_CODE_STAGES, FailureCode, ItemStage
 
 
@@ -52,6 +53,28 @@ class Summary(Contract):
 
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-12T16:20",
+            change=(
+                "Added optional call_1 and call_2, each a CallCost; the five flat cost "
+                "fields are now the item's total across the calls recorded there."
+            ),
+            why=(
+                "An item is read by more than one model call and this payload kept one "
+                "call's five numbers without saying which. Folded, they stop being "
+                "readable: measured on the one two-call run, cached_tokens of 0 and "
+                "1,493 fold to 1,493 against 3,886 prompt tokens - 38 percent, which is "
+                "neither call's 0 nor its 62. Both slots default to null, so a payload "
+                "an earlier run wrote still validates and its flat five stand alone. "
+                "Where a slot is filled the flat five must equal the sum over the "
+                "filled slots, which is what keeps every aggregate that reads them - "
+                "publish_day_metrics, publish_console_band, reconcile_prefill - correct "
+                "the day a second call starts being recorded, with no edit of their "
+                "own. No read-side migration is owed: this payload is written under "
+                "backend/var/, which is gitignored and read only inside the run that "
+                "wrote it."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-10T00:30",
             change="length_action added, optional and defaulting to null.",
@@ -206,8 +229,12 @@ class Summary(Contract):
             "extraction rather than a summary."
         ),
     )
-    input_tokens: int = Field(default=0, ge=0)
-    output_tokens: int = Field(default=0, ge=0)
+    input_tokens: int = Field(
+        default=0, ge=0, description="Prompt tokens, added over every call recorded below."
+    )
+    output_tokens: int = Field(
+        default=0, ge=0, description="Tokens written, added over every call recorded below."
+    )
     duration_ms: int = Field(
         default=0, ge=0, description="Fetch plus extract plus summarize. The three below sum to it."
     )
@@ -216,25 +243,50 @@ class Summary(Contract):
     summarize_ms: int = Field(
         default=0,
         ge=0,
-        description="The model. The only one of the three that a model swap moves.",
+        description=(
+            "The model, on the stage clock. The only one of the three that a model swap "
+            "moves, and the one cost below that stays a stage figure: it is the wall "
+            "clock around every call the stage made, including the HTTP overhead no "
+            "call reports."
+        ),
     )
     prefill_ms: int = Field(
         default=0,
         ge=0,
-        description="Reading the prompt. Scales with article length, minus what the cache kept.",
+        description=(
+            "Reading the prompt, added over every call recorded below. Scales with "
+            "article length, minus what the cache kept."
+        ),
     )
     decode_ms: int = Field(
         default=0,
         ge=0,
-        description="Writing the summary. One token at a time, so about half the prefill rate.",
+        description=(
+            "Writing the reply, added over every call recorded below. One token at a "
+            "time, so about half the prefill rate."
+        ),
     )
     cached_tokens: int = Field(
         default=0,
         ge=0,
         description=(
-            "Prompt tokens the runtime reused instead of reading. "
-            "input_tokens minus this is what prefill_ms actually paid for."
+            "Prompt tokens the runtime reused instead of reading, added over every call "
+            "recorded below. input_tokens minus this is what prefill_ms actually paid "
+            "for. Read it per call rather than here when the question is whether the "
+            "cache answered: a second call that reuses the first call's prompt makes "
+            "this figure non-zero on every item."
         ),
+    )
+    call_1: CallCost | None = Field(
+        default=None,
+        description=(
+            "What the stage's first model call cost, and which call it was. Null on a "
+            "payload written before 2026-09-12, which recorded a total and no split."
+        ),
+    )
+    call_2: CallCost | None = Field(
+        default=None,
+        description="The same for the second call, or null where the stage made only one.",
     )
 
     generated_at: Timestamp
@@ -260,6 +312,23 @@ class Summary(Contract):
         # Read straight off the runtime, and the console divides by the remainder.
         if self.cached_tokens > self.input_tokens:
             raise ValueError("cached_tokens cannot exceed input_tokens")
+        return self
+
+    @model_validator(mode="after")
+    def _the_flat_cost_is_the_sum_of_the_calls(self) -> Self:
+        """Enforced rather than described, because every aggregate depends on it.
+
+        A writer that records one call and forgets the other leaves a total that
+        reads as the item's and is one call's, which is the defect the split
+        exists to prevent. It fires here, at the moment the payload is built.
+        """
+        calls = [call for call in (self.call_1, self.call_2) if call is not None]
+        if not calls:
+            return self
+        for field in COST_FIELDS:
+            total = sum(getattr(call, field) for call in calls)
+            if getattr(self, field) != total:
+                raise ValueError(f"{field} must equal the sum over the recorded calls")
         return self
 
     @model_validator(mode="after")

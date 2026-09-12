@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from idhazh import cli, config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -540,6 +541,53 @@ def test_an_article_that_never_measured_the_full_body_writes_an_empty_cell() -> 
 
     assert row.source_words_before_cap is None
     assert row.csv_row()["source_words_before_cap"] == ""
+
+
+def test_the_census_row_says_which_call_each_number_came_from() -> None:
+    """The summary's slots reach the ledger, and the ledger stays their sum.
+
+    This is the only ledger carrying every planned item, so it is where a
+    per-call cost has to land for anything later to read it. The translation is
+    one function - a CSV line cannot nest - and the fact worth pinning is that
+    the two cache figures survive it apart.
+    """
+    calls = (
+        CallCost(
+            kind=CallKind.LABEL,
+            prefill_ms=214122,
+            decode_ms=88795,
+            input_tokens=1497,
+            output_tokens=205,
+            cached_tokens=0,
+        ),
+        CallCost(
+            kind=CallKind.SUMMARIZE_AND_PLAN,
+            prefill_ms=186750,
+            decode_ms=292626,
+            input_tokens=2389,
+            output_tokens=567,
+            cached_tokens=1493,
+        ),
+    )
+    totals = {
+        field: sum(getattr(call, field) for call in calls)
+        for field in ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens")
+    }
+    split = summary().model_copy(update={"call_1": calls[0], "call_2": calls[1], **totals})
+
+    row = telemetry.classify_item(
+        planned=item(), date=plan().date, run_id="2026-08-21-1", article=article(), summary=split
+    )
+
+    assert row.model_calls == 2
+    assert (row.call_1_kind, row.call_2_kind) == (CallKind.LABEL, CallKind.SUMMARIZE_AND_PLAN)
+    assert row.call_1_cached_tokens == 0, "the first call read its prompt cold"
+    assert row.call_2_cached_tokens == 1493
+    assert row.cached_tokens == 1493, "the folded cell is their sum and says neither"
+
+    cells = row.csv_row()
+    assert cells["call_1_kind"] == "label"
+    assert ItemHealthRow.from_csv_row(cells) == row
 
 
 def test_a_row_written_before_the_pre_cap_column_reads_as_unmeasured() -> None:

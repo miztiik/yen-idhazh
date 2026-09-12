@@ -31,7 +31,16 @@ rewrites is a file with every row twice.
 
 The published columns are exactly:
 
-`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens`
+`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, model_calls, call_1_kind, call_1_prefill_ms, call_1_decode_ms, call_1_input_tokens, call_1_output_tokens, call_1_cached_tokens`
+
+The last six are the **first** model call's own share of the five cost cells
+before them, and the kind of call it was. The second call is the remainder - the
+total minus the first - which is exact because the contract refuses a row whose
+totals are not the sum of its calls, and `model_calls` says how many calls that
+remainder covers. Both calls spelled out would have cost 72.9 and 80.1 percent
+more gzipped on the two committed shards against 35.3 and 40.8 for these,
+measured 2026-09-12 with every timed row populated
+([the split](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum)).
 
 These source-ledger columns never cross to the browser:
 
