@@ -1,19 +1,21 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * The console is three routes, and this file is why it is routes and not tabs.
+ * The console is five routes, and this file is why it is routes and not tabs.
  *
  * A tab strip that switches with script fails every assertion here: with
  * JavaScript off it shows one panel set and no way to reach the others, and
- * every panel it hides still ships inside the one document. Three prerendered
+ * every panel it hides still ships inside the one document. Five prerendered
  * routes with real anchors pass.
  *
- * Three things this file protects that a screenshot cannot. The labels are the
+ * Four things this file protects that a screenshot cannot. The labels are the
  * words the owner chose, so a paraphrase fails. The ids and the paths under
  * them did NOT move when two of the labels changed on 2026-08-31, which is what
- * makes that a rename and not a route change. And the strip may never take the
+ * makes that a rename and not a route change. The strip may never take the
  * health ramp: green, amber and red on a label would say a route is failing,
- * and a route is a noun.
+ * and a route is a noun. And since 2026-09-12 the strip has to FIT - five tabs
+ * on no more than two rows at 1440 and three at 360 and 320, with no box
+ * overlapping another.
  */
 
 /** The owner's words, and the paths they sit on. Typed out on purpose: this is
@@ -24,11 +26,25 @@ import { expect, test, type Page } from '@playwright/test';
  * Every panel on the middle route is about a published summary and none is
  * about the model as an artefact; `Hardware` is the plainest word for a
  * processor, a memory and a clock, and unlike `Runner` it is not a term the
- * build system uses on itself (CLAUDE.md section 0b). */
+ * build system uses on itself (CLAUDE.md section 0b).
+ *
+ * `Judgement` and `Voices` joined on 2026-09-12, opened empty by the row that
+ * added them. `Judgement` is singular because the other three name a place and
+ * this one names an act; `Voices` is the owner's word over Susan's `Sources`.
+ */
 const ROUTES = [
 	{ id: 'pipelines', label: 'Pipelines', path: '/console/' },
 	{ id: 'model', label: 'Summaries', path: '/console/model/' },
-	{ id: 'machine', label: 'Hardware', path: '/console/machine/' }
+	{ id: 'machine', label: 'Hardware', path: '/console/machine/' },
+	{ id: 'judgement', label: 'Judgement', path: '/console/judgement/' },
+	{ id: 'voices', label: 'Voices', path: '/console/voices/' }
+] as const;
+
+/** The two routes opened with no panel of their own, and the row that fills
+ * each. A strip that names a page nobody can reach is a strip that lies. */
+const EMPTY_ROUTES = [
+	{ id: 'judgement', path: '/console/judgement/', rows: ['row #12', 'row #15'] },
+	{ id: 'voices', path: '/console/voices/', rows: ['row #13'] }
 ] as const;
 
 /** The three verdict colours, as the tokens a stylesheet would have to name. */
@@ -47,11 +63,11 @@ async function tabs(page: Page) {
 
 test.describe('the strip', () => {
 	for (const route of ROUTES) {
-		test(`${route.path} draws the same three labels and marks its own`, async ({ page }) => {
+		test(`${route.path} draws the same five labels and marks its own`, async ({ page }) => {
 			await page.goto(route.path);
 
 			const drawn = await tabs(page);
-			expect(drawn.map((tab) => tab.id), 'the strip does not name the three routes in order').toEqual(
+			expect(drawn.map((tab) => tab.id), 'the strip does not name the five routes in order').toEqual(
 				ROUTES.map((entry) => entry.id)
 			);
 			// Verbatim. A label that paraphrases the owner's word fails here.
@@ -75,7 +91,7 @@ test.describe('the strip', () => {
 		expect(
 			drawn.map((tab) => tab.id),
 			'a tab id moved, which is an address and not a label'
-		).toEqual(['pipelines', 'model', 'machine']);
+		).toEqual(['pipelines', 'model', 'machine', 'judgement', 'voices']);
 
 		for (const [index, entry] of ROUTES.entries()) {
 			expect(drawn[index].href, `${entry.id} no longer points at its own route`).toContain(
@@ -102,7 +118,7 @@ test.describe('the strip', () => {
 				line: (node.querySelector('.tab-line')?.textContent ?? '').trim()
 			}))
 		);
-		expect(drawn).toHaveLength(3);
+		expect(drawn).toHaveLength(5);
 		for (const tab of drawn) {
 			expect(tab.line.length, `${tab.id} has no description under its label`).toBeGreaterThan(20);
 			expect(tab.title, `${tab.id}'s tooltip is not its description`).toBe(tab.line);
@@ -166,6 +182,131 @@ test.describe('the strip', () => {
 	});
 });
 
+/** Every tab's box in page coordinates, plus the width the page really has.
+ *
+ * `window.innerWidth` is read inside the page and returned beside the boxes on
+ * purpose: a viewport asked for and a viewport rendered are two numbers, and a
+ * geometry figure quoted without the second one cannot be checked.
+ */
+async function stripBoxes(page: Page) {
+	return page.locator('[data-console-nav] [data-console-tab]').evaluateAll((links) => ({
+		innerWidth: window.innerWidth,
+		clientWidth: document.documentElement.clientWidth,
+		boxes: links.map((node) => {
+			const box = node.getBoundingClientRect();
+			return {
+				id: node.getAttribute('data-console-tab') ?? '',
+				top: Math.round(box.top + window.scrollY),
+				left: Math.round(box.left),
+				right: Math.round(box.right),
+				bottom: Math.round(box.bottom + window.scrollY)
+			};
+		})
+	}));
+}
+
+/** Widths and the rows five tabs may stand on at each.
+ *
+ * 1440 is where the console is read; 360 is the narrowest phone the rest of
+ * this suite drives; 320 is the narrowest screen still in use and is here
+ * because the basis that cleared 360 still stacked five deep there - the same
+ * defect one screen narrower, found by measuring rather than by reading the
+ * rule. Two rows and three rows, because the strip sits directly above the band
+ * and the band is the first thing an operator reads: five rows of chrome would
+ * push the verdict off a phone's first screen.
+ */
+const STRIP_WIDTHS = [
+	{ width: 1440, height: 1000, rows: 2 },
+	{ width: 360, height: 780, rows: 3 },
+	{ width: 320, height: 780, rows: 3 }
+] as const;
+
+for (const view of STRIP_WIDTHS) {
+	test(`THE ORACLE: five tabs stand on at most ${view.rows} rows at ${view.width}`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: view.width, height: view.height });
+		await page.goto('/console/');
+
+		const { innerWidth, clientWidth, boxes } = await stripBoxes(page);
+		expect(boxes, `only ${boxes.length} tabs are drawn, so this proves nothing`).toHaveLength(5);
+
+		// A row is a distinct top. Read off the built page rather than off the
+		// rule, so a basis, a gap or a font change that breaks it fails here.
+		const rows = new Set(boxes.map((box) => box.top));
+		// Printed on every run, because a geometry figure without the width the
+		// page really had is an assertion rather than a measurement (Rule #10),
+		// and a passing oracle otherwise says nothing about the margin it passed by.
+		console.log(
+			`[strip] asked ${view.width} -> innerWidth ${innerWidth}, clientWidth ${clientWidth}, ` +
+				`${rows.size} of ${view.rows} rows, boxes ` +
+				boxes.map((box) => `${box.id} ${box.left}-${box.right} @${box.top}`).join(' | ')
+		);
+		expect(
+			rows.size,
+			`five tabs stand on ${rows.size} rows at innerWidth ${innerWidth} ` +
+				`(clientWidth ${clientWidth}), over the ${view.rows} this width allows: ` +
+				boxes.map((box) => `${box.id}@${box.left}-${box.right}x${box.top}`).join(' ')
+		).toBeLessThanOrEqual(view.rows);
+
+		// And no box sits on another. Flex cannot normally produce one, so this
+		// catches the thing that can: a negative margin, an absolute position, or
+		// a min-width that makes a slot wider than the row it is in.
+		for (const [index, box] of boxes.entries()) {
+			for (const other of boxes.slice(index + 1)) {
+				const overlaps =
+					box.left < other.right &&
+					other.left < box.right &&
+					box.top < other.bottom &&
+					other.top < box.bottom;
+				expect(
+					overlaps,
+					`${box.id} and ${other.id} overlap at innerWidth ${innerWidth}: ` +
+						`${box.left}-${box.right}x${box.top}-${box.bottom} against ` +
+						`${other.left}-${other.right}x${other.top}-${other.bottom}`
+				).toBe(false);
+			}
+		}
+	});
+}
+
+test.describe('the two routes opened empty', () => {
+	for (const route of EMPTY_ROUTES) {
+		test(`${route.path} answers, names itself and names the row that fills it`, async ({
+			page
+		}) => {
+			// A tab in a strip whose page does not exist is a strip that lies, and
+			// rows #12 and #13 land later. So the absence is named rather than
+			// blank, and it names where the specification is - which is the only
+			// part of it that stays true as those rows are written.
+			const errors: string[] = [];
+			page.on('console', (message) => {
+				if (message.type() === 'error') errors.push(message.text());
+			});
+			page.on('pageerror', (error) => errors.push(String(error)));
+
+			const answered = await page.goto(route.path);
+			expect(answered?.status(), `${route.path} did not answer`).toBe(200);
+
+			const heading = page.locator('[data-surface="operator"] h2');
+			await expect(heading, `${route.path} carries no heading of its own`).toHaveCount(1);
+			expect((await heading.innerText()).trim().length).toBeGreaterThan(10);
+
+			const empty = page.locator(`[data-console-empty="${route.id}"]`);
+			await expect(empty, `${route.path} prints no named absence`).toHaveCount(1);
+			const said = (await empty.innerText()).replace(/\s+/g, ' ').trim();
+			expect(said.length, `${route.path} left its absence empty`).toBeGreaterThan(80);
+			for (const row of route.rows) {
+				expect(said, `${route.path} does not say which row fills it`).toContain(row);
+			}
+
+			// It fetches nothing, so it has no window control to govern nothing.
+			await expect(page.locator('[data-window-control]')).toHaveCount(0);
+			expect(errors, `${route.path} logged an error`).toEqual([]);
+		});
+	}
+});
+
 test.describe('with no script at all', () => {
 	test('each route is its own complete document and every link resolves', async ({ browser }) => {
 		const context = await browser.newContext({ javaScriptEnabled: false });
@@ -202,8 +343,8 @@ test.describe('with no script at all', () => {
 			}
 		}
 
-		// Every one of the nine links, followed. A strip whose anchors 404 is a
-		// strip that reads correctly and goes nowhere.
+		// Every one of the twenty-five links, followed. A strip whose anchors 404 is
+		// a strip that reads correctly and goes nowhere.
 		for (const route of ROUTES) {
 			await page.goto(route.path);
 			for (const entry of ROUTES) {
@@ -242,7 +383,7 @@ test.describe('the standing band', () => {
 		});
 	}
 
-	test('the band says the same thing on all three routes', async ({ page }) => {
+	test('the band says the same thing on every route', async ({ page }) => {
 		const read = async (path: string) => {
 			await page.goto(path);
 			return {
@@ -251,11 +392,12 @@ test.describe('the standing band', () => {
 				size: (await page.locator('[data-band-size]').innerText()).trim()
 			};
 		};
-		// Derived once for all three, so they cannot disagree about which route is
+		// Derived once for all five, so they cannot disagree about which route is
 		// worst - which is the failure a per-route band eventually produces.
 		const pipelines = await read('/console/');
-		expect(await read('/console/model/')).toEqual(pipelines);
-		expect(await read('/console/machine/')).toEqual(pipelines);
+		for (const route of ROUTES.slice(1)) {
+			expect(await read(route.path), `the band differs on ${route.path}`).toEqual(pipelines);
+		}
 	});
 
 	test('the worst thing names the route it is on, and that route exists', async ({ page }) => {
@@ -336,7 +478,12 @@ test.describe('the cross-boundary carries', () => {
 	const POINTS_AT: Record<string, string> = {
 		pipelines: '/console/model/',
 		model: '/console/machine/',
-		machine: '/console/'
+		machine: '/console/',
+		// The two empty routes point at the route that holds the nearest figure
+		// they have none of: what the checker doubted is on Summaries, and which
+		// feeds broke is on Pipelines.
+		judgement: '/console/model/',
+		voices: '/console/'
 	};
 
 	for (const route of ROUTES) {

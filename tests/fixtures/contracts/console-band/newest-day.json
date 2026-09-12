@@ -31,6 +31,24 @@
       "label": "Hardware",
       "severity": 1,
       "worst": "one slow shard"
+    },
+    {
+      "carries": "Summary doubt is on Summaries.",
+      "description": "What the model made of each article, and where we disagreed.",
+      "href": "/console/judgement/",
+      "id": "judgement",
+      "label": "Judgement",
+      "severity": 0,
+      "worst": null
+    },
+    {
+      "carries": "Feed failures are on Pipelines.",
+      "description": "Who supplied the day, and how far each feed is discounted.",
+      "href": "/console/voices/",
+      "id": "voices",
+      "label": "Voices",
+      "severity": 0,
+      "worst": null
     }
   ],
   "size": {

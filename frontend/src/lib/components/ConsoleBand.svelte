@@ -79,7 +79,7 @@
 				</p>
 			{:else}
 				<p class="fact-body" data-band-worst="clear">
-					Nothing on any of the three routes is asking for attention.
+					Nothing on any console route is asking for attention.
 				</p>
 			{/if}
 		</div>
