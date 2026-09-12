@@ -87,9 +87,9 @@ Three items on one slot, adjacent, in one process.
 
 Item 3's call 1 stopped because it was finished, not because it ran out of
 budget, so **96 tokens is call 1's real reply length** on a 3,430-word article.
-The three articles are all near the corpus ceiling and their prompts still differ
-by 2,043 tokens, because sentence addressing and the candidate table are not a
-function of the word count.
+Two of the three articles sit at the corpus ceiling of 3,846 words and the third
+is 3,430, and their call-1 prompts still differ by 2,043 tokens - sentence
+addressing and the candidate table are not a function of the word count.
 
 ### Where the re-prefilled tokens went
 
