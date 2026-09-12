@@ -35,11 +35,13 @@ committed file.
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
+| [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 5 | 0 | 5 | 0 |
 
-## In flight - 0
+## In flight - 1
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #1 | 27 | A | Intent chain, rename, preamble, approval encoding | `../yen-idhazh.worktrees/p27-r1` |
 
 ## Ready now - 30
 
@@ -80,7 +82,7 @@ section 3 is where it is answered.
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 | #1 | 26 | A | What prerendering actually weighs, both arms | - |
 
-## Waiting on another row - 74
+## Waiting on another row - 78
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -158,6 +160,10 @@ section 3 is where it is answered.
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 | #4 | 26 | B | The ruling, written where the next person arrives | 1 is PENDING |
+| #2 | 27 | B | Rewrite all twelve guardrails | 1 is IN-FLIGHT |
+| #3 | 27 | C | Eight collateral sections | 2 is PENDING |
+| #4 | 27 | D | Restate in the three derived agent surfaces | 3 is PENDING |
+| #5 | 27 | E | Repository-wide sweep, schemas, relapse proof | 4 is PENDING |
 
 ## Finished - 13 plans with no live row
 
