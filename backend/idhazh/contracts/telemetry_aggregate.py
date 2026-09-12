@@ -10,7 +10,7 @@ readable item by item. Past it, a month is folded into this shape and the
 full-grain shard is deleted.
 One row per `(date, stage)` is five rows a day, so a year of history costs
 kilobytes rather than megabytes and a year-over-year comparison stays possible -
-which deleting the shard outright would make unanswerable, and Rule #10 would
+which deleting the shard outright would make unanswerable, and Guardrail #10 would
 then forbid citing last year's number at all.
 
 **The fold changes the grain and never the answer.** Counts are of rows as the

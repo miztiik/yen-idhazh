@@ -2,7 +2,7 @@
 
 The cap was set to the number the encoder was trained at and never checked
 against real text. A character-count proxy said "about 18 percent of items run
-over", which is an estimate and may not justify a change on its own (Rule #10).
+over", which is an estimate and may not justify a change on its own (Guardrail #10).
 This tool counts the tokens the encoder itself produces, over every day the
 repository has published, and reports the distribution the cap has to answer to.
 
@@ -142,7 +142,7 @@ def summarise(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def hardware() -> dict[str, Any]:
-    """Rule #10: a number without its hardware and date is not a measurement."""
+    """Guardrail #10: a number without its hardware and date is not a measurement."""
     return {
         "measured_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "platform": platform.platform(),

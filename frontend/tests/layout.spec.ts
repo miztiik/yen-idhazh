@@ -93,7 +93,7 @@ test.describe('the frame', () => {
 	});
 
 	test('uses most of the screen it is on, at every width', async ({ page }) => {
-		// The number nobody measured for eleven months. Rule #10 was applied to
+		// The number nobody measured for eleven months. Guardrail #10 was applied to
 		// everything the runner touches and to nothing the reader sees.
 		const floors: Array<[number, number]> = [
 			[390, 0.86],

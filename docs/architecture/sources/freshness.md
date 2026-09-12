@@ -93,7 +93,7 @@ reverses was right when it was written.** The old text said the ledger must not
 shard, because the question has no time bound, so every shard would be opened
 anyway - and sharding a file you always read whole adds file opens and removes
 nothing. That still holds for a read with no cover. What changed is that the
-read got one. Rule #12 landed on 2026-09-05 and makes constant cost the default,
+read got one. Guardrail #12 landed on 2026-09-05 and makes constant cost the default,
 so a read whose cost rises because a run appended now needs a person's name
 against it rather than an argument in its favour. The cover is where that name
 goes: `-1` keeps today's guarantee unchanged, and a finite value opens only the
@@ -281,7 +281,7 @@ busy one. Any value tight enough to bind on 2026-08-30 would have displaced 126
 of its 431 items, and the runs of that day planned 106, 99, 93, 88 and 79 items
 against a 160 ceiling - so there was no reserve to repay them with. Setting the
 number lower is the owner's call and needs a run measured at it first
-(Rule #10).
+(Guardrail #10).
 
 ## A feed that publishes badly stops scoring as though it did not
 
@@ -296,7 +296,7 @@ It is applied inside `authority`, the same place and the same way `weight` is: `
 
 Two knobs, both under `collect`, both bounded so the factor can only ever reduce a score and never remove a feed:
 
-- `reliability_window_days` (30) is the trailing window. A feed publishes a few times a day at most, so thirty days is dozens of reads - enough that one bad afternoon cannot set the factor. The read is bounded by this window and never the whole ledger (Rule #12).
+- `reliability_window_days` (30) is the trailing window. A feed publishes a few times a day at most, so thirty days is dozens of reads - enough that one bad afternoon cannot set the factor. The read is bounded by this window and never the whole ledger (Guardrail #12).
 - `reliability_floor` (0.5) is the lowest the factor may reach. A feed with a record of nothing but dead reads scores 0.0 raw and is clamped up to 0.5, so the worst its record can do is **halve its authority - a two-to-one cut, never more**. That is why this factor alone can never empty a desk: a `min_feeds` floor counts configured feeds, and a multiplier scales a score without removing a feed from the count.
 
 A feed with no evidence-bearing read in the window - brand new, or only ever rested and politely refused - scores 1.0. **Unknown is not the same as bad**, so an untested feed is never punished; it simply carries its tier until it has a record. The map of factors is built once per run by `ledger.reliability` off the committed feed-health shards and read inside `authority`; a feed absent from the map reads 1.0.
@@ -341,9 +341,9 @@ Measured over the committed 30-day window ending 2026-09-06 (a developer machine
 
 ### The plan-stage duplicate pass ships record-only, and does not yet read the published past
 
-The pass records what it would collapse before it cuts anything, because a cut nobody has read the record of is a cut nobody can defend. The first scheduled run writes the day's would-collapse count to the log; the number the pass would remove on a live day is knowable from that log, not asserted here (Rule #10). The within-day count is bounded by the day's plan and never by the archive - the safety ceiling caps the stories walked, and the vectors are the day's own (Rule #12).
+The pass records what it would collapse before it cuts anything, because a cut nobody has read the record of is a cut nobody can defend. The first scheduled run writes the day's would-collapse count to the log; the number the pass would remove on a live day is knowable from that log, not asserted here (Guardrail #10). The within-day count is bounded by the day's plan and never by the archive - the safety ceiling caps the stories walked, and the vectors are the day's own (Guardrail #12).
 
-**It compares a day against itself, and not against the days already published - deliberately, and for now.** The design called for a second comparison: embed the stories published in a trailing window, decayed by recency, and drop today's story if it repeats one, so a re-run of the same day cannot publish the same story twice. That step is deferred, because the store it would read cannot answer it. `state/published/` carries `item_id`, `published_on` and `url_key` and no title, so even under a finite `collect.published_window_days` there is no text to embed. Embedding a trailing window of published stories needs a bounded, title-carrying published surface that does not exist, and creating one is a new retention surface this plan refused. The within-day collapse is the honest part today's committed state supports; the cross-day part waits for a surface that carries the text (Rule #12).
+**It compares a day against itself, and not against the days already published - deliberately, and for now.** The design called for a second comparison: embed the stories published in a trailing window, decayed by recency, and drop today's story if it repeats one, so a re-run of the same day cannot publish the same story twice. That step is deferred, because the store it would read cannot answer it. `state/published/` carries `item_id`, `published_on` and `url_key` and no title, so even under a finite `collect.published_window_days` there is no text to embed. Embedding a trailing window of published stories needs a bounded, title-carrying published surface that does not exist, and creating one is a new retention surface this plan refused. The within-day collapse is the honest part today's committed state supports; the cross-day part waits for a surface that carries the text (Guardrail #12).
 
 **Two knobs shipped, not four.** The deferred cross-day step needs a window length and a recency half-life; both are added when that step lands, not before, because a config knob no code reads is a knob nobody can trust. The threshold reuses `assemble.duplicate_similarity_min` rather than minting a second number for the same question one stage earlier: both ask whether two of a day's stories are one, both score cosine over MiniLM vectors, and 0.94 was set by hand labels for exactly that question (measured 2026-09-01, a developer machine, 3,978 items). The text each embeds differs - a feed's lead here, our own summary at assemble - so the reused number is the labelled answer to the same question, not a claim the inputs are identical.
 
@@ -401,7 +401,7 @@ about the story. `too_old` on each vertical's plan summary is what makes that
 checkable - a desk that thins can say whether a gate or a dead feed did it.
 The threshold is `collect.max_age_hours` and moving it is a config edit.
 
-Both first-sighting and the published ledger are append-only files under `state/`, committed by CI. That is not a preference - it is the only shape available. There is no database (Rule #1), and anything a later run must read has to survive as a committed file. The second one-shot migration was 2026-09-08: `backend/utilities/split_published_ledger.py` moved every row of the flat `state/published.csv` into the day file its own date names and removed the flat file, copying each row's bytes across unchanged.
+Both first-sighting and the published ledger are append-only files under `state/`, committed by CI. That is not a preference - it is the only shape available. There is no database (Guardrail #1), and anything a later run must read has to survive as a committed file. The second one-shot migration was 2026-09-08: `backend/utilities/split_published_ledger.py` moved every row of the flat `state/published.csv` into the day file its own date names and removed the flat file, copying each row's bytes across unchanged.
 
 ### A per-run reading budget was proposed on 2026-08-25 and refused
 
@@ -456,7 +456,7 @@ and guessing it is what this refusal is about.
 | Writing the published ledger at plan time | A run that dies mid-way would leave behind a claim it published something it did not, and the article would never be publishable again. |
 | A per-run reading budget at the planning step | Refused 2026-08-25 by Carmack and Fowler. The bound already exists one stage later and is a clock; the artifact loss it answered already carries `if: always`; its value came from a measurement taken before `diagram` was switched off; and it deletes about 436 items from a 731-item day. See the design rationale above. |
 | A score floor set now rather than measured | A floor is the right control and the wrong thing to guess. It waits on the retrieval eval, which is the instrument that can say what a score is worth. |
-| Sharding `state/published.csv` by month | Refused until 2026-09-08, and then overturned. The reasoning stood while the read had no cover: every shard is opened anyway, so it adds file opens and removes nothing. Rule #12 made constant cost the default, the read gained `collect.published_window_days`, and the ledger moved to `state/published/YYYY/MM/DD.csv` - a day rather than a month, for the three reasons in the section above. |
+| Sharding `state/published.csv` by month | Refused until 2026-09-08, and then overturned. The reasoning stood while the read had no cover: every shard is opened anyway, so it adds file opens and removes nothing. Guardrail #12 made constant cost the default, the read gained `collect.published_window_days`, and the ledger moved to `state/published/YYYY/MM/DD.csv` - a day rather than a month, for the three reasons in the section above. |
 | Windowing the dedupe read without sharding the file | Filtering rows after reading them saves no I/O. A window pays only when it can decide which files to skip - which is why the partition landed before the cover did. |
 | Shipping a finite `collect.published_window_days` | The machinery is in and the value is `-1`. A finite cover forgets an address and lets it publish again, and how many days is worth forgetting is a question the refusal ages on the plan payload can answer and prose cannot. |
 | Pruning the published ledger | It is the only record of what a digest carried. Pruning makes a re-publish look new, which is the exact failure the ledger exists to stop. |

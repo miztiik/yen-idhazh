@@ -24,7 +24,7 @@
  * It is also what makes a retirement converge: the layout registers on every
  * load, and a registration pending removal is resurrected by the next
  * `register()`.
- * **Rule #1 is unaffected, and this file is where that is checkable rather than
+ * **Guardrail #1 is unaffected, and this file is where that is checkable rather than
  * asserted.** Every request below is refused unless it is a GET for our own
  * origin. Nothing is reported anywhere, there is no notification, no push and
  * no background sync, and `frontend/tests/manifest.spec.ts` reads this source
@@ -231,7 +231,7 @@ sw.addEventListener('fetch', (event) => {
 	} catch {
 		return;
 	}
-	// Rule #1, checkable rather than promised: nothing off our own origin is
+	// Guardrail #1, checkable rather than promised: nothing off our own origin is
 	// touched, so no third party can be reached through this worker at all.
 	if (url.origin !== sw.location.origin) return;
 	// The way out is never served from a cache. A switch a worker reads out of

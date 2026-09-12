@@ -115,7 +115,7 @@ Nothing in this project may cite a throughput, cost or quality figure without
 saying what measured it and when. One exception, added 2026-08-30: the operator
 console prints a counterfactual cost in currency, from measured token counts and
 a rate the operator sets, labelled a counterfactual and never a bill
-([../../CLAUDE.md](../../CLAUDE.md) Rule #10). The numbers that currently shape
+([../../CLAUDE.md](../../CLAUDE.md) Guardrail #10). The numbers that currently shape
 the design:
 
 | Measured | Value | Where |
@@ -132,7 +132,7 @@ the design:
 There is no blended seconds-per-article figure for the configured summarizer.
 Deriving one needs its own tokenizer's prompt count, which nobody has measured,
 so the row is absent rather than filled with the retired model's arithmetic
-(Rule #10).
+(Guardrail #10).
 
 **The configured summarizer did not pass qualification.** It was adopted on
 2026-08-27 by owner decision ([`../../CLAUDE.md`](../../CLAUDE.md) section 0)

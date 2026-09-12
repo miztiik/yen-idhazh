@@ -142,7 +142,7 @@ test.describe('the day runs newest first, and every time it prints is attributed
 		// The whole domain rather than a sample of it. `time_source` is a contract
 		// enum and `published_at` is validated beside it, so a committed story
 		// cannot carry a pair outside this table - which is what walking the
-		// archive was re-establishing, once per story, for ever (Rule #12).
+		// archive was re-establishing, once per story, for ever (Guardrail #12).
 		const day = '2026-08-20';
 		const cases: { at: string | null; source: string | null; form: TimeForm; label: string }[] = [
 			{ at: `${day}T14:05:00Z`, source: 'feed', form: 'clock', label: '14:05' },

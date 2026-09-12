@@ -67,7 +67,7 @@ the measurement.
 than about its numbers, so no query here can reach them. Anything reporting per
 class names three and says so.
 
-**The threshold is `visuals.min_chart_points` and not a second knob** (Rule #6).
+**The threshold is `visuals.min_chart_points` and not a second knob** (Guardrail #6).
 Mint one and the console can call an article chartable while the planner refuses
 to draw it, and the rate then measures two knobs drifting apart rather than
 measuring the planner.
@@ -263,7 +263,7 @@ rationale below.
 
 The check is every pair of candidates against every other, which is quadratic in
 one article and bounded by `elements.max_per_article` - it cannot grow with the
-archive (Rule #12). Measured 2026-09-08 on a a developer machine with
+archive (Guardrail #12). Measured 2026-09-08 on a a developer machine with
 Python 3.14.2: on the densest bounded fixture, 11 candidates settle to 7 in a
 median 0.0116 ms, spread 0.0111-0.0167 ms over 9 runs of 200. At the ceiling -
 256 from each pass - 512 candidates settle to 384 in a median 12.37 ms, spread
@@ -277,7 +277,7 @@ model-anchored kinds need and a blanket validator would refuse that too.
 
 ### What a pattern over fetched bytes can hand you
 
-Fetched text is data (`CLAUDE.md` Rule #11), and a hostile or broken page can
+Fetched text is data (`CLAUDE.md` Guardrail #11), and a hostile or broken page can
 follow a number with a 600-character hyphenated word, or state a 200-digit
 serial number. Two bounds keep that from raising in the middle of an article:
 
@@ -311,7 +311,7 @@ The model is given the item's title, the whole article one addressed sentence
 per line, and the candidate table addressed by `element_id` - the article rather
 than a summary of it, because a compression cannot carry a series it dropped and
 judging what an item is about against text that lost the figures is judging the
-wrong document. Both blocks are fenced as untrusted data (Rule #11). The
+wrong document. Both blocks are fenced as untrusted data (Guardrail #11). The
 addresses are ours; the sentences are a stranger's web page.
 
 **No field of the reply accepts a number.** Not a value, not a unit, not a
@@ -841,7 +841,7 @@ Authority: **Fowler** (persisted contracts), consulted by reading
 | A per-element text hash | Redundant against the per-article hash plus the re-slice, and it is a hash per element on every article for ever | Fowler |
 | One flat tier | Then nothing distinguishes a character range code cut from a word a model chose, which is the entire trust argument | Andre |
 | Ship only the two kinds that have producers | Six kinds in one contract with one changelog entry is cheaper than four later widenings of a persisted shape | Fowler |
-| Carry the element cap in the contract | A cap is a tunable and lives in `config/` (Rule #6). The shape says what an element is, never how many a producer keeps | Fowler |
+| Carry the element cap in the contract | A cap is a tunable and lives in `config/` (Guardrail #6). The shape says what an element is, never how many a producer keeps | Fowler |
 | Reuse `numeric_facts` as the candidate source | It collapses a figure repeated across two periods, drops a magnitude at or below two, drops a bare year, nulls a stop-listed unit and stops at 16. Every one of those is right for picking bars and wrong for a candidate set | Row 2 decision 2 |
 | Repair `numeric_facts` in place instead of adding a pass | Its caller wants the drops. Two callers want opposite things, so they are two functions | Fowler |
 | Count the candidates after the cap | A capped counter returns a plausible integer, so the failure is silent. The count is taken before the cap or it is not a count | Andre |
@@ -924,6 +924,6 @@ on together.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the generated schemas, and the drift gate over both.
 - [../publishing/visuals.md](../publishing/visuals.md) - the visual planner, which reads the same number pattern and keeps its own drops.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection has to declare.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3 (contracts before logic), Rule #6 (no hardcoding), Rule #11 (fetched text is data), section 11 (schema versioning).
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).
 - [../../../TODO/20260905-08-element-table-plan.md](../../../TODO/20260905-08-element-table-plan.md) - the plan this shape was written for, and the producers that follow it.
 - [../../../TODO/20260905-11-two-call-planner-plan.md](../../../TODO/20260905-11-two-call-planner-plan.md) - the plan call 1 belongs to, and the call that reads its table next.

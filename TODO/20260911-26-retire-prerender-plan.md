@@ -51,7 +51,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 ### 0.1 Standing rules, and they bind every row
 
-**Deliver the intent, not the letter.** **A structural fix matters more than a small diff.** Where a row cannot be done correctly inside its stated file list, expand the scope and say so in the pull request - do not ship a band-aid to stay inside a list somebody wrote before the code was read. `CLAUDE.md` Rule #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
+**Deliver the intent, not the letter.** **A structural fix matters more than a small diff.** Where a row cannot be done correctly inside its stated file list, expand the scope and say so in the pull request - do not ship a band-aid to stay inside a list somebody wrote before the code was read. `CLAUDE.md` Guardrail #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
 
 **No prisoners.** Every removal takes its code, its tests, its fixtures, its config keys, its schema fields and its docs **in the same commit**. Git is the backup. Row #2 is the only removal row in this plan and its acceptance gate names all five.
 
@@ -108,7 +108,7 @@ npm run test:browser
 
 **Ruled: the six prerendered routes stay. `frontend/prerender-guard.js` goes.** Authority: this plan, on the evidence below; reversal is section 6 and needs the owner.
 
-**Fact 1 - the expensive half of prerendering was already removed, twelve days before the instruction that called it legacy.** Until 2026-09-09 the two dated reading routes were prerendered off the committed digest tree at **twelve documents per published day** - six HTML pages and six `__data.json` twins - which reached **50,598,258 bytes and 39.5 percent of the published site**, and grew with every day the pipeline wrote. Both render in the browser now. What is left reads no committed day to decide whether it exists, so it is **six documents per build and the count does not move when a day publishes**. Under `CLAUDE.md` Rule #12 the version that grew was the defect and the version that remains is not one.
+**Fact 1 - the expensive half of prerendering was already removed, twelve days before the instruction that called it legacy.** Until 2026-09-09 the two dated reading routes were prerendered off the committed digest tree at **twelve documents per published day** - six HTML pages and six `__data.json` twins - which reached **50,598,258 bytes and 39.5 percent of the published site**, and grew with every day the pipeline wrote. Both render in the browser now. What is left reads no committed day to decide whether it exists, so it is **six documents per build and the count does not move when a day publishes**. Under `CLAUDE.md` Guardrail #12 the version that grew was the defect and the version that remains is not one.
 
 **Fact 2 - the six that remain are a decision with a reason written beside it, dated one day before the instruction.** `frontend/src/routes/+page.svelte` gives three, and none of them is a special case: one document a build is not one a published day; the address a stranger meets first should carry its seed in the first bytes; and a failed fetch should leave a reader the seed rather than a headline and a button. `frontend/src/routes/+page.server.ts` gives a fourth in its own comment - without the declaration the site root emits no `index.html` and GitHub Pages answers `/` at HTTP 404. **An instruction that treats this as an unexamined leftover is arguing against a ruling it has not read.**
 
@@ -176,7 +176,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 Build the site twice from one tree - once as it stands, once with the seven `prerender = true` declarations removed - and write up the difference as this repository's first record under `docs/reference/benchmarks/`. **The second arm is a throwaway measurement branch that is never merged and never pushed**; its only product is a number.
 
-**The measurement, named exactly** ([`../CLAUDE.md`](../CLAUDE.md) Rule #10):
+**The measurement, named exactly** ([`../CLAUDE.md`](../CLAUDE.md) Guardrail #10):
 
 | What | How |
 | --- | --- |
@@ -205,7 +205,7 @@ git status --porcelain frontend/src
 
 ### Oracle
 
-**The fixture is the tree at the commit the row runs on, and it is named in the record.** There is no smaller one: the quantity under measurement is what the whole site weighs, and a canary day cannot answer it. This is `CLAUDE.md` Rule #12's escape hatch used deliberately - the read is over a growing collection, it happens once, by hand, off the daily path, and its cost is written down here rather than discovered later.
+**The fixture is the tree at the commit the row runs on, and it is named in the record.** There is no smaller one: the quantity under measurement is what the whole site weighs, and a canary day cannot answer it. This is `CLAUDE.md` Guardrail #12's escape hatch used deliberately - the read is over a growing collection, it happens once, by hand, off the daily path, and its cost is written down here rather than discovered later.
 
 **The oracle for the row's own correctness is the ceiling file.** `npm run bundle-gate` on arm A must print `/404` and `/evals/` inside the 4,400 B and 6,600 B written in `config/idhazh.json`. If it does not, the worktree is not clean and no number from it is usable.
 
@@ -213,7 +213,7 @@ git status --porcelain frontend/src
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **Both arms, even though the ruling is already made.** A ruling defended only in prose can only be argued with; a ruling with a number beside it can be overturned by a better number. Section 6 is executable the day the owner wants it, and this is the row that tells them what they would be buying | `CLAUDE.md` Rule #10 |
+| 1 | **Both arms, even though the ruling is already made.** A ruling defended only in prose can only be argued with; a ruling with a number beside it can be overturned by a better number. Section 6 is executable the day the owner wants it, and this is the row that tells them what they would be buying | `CLAUDE.md` Guardrail #10 |
 | 2 | **Arm B is never merged and never pushed.** It exists for one afternoon in one worktree. The plan's hard scope forbids removing a declaration, and a branch that did it would be one merge away from doing it by accident | This plan, section 0 |
 | 3 | **The record goes under `docs/reference/benchmarks/` and the instrument log gets one line.** A run is a fact about a day and the figure it produces is in force only until the next run; appending to the log instead would leave two readings of one quantity in date order, where only the ordering says which governs | `CLAUDE.md` section 5 |
 
@@ -223,7 +223,7 @@ git status --porcelain frontend/src
 | --- | --- |
 | Estimate it from the six documents' current sizes | It answers the wrong question. The interesting number is not what the six weigh, it is whether arm B produces a root document at all - and an estimate cannot see a missing file |
 | Measure only arm A | Half a measurement is a description. The decision this priced is a comparison |
-| Leave the measurement to whoever executes section 6 | Then the number arrives after the decision, which is the failure `CLAUDE.md` Rule #10 exists to stop |
+| Leave the measurement to whoever executes section 6 | Then the number arrives after the decision, which is the failure `CLAUDE.md` Guardrail #10 exists to stop |
 
 ### What this row does not do
 
@@ -259,7 +259,7 @@ npm run test:logic
 npm run test:browser
 ```
 
-**The build is `npm run build:canary`, and the oracle below is why.** An earlier draft of this block ran `npm run build` while the oracle named the canary build, so the row had two different builds in it and neither said which one the gates were read from. The canary day is fixed in size and carries a day the archive has never produced, which is what `CLAUDE.md` Rule #12 asks for; the real digest tree grows every four hours.
+**The build is `npm run build:canary`, and the oracle below is why.** An earlier draft of this block ran `npm run build` while the oracle named the canary build, so the row had two different builds in it and neither said which one the gates were read from. The canary day is fixed in size and carries a day the archive has never produced, which is what `CLAUDE.md` Guardrail #12 asks for; the real digest tree grows every four hours.
 
 `GATE-WEB` and `GATE-BROWSER`, plus all four of:
 
@@ -272,7 +272,7 @@ npm run test:browser
 
 **`frontend/scripts/test-groups.ts` is driven from its own fixture, not from the file system.** `groupForSpec('prerender-guard')` must return `undefined` after this row and `groupForSpec('payload-weight')` must still return `'publishing'`. Both are pure string lookups over a literal in the module, so the check needs no build and no browser.
 
-**The build oracle is the canary day** (`backend/utilities/build_canary_day.py`, then `npm run build:canary`), which is fixed in size and carries a day the archive has never produced. The committed digest tree is not the oracle here and `CLAUDE.md` Rule #12 is why - the question is whether six routes still build, not what is in them.
+**The build oracle is the canary day** (`backend/utilities/build_canary_day.py`, then `npm run build:canary`), which is fixed in size and carries a day the archive has never produced. The committed digest tree is not the oracle here and `CLAUDE.md` Guardrail #12 is why - the question is whether six routes still build, not what is in them.
 
 ### Decisions
 
@@ -281,7 +281,7 @@ npm run test:browser
 | 1 | **The handler goes and the failure stays.** SvelteKit's default for `handleUnseenRoutes` is to fail. We are deleting a message, not a check, and a row that deleted the check would be doing what `'ignore'` does - which the guard's own docstring already refuses | `frontend/prerender-guard.js` docstring; SvelteKit's default |
 | 2 | **`handleHttpError: 'warn'` is untouched.** It is a different knob about a different failure, it is not legacy, and nothing in this plan examined it | This plan, section 0 |
 | 3 | **The three dated records keep their references.** `data-growth-audit.md` is pinned to `76c2d27c` and `test-execution-audit.md` to `3b425be8`; both describe a `surveyDigest` that had already been deleted before this plan was written. Editing a frozen record to match today's tree destroys the only thing it is for | `CLAUDE.md` section 5 |
-| 4 | **No row replaces the sentence with a comment in `svelte.config.js`.** A comment explaining a handler that no longer exists is the debt this row is paying off | `CLAUDE.md` Rule #5 |
+| 4 | **No row replaces the sentence with a comment in `svelte.config.js`.** A comment explaining a handler that no longer exists is the debt this row is paying off | `CLAUDE.md` Guardrail #5 |
 
 ### Rejected alternatives
 
@@ -436,7 +436,7 @@ It removes no declaration, changes no build, and edits no other page. It does no
 | Take the reader losses in section 0.0 | All six of them |
 | Take the crawler loss in section 0.0a | Every address answers 404 |
 
-**Why this plan refuses it.** The cost is on the left and the benefit is six documents per build that grow with nothing. Under `CLAUDE.md` Rule #12 the version of prerendering that grew with the archive was the defect, and it was removed on 2026-09-09 - 39.5 percent of the published site, gone, with the reason written down. What remains costs the site a constant and buys a first screen, a status code and a page that works without a script. **A design is changed by a measurement that contradicts it** (Rule #10), and no measurement contradicts this one. The instruction that called it legacy was reasoning from the state before 2026-09-09.
+**Why this plan refuses it.** The cost is on the left and the benefit is six documents per build that grow with nothing. Under `CLAUDE.md` Guardrail #12 the version of prerendering that grew with the archive was the defect, and it was removed on 2026-09-09 - 39.5 percent of the published site, gone, with the reason written down. What remains costs the site a constant and buys a first screen, a status code and a page that works without a script. **A design is changed by a measurement that contradicts it** (Guardrail #10), and no measurement contradicts this one. The instruction that called it legacy was reasoning from the state before 2026-09-09.
 
 ---
 

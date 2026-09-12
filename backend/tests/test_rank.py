@@ -7,7 +7,7 @@ and it never falls below the configured floor, so it can never remove a feed.
 
 Every health row here is built in memory. No test reads state/, so the archive
 is never the input and the cost of these tests does not grow with it (CLAUDE.md
-Rule #12 and the section 13 test policy).
+Guardrail #12 and the section 13 test policy).
 """
 
 from __future__ import annotations
@@ -354,7 +354,7 @@ def test_a_cluster_of_three_keeps_only_the_strongest_telling() -> None:
 def test_the_encoder_finds_a_repeat_and_reaches_no_network() -> None:
     """The pass over the committed ONNX encoder: two sources spelling one headline
     embed to the same vector and the weaker telling is recorded. The encoder is a
-    local file, so this reaches no network (Rule #7).
+    local file, so this reaches no network (Guardrail #7).
     """
     embedder = Embedder(REPO_ROOT, AssistConfig())
     assert embedder.available, "the committed ONNX encoder must be present for this test"

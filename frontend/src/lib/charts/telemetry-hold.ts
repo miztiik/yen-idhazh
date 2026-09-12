@@ -20,7 +20,7 @@
  * a fixed one or two months and the page's fallback; what accumulates over a
  * long session of panning is the fetched shards, and the ceiling is the count
  * of months the widest window can touch - so the window in force is always in
- * hand and memory does not climb with the session (Carmack, Rule #12).
+ * hand and memory does not climb with the session (Carmack, Guardrail #12).
  */
 
 import type { TelemetryRow } from './series';
@@ -92,7 +92,7 @@ export function seedHold(rows: readonly TelemetryRow[], seedStart: string | null
  *
  * Bounded by the ceiling, not by the archive: at most the widest window's
  * months of rows are ever held, so this sort is over a fixed input however long
- * the pipeline runs (Rule #12).
+ * the pipeline runs (Guardrail #12).
  */
 export function holdRows(hold: TelemetryHold): TelemetryRow[] {
 	const rows: TelemetryRow[] = [];

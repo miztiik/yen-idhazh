@@ -1380,7 +1380,7 @@ test('the reading path and the console carry no chart library', () => {
 		readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
 	) as { dependencies?: Record<string, string> };
 
-	// Rule #8: a dependency names a beneficiary feature. The pan this one was
+	// Guardrail #8: a dependency names a beneficiary feature. The pan this one was
 	// bought for is implemented in `Viewport.svelte`, and the window it pans is
 	// set by the control on the page above it.
 	expect(Object.keys(manifest.dependencies ?? {})).toEqual([]);

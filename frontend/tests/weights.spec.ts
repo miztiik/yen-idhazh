@@ -13,7 +13,7 @@
  * the caller holding no files at all.
  *
  * This is a `logic` spec and not a browser one. Nothing here touches the
- * network (Rule #7): every response is built in memory from bytes this file
+ * network (Guardrail #7): every response is built in memory from bytes this file
  * owns, and the real weights are never fetched. `crypto.subtle` is the same
  * implementation in node as in the tab, so the hashing under test is the
  * hashing that ships.
@@ -83,7 +83,7 @@ test.describe('a verified set', () => {
 	test('only paths the manifest names can be asked for', async () => {
 		// The URL is built from two committed values and a KEY of the manifest, so
 		// there is no path a caller could hand in that this module would fetch.
-		// Nothing here reads a payload field or any fetched text (Rule #11).
+		// Nothing here reads a payload field or any fetched text (Guardrail #11).
 		const source = await honest();
 		const { asked, fetch } = origin((path) => FILES[path]!);
 		await fetchVerifiedWeights(source, { fetch });

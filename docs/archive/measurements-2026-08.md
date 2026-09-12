@@ -881,7 +881,7 @@ script is the gate, so the number quoted is the number that fails a build.
 `frontend/bundle-baseline.json` (deleted 2026-08-30), one record
 per route class carrying the byte count, the date it was measured and a sentence
 saying what those bytes buy. Two copies of one number are free to drift
-(Rule #4), and the copy the gate reads is the one that decides a build. The
+(Guardrail #4), and the copy the gate reads is the one that decides a build. The
 toolchain is pinned in that file, because `gzip -9` is deterministic for given
 input bytes: the CPU is irrelevant and the Node major is not.
 
@@ -891,7 +891,7 @@ input bytes: the CPU is irrelevant and the Node major is not.
 | Gate tolerance, every route, both directions | **64 B** | **Derived, not measured**: 5.3x the observed range. Four samples underestimate a true range, so the multiple is the margin. A build that ever fails inside 64 B re-derives this from more builds and more routes rather than nudging it. |
 | Node 22 against Node 24, same build | **0 B on all seven routes** | Measured 2026-08-25 on one build, a developer machine, Windows. Node 22.23.2 (zlib `1.3.1-e00f703`) and Node 24.12.0 (zlib `1.3.1-470d3a2`) summed identically to the byte on every route class. The zlib build hashes differ and the output does not, so a baseline taken on a developer machine reproduces on the CI runner. This is two Node majors, not a proof about a third. |
 
-The whole build is 133.8 MB against the 1 GB Pages ceiling (Rule #2).
+The whole build is 133.8 MB against the 1 GB Pages ceiling (Guardrail #2).
 
 
 ## The length tier a qualification corpus can actually reach
@@ -990,7 +990,7 @@ what memory exhaustion looks like from inside a job. That attempt settled nothin
 except that float32 does not run. This one settles the question.
 
 **Consequence: Row #9's ESCALATE trigger fired and the image renderer is
-descoped.** Rule #2 says the budget is the platform, not a preference. No step
+descoped.** Guardrail #2 says the budget is the platform, not a preference. No step
 count or resolution reduction reaches a usable number from 527 s per step: at one
 step the image is noise, and at three it is still 26 minutes. Narrative items
 publish without a visual, which the pipeline already handles - `none` is the
@@ -1029,7 +1029,7 @@ for what that costs.
 
 The step also echoes `LLAMA_CPP_BUILD`, so a disagreement between the pin and
 what the binary says about itself is visible on one screen. The two digests are
-what let a number on this page name the bytes that produced it (Rule #10); the
+what let a number on this page name the bytes that produced it (Guardrail #10); the
 run manifest still records `runtime_build` as a fixed string and does not.
 
 Three more instruments landed beside them.
@@ -1055,7 +1055,7 @@ The sampler's artifact cost is bounded, not estimated: a row is five
 tab-separated fields and at most about 60 bytes. The `work` job's configured
 bound is 150 minutes, so one shard writes at most 600 rows, about 36 KB; four
 shards at most about 144 KB and eight at most about 288 KB - 0.03% and 0.06% of
-the 500 MB artifact budget (Rule #2). A 105-minute shard writes about two thirds
+the 500 MB artifact budget (Guardrail #2). A 105-minute shard writes about two thirds
 of that. Raising the shard ceiling scales this term with the shard count and
 leaves the `items-*` total flat, because the plan is divided between workers
 rather than copied to each of them.
@@ -1190,7 +1190,7 @@ whole share of the day is lost.
 | a bad draw, +10.9 | 96.5 | 13.5 below |
 | the pathological draw, +43 to +46 | 128.6 to 131.6 | **18.6 to 21.6 above**, and still 18.4 to 21.4 below the 150-minute bound |
 
-**The three extra costs are projections, not measurements (Rule #10).** An
+**The three extra costs are projections, not measurements (Guardrail #10).** An
 at-cap item picks up about 1,312 extra input tokens at cap 5000, which is 1.8
 minutes at the 12.05 tok/s uncached read rate. Two such items on the heaviest
 shard is +3.6 minutes, six is +10.9, and the pathological case is all 12 landing
@@ -1322,7 +1322,7 @@ run's rows by `job_seconds` and the slowest worker is the first one; that is the
 number [Trigger A](#trigger-a---the-shard-clock) compares against 110 minutes.
 Read `cpu_model` in the same row, because this page has measured a 3.1x swing in
 prompt-reading throughput between hosts, so two clocks on two different parts
-are not a comparison (Rule #10).
+are not a comparison (Guardrail #10).
 
 **It is a floor, and the gap is 13 to 17 seconds.** The scrape happens before
 the ledger push, the two log summaries and the artifact uploads, so `job_seconds`
@@ -1437,7 +1437,7 @@ read a committed file instead of an API.
 | 2 | Fixed cost per worker: the part of a worker's clock that is not model time (cache restore, weight load, warmup). `job_seconds` minus the server's own `prompt_seconds_total` plus `tokens_predicted_seconds_total`, in the same row | no prior on record; this run establishes it | **284, 346, 366 and 447 s - 4.7 to 7.5 minutes, 8.7 to 12.4 percent of the shard's clock.** The slowest shard carries the largest fixed cost as well as the largest model time, so the two do not trade off |
 | 3 | Items at the new cap, per run and per shard | 7.8 a run at the old cap (155 rows at exactly 1,923 words over 20 runs, `state/item-health/2026-08.csv`, counted 2026-08-29) | **0, on every shard.** The run's longest article was 2,772 words against a 3,846-word cap, so nothing reached it. **6 items were read past the old 1,923-word ceiling** and all six were read whole. Against 7.8 a run before: the cap stopped binding rather than binding higher up |
 | 4 | Extra input tokens actually read, against the run before it | the projection of 10,300 to 11,000 a run | **About 3,000 tokens, a quarter of the projection.** The 6 items past the old ceiling carry 2,172 words the old cap would have dropped - 362 an item - which is 2,824 tokens at the 1.3 placement estimate and 3,013 at the 1.387 rate row 10 measures. The projection assumed 7.8 items sitting on the cap and this run had none. Run totals were 119,516 uncached tokens against 118,812 the run before, and that difference is a different article mix, not the cap |
-| 5 | Read rate, uncached, tok/s | 12.05 tok/s, the rate the projection used | **16.19 tok/s** over the 104 items with a prefill clock, against 11.88 on run `2026-08-29-1` the same day. **This is not the cap making reading faster.** The two runs drew different hosts, and run 1 recorded no CPU model at all, so the covariate cannot be held (Rule #10) |
+| 5 | Read rate, uncached, tok/s | 12.05 tok/s, the rate the projection used | **16.19 tok/s** over the 104 items with a prefill clock, against 11.88 on run `2026-08-29-1` the same day. **This is not the cap making reading faster.** The two runs drew different hosts, and run 1 recorded no CPU model at all, so the covariate cannot be held (Guardrail #10) |
 | 6 | Decode rate on at-cap items, tok/s | 4.89 tok/s over 25 at-cap items on the configured model, counted 2026-08-29. **n=25 is one number, not a distribution** | **No at-cap item exists, so this row has nothing of its own to measure.** Over the 6 items read past the old ceiling it is **6.65 tok/s**, and over the whole run **6.35**, against 4.88 on run 1. The instrument is there and the population is not: it needs a run whose longest article is 3,846 words or more |
 | 7 | Output tokens on at-cap items, median. **This is now expected to rise** | 331 tokens over the same 25 items. A cap change alone cannot move the ask, because the band comes from `band_source_words` and that is pre-cap. The fifth summary rung, landed 2026-08-29, does move it: its floor is 3,000 words and every at-cap item is 3,846 words or more, so every one of them left the 110-200 ask for 150-230. Expect about **+45 tokens**, and read a move of that size as the new rung rather than as a fault | **The fifth rung never fired: no item reached 3,000 words**, so the +45 cannot be looked for. What the run does answer is the half that catches a mistake - median output on items **below** 3,000 words is **248 tokens over 104 items**, against **251.5 over 108** on run 1. It did not rise, so the 2026-08-26 band defect has not come back |
 | 8 | Slowest single item, seconds | 449 s on record, against the 1,326 s bound (`models.inference.request_timeout_minutes` of 22.1) | **337.3 s**, the slowest `summarize_ms` of the run - 25.4 percent of the bound. Run `2026-08-29-1` the same day held a 503.3 s item, so this run's tail is shorter than the cap-2500 run before it |
@@ -1659,7 +1659,7 @@ timestamps, so that queue is not inside any of them.
 ### What changed, and what did not
 
 `digest.yml` held the fan-out at four with a regex, `^[1-4]$`, and a matching
-`max-parallel: 4`. Both now read eight. Rule #2 allows 20 concurrent jobs, so
+`max-parallel: 4`. Both now read eight. Guardrail #2 allows 20 concurrent jobs, so
 four was a choice and not a platform limit. Every shard restores the same cache
 key, so the change adds cache restores and model loads, never cache bytes.
 
@@ -1828,7 +1828,7 @@ halving took 66 minutes off the pair; a second would take 29. `route` already
 owns more of the remaining clock than any further worker fan-out can give back,
 and it is the stage that dropped 54 items.
 
-### Cache, memory and artifacts against Rule #2
+### Cache, memory and artifacts against Guardrail #2
 
 **Cache restore is 30 to 73 seconds per shard**, median 45, mean 49 - from the
 `Cache weights and runtime` step timing on each job. This page had asserted
@@ -1841,13 +1841,13 @@ minutes.
 restored the one entry `llm-Qwen3-8B-Q4_K_M.gguf-b10598-v3` (retired incumbent, historical record),
 4,943,540,782 bytes
 (4.60 GiB). Read on 2026-08-25 after the run, the repository held eight cache
-entries totalling 10,585,631,000 bytes against the 10 GB ceiling in Rule #2 -
+entries totalling 10,585,631,000 bytes against the 10 GB ceiling in Guardrail #2 -
 at the ceiling, but not because of this change. What fills it is a stale 4B
 entry under an old key plus duplicated Python and npm entries. More shards
 restore the same key and never add a byte.
 
 **Artifacts are 0.33% of the budget.** Nineteen artifacts, 1,740,473 bytes in
-total - 1.66 MB against the 500 MB in Rule #2. The eight `items-*` artifacts are
+total - 1.66 MB against the 500 MB in Guardrail #2. The eight `items-*` artifacts are
 709,603 bytes together and the eight `runtime-log-*` are 83,050; `routes` at
 906,169 bytes is the single largest. Doubling the worker count left the
 `items-*` total flat, exactly as predicted: the plan is divided between the
@@ -1857,7 +1857,7 @@ workers, never copied to each of them.
 `cgroup_memory_peak_bytes=unavailable` on all eight shards -
 `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so the
 step that was meant to answer this printed a placeholder. Not readable, not
-estimated (Rule #10).
+estimated (Guardrail #10).
 
 The RSS sampler beside it did work. llama-server's resident set is 9.0 GiB when
 the weights finish loading and climbs to 12.1-13.5 GiB by the end of a job;
@@ -1883,7 +1883,7 @@ the section to cite.
 Three of the four conditions this section had set were met by the run above. The
 slowest `work` job fell from 113.1 to 58.8 minutes. The whole run finished in
 104.8 minutes against the job's `timeout-minutes: 330`. Artifacts and cache bytes
-are inside Rule #2. The fourth - every shard's memory peak clear of 16 GB - is
+are inside Guardrail #2. The fourth - every shard's memory peak clear of 16 GB - is
 unread rather than failed, and the resident-set figure that stands in for it is a
 per-machine number the shard count does not change.
 
@@ -1891,7 +1891,7 @@ per-machine number the shard count does not change.
 1.92x - the four-shard baseline of 2026-08-24 and the eight-shard run of
 2026-08-25 - are `Qwen3-8B-Q4_K_M`, retired on 2026-08-27. Nothing about the
 fan-out argument depends on the weights, but every number in it does, and a
-number measured on retired weights may not size a live config (Rule #10). That
+number measured on retired weights may not size a live config (Guardrail #10). That
 is why the paired run was worth its runner time.
 
 Three things had to hold before `run.max_parallel` could move, and all three are
@@ -1951,7 +1951,7 @@ because **halving the items does not halve the fixed cost**: checkout,
 whatever it carries. Per item the eight-worker run is therefore *worse* - 2.14
 minutes an item at four workers, 2.67 at eight. Eight workers buy wall-clock by
 spending more machine time in total, which on a public repository costs nothing
-(Rule #2).
+(Guardrail #2).
 
 **The spread inside the eight-worker run is 1.84x**, 29.0 to 53.4 minutes,
 against 1.37x inside the four-worker run. Two points sampled across a spread
@@ -1987,7 +1987,7 @@ measured. **The four-worker run is the outlier of that pair, not the baseline.**
 ### What is left to decide
 
 Not a measurement. Eight workers make the day ready about half an hour sooner,
-publish correctly, and stay inside every Rule #2 budget. What they do not do is
+publish correctly, and stay inside every Guardrail #2 budget. What they do not do is
 make `route` faster, because nothing a worker does reaches it.
 
 Sharding `route` is the lever that would, and the asset-name change unblocked it
@@ -2024,7 +2024,7 @@ early is the exception, and there is one.
 Quoting it - or any single run - as "what `route` costs" is how an ordinary run
 comes to look like a regression, which is exactly what happened when the
 eight-worker run was first read against it. Size a design against the
-distribution, never against one draw (Rule #10).
+distribution, never against one draw (Guardrail #10).
 
 **The spread has a suspect and it is not proved here.** This page already
 records that the host moves prompt-reading throughput 3.1x to 3.4x between CPU
@@ -2101,7 +2101,7 @@ rows and their -0.3104 is what 3 windows cost rather than what a cut costs. The
 110 uncut rows include the 91 one-window zeros, which is most of why their mean
 is near zero. Separating the cut from the window count needs cut and uncut items
 at the same window count, and there are 7 and 3 of those - too few to say
-anything (Rule #10). The cut is what a bigger `extract.truncation_cap_tokens`
+anything (Guardrail #10). The cut is what a bigger `extract.truncation_cap_tokens`
 would change, so this split has to be re-taken when the cap moves.
 
 Cut status is read as the arithmetic and not the flag: `source_word_count`
@@ -2140,7 +2140,7 @@ all.
 
 It says the instrument moves with slicing. It does **not** say the whole-article
 number is the truer one - that needs the human labels, and **0 of 60** are drawn
-(Rule #10). No default moved in the commit that recorded this:
+(Guardrail #10). No default moved in the commit that recorded this:
 `evaluation.chunk_words` is still 900.
 
 **One corpus, one day, one run.** 117 items from 2026-08-28, of which only 26
@@ -2244,7 +2244,7 @@ was not what was wrong here and stands. The rule as it stands today is in
 
 ## What the design-system reset cost, and what a page uses of the screen (2026-08-29)
 
-Rule #10 had been applied to everything the runner touches and to nothing the
+Guardrail #10 had been applied to everything the runner touches and to nothing the
 reader sees, which is part of why the reset was needed. These are the numbers
 that did not exist.
 
@@ -2457,7 +2457,7 @@ residual stays a figure on this page and is not published.
 The boundary is the day the configured 9B replaced the retired 8B
 (`pipeline_fingerprint` `f0d4ecc7` to `6a23e277`). A residual is our side of the
 call, so the model is an odd cause for it, and more than one thing changed that
-day. It is recorded as a boundary and not as an attribution (Rule #10).
+day. It is recorded as a boundary and not as an attribution (Guardrail #10).
 
 ### The extractor's 1.3 tokens a word is right to 0.01 percent
 
@@ -2935,7 +2935,7 @@ frozen articles at three repeats, which is 30 inference calls a shard:
 Margin 215 minutes, 65 percent of the bound. **At twice the derived per-item
 cost the worst shard is 218 minutes and still inside**, which is the point of
 sharding it: the design survives the estimate being wrong by 100 percent
-(Rule #2, Rule #10).
+(Guardrail #2, Guardrail #10).
 
 The production projection uses the same 176 s. `digest.yml` derives workers as
 `min(ceil(items / run.shard_size), run.max_parallel)`, so at the 160-item
@@ -3363,7 +3363,7 @@ Taken by `python backend/utilities/entity_gap.py` at commit `e0d6724`, over the
 Python 3.14.2, 2026-08-31. **No spread, because there is nothing to vary.** The
 report is a pure function of the committed tree, so two runs at one commit print
 the same bytes - checked by SHA-256 in `backend/tests/test_entity_gap.py`. Any
-machine at `e0d6724` gets these figures; the hardware is here because Rule #10
+machine at `e0d6724` gets these figures; the hardware is here because Guardrail #10
 asks, not because it moved anything.
 
 ### Two arms, because the record disagrees with itself
@@ -3712,7 +3712,7 @@ each:
 partly a change of method rather than a change of page: 16,237 was 9.38 bytes a
 ledger row extrapolated to the heaviest day on record, where 16,024 is a heavy
 mature day removed and measured. A measured day replaces an extrapolated one
-(Rule #10). `/console/machine/`'s run rate fell 36 bytes because the counter
+(Guardrail #10). `/console/machine/`'s run rate fell 36 bytes because the counter
 strip now reads one row per run where it read several.
 
 **Seven publishes, when the recorded rule would allow nine.** The horizon rule in

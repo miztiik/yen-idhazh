@@ -67,7 +67,7 @@
         }
       ],
       "default": null,
-      "description": "Our own one-line reason. Never the response body (Rule #11).",
+      "description": "Our own one-line reason. Never the response body (Guardrail #11).",
       "title": "Detail"
     },
     "endpoint_key": {

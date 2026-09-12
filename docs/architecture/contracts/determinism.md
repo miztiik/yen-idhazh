@@ -51,7 +51,7 @@ Every field is read from the thing it describes, not from a literal beside the c
 | `runner_class` | `RUNNER_ENVIRONMENT` / `RUNNER_OS` / `RUNNER_ARCH` | `local/<system>/<machine>` from `platform`. A machine that publishes none of the three is a developer machine and says so. |
 | `host_cpu` (not digested) | the `model name` line of `/proc/cpuinfo` | `platform.processor`, then the architecture. |
 
-Degrading is not the same as inventing. A degraded run stamps a value nothing else can produce, so its rows sit apart from every run whose runtime was named, and a reader can see which is which without being told (Rule #10, section 1a).
+Degrading is not the same as inventing. A degraded run stamps a value nothing else can produce, so its rows sit apart from every run whose runtime was named, and a reader can see which is which without being told (Guardrail #10, section 1a).
 
 ### Current implementation gap
 
@@ -106,7 +106,7 @@ file whose digest is missing. Refusing is right where degrading was right for
 answer, which is a fact about the run and stamps apart from every run whose
 source did answer. A placeholder weights digest records nothing and stamps
 *together* with every other unmeasured run, which is the one shape that makes the
-ledger lie (Rule #10).
+ledger lie (Guardrail #10).
 
 The defect was found by the 2026-08-26 model qualification, which is the first
 thing that had a reason to compare an expectation against an observation
@@ -224,7 +224,7 @@ The row is written in `work` and appended in `assemble` because a work shard's c
 | Raise when `LLAMA_CPP_BUILD` is absent, the way a missing weights digest raises | It would stop every developer run and every test that composes the stages, to protect a field that explains a run rather than gating one. A recorded absence stamps apart from every pinned run, says the same thing, and still runs. | Carmack |
 | Call `append_new` from `stage_work` | A shard's checkout is discarded when the job ends, so the row would never reach the committed ledger and the oracle would fail in CI while passing locally. | Fowler |
 | Have `assemble` rebuild the stamp from config | It runs on another machine after the server is gone, so it would record its own runner class and its own host as the ones that summarized nothing. | Carmack |
-| Backfill the stamps already in `state/scores.csv` | They predate any recorded runtime, so expanding them means manufacturing a measurement nobody took (Rule #10). They stay unexpandable, and that is the honest record. | Andre |
+| Backfill the stamps already in `state/scores.csv` | They predate any recorded runtime, so expanding them means manufacturing a measurement nobody took (Guardrail #10). They stay unexpandable, and that is the honest record. | Andre |
 | A `reason` or `superseded_by` column on the ledger row | Nothing parses a sentence in a CSV, and the machine-readable "why" already lives in `state/validation-<date>.csv`. | Fowler |
 
 ## See also
@@ -234,4 +234,4 @@ The row is written in `work` and appended in `assemble` because a work shard's c
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what an eval row measures, and why an empty re-run must not write one.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the identity and replay requirements for a model change.
 - [../../reference/measurements.md](../../reference/measurements.md) - where a measured number carries its hardware and date.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #10, section 11.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10, section 11.

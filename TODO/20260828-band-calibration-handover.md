@@ -27,7 +27,7 @@ established that items above 0.80 match their source more often than items
 below it. The cut could sit at 0.60 or 0.95 and every page would look equally
 confident.
 
-This is a Rule #10 problem on the surface a reader actually sees: an unmeasured
+This is a Guardrail #10 problem on the surface a reader actually sees: an unmeasured
 number is justifying a design, and the design is a sentence we tell strangers.
 
 Three defects closed on 2026-08-27 were the same shape one layer down - a column

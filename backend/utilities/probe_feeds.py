@@ -26,7 +26,7 @@ A verdict here is a `FailureCode` from the same vocabulary an item-health row
 carries, so a result drops straight into the reasons table in `discovery.md`.
 
 **This touches the network, which is why it is a utility and not a test**
-(Rule #7). It is also why a result is evidence about the machine it ran on and
+(Guardrail #7). It is also why a result is evidence about the machine it ran on and
 not qualification on the runner: several publishers serve a developer machine
 and refuse a GitHub address. The report says which host it ran from so nobody
 mistakes one for the other.

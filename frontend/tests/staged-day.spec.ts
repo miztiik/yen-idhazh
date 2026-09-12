@@ -108,7 +108,7 @@ function staged(): Day[] {
  * The control below needs one day that carries a vector block, and the newest
  * is the one the current writer produced. Parsing all of them to find one cost
  * a parse per published day and answered the same question sixteen times
- * (`CLAUDE.md` Rule #12).
+ * (`CLAUDE.md` Guardrail #12).
  */
 function newestCommittedDay(): Day {
 	const deepest = (at: string, depth: number): string =>

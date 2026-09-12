@@ -4,7 +4,7 @@ Every fetch decision worth getting wrong is a pure function over a status code,
 a robots file or an address, so all of them are tested and none of them needs a
 socket. The function that opens the connection is a thin wrapper; where the
 order of two reads is the thing under test, the socket edge is supplied as a
-reader over a committed capture rather than mocked (Rule #7).
+reader over a committed capture rather than mocked (Guardrail #7).
 
 The extraction tests are about the trust boundary and about the failures that
 are supposed to degrade rather than raise.
@@ -387,7 +387,7 @@ class Recorder:
     This is not a mock of our own logic: it is one implementation of the same
     `Fetcher` signature every stage already takes, answering from a committed
     capture. The order of the two reads is the policy under test, and policy is
-    what a test has to be able to get wrong (Rule #7).
+    what a test has to be able to get wrong (Guardrail #7).
     """
 
     def __init__(self, answer: FetchResult) -> None:

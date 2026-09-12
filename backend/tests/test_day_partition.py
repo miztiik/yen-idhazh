@@ -19,7 +19,7 @@ different shape answering a different question is not a disagreement.
 
 Every tree here is built under `tmp_path` from the constants below, so these
 checks cost the same on the day `state/published/` holds ten times the days
-(`CLAUDE.md` Rule #12, section 13). A built tree also carries the four cases the
+(`CLAUDE.md` Guardrail #12, section 13). A built tree also carries the four cases the
 committed ledgers have never produced and never will.
 """
 

@@ -193,7 +193,7 @@ class TestOneEncoderTwoRuntimes:
         `config.json` - would discard every set a browser fetched and leave no
         trace except readers with no search. Hashing 23 MB of committed,
         fixed-size files costs about 60 ms and is not a walk over anything a run
-        appends to (Rule #12).
+        appends to (Guardrail #12).
         """
         digests = AssistConfig().model_digests
         assert set(digests) == {
@@ -356,7 +356,7 @@ class TestPinnedArithmetic:
         assert set(short.attention_mask) == {1}
 
     def test_the_cap_is_the_configured_one_and_not_a_literal(self) -> None:
-        """The knob has to reach the tokenizer, or it is decoration (Rule #6)."""
+        """The knob has to reach the tokenizer, or it is decoration (Guardrail #6)."""
         if not (REPO_ROOT / TOKENIZER_RELPATH).exists():
             pytest.skip("the tokenizer is not committed in this checkout")
         narrow = build_tokenizer(REPO_ROOT, max_tokens=64)

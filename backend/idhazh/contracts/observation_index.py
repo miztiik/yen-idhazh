@@ -7,7 +7,7 @@ writer has to answer "have we recorded this one?" before it appends, and until
 2026-09-07 it answered by reading every score row it had ever written.
 
 That is a bill that arrives every run for an answer the writer already had, and
-it grows on a day nobody writes any code (Rule #12). An eval row is 819.6 bytes
+it grows on a day nobody writes any code (Guardrail #12). An eval row is 819.6 bytes
 wide on average because it carries eleven metrics, two model scores, a band and
 a timestamp - none of which the question needs. The question needs one digest.
 
@@ -54,11 +54,11 @@ class ObservationIndexRow(Contract):
                 "The writer's dedupe read every live score shard and every archived month "
                 "before a single append. Measured on this repository on 2026-09-07: 7,636 rows, "
                 "6,111.8 KB, 819.6 bytes a row, and about 173 MB once the ledger reaches steady "
-                "state - a cost that rises on a day nobody writes any code, which is what Rule "
-                "#12 refuses. The question is 64 hex characters wide, so the answer is a cheaper "
-                "record of the same identities rather than a shorter memory: 566.8 KB over those "
-                "same measurements, 10.8 times smaller. Nothing is forgotten and no clock is "
-                "involved."
+                "state - a cost that rises on a day nobody writes any code, which is what "
+                "Guardrail #12 refuses. The question is 64 hex characters wide, so the answer "
+                "is a cheaper record of the same identities rather than a shorter memory: "
+                "566.8 KB over those same measurements, 10.8 times smaller. Nothing is "
+                "forgotten and no clock is involved."
             ),
         ),
     )

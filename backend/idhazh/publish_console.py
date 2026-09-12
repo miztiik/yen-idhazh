@@ -19,7 +19,7 @@ canary assertion non-deterministic.
 1. *One month per run.* The run knows which month it appended to, and every
    other month is frozen. A producer takes that month and reads nothing else -
    unless a target file is missing, which is what makes a fresh clone, a deleted
-   file and a first backfill all land (Rule #12).
+   file and a first backfill all land (Guardrail #12).
 2. *Only on a byte difference.* A re-derived month whose bytes match what is on
    disk is not rewritten. A timestamp says when a file was written, never
    whether its content moved.
@@ -165,7 +165,7 @@ def months_to_write(
     every run, for ever, on a month no console window can reach.
 
     This is `publish_telemetry.publish`'s rule, lifted so five more producers
-    obey it rather than each restating it (Rule #12, decision 4 of the row).
+    obey it rather than each restating it (Guardrail #12, decision 4 of the row).
     """
     wanted: list[str] = []
     for month in available:
@@ -202,7 +202,7 @@ def prune_months(
 ) -> tuple[str, ...]:
     """Delete every published month past its own configured age.
 
-    Without this a producer is the growing cost Rule #12 refuses: a directory
+    Without this a producer is the growing cost Guardrail #12 refuses: a directory
     that gains a file every month and loses none. With it the directory holds at
     most `keep_months` files, which is what makes every later listing of it
     bounded.

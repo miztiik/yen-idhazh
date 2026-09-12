@@ -155,7 +155,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The question is authored from the elements, never from the visual. That is the condition the whole arm rests on | 12.13 G38, P.5.4.3 |
-| 2 | It is called **offline paired evaluation**, never A/B testing. That names a mechanism Rule #1 forbids, and the numbers would eventually be quoted as if readers produced them | Row 66 |
+| 2 | It is called **offline paired evaluation**, never A/B testing. That names a mechanism Guardrail #1 forbids, and the numbers would eventually be quoted as if readers produced them | Row 66 |
 | 3 | The standing arm is visual against no-visual; a config comparison rides on top | P.D9, P.L16 |
 | 4 | The `none` arm carries a **floor above zero** and a frozen window, so it cannot be quietly switched off | P.D10 |
 | 5 | `human_visual_gain` gets a home here. It is one of only eight human measures and the one asking whether comprehension materially improved | 12.13 G39 |

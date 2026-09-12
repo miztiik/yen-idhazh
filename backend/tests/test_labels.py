@@ -6,7 +6,7 @@ other is that the ledger is hard to fill with a machine - LLM-as-judge is a
 project non-goal (`CLAUDE.md` section 0a), and a non-goal that is only
 discouraged is not a control.
 
-No mocks and no network (Rule #7). The draw runs over a ledger built here, not
+No mocks and no network (Guardrail #7). The draw runs over a ledger built here, not
 over `state/`: measured 2026-09-06 the committed ledger held 6,966 rows over 15
 days and grows by about 465 a day, and the tests below read and re-drew over all
 of them eighteen times to establish six cases. The draw reads `hhem`,

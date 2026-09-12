@@ -6,12 +6,12 @@
 	 * the wall clock alone cannot say whether four hours of runner time was a
 	 * good trade. Priced at somebody else's rate the same run gets a second unit,
 	 * and that is the one question no other panel on this site answers. CLAUDE.md
-	 * Rule #10 carries the owner's carve-out for it on one condition, which is
+	 * Guardrail #10 carries the owner's carve-out for it on one condition, which is
 	 * this control: a money figure whose basis is invisible is the exact thing
 	 * that rule exists to prevent, so the rate and its source are printed beside
 	 * every cost on the page.
 	 *
-	 * The configured pair comes from `config/idhazh.json` (Rule #6). A rate the
+	 * The configured pair comes from `config/idhazh.json` (Guardrail #6). A rate the
 	 * operator types is kept in `localStorage` and read on mount and never during
 	 * prerender, so the first paint always matches the prerendered document and
 	 * the page never flickers from one number to another before a script runs.

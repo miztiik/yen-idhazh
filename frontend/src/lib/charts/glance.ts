@@ -36,7 +36,7 @@ export interface GlanceDay {
  * enough to have a shape, short enough that a card is still a card. */
 const TREND_DAYS = 14;
 
-/** GitHub Pages refuses a site larger than this (Rule #2).
+/** GitHub Pages refuses a site larger than this (Guardrail #2).
  *
  * A constant and not a config knob, for the reason
  * `backend/idhazh/retention.py` gives for its own copy: it is a property of the

@@ -582,7 +582,7 @@ def duplicates_within_plan(
     it would already be gone. So the count is what enforcing would remove, not an
     over-count matched against items that would not survive.
 
-    Cost is bounded by the day's plan, never by the archive (Rule #12): the
+    Cost is bounded by the day's plan, never by the archive (Guardrail #12): the
     safety ceiling caps `items`, and the vectors are handed in already computed.
     """
     desk_size = Counter(item.vertical for item in items)

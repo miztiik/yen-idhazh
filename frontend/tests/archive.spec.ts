@@ -14,7 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
  * therefore serves a larger index through `page.route`. That is the static host
  * answering differently, not our code replaced - the same boundary the missing
  * -index and model-absent tests use, and the only one any of them touches
- * (Rule #7).
+ * (Guardrail #7).
  */
 
 const MONTH = /\/index\/\d{4}-\d{2}\.json$/;
@@ -164,7 +164,7 @@ test('the browse window bounds the list, and states an empty window plainly', as
 	// 2026-08-20. These ten stories are dated the first of the month, so a
 	// thirty-day window reaches them and a one-day window - the anchor day alone -
 	// does not. The window bounds the fetch and the list; before this row the list
-	// walked back through the archive until a page filled (Rule #12).
+	// walked back through the archive until a page filled (Guardrail #12).
 	const entries = Array.from({ length: 10 }, (_, at) => ({
 		date: '2026-08-01',
 		item_id: `ai-${at + 1}`,

@@ -5,7 +5,7 @@
 module writes the narrow monthly projection under `frontend/public/scores/`,
 which is the only score data the console fetches.
 
-The shape is `PublicEvalRow` and the shape owns which cells may cross (Rule #3).
+The shape is `PublicEvalRow` and the shape owns which cells may cross (Guardrail #3).
 What this module owns is *from what* a month is built. Where it sits, when it is
 written and how long it survives are `publish_console`'s, and every producer
 beside this one obeys the same three rules from the same place.

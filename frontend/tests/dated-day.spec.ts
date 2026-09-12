@@ -53,7 +53,7 @@ test.describe('the day a document seeds', () => {
 	 * moment the desks reorder - and the rule below would then pass without ever
 	 * having been exercised. It is also a rule about `dayShell`, which is a pure
 	 * function of one payload, so reading 16 days to check it 16 times buys the
-	 * sixteenth nothing (`CLAUDE.md` Rule #12).
+	 * sixteenth nothing (`CLAUDE.md` Guardrail #12).
 	 */
 	test.beforeAll(() => {
 		scratch = mkdtempSync(join(tmpdir(), 'dated-day-'));

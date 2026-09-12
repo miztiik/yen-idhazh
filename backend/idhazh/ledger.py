@@ -4,7 +4,7 @@ Every file here is written by CI and read by a later run. All but one are
 append-only; the exception is named below. They exist because the pipeline has
 no memory of its own: every run starts on a fresh machine with a fresh
 checkout, so anything one run needs to tell the next has to be committed
-(Rule #1).
+(Guardrail #1).
 
 A ledger partitions only when the read that consumes it carries a time window.
 A window lets the reader name the files it wants and skip the rest; without one,
@@ -761,7 +761,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[tuple[Path, tuple[
     to, so a repeat the union merge left behind can only be in a file that run
     wrote - and the two month-partitioned ledgers here contribute one shard each
     whatever the archive holds. `date=None` is the operator's full pass and names
-    every shard; it is the only cover that costs more every month, and Rule #12
+    every shard; it is the only cover that costs more every month, and Guardrail #12
     is why a person has to ask for it by name.
 
     Nothing here is a clock. An older month is skipped because this run did not
@@ -910,7 +910,7 @@ def load_item_health_shard(path: Path) -> list[ItemHealthRow]:
 def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[ItemHealthRow]:
     """Every item-health row in the window, oldest shard first.
 
-    Bounded for the same reason `load_health` is (Rule #12): this is the
+    Bounded for the same reason `load_health` is (Guardrail #12): this is the
     fastest-growing ledger in the repository and a run appends to it five times
     a day, so a reader that globbed every shard would cost more every run for an
     answer about the last few weeks. `shards_in_window` is the pruner's own
@@ -967,7 +967,7 @@ def load_runtime_counters(state_dir: Path, *, run_id: str) -> list[RuntimeCounte
     Nothing is partitioned, and that is the point: a declared cover can be one
     run. Measured 2026-09-08: 209 rows over 12 days in 35,950 B, gaining 20 rows
     on each of the last eight days, so a layout over it would buy an answer the
-    cover already gives (Rule #12).
+    cover already gives (Guardrail #12).
     """
     rows = [
         RuntimeCountersRow.from_csv_row(row)
@@ -1034,7 +1034,7 @@ def reliability(state_dir: Path, *, today: str, within_days: int, floor: float) 
 
     Reads the same health shards `load_health` reads, groups them by feed, and
     reduces each feed's rows through `feed_reliability`. The read is bounded by
-    `within_days` (Rule #12): it is the feeds' recent record, never the whole
+    `within_days` (Guardrail #12): it is the feeds' recent record, never the whole
     ledger. A feed absent from the map had no evidence-bearing read in the
     window, so a caller reads a miss as 1.0.
     """

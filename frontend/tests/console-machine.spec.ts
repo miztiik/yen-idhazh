@@ -459,7 +459,7 @@ test.describe('the committed ledger, read as the page reads it', () => {
 	test('the ceilings come from config, and the runner memory from the platform', () => {
 		expect(limits.contextWindow).toBe(CONFIG.models.summarize.inference.n_ctx);
 		expect(limits.jobTimeoutSeconds).toBe(runConfig().shard_timeout_minutes * 60);
-		// CLAUDE.md Rule #2: a stock ubuntu-latest runner has 16 GB.
+		// CLAUDE.md Guardrail #2: a stock ubuntu-latest runner has 16 GB.
 		expect(RUNNER_MEMORY_BYTES).toBe(16 * 1024 * 1024 * 1024);
 	});
 

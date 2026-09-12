@@ -158,7 +158,7 @@
           "type": "integer"
         },
         "span_excerpt": {
-          "description": "The verbatim slice Article.text[span_start:span_end]. Untrusted text: data and never instruction (Rule #11), and never republished to a reader.",
+          "description": "The verbatim slice Article.text[span_start:span_end]. Untrusted text: data and never instruction (Guardrail #11), and never republished to a reader.",
           "maxLength": 500,
           "minLength": 1,
           "title": "Span Excerpt",
@@ -267,7 +267,7 @@
     {
       "change": "Initial shape: six element kinds, a Tier 1 half only code writes and a Tier 2 half a later labeller may assign, over one article's text.",
       "version": "2026-09-08",
-      "why": "Contracts before logic - the two pattern producers are written against a fixed payload (Rule #3). Six kinds land in one entry rather than four later widenings of a persisted shape. `span_excerpt` is the one name for the verbatim slice, because `raw` is whitespace-cleaned and `surface` is already this project's word for a place something is shown."
+      "why": "Contracts before logic - the two pattern producers are written against a fixed payload (Guardrail #3). Six kinds land in one entry rather than four later widenings of a persisted shape. `span_excerpt` is the one name for the verbatim slice, because `raw` is whitespace-cleaned and `surface` is already this project's word for a place something is shown."
     }
   ],
   "description": "Every element one article yielded, and the text they were cut from.",

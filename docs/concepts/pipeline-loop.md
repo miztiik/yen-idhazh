@@ -25,9 +25,9 @@ items because per-item `WorkIdentity` skip is not implemented yet.
 Each stage consumes one validated payload and emits another. It never reaches into another stage's internals. Two consequences follow, and they are the reason for the rule:
 
 - **Every stage is invocable alone**, with a file in and a file out. A stage that can only run as part of the whole pipeline cannot be tested, and is a design error.
-- **Every boundary is a fixture.** Because a payload is plain serializable data, a real captured payload can be replayed in a test with no mocks and no network (Rule #7).
+- **Every boundary is a fixture.** Because a payload is plain serializable data, a real captured payload can be replayed in a test with no mocks and no network (Guardrail #7).
 
-The payload shapes are Pydantic models under `backend/idhazh/contracts/`, written before the logic that reads them (Rule #3). See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
+The payload shapes are Pydantic models under `backend/idhazh/contracts/`, written before the logic that reads them (Guardrail #3). See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
 
 ## The stages
 
@@ -83,7 +83,7 @@ Four invariants hold regardless of how the batches are sized:
  discards every decision it had already made - measured on 2026-08-25, 88 decided
  items and 9 rendered charts thrown away, and the day published 145 items with
  no visuals at all. An item the stage never reached writes no payload, which is
- what `items_routed` already reports (Rule #10). It also skips what the day
+ what `items_routed` already reports (Guardrail #10). It also skips what the day
  already published, because the assembler keeps the published copy and discards
  the new one - so re-deciding it is work no reader can ever see.
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
@@ -94,7 +94,7 @@ Four invariants hold regardless of how the batches are sized:
 
 ## What one run leaves for the next
 
-There is no database (Rule #1), so anything a later run must read has to survive
+There is no database (Guardrail #1), so anything a later run must read has to survive
 as a committed file. Four live append-only ledgers plus one unwired fingerprint
 ledger contract sit under `state/`:
 
@@ -117,9 +117,9 @@ See [../architecture/sources/freshness.md](../architecture/sources/freshness.md)
 
 ## What never happens in the loop
 
-- No stage fetches at read time. Everything here is build time (Rule #1).
+- No stage fetches at read time. Everything here is build time (Guardrail #1).
 - No article body is committed or served. The link and our summary are the output (see [../../CLAUDE.md](../../CLAUDE.md) section 0a).
-- No fetched text becomes an instruction, a shell argument, a file path, or a URL to fetch (Rule #11).
+- No fetched text becomes an instruction, a shell argument, a file path, or a URL to fetch (Guardrail #11).
 - No stage silently drops data. Truncation, degradation and failure are all recorded on the item.
 
 ## Design rationale

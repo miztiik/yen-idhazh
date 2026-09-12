@@ -21,7 +21,7 @@ import { assetBaseUrl, connectSources, encoderOrigins } from './asset-base.js';
  *
  * Derived rather than written down, because a hash somebody pasted goes stale
  * the next time the script is edited and takes the theme with it, silently
- * (Rule #6).
+ * (Guardrail #6).
  */
 function inlineScriptHashes() {
 	const shell = readFileSync(

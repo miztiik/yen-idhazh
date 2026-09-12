@@ -1,6 +1,6 @@
 """Contract-tier tests for the training window.
 
-No mocks and no network (Rule #7): every input is a committed fixture or a row
+No mocks and no network (Guardrail #7): every input is a committed fixture or a row
 this module builds from one.
 """
 
@@ -105,7 +105,7 @@ def test_the_file_is_the_conversational_sft_shape_a_trainer_loads(tmp_path: Path
     Asserted structurally rather than by calling `datasets.load_dataset`. That
     library is the reader this shape exists for, but it is not a dependency of
     this project and adding it for one test costs pyarrow and several hundred
-    megabytes against a beneficiary that is one assertion (Rule #8). What every
+    megabytes against a beneficiary that is one assertion (Guardrail #8). What every
     one of TRL, Unsloth, Axolotl and LLaMA-Factory actually requires is written
     out here instead, so a change that breaks them fails here.
     """

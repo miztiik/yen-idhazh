@@ -4,14 +4,14 @@ This suite lands before the summarizer, not after, so the summarizer is written
 against a live assertion rather than audited afterwards. A prompt asking a model
 to ignore embedded instructions is a request; the controls asserted here - the
 sanitizer, the fence, and the pinned output shape - are the controls
-(Rule #11).
+(Guardrail #11).
 
 The oracle is that all five fail to inject, and a single success fails the
 build. The counter-oracle matters just as much: every canary also declares text
 that MUST survive, because a sanitizer that deletes the article passes an
 absence check trivially and produces nothing worth reading.
 
-No mocks and no network (Rule #7): every attack is a committed fixture.
+No mocks and no network (Guardrail #7): every attack is a committed fixture.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def payload_of(canary: Canary) -> dict[str, object]:
 def as_a_real_page(canary: Canary) -> Article:
     """The article `extract` builds when a real host serves these same bytes.
 
-    Not a mock (Rule #7): the fixture's own paragraphs go into a page, and the
+    Not a mock (Guardrail #7): the fixture's own paragraphs go into a page, and the
     real extractor and the real sanitizer read it. It is the only honest way to
     check the canary adapter, because an assertion that re-states the adapter's
     own arithmetic passes even when both sides are wrong together.

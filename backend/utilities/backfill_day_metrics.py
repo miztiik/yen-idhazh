@@ -9,7 +9,7 @@ slice, written to `state/day-metrics/<YYYY>/<MM>/<DD>.json`.
 Operator tooling. It runs by hand, reads the committed record and writes
 committed state, and reaches no reader.
 
-A walk over every published day is the growing cost Rule #12 keeps out of the
+A walk over every published day is the growing cost Guardrail #12 keeps out of the
 pipeline - which is why the pipeline writes one record per run and this walk runs
 once, by a person, to seed the days that predate the producer. Each day's
 figures are still read from that one day's month shard, so the work for any one

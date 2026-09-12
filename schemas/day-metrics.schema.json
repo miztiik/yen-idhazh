@@ -433,12 +433,12 @@
     {
       "change": "Added the nullable extraction block.",
       "version": "2026-09-08T21:00",
-      "why": "Nothing said whether an article the planner drew nothing for had anything to draw, so a fall in published charts read the same whether the planner stopped choosing them or the extractor stopped finding numbers. The block is the day's join of the item-health census, which carries the class, against the published day, which carries the chart - both bounded by the day and neither by the archive (Rule #12). Nullable, because a record an earlier run wrote carries no such block and the console reads it leniently rather than dropping the whole day."
+      "why": "Nothing said whether an article the planner drew nothing for had anything to draw, so a fall in published charts read the same whether the planner stopped choosing them or the extractor stopped finding numbers. The block is the day's join of the item-health census, which carries the class, against the published day, which carries the chart - both bounded by the day and neither by the archive (Guardrail #12). Nullable, because a record an earlier run wrote carries no such block and the console reads it leniently rather than dropping the whole day."
     },
     {
       "change": "Initial shape: one record per published day, additive against non-additive.",
       "version": "2026-09-07",
-      "why": "The console rebuilt every per-day figure by walking the whole committed history on every build (research findings 61-75), a cost that rose with each published day for an answer that never changed once the day was frozen (Rule #12). This record carries those figures, written once by the producer that already holds the data. It stores a total only where a reader may add it across days and never as a running counter, because a correction to a counter needs a decrement path and a missed decrement is silent (owner, 2026-09-06); a correction rewrites this whole record instead. A non-additive figure carries the day's own value plus what a reader needs to combine days in a defined way (Andre)."
+      "why": "The console rebuilt every per-day figure by walking the whole committed history on every build (research findings 61-75), a cost that rose with each published day for an answer that never changed once the day was frozen (Guardrail #12). This record carries those figures, written once by the producer that already holds the data. It stores a total only where a reader may add it across days and never as a running counter, because a correction to a counter needs a decrement path and a missed decrement is silent (owner, 2026-09-06); a correction rewrites this whole record instead. A non-additive figure carries the day's own value plus what a reader needs to combine days in a defined way (Andre)."
     }
   ],
   "description": "Everything a run settled about one published day, for a later reducer to read.",

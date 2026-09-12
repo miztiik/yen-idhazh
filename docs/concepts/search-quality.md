@@ -352,14 +352,14 @@ worse. Both are printed by the same test on every run. Authority: Andre.
 **The floor moved on evidence, not on taste (2026-08-26).** The estimate before
 measuring was 0.35 to 0.45. The measurement put it at the bottom of that range
 and said why: past 0.35 the cost in right answers becomes larger than this
-instrument's own spread. Authority: Andre, Rule #10.
+instrument's own spread. Authority: Andre, Guardrail #10.
 
 **The bar was re-derived rather than lowered, and the difference is the four
 arms above (2026-08-26).** A gate that fails after a fix landed can be met two
 ways: move the number until it passes, or find out what changed. Holding the
 corpus, the labels and the vectors constant one at a time showed the ranking had
 not moved at all, so 0.85 was never the system's number - it was the number of
-an archive with 44.5% of its vectors. Authority: Andre, Rule #10.
+an archive with 44.5% of its vectors. Authority: Andre, Guardrail #10.
 
 **The floor stayed where it was because the noise did (2026-08-26).** The
 corpus grew 3.7x in scored pairs and the same-domain noise distribution did not
@@ -386,7 +386,7 @@ lasts about six published days. Two things follow. The number is written with
 its expiry, in this page and in the field description, so the next failure is
 recognised instead of re-investigated. And the second pass is the last one: it
 cost a pull request and bought a week, and a third would move the alarm further
-from what a reader gets for the same week. Authority: Andre, Rule #10.
+from what a reader gets for the same week. Authority: Andre, Guardrail #10.
 
 ## Rejected alternatives
 
@@ -417,4 +417,4 @@ from what a reader gets for the same week. Authority: Andre, Rule #10.
 - [config.md](config.md) - `assist.recall_min` and the similarity floor.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the search control and what it downloads.
 - [../reference/measurements-site.md](../reference/measurements-site.md) - the index weight and the recall series.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rule #10 (measured, not estimated).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (measured, not estimated).

@@ -43,7 +43,7 @@ drops a job record when the run ages out.
 summarize stage copied out of one model reply, and two documents publish rates
 derived from it - `docs/architecture/summarize/throughput.md` and the console.
 Nothing committed could check them, because the only place the server's own
-counters landed was a job log with two days of retention. Rule #10 says an
+counters landed was a job log with two days of retention. Guardrail #10 says an
 unreconcilable number may not justify a design, so the second instrument had to
 become a committed row.
 
@@ -283,7 +283,7 @@ class RuntimeCountersRow(Contract):
                 "outside the repository is checked by hand or not at all. The CPU model "
                 "lands in the same row because this project has measured a 3.1x swing "
                 "in read throughput between hosts, so a clock without the part it was "
-                "taken on cannot be compared with the next run's (Rule #10). Both are "
+                "taken on cannot be compared with the next run's (Guardrail #10). Both are "
                 "one fact about one work job, which is exactly this row's grain; the "
                 "run manifest is one row per run and a run draws up to eight hosts."
             ),
@@ -300,7 +300,7 @@ class RuntimeCountersRow(Contract):
                 "surfaces quote rates derived from them. Nothing committed could check "
                 "either, because the server's own counters were scraped into a job log "
                 "that keeps them for two days. A number that cannot be reconciled "
-                "cannot justify a design (Rule #10), so the second instrument is now a "
+                "cannot justify a design (Guardrail #10), so the second instrument is now a "
                 "committed row."
             ),
         ),

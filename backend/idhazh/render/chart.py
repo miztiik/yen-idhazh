@@ -204,7 +204,7 @@ def _mark_name(value: DisplayedValue, known: Mapping[ElementId, Element]) -> str
     """What names one bar: the element's own characters, cut and sanitized.
 
     A category is not a measured channel, so the resolver never derives one and
-    `element_id` is always set. Fetched text is data (Rule #11), so it is
+    `element_id` is always set. Fetched text is data (Guardrail #11), so it is
     sanitized on the way into markup a reader's browser will parse.
     """
     if value.element_id is None:  # pragma: no cover - a category is never derived

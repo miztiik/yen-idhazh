@@ -38,7 +38,7 @@
     {
       "change": "Initial shape: the three-turn exchange, plus url_key, date, model_id and vertical.",
       "version": "2026-08-28",
-      "why": "The pipeline scores 600-730 articles a day and throws the pairs away. They are training data for the exact job we run, so the window that keeps them needs a shape before anything writes one (Rule #3). Five fields and no more: prompt_fingerprint is sha256 of messages[0], source_words is a word count of messages[1], and which file a row lives in already says whether a human wrote it - a stored copy of a derivable value is a second thing that can disagree with the first."
+      "why": "The pipeline scores 600-730 articles a day and throws the pairs away. They are training data for the exact job we run, so the window that keeps them needs a shape before anything writes one (Guardrail #3). Five fields and no more: prompt_fingerprint is sha256 of messages[0], source_words is a word count of messages[1], and which file a row lives in already says whether a human wrote it - a stored copy of a derivable value is a second thing that can disagree with the first."
     }
   ],
   "description": "One article's exchange, as one line of `corpus/corpus.jsonl`.",

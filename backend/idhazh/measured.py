@@ -28,7 +28,7 @@ on 2026-09-10 and the property behind them is asserted directly, by
 document that should not carry one and has no number in it at all.
 
 **The test a number has to pass to live here: does it have to move when nobody
-wrote any code, because a run appended more?** That is Rule #12's question with
+wrote any code, because a run appended more?** That is Guardrail #12's question with
 one noun changed. Yes means it is the defect and the property behind it should be
 asserted instead. No means it is a design statement and it is welcome. And where
 a number must exist, prefer putting the direction it may not move into the type -

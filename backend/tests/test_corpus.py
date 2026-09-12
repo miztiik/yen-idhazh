@@ -5,7 +5,7 @@ over-cap items present, brief items present - and qualification run
 32998603233 died on it: `band 3 (min_source_words 2000) has 0, needs 3`. Two
 faults, both exercised here.
 
-No mocks and no network (Rule #7). The fetcher is a real function over a real
+No mocks and no network (Guardrail #7). The fetcher is a real function over a real
 HTML body, and the bodies are built to a word count so the length tiers are the
 thing under test rather than a property of a captured page.
 """
@@ -292,7 +292,7 @@ def test_the_selection_does_not_move_when_the_pool_is_reordered() -> None:
 
 
 def test_the_pool_floor_is_read_from_config() -> None:
-    """Rule #6. The knob is the only number that sizes the walk.
+    """Guardrail #6. The knob is the only number that sizes the walk.
 
     The band-against-cap assertion that used to sit here moved to
     `test_the_truncation_cap_sits_below_the_longest_band`, which owns that

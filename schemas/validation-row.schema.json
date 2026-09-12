@@ -1,7 +1,7 @@
 {
   "$defs": {
     "LeaderboardProvenance": {
-      "description": "Whether anybody published a number for this model, on this task.\n\n`not_reported` is not zero. A model whose card publishes no summarization or\nfaithfulness result has an unknown prior, and recording that as `0.0` would\nput a fabricated worst case into every mean, chart and comparison that ever\nreads the column (Rule #10).",
+      "description": "Whether anybody published a number for this model, on this task.\n\n`not_reported` is not zero. A model whose card publishes no summarization or\nfaithfulness result has an unknown prior, and recording that as `0.0` would\nput a fabricated worst case into every mean, chart and comparison that ever\nreads the column (Guardrail #10).",
       "enum": [
         "reported",
         "not_reported"

@@ -154,7 +154,7 @@ from idhazh.contracts.element import ELEMENT_ID_PATTERN, ElementId
 #: name rather than left as an absence. Alt text assembled by the compiler is
 #: satisfied by construction, because the compiler holds only element values;
 #: alt text written by the model is prose restating the chart's own data, which
-#: no validator can check (Rule #11). A trust boundary kept as an omission is
+#: no validator can check (Guardrail #11). A trust boundary kept as an omission is
 #: one careless widening away from gone; kept as a name, the widening does not
 #: start - this module raises at import instead.
 FORBIDDEN_FIELDS: Final = frozenset({"alt_text"})
@@ -393,7 +393,7 @@ class VisualPlan(Contract):
             ),
             why=(
                 "Contracts before logic - the planner's second call and the compiler are "
-                "both written against a fixed payload (Rule #3). The prohibitions are the "
+                "both written against a fixed payload (Guardrail #3). The prohibitions are the "
                 "point of the shape rather than a note beside it: a plan that can name a "
                 "pixel is a plan bound to one renderer, and a plan that can state a "
                 "number turns the worst a prompt injection can do from picking the wrong "

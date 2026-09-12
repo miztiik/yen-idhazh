@@ -13,7 +13,7 @@ import { FRONTEND_GROUPS, groupedSpecs } from './scripts/test-groups';
 
 /** The port a runner uses, and the number this file has always defaulted to.
  *
- * A GitHub runner is one job alone on its own machine (Rule #2), so it has
+ * A GitHub runner is one job alone on its own machine (Guardrail #2), so it has
  * nothing to collide with and nothing about a CI run moves.
  */
 export const CI_PREVIEW_PORT = 4173;
@@ -108,7 +108,7 @@ const WHOLE_DAY = /whole-day\.spec\.ts$/;
 /** How many spec files run at once.
  *
  * One by default, four in CI, and the two machines disagree about which is
- * right. On a runner - 4 vCPU with nothing else on it (Rule #2) - four workers
+ * right. On a runner - 4 vCPU with nothing else on it (Guardrail #2) - four workers
  * took the browser step from 344 s to 207 s, 40 percent faster, measured
  * 2026-09-05 on runs 33989034726 and 33991122503. On an i7-1265U with six other
  * checkouts building, the same change measured 233.7 s against 135.5 s, 72

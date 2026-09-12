@@ -32,7 +32,7 @@
       "type": "string"
     },
     "premise": {
-      "description": "The article after extraction, sanitizing and the truncation cap - the text the scorer read, byte for byte. Untrusted (Rule #11): it prints as inert terminal text and never becomes a prompt, a path or a URL.",
+      "description": "The article after extraction, sanitizing and the truncation cap - the text the scorer read, byte for byte. Untrusted (Guardrail #11): it prints as inert terminal text and never becomes a prompt, a path or a URL.",
       "title": "Premise",
       "type": "string"
     },
