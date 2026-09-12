@@ -3,25 +3,41 @@
 from __future__ import annotations
 
 import json
+import re
+from decimal import Decimal
 from pathlib import Path
+from typing import Final
 
 import pytest
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
+from idhazh.contracts.app_config import AppConfig, VisualsConfig
+from idhazh.contracts.element import ElementTable
+from idhazh.contracts.visual import VisualPlan, VisualType
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
     VisualDecision,
     VisualKind,
     VisualState,
 )
+from idhazh.render.chart import CompileError, compile_bar, render_chart
 from idhazh.render.chart import RenderError as ChartError
-from idhazh.render.chart import render_chart
 from idhazh.render.write import (
     asset_relpath,
     drop_raced_assets,
+    render_planned_visual,
     render_visual,
 )
 
 pytestmark = pytest.mark.visual
+
+#: The one committed `bar` plan and the article table it draws from. The canary
+#: day compiles the same pair, so the drawing a browser reads back and the
+#: drawing asserted here cannot be two different pictures.
+PLAN_FIXTURES: Final = FIXTURES_DIR / "visual-validator" / "plans"
+TABLE_FIXTURES: Final = FIXTURES_DIR / "visual-validator" / "tables"
+BAR_PLAN: Final = PLAN_FIXTURES / "passes.json"
+BAR_TABLE: Final = TABLE_FIXTURES / "wind.json"
 
 SPEC = {
     "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
@@ -44,6 +60,234 @@ def _decision(kind: VisualKind, spec: str) -> VisualDecision:
         model_id="qwen3-4b",
         decided_at="2026-08-22T00:00:00Z",
     )
+
+
+def committed_visuals() -> VisualsConfig:
+    """The knobs the pipeline ships, never a number typed here (Rule #6)."""
+    return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
+
+
+#: One drawn bar, as the Vega toolchain writes it: the name it was given, and
+#: the length it was drawn at. The horizontal rectangle opens with `M0,0h<width>`
+#: and the width is the only figure in the path a reader can see.
+_BAR = re.compile(
+    r'aria-label="(?P<label>[^"]*)"[^>]*?aria-roledescription="bar"[^>]*?\bd="M0,0h(?P<width>[0-9.]+)'
+)
+
+
+def drawn_bars(svg: str) -> list[tuple[str, Decimal]]:
+    """Every bar in a rendered chart, named and measured off the SVG itself.
+
+    Reading the drawn attributes rather than the spec is the whole point: a spec
+    holding the right numbers proves the compiler agreed with itself, and this
+    proves the picture did.
+    """
+    bars: list[tuple[str, Decimal]] = []
+    for match in _BAR.finditer(svg):
+        label = match["label"]
+        name = label.split("label: ", 1)[1] if "label: " in label else label
+        bars.append((name, Decimal(match["width"])))
+    return bars
+
+
+def bar_chart(table: ElementTable, plan: VisualPlan) -> list[tuple[str, Decimal]]:
+    """Compile, draw, and hand back what ended up on the picture."""
+    compiled = compile_bar(plan, table, visuals=committed_visuals())
+    return drawn_bars(render_chart(json.dumps(compiled.spec)).decode("utf-8"))
+
+
+class TestCompiledBar:
+    """A plan with no figure in it becomes a picture full of the article's figures.
+
+    The plan names elements and states no number - the shape refuses one - so
+    every bar is as long as something the extractor cut out of the article's own
+    characters. These are the tests that say so by measuring the drawing rather
+    than by reading the code that made it.
+    """
+
+    def test_every_bar_is_drawn_as_long_as_the_figure_the_article_states(self) -> None:
+        """The oracle: one pixel is the same quantity on every bar in the picture.
+
+        The drawn width is divided by the figure the element table states for
+        that bar, and every bar has to return the same number. A bar drawn from
+        another story's figure, a channel read in the wrong order, or a mark
+        whose length came from anywhere but the table puts a second entry in
+        that set.
+        """
+        table = ElementTable.read(BAR_TABLE)
+        plan = VisualPlan.read(BAR_PLAN)
+        stated = {element.element_id: element for element in table.elements}
+        wanted = [Decimal(str(stated[cited].value)) for cited in plan.encodings.quantity]
+        named = [stated[cited].span_excerpt for cited in plan.encodings.category]
+
+        bars = bar_chart(table, plan)
+
+        assert [name for name, _ in bars] == named
+        per_unit = {
+            round(width / figure, 9)
+            for (_, width), figure in zip(bars, wanted, strict=True)
+        }
+        assert len(per_unit) == 1, f"the bars are drawn at {len(per_unit)} different scales"
+
+    def test_changing_one_figure_in_the_table_moves_that_bar_and_no_other(self) -> None:
+        """What proportionality alone cannot say: the drawing reads THIS table.
+
+        A picture drawn at its own invented scale is proportional to itself and
+        passes the test above. So one element's figure is doubled - one that is
+        not the longest bar, which leaves the axis where it was - and the
+        drawing has to answer with that one bar twice as long and the other
+        three untouched.
+
+        Only `value` moves, not the `span_excerpt` beside it. Whether the two
+        agree is `no_invented_values`' question and it is asked before a plan
+        reaches a compiler; what is under test here is which number the picture
+        was drawn from.
+
+        The widths are rounded because the toolchain writes the geometry as a
+        printed float, so an exact doubling lands one unit in the last place
+        away from itself.
+        """
+        table = ElementTable.read(BAR_TABLE)
+        plan = VisualPlan.read(BAR_PLAN)
+        moved = plan.encodings.quantity[2]
+        rows = table.model_dump(mode="json")["elements"]
+        rewritten = ElementTable.model_validate(
+            table.model_dump(mode="json")
+            | {
+                "elements": [
+                    row
+                    | (
+                        {"value": str(Decimal(str(row["value"])) * 2)}
+                        if row["element_id"] == moved
+                        else {}
+                    )
+                    for row in rows
+                ]
+            }
+        )
+
+        before = [round(width, 9) for _, width in bar_chart(table, plan)]
+        after = [round(width, 9) for _, width in bar_chart(rewritten, plan)]
+
+        assert after[2] == round(before[2] * 2, 9)
+        assert [after[0], after[1], after[3]] == [before[0], before[1], before[3]]
+
+    def test_each_bar_carries_the_article_s_own_characters_as_its_name(self) -> None:
+        """The name on a bar is a span out of the article, never a word we wrote."""
+        table = ElementTable.read(BAR_TABLE)
+        excerpts = {element.span_excerpt for element in table.elements}
+
+        bars = bar_chart(table, VisualPlan.read(BAR_PLAN))
+
+        assert {name for name, _ in bars} <= excerpts
+
+    def test_the_alt_text_states_every_figure_the_picture_draws(self) -> None:
+        """The visual is never the only carrier of a fact."""
+        table = ElementTable.read(BAR_TABLE)
+        plan = VisualPlan.read(BAR_PLAN)
+
+        compiled = compile_bar(plan, table, visuals=committed_visuals())
+
+        stated = {element.element_id: element for element in table.elements}
+        for cited in plan.encodings.quantity:
+            assert f"{Decimal(str(stated[cited].value)):,f}" in compiled.alt_text
+        for cited in plan.encodings.category:
+            assert stated[cited].span_excerpt in compiled.alt_text
+
+    def test_a_plan_that_asks_for_no_picture_compiles_to_none(self) -> None:
+        with pytest.raises(CompileError):
+            compile_bar(
+                VisualPlan.read(PLAN_FIXTURES / "declines.json"),
+                ElementTable.read(BAR_TABLE),
+                visuals=committed_visuals(),
+            )
+
+    def test_a_type_this_build_cannot_draw_is_refused_by_its_own_name(self) -> None:
+        """One type. Drawing a `pie` as bars would publish a picture nobody planned."""
+        plan = VisualPlan.read(BAR_PLAN)
+        other = VisualPlan.model_validate(
+            plan.model_dump(mode="json") | {"type": VisualType.PIE.value}
+        )
+
+        with pytest.raises(CompileError, match="pie"):
+            compile_bar(other, ElementTable.read(BAR_TABLE), visuals=committed_visuals())
+
+    def test_a_plan_the_resolver_refuses_never_becomes_a_picture(self) -> None:
+        """The refusal travels with its check's name, so an operator can act on it."""
+        with pytest.raises(CompileError, match="element_exists"):
+            compile_bar(
+                VisualPlan.read(PLAN_FIXTURES / "element-missing.json"),
+                ElementTable.read(BAR_TABLE),
+                visuals=committed_visuals(),
+            )
+
+
+class TestRenderPlannedVisual:
+    """An item is decided to nothing until a plan compiles into a picture.
+
+    `VisualDecision` refuses a `chart` that carries no spec, so the decision
+    handed in is the `none` it honestly is and the compile is what promotes it.
+    """
+
+    @staticmethod
+    def _nothing_yet() -> VisualDecision:
+        return VisualDecision(
+            version=VisualDecision.schema_version(),
+            item_id="energy-01",
+            url_key="b" * 64,
+            kind=VisualKind.NONE,
+            model_id="qwen3-4b",
+            decided_at="2026-08-22T00:00:00Z",
+        )
+
+    def test_a_planned_bar_lands_on_disk_carrying_its_spec_and_its_alt_text(
+        self, tmp_path: Path
+    ) -> None:
+        result = render_planned_visual(
+            self._nothing_yet(),
+            VisualPlan.read(BAR_PLAN),
+            ElementTable.read(BAR_TABLE),
+            public_root=tmp_path,
+            relpath="digest/2026/08/22/ai-01.svg",
+            visuals=committed_visuals(),
+        )
+
+        assert result.kind is VisualKind.CHART
+        assert result.visual_state is VisualState.RENDERED
+        assert result.asset_path == "digest/2026/08/22/ai-01.svg"
+        assert result.alt_text and result.alt_text.startswith("Bar chart.")
+        assert result.spec and "Denmark" in result.spec
+        assert (tmp_path / "digest/2026/08/22/ai-01.svg").read_bytes().startswith(b"<svg")
+
+    def test_a_plan_that_cannot_be_compiled_leaves_the_item_decided_to_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        """No raise, no half-written state, and no file. The story is simply shorter."""
+        result = render_planned_visual(
+            self._nothing_yet(),
+            VisualPlan.read(PLAN_FIXTURES / "declines.json"),
+            ElementTable.read(BAR_TABLE),
+            public_root=tmp_path,
+            relpath="digest/2026/08/22/ai-01.svg",
+            visuals=committed_visuals(),
+        )
+
+        assert result.kind is VisualKind.NONE
+        assert result.spec is None
+        assert result.visual_state is VisualState.ABSENT
+        assert not (tmp_path / "digest/2026/08/22/ai-01.svg").exists()
+
+    def test_a_decision_that_already_carries_a_chart_is_refused(self) -> None:
+        """Compiling over a drawn chart would silently replace one story's picture."""
+        with pytest.raises(ValueError, match="decided to nothing"):
+            render_planned_visual(
+                _decision(VisualKind.CHART, json.dumps(SPEC)),
+                VisualPlan.read(BAR_PLAN),
+                ElementTable.read(BAR_TABLE),
+                public_root=Path("unused"),
+                relpath="digest/2026/08/22/ai-01.svg",
+                visuals=committed_visuals(),
+            )
 
 
 class TestChartRenderer:

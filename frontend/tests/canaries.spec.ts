@@ -238,7 +238,7 @@ test.describe('the visual path', () => {
 			.locator('main figure[role="img"]')
 			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
 		expect(alts).toHaveLength(2);
-		expect(alts.filter((alt) => alt.includes('15,400'))).toHaveLength(1);
+		expect(alts.filter((alt) => alt.includes('3,400'))).toHaveLength(1);
 		expect(alts.filter((alt) => alt.includes('Filed'))).toHaveLength(1);
 	});
 

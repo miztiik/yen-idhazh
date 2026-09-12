@@ -193,6 +193,59 @@ test.describe('the drawing is in the document', () => {
 	});
 });
 
+test.describe('THE ORACLE: a drawn bar is a figure the article states', () => {
+	/**
+	 * The canary day's first drawing is compiled rather than written out by
+	 * hand: `build_canary_day.py` puts the committed plan below through
+	 * `compile_bar` over the committed element table below, and the file the
+	 * page fetches is what came out. So the numbers on the page can be re-derived
+	 * here from the same table the compiler read, and a chart that shows numbers
+	 * can be told from a chart that shows THIS article's numbers.
+	 *
+	 * Driven from the canary, never from `frontend/public/digest/` - the cost of
+	 * this file may not rise because a run published more (Rule #12).
+	 */
+	const FIXTURES = resolve(ROOT, 'tests', 'fixtures', 'visual-validator');
+	const PLAN = JSON.parse(
+		readFileSync(join(FIXTURES, 'plans', 'passes.json'), 'utf8')
+	) as { encodings: { category: string[]; quantity: string[] } };
+	const TABLE = JSON.parse(readFileSync(join(FIXTURES, 'tables', 'wind.json'), 'utf8')) as {
+		elements: { element_id: string; span_excerpt: string; value: string | null }[];
+	};
+	const STATED = new Map(TABLE.elements.map((element) => [element.element_id, element]));
+
+	/** What the article says each bar is called, in the plan's own channel order. */
+	const NAMES = PLAN.encodings.category.map((id) => STATED.get(id)?.span_excerpt ?? '');
+	/** And how big each one is, read out of the same table. */
+	const FIGURES = PLAN.encodings.quantity.map((id) => Number(STATED.get(id)?.value));
+
+	test('every bar on the page is as long as the figure its element states', async ({ page }) => {
+		await page.goto(DAY, { waitUntil: 'networkidle' });
+		await dayReady(page);
+
+		const figure = page.locator(
+			`main article figure[role="img"][aria-label*="${NAMES[0]}"]`
+		);
+		await expect(figure, `no drawing on ${DAY} is the compiled one`).toHaveCount(1);
+		await expect(figure.locator('.mark-rect > path')).toHaveCount(NAMES.length);
+
+		const bars = await figure.locator('.mark-rect > path').evaluateAll((paths) =>
+			paths.map((path) => ({
+				label: (path.getAttribute('aria-label') ?? '').replace(/^.*label: /, ''),
+				width: Number(/^M0,0h([0-9.]+)/.exec(path.getAttribute('d') ?? '')?.[1])
+			}))
+		);
+
+		// Each bar is named by the element's own characters, in the plan's order.
+		expect(bars.map((bar) => bar.label)).toEqual(NAMES);
+		// And one pixel is the same quantity on every one of them. A bar drawn
+		// from another story's figure, or a channel read in the wrong order, puts
+		// a second entry in this set.
+		const scales = bars.map((bar, at) => Number((bar.width / FIGURES[at]).toPrecision(9)));
+		expect(new Set(scales).size, `the bars are drawn at ${[...new Set(scales)]}`).toBe(1);
+	});
+});
+
 test.describe('THE ORACLE: every drawn colour comes from a token', () => {
 	test('a bar takes the page own chart colour, in both themes', async ({ page }) => {
 		await page.goto(DAY);
