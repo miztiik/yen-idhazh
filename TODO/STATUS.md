@@ -21,7 +21,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 7 | 3 | 4 | 4 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 9 | 4 | 1 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 13 | 10 | 3 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 1 | 2 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -36,18 +36,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 7 | 21 | 6 |
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 3 | 5 | 0 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
-| [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 0 |
+| [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 3 | 1 | 1 |
 
-## In flight - 4
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | p11-5b |
 | #1a | 23 | C | The fingerprint stops gating and stops being read | p23-1a |
 | #3 | 24 | B | The migration utility, and it refuses to write a tree it cannot read back | p24-3 |
-| #1 | 26 | A | What prerendering actually weighs, both arms | p26-1 |
 
-## Ready now - 26
+## Ready now - 27
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -81,8 +79,9 @@ section 3 is where it is answered.
 | #21 | 23 | L | The unpublished pool is scored with the bonus and without it | plan 24 row #1 |
 | #1 | 25 | A | Three docstrings defend a requirement the page retired | - |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
+| #4 | 26 | B | The ruling, written where the next person arrives | 1, 2 |
 
-## Waiting on another row - 75
+## Waiting on another row - 74
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -92,7 +91,7 @@ section 3 is where it is answered.
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
 | #3f | 11 | C6 | The window is sized for two calls | plan 23 row #1a is IN-FLIGHT |
-| #6 | 11 | F | The small model, its job and its cache go | 5b is IN-FLIGHT |
+| #6 | 11 | F | The small model, its job and its cache go | - |
 | #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
 | #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
 | #4 | 12 | C | The smallest label a person can read, and enough marks to be worth the space | 2 is PENDING; 3 is PENDING |
@@ -160,7 +159,6 @@ section 3 is where it is answered.
 | #10 | 25 | F | The `assemble` consolidation | 2 is PENDING; 7 is PENDING; 8 is PENDING |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #4 | 26 | B | The ruling, written where the next person arrives | 1 is IN-FLIGHT |
 
 ## Finished - 14 plans with no live row
 
