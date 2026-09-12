@@ -32,12 +32,13 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 **This section is a snapshot of 2026-09-11, and the dispatch list is no longer here.** Run `python backend/utilities/plan_status.py --ready`, which computes the same answer from the Reckoners every time it runs and so cannot go stale. What is still worth reading below is the REASONING: which rows collide, why the opening wave is seven and not more, and what that wave costs. [`20260911-handover.md`](20260911-handover.md) is the entry point for an agent arriving with no context.
 
-**Nineteen rows had every dependency satisfied when this was derived.** Two of them landed the same day and are struck from the table below: plan 23 row `#P1` as pull request #608, and plan 24 row `#1` as #609. **Neither pull request updated its own Reckoner line**, which is why [`20260911-handover.md`](20260911-handover.md) makes that update part of the row rather than a step after the merge. The counts that follow are the counts as derived.
+**Nineteen rows had every dependency satisfied when this was derived.** **The whole recommended opening wave has since landed - all seven of it**, so the seven are struck from the table below: plan 23 row `#P1` as pull request #608, plan 24 row `#1` as #609, plan 11 row `#4` as #612, plan 26 row `#2` as #613, plan 26 row `#3` as #614, plan 24 row `#2` as #615 and plan 25 row `#11` as #616. **The first two did not update their own Reckoner lines and the last five did not either**, which is why [`20260911-handover.md`](20260911-handover.md) makes that update part of the row rather than a step after the merge; #610 flipped the first two and this pull request flips the other five. The counts that follow are the counts as derived.
+
+**Twelve rows are ready now, and this table is not the place to read that.** Run `python backend/utilities/plan_status.py --ready`.
 
 | Row | Plan | Group | Title |
 | --- | --- | --- | --- |
 | #3b | 11 | C2 | Every call reports its own cost |
-| #4 | 11 | D | The gate that refuses before the plan is drafted, and the ladder that steps down |
 | #P2 | 23 | B | The reference dataset, built so a number cannot flatter us |
 | #P4 | 23 | B | What one more call costs on the runner |
 | #P5 | 23 | C | Which distribution the runtime reports at a masked token |
@@ -45,14 +46,10 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 | #5 | 23 | A | The item id becomes sixteen characters of base32 |
 | #7a | 23 | E | The classification code gets its own package |
 | #20 | 23 | A | The order of the day, written down |
-| #2 | 24 | A | The score index can be rebuilt from the ledger it indexes |
 | #4 | 24 | B | The telemetry publisher declares the cover it already has |
 | #1 | 25 | A | Three docstrings defend a requirement the page retired |
 | #5 | 25 | A | The rail goes and the time lands under the heading |
-| #11 | 25 | G | The console strip takes five tabs |
 | #1 | 26 | A | What prerendering actually weighs, both arms |
-| #2 | 26 | A | The guard retires, and nothing a reader sees moves |
-| #3 | 26 | B | The three surfaces that say every route is prerendered |
 
 **Nineteen are unblocked; seven may run at once.** The other twelve are blocked by a *file*, not by a dependency, and section 3 is where that is proved. **Exactly one of the nineteen collides with nothing else in the set: plan 26 row #2.**
 
@@ -64,11 +61,13 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 | --- | --- |
 | 23 #P1 | **The longest pole.** 18 of the 58 live rows wait on it, and it is three prose files. **Landed as #608; the wave is five rows now** |
 | 24 #1 | The second pole at 17, and it creates `backend/idhazh/day_partition.py`, which four rows of plan 23 wait on. **Landed as #609; the wave is five rows now** |
-| 11 #4 | The third pole at 15. It heads plan 11's only remaining chain, and that chain gates plan 23 row #7b, which gates eleven more rows |
-| 24 #2 | Five files. Plan 24 row #8 waits on it and nothing else does |
-| 25 #11 | Thirteen files, all console. Both of plan 25's tab rows wait on it |
-| 26 #2 | Collides with nothing anywhere in the set |
-| 26 #3 | Four files, all prose and one test |
+| 11 #4 | The third pole at 15. It heads plan 11's only remaining chain, and that chain gates plan 23 row #7b, which gates eleven more rows. **Landed as #612** |
+| 24 #2 | Five files. Plan 24 row #8 waits on it and nothing else does. **Landed as #615** |
+| 25 #11 | Thirteen files, all console. Both of plan 25's tab rows wait on it. **Landed as #616** |
+| 26 #2 | Collides with nothing anywhere in the set. **Landed as #613** |
+| 26 #3 | Four files, all prose and one test. **Landed as #614** |
+
+**The wave ran serially rather than seven at once, and that was not a compromise.** An orchestrator dispatches a worker and waits for its report, so the seven were dispatched one at a time in pole order and each pull request was merged before the next worker cut its worktree. **Every file collision the wave was composed to avoid therefore could not arise**, and none did: seven pull requests, zero conflicts, every one green on its first push. The disjointness proof above is what would have mattered had the dispatches overlapped, and it stays here because the next wave may.
 
 **What this wave costs, named rather than hidden.** It contains **no reader-visible change**. Plan 25 row #5 is the one ready row a reader could see (section 5) and it cannot be in this wave: it and plan 24 row #1 both write `docs/architecture/publishing/layout.md`. **Running row #5 instead of plan 24 row #1 buys a visible change and delays the second-heaviest pole in the project by one wave.** The recommendation is to take the pole and run row #5 in the second wave, because nothing plan 24 row #1 blocks is reachable before the third wave and a day spent on it there is a day the schedule does not get back.
 
