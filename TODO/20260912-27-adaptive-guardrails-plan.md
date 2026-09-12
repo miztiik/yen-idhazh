@@ -321,7 +321,7 @@ Added 2026-09-12 after Row #4 reported it. Owner instruction, same day.
   - Local: `python backend/utilities/doc_load.py` before and after; record both figures and what they mean.
   - Local: ASCII-only, LF-only.
   - Local: `npm --prefix frontend run test:changed -- --list`, then whatever it selects.
-  - Local: `python backend/utilities/plan_status.py --write` after the Reckoner edit.
+  - Local: `python backend/utilities/plan_status.py` after the Reckoner edit, to read the queue back. Do NOT run `--write`: `TODO/STATUS.md` has one writer, a job on `main`, and a pull request that carries it is refused.
   - CI: full suite.
 - **Oracle:** **Ten defects, ten fixes, and no eleventh claim.** Every row of the table above is quoted before and after in the PR body. Then the reverse check: for each of the twelve summaries, name the sentence in `CLAUDE.md` it derives from. A summary with no source sentence is an extension and fails the row (Guardrail #4 - the digest restates, it never extends).
 - **Decisions:**

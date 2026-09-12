@@ -533,11 +533,12 @@ def test_an_open_pull_request_is_matched_to_the_row_it_is_finishing(tree: Path) 
 
 
 def test_the_written_page_is_the_same_bytes_every_time(tree: Path) -> None:
-    """A drift gate over a file that moves on its own fails for no reason.
+    """One writer only works if every machine would have written the same thing.
 
-    So this asserts the one property the gate rests on: same tree in, same
-    bytes out. Nothing in the page may come from a clock, the network or a
-    checkout.
+    So this asserts the one property that rests on: same tree in, same bytes
+    out. Nothing in the page may come from a clock, the network or a checkout.
+    Without it, the post-merge job would rewrite the file on runs where no
+    Reckoner moved, and each rewrite is a push.
     """
     plans = read_plans(tree)
     index = index_rows(plans)
