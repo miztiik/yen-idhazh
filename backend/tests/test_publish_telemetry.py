@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import csv
 import inspect
+import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -315,6 +318,76 @@ def _month_shard(state: Path, month: str, rows: list[ItemHealthRow]) -> None:
         writer = csv.DictWriter(handle, fieldnames=ItemHealthRow.csv_columns(), lineterminator="\n")
         writer.writeheader()
         writer.writerows(row.csv_row() for row in rows)
+
+
+_OPENED: list[str] = []
+_WATCHING = False
+
+
+def _audit(event: str, args: tuple[object, ...]) -> None:
+    if _WATCHING and event == "open" and args and isinstance(args[0], str):
+        _OPENED.append(args[0])
+
+
+sys.addaudithook(_audit)
+
+
+@contextmanager
+def _partitions_opened(source_dir: Path) -> Iterator[list[str]]:
+    """Every ledger partition opened inside the block, by name.
+
+    An audit hook rather than a stopwatch, because a stopwatch on this box cannot
+    tell one partition from twelve: a sibling row measured 16.6 percent
+    run-to-run variance on identical work. What a read opens is arithmetic and
+    has no spread at all (Guardrail #10).
+
+    A deliberate copy of the hook in `test_console_payloads_producer.py` rather
+    than a fixture the two share: an audit hook cannot be removed once
+    installed, so lifting it into `conftest.py` would install it for every module
+    in the suite to serve two. It counts `open` itself, not a call to any helper
+    here, so it still answers after a refactor that reads the partitions some
+    other way.
+    """
+    global _WATCHING
+    names: list[str] = []
+    _OPENED.clear()
+    _WATCHING = True
+    try:
+        yield names
+    finally:
+        _WATCHING = False
+        prefix = str(source_dir)
+        names.extend(sorted(Path(path).name for path in _OPENED if path.startswith(prefix)))
+        _OPENED.clear()
+
+
+def test_the_cover_is_the_months_the_caller_names(tmp_path: Path) -> None:
+    """The two arms of the cover, counted in file handles rather than timed.
+
+    The daily caller passes the one month it appended to, so the ordinary pass
+    opens one partition whatever the ledger holds - twelve here. `months=None`
+    opens all twelve, which is the unbounded arm the module's own docstring
+    declares, and it is unbounded on purpose: a fresh clone has to rebuild a
+    mirror it never published.
+
+    The backfill has to run first, because a month whose mirror is missing is
+    read whatever the caller asked for. That is the same escape the fresh clone
+    depends on, so the count here is the count after it has been satisfied.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "public"
+    months = [f"2026-{month:02d}" for month in range(1, 13)]
+    for month in months:
+        _month_shard(state, month, [_row(date=f"{month}-05", run_id=f"{month}-05-1")])
+    source_dir = state / "item-health"
+
+    with _partitions_opened(source_dir) as backfill:
+        publish(state_root=state, public_root=public)
+    with _partitions_opened(source_dir) as daily:
+        publish(state_root=state, public_root=public, months={"2026-09"})
+
+    assert backfill == [f"{month}.csv" for month in months]
+    assert daily == ["2026-09.csv"]
 
 
 def test_a_frozen_month_is_not_rebuilt_once_it_has_been_published(tmp_path: Path) -> None:
