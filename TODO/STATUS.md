@@ -19,7 +19,7 @@ committed file.
 | --- | --- | --- | --- | --- |
 | [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 5 | 3 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
-| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 9 | 5 | 3 | 1 |
+| [20260905-11-two-call-planner-plan.md](20260905-11-two-call-planner-plan.md) | 9 | 5 | 3 | 0 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 6 | 0 | 6 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 0 | 3 | 1 |
 | [20260905-14-sufficiency-bar-plan.md](20260905-14-sufficiency-bar-plan.md) | 4 | 0 | 4 | 2 |
@@ -37,13 +37,14 @@ committed file.
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
 | [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 5 | 3 | 2 | 0 |
 
-## In flight - 1
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
+| #3b | 11 | C2 | Every call reports its own cost | p11-3b |
 | #4 | 27 | D | Restate in the three derived agent surfaces | `../yen-idhazh.worktrees/p27-r4` |
 
-## Ready now - 29
+## Ready now - 28
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -54,7 +55,6 @@ section 3 is where it is answered.
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
-| #3b | 11 | C2 | Every call reports its own cost | 3 |
 | #1 | 12 | A | A new engine behind the same seam | - |
 | #1 | 13 | A | The rules, and which rule governs every file this project writes | - |
 | #1 | 14 | A | A drawing that costs too much is not drawn | - |
@@ -90,7 +90,7 @@ section 3 is where it is answered.
 | #8 | 20260827-summarizer-fine-tuning-plan | C | Judge and decide | 7 is PENDING |
 | #9 | 20260827-summarizer-fine-tuning-plan | B+C | Distil into the student | 8 is PENDING |
 | #10 | 20260827-summarizer-fine-tuning-plan | C | Adopt, or do not | 8 (and 9 for the student) is PENDING |
-| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 3b is PENDING |
+| #5b | 11 | E2 | Call 1 and call 2 run in the pipeline | 3b is IN-FLIGHT |
 | #6 | 11 | F | The small model, its job and its cache go | 5b is PENDING |
 | #2 | 12 | B | The drawing takes the width it is given | 1 is PENDING |
 | #3 | 12 | B | Numbers a reader can say out loud | 1 is PENDING |
