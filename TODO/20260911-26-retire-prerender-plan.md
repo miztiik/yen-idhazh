@@ -140,7 +140,7 @@ Read 2026-09-11 from `main` at `b0e0411a`, in an isolated worktree. Every figure
 | Page ceilings it holds | **2 routes** - `/404` at 4,400 B and `/evals/` at 6,600 B, `gzip -5` | `config/idhazh.json`, `page_weight.ceilings_bytes` |
 | `robots.txt` published | **none**. Sitemap: **none** | `git ls-files -- frontend/static` |
 | Anything asserting prerender output is byte-identical | **nothing**. Two docs record byte-identical build pairs and both pinned `BUILD_VERSION` to get them; unpinned, two builds of one unchanged tree disagree on about **20 percent of `build/` by filename** | `docs/architecture/publishing/layout.md`, `docs/architecture/publishing/retention.md`, `docs/reference/agent-notes/gates-and-builds.md` |
-| Records under `docs/reference/benchmarks/` | **0**. Row #1 writes the first one | `git ls-files -- docs/reference/benchmarks` |
+| Records under `docs/reference/benchmarks/` | **0** on 2026-09-11; **3** when row #1 ran on 2026-09-12. Row #1 writes a fourth, and the directory was created by [`20260910-24-day-sharded-ledgers-plan.md`](20260910-24-day-sharded-ledgers-plan.md) row #1 (#609). Corrected by row #1, which read "Row #1 writes the first one" | `git ls-files -- docs/reference/benchmarks` |
 
 ---
 
@@ -433,6 +433,7 @@ It removes no declaration, changes no build, and edits no other page. It does no
 | Answer the fallback problem | `adapter-static` has one fallback and GitHub Pages serves it at HTTP 404. Either the site accepts a 404 status on every address, or something publishes a copy of `404.html` at each address - which is prerendering with extra steps |
 | Re-home five server loads | The three console pages and `/`, `/archive/` run universal or server loads that SvelteKit executes at build time today. Each becomes a runtime fetch, with a loading state, a request budget and an error class - the three things `frontend.md` records prerendering as deleting, two of which came back on 2026-09-01 and had to be solved again |
 | Re-price two page ceilings | `page_weight.ceilings_bytes` measures prerendered HTML. With nothing prerendered, `/evals/` has no document to weigh and the gate holds one route |
+| Re-home the build certification | `frontend/scripts/build-state.ts` refuses to certify a build whose `frontend/build/index.html` is missing, so `npm run build` exits 1 with nothing prerendered even though the adapter wrote the site. Every browser spec runs against a certified build, so the whole suite stops collecting. **Found by row #1 on 2026-09-12**, which measured the exit code rather than assuming it |
 | Rewrite or delete parts of 34 browser specs | Several assert against the prerendered document by name - `console-published.spec.ts` and `console-readout.spec.ts` check that a figure is in it, `console-window.spec.ts` checks a control is disabled in it, `console-machine-page.spec.ts` checks the prerendered page prices at the configured rate, `charts.spec.ts` has a describe block for the prerendered chart, and `footer-facts.spec.ts` reads it as raw text |
 | Re-draw the console's charts in the browser | They are server-drawn SVG at a fixed `chart.width_px` because a prerendered chart has no element to measure. Moving them to the client re-opens a decision `console-charts.md` settled and costs a drawing library |
 | Take the reader losses in section 0.0 | All six of them |
@@ -446,7 +447,7 @@ It removes no declaration, changes no build, and edits no other page. It does no
 
 | Row | Page | What changes |
 | --- | --- | --- |
-| 1 | `docs/reference/benchmarks/2026-09-11-prerender-on-and-off.md` | New, and the first record in that directory |
+| 1 | [`../docs/reference/benchmarks/2026-09-12-prerender-on-and-off.md`](../docs/reference/benchmarks/2026-09-12-prerender-on-and-off.md) | New. The fourth record in that directory, which plan 24 row #1 created (#609). Corrected by row #1, which read `2026-09-11-...` and "the first record in that directory" |
 | 1 | [`../docs/reference/measurements-site.md`](../docs/reference/measurements-site.md) | One line and a link to the record |
 | 2 | [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) | Two sentences deleted with the file they describe |
 | 3 | [`../README.md`](../README.md) | One diagram node |
@@ -462,6 +463,7 @@ Named here so they are not mistaken for work this plan is doing.
 
 | Gap | What it is | Why it is not a row here |
 | --- | --- | --- |
+| `docs/architecture/publishing/frontend.md:9` and `:11` | A heading reading "Six documents" and a sentence reading "Six routes are generated at build time - `/`, `/archive/`, `/evals/` and the three console routes". **Both are false since 2026-09-12**: `/console/judgement/` and `/console/voices/` arrived with plan 25 row #11 (#616) and inherit prerendering from `console/+layout.ts`, so the build writes **eight** documents. The declaration count is still 7 | **Row #4 already opens this file** and is the row that should carry it, so it is named here rather than given a row of its own. Found by row #1 on 2026-09-12, which counted the documents in the build instead of the declarations in the grep. A worker taking row #4 corrects the heading, the sentence and the "123 documents become 7" figure in the paragraph under it, and says what it was corrected from |
 | `TODO/20260910-25-placement-plan.md` row #6 decision 5 | A decision reading "every page here is prerendered", which is false for the two dated routes | **Corrected on 2026-09-11 by the plan that owns it**, in the same pull request that fixed this line. It is named here because a plan-doc records a reading of the day it was written, and correcting another plan's decision text from a passing sweep is how a decision loses its author - so the correction was made in plan 25 and this row records that it was |
 | `docs/how-to/run-the-gates.md:831` | Reported speech quoting a deleted gate's false docstring | Row #3 examined it and left it, with the reason. A worker who disagrees may correct the tense and say so |
 | Whether `/evals/` earns a prerendered document | It is one of the six and nobody has asked what it is for since the dashboard was built. Its ceiling is 6,600 B, the smallest on the site | This plan rules on prerendering as one decision. Whether a single route deserves its document is a question about that route |
