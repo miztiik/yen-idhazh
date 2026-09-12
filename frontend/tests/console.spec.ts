@@ -12,6 +12,7 @@ import { dayKey, monthsInWindow, panWindow, toDay, windowOfDays } from '../src/l
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 import { failing, preserves, reliability, type FeedRecord } from '../src/lib/feed-health';
+import { telemetryRow } from './support/telemetry-row';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -1269,28 +1270,15 @@ test('an unplaceable row is counted and never silently dropped', () => {
 	// prints. Three rows, one of each outcome, and the two outputs come out of
 	// one pass - a plot and a sentence that disagree about the same row is the
 	// failure this shape exists to prevent.
-	const row = (over: Partial<TelemetryRow>): TelemetryRow => ({
-		date: '2026-08-28',
-		run_id: '2026-08-28-1',
-		item_id: 'ai-01',
-		vertical: 'ai',
-		source_id: 'canary',
-		stage: 'publish',
-		outcome: 'ok',
-		code: '',
-		source_words: 1923,
-		summary_words: 205,
-		source_words_before_cap: 4200,
-		fetch_ms: null,
-		extract_ms: null,
-		summarize_ms: null,
-		prefill_ms: null,
-		decode_ms: null,
-		input_tokens: null,
-		output_tokens: null,
-		cached_tokens: null,
-		...over
-	});
+	const row = (over: Partial<TelemetryRow>): TelemetryRow =>
+		telemetryRow({
+			date: '2026-08-28',
+			run_id: '2026-08-28-1',
+			source_words: 1923,
+			summary_words: 205,
+			source_words_before_cap: 4200,
+			...over
+		});
 
 	const view = compressionView([
 		row({ item_id: 'ai-cut' }),
@@ -2206,27 +2194,14 @@ test('the plot reads the cut off two lengths, so no ledger stamp can change what
 	// column. The projection ends the argument. A pre-cap length standing above
 	// a post-cap one has meant exactly one thing on every row ever written, so
 	// there is no stamp to read and no second meaning to gate.
-	const row = (before: number | null, after: number | null): TelemetryRow => ({
-		date: '2026-08-28',
-		run_id: '2026-08-28-1',
-		item_id: 'ai-01',
-		vertical: 'ai',
-		source_id: 'canary',
-		stage: 'publish',
-		outcome: 'ok',
-		code: '',
-		source_words: after,
-		summary_words: 205,
-		source_words_before_cap: before,
-		fetch_ms: null,
-		extract_ms: null,
-		summarize_ms: null,
-		prefill_ms: null,
-		decode_ms: null,
-		input_tokens: null,
-		output_tokens: null,
-		cached_tokens: null
-	});
+	const row = (before: number | null, after: number | null): TelemetryRow =>
+		telemetryRow({
+			date: '2026-08-28',
+			run_id: '2026-08-28-1',
+			source_words: after,
+			summary_words: 205,
+			source_words_before_cap: before
+		});
 
 	const marked = (before: number | null, after: number | null): boolean => {
 		const placed = placeRow(row(before, after));

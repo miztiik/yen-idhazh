@@ -20,30 +20,11 @@ import {
 } from '../src/lib/charts/telemetry-hold';
 import type { TelemetryRow } from '../src/lib/charts/series';
 import { daysInWindow, monthsInWindow, type TimeWindow } from '../src/lib/charts/viewport';
+import { telemetryRow } from './support/telemetry-row';
 
 /** A telemetry row with only the fields an identity and a date need set. */
 function trow(date: string, run: string, item: string, stage: string): TelemetryRow {
-	return {
-		date,
-		run_id: run,
-		item_id: item,
-		vertical: 'ai',
-		source_id: 'src',
-		stage,
-		outcome: 'ok',
-		code: '',
-		source_words: null,
-		summary_words: null,
-		source_words_before_cap: null,
-		fetch_ms: null,
-		extract_ms: null,
-		summarize_ms: null,
-		prefill_ms: null,
-		decode_ms: null,
-		input_tokens: null,
-		output_tokens: null,
-		cached_tokens: null
-	};
+	return telemetryRow({ date, run_id: run, item_id: item, source_id: 'src', stage });
 }
 
 /** The identities held, sorted, so a test can say what survived a merge. */
