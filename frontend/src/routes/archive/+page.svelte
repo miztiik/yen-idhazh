@@ -62,7 +62,7 @@
 	/** How many days back the browse list reaches. The reader widens or narrows
 	 * it over the presets; the loop then fetches only the months this window can
 	 * hold a story from, and a story older than the window is out of the list
-	 * until the window grows or a search reaches past it (Rule #12). */
+	 * until the window grows or a search reaches past it (Guardrail #12). */
 	// svelte-ignore state_referenced_locally
 	let windowDays = $state(data.window.default_days);
 	// The day the window is measured back from - the newest published day, baked
@@ -139,7 +139,7 @@
 		// the window reaches until the page is full or the window is spent. A month
 		// that holds none of the current topic buys no rows, so it reads the one
 		// after. `windowMonths[loadedMonths.length]` is always the next unread month,
-		// because both lists are newest-first prefixes of `data.months` (Rule #12).
+		// because both lists are newest-first prefixes of `data.months` (Guardrail #12).
 		while (browsable.length < wanted && loadedMonths.length < windowMonths.length) {
 			const month = windowMonths[loadedMonths.length]!;
 			loadedMonths = [...loadedMonths, month];

@@ -753,7 +753,7 @@
     {
       "change": "Added optional items_routed and route_ms to a run.",
       "version": "2026-08-24T11:15",
-      "why": "The route job lands between 51 and 60 minutes against a 60-minute bound, and no committed artifact said what it spent or how many items it spent it on. The budget cannot be argued from an estimate (Rule #10). Both default on a manifest written before they existed."
+      "why": "The route job lands between 51 and 60 minutes against a 60-minute bound, and no committed artifact said what it spent or how many items it spent it on. The budget cannot be argued from an estimate (Guardrail #10). Both default on a manifest written before they existed."
     },
     {
       "change": "Pinned RunRecord vertical published counts to the run that wrote them.",

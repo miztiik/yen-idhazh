@@ -8,7 +8,7 @@ function's docstring carries the defect it exists for.
 **It used to be one test per committed day, and that is what changed.** A day
 already published is frozen: no later run rewrites its payload or redraws its
 pictures. Re-checking all of them added a case every day the pipeline ran and
-re-answered a question settled when the day was written (Rule #12). The day that
+re-answered a question settled when the day was written (Guardrail #12). The day that
 can still be wrong is the one being written, and the producer is standing there
 when it is.
 

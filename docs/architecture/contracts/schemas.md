@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-09-11
 
-The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
+The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
 Concept-level *why* lives in [../../concepts/principles.md](../../concepts/principles.md) (principle 4). This page is the *shape*.
 
@@ -47,8 +47,8 @@ The shapes, and where each one lives once written:
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `VisualDecision` | `visual-decision` | one file per item under the run directory |
-| `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Rule #3), and what a plan may not carry is as much of it as what it holds ([../publishing/visuals.md](../publishing/visuals.md)) |
-| `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Rule #3), and where an article's elements are written is settled by the row that writes them |
+| `VisualPlan` | `visual-plan` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and what a plan may not carry is as much of it as what it holds ([../publishing/visuals.md](../publishing/visuals.md)) |
+| `ElementTable` | `element-table` | not persisted yet - the shape lands ahead of its producers (Guardrail #3), and where an article's elements are written is settled by the row that writes them |
 | `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
 | `ObservationIndexRow` | `observation-index-row` | one appended row of `state/score-index/<YYYY-MM>.csv`, the identity of one measurement the shard beside it holds |
 | `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
@@ -75,7 +75,7 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 `ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of `state/scores/` past `observability.scores_full_grain_months` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the shard's SHA-256 and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of the shard before the shard is unlinked; `.github/workflows/prune.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a shard deleted on the strength of an unchecked summary does not come back. What it weighs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
-`DayMetrics` is the third, and a document for the same reason `ScoreArchive` is: it is a whole-day fact, not a per-row one. A run writes one `state/day-metrics/<YYYY>/<MM>/<DD>.json` per published day - the day's counts and sums stored directly, and each median, distinct count or ranked list stored as the day's own value plus whatever lets a reader combine days in a defined way, because a percentile cannot be re-added into a window's percentile. It nests by year and month to mirror the published digest-day layout, and it is never a running total: a correction rewrites the whole record for that day. The console reads it back instead of walking every score, item-health, feed-health and published-day row for a figure that never changes once the day is frozen (Rule #12). It was authored as a contract in row 21 of the constant-cost-reads plan (#486), written by the producer in row 22 (#489), and read by the console reducers in rows 23 and 24 (#500, #501).
+`DayMetrics` is the third, and a document for the same reason `ScoreArchive` is: it is a whole-day fact, not a per-row one. A run writes one `state/day-metrics/<YYYY>/<MM>/<DD>.json` per published day - the day's counts and sums stored directly, and each median, distinct count or ranked list stored as the day's own value plus whatever lets a reader combine days in a defined way, because a percentile cannot be re-added into a window's percentile. It nests by year and month to mirror the published digest-day layout, and it is never a running total: a correction rewrites the whole record for that day. The console reads it back instead of walking every score, item-health, feed-health and published-day row for a figure that never changes once the day is frozen (Guardrail #12). It was authored as a contract in row 21 of the constant-cost-reads plan (#486), written by the producer in row 22 (#489), and read by the console reducers in rows 23 and 24 (#500, #501).
 
 ### A new row ledger ships with its header, not with its first run
 
@@ -113,11 +113,11 @@ an omission. `canonical_url`, `url_key` and `detail` are named in
 `FORBIDDEN_COLUMNS`, and the module raises at **import** if any of them ever
 appears on the model. A trust boundary spelled as a list of strings in the writer
 gains a cell by a one-word edit and nothing refuses it; spelled as a model, the
-edit does not start (Rule #11).
+edit does not start (Guardrail #11).
 
 ### Two of these are contracts and are deliberately not migration surfaces
 
-`EvidenceItem` and the two corpus shapes carry a `version` like everything else and owe no read-side migration when they change (section 11). Nothing they were written into survives: the oldest `EvidenceItem` that can exist is a 14-day workflow artifact, and the corpus is a rolling window regenerable from the run's own payloads whose history is rewritten every `finetune.prune_every_days`. A shape change there owes a re-run or a re-harvest. They are contracts under Rule #3 all the same, because each crosses a process boundary and something on the far side has to be able to refuse a file it cannot trust.
+`EvidenceItem` and the two corpus shapes carry a `version` like everything else and owe no read-side migration when they change (section 11). Nothing they were written into survives: the oldest `EvidenceItem` that can exist is a 14-day workflow artifact, and the corpus is a rolling window regenerable from the run's own payloads whose history is rewritten every `finetune.prune_every_days`. A shape change there owes a re-run or a re-harvest. They are contracts under Guardrail #3 all the same, because each crosses a process boundary and something on the far side has to be able to refuse a file it cannot trust.
 
 ### A shard-grain fact is its own contract, not a field on the run manifest
 
@@ -391,4 +391,4 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, which is deliberately not one of these shapes.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - the eval ledger row.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3, section 1a, section 4, section 11.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3, section 1a, section 4, section 11.

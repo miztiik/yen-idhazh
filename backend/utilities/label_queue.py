@@ -2,7 +2,7 @@
 
 Runs on a developer machine against the committed ledger. It is not a stage, not
 a workflow, and not a page on the published site - the site has no writer
-(Rule #1).
+(Guardrail #1).
 
 **Two modes, and the split is the control.**
 
@@ -53,7 +53,7 @@ the reason printed, because a labeller reading different text from the scorer
 measures nothing. That includes every row scored before 2026-08-27, when no run
 recorded a premise at all.
 
-Both the summary and the article body are untrusted (Rule #11). They print as
+Both the summary and the article body are untrusted (Guardrail #11). They print as
 inert terminal text and are sanitized on the way to the note field.
 
 **A draw only reaches the months still at full grain.** `state/scores/` keeps

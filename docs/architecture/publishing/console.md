@@ -171,7 +171,7 @@ Either way every other figure on the route is fiction, including the figures a
 reader would use to decide the day was fine. The rule is two-sided because the
 failure is - it carried only the floor end until 2026-09-11, and a classifier
 that had stopped answering would have printed a reassuring tab. The two bounds
-are arguments and not literals (Rule #6); row #12 of the placement plan moves
+are arguments and not literals (Guardrail #6); row #12 of the placement plan moves
 them to `console.decline_rate_floor` and `console.decline_rate_ceiling`. The
 fraction itself is null until the classifier lands, so the rule fires on nothing
 today and costs nothing to carry.
@@ -403,7 +403,7 @@ today no run is refused; the guard stays because a reader of a committed ledger
 cannot assume the run that wrote it was made by today's pipeline.
 
 **The cost panel is a counterfactual and never a bill**, and it is the one place
-on this site a figure in currency appears. CLAUDE.md Rule #10 carries the
+on this site a figure in currency appears. CLAUDE.md Guardrail #10 carries the
 owner's carve-out for it; the condition is that the page prints the rate it used
 and says whether that rate came from `config/idhazh.json` or from the operator.
 The operator's pair is kept in `localStorage` and read on mount only, so the
@@ -630,7 +630,7 @@ a fill value has to land in.
 
 Beneath the strip, the section leads with its own denominator: **how many feeds did not fail, out of how many the pipeline read, over how many runs** - 152 of 179 across 44 runs, measured 2026-09-03. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "did not fail" means "did not fail twice". The rule is `reliability` in `frontend/src/lib/feed-health.ts`, reading the same `failing` the quarantine reads ([../sources/health.md](../sources/health.md)).
 
-**The sentence names its span, since 2026-09-09, because it never had one.** It said feeds "have never failed", and the read behind it is `feedResults(shardMonths(widest))` - the newest five month shards, which is what the widest window preset can reach and no further. "Never" claimed every run there has been over a read that opens a bounded set of files, so the page was making a claim only a growing read could support (`CLAUDE.md` Rule #12, owner decision 2026-09-08). It now says the feeds "did not fail a read in these 44 runs", with the count from the record rather than a literal. The windowed sentence is also the more useful one: a feed that broke once in August and has answered every run since is permanently disqualified by "never failed", and the question on the desk is whether anything is broken now. `tests/console-window-claims.spec.ts` holds it - it reads the three built console documents, strips scripts and every attribute but `aria-label`, and refuses a claim in the present perfect.
+**The sentence names its span, since 2026-09-09, because it never had one.** It said feeds "have never failed", and the read behind it is `feedResults(shardMonths(widest))` - the newest five month shards, which is what the widest window preset can reach and no further. "Never" claimed every run there has been over a read that opens a bounded set of files, so the page was making a claim only a growing read could support (`CLAUDE.md` Guardrail #12, owner decision 2026-09-08). It now says the feeds "did not fail a read in these 44 runs", with the count from the record rather than a literal. The windowed sentence is also the more useful one: a feed that broke once in August and has answered every run since is permanently disqualified by "never failed", and the question on the desk is whether anything is broken now. `tests/console-window-claims.spec.ts` holds it - it reads the three built console documents, strips scripts and every attribute but `aria-label`, and refuses a claim in the present perfect.
 
 **What that guard does not catch, said out loud.** It bans a grammar, not a word: "has never failed" and "has ever reached" place a claim in an unbounded past, while "runs are never pooled" and "a counterfactual, never a bill" state rules and read over no span at all. Measured on the canary build 2026-09-09, the three console documents carry **42 remaining uses of `never` or `ever`, and every one is a rule, a domain term or a statement about named items** - 24 of them are the cell `Never checked:`, which is one of the checker's five reason names. A word list would have fired on all 42. A bare past tense - "the feeds that never failed" - makes the same claim as the perfect and is not matched, because the only pattern that would catch it is a list of verbs, and that list fires on "the part the machine never read" two sections up the same page. Those strings are held by review and by the assertions in `console.spec.ts`.
 
@@ -1273,7 +1273,7 @@ look wrong.
 `console.chart_arm_minutes_target` and `console.chart_arm_coverage_pct` live in
 `config/appearance.json`, bounded by `ConsoleConfig`. They were constants in a
 TypeScript module until 2026-08-30, which made the one section that states a
-threshold the one section an operator could not move a threshold on (Rule #6).
+threshold the one section an operator could not move a threshold on (Guardrail #6).
 The contract also refuses a preset list whose widest span cannot reach
 `chart_arm_rule_days`: a rule no preset can show would print the
 widen-the-window notice at every setting of the control, which reads as a broken
@@ -1528,7 +1528,7 @@ most 6,519.
 
 Authority: Jony, 2026-08-29, over Fowler's ordering constraint that this ships
 before the cap moves - the first day at a new cap has to be measured by a
-console that can already see it, or Rule #10 defeats the change.
+console that can already see it, or Guardrail #10 defeats the change.
 
 **`Visuals published` counts only items whose `visual` is a `chart` in state
 `rendered`**, which is what [visuals.md](visuals.md) requires so a diagram never
@@ -1742,7 +1742,7 @@ heading.
 | Dropping a column from the shard board on a phone | The board is five facts about one shard, and an instrument that answers four questions on a phone and five on a desktop is two instruments. A horizontal scroll was refused with it: it hides the job clock, the column an operator opens the page for. | Jony, Susan |
 | Summing peak memory across shards | Shards are separate jobs on separate hosts. The sum reads about 53 GB on a runner that has 16. | Carmack |
 | Reading stage timings from `state/scores.csv` | The score ledger did not carry those columns, and it only covers scored items. Timings belong on the item-health census. | Fowler |
-| Serving `state/item-health/` directly | It carries `canonical_url`, `url_key` and untrusted `detail`. The browser gets only the published telemetry projection. | Fowler, Rule #11 |
+| Serving `state/item-health/` directly | It carries `canonical_url`, `url_key` and untrusted `detail`. The browser gets only the published telemetry projection. | Fowler, Guardrail #11 |
 | A failure bar scaled to the window's own maximum | With one day in view the bar normalises to itself, so a 12% failure rate and a 90% one both fill the panel. | Jony |
 | A failure rate carried only by an SVG `<title>` | A tooltip does not fire on touch and does not survive the screenshot an operator pastes into an issue. | Jony |
 | Suppressing the failure chart for a window holding one day | It was right when the panel drew one bar per stage: a chart of a single value is a rectangle. The column carries the volume now, so one day is one column and still says how much work there was. Only a window holding nothing at all draws no chart. | Jony |
@@ -1758,13 +1758,13 @@ heading.
 | A fifth sub-millisecond decade on the stage-timing axis | It moves every mark on a 30-day chart to hold ten rows from one day. The axis is not the thing that was wrong. | Jony |
 | A linear/log toggle on the stage-timing axis | A toggle is an admission that we could not decide which axis is correct. | Jony |
 | A density-binned scatter, or reducing the mark opacity | Both keep the two-axis reading the band split removes, and the second makes a paler blob. | Jony |
-| `uplot` on the compression scatter | It drew a second, smaller chart beneath a complete SVG, and the pan and zoom it was bought for live in the viewport control, not in the plot. | Jony, Rule #8 |
+| `uplot` on the compression scatter | It drew a second, smaller chart beneath a complete SVG, and the pan and zoom it was bought for live in the viewport control, not in the plot. | Jony, Guardrail #8 |
 | Fading the per-point band lines instead of collapsing them | The wash is a node count, not an alpha value. One fact drawn 1166 times is still drawn 1166 times at any opacity, and the fact has one value per configured band. | Jony, Carmack |
 | A drawing library for the console charts - `echarts`, `@observablehq/plot`, `chart.js`, a component library | 336 KB gz on canvas, 128 KB gz and a DOM shim to prerender, 67 KB gz on canvas, and a component set is worst of all where every chart is bespoke. All of them own the element and the theme; the console needed the arithmetic. This was reversed for the console on 2026-08-29 on three named conditions, and it still binds a reader route. | Jony, Carmack |
 | `d3-scale` from a CDN | The HTTP cache is partitioned per site, so the shared-cache argument is dead, and the repo's `script-src` allows `self` only. | Carmack |
 | Fixing the units by hand instead of taking the dependency | `.nice` and `ticks` are exactly the part hand-rolling gets wrong, and an axis labelled 0, 37, 74 is an axis nobody reads a value off. | Jony |
 | A `console.chart_width` default per chart shape | One knob names the width the reading column leaves; a chart sharing a row divides it. Four knobs would be four ways to disagree about one column. | Jony |
-| Putting the page ceilings anywhere but `config/` | A ceiling is a limit a person chose and raises on purpose, which is the definition of a knob (Rule #6). | Carmack, Rule #2 |
+| Putting the page ceilings anywhere but `config/` | A ceiling is a limit a person chose and raises on purpose, which is the definition of a knob (Guardrail #6). | Carmack, Guardrail #2 |
 | A `run.success_floor_pct` reference line on a stage failure panel | That floor is a published rate over attempted items; a stage panel is a different denominator. A wrong reference line is worse than none. | Jony |
 | A separate chart for where the cut falls | It is a line. A chart that says what a line says has not earned its place. | Jony |
 | A cap line read from `extract.truncation_cap_tokens` | A thirty-day window can hold two settings, so the knob is a claim about a config file rather than about the plot. It also draws a line when nothing in view was cut, and the data-derived line cannot. | Jony |
@@ -1779,7 +1779,7 @@ heading.
 | A floating readout box over a plot | Measured 2026-08-29 at 88 to 121px over a 220px plot: 40 to 55 percent of the chart it explains. A strip below the plot cannot occlude at any width. | Jony |
 | Re-sorting the readout rows to the hovered day | The rows are the legend. A legend that re-orders under the eye as the pointer moves cannot be read, and the colour swatch already matches the line. | Jony |
 | Labelling only the first and last day of a date axis | That is what it did. It is what makes a spike unattributable to a date. | owner, 2026-08-30 |
-| A charting library for the readout | There is none on this surface and this adds none. One action beside `observeWidth`. | Jony, Rule #8 |
+| A charting library for the readout | There is none on this surface and this adds none. One action beside `observeWidth`. | Jony, Guardrail #8 |
 | One chart carrying both the visuals strip and the articles strip | Two axes invite a comparison of slopes that means nothing, and one axis flattens the smaller series to nothing. | Jony |
 | Seeding the per-item cost columns with real values | It cost `/console/` 176,753 gzipped bytes and put it 98,182 over its ceiling. Dropping the seeded months instead puts a 244 KB fetch behind the first click and leaves the section blank until it lands. | Carmack |
 

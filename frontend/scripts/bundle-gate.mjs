@@ -37,7 +37,7 @@
  *
  * Its own docstring said nobody had measured what first-load cost a reader, so
  * it did not invent a number - it failed on any difference instead. That makes
- * it a change-detector, and CLAUDE.md Rule #10 says an unmeasured number may
+ * it a change-detector, and CLAUDE.md Guardrail #10 says an unmeasured number may
  * not justify a design. Two things followed. A local Windows build could not
  * reproduce a Linux CI build inside 64 B, so half of its failures were the
  * toolchain and every one of them needed a control build to tell apart. And the
@@ -164,7 +164,7 @@ let failed = false;
  * The document, against the guardrails in `config/idhazh.json`.
  *
  * A guardrail is a limit somebody chose, so it is a knob and lives with the
- * other knobs (Rule #6), in config/idhazh.json and nowhere else - the model
+ * other knobs (Guardrail #6), in config/idhazh.json and nowhere else - the model
  * default in app_config.py is empty so the numbers are not copied into a second
  * file.
  *
@@ -259,7 +259,7 @@ if (uncapped.length > 0) {
  *
  * The walk is over the named keys and not over the build, so what this costs is
  * set by how many ceilings are written rather than by how much the pipeline has
- * accumulated (Rule #12). A directory key does read every file under itself,
+ * accumulated (Guardrail #12). A directory key does read every file under itself,
  * and that read grows - a month a run appends is a file this opens. It is
  * bounded where it matters by retention: observability.public_telemetry_keep_months
  * is 14, so the directory holds fourteen shards however long the project runs.

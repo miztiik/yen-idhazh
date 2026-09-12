@@ -26,7 +26,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 ### 0.1 Standing rules, and they bind every row
 
-**Deliver the intent, not the letter.** A structural fix matters more than a small diff. Where a row cannot be done correctly inside its stated file list, **expand the scope and say so in the pull request** - do not ship a band-aid to stay inside a list somebody wrote before the code was read. `CLAUDE.md` Rule #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
+**Deliver the intent, not the letter.** A structural fix matters more than a small diff. Where a row cannot be done correctly inside its stated file list, **expand the scope and say so in the pull request** - do not ship a band-aid to stay inside a list somebody wrote before the code was read. `CLAUDE.md` Guardrail #5 is the authority; a row's file list reads like a fence and is meant to read like a start.
 
 **No prisoners.** Every removed feature takes its code, its tests, its fixtures, its config keys, its schema fields, its docs and its `state/` writers with it, **in the same commit**. Git is the backup. A row that removes something and leaves a dead test, an orphan config key or a doc paragraph describing the removed thing has not finished, and its acceptance gate says so.
 
@@ -38,7 +38,7 @@ Execute per [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.m
 
 **A human read can refuse a rank change; only a measurement can authorise one.** Refusing on judgement is safe, because the digest we already publish is the fallback and the cost of a refusal is one unchanged day. Authorising on judgement is not, because a subsidised theme reorders every future day and nothing on the page says why. Every row that raises a weight names the measurement; every row that lowers one may cite a read.
 
-**Every oracle is driven from a fixture, never from the committed archive** (`CLAUDE.md` Rule #12 and section 13). A per-item rule is proved on `backend/var/canary/` or on `tests/fixtures/`, both fixed in size and both able to carry a case the archive has never produced - `time_source: unknown` has never once happened in 8,550 committed items and row #5 has to render it. A question genuinely about the whole tree is asked once, on the total, by `idhazh validate-days`, and not by pytest.
+**Every oracle is driven from a fixture, never from the committed archive** (`CLAUDE.md` Guardrail #12 and section 13). A per-item rule is proved on `backend/var/canary/` or on `tests/fixtures/`, both fixed in size and both able to carry a case the archive has never produced - `time_source: unknown` has never once happened in 8,550 committed items and row #5 has to render it. A question genuinely about the whole tree is asked once, on the total, by `idhazh validate-days`, and not by pytest.
 
 **Additive contract fields are stamped in the commit that adds them.** Every row that adds a field to a persisted model names its `version` date-stamp and its `changelog` entry in its own acceptance gate, per `CLAUDE.md` section 11.
 
@@ -273,7 +273,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | 1 | **A cap displaces; it never shortens.** Every slot a cap takes back is offered to the best candidate the cap held down. This is the rule `rank._take` already follows for `day_ceiling` and it is copied rather than re-invented | `backend/idhazh/rank.py`; Editor |
 | 2 | **The head is a count, not a share** - the first 20 and the first 10. What a reader sees before deciding whether to scroll does not grow with the day: a share of a 731-story day is a head nobody reaches | Jony |
 | 3 | **The order is computed in the backend and published.** The frontend's sort is removed in row #10 and not before, so no row of this plan ships a day with no order at all | Section 0.1 |
-| 4 | Both caps are `config/idhazh.json` keys with sane defaults and a schema bound. A fresh clone runs on the defaults | `CLAUDE.md` Rule #6 |
+| 4 | Both caps are `config/idhazh.json` keys with sane defaults and a schema bound. A fresh clone runs on the defaults | `CLAUDE.md` Guardrail #6 |
 | 5 | **This is what replaces the editor.** Nobody reads the digest before it publishes and it publishes five times a day, so a standing editorial decision can only reach a reader as arithmetic that runs without one. The page that says so is `docs/concepts/placement.md` and it is written here rather than left implicit | Editor; owner |
 
 ### Rejected alternatives
@@ -304,7 +304,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | 1 | **Reliability is already the model this whole plan copies and it needs no new machinery.** `ledger.reliability` reads the trailing `collect.reliability_window_days` - 30 - of feed health, clamps each feed between `collect.reliability_floor` - 0.5 - and 1.0, treats a feed with no evidence as 1.0, and writes nothing to `config/`. It is a fact about the world derived inside the run from a bounded window, which is exactly the half of section 0's governing line that is not a pull request | Verified 2026-09-11; owner |
 | 2 | **Recency stays a bonus and never becomes a filter.** A cutoff cannot tell a strong old story from a weak fresh one; `too_old` already decides what may be admitted and this term decides only the order of what passed | `backend/idhazh/rank.py`; [`../docs/architecture/sources/freshness.md`](../docs/architecture/sources/freshness.md) |
 | 3 | **`RANK_VERSION` bumps in this commit.** A published order that moved for a reason nobody recorded is a published order nobody can defend, and `RunRecord.rank_version` is where the shape is written down | `backend/idhazh/rank.py` |
-| 4 | The relative sizes are **config, and they are estimates until row #9a can price them**. Every one is stamped as an estimate in `config/idhazh.json`'s own comment block and in `discovery.md`, per Rule #10 | `CLAUDE.md` Rule #10 |
+| 4 | The relative sizes are **config, and they are estimates until row #9a can price them**. Every one is stamped as an estimate in `config/idhazh.json`'s own comment block and in `discovery.md`, per Guardrail #10 | `CLAUDE.md` Guardrail #10 |
 | 5 | **A term may reorder; it may never admit.** A weight that could pull an item past a gate it failed is a weight that publishes something the gate refused, and no amount of tuning makes that safe | Editor |
 
 ### Rejected alternatives
@@ -337,7 +337,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 | 2 | **It ranks below a tier step, and the oracle enforces it.** Today it doubles the authority term at two carriers, which is a bigger move than the recency bonus, the watchlist bonus, the front-page vote and the heaviest lens - and it is a multiplier where every one of those is an addition | Section 0.3 |
 | 3 | **The independence half does not ship, and the row says so on the page rather than implying otherwise.** Independent carriage needs to know which of 151 feeds are wire customers of the same original, and `config/sources.json` has no syndication field - verified 2026-09-11. So what ships is a step on "more than one of our feeds carried this address", and `discovery.md` and `layout.md` both say that is **syndication, not agreement**. Adding a `syndicates_from` relation to the source contract is named in section 14 as work nobody owns | Verified 2026-09-11; Andre |
 | 4 | **This closes a contradiction rather than opening one.** `docs/concepts/digest.md` already refuses to print "three sources covered this" because the number does not support the claim. The ranker was making that claim in arithmetic while the page refused it in words | [`../docs/concepts/digest.md`](../docs/concepts/digest.md) |
-| 5 | The step's size is an **estimate**, and it moves under plan 23 row #17's per-run loop like every other weight, with the oracle's ceiling as its hard bound | `CLAUDE.md` Rule #10 |
+| 5 | The step's size is an **estimate**, and it moves under plan 23 row #17's per-run loop like every other weight, with the oracle's ceiling as its hard bound | `CLAUDE.md` Guardrail #10 |
 
 ### Rejected alternatives
 
@@ -421,7 +421,7 @@ Ruled by Susan, 2026-09-11, with Jony on what may leave the page.
 | 1 | **A margin, not raw count order.** Without it the row reorders between a reader's breakfast and their lunch, and a control that moves under the pointer is read as instability whatever caused it | Susan; `frontend/src/lib/day-shape.ts` |
 | 2 | **The active desk stays on the row**, folded or not. It is the one pill the reader came for and the only mark saying where they are. This rule exists today and is kept verbatim | `frontend/src/lib/day-shape.ts` |
 | 3 | **A curated desk is never folded away; an auto-created one may be.** They rank on the same number in the **order** and on different rules in the **fold**. A desk a person put in `config/taxonomy.json` is a promise the site makes; a desk a model proposed is a suggestion, and hiding a suggestion costs a reader nothing. Auto-created verticals arrive from plan 23 row #16 and **do not exist today**, so this row writes the rule and the branch is driven by a fixture | Editor; owner |
-| 4 | **The threshold is config, not code.** 8 today, 5 after this row, in `config/appearance.json` | `CLAUDE.md` Rule #6 |
+| 4 | **The threshold is config, not code.** 8 today, 5 after this row, in `config/appearance.json` | `CLAUDE.md` Guardrail #6 |
 | 5 | The order is computed at build time and published. Measuring the row in the browser was refused for a reason the conclusion does not need: a row that measures itself is wrong until a script runs, on any route. **The reason this decision used to give was that "every page here is prerendered", and that is false** - `frontend/src/routes/[date]/+page.ts:22` and `frontend/src/routes/[date]/[vertical]/+page.ts:11` both set `export const ssr = false`, so the two dated reading routes render in the browser (verified 2026-09-11). **The real reason is that one order is computed in the backend and published** (section 0.1), so a measurement taken on the reader's device could disagree with the order the payload carries | `frontend/src/lib/day-shape.ts`; corrected 2026-09-11 |
 
 ### Rejected alternatives
@@ -456,7 +456,7 @@ Ruled by Susan, 2026-09-11, with Jony on what may leave the page.
 | --- | --- | --- |
 | 1 | **The ceiling displaces to a second desk, not to the bin.** A ceiling with nowhere to put the overflow is a rule that shortens the day, which decision 1 of row #2 already forbids. Row #8 is the pressure valve and this row does not land usefully without it | Editor |
 | 2 | **A floor never admits a story a gate refused.** `too_old`, `below_feed_floor`, a failed extraction and a failed summary all stand. A thin desk publishes thin and says why - the sentence already exists and `desk_ref` already carries the shortfall | Fowler; `backend/idhazh/assemble.py` |
-| 3 | **Per-desk, not global.** `ai` has 35 feeds and a floor of 21 would mean something different there than on `india`. Both numbers sit beside `min_feeds` in `config/taxonomy.json`, where the desk's other bounds already are | `CLAUDE.md` Rule #6 |
+| 3 | **Per-desk, not global.** `ai` has 35 feeds and a floor of 21 would mean something different there than on `india`. Both numbers sit beside `min_feeds` in `config/taxonomy.json`, where the desk's other bounds already are | `CLAUDE.md` Guardrail #6 |
 | 4 | **The ceiling is a share of the day, the floor is a count.** A ceiling that is a count is a moving share - ten items is 3 percent of a 365-story day and a quarter of a 40-story one - and `rank.day_source_ceiling` already makes exactly this argument for the per-feed case. A floor is a count because a floor is about whether a desk is worth opening at all | `backend/idhazh/rank.py` |
 | 5 | This row is **not blocked on plan 23**. It is built against whatever field names the desk | Section 0.4 |
 
@@ -523,8 +523,8 @@ Verified 2026-09-11 by reading both headers. `state/scores/*.csv` carries 36 col
 | --- | --- | --- |
 | 1 | **One counterfactual ledger, and it is plan 23 row #21's.** `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv`, day-sharded through `backend/idhazh/day_partition.py`, bounded by config, with a prune in the commit that created it. This row adds columns | Fowler, 2026-09-11 |
 | 2 | **It records; it decides nothing.** No stage reads it, no gate fails on it, and a run that cannot write it publishes anyway | Section 1a, degrade do not fail |
-| 3 | **The pool is the bounded one, not every candidate.** Plan 23 row #21 decision 2 takes every item the run took plus the highest-scoring refused candidates in each desk - the ones sitting at the cut, where a weight decides. A weight change that would move an item outside that band is a change so large the step limit refuses it anyway. **An earlier draft of this row wrote a row for every candidate**, which is 4,843 a run and 1.3 GB a year | Plan 23 row #21; `CLAUDE.md` Rule #12 |
-| 4 | The cost is bounded by config, never by the archive. It is written at plan time, where every candidate is already in memory and already scored | `CLAUDE.md` Rule #12 |
+| 3 | **The pool is the bounded one, not every candidate.** Plan 23 row #21 decision 2 takes every item the run took plus the highest-scoring refused candidates in each desk - the ones sitting at the cut, where a weight decides. A weight change that would move an item outside that band is a change so large the step limit refuses it anyway. **An earlier draft of this row wrote a row for every candidate**, which is 4,843 a run and 1.3 GB a year | Plan 23 row #21; `CLAUDE.md` Guardrail #12 |
+| 4 | The cost is bounded by config, never by the archive. It is written at plan time, where every candidate is already in memory and already scored | `CLAUDE.md` Guardrail #12 |
 
 ### Rejected alternatives
 
@@ -632,7 +632,7 @@ Measured 2026-09-12 off the built page in headless Chromium, `window.innerWidth`
 
 **A `Judgement` or `Voices` fault caps at `WORTH_A_LOOK`.** A skewed day still published; a failed run did not.
 
-**One exception, at `BROKEN`: a decline rate at either end on any gating kind.** That is not a skew. **Zero** means a gate that never declines - a classifier stamping everything it is shown - and **one** means a gate that declines on everything, which is the same instrument reading dead from the other side. Both make every other figure on the tab fiction, including the figures a reader would use to decide the day was fine. **The rule is two-sided because the failure is**: the row carried only the zero end until 2026-09-11, and a classifier that had stopped answering would have printed a reassuring tab. The two bounds are `console.decline_rate_floor` and `console.decline_rate_ceiling` with sane defaults, because a bare 0 and a bare 1 are thresholds in code (`CLAUDE.md` Rule #6). **They land in `config/idhazh.json` under row #12, not this row, and the reason is group G**: row #14 already writes `config/idhazh.json`, `backend/idhazh/contracts/app_config.py` and `schemas/app-config.schema.json`, so adding them here would put three files on both sides of this pair. Row #12 is a singleton, already edits all three, and is the row that draws the fractions. **This row encodes the rule in `publish_console_band.py` and reads the two keys through their defaults until row #12 commits them**, which costs nothing because the fraction itself is `null` until plan 23 row #10 lands. The fraction arrives with plan 23; this row encodes the rule and the producer writes `null` until it does.
+**One exception, at `BROKEN`: a decline rate at either end on any gating kind.** That is not a skew. **Zero** means a gate that never declines - a classifier stamping everything it is shown - and **one** means a gate that declines on everything, which is the same instrument reading dead from the other side. Both make every other figure on the tab fiction, including the figures a reader would use to decide the day was fine. **The rule is two-sided because the failure is**: the row carried only the zero end until 2026-09-11, and a classifier that had stopped answering would have printed a reassuring tab. The two bounds are `console.decline_rate_floor` and `console.decline_rate_ceiling` with sane defaults, because a bare 0 and a bare 1 are thresholds in code (`CLAUDE.md` Guardrail #6). **They land in `config/idhazh.json` under row #12, not this row, and the reason is group G**: row #14 already writes `config/idhazh.json`, `backend/idhazh/contracts/app_config.py` and `schemas/app-config.schema.json`, so adding them here would put three files on both sides of this pair. Row #12 is a singleton, already edits all three, and is the row that draws the fractions. **This row encodes the rule in `publish_console_band.py` and reads the two keys through their defaults until row #12 commits them**, which costs nothing because the fraction itself is `null` until plan 23 row #10 lands. The fraction arrives with plan 23; this row encodes the rule and the producer writes `null` until it does.
 
 ### `Voices` has a worst state too, and these are its candidates
 
@@ -834,7 +834,7 @@ So `backend/idhazh/contracts/console_judgement.py` carries, at minimum:
   - **`headline_sentence` is present and non-empty on every built payload**, including one built from an empty window (decision 8);
   - **the moved panels keep their own specs**, renamed rather than rewritten, and `Pipelines` keeps none of them (section 0.1, no prisoners);
   - `config/idhazh.json` gains a `payload_ceilings_bytes` entry for the tab's payload.
-- **Oracle:** **Every source panel is on exactly one route, and the reliability factor the page draws equals the one the ranker used.** Two halves, **both driven from the canary build and from built feed-health rows, never from the committed ledger** (Rule #12). The first counts each moved panel's own data attribute across all five built routes and asserts one. The second re-derives `feed_reliability` over the rows the payload was built from and holds the drawn value to it, to three decimal places. **The second half is the one that matters**: a console figure that is a second derivation of a ranking factor is two verdicts, and the day they disagree neither is trustworthy.
+- **Oracle:** **Every source panel is on exactly one route, and the reliability factor the page draws equals the one the ranker used.** Two halves, **both driven from the canary build and from built feed-health rows, never from the committed ledger** (Guardrail #12). The first counts each moved panel's own data attribute across all five built routes and asserts one. The second re-derives `feed_reliability` over the rows the payload was built from and holds the drawn value to it, to three decimal places. **The second half is the one that matters**: a console figure that is a second derivation of a ranking factor is two verdicts, and the day they disagree neither is trustworthy.
 - **What this row does not do:** it changes no feed score and writes no new ledger. `ledger.reliability` is read.
 
 ### The fifth tab is a split, not an addition
@@ -869,7 +869,7 @@ The threshold is **config, and the project already has the number**: `collect.so
 | 2 | **A split, not an addition.** The four feed panels move; `Pipelines` keeps none of them, and its route description loses the feed clause | Editor |
 | 3 | **Nothing folds.** Folding `Hardware` into `Pipelines` to keep the count down would undo the split of 2026-08-30 for the same reason this row is making one | Editor; `docs/architecture/publishing/console.md` |
 | 4 | **The reliability factor is published on the source-health view, not recomputed in the browser.** Two derivations of one verdict is two verdicts, and the console already learned this when the band moved to a producer | `frontend/src/lib/console/band.ts` |
-| 5 | **A feed under `collect.source_yield_alarm_min_decisions` judged items prints a dash.** Reusing the existing 30 rather than minting a second threshold | `CLAUDE.md` Rule #6; `config/idhazh.json` |
+| 5 | **A feed under `collect.source_yield_alarm_min_decisions` judged items prints a dash.** Reusing the existing 30 rather than minting a second threshold | `CLAUDE.md` Guardrail #6; `config/idhazh.json` |
 | 6 | **No single combined score.** Four facts, four figures | `frontend/src/routes/console/+page.svelte` |
 | 7 | **This plan reads `ledger.reliability` and never modifies it.** Feed scoring belongs to another plan | Owner, 2026-09-11 |
 | 8 | **This tab carries a `headline_sentence` on the same rule row #12's does.** One sentence at the top, computed in the producer, never null, never empty, no adjective: the worst of this tab's figures against its own bound, or `Nothing on this page is outside its bound.`, or a count of the figures not computed yet. **A generated sentence on one of two new tabs is a pattern half-introduced**, and the next person cannot tell whether the other tab was an omission or a decision. `schemas/source-health-view.schema.json` carries the field | Susan, 2026-09-11; row #12 |
@@ -879,7 +879,7 @@ The threshold is **config, and the project already has the number**: `collect.so
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Leave the feed panels on `Pipelines` and give `Voices` only the reliability panel | Then two routes both answer "which feeds broke" and neither owns it. The split is what pays for the tab | Editor |
-| 2 | Compute the reliability factor in `+page.server.ts` from the feed-health shards | It is a second derivation of a ranking factor, on the other side of a boundary, and it would walk the shards at build time. The producer already has the number | Carmack; `CLAUDE.md` Rule #12 |
+| 2 | Compute the reliability factor in `+page.server.ts` from the feed-health shards | It is a second derivation of a ranking factor, on the other side of a boundary, and it would walk the shards at build time. The producer already has the number | Carmack; `CLAUDE.md` Guardrail #12 |
 | 3 | One combined source score, ranked | It would tell an operator something is wrong and nothing about what to do - the page's own sentence, and the reason the census is four facts | `docs/architecture/publishing/console.md` |
 | 4 | Print a lean on every feed, thin record and all | A lean over four articles is a claim the record cannot carry, and a chart is the most convincing way to make one | Andre |
 
@@ -914,7 +914,7 @@ The threshold is **config, and the project already has the number**: `collect.so
 
 ### What it measures, and what a person writes
 
-- **Four target distributions**, one per vocabulary: desk, kind, lens, viewpoint. Each is a set of shares that sum to 1.0, written into `config/idhazh.json` with a sane default and a schema bound, per Rule #6. **Each one names the denominator it sums over, because the four do not share one and "shares that sum to 1.0" was the whole specification until 2026-09-11.**
+- **Four target distributions**, one per vocabulary: desk, kind, lens, viewpoint. Each is a set of shares that sum to 1.0, written into `config/idhazh.json` with a sane default and a schema bound, per Guardrail #6. **Each one names the denominator it sums over, because the four do not share one and "shares that sum to 1.0" was the whole specification until 2026-09-11.**
 
 | Vocabulary | Shares sum over | Why it is not the same as the one above it |
 | --- | --- | --- |
@@ -938,16 +938,16 @@ The threshold is **config, and the project already has the number**: `collect.so
 | 1 | **A target a person writes, never a target the pipeline learns.** A target the system derives from what it published is the runaway plan 23 row #17 decision 4 names, one level up | Andre; section 0 |
 | 2 | **It reports and decides nothing.** No stage reads the divergence, no gate fails on it, and a run that cannot compute it publishes anyway | Section 1a, degrade rather than fail |
 | 3 | **Rank-aware, because this plan gave the day one order.** A flat count over 365 stories says nothing about the head, and the head is the only part most readers reach | [arXiv 2209.13520](https://arxiv.org/abs/2209.13520) |
-| 4 | **It rides on the existing day-metrics record.** A per-day quality number about the page is what that record is; a second day-sharded ledger would be a second prune and a second growing-reads declaration for one number a day | `CLAUDE.md` Rule #12; `backend/idhazh/publish_day_metrics.py` |
+| 4 | **It rides on the existing day-metrics record.** A per-day quality number about the page is what that record is; a second day-sharded ledger would be a second prune and a second growing-reads declaration for one number a day | `CLAUDE.md` Guardrail #12; `backend/idhazh/publish_day_metrics.py` |
 | 5 | **The desk mix's `TargetBar` lands here, not on `Judgement`.** A `TargetBar` needs a threshold to mark and this is the row that owns it. Row #12 records the refusal and points here | Susan, 2026-09-11 |
 | 6 | Every field added to `DayMetrics` is **optional and an absent value reads as unknown**, because 22 committed day records do not carry it and none of them is rewritten | `CLAUDE.md` section 11 |
-| 7 | **Each target names its denominator, and the four do not share one.** Desk and kind sum over published items; lens sums over **firings**, because 73.0 percent of items carry no lens and a share over items cannot reach 1.0; viewpoint is **five distributions**, one per stance field, each over that axis's gate-opened items including its own `not_applicable`. **A divergence whose denominator is unstated is not a measurement**, and "shares that sum to 1.0" was the whole specification until 2026-09-11 | Andre, 2026-09-11; `CLAUDE.md` Rule #10 |
+| 7 | **Each target names its denominator, and the four do not share one.** Desk and kind sum over published items; lens sums over **firings**, because 73.0 percent of items carry no lens and a share over items cannot reach 1.0; viewpoint is **five distributions**, one per stance field, each over that axis's gate-opened items including its own `not_applicable`. **A divergence whose denominator is unstated is not a measurement**, and "shares that sum to 1.0" was the whole specification until 2026-09-11 | Andre, 2026-09-11; `CLAUDE.md` Guardrail #10 |
 
 ### Rejected alternatives
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Learn an importance score from what readers opened | There are no clicks, by design - no accounts, no telemetry, no runtime call home. The literature's own answer to that constraint is a target distribution | `CLAUDE.md` Rule #1 |
+| 1 | Learn an importance score from what readers opened | There are no clicks, by design - no accounts, no telemetry, no runtime call home. The literature's own answer to that constraint is a target distribution | `CLAUDE.md` Guardrail #1 |
 | 2 | Set the target to the trailing average of what we published | It measures the pipeline against itself and reports zero for ever. A target is a statement about what should be, and only a person can make it | Andre |
 | 3 | Wire the divergence into `rank_score` as a term | A measurement a score optimises against stops measuring. ESCALATE trigger 8 fires on it | Owner; section 0 |
 | 4 | A single diversity number for the day | Four vocabularies collapse to one figure that says something is off and not which. It is the same refusal `Voices` makes about a combined source score | Editor |

@@ -263,7 +263,7 @@ def _recent_item_health(state_root: Path, *, today: str, keep: int) -> list[Item
     the newest is opened first, and the walk stops the moment `keep` distinct
     dates are in hand. The months behind them are never opened, so this costs the
     same on a run whether the project has published for a fortnight or a decade
-    (CLAUDE.md Rule #12). Every date it returns is strictly before `today`,
+    (CLAUDE.md Guardrail #12). Every date it returns is strictly before `today`,
     because a run still working on today has opportunities nobody has attempted.
     """
     if keep <= 0:

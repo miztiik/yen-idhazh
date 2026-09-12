@@ -1,7 +1,7 @@
 /** The published surface's knobs, read at build time.
  *
  * Nothing in a component is hardcoded that an operator might reasonably want
- * different (Rule #6).
+ * different (Guardrail #6).
  *
  * Two files, and the split is along who edits them and how often.
  * `config/appearance.json` owns everything the surface is DRAWN from - the
@@ -59,7 +59,7 @@ export interface RunConfig {
 	/** The most articles one run may publish. The console divides the site's
 	 * headroom by this rather than by an average of the days on disk: a quiet
 	 * day is not evidence the next one will be quiet, and a runway has to be the
-	 * worst case to be worth printing (Rule #10). */
+	 * worst case to be worth printing (Guardrail #10). */
 	safety_ceiling_per_run: number;
 	/** When the platform stops a work shard. The ceiling the machine page reads
 	 * `job_seconds` against - 4,208 seconds means nothing until 200 minutes sits
@@ -89,7 +89,7 @@ export interface RetentionConfig {
 /** The rate the Machine route prices a run's tokens at, and what was recorded.
  *
  * Part of the pipeline's `observability` block, not the whole of it. The price
- * is here because Rule #6 forbids a literal in a component and CLAUDE.md Rule
+ * is here because Guardrail #6 forbids a literal in a component and CLAUDE.md Rule
  * #10's one carve-out requires the figure to say where its rate came from.
  *
  * The two switches and the rate are here for the opposite reason: a page whose
@@ -122,7 +122,7 @@ export interface CollectConfig {
 /** The one checker knob a console panel has to name to be honest.
  *
  * The lead-coverage panel draws how many summaries fell under this share, so it
- * has to print the share itself - and Rule #6 forbids the literal in the
+ * has to print the share itself - and Guardrail #6 forbids the literal in the
  * component. The rest of the `evaluation` block sets bands the pipeline applies
  * and the page only ever reads the outcome of, so nothing else from it is here.
  */

@@ -23,7 +23,7 @@ are on `docs/architecture/extraction/elements.md`.
 
 **What it will not write is a reading the shape cannot hold.** A pattern over
 fetched bytes can match a 200-digit serial number or a 600-character hyphenated
-word (Rule #11). A value too wide to write is not a quantity and is not emitted;
+word (Guardrail #11). A value too wide to write is not a quantity and is not emitted;
 a word too wide to be a unit is read as no unit, and the element still lands
 with its span. A date needs no such bound: the longest reading either pattern
 can produce is ten characters.
@@ -406,7 +406,7 @@ def settle(candidates: Iterable[Element]) -> list[Element]:
     merges them after this has run.
 
     Quadratic in one article's candidates and bounded by the cap the caller
-    passes, so it cannot grow with the archive (Rule #12).
+    passes, so it cannot grow with the archive (Guardrail #12).
     """
     kept: list[Element] = []
     for element in sorted(candidates, key=lambda item: (_RANK[item.kind], item.span_start)):
@@ -501,7 +501,7 @@ def classify(table: ElementTable, *, min_chart_points: int) -> ElementClass:
     closing it here would delete the measurement.
 
     `min_chart_points` is `visuals.min_chart_points` and not a second knob
-    (Rule #6). Mint one and the console can call an article chartable while the
+    (Guardrail #6). Mint one and the console can call an article chartable while the
     planner refuses to draw it, and the rate then measures two knobs drifting
     apart rather than the planner.
     """
@@ -521,7 +521,7 @@ def extraction_health(
 ) -> ExtractionHealth | None:
     """The three census cells for one article, or nothing when there was no text.
 
-    O(1) in the archive: it reads one article and builds one table (Rule #12).
+    O(1) in the archive: it reads one article and builds one table (Guardrail #12).
 
     **A drifted span degrades this item and nothing else.** That is row 4's
     ruling, and this is where it is carried out: `element_table` raises because

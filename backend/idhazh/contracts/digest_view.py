@@ -6,7 +6,7 @@ it is read from disk at build time. This is the other file: the projection
 the published site serves at `<base>/digest/<YYYY>/<MM>/<DD>/digest.json` and a
 browser fetches over the network.
 
-**It is a contract because it has a consumer we cannot upgrade** (Rule #3).
+**It is a contract because it has a consumer we cannot upgrade** (Guardrail #3).
 Until 2026-08-31 the field list was a JavaScript array in a build script, which
 was honest while the one reader was our own archive page rendering a search
 result. It stops being honest the moment a reader's cached shell fetches this
@@ -295,7 +295,7 @@ class DigestView(Contract):
                 "reading route is about to fetch this file, so a browser we cannot "
                 "upgrade will parse it and its address stops being movable - which is "
                 "a persisted shape and therefore a contract before logic reads it "
-                "(Rule #3). The version is here from the first byte so that an older "
+                "(Guardrail #3). The version is here from the first byte so that an older "
                 "shell reading a newer payload has something to branch on. Nine names "
                 "join the thirteen in the same commit, each with a named renderer: "
                 "carried_by, watchlist_hit, on_front_page and rank_score for the lead "

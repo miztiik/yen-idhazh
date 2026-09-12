@@ -1,6 +1,6 @@
 """The reference-set harness, run against a real corpus in a temp directory.
 
-No mocks and no network (Rule #7). Nothing here writes a summary - the point of
+No mocks and no network (Guardrail #7). Nothing here writes a summary - the point of
 the harness is that it refuses what a run would refuse, so the tests are mostly
 about what it turns away.
 """

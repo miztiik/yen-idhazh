@@ -3,7 +3,7 @@
 The console rebuilds every per-day figure by walking the whole committed
 history - every score row, item-health row and published day - on each build
 (research findings 61-75). That walk gets slower with every published day for an
-answer that never changes once the day is frozen (CLAUDE.md Rule #12). This
+answer that never changes once the day is frozen (CLAUDE.md Guardrail #12). This
 producer writes the answer once, from the data the publication step already
 holds, so a reader loads one small file instead.
 
@@ -17,7 +17,7 @@ The record carries counts and facts about a day and never a line of article text
 (section 2).
 
 The day's slice is read from that one day's month shard alone - not the whole
-ledger - so the cost does not rise as the ledger keeps more months (Rule #12).
+ledger - so the cost does not rise as the ledger keeps more months (Guardrail #12).
 The figures match the frontend console reducers exactly, so the reader that
 replaces the walk reads the same numbers it computes today: an eval-row
 percentile is nearest-rank as `eval-instruments.ts` takes it, a stage or
@@ -113,7 +113,7 @@ def read_score_rows(state_root: Path, date: str) -> list[dict[str, str]]:
 
     One shard, never the whole ledger: the record is about one day, and a walk
     over every month would cost more with each month the ledger keeps
-    (CLAUDE.md Rule #12).
+    (CLAUDE.md Guardrail #12).
     """
     return _rows_for_date(eval_writer.ledger_path(state_root, date), date)
 
@@ -241,7 +241,7 @@ def _extraction(
     other and only one of them is the planner's fault.
 
     Both inputs are one day's worth, so the cost does not rise as the archive
-    does (Rule #12). Null when no row on the day recorded the pass at all, which
+    does (Guardrail #12). Null when no row on the day recorded the pass at all, which
     is what a day written before 2026-09-08 looks like: a block of zeros there
     would report an extractor that found nothing rather than a day that measured
     nothing.
@@ -662,7 +662,7 @@ def records_in_month(state_root: Path, month: str) -> list[DayMetrics]:
 
     One directory listing and at most 31 small files, whatever the archive
     grows to - the state records are nested `<YYYY>/<MM>/<DD>.json` for exactly
-    this reason (Rule #12). A record that will not validate raises rather than
+    this reason (Guardrail #12). A record that will not validate raises rather than
     being skipped: this is the only place a band count or an extraction census
     survives once a day's items are folded, and a month quietly published short
     would report work that happened as work that did not.

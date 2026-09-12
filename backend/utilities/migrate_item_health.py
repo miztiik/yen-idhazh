@@ -20,9 +20,9 @@ breakdown, and a breakdown invented from the total would be a reading nobody
 took.
 
 Committed rather than run by hand, so a fork or a stale branch can reproduce the
-exact rewrite this repository ran (CLAUDE.md Rule #5). It is safe to re-run: a
-shard that already carries the wide header is reported and skipped. That is what
-makes it the tool for the merge conflict this change is guaranteed to hit -
+exact rewrite this repository ran (CLAUDE.md Guardrail #5). It is safe to re-run:
+a shard that already carries the wide header is reported and skipped. That is
+what makes it the tool for the merge conflict this change is guaranteed to hit -
 `state/*.csv` is `merge=union`, so a merge concatenates two headers instead of
 raising, and the repair is to take the upstream file whole
 (`git checkout origin/main -- state/item-health`) and run this over it again

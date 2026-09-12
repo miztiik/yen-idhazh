@@ -108,7 +108,7 @@
     {
       "change": "Initial shape: the run that wrote it, the window the publishing record covers, whether that window is deep enough to read as a rate, and one row per configured address.",
       "version": "2026-09-03T09:00",
-      "why": "Permission, availability, retirement and yield were derived in four places and published in none, so the console re-derived what it could in TypeScript and simply could not see the rest. A typed projection gives the page one answer to render and keeps every private cell out of the published tree by construction (Rule #11)."
+      "why": "Permission, availability, retirement and yield were derived in four places and published in none, so the console re-derived what it could in TypeScript and simply could not see the rest. A typed projection gives the page one answer to render and keeps every private cell out of the published tree by construction (Guardrail #11)."
     }
   ],
   "description": "Every address the run may ask, and what the committed record says about it.",

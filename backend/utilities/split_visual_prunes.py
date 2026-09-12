@@ -1,7 +1,7 @@
 """Move every row of `state/visual-prunes.csv` into the day file its own date names.
 
 One-shot, and committed rather than run by hand, so a fork or a stale branch can
-reproduce the exact cutover this repository ran (CLAUDE.md Rule #5). It is safe
+reproduce the exact cutover this repository ran (CLAUDE.md Guardrail #5). It is safe
 to leave here afterwards: a checkout with no flat file has nothing to split and
 is told so.
 
@@ -22,7 +22,7 @@ moved to the day tree in the same commit as this utility. A flat file a merge
 brings back is therefore unread, and running this again is what puts its rows
 back in reach.
 
-This reads the whole ledger, which is the growing cost Rule #12 is about. It is
+This reads the whole ledger, which is the growing cost Guardrail #12 is about. It is
 allowed here for two reasons and they are both narrow: this is an operator
 command a person runs once, not a step of any run; and the read it performs is
 the read `load_visual_prunes` already performs on every call, because the

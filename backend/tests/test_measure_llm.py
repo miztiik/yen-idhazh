@@ -29,7 +29,7 @@ def test_model_refs_are_validated_before_they_become_paths_or_urls() -> None:
 
 def test_a_reference_reaches_hugging_face_only_at_a_pinned_commit() -> None:
     """A branch is re-pointed on every upload, so a bench that names one cannot
-    be repeated: the bytes move and no recorded number says they did (Rule #10).
+    be repeated: the bytes move and no recorded number says they did (Guardrail #10).
     """
     ref = ModelRef("owner/repo", "c" * 40, "model.gguf")
 

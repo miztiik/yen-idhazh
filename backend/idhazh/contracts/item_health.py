@@ -246,7 +246,7 @@ class ItemHealthRow(Contract):
                 "was one unbroken copy of its 53-word source, which republishes an "
                 "article body (CLAUDE.md section 0a); and nothing on the output side "
                 "refused an address in our own text, so the sanitizer running before the "
-                "model was the only control on Rule #11. Both codes are source-neutral: "
+                "model was the only control on Guardrail #11. Both codes are source-neutral: "
                 "a copied brief and a leaked address are the model's failures, and "
                 "counting either against the feed would quarantine a wire service for a "
                 "defect we own. Additive and the vocabulary is closed, so a row an "

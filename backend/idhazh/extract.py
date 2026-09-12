@@ -2,7 +2,7 @@
 
 This is the trust boundary, and it is crossed here exactly once. Everything
 below this line has already been sanitized; nothing above it may be trusted
-(Rule #11).
+(Guardrail #11).
 
 A failure is a state of the payload rather than an absence of it. A dead link,
 a paywall, a robots refusal or an extractor that found nothing degrades its own
@@ -215,7 +215,7 @@ class Extracted(NamedTuple):
     """The payload, and the body it was cut from.
 
     `source_text` is the sanitized article before `truncation_cap_tokens` cut
-    it. It is never persisted and never republished (Rule #1): it exists so the
+    it. It is never persisted and never republished (Guardrail #1): it exists so the
     work stage can score the summary against the whole article in the same
     process that produced it. Empty whenever there was no body to keep.
     """

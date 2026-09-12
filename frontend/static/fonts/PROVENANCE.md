@@ -21,7 +21,7 @@ reader came for.
 
 ## Why it is committed rather than fetched
 
-Rule #1 as amended 2026-08-23 permits a third-party static asset, and a webfont
+Guardrail #1 as amended 2026-08-23 permits a third-party static asset, and a webfont
 is judged on bytes, licence and privacy behaviour rather than on hostname. This
 project self-hosts anyway, for two reasons that are not about the rule:
 

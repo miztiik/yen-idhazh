@@ -1,7 +1,7 @@
 """Rewrite `state/published.csv` without its `canonical_url` column.
 
 One-shot, and committed rather than run by hand, so a fork or a stale branch
-can reproduce the exact rewrite this repository ran (CLAUDE.md Rule #5). It is
+can reproduce the exact rewrite this repository ran (CLAUDE.md Guardrail #5). It is
 safe to leave here after it has run: a ledger that already has the narrow shape
 is refused rather than rewritten a second time.
 

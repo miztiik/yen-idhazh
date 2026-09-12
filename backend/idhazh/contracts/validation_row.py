@@ -32,7 +32,7 @@ class LeaderboardProvenance(StrEnum):
     `not_reported` is not zero. A model whose card publishes no summarization or
     faithfulness result has an unknown prior, and recording that as `0.0` would
     put a fabricated worst case into every mean, chart and comparison that ever
-    reads the column (Rule #10).
+    reads the column (Guardrail #10).
     """
 
     REPORTED = "reported"

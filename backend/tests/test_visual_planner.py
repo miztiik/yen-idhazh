@@ -935,7 +935,7 @@ def wind_table(*element_ids: str) -> ElementTable:
     """The committed wind table, narrowed to these elements.
 
     Built rather than found, because the case the gate is about - a table too
-    thin for any picture - is one no committed table holds (`CLAUDE.md` Rule #12).
+    thin for any picture - is one no committed table holds (`CLAUDE.md` Guardrail #12).
     """
     payload = json.loads(read_text(VALIDATOR_FIXTURES / "tables" / "wind.json"))
     payload["elements"] = [one for one in payload["elements"] if one["element_id"] in element_ids]
@@ -1063,7 +1063,7 @@ class TestTheReachabilityGate:
         )
 
     def test_the_gate_reads_no_word_of_the_article(self) -> None:
-        """Rule #11 with no prompt in sight: fetched prose may not steer control flow.
+        """Guardrail #11 with no prompt in sight: fetched prose may not steer control flow.
 
         Every input is a kind, a unit or a figure re-read with the producer's own
         reader. The words an element was cut from, and the Tier 2 name a model

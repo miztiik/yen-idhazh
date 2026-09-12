@@ -24,7 +24,7 @@
  * doubling both dimensions quadrupled the work. Those three arms are below.
  *
  * Nothing here reads a committed ledger. A test that walks the archive costs
- * more every published day (Rule #12), and every shape this row is about is
+ * more every published day (Guardrail #12), and every shape this row is about is
  * reachable from a built fixture.
  */
 

@@ -25,11 +25,11 @@ carrying a markdown table with a `#` column and a `Status` column, and the
 column NAMES are read from the header rather than counted - so a plan spelling
 its group column `Group` and a plan spelling it `Parallel-group` both parse, a
 plan with no `Worktree` column parses, and a sixth plan needs no edit here
-(Rule #6).
+(Guardrail #6).
 
 What it reads, and why that is bounded. The plan-docs, and nothing else. Those
 are source a person writes, so they grow at review speed rather than once a run,
-and reading all of them is a bounded read under Rule #12. It never opens
+and reading all of them is a bounded read under Guardrail #12. It never opens
 `state/`, the published archive, or any collection a run appends to. The `git`
 and `gh` questions are bounded the same way: one per live worktree, and one per
 pull request a live row names.

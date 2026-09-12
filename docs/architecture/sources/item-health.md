@@ -47,7 +47,7 @@ Three files carry one item-health row, and each owns one thing:
 | Where | What it owns |
 | --- | --- |
 | `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns` |
-| `schemas/item-health-row.schema.json` | the generated schema. Never hand-edited (Rule #3) |
+| `schemas/item-health-row.schema.json` | the generated schema. Never hand-edited (Guardrail #3) |
 | `backend/idhazh/ledger.py` | the append, the header guard, and the monthly shard path |
 
 **One definition of the column list.** `ItemHealthRow.csv_columns` returns
@@ -540,4 +540,4 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract and schema rules.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - logs as evidence, ledgers as records.
 - [../../reference/measurements.md](../../reference/measurements.md) - the sizes and rates quoted above.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3, Rule #11, and section 11.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3, Guardrail #11, and section 11.

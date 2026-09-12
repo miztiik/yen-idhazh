@@ -1,6 +1,6 @@
 """The eleven hard gates, exercised against payloads a run could really write.
 
-No mocks and no network (Rule #7). Every observation here is built from the
+No mocks and no network (Guardrail #7). Every observation here is built from the
 committed contracts, and every threshold is read from `EvaluationConfig`,
 `RunConfig` and `InferenceConfig` rather than typed into an assertion - a test
 that hardcodes 0.5 stops failing the day somebody moves the config knob, which
@@ -234,7 +234,7 @@ def test_a_clean_run_passes_all_eleven() -> None:
 
 
 def test_every_gate_names_where_its_threshold_came_from() -> None:
-    """A gate that cannot cite its source is a number somebody typed (Rule #10)."""
+    """A gate that cannot cite its source is a number somebody typed (Guardrail #10)."""
     for outcome in outcomes_of(a_passing_shard()).values():
         assert outcome.source.strip()
         assert outcome.measured.strip()

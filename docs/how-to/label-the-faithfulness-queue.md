@@ -6,7 +6,7 @@ Read sixty summaries against the articles they came from, and record whether eac
 one asserts something the article does not support. This is the only instrument
 that says what the `high`, `medium` and `low` bands mean to a person. Until it
 has rows, the band cuts at 0.80 and 0.50 are a promise nobody has checked
-(`CLAUDE.md` Rule #10).
+(`CLAUDE.md` Guardrail #10).
 
 You need the article text. The committed ledger does not have it: `state/scores.csv`
 records a digest of the article and a digest of the summary and neither text.
@@ -147,7 +147,7 @@ characters per word):
 
 The busiest day on record costs 4.63 MB, so 14 days of retention costs 64.8 MB
 against the 500 MB artifact budget - 13 percent of it, and that assumes every one
-of the 14 days is the biggest day ever recorded (`CLAUDE.md` Rule #2). The
+of the 14 days is the biggest day ever recorded (`CLAUDE.md` Guardrail #2). The
 ceiling would not be reached until 108 days.
 
 Longer is not free in a different currency. The package holds somebody else's

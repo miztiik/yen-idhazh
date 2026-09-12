@@ -221,7 +221,7 @@ test.describe('the home page anchors its leads', () => {
 	 * rule is invisible in it. The shape is built rather than found: 40 stories,
 	 * with the two leads at positions 25 and 39 so neither is inside any head a
 	 * page would take. Fixed in size, so it costs the same whatever the archive
-	 * grows to (Rule #12).
+	 * grows to (Guardrail #12).
 	 */
 	function dayWithOutlyingLeads(root: string, date: string): { leads: string[]; total: number } {
 		const total = 40;

@@ -85,7 +85,7 @@ LABEL_PASS_VERSION: Final = "2026-09-09"
 #: Structural bounds on a decoder shape, in the same place and for the same
 #: reason `VisualDraft` carries its own: a `maxItems` is a hard grammar stop, so
 #: it bounds the reply before a byte of it is written rather than after. These
-#: are not the tunables Rule #6 sends to `config/` - moving one changes what the
+#: are not the tunables Guardrail #6 sends to `config/` - moving one changes what the
 #: decoder can emit at all, which is a contract change and not an operator's
 #: dial, and a grammar is fixed before a request is built. The per-article
 #: proposal cap decision 3 asks for is `PROPOSED_MAX`.
@@ -122,7 +122,7 @@ ADDRESS_MAX: Final = 48
 PHRASE_MAX: Final = 60
 
 #: How much of the story one fact is, in three words rather than as a number.
-#: The model may not type a figure (Rule #11 and the module docstring), so it
+#: The model may not type a figure (Guardrail #11 and the module docstring), so it
 #: picks a band and code converts. The scores are the midpoints of three equal
 #: bands over the 0..1 `Element.salience` holds - written as fractions so nobody
 #: reads 0.83 as a tuned value. Nothing tunes them: they are what the three
@@ -324,7 +324,7 @@ def numbered_sentences(text: str) -> str:
     the summary: a compression cannot carry a fact it dropped, and judging what
     an item is about against text that lost the series is judging the wrong
     document. It is fenced as data by its caller - the addresses are ours, the
-    sentences are a stranger's web page (Rule #11).
+    sentences are a stranger's web page (Guardrail #11).
     """
     return "\n".join(
         f"[{sentence_id(index)}] {text[start:end].strip()}"
@@ -1008,7 +1008,7 @@ def call_two_schema(
     brief: bool = False,
     plan: bool = True,
 ) -> dict[str, Any]:
-    """Generated from the model, never hand-written (Rule #3)."""
+    """Generated from the model, never hand-written (Guardrail #3)."""
     return call_two_model(
         prompt_config, source_words=source_words, brief=brief, plan=plan
     ).model_json_schema()
@@ -1029,7 +1029,7 @@ def call_two_user_turn(
     already holds - and would put a second, differently-worded copy of the same
     untrusted text in front of the model.
 
-    Every number in it is substituted from `config/` at render time (Rule #6),
+    Every number in it is substituted from `config/` at render time (Guardrail #6),
     and the key-point pair comes off `summarize.key_point_rail`, which is the
     same function the decoder's rail comes off. Asking for more key points than
     the grammar admits would lose the item for doing what it was told, and with

@@ -189,7 +189,7 @@ export async function readScope(
 
 /** How the archive is searched. All three values come from `config/idhazh.json`.
  *
- * They were literals here with no override path, which is what Rule #6 forbids.
+ * They were literals here with no override path, which is what Guardrail #6 forbids.
  * The floor in particular is a measured quantity - see `assist.similarity_floor`
  * in the contract for the null distribution it was cut from.
  */

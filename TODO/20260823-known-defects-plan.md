@@ -18,7 +18,7 @@ tests and canonical docs. Git history holds their execution record; the living
 docs hold the rules they established.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
-decision. Current project behaviour belongs in `docs/` (Rule #4).
+decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 
 | # | Defect | Level | Status |
 | --- | --- | --- | --- |
@@ -52,7 +52,7 @@ Two consequences follow, and only the first is certain:
   `Article.truncated` is already persisted and answers that question exactly.
 
 **Why this is not closed by measurement.** No test may fetch the HHEM weights
-(Rule #7), so the monotonicity claim above is an argument about the aggregation
+(Guardrail #7), so the monotonicity claim above is an argument about the aggregation
 rather than an observation of the scorer. Confirming it needs a run with the
 weights present, and the honest first step is to look at `hhem_delta` on the
 rows written since row 16 shipped rather than to reason further.
@@ -68,7 +68,7 @@ so it is Level 5 and needs an owner ruling before any of it is written.
 
 No current threshold has a measured human error rate. Re-cutting the bands is a
 Level-5 reader-facing decision, so no threshold moves until the evidence exists
-(Rule #10).
+(Guardrail #10).
 
 ### The three queue repairs shipped on 2026-08-27
 
@@ -139,7 +139,7 @@ The canonical measurement contract lives in
 | # | Defect | Fix |
 | --- | --- | --- |
 | 15 | `median()` returned `0` for an empty sample, so all four stage timings lost the difference between "not measured" and "measured as zero" before the chart saw them. `StageTimings.svelte` reconstructed absence from the value, which is a repair on top of a lost fact. | 2026-08-27, PR #180. `median()` returns `null`, `StageTimingDay` carries `number | null`, and the console reads the null directly. Both a missing timing and a real zero are pinned in `frontend/tests/console.spec.ts`. Recorded in [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md). |
-| 16 | `dual_score` exists to tell "the model invented something" from "the model faithfully summarized the half we gave it", and its only production caller handed it `article.text` twice. Measured over the whole committed ledger: `hhem_delta` exactly 0.0 on **2,232 of 2,232 rows**. The run also paid for the duplicate pass - about 2 s an item, 21 to 24 minutes of runner wall-clock a day. | 2026-08-27. `extract.to_article_with_source` returns the payload beside the untruncated body; the body stays in the process that extracted it and is never persisted or republished (Rule #1). The work stage scores against it, and `dual_score` scores identical texts once. About 97 percent of items are never cut, so most now pay one pass instead of two. Stamped `2026-08-27T20:30` with the read-side rule: a row older than that stamp recorded two scores of one text, so its zero means "never measured". Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
+| 16 | `dual_score` exists to tell "the model invented something" from "the model faithfully summarized the half we gave it", and its only production caller handed it `article.text` twice. Measured over the whole committed ledger: `hhem_delta` exactly 0.0 on **2,232 of 2,232 rows**. The run also paid for the duplicate pass - about 2 s an item, 21 to 24 minutes of runner wall-clock a day. | 2026-08-27. `extract.to_article_with_source` returns the payload beside the untruncated body; the body stays in the process that extracted it and is never persisted or republished (Guardrail #1). The work stage scores against it, and `dual_score` scores identical texts once. About 97 percent of items are never cut, so most now pay one pass instead of two. Stamped `2026-08-27T20:30` with the read-side rule: a row older than that stamp recorded two scores of one text, so its zero means "never measured". Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
 | 17 | `source_word_count` came from `metrics.word_count(full_text)` and `source_seen_word_count` from `article.word_count` - the **same post-cap string** through two different counters. Read as a truncation signal the pair said 87 percent of items were truncated; the real rate is 6.3 percent. The proof is the impossible direction: `source_seen_word_count` was larger on **590 of 2,232 rows**, which cannot happen when one string is a cut of the other. | 2026-08-27. The column is `Article.source_word_count`, the pre-cap count the payload already carried, so one counter produces both numbers and the difference between them is the cut. An article written before that field existed reports its post-cap count rather than inventing a source length. Stamped `2026-08-27T20:00`. Proved by a test that builds its article through the real extractor, so the pair is a genuine cut. Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
 
 ## See also

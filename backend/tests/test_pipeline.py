@@ -492,7 +492,7 @@ def test_the_work_stage_digests_the_same_text_it_scores() -> None:
     A digest of anything else - the fetched page, the untruncated article, the
     summary - would let a labeller and the scorer disagree about text and read
     as the scorer being wrong. The suite cannot run the real scorer, whose
-    weights it may not download (Rule #7), so what is checked is the wiring:
+    weights it may not download (Guardrail #7), so what is checked is the wiring:
     `stage_work` passes one name to `dual_score(seen_text=...)` and to
     `to_eval_row(premise=...)`.
     """
@@ -529,7 +529,7 @@ def test_the_work_stage_scores_against_a_different_text_than_it_showed_the_model
     was exactly 0.0 on all 2,232 committed rows and the detector `dual_score`
     exists to be had never once carried information. Checked as wiring for the
     same reason as the digest test above: the suite may not download the
-    scorer's weights (Rule #7).
+    scorer's weights (Guardrail #7).
     """
     tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
     stage = next(
@@ -1047,7 +1047,7 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
 
 
 def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
-    """One whole run over captured pages, with no model and no network (Rule #7).
+    """One whole run over captured pages, with no model and no network (Guardrail #7).
 
     The summaries fail, which is the point: the stamp describes the pipeline
     rather than the words, so it has to reach the ledger on a day the model was
@@ -1239,7 +1239,7 @@ def stage_visual_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> N
 
 # No quantity in here survives `numeric_facts`, so no enabled kind is reachable
 # and the planner decides every item without a model. That is what keeps this an
-# offline test of the bound rather than a test of the model (Rule #7).
+# offline test of the bound rather than a test of the model (Guardrail #7).
 FACT_FREE_TEXT = (
     "The laboratory said the work continues and gave no figures. A spokesperson "
     "declined to describe the schedule, and no comparison against the previous "
@@ -1854,7 +1854,7 @@ def test_a_shard_commits_what_its_model_server_counted(
     reply. The server counts the same work for itself, and until this stage
     existed those counters reached only a job log with two days of retention -
     so the read rate two published surfaces quote could be reported and never
-    reconciled (Rule #10).
+    reconciled (Guardrail #10).
     """
     run_plan = plan()
     isolate_ledgers(tmp_path, monkeypatch)
@@ -2482,7 +2482,7 @@ def test_the_manifest_records_what_the_planner_cost() -> None:
     """The visuals job runs against a 60-minute bound and nothing recorded its cost.
 
     The stage total and the item count are committed together, because either
-    one alone answers no question about the budget (Rule #10).
+    one alone answers no question about the budget (Guardrail #10).
     """
     settings = config.load(CONFIG_DIR)
     decided = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
@@ -2818,7 +2818,7 @@ def test_a_scored_run_names_the_instrument_that_wrote_its_rows(
 # published day is frozen, so a second reading can only reach the verdict the
 # first one did - what can move is the shape the day is read through. That is a
 # bill arriving for an answer the tree already holds, and it grows on a day
-# nobody writes any code (Rule #12).
+# nobody writes any code (Guardrail #12).
 #
 # Every fixture below is built in the test from the committed contract fixture.
 # None of it reads `frontend/public/digest`, whose cost follows what the

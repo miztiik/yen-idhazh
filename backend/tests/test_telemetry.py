@@ -764,7 +764,7 @@ def test_a_summarize_failure_logs_the_envelope_the_helper_built(
     """A captured stream is the fixture, so the record is what gets asserted.
 
     Every event is a plain serializable payload, which is what lets a test read
-    back what a stage logged with no mocks and no network (Rule #7). Asserting
+    back what a stage logged with no mocks and no network (Guardrail #7). Asserting
     the whole key set matters more than any one value: the point of the helper
     is that a second emitter cannot ship a different set.
     """

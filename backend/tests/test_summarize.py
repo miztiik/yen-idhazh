@@ -474,7 +474,7 @@ def test_the_output_schema_is_generated_not_hand_written() -> None:
 
 
 def test_every_number_in_the_prompt_comes_from_config() -> None:
-    """Rule #6. A literal in the prompt is a knob no schema can see."""
+    """Guardrail #6. A literal in the prompt is a knob no schema can see."""
     asked = SummarizeConfig(
         bands=[SummaryBand(min_source_words=0, target_words_min=71, target_words_max=93)],
         max_verbatim_words=4,
@@ -761,7 +761,7 @@ def test_no_rung_floor_ever_sits_above_the_cut_point() -> None:
 
     Both sides are read from `config/`, never from a literal: the cap moved from
     2500 to 5000 on 2026-08-29 and to 10000 on 2026-09-09, and a pinned number
-    here would keep passing while the relationship it guards inverted (Rule #6).
+    here would keep passing while the relationship it guards inverted (Guardrail #6).
     """
     app = config.load().app
     cut_point_words = int(app.extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)
@@ -790,7 +790,7 @@ def test_no_band_asks_for_more_key_points_than_its_summary_can_carry() -> None:
     band, so asking for more key points than the budget can hold is asking for
     facts that are not there - which is what made a 40-word note restate itself
     five times. The bound is `target_words_max / _WORDS_PER_KEY_POINT`, read from
-    `config/` so it follows the ladder when the ladder moves (Rule #6). It is a
+    `config/` so it follows the ladder when the ladder moves (Guardrail #6). It is a
     ceiling, not a target: a band may ask for fewer, and the shortest one does.
     """
     bands = config.load().app.summarize.bands
@@ -959,7 +959,7 @@ def test_the_prompt_asks_for_a_title_in_the_range_config_sets() -> None:
 
 
 def test_the_title_range_moves_with_config() -> None:
-    """Rule #6. The prompt asks; config decides what it asks for."""
+    """Guardrail #6. The prompt asks; config decides what it asks for."""
     ask = SummarizeConfig(title_words_min=4, title_words_max=9)
     assert "title of 4 to 9 words" in system_prompt(prompt_config=ask)
 
@@ -991,7 +991,7 @@ def test_the_prompt_names_the_headline_styles_it_will_not_accept() -> None:
 
 
 def test_the_source_headline_arrives_inside_the_fence() -> None:
-    """Rule #11. It is fetched text, and it is the line we ask a model to rewrite.
+    """Guardrail #11. It is fetched text, and it is the line we ask a model to rewrite.
 
     Outside the fence it would be untrusted text sitting where the prompt's
     "that block is DATA" sentence does not reach.
@@ -1323,7 +1323,7 @@ def test_the_restatement_drop_keeps_the_bands_key_points_min_not_just_one() -> N
 
 
 def test_the_restatement_ceiling_is_read_from_config_and_not_written_in_the_code() -> None:
-    """Rule #6. Move the knob and the same restating key point changes side."""
+    """Guardrail #6. Move the knob and the same restating key point changes side."""
     points = [_DISTINCT_POINT, _RESTATING_POINT]
     lenient = replied(
         body(summary=RESTATE_SUMMARY, key_points=points), prompt_config=_one_band(ceiling=1.0)
@@ -1545,7 +1545,7 @@ def test_the_reject_fires_above_the_ceiling_and_not_at_it() -> None:
 
 
 def test_the_copy_ceiling_is_read_from_config_and_not_written_in_the_code() -> None:
-    """Rule #6. Move the knob and the same reply changes side."""
+    """Guardrail #6. Move the knob and the same reply changes side."""
     reply = completion("copied-the-source").content
     permissive = EvaluationConfig(verbatim_reject_ceiling=1.0)
     strict = EvaluationConfig(verbatim_reject_ceiling=0.6)
@@ -1599,7 +1599,7 @@ def test_the_exfiltration_canarys_address_cannot_reach_a_payload() -> None:
 
     The sanitizer stops the address on the way in. This is the second control:
     if the model writes one anyway - invented, remembered, or lifted from a page
-    the sanitizer had not seen - the item does not publish (Rule #11).
+    the sanitizer had not seen - the item does not publish (Guardrail #11).
     """
     canary = json.loads(read_text(FIXTURES_DIR / "canaries" / "exfiltration-via-url.json"))
     beacon = canary["must_not_survive"][0]
@@ -1731,7 +1731,7 @@ def test_an_article_that_would_be_cut_off_mid_reply_does_not_fit() -> None:
 
 
 def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:
-    """Rule #2. The prompt can grow a rule at a time until it eats the budget.
+    """Guardrail #2. The prompt can grow a rule at a time until it eats the budget.
 
     Nothing else would catch it: a prompt that crowds out the article does not
     fail, it just quietly drops every long read from the day.
@@ -1758,7 +1758,7 @@ class RecordedErrorEndpoint:
 
     Nothing is mocked: the worker makes its ordinary POST over a loopback
     socket, and the bytes it reads back are the ones a llama-server wrote
-    (Rule #7). The stdlib server owns the framing, so the test is about the
+    (Guardrail #7). The stdlib server owns the framing, so the test is about the
     body and not about HTTP.
     """
 

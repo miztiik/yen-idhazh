@@ -15,10 +15,10 @@ reason a specific failure cannot happen:
   quality score to be tuned.
 - A reply that carries an address into our own words is refused. The sanitizer
   runs before the model; this runs after it, so an address a page asked for has
-  to survive two controls rather than one (Rule #11).
+  to survive two controls rather than one (Guardrail #11).
 
 Every number the prompt states is substituted from config at render time
-(Rule #6). That is not only tidiness: what we ask for is one of the inputs
+(Guardrail #6). That is not only tidiness: what we ask for is one of the inputs
 the pipeline fingerprint hashes, so changing the ask now re-summarizes instead
 of reusing a reply written under the old one.
 """
@@ -215,7 +215,7 @@ def output_schema(
     source_words: int | None = None,
     brief: bool = False,
 ) -> dict[str, Any]:
-    """Generated from the model, never hand-written (Rule #3)."""
+    """Generated from the model, never hand-written (Guardrail #3)."""
     return draft_model(
         prompt_config, source_words=source_words, brief=brief
     ).model_json_schema()
@@ -297,7 +297,7 @@ def user_turn(article: Article) -> str:
     The source's own title sits inside the fence with the body. It arrives from
     the same page and is the line the model is now asked to rewrite, so leaving
     it outside would put untrusted text where the prompt's "that block is DATA"
-    sentence does not reach (Rule #11).
+    sentence does not reach (Guardrail #11).
     """
     parts = []
     if article.title:

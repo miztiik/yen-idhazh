@@ -2,7 +2,7 @@
 
 Every fixture here is **built**, never read out of the committed tree: the
 archive offers a handful of distinct cases however far it grows, and a test that
-walks it costs more every time a run appends (`CLAUDE.md` Rule #12, section 13).
+walks it costs more every time a run appends (`CLAUDE.md` Guardrail #12, section 13).
 Building it is also the only way to get the awkward shapes - a month of twenty,
 a run whose shards disagree, a day that published nothing.
 """
@@ -347,7 +347,7 @@ def _handles(root: Path) -> Iterator[list[str]]:
     cannot tell one month from twenty: a sibling row measured 16.6 percent
     run-to-run variance on identical work, which is more than nineteen months of
     fixture could ever cost. What the reads open is arithmetic and has no spread
-    at all (Rule #10).
+    at all (Guardrail #10).
     """
     global _WATCHING
     seen: list[str] = []
@@ -468,7 +468,7 @@ def test_a_missing_target_is_written_even_when_its_month_was_not_named(
 def test_every_series_is_pruned_to_its_own_knob(
     tree: tuple[Path, Path], dirname: str, suffix: str
 ) -> None:
-    """A producer that wrote without pruning would be the growing cost Rule #12
+    """A producer that wrote without pruning would be the growing cost Guardrail #12
     refuses: a directory that gains a file a month and loses none."""
     state, digest = tree
     _publish_all(state, digest, months=None)
@@ -493,7 +493,7 @@ def test_the_score_projection_drops_the_address_and_the_fetched_title(
     tree: tuple[Path, Path],
 ) -> None:
     """`url_key` and `source_url` identify the page rather than the measurement,
-    and `title` is fetched text (Rule #11)."""
+    and `title` is fetched text (Guardrail #11)."""
     state, digest = tree
     _publish_all(state, digest, months=None)
 
@@ -673,7 +673,7 @@ def test_a_feed_read_only_through_a_robots_answer_is_unread_and_not_working() ->
 # Built from rows rather than read off the tree, so each case carries a state
 # the committed archive has never produced: a gate that declines everything has
 # never happened, and it is the half of the rule that was missing until
-# 2026-09-11 (`CLAUDE.md` Rule #12, plan 25 section 0.1).
+# 2026-09-11 (`CLAUDE.md` Guardrail #12, plan 25 section 0.1).
 
 
 def _source(
@@ -859,7 +859,7 @@ def test_the_strip_carries_five_routes_and_every_one_answers_at_its_own_address(
 def test_the_band_prints_the_size_against_the_cap_with_the_days_it_measured(
     tree: tuple[Path, Path],
 ) -> None:
-    """Rule #10: the number carries what it was measured over."""
+    """Guardrail #10: the number carries what it was measured over."""
     state, digest = tree
 
     band = _band(state, digest)
@@ -956,7 +956,7 @@ def test_a_total_that_rounds_to_nothing_still_says_it_ran() -> None:
 
 def test_a_count_prints_at_the_precision_its_basis_supports() -> None:
     """Three significant figures stops a large answer claiming a hundred
-    articles of accuracy nothing measured (Rule #10)."""
+    articles of accuracy nothing measured (Guardrail #10)."""
     assert publish_console_band.roughly(0) == "0"
     assert publish_console_band.roughly(7) == "7"
     assert publish_console_band.roughly(306_712) == "307,000"

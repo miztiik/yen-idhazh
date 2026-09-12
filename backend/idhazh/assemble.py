@@ -394,7 +394,7 @@ def collapse_same_story(
     view draws instead, and every item in a group carries the count of other
     sources so the sentence on it is true whichever one is on screen.
 
-    Runs at build time over the block the payload already holds (Rule #1): the
+    Runs at build time over the block the payload already holds (Guardrail #1): the
     browser never computes this, and no encoder is loaded to do it. A day with
     no vectors, and an item without one, come back untouched - both fields stay
     null, which reads as unknown rather than as "only one source carried this".
@@ -549,7 +549,7 @@ def subject_clusters(items: Sequence[DigestItem], watchlist: Watchlist) -> list[
     The title, never the body and never fetched text: the matcher reads words
     we wrote and may only emit a slug the committed registry already holds, so
     a hostile page can win a tag we already publish and can never mint one
-    (Rule #11).
+    (Guardrail #11).
 
     The title alone, and not the summary, because a lead is a claim about what
     the story is about rather than about what our paragraph happened to
@@ -1311,7 +1311,7 @@ def low_confidence(day: DigestDay) -> int:
 def site_size(root: Path) -> tuple[int, int]:
     """Bytes and files under the committed payload tree. Measured every assembly.
 
-    **This read grows with the archive and is not bounded (Rule #12).** It opens
+    **This read grows with the archive and is not bounded (Guardrail #12).** It opens
     every file the tree holds, so one more published day is one more day of files
     to open, for ever. Measured 2026-09-07 on an Intel Core i7-1265U over
     `frontend/public/digest/`: 443 files, 25,070,521 bytes, 300.4 ms best and

@@ -43,7 +43,7 @@ is the shape a planner decodes into and the only thing a compiler is allowed to 
 element references and closed vocabularies: a decision, a purpose, a type, one channel per encoding
 role, the elements it draws from, which of them name the marks and which one lands first, one
 sentence of reasoning, a title, a caption, a confidence and the vocabulary date-stamp it
-was planned against. It lands ahead of its producers, so nothing writes one yet (Rule #3).
+was planned against. It lands ahead of its producers, so nothing writes one yet (Guardrail #3).
 
 What it may not carry is as much of the contract as what it holds.
 
@@ -174,7 +174,7 @@ refusal it is credited with.
 ### Where the vocabulary lives, and why none of it is in `config/`
 
 `visuals.min_chart_points`, `visuals.max_chart_points` and `visuals.histogram_bins` are knobs and
-are read from `config/` (Rule #6). The tables are not knobs, and since 2026-09-09 they are not the
+are read from `config/` (Guardrail #6). The tables are not knobs, and since 2026-09-09 they are not the
 validator's either: `backend/idhazh/visual_vocabulary.py` holds which roles a type may fill, which
 kinds may fill a channel, which channels are drawn on a measured axis, which units measure the same
 thing, and the two date-stamps over those tables.
@@ -225,7 +225,7 @@ same string, **or** when one table names both under one dimension - power, energ
 duration.
 
 That table is a closed allow-list and its omissions are the safety. A unit is read off a stranger's
-page (Rule #11), so a unit the table does not name is compared by identity and is never assumed
+page (Guardrail #11), so a unit the table does not name is compared by identity and is never assumed
 compatible with anything. `m` is out because it is metres or millions, and a guess there is a
 one-million-fold error on a published bar - the same reason `MAGNITUDE` omits it. `ton` is out
 because short, long and metric tons are three different masses. Currency symbols are out because
@@ -313,7 +313,7 @@ values, because fewer values than bins leaves a bin empty whatever their spread.
 
 A tenth check was weighed and refused. It would have fired on every histogram of every run for one
 config edit, and the reader loses nothing by its absence: the same fault is caught earlier and
-stated once. The three bounds are all `config/` knobs and none is a number chosen in code (Rule #6);
+stated once. The three bounds are all `config/` knobs and none is a number chosen in code (Guardrail #6);
 no new knob was needed, because `min_chart_points` and `max_chart_points` already mean "how many
 marks a chart may draw" and a histogram's bars are marks.
 
@@ -456,7 +456,7 @@ Three properties of how it is written, and each one is load-bearing:
  from prose, so nothing about one is decidable in advance, and with `diagram` in
  `visuals.enabled_kinds` **no item was ever skipped** - measured at 145 of 145 asked on 2026-08-25.
 - **It reads the facts only - never the article's words.** A predicate that branched on fetched
- prose would let a stranger's page steer our control flow, which is Rule #11 with no prompt in
+ prose would let a stranger's page steer our control flow, which is Guardrail #11 with no prompt in
  sight. There was no keyword rescue for the diagram arm for the same reason.
 - **The empty string is a unit group.** `numeric_facts` writes `""` when nothing after the number
  reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
@@ -499,7 +499,7 @@ and does not count it as a mark.
 
 **It reads no word of the article.** Every input is a kind, a unit or a figure re-read from the
 span - so a page that asks to be drawn is answered with the same tuple as one that does not. That is
-Rule #11 with no prompt in sight, and it is the same property the single-call gate holds.
+Guardrail #11 with no prompt in sight, and it is the same property the single-call gate holds.
 
 **The gate is proved by exhaustion, not by sampling.**
 `test_the_gate_admits_nothing_the_validator_would_have_passed` builds a table the gate calls
@@ -741,7 +741,7 @@ The job's `timeout-minutes` is 50 against a 40-minute stage budget. It is the ba
 budget, and the 10 minutes between them are the fixed cost the stage clock never sees - checkout,
 weights, install, model start. Both numbers came down together on 2026-08-25, because a job bound
 20 minutes above the stage bound is 20 minutes in which a stuck stage burns runner wall-clock past
-its own limit. Raising either one is the move Rule #2 forbids.
+its own limit. Raising either one is the move Guardrail #2 forbids.
 
 **The chart arm has a kill line, registered before the data was read.** Authority: Jony,
 2026-08-25. Over 14 consecutive days with the chart-only gate on, retire the arm if the median day
@@ -839,7 +839,7 @@ job's 60-minute bound, and about 196 hours for a 149-item day against a 6-hour
 job limit. The job was cancelled at step 7 of 9 and never reached 768px or a byte
 count. The plan's second candidate, `alpha-vllm/Anima-2.9B`, answers 401
 Repository Not Found: it does not exist. Reducing steps does not rescue it -
-three steps is still 26 minutes, and one step is noise. Rule #2 says the budget
+three steps is still 26 minutes, and one step is noise. Guardrail #2 says the budget
 is the platform, so the feature goes rather than the budget. The `image` member
 survived in the enum for two more weeks so that a payload could say it, and no
 payload ever did: scanned 2026-09-05 over all 15 committed `digest.json` files,
@@ -909,7 +909,7 @@ long with the other three untouched, which is what proportionality alone cannot 
 **The canary day carries one compiled drawing**, built by `backend/utilities/build_canary_day.py`
 from the same committed plan and table, so `frontend/tests/item-visual.spec.ts` re-derives the same
 ratio off the live page. Driven from the canary and never from `frontend/public/digest/`, because a
-test may not cost more as the archive grows (Rule #12). The day's other two drawings stay
+test may not cost more as the archive grows (Guardrail #12). The day's other two drawings stay
 hand-written: they carry a chart with no unit on its axis and a spec the toolchain refuses, and a
 compiled plan produces neither.
 
@@ -957,7 +957,7 @@ committed day that ever held one - the other five are one path per item. The rep
 on **all 28** items that claimed a shared path, not one of each pair: nothing committed says which of
 the two stories a chart was drawn for, so keeping one is a guess wearing a record's clothes. The four
 singly claimed files keep their items. The 14 files nobody names any more are deleted - 172,164
-bytes, three quarters of that day's picture weight, dead against the 1 GB Pages cap (Rule #2). No
+bytes, three quarters of that day's picture weight, dead against the 1 GB Pages cap (Guardrail #2). No
 reader-facing string was added: no picture is the common and correct answer and the page says nothing
 about it, so a repaired item reads exactly like the 699 that never had one.
 
@@ -979,7 +979,7 @@ depth, and the only per-plan number in the contract is `confidence` - which the 
 "recorded, and it gates nothing". Three reasons, and the cheapest one comes first: gating on it
 breaks the shape's own written guarantee. It is also the one free number the model writes, so
 prohibition 2 - "the worst a prompt injection can do is pick the wrong bars; it cannot draw the
-wrong number" - would stop being true of publish decisions (Rule #11). And a model may not select
+wrong number" - would stop being true of publish decisions (Guardrail #11). And a model may not select
 what publishes (`CLAUDE.md` section 0a). The mark count is code's own count over code's own
 elements, and it is the quantity `enough_data` already rules on. Authority: Andre and Fowler, ruled
 independently and agreeing, 2026-09-11.
@@ -1085,7 +1085,7 @@ told apart without a prompt change nobody has a reason to make. Across 703 decid
 above could never fire, which cost 46.9% of every day at 20.7 to 40.3 s an item.
 
 So the arm is switched off in `visuals.enabled_kinds`, and the contract default follows, because a
-fresh clone should not pay for it either (Rule #6: the sane default is the measured one). Nothing
+fresh clone should not pay for it either (Guardrail #6: the sane default is the measured one). Nothing
 else changes: the `diagram` enum member, the Mermaid writer, the SVG layout and their tests all
 stay, and `TestToDecision` keeps both arms on so the rejection paths and the injection canaries still
 hold. Turning it back on is one word in `config/idhazh.json`. The prompt still describes diagrams;
@@ -1125,14 +1125,14 @@ nothing - the rebuild keeps the tip's item, so this run's copy was never going t
 fails, and it runs before `REGENERATE_COMMAND` does, so a fix that runs after it never gets to run
 at all. The naming rule itself stays in `backend/idhazh/render/write.py`, which owns it: the shell
 lists paths and pipes them, and a small argv wrapper under `backend/utilities/` does the work.
-Bash never learns what an item id means (Rule #3).
+Bash never learns what an item id means (Guardrail #3).
 
 **Why the budget became a stop rather than a louder warning.** `run.visual_planner_budget_minutes` already
 existed and already logged when the stage went over. It fired after the fact, into a log nobody
 reads until a reader notices a day with no pictures - and by then the run had already been
 cancelled and had already binned its artifact. A warning that only ever describes a loss is not a
 control. The same field now stops the loop, which is the smallest change that makes the job fit its
-bound by design instead of by which host it drew (Rule #2).
+bound by design instead of by which host it drew (Guardrail #2).
 
 **Two things about the 2026-08-24 repair are not in the record above.** Authority: owner,
 2026-08-27.
@@ -1171,7 +1171,7 @@ file before it can be enabled.
 | A funnel of bars for the four chart counts on the console | The stages fall by an order of magnitude - 88 reached, 47 asked, 17 drafted, 9 published on 2026-08-25 - so the bar the decision rests on is the one a reader can barely see. A table gives every stage the same weight. |
 | A model filter or a model legend on the console Charts table | A filter over two values hides half the data and saves nobody any work. When a second model has run enough days to compare, the ledger it is read from has to be truthful first. |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
-| Raise `visuals`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
+| Raise `visuals`'s `timeout-minutes` | The budget is the platform, not a preference (Guardrail #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
 | Shard the `visuals` job across a matrix | **Unblocked on 2026-08-27 and still not built.** It was blocked on the asset name: a per-vertical counter seeded from the day's directory meant four shards would each read the same highest ordinal and two would write `energy-01.svg`, silently, long before any commit. Naming the asset from the item id removes that, so sharding is now an ordinary throughput change rather than a contract one - and it is the strongest lever left, because the stage spends its whole 40-minute budget on ten of the eleven runs on record. Nobody has measured what a sharded planner costs in cache restores and model loads against what it saves, and that measurement is the work. |
 | Keep the per-vertical counter and seed it better | Every seeding rule reads something a process can observe, and the defect is that two processes observe different things. A per-process counter lost 2026-08-24; a directory-seeded counter lost run `32869125768`. There is no third thing to read. |
 | Name the asset from a hash of the address, `<vertical>-<url_key prefix>.svg` | It fixes the same defect as the item id and breaks a rule the item id does not: [`layout.md`](layout.md) says no hash appears in any path, filename or URL, and `backend/tests/test_contracts.py::test_no_hash_appears_in_any_published_path` holds it. The item id is already a published address - it is the anchor a reader lands on - so it costs the reader nothing that has not already been accepted. |
@@ -1184,7 +1184,7 @@ file before it can be enabled.
 | Cap the number of items the planner may consider | A count has to be set for the worst host, so a fast host would decide 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
 | Give a budget-stopped item a `VisualDecision` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
-| A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Rule #11 in spirit, with no prompt involved. |
+| A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Guardrail #11 in spirit, with no prompt involved. |
 | A second, smaller model to triage items first | Two calls where the point was zero. |
 | Diffusion for charts | Produces a beautiful picture of a chart with hallucinated axis labels. |
 | A charting library in the renderer | `vl-convert` takes a spec to PNG or SVG with no browser and no runtime JavaScript. |

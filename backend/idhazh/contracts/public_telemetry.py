@@ -6,7 +6,7 @@ shape that does cross, written to `frontend/public/telemetry/<YYYY-MM>.csv` and
 fetched a month at a time as the console pans its viewport.
 
 It is a contract rather than a tuple of names in the writer because the list is
-a trust boundary (Rule #11). A projection spelled as strings gains a cell by a
+a trust boundary (Guardrail #11). A projection spelled as strings gains a cell by a
 one-word edit and nothing refuses it; a projection spelled as a model cannot
 carry `canonical_url`, `url_key` or `detail` at all, and adding one fails at
 import rather than in the published tree.
@@ -111,7 +111,7 @@ class PublicTelemetryRow(Contract):
                 "set of three more it was checked against. Both are readable code and "
                 "neither is a contract, so the projection had no schema, no version "
                 "stamp and no changelog while every other persisted surface has all "
-                "three (Rule #3). Typing it also gives the migration something to read "
+                "three (Guardrail #3). Typing it also gives the migration something to read "
                 "a committed shard back through, which is what proves a published file "
                 "still loads rather than merely still parses. item_id is the one cell "
                 "carried as an opaque key: identity is minted by ItemHealthRow, and a "

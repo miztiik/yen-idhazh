@@ -44,7 +44,7 @@ URL_KEY = derive_url_key(URL)
 #: The one committed run both instruments measured. Its four `runtime-log-*`
 #: artifacts were pulled before they expired and its item-health rows are in the
 #: committed month shard, so the reconciliation runs on real data with no
-#: network and no mocks (Rule #7).
+#: network and no mocks (Guardrail #7).
 RECONCILED_DATE = "2026-08-26"
 RECONCILED_RUN = "2026-08-26-5"
 
@@ -240,7 +240,7 @@ def test_load_published_costs_the_answer_and_not_the_file(tmp_path: Path) -> Non
     reduction legitimately keeps is its mapping. So the property is asserted
     directly: hold the answer still, double the rows, and the peak must not
     follow. Both populations are built and fixed, so this costs the same on the
-    day the archive holds ten times either (Rule #12, section 13).
+    day the archive holds ten times either (Guardrail #12, section 13).
     """
     keys = 20_000
     small = tmp_path / "small"
@@ -308,7 +308,7 @@ def _published_file(path: Path, dates: dict[str, str]) -> None:
 
     Rows go through the contract, so a fixture cannot drift from what a run
     would really append. Every fixture here is built and fixed, so these checks
-    cost the same on the day the archive holds ten times the rows (Rule #12).
+    cost the same on the day the archive holds ten times the rows (Guardrail #12).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -404,7 +404,7 @@ def test_load_published_refuses_a_file_it_cannot_place_in_the_day_tree(
 
 #: Six day files over six months, and two addresses that appear twice. Built
 #: rather than read off `state/published/`, which spans 16 days and could never
-#: carry the case these arms are about (Rule #12, section 13).
+#: carry the case these arms are about (Guardrail #12, section 13).
 #:
 #: `_address(6)` is the one that matters: it was published in April and again in
 #: July, so the unwindowed read answers April and a 120-day cover answers July.
@@ -466,7 +466,7 @@ def _opened(monkeypatch: pytest.MonkeyPatch, state: Path) -> list[str]:
 
     A recorder rather than a substitute: it calls the real reader and hands back
     what the real reader returns, so the mapping under test is the mapping a run
-    gets (Rule #7). Counting the opens is the only way to tell the two paths
+    gets (Guardrail #7). Counting the opens is the only way to tell the two paths
     apart - both answer the same over a fixture the cover covers, and a wall
     clock would measure the box rather than the read.
     """
@@ -876,7 +876,7 @@ def test_a_day_nothing_was_recorded_for_counts_nothing(tmp_path: Path) -> None:
 
 
 def test_the_item_health_read_stops_at_the_window(tmp_path: Path) -> None:
-    """A shard older than the window is never opened (Rule #12).
+    """A shard older than the window is never opened (Guardrail #12).
 
     This is the ledger a run appends to five times a day, so a reader that
     globbed the directory would cost more every run for an answer about the last
@@ -1163,7 +1163,7 @@ def test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header() -> None:
     Three facts, and each one is a fixed cost: the tree is in the checkout, the
     flat file it replaced is not, and the path helper still names the layout the
     writer uses. What is deliberately not asserted here is anything about the
-    rows, which grow with every run (Rule #12).
+    rows, which grow with every run (Guardrail #12).
     """
     assert (REPO_ROOT / "state" / ledger.VISUAL_PRUNES_DIRNAME).is_dir()
     assert not (REPO_ROOT / "state" / "visual-prunes.csv").exists()
@@ -1607,7 +1607,7 @@ def test_the_whole_state_tree_settles_in_one_call(tmp_path: Path) -> None:
 def _file_opens() -> Iterator[list[Path]]:
     """Every file opened inside the block, in the order it was opened.
 
-    The instrument Rule #12 asks for. A pass that costs more every month spends
+    The instrument Guardrail #12 asks for. A pass that costs more every month spends
     it in `open`, and a count of opens is the one thing a shared 4 vCPU box can
     hold still - a stopwatch there measures the neighbour's build as much as
     this one.
@@ -1637,7 +1637,7 @@ def _month_of_history(state: Path, date: str) -> tuple[Path, Path, Path]:
     Built here rather than read from the committed tree, and written by the
     shipped appenders rather than by hand: the archive offers one shape however
     far it grows, and a test that walked it would cost more every month than the
-    pass it is measuring (Rule #12, section 13).
+    pass it is measuring (Guardrail #12, section 13).
     """
     ledger.append_health(state, date, [account(FetchOutcome.OK, items=1)])
     ledger.append_item_health(state, date, [carried_row(1, source_id="wire", date=date)])
@@ -1673,7 +1673,7 @@ def test_a_repeat_in_a_shard_this_run_wrote_is_still_settled(tmp_path: Path) -> 
 def test_the_settlement_opens_no_shard_from_a_month_this_run_did_not_write(
     tmp_path: Path,
 ) -> None:
-    """Rule #12, proved by a count of opens rather than by a clock.
+    """Guardrail #12, proved by a count of opens rather than by a clock.
 
     A run appends only to the shard its own date routes to, so a repeat the
     merge left can only be in a file this run wrote. Every other month was
@@ -1707,7 +1707,7 @@ def test_more_history_does_not_make_the_ordinary_settlement_read_more(tmp_path: 
     Measured on the fixture below, 2026-09-08: the run's cover opens 6 files at
     one month of history and 6 at twelve. The operator's opens 12 and 78 - six
     more for every month the archive gains. These are exact counts rather than
-    timings, so the spread is zero and the hardware does not enter (Rule #10).
+    timings, so the spread is zero and the hardware does not enter (Guardrail #10).
     """
 
     def opens(cover: str, months: int) -> int:
@@ -1751,7 +1751,7 @@ def test_the_operator_pass_settles_a_repeat_an_older_month_kept(tmp_path: Path) 
 
 
 def test_the_settlement_refuses_to_run_until_it_is_told_what_it_covers() -> None:
-    """An unbounded pass is a person's decision and never a default (Rule #12).
+    """An unbounded pass is a person's decision and never a default (Guardrail #12).
 
     `--date` is what a commit step passes, and it settles that run's shards.
     `--every-shard` is the operator's full pass. Neither is the default, so a
@@ -1901,7 +1901,7 @@ def test_loading_one_runs_counters_costs_the_run_and_not_the_file(tmp_path: Path
     read legitimately keeps is the run's own rows. So the property is asserted
     directly: hold the answer still, double the file, and the peak must not
     follow. Both populations are built and fixed, so this costs the same on the
-    day the committed ledger holds ten times either (Rule #12, section 13).
+    day the committed ledger holds ten times either (Guardrail #12, section 13).
     """
     shards = 8
     small = tmp_path / "small"
@@ -1930,7 +1930,7 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None
     read rate derived from the item-health ledger, which sums a field copied out
     of one model reply per item. The server counted the same work for itself.
     Until the counters were committed the two could not be held against each
-    other at all, which is what Rule #10 forbids.
+    other at all, which is what Guardrail #10 forbids.
 
     The tolerance was written down before either side was read. The four
     `.prom` bodies are real captures from run `2026-08-26-5`'s `runtime-log-*`
