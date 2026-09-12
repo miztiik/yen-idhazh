@@ -1903,14 +1903,6 @@
           "title": "Payload Slow Ms",
           "type": "integer"
         },
-        "rail_group_minutes": {
-          "default": 60,
-          "description": "How coarse the day's time rail groups its stories. The rail draws one marker per group and none on the stories under it, so this is what decides how many times a reader is told the time. Measured 2026-09-02 over the 12 committed days and 4,713 stories, at 60 minutes: 907 markers instead of 4,713, so 80.8 percent of the labels are duplicates the rail does not draw. Sixty is the hour, which is the unit a reader already reads a clock in; 1440 is a whole day and 1 is a marker on almost every story, which is the state this knob exists to avoid.",
-          "maximum": 1440,
-          "minimum": 1,
-          "title": "Rail Group Minutes",
-          "type": "integer"
-        },
         "read_mark_days": {
           "default": 14,
           "description": "How far back a read mark is kept, counted in calendar days from today. Marks are held per digest date, so a mark made on one day can never grey out a different day's article, and every page load drops the dates that now sit outside this window. Fourteen days, the same span `archive_recent_days` lists, so the days the archive offers as rows of their own are exactly the days a reader can still see their own marks on. THIS RULE TRUSTS THE DEVICE CLOCK AND THE RULE IT REPLACED DELIBERATELY DID NOT: keeping the newest N dates present in the store needed no clock at all, and expiry by calendar cannot work without one, so a clock set wrong now keeps marks too long or drops them early. That is the price. It is worth paying because the old rule bounded the store by how often a reader came back rather than by time: a reader who opened one day a month kept marks from seven different months, and every one of them greyed out an article last seen most of a year ago. A wrong mark is the thing this store exists to avoid.",
@@ -2105,6 +2097,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ui.rail_group_minutes is REMOVED. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together; the appearance document also drops frame.zone_time_rem, which only it carried. config/idhazh.json never set the key, so the committed file is unchanged. BREAKING for a file that sets it - the read-side migration is that the key is dropped rather than defaulted, and a config carrying it is refused rather than silently ignored.",
+      "version": "2026-09-12",
+      "why": "The day's time rail is deleted, and this was how coarsely it grouped stories into markers. Every story now prints its own published time in its eyebrow, so there is nothing left to group. Re-measured 2026-09-12 over 8,922 committed items in 22 days: at the 60-minute default the rail drew 1,218 markers, so 86.3 percent of stories carried no time at all."
+    },
     {
       "change": "page_weight.ceilings_bytes loses /archive/, /console/, /console/machine/ and /console/model/ from config/idhazh.json. /404 and /evals/ stay. No key was added, removed or retyped on the model - the object was already free-form and its default was already empty - so no committed config becomes invalid and no payload needs a read-side migration.",
       "version": "2026-09-10T22:00",
@@ -2720,7 +2717,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-10T22:00",
+      "default": "2026-09-12",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2734,5 +2731,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-10T22:00"
+  "version": "2026-09-12"
 }

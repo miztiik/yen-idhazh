@@ -11,7 +11,6 @@
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
-	import TimeRail from '$lib/components/TimeRail.svelte';
 	import { restoreAnchor } from '$lib/assist/day';
 	import {
 		deskCount,
@@ -20,12 +19,11 @@
 		indexDay,
 		leadingStories,
 		orderByTime,
-		railRows,
 		revealed,
 		shortlist
 	} from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
-	import type { DayForPage, DigestItem } from '$lib/payload/types';
+	import type { DayForPage } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
 	import { onMount, tick } from 'svelte';
 
@@ -268,17 +266,24 @@
 					You have read everything here today.
 				</p>
 			{:else}
-				<TimeRail rows={railRows(paged, day.date, ui.rail_group_minutes)}>
-					{#snippet story(item: DigestItem)}
-						<DigestItemView
-							{item}
-							verticalName={verticalNames[deskOf(item)] ?? deskOf(item)}
-							showMark={ui.source_mark}
-							read={read.has(item.item_id)}
-							onRead={() => (read = markRead(item.item_id, read, day.date))}
-						/>
-					{/snippet}
-				</TimeRail>
+				<!-- The zone, once, above the stream it explains. Not a suffix on 627
+				     stamps: every clock on this page is in the same zone, so it is a fact
+				     about the page and it is drawn where the page's own facts are. It
+				     hung above the time rail until 2026-09-12 and it outlived it - the
+				     rail was the duplicate; this sentence is what makes a bare clock
+				     readable. -->
+				<p class="zone-note" data-time-note>Times shown in UTC.</p>
+
+				{#each paged as item (item.item_id)}
+					<DigestItemView
+						{item}
+						verticalName={verticalNames[deskOf(item)] ?? deskOf(item)}
+						showMark={ui.source_mark}
+						onDate={day.date}
+						read={read.has(item.item_id)}
+						onRead={() => (read = markRead(item.item_id, read, day.date))}
+					/>
+				{/each}
 
 				{#if remaining > 0}
 					<!-- Hidden with no script, and replaced by a line that says so.
@@ -361,3 +366,15 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/* The zone, once, in the day's own chrome type. The rail that used to carry
+	   this sentence is gone; the sentence is not, because it is the fact that
+	   makes every bare clock on the page readable. */
+	.zone-note {
+		margin-block-start: var(--space-5);
+		color: var(--color-text-tertiary);
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+	}
+</style>
