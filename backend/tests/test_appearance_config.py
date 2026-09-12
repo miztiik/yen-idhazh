@@ -34,8 +34,6 @@ from idhazh.contracts.appearance_config import (
     ZONE_MARK_MIN_REM,
     ZONE_RAIL_MAX_REM,
     ZONE_RAIL_MIN_REM,
-    ZONE_TIME_MAX_REM,
-    ZONE_TIME_MIN_REM,
     AppearanceConfig,
     ChartConfig,
     FrameConfig,
@@ -134,7 +132,6 @@ def test_the_column_zones_are_relative_and_bounded() -> None:
     assert FrameConfig().zone_mark_rem == 1.75
     assert FrameConfig().zone_rail_rem == 14.0
     assert FrameConfig().zone_aside_rem == 18.0
-    assert FrameConfig().zone_time_rem == 5.5
 
 
 @pytest.mark.parametrize(
@@ -146,8 +143,6 @@ def test_the_column_zones_are_relative_and_bounded() -> None:
         ("zone_rail_rem", ZONE_RAIL_MAX_REM + 0.1),
         ("zone_aside_rem", ZONE_ASIDE_MIN_REM - 0.1),
         ("zone_aside_rem", ZONE_ASIDE_MAX_REM + 0.1),
-        ("zone_time_rem", ZONE_TIME_MIN_REM - 0.1),
-        ("zone_time_rem", ZONE_TIME_MAX_REM + 0.1),
     ],
 )
 def test_a_column_zone_outside_its_bounds_is_refused(field: str, value: float) -> None:
