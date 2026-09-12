@@ -106,6 +106,14 @@ const end = t.responseEnd >= 0 ? t.startTime + t.responseEnd : t.startTime;
 
 **Aborting a fetch makes Chrome log a console error of its own**, so a zero-console-error assertion (`CLAUDE.md` section 12) reports a failure the page did not cause. Classify rather than count: match the errors your own abort produced by URL, and report how many of each there were.
 
+**Proving a page survives a missing file is three separate traps, and each one returns a green that means nothing.** `CLAUDE.md` section 12 requires the missing-data arm on every published-site change, so this is the check most often passed without being run. Measured 2026-09-12 while proving the drawing-absent branch of a digest page.
+
+- **A service worker serves the deleted file from cache, at 200.** The canary preview registers one, so `page.route` never sees the payload fetch and the file you deleted answers anyway. The arm reports "the page rendered fine" because the page did render fine - on the old bytes. Use a fresh origin on a port the worker has never claimed.
+- **`vite preview` does not serve `frontend/build/`.** It serves `.svelte-kit/output/client/` and `static/`, so hiding a file under `build/` proves nothing at all. There are three copies and all three have to go. `docs/how-to/run-the-gates.md` and this page disagreed about the preview command until 2026-09-12; the form that serves the tree you just built is `npm run preview`.
+- **A null result needs a control.** Delete one file and leave its sibling: `ai-01.svg` must answer 404 while `ai-02.svg` answers 200. Without the sibling, "nothing was drawn" is equally consistent with the arm never having run.
+
+The green that counts names what the page did instead - here, `[digest] digest/2026/08/20/ai-01.svg: not available (404), so it is not drawn`, all eight stories still rendered, zero `<img>`, no `pageerror`.
+
 ## Driving components
 
 **A test driving a hydrated control must wait for hydration**, not for the element. Every `[data-window-preset]` input is `disabled` in the prerendered document and enabled on mount, so a click issued before that lands times out at about 15 s with no useful message:

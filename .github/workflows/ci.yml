@@ -114,6 +114,18 @@ jobs:
           python -m idhazh.contracts.export
           git diff --exit-code -- schemas/
 
+      # The same trade as the gate above, for the same reason. Five Status
+      # Reckoners are the source of what is done; TODO/STATUS.md is the one
+      # place all five can be read at once, and a summary nobody regenerates is
+      # worse than no summary because it looks current. The generator reads the
+      # committed plan-docs and nothing else - no clock, no network, no
+      # worktree - so this gate cannot go red for a reason the pull request did
+      # not cause.
+      - name: The plan queue matches its Reckoners
+        run: |
+          python backend/utilities/plan_status.py --write
+          git diff --exit-code -- TODO/STATUS.md
+
       # What prerendering used to give free. Until the reading routes were split
       # on 2026-09-01 every story was serialised into a document at build time,
       # so a story the contract refused failed the build. A reading document now
