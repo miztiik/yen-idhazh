@@ -35,15 +35,16 @@ committed file.
 | [20260910-24-day-sharded-ledgers-plan.md](20260910-24-day-sharded-ledgers-plan.md) | 8 | 2 | 6 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 15 | 2 | 12 | 2 |
 | [20260911-26-retire-prerender-plan.md](20260911-26-retire-prerender-plan.md) | 4 | 2 | 2 | 1 |
-| [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 6 | 5 | 1 | 1 |
+| [20260912-27-adaptive-guardrails-plan.md](20260912-27-adaptive-guardrails-plan.md) | 6 | 5 | 1 | 0 |
 
-## In flight - 1
+## In flight - 2
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #3b | 11 | C2 | Every call reports its own cost | p11-3b |
+| #5 | 27 | F | Repository-wide sweep, schemas, relapse proof | `../yen-idhazh.worktrees/p27-r5` |
 
-## Ready now - 29
+## Ready now - 28
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -79,7 +80,6 @@ section 3 is where it is answered.
 | #1 | 25 | A | Three docstrings defend a requirement the page retired | - |
 | #13 | 25 | I | `Voices` - who supplied the day, and what it is worth | 11 |
 | #1 | 26 | A | What prerendering actually weighs, both arms | - |
-| #5 | 27 | F | Repository-wide sweep, schemas, relapse proof | 6 |
 
 ## Waiting on another row - 76
 
