@@ -208,6 +208,17 @@ git checkout origin/main -- TODO/STATUS.md
 
 **A whitespace-sensitive "did I lose a line" check reports false losses.** A resolution that re-nests a block changes the leading spaces on every line, so a set difference over raw lines lists the whole block as dropped. Compare normalised text. After a base/override inversion in a token file, grep every other file that emits the same custom property: a generated stylesheet still emitting the light value under `:root` put the default document at 2.99:1 against a 4.5:1 bound, with no conflict anywhere and every theme test green because each names a theme explicitly. A test that splits a stylesheet at a selector inverts with it, so split at the OVERRIDE selector.
 
+**A squash merge folds the pull-request body into the commit message, so a CI-skip marker anywhere in that body silences every workflow on the push.** GitHub scans the whole commit message, not the first line, and it does not care that the marker sits inside a code span, a table cell or a paragraph explaining why the marker was rejected. Measured 2026-09-12: the merge of the change that gave `TODO/STATUS.md` one writer carried a table row weighing that very marker as a loop guard, and the push created zero workflow runs - not the CI suite, and not the Pages publication, which the change never touched. The absent Pages run is the tell that separates this from a `paths-ignore` filter, because a path filter is per workflow and this is not.
+
+The cost of missing it is quiet. Nothing fails, no check reports red, and `gh pr checks` still shows the pull request's own green run against the pre-merge head - so the queue looks healthy while `main` has had no gate run at all, and any job that only fires on a push to `main` silently did not.
+
+```powershell
+git log -1 --format='%B' <merge-sha> | Select-String -SimpleMatch '[skip ci]'
+gh api "repos/<owner>/<repo>/actions/runs?head_sha=<full-sha>" --jq '.total_count'
+```
+
+A total of zero on a push to `main` means no workflow was created. The recovery is an ordinary next commit without the marker; the merge cannot be amended (`CLAUDE.md` section 8). The prevention is to name such a marker in prose - "the skip-CI marker" - and never to paste it literally into a pull-request body, a row of a decision table, or a commit message.
+
 ## The commit-and-push script
 
 **A path added to `.github/scripts/commit-and-push.sh` must already exist in a fresh checkout.** The script runs `git add "$@"` under `set -euo pipefail` with every path a job owns in one call, so a file that appears only once its producer succeeded turns a producer failure into a failure of the whole commit step, and the other ledgers staged beside it are lost with it. Ship a new ledger with its header committed.
