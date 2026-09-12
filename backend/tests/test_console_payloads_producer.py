@@ -45,6 +45,11 @@ from idhazh.contracts.run_manifest import (
     RunStatus,
 )
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.source_health_view import (
+    SourceAvailability,
+    SourceHealthRow,
+    SourcePermission,
+)
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 
@@ -661,6 +666,194 @@ def test_a_feed_read_only_through_a_robots_answer_is_unread_and_not_working() ->
     trouble = publish_console_band.feed_trouble(rows, COLLECT.availability_strikes_before_rest)
 
     assert (trouble.rested, trouble.failed, trouble.unread) == (0, 0, 1)
+
+
+# --- the two editorial routes ------------------------------------------------
+#
+# Built from rows rather than read off the tree, so each case carries a state
+# the committed archive has never produced: a gate that declines everything has
+# never happened, and it is the half of the rule that was missing until
+# 2026-09-11 (`CLAUDE.md` Rule #12, plan 25 section 0.1).
+
+
+def _source(
+    source_id: str, *, publications: int, failures: int, retired: bool = False
+) -> SourceHealthRow:
+    """One address on the source-health view, at a chosen size of record."""
+    return SourceHealthRow(
+        source_id=source_id,
+        title=source_id.replace("-", " ").title(),
+        vertical="world",
+        permission=SourcePermission.ALLOWED,
+        availability=SourceAvailability.ANSWERING,
+        retired=retired,
+        retired_on="2026-12-01" if retired else None,
+        opportunities=publications + failures + 5,
+        publications=publications,
+        source_failures=failures,
+    )
+
+
+def test_a_gate_at_either_end_of_its_decline_rate_ranks_broken() -> None:
+    """Both ends, because the instrument is dead at both.
+
+    Zero is a gate that declines nothing, so it stamps every article it is
+    shown. One is a gate that declines everything, so nothing reached a verdict.
+    The row carried only the zero end until 2026-09-11, and a classifier that
+    had stopped answering would have printed a reassuring tab.
+    """
+    dead_low = publish_console_band.dead_gate_candidates({"desk": 0.0})
+    dead_high = publish_console_band.dead_gate_candidates({"desk": 1.0})
+    alive = publish_console_band.dead_gate_candidates({"desk": 0.4})
+    unmeasured = publish_console_band.dead_gate_candidates({"desk": None})
+
+    assert [c.severity for c in dead_low] == [publish_console_band.BROKEN]
+    assert dead_low[0].text == "desk declines nothing"
+    assert [c.severity for c in dead_high] == [publish_console_band.BROKEN]
+    assert dead_high[0].text == "desk declines everything"
+    assert alive == []
+    # The fraction is null until plan 23 row #10 lands, so the rule costs
+    # nothing to carry and may not invent a verdict out of an absent one.
+    assert unmeasured == []
+
+
+def test_the_bounds_the_dead_gate_rule_reads_are_arguments_and_not_literals() -> None:
+    """Row #12 of the placement plan moves these two to `config/idhazh.json`.
+
+    The rule is written here first because the band is derived once, so this
+    asserts the hand-off works: a caller that passes its own floor and ceiling
+    changes what fires, which is what that row will do and nothing else.
+    """
+    inside = publish_console_band.dead_gate_candidates({"desk": 0.05})
+    outside = publish_console_band.dead_gate_candidates({"desk": 0.05}, floor=0.1)
+    ceiling = publish_console_band.dead_gate_candidates({"desk": 0.95}, ceiling=0.9)
+
+    assert inside == []
+    assert [c.text for c in outside] == ["desk declines nothing"]
+    assert [c.text for c in ceiling] == ["desk declines everything"]
+
+
+def test_an_editorial_fault_never_takes_the_band_from_a_failed_run() -> None:
+    """A skewed day still published; a failed run did not.
+
+    `editorial` is the cap and `dead_gate_candidates` is the one thing that goes
+    round it, so this drives both: a loud editorial figure is demoted to
+    `EDITORIAL_CAP` with its words intact, and a dead gate keeps BROKEN.
+    """
+    loud = publish_console_band.Candidate(
+        text="one desk holds the day",
+        sentence="One desk holds most of the day, so the page reads as one story.",
+        severity=publish_console_band.BROKEN,
+    )
+
+    capped = publish_console_band.editorial([loud])
+
+    assert [c.severity for c in capped] == [publish_console_band.EDITORIAL_CAP]
+    assert capped[0].text == loud.text and capped[0].sentence == loud.sentence
+    assert publish_console_band.EDITORIAL_CAP < publish_console_band.BROKEN
+    assert [
+        c.severity for c in publish_console_band.dead_gate_candidates({"desk": 1.0})
+    ] == [publish_console_band.BROKEN]
+
+
+def test_voices_names_a_feed_the_ranker_has_discounted_as_far_as_it_goes() -> None:
+    """The one state where the ranker is actively discounting a feed.
+
+    `feed_reliability` clamps at `collect.reliability_floor`, so a feed sitting
+    exactly there is as far down as the multiplier goes - and until this route
+    no page said so.
+    """
+    dead = [
+        _feed_row("2026-12", feed_id="wire-co", outcome=FetchOutcome.PERMANENT, items=0).model_copy(
+            update={"run_id": f"2026-12-0{n}-1", "date": f"2026-12-0{n}"}
+        )
+        for n in range(1, 5)
+    ]
+    good = [
+        _feed_row("2026-12", feed_id="good-co", outcome=FetchOutcome.OK, items=4).model_copy(
+            update={"run_id": f"2026-12-0{n}-1", "date": f"2026-12-0{n}"}
+        )
+        for n in range(1, 5)
+    ]
+
+    found = publish_console_band.voices_candidates(
+        [*dead, *good],
+        [],
+        reliability_floor=COLLECT.reliability_floor,
+        min_decisions=COLLECT.source_yield_alarm_min_decisions,
+    )
+
+    assert [c.text for c in found] == ["1 feed discounted to the floor"]
+    assert found[0].severity == publish_console_band.WORTH_A_LOOK
+    assert "50% floor" in found[0].sentence
+
+
+def test_a_source_too_thin_to_judge_carries_its_denominator_and_is_ranked_lower() -> None:
+    """Too little evidence is not the same as bad evidence.
+
+    It is ranked below the floor case on purpose - ranking it higher would
+    publish a judgement the record cannot carry - and the fragment carries the
+    denominator, because a bare count is a number with no scale.
+    """
+    thin = COLLECT.source_yield_alarm_min_decisions - 1
+    rows = [
+        _source("thin-co", publications=thin, failures=0),
+        _source("fat-co", publications=COLLECT.source_yield_alarm_min_decisions, failures=0),
+        # Retired addresses are out of both halves of the fraction: nothing asks
+        # them, so a record that stopped growing is not a record too short to read.
+        _source("gone-co", publications=0, failures=0, retired=True),
+    ]
+
+    found = publish_console_band.voices_candidates(
+        [],
+        rows,
+        reliability_floor=COLLECT.reliability_floor,
+        min_decisions=COLLECT.source_yield_alarm_min_decisions,
+    )
+
+    assert [c.text for c in found] == ["1 of 2 sources too thin to judge"]
+    assert found[0].severity == publish_console_band.WORTH_KNOWING
+    assert found[0].severity < publish_console_band.WORTH_A_LOOK
+
+
+def test_the_strip_carries_five_routes_and_every_one_answers_at_its_own_address(
+    tree: tuple[Path, Path],
+) -> None:
+    """A tab in a strip whose page does not exist is a strip that lies.
+
+    The ids, the addresses and the order are what a browser resolves, so they
+    are asserted here rather than left to the component that draws them.
+    """
+    state, digest = tree
+
+    band = _band(state, digest)
+
+    assert [route.id for route in band.routes] == [
+        RouteId.PIPELINES,
+        RouteId.MODEL,
+        RouteId.MACHINE,
+        RouteId.JUDGEMENT,
+        RouteId.VOICES,
+    ]
+    assert [route.href for route in band.routes] == [
+        "/console/",
+        "/console/model/",
+        "/console/machine/",
+        "/console/judgement/",
+        "/console/voices/",
+    ]
+    assert [route.label for route in band.routes] == [
+        "Pipelines",
+        "Summaries",
+        "Hardware",
+        "Judgement",
+        "Voices",
+    ]
+    # Every route points at a panel another route owns, the two new ones
+    # included: a route carrying nothing is a route that hides the page which
+    # explains it.
+    for route in band.routes:
+        assert len(route.carries) > 20, route.id
 
 
 def test_the_band_prints_the_size_against_the_cap_with_the_days_it_measured(
