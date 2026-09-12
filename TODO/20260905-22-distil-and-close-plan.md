@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-21-human-judgement-plan.md`](20260905-21-human-judgement-plan.md). **Last plan of the group.**
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - the document this row deletes, and O40 in particular.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | Any code change. Any new decision - if a decision is still open at this point it is a new plan, not a closure row. Deleting anything under `docs/` |
 | ESCALATE triggers | 1. A durable finding has no living doc that owns it and creating one is not obviously right - that is a documentation-structure question. 2. A decision recorded in the pseudo-plan turns out never to have been implemented, which means the group is not finished. 3. An inbound link points at a section that no longer exists anywhere |
 | Chosen strategy | Verify before writing. The closure of the last comparable programme found that most of what it was told to record was **already** in the living docs, and the useful output was the re-measured numbers and the corrections |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ---
 

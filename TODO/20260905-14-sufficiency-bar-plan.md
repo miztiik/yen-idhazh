@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-13-switch-on-deletion-plan.md`](20260905-13-switch-on-deletion-plan.md) | next [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O36, rows 22, 31, 32, 33, 36, sections 12.10, 12.13 G31.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | The legibility and density floors (plan 12 owns them). Any new type. Any accessibility audit tooling - descoped at project level; basic ARIA and keyboard navigation are in scope and that is what row 2 is |
 | ESCALATE triggers | 1. The post-hydrate DOM cannot be made byte-identical to the build-time emit - that reopens a compliance clause and is Level 5. 2. The byte cap would refuse more than a stated share of otherwise-valid visuals, which means the cap is wrong rather than the visuals. 3. A fact is reachable only on hover and cannot be given a keyboard route without a new interaction pattern |
 | Chosen strategy | Each check is a build-failing oracle, not a review item. A check a person can skip is the check skipped on the day it would have bitten |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ---
 

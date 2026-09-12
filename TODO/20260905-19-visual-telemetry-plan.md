@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-18-diagram-vocabulary-plan.md`](20260905-18-diagram-vocabulary-plan.md) | next [`20260905-20-visual-console-plan.md`](20260905-20-visual-console-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - rows 54, 55, sections 12.6 G1, 12.7 G7, G10, G11, 12.9 G12, 12.13 G37, 12.14 G40, G41, section 9.2, 9.3.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | The console panels (plan 20). Any human review surface (plan 21). Any change to what publishes |
 | ESCALATE triggers | 1. The ledger is proposed as one row per **published** visual - that leaves every refusal uncommitted and the machine loop stops being auditable while still being the gate. 2. A route to `none` exists that carries no reason. 3. The fold key is settled without the stratum terms - **the fold is irreversible and a key settled narrow cannot be widened later against data that no longer exists** |
 | Chosen strategy | Settle the fold key first, because it is the only decision here that cannot be revised. Then the stage, then the ledger, then the store |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ---
 

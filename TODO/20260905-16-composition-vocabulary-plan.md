@@ -6,7 +6,7 @@
 **Chain**: previous [`20260905-15-chart-vocabulary-plan.md`](20260905-15-chart-vocabulary-plan.md) | next [`20260905-17-infographic-vocabulary-plan.md`](20260905-17-infographic-vocabulary-plan.md).
 **Reference**: [`20260902-visual-planner-pseudo-plan.md`](20260902-visual-planner-pseudo-plan.md) - O45, O47, rows 43, 44, 45, sections 7.2, 12.2 L3, 12.12 G27, M7.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 1; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ---
 
@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Hard scope - out | The Derived Value **contract** - plan 10 built it, this plan builds the producers. Any fifth allow-list function. Diagrams. The infographic family |
 | ESCALATE triggers | 1. A derived value is produced whose provenance chain does not name its function, its version and every input element. 2. A `pie` is drawn against a whole that was **summed** rather than **declared**. 3. `bubble` cannot clear the legibility floor at 390 CSS px, which means it cannot ship on the surface most readers use |
 | Chosen strategy | Gate first, produce second, flag third - so that when someone re-argues the pie question in six months there is data rather than opinion |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 **Why this plan exists at all, recorded because it was nearly dropped.** Carmack proposed dropping the family on the grounds that derived values "let the planner state a number the article never did". **Overruled by the owner on 2026-09-05, and the reasoning is now O45.** The planner states nothing: every value is arithmetic **code** performs over Tier 1 elements **code** extracted, through a closed list whose members the model cannot name, cannot supply an operand to, and cannot express in its schema. The metric that objection reached for measures whether a summary bullet says something the summary prose does not - a prose instrument, unrelated to a chart's arithmetic.
 
