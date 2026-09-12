@@ -573,18 +573,28 @@ from corpus prose and cut by `truncate_to_tokens` itself.
 | Term | Tokens |
 | --- | --- |
 | call 1's prompt | 14,306 |
-| plus call 1's 900-token output budget | 15,206 |
-| call 2's prompt, with a 400-token stand-in reply | 15,404 |
-| plus the 4,694-token reply call 2's grammar may write | **20,098** |
+| plus call 1's 6,491-token output budget | 20,797 |
+| call 2's prompt, carrying call 1's reply | 21,495 |
+| plus the 4,694-token reply call 2's grammar may write | **26,189** |
 | `models.summarize.inference.n_ctx` | 16,384 |
-| **over by** | **3,714** |
+| **over by** | **9,805** |
 
-So call 2 has **980 tokens of room for a reply whose grammar can emit 4,694**,
-and the only shape that fits at the cap is the one with the picture already
-suppressed: `SUPPRESSED_BUDGET_TOKENS` is 905, which leaves **75 tokens, 0.46
-percent**. `test_the_longest_article_the_cap_allows_still_fits_the_window` sizes
-the single-call sequence at 14,088 of 16,384 and passes; nothing sizes the
-two-call sequence.
+**Three of those numbers moved on 2026-09-13 and the direction is worse, not
+better.** The table used to size call 2 with a **400-token stand-in** for call
+1's reply, which was not call 1's budget then either: at the 900-token budget in
+force until that day the real overflow was **4,214** rather than the 3,714 this
+table printed. Then call 1's budget was derived from its own grammar and went
+900 -> 6,491, and **call 1's reply is paid twice** - once as its own decode, once
+inside call 2's prompt - so the pair went from 4,214 over to 9,805 over. **At
+the 32,768 the owner authorised on 2026-09-12 the worst sequence is 80 percent
+of the window with 6,579 tokens spare.**
+
+So at 16,384 call 2 has **no room at all** for a reply whose grammar can emit
+4,694, and the shape that used to fit - the picture already suppressed, at
+`SUPPRESSED_BUDGET_TOKENS` of 905 - does not fit either.
+`test_the_longest_article_the_cap_allows_still_fits_the_window` sizes the
+single-call sequence at 14,088 of 16,384 and passes; nothing sizes the two-call
+sequence.
 
 **The failure it produces is silent.** With `--no-context-shift` the decode stops
 at the wall rather than raising, `classify.calls.recovered_completion` salvages
@@ -639,6 +649,13 @@ after this ordering goes live, this is the first thing to suspect.**
 
 ### The output budget is derived, not picked
 
+**Each call has one, and neither is the summariser role's
+`max_output_tokens`.** That knob is a crash guard sized for a summary; it still
+sizes the single call and it sizes neither of these. `call_one_output_tokens`
+and `call_two_output_tokens` run their arithmetic on every import and raise when
+the recorded number no longer matches, so a bound cannot move without the budget
+moving with it.
+
 Call 2 decodes the summary and the plan through one ceiling, and that number is
 arithmetic over the two shapes' own bounds. Every array in them carries a
 `maxItems` and every decoded string a `maxLength` - which is why
@@ -646,10 +663,8 @@ arithmetic over the two shapes' own bounds. Every array in them carries a
 decoded string in the reply with no upper end and a derivation with an unbounded
 term in it is not a derivation.
 
-`classify.calls.call_two_output_tokens` runs the arithmetic on every import and
-raises when the recorded number no longer matches, so a bound cannot move
-without the budget moving with it. The two halves convert differently, because
-one rule would be wrong about one of them:
+The two halves convert differently, because one rule would be wrong about one of
+them:
 
 | Part | Bound | Converted at |
 | --- | --- | --- |
@@ -678,6 +693,72 @@ whole stage budget. The grammar closes the object long before that on every
 reply seen so far - the two committed plan fixtures are a fifth and a tenth of
 the plan's own ceiling - but the wiring row is where that stops being a
 reassurance and starts being something to watch.
+
+### Call 1's budget, and why it converts differently
+
+**Call 1 has no word rails to spend**, because every bound on `CallOneReply` is
+a character bound. So call 2's rule reads the whole shape as structure and
+returns 20,229 tokens - which fits no authorised window, because **call 1's
+reply is paid twice: once as its own decode, once inside call 2's prompt.** A
+ceiling that fits no window is not a ceiling.
+
+The widest reply the grammar admits is **20,229 characters**, measured against
+the committed bounds on 2026-09-13: 8,160 in 136 free-text slots at
+`PHRASE_MAX`, 5,664 in 118 address slots at `ADDRESS_MAX`, and 6,405 of keys,
+punctuation and closed vocabularies. Both of those bounds are anti-abuse rather
+than expected lengths - `ADDRESS_MAX` is 48 where a real address is
+`quantity-118-123` - which is why one token a character overstates so heavily
+here and barely at all on call 2, whose structure is keys and enums at their
+real length.
+
+That ceiling is converted at **the one measured density of real call-1 output**:
+2,805 characters over 900 tokens, read off the reply that made this budget
+necessary, on `Qwen3.5-9B-Q4_K_M` under grammar-constrained decoding,
+2026-09-12, one reply, no spread. **The budget is 6,491 tokens**, which is 7.2
+times the reply that was lost and 68 times an ordinary one. The density is held
+in source as the two numbers it was read from rather than as a decimal, it is
+labelled an estimate (Guardrail #10), and it names what would overturn it:
+decode twenty corpus articles through call 1 at a budget no reply reaches and
+take the lowest ratio.
+
+**So call 1's budget is a sizing too, and its seatbelt is not a recovery.** Call
+2's reply carries the summary before the plan, so a cut is cut in the plan and
+`recovered_completion` reads out the closed half. Call 1's reply is one flat
+object of eight required arrays, and a repaired one would fabricate a
+completeness the decoder never wrote - an array defaulted to empty because the
+budget ran out is byte-identical to an array that is empty because the article
+has nothing, and that ambiguity picks the desk, the entities and whether a
+picture is reachable. So a cut is **named** instead: `finish_reason` is read
+before anything tries to parse, and the item fails as `labels_truncated` rather
+than as `bad_shape`, which is the code for a reply that answered inside its
+budget and still could not be read. The item is still lost. What it is not is
+lost silently.
+
+**The condition that reopens the recovery question is written rather than left
+to taste:** `labels_truncated` non-zero on a real run. Zero means the derived
+budget was the whole fix.
+
+**Two budgets, two derivations, one width function.** The arithmetic over a
+generated schema lives once in `contracts.visual.widest_json_characters`, and
+both calls read it - two implementations of one piece disagree the first time a
+bound moves, and the one that is wrong is the one nobody reads. What differs is
+only the conversion, and it differs because the shapes do.
+
+**Rejected: call 2's rule applied unchanged to call 1.** It gives 12,953 tokens
+and leaves 117 tokens of margin across the two-call sequence at 32,768. The row
+that owns the window called 75 tokens "luck rather than a margin", and 117 is
+the same thing. Refused by Carmack, 2026-09-13.
+
+**Rejected: clamping the budget against `n_ctx`.** A `min()` silently shrinks
+the budget, which reproduces the exact failure being fixed - a quiet cut with
+nothing saying the window did it. At 16,384 the clamp computes negative, and it
+would make an import-time constant depend on a config value another row is
+mid-flight on. Refused by Carmack, 2026-09-13.
+
+**Rejected: recording a cut call-1 reply as the existing `output_truncated`.**
+The counter is how anybody sees whether the derived budget worked, and folded in
+with call 2's cuts it moves for reasons that have nothing to do with call 1.
+Refused by Fowler, 2026-09-13.
 
 **A retry must perturb the input, or it must not happen.** Decoding is
 `temperature 0.0` with `seed 0`, so a second call against an identical prompt
